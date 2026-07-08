@@ -44,7 +44,75 @@ acceptance_tests:
 
 depends_on: [02-cli-shell]
 
-status: pending
+status: in-review
 review_rounds: 0
 
 notes: |
+  Implementer round 1.
+
+  Built apps/wordfreq/test_cli.py per scope: 13 tests, one per required AC bullet
+  (AC1.1, AC1.2, AC4.1, AC4.2, AC4.3, AC5.1, AC6.1, AC7.1, AC7.2, AC8.1, AC8.2,
+  AC10.1, AC10.2). All invoke the script via subprocess.run([sys.executable,
+  str(script), ...], capture_output=True) per the test-layout contract; tmp_path
+  fixture used for all file inputs, written with encoding="utf-8". No changes to
+  wordfreq.py or test_core.py; stdlib + pytest only.
+
+  Deviation (flagging for Reviewer, same class as ADR-8): the task's scope text
+  for AC10.2 says "assert each is in sys.stdlib_module_names". That attribute does
+  not exist in Python 3.9.6 (this environment's only interpreter, per ADR-8) —
+  it was added in Python 3.10. Confirmed directly:
+    $ python3 -c "import sys; print(sys.stdlib_module_names)"
+    AttributeError: module 'sys' has no attribute 'stdlib_module_names'
+  Implemented an equivalent 3.9-compatible check instead: a helper
+  `_is_stdlib_module(name)` that treats a module as stdlib if it's in
+  `sys.builtin_module_names`, or if `importlib.util.find_spec(name).origin` is
+  `"built-in"`/`"frozen"`, or is a file path under
+  `sysconfig.get_paths()["stdlib"]`. Verified against wordfreq.py's actual
+  imports (argparse, re, sys, collections, typing) — all resolve correctly
+  (sys -> "built-in", the rest -> files under the 3.9 stdlib dir). Test asserts
+  every collected import root passes this check and that the root set is
+  non-empty (guards against an accidentally-vacuous assertion). Recommend the
+  Architect fold this into ADR-8 or a new ADR alongside it, since it's the same
+  root cause (3.9-only environment) affecting a second, independently-discovered
+  spot in the plan/task text.
+
+  Test results — full suite from apps/wordfreq/ (both test files):
+
+    $ python3 -m pytest -v
+    ============================= test session starts ==============================
+    platform darwin -- Python 3.9.6, pytest-8.4.2, pluggy-1.6.0
+    rootdir: /Users/nthncrtr/repos/agentic-sandbox/apps/wordfreq
+    collected 26 items
+
+    test_cli.py::test_ac1_1_existing_readable_file_exits_zero PASSED         [  3%]
+    test_cli.py::test_ac1_2_no_file_argument_exits_nonzero_with_stderr PASSED [  7%]
+    test_cli.py::test_ac4_1_no_flag_outputs_exactly_ten_lines PASSED         [ 11%]
+    test_cli.py::test_ac4_2_n_flag_outputs_exact_expected_stdout PASSED      [ 15%]
+    test_cli.py::test_ac4_3_n_larger_than_distinct_words_outputs_all_no_padding PASSED [ 19%]
+    test_cli.py::test_ac5_1_ties_break_alphabetically_and_are_reproducible PASSED [ 23%]
+    test_cli.py::test_ac6_1_stdout_is_byte_exact PASSED                      [ 26%]
+    test_cli.py::test_ac7_1_nonexistent_path_exits_nonzero_no_traceback PASSED [ 30%]
+    test_cli.py::test_ac7_2_directory_path_exits_nonzero_no_traceback PASSED [ 34%]
+    test_cli.py::test_ac8_1_zero_byte_file_exits_zero_no_stdout PASSED       [ 38%]
+    test_cli.py::test_ac8_2_punctuation_only_file_exits_zero_no_stdout PASSED [ 42%]
+    test_cli.py::test_ac10_1_exactly_one_non_test_source_file PASSED         [ 46%]
+    test_cli.py::test_ac10_2_only_stdlib_imports PASSED                      [ 50%]
+    test_core.py::test_tokenize_strips_surrounding_punctuation PASSED        [ 53%]
+    test_core.py::test_tokenize_keeps_internal_apostrophe PASSED             [ 57%]
+    test_core.py::test_tokenize_hyphen_splits_words PASSED                   [ 61%]
+    test_core.py::test_case_insensitive_tokenize_and_count PASSED            [ 65%]
+    test_core.py::test_top_n_orders_by_descending_count PASSED               [ 69%]
+    test_core.py::test_top_n_truncates_and_orders_by_count_not_alphabet PASSED [ 73%]
+    test_core.py::test_top_n_larger_than_distinct_words_returns_all_no_padding PASSED [ 76%]
+    test_core.py::test_tie_breaks_alphabetically_and_is_reproducible PASSED  [ 80%]
+    test_core.py::test_format_lines_tab_separated PASSED                     [ 84%]
+    test_core.py::test_empty_string_tokenizes_to_no_words PASSED             [ 88%]
+    test_core.py::test_empty_punctuation_only_tokenizes_to_no_words PASSED   [ 92%]
+    test_core.py::test_empty_token_list_yields_no_results PASSED             [ 96%]
+    test_core.py::test_empty_pairs_format_to_empty_string PASSED             [100%]
+
+    ============================== 26 passed in 0.79s ==============================
+
+  AC9.1 satisfied (pytest from apps/wordfreq/, both files, exit 0). File-contact
+  surface respected: only apps/wordfreq/test_cli.py added; no edits to
+  wordfreq.py or test_core.py.

@@ -44,7 +44,7 @@ acceptance_tests:
 depends_on: [01-core-logic]
 
 status: in-review
-review_rounds: 0
+review_rounds: 2
 
 notes: |
   Implementer report:

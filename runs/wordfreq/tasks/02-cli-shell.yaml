@@ -47,7 +47,7 @@ acceptance_tests:
 depends_on: [01-core-logic]
 
 status: in-review
-review_rounds: 0
+review_rounds: 1
 
 notes: |
   Implemented positive_int(), main(argv=None) -> int, and the __main__ guard in

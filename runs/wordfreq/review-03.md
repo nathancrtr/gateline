@@ -116,3 +116,79 @@ treatment: that is the pipeline's own bookkeeping artifact, which the task
 file's `notes:` section exists to receive (the scope explicitly directs
 deviations to be recorded there); not counted as a boundary violation.
 In bounds.
+
+---
+
+# Review Report: 03-unit-tests — Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** commit e57277f (branch run/wordfreq)
+
+## Findings
+
+None. Both round-1 blocking findings are resolved; no new defects introduced.
+
+### Resolution of round-1 findings
+
+- **F1 (blocking, resolved)** — `apps/wordfreq/test_core.py:44-54`
+  (`test_top_n_truncates_and_orders_by_count_not_alphabet`). Input
+  `"zebra zebra zebra mango mango apple"` has its highest-count word
+  ('zebra', 3) alphabetically *last*. Traced against the F1 mutant
+  `sorted(Counter(tokens).items())` (count-blind alphabetical sort): it
+  yields `[('apple',1), ('mango',2), ('zebra',3)]`, which fails the
+  asserted `[('zebra',3), ('mango',2)]` whether or not the mutant also
+  truncates (`[:2]` of the alphabetical order is
+  `[('apple',1), ('mango',2)]` — still wrong). Count-descending order is
+  now genuinely pinned. Killed.
+- **F2 (blocking, resolved)** — same test. 3 distinct words with n=2:
+  the F2 mutant (correct sort key `(-count, word)` but missing `[:n]`)
+  returns a 3-element list `[('zebra',3), ('mango',2), ('apple',1)]`,
+  failing the exact 2-element equality. Truncation is now genuinely
+  exercised. Killed.
+- Cross-check against the real implementation (`wordfreq.py:21-26` at
+  e57277f): `sorted(counts.items(), key=lambda pair: (-pair[1],
+  pair[0]))[:n]` produces exactly `[('zebra',3), ('mango',2)]` — the new
+  assertion passes against correct code, so this is not a
+  false-failing test.
+
+## Coverage
+
+Reviewed against spec.md and plan.md directly; implementer round-2 notes
+used as context only. Static analysis (dispatch restricts execution to
+git); the new assertion and both mutants traced by hand against the
+merged `wordfreq.py` at commit e57277f.
+
+- **New test correctness** ✓ clean — input is plain whitespace-separated
+  lowercase words, so no interaction with the trickier tokenize paths;
+  expected value matches the actual implementation; docstring accurately
+  describes the two mutants it discriminates.
+- **R4/AC4.2** ✓ now clean — count-descending order and exact-n
+  truncation are each pinned by at least one test where a wrong
+  implementation produces a detectably different result. The retained
+  `test_top_n_orders_by_descending_count` (distinct == n) remains valid
+  as the "exactly n results" case; the new test covers distinct > n.
+- **No regression to round-1 clean areas** ✓ — the diff is additive: all
+  12 round-1 tests are byte-identical (verified via the diff hunks);
+  R2/R3/R5/R6/R8 coverage conclusions from round 1 stand unchanged.
+- **AC9.2 naming contract** ✓ — new function name contains `top_n`; all
+  five required substrings (tokeniz, case, top_n, tie, empty) still
+  present in individually named top-level test functions.
+- **Constraints** ✓ — still stdlib + pytest only (sole import
+  `wordfreq`); no conftest.py, no `__init__.py`, no fixtures, no
+  subprocess/CLI usage.
+- **Not assessed:** actual pytest execution (implementer reports 13
+  passed; static trace corroborates); uncommitted parallel work on
+  test_cli.py (task 04's surface, explicitly out of scope for this
+  review per dispatch).
+- **Bookkeeping note for G2 (not a finding):** the task file still shows
+  `review_rounds: 0` at e57277f despite this being round 2; whichever
+  role owns that counter (orchestrator per the pipeline design) should
+  true it up. Does not affect code correctness.
+
+## Boundary check
+
+Declared `file_contact_surface`: `apps/wordfreq/test_core.py`. The diff
+touches that file (13 added lines, one test function) plus
+`runs/wordfreq/tasks/03-unit-tests.yaml` (round-2 notes appended) —
+the same bookkeeping pattern accepted in round 1. In bounds.

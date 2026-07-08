@@ -46,7 +46,7 @@ acceptance_tests:
 depends_on: []
 
 status: in-review
-review_rounds: 0
+review_rounds: 1
 
 notes: |
   Implemented apps/wordfreq/wordfreq.py exactly per the interface contract in

@@ -45,7 +45,22 @@ acceptance_tests:
 
 depends_on: []
 
-status: pending
+status: in-review
 review_rounds: 0
 
 notes: |
+  Implemented apps/wordfreq/wordfreq.py exactly per the interface contract in
+  plan.md: module docstring stating the word rule (R2), WORD_RE, tokenize(),
+  top_words(), format_lines(). No main(), no __main__ guard, no non-stdlib
+  imports (re, collections.Counter, typing.Iterable only) — left import-clean
+  for task 02-cli-shell.
+
+  All nine acceptance tests in this task file pass verbatim (run from
+  apps/wordfreq/), including the module-import/no-main/stdlib-only check.
+  Verified with Python 3.9.6 (subscriptable builtin generics like list[str]
+  and tuple[str, int] are valid at runtime since 3.9, so no
+  `from __future__ import annotations` was needed).
+
+  No deviations from plan.md's ADR-3/ADR-4 or the spec's ACs. top_words uses
+  Counter + explicit sorted(key=(-count, word)) as ADR-4 mandates (not
+  Counter.most_common()).

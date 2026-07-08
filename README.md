@@ -18,6 +18,8 @@ pair-programming to multi-agent development.
 | [`registry/models.yaml`](registry/models.yaml) | The only place vendor/model IDs exist; roles bind via capability profiles | ✅ core |
 | [`adapters/claude-code/`](adapters/claude-code/) | First runtime binding: role specs → `.claude/agents/` subagents | per-runtime |
 | [`.claude/agents/`](.claude/agents/) | The rendered subagents (runnable in Claude Code today) | per-runtime |
+| [`adapters/copilot-cli/`](adapters/copilot-cli/) | Second runtime binding: role specs → `.github/agents/*.agent.md` custom agents | per-runtime |
+| [`.github/agents/`](.github/agents/) | The rendered custom agents (runnable in Copilot CLI today) | per-runtime |
 | [`runs/`](runs/) | One directory per pipeline run — the pipeline state lives in git | working area |
 
 ## The one idea
@@ -31,6 +33,6 @@ customizability" are both satisfied by the same mechanism.
 
 ## Status
 
-v0.1 — design drafted, Claude Code adapter built, unexercised. Next: team review of
-DESIGN.md, then a toy run per the walkthrough, then the `redacted` pilot plan
-(CLAUDE.md Future Consideration #2).
+v0.1 — design drafted, Claude Code and Copilot CLI adapters built, unexercised. Next:
+team review of DESIGN.md, then a toy run per the walkthrough, then the `redacted` pilot
+plan (CLAUDE.md Future Consideration #2).

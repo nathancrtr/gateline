@@ -27,7 +27,9 @@ spec is the source of truth; drift between them is a bug.
   away from the Implementer's *vendor*, but this harness runs one vendor. The interim
   fallback is different model lineages (`fable` reviews `sonnet` output). Full
   decorrelation requires a second adapter wrapping another vendor's CLI for the
-  Reviewer role — that's the first future adapter worth building.
+  Reviewer role — see [`adapters/copilot-cli/`](../copilot-cli/), which hosts
+  Anthropic/OpenAI/Google models natively and binds Reviewer/Verifier to a genuinely
+  different vendor than Implementer.
 - **Tool narrowing is coarse.** `tools:` frontmatter restricts which tools a subagent
   has, but path-level rules ("write only under `runs/<slug>/`", "tests only") are
   enforced by instruction, and belt-and-braces by gate review. Hooks

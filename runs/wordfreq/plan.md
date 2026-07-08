@@ -1,7 +1,8 @@
 # Technical Plan: Word Frequency CLI
 
 <!-- Contract: produced by Architect; consumed by Implementers, Reviewer.
-     Gate: G1. All sections required. Accompanied by tasks/*.yaml. -->
+     Gate: G1. All sections required. Accompanied by tasks/*.yaml.
+     Amended 2026-07-08 per review-02 F1: main() signature spelling (ADR-8). -->
 
 ## Approach
 
@@ -62,13 +63,22 @@ def format_lines(pairs: Iterable[tuple[str, int]]) -> str:
 def positive_int(value: str) -> int:
     """argparse type= converter; raises argparse.ArgumentTypeError for < 1."""
 
-def main(argv: Sequence[str] | None = None) -> int:
+def main(argv: Optional[Sequence[str]] = None) -> int:
     """Full CLI. argv excludes the program name (None → sys.argv[1:]).
     Returns the process exit code; never raises for anticipated errors (R7)."""
 
 if __name__ == "__main__":
     raise SystemExit(main())
 ```
+
+> **Environment constraint (amendment, review-02 F1 / ADR-8):** the execution
+> environment's only interpreter is `/usr/bin/python3` = Python **3.9.6**. PEP 604
+> union syntax in evaluated annotations (`Sequence[str] | None`) raises `TypeError`
+> at def time on 3.9, so `main()` is pinned in the `Optional[...]` spelling above
+> (semantically identical union; `Optional` and `Sequence` come from `typing`).
+> Do not copy `X | None` annotations into any code for this run — task 04 included.
+> PEP 585 subscriptions (`list[str]`, `tuple[str, int]`, `re.Pattern[str]`) are
+> fine on 3.9 and remain as written.
 
 ### CLI contract (what `test_cli.py` builds against)
 
@@ -186,6 +196,29 @@ if __name__ == "__main__":
   `depends_on`; no other surfaces overlap. Two separate test files exist solely so 03
   and 04 never collide.
 
+### ADR-8 (amendment, 2026-07-08): Annotations must evaluate on Python 3.9; `main()` pinned as `Optional[Sequence[str]]`
+- **Context:** Post-G1 amendment prompted by review-02 finding F1. The plan
+  originally pinned `def main(argv: Sequence[str] | None = None) -> int:`. The
+  environment's only interpreter is `/usr/bin/python3` = 3.9.6 (no 3.10+ on PATH);
+  PEP 604 `X | None` in a parameter annotation is evaluated at def time on 3.9 and
+  raises `TypeError` at import — the pinned form was uninstantiable, not a style
+  choice. Task 02's implementer shipped `Optional[Sequence[str]]` and logged the
+  deviation; the reviewer verified semantic equivalence (`Optional[X] ==
+  Union[X, None]`, identical parameter name/default/return type, no call-site
+  effect) and endorsed amending the plan.
+- **Choice:** Re-pin the signature as `def main(argv: Optional[Sequence[str]] =
+  None) -> int:` and adopt a run-wide rule: no PEP 604 unions in evaluated
+  annotations; PEP 585 builtin/stdlib subscriptions (`list[str]`,
+  `re.Pattern[str]`) are 3.9-safe and stay.
+- **Rejected:** (a) `from __future__ import annotations` — works at runtime, but
+  AC10.2's AST one-liner would report an import named `annotations`, which is not
+  an importable stdlib module, risking a strict AC10.2 failure (task 02 notes).
+  (b) Requiring a 3.10+ interpreter — environment provisioning outside the run's
+  surface, for zero semantic gain over the equivalent spelling.
+- **Consequences:** Plan and shipped code (commit c494808) now agree; task 04's
+  implementer must not copy the stale `X | None` form. No task scope, dependency,
+  or behavior changes — annotations have no runtime call-boundary effect.
+
 ## Requirement → task mapping
 
 | Requirement | Task(s) |
@@ -226,3 +259,8 @@ if __name__ == "__main__":
   digits) could trigger review debate. *Guardrail:* ADR-3 fixes the rule; behavior
   not pinned by an AC follows the regex as written — Reviewer findings against
   non-spec'd behavior should cite a requirement or be rebutted in task notes.
+- **Python 3.9-only environment (resolved for `main()`, latent elsewhere)** — PEP 604
+  unions in evaluated annotations fail at import on 3.9.6 (see ADR-8). *Early
+  signal:* `TypeError: unsupported operand type(s) for |` at import. *Mitigation:*
+  ADR-8's rule — `Optional[...]`/`Union[...]` spellings only; applies to task 04's
+  test helpers and any future code in this run.

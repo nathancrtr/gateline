@@ -1,0 +1,52 @@
+# Contract: produced by Architect; consumed by exactly one Implementer.
+
+id: 02-cli-shell
+title: Add the argparse CLI shell, error handling, and __main__ entry to wordfreq.py
+requirements: [R1, R4, R6, R7, R8, R10]
+
+scope: |
+  Modify apps/wordfreq/wordfreq.py (created by task 01-core-logic; its core
+  functions are already merged — do not change their signatures or behavior).
+  Add exactly the remaining interface pinned in plan.md ("Interface contracts"
+  and "CLI contract"): positive_int(), main(argv=None) -> int, and the
+  `if __name__ == "__main__": raise SystemExit(main())` guard.
+
+  main() must:
+  - Parse args with argparse (ADR-5): prog="wordfreq.py"; required positional
+    `file`; `-n/--top`, dest n, type=positive_int, default 10 (R1, R4). Missing
+    positional -> argparse's own usage/error on stderr, exit 2 (AC1.2); n < 1 ->
+    argparse error via positive_int raising argparse.ArgumentTypeError.
+  - Read the file with open(path, encoding="utf-8") inside one try/except
+    catching (OSError, UnicodeDecodeError) (ADR-6); on failure print exactly one
+    human-readable line to stderr of the form "wordfreq.py: error: <reason>"
+    (no traceback) and return 1 (AC7.1, AC7.2, spec assumption 6).
+  - On success: sys.stdout.write(format_lines(top_words(tokenize(text), n)))
+    and return 0. Use sys.stdout.write, not print — AC6.1 is byte-exact and
+    empty results must produce zero bytes of stdout (AC8.1, AC8.2).
+
+  Constraints: stdlib only (adds argparse, sys); all logic stays in this one
+  file (R10). Do not add new files.
+
+file_contact_surface:
+  - apps/wordfreq/wordfreq.py
+
+acceptance_tests:
+  # Run from apps/wordfreq/ with throwaway fixture files you create ad hoc:
+  - "AC1.1 — python3 wordfreq.py <existing readable .txt> exits 0"
+  - "AC1.2 — python3 wordfreq.py (no args) exits non-zero with usage on stderr"
+  - "AC4.1 — file with >10 distinct words, no flag -> exactly 10 stdout lines"
+  - "AC4.2 — -n 3 -> exactly 3 lines, descending count order"
+  - "AC4.3 — -n 100 against 5 distinct words -> exactly 5 lines, exit 0"
+  - "AC6.1 — file containing 'cat cat dog' -> stdout is exactly b'cat\\t2\\ndog\\t1\\n'"
+  - "AC7.1 — nonexistent path -> non-zero exit, one readable stderr line, no traceback"
+  - "AC7.2 — directory path -> non-zero exit, one readable stderr line, no traceback"
+  - "AC8.1 — 0-byte file -> exit 0, zero bytes on stdout"
+  - "AC8.2 — punctuation-only file -> exit 0, zero bytes on stdout"
+  - "AC10.1/AC10.2 — still one .py source file; the spec's AST one-liner lists only stdlib modules"
+
+depends_on: [01-core-logic]
+
+status: pending
+review_rounds: 0
+
+notes: |

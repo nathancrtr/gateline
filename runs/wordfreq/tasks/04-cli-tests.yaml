@@ -1,0 +1,50 @@
+# Contract: produced by Architect; consumed by exactly one Implementer.
+
+id: 04-cli-tests
+title: End-to-end CLI tests via subprocess (exit codes, stderr, exact stdout, constraints)
+requirements: [R1, R4, R5, R6, R7, R8, R9, R10]
+
+scope: |
+  Create apps/wordfreq/test_cli.py: pytest tests that run the finished CLI
+  (tasks 01 and 02 are merged) as a real process and assert on exit codes,
+  stdout bytes, and stderr. Per plan.md "Test-layout contract": locate the
+  script as pathlib.Path(__file__).parent / "wordfreq.py" and invoke it with
+  subprocess.run([sys.executable, str(script), ...], capture_output=True).
+  Use pytest's tmp_path fixture to create input files; write them with
+  encoding="utf-8". Do not duplicate task 03's function-level tests.
+
+  Required coverage (one test per bullet; names may follow the AC numbers):
+  - AC1.1 — existing readable file -> returncode 0.
+  - AC1.2 — no file argument -> returncode != 0, stderr non-empty (usage).
+  - AC4.1 — file with >10 distinct words, no flag -> exactly 10 stdout lines.
+  - AC4.2 — `-n 3` -> exactly 3 lines, most frequent first (build an input with
+    known counts and assert the full expected stdout).
+  - AC4.3 — `-n 100` against 5 distinct words -> exactly 5 lines, returncode 0.
+  - AC5.1 — input 'zebra apple zebra apple' with `-n 2` -> apple line before
+    zebra line; run the identical command twice and assert byte-identical stdout.
+  - AC6.1 — input file 'cat cat dog' -> stdout == b'cat\t2\ndog\t1\n' exactly.
+  - AC7.1 — nonexistent path -> returncode != 0, stderr non-empty and does not
+    contain 'Traceback'.
+  - AC7.2 — a directory path (use tmp_path itself) -> same assertions as AC7.1.
+  - AC8.1 — 0-byte file -> returncode 0, stdout == b''.
+  - AC8.2 — file containing '... !!! ,,,' -> returncode 0, stdout == b''.
+  - AC10.1 — exactly one non-test *.py source file in the deliverable directory
+    (glob apps/wordfreq/*.py; exclude names starting with test_ and conftest.py).
+  - AC10.2 — parse wordfreq.py with ast, collect Import/ImportFrom module roots,
+    assert each is in sys.stdlib_module_names.
+
+  Constraints: stdlib + pytest only; no changes to wordfreq.py or test_core.py.
+
+file_contact_surface:
+  - apps/wordfreq/test_cli.py
+
+acceptance_tests:
+  - "AC9.1 — `pytest` run from apps/wordfreq/ (both test files) exits 0"
+  - "Every AC listed in scope (AC1.1-1.2, AC4.1-4.3, AC5.1, AC6.1, AC7.1-7.2, AC8.1-8.2, AC10.1-10.2) has a distinct test that passes"
+
+depends_on: [02-cli-shell]
+
+status: pending
+review_rounds: 0
+
+notes: |

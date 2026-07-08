@@ -1,0 +1,49 @@
+# Contract: produced by Architect; consumed by exactly one Implementer.
+
+id: 03-unit-tests
+title: Unit tests for the core functions (tokenization, case, ranking, ties, empty)
+requirements: [R2, R3, R4, R5, R6, R8, R9]
+
+scope: |
+  Create apps/wordfreq/test_core.py: pytest unit tests that `import wordfreq`
+  and exercise the pure functions directly (no subprocess, no CLI — that is
+  task 04-cli-tests' file). Test against the interface contract in plan.md;
+  wordfreq.py's core functions (task 01-core-logic) are already merged.
+
+  Naming contract (AC9.2, binding — see plan.md "Test-layout contract"):
+  individually named test functions whose names include the substrings
+  `tokeniz` (R2), `case` (R3), `top_n` (R4), `tie` (R5), `empty` (R8).
+
+  Minimum behaviors to cover (one small test each; more granular is fine):
+  - tokenize: AC2.1 punctuation stripped ('Hello, hello! World.'), AC2.2
+    internal apostrophe kept ("don't stop"), AC2.3 hyphen splits
+    ('co-located items').
+  - case: AC3.1 — tokenize('The the THE') yields ['the','the','the'] and
+    top_words reports a single entry ('the', 3).
+  - top_n: AC4.2 ordering (descending count, exactly n results) and AC4.3
+    (n larger than distinct-word count -> all words, no error, no padding).
+  - tie: AC5.1 — equal counts ordered alphabetically ascending ('apple' before
+    'zebra'), and the result is identical across two calls.
+  - empty: AC8.1/AC8.2 — tokenize('') == [] and tokenize('... !!! ,,,') == [];
+    top_words([], 10) == []; format_lines([]) == ''.
+  - format: AC6.1 — format_lines([('cat',2),('dog',1)]) == 'cat\t2\ndog\t1\n'.
+
+  Constraints: stdlib + pytest only; no fixtures on disk needed (pure
+  functions). Do not create __init__.py. If `import wordfreq` fails when pytest
+  runs from apps/wordfreq/, add an empty apps/wordfreq/conftest.py and record
+  that deviation in this task's notes (pre-authorized by plan.md Risks).
+
+file_contact_surface:
+  - apps/wordfreq/test_core.py
+
+acceptance_tests:
+  - "AC9.1 (partial) — `pytest test_core.py` run from apps/wordfreq/ exits 0"
+  - "AC9.2 — `pytest --collect-only` lists distinct named tests matching the substrings tokeniz, case, top_n, tie, empty"
+  - "All listed spec ACs (AC2.1-2.3, AC3.1, AC4.2, AC4.3, AC5.1, AC6.1, AC8.1, AC8.2) have a corresponding assertion at function level"
+
+depends_on: [01-core-logic]
+
+status: pending
+review_rounds: 0
+
+notes: |

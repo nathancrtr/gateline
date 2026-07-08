@@ -1,0 +1,43 @@
+# Model registry — the ONLY place vendor/model IDs appear in this system.
+# Roles declare a capability_profile; this file resolves it to a concrete model.
+# Swapping vendors is an edit here, never in roles/ or contracts/.
+#
+# Model IDs below are ILLUSTRATIVE. Pin to your org's approved, current models
+# and re-verify pricing/limits when you do.
+
+profiles:
+  frontier-reasoning:
+    # Deepest reasoning available; used where judgment concentrates and errors
+    # are expensive (architecture, review, orchestration). Cost-insensitive.
+    default: anthropic/claude-fable-5
+    alternates:
+      - openai/<current-frontier-model>
+      - google/<current-frontier-model>
+
+  balanced:
+    # Strong general capability at moderate cost; the workhorse tier.
+    default: anthropic/claude-sonnet-5
+    alternates:
+      - openai/<current-workhorse-model>
+      - google/<current-workhorse-model>
+
+  fast-cheap:
+    # High-volume, low-stakes work. No core role binds here yet; reserved for
+    # extension roles (triage, summarization, formatting).
+    default: anthropic/claude-haiku-4-5
+    alternates:
+      - openai/<current-small-model>
+
+bindings:
+  orchestrator: {profile: frontier-reasoning}
+  analyst:      {profile: balanced}
+  architect:    {profile: frontier-reasoning}
+  implementer:  {profile: balanced}
+
+  # P5 decorrelation: reviewer and verifier must not resolve to the same vendor
+  # as implementer. `avoid_vendor_of` makes the constraint explicit so an
+  # orchestrator (or a human doing v0 dispatch) can enforce it.
+  reviewer:     {profile: frontier-reasoning, avoid_vendor_of: implementer}
+  verifier:     {profile: balanced,           avoid_vendor_of: implementer}
+
+  ops:          {profile: balanced}

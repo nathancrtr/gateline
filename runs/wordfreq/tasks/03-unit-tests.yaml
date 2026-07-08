@@ -43,7 +43,40 @@ acceptance_tests:
 
 depends_on: [01-core-logic]
 
-status: pending
+status: in-review
 review_rounds: 0
 
 notes: |
+  Implementer report:
+  - Created apps/wordfreq/test_core.py with 12 individually named test
+    functions covering all listed behaviors (AC2.1-2.3, AC3.1, AC4.2, AC4.3,
+    AC5.1, AC6.1, AC8.1, AC8.2). No changes made to wordfreq.py or any file
+    outside the declared surface.
+  - `import wordfreq` succeeded from apps/wordfreq/ with no conftest.py
+    needed — the plan's Risk about rootdir/sys.path did not materialize.
+    No conftest.py was added.
+  - Transient issue encountered and self-resolved (recording for
+    traceability, not an escalation): mid-session, wordfreq.py (owned by the
+    parallel task 02 implementer) briefly contained
+    `def main(argv: Sequence[str] | None = None) -> int:` without a
+    `from __future__ import annotations` guard, which raised
+    `TypeError: unsupported operand type(s) for |: '_GenericAlias' and
+    'NoneType'` at import time under this environment's only available
+    interpreter (system /usr/bin/python3, version 3.9.6 — PEP 604 `X | None`
+    syntax requires 3.10+ unless annotation evaluation is deferred). This
+    was task 02's in-flight edit, not a defect in my surface; by the next
+    pytest run task 02 had added `from __future__ import annotations` to
+    wordfreq.py and the error was gone. Flagging for the Reviewer/Architect:
+    since this environment's only python3 is 3.9.6, wordfreq.py's final
+    state must keep that `from __future__ import annotations` import (or
+    equivalent) for AC9.1/AC10.2 to hold here — worth an explicit check in
+    task 04/review rather than assuming a 3.10+ interpreter.
+  - Test results (from apps/wordfreq/):
+      `python3 -m pytest test_core.py -v` -> 12 passed in 0.02s
+      `python3 -m pytest --collect-only -q` -> 12 tests collected; names
+      individually contain tokeniz (4), case (1, overlapping with tokeniz),
+      top_n (2), tie (1), empty (4, some overlapping with tokeniz) —
+      satisfies AC9.2's substring requirement for each of R2/R3/R4/R5/R8.
+  - No other test files exist in the repo yet (test_cli.py is task 04's
+    surface, not yet created), so "the project's existing suite" and this
+    task's own suite are currently the same command; both pass.

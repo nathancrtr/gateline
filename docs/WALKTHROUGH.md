@@ -7,6 +7,15 @@ session; real enough to exercise every handoff.
 
 Everything below happens in a Claude Code session opened in this repo.
 
+**How dispatches work:** the indented "Use the **X** subagent…" lines are ordinary
+chat messages you type to the main session — there is no special syntax. Claude Code
+loads `.claude/agents/*.md` at session start (verify with `/agents`; restart the
+session if you created or edited them mid-session), and when your message names a
+subagent, the main session spawns it with your text as its dispatch prompt. It runs
+cold in its own context, under its own model and restricted tools, and reports back.
+Naming the agent explicitly matters: it guarantees delegation instead of the main
+session doing the role's work itself with its full toolset.
+
 ## 0. Set up the run
 
 ```bash

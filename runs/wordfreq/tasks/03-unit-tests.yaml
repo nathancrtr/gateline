@@ -80,3 +80,41 @@ notes: |
   - No other test files exist in the repo yet (test_cli.py is task 04's
     surface, not yet created), so "the project's existing suite" and this
     task's own suite are currently the same command; both pass.
+
+  Round 2 (review-03.md, verdict request-changes):
+  - F1 (blocking) — Descending-count ordering (AC4.2) never discriminated
+    from alphabetical order. Fixed. Added
+    test_top_n_truncates_and_orders_by_count_not_alphabet, using
+    tokenize("zebra zebra zebra mango mango apple") with n=2, expecting
+    [("zebra", 3), ("mango", 2)]. "zebra" (highest count) is alphabetically
+    last, so a count-blind `sorted(Counter(tokens).items())` mutant now
+    fails.
+  - F2 (blocking) — top-N truncation never exercised (no test has distinct
+    words > n). Fixed by the same test above: 3 distinct words with n=2
+    means the correctly-ordered-but-untruncated mutant
+    (`sorted(..., key=...)` without `[:n]`) now returns a 3-element list
+    that fails the 2-element equality assertion.
+  - Adopted the reviewer's exact proposed fix (one input, one test, kills
+    both mutants) rather than two separate tests — matches the review's own
+    recommendation ("A single added test with distinct > n and count-order
+    != alphabetical order resolves both F1 and F2") and keeps the suite
+    minimal per the task's "one small test each; more granular is fine"
+    guidance.
+  - Verified both mutants independently in a scratch script (not touching
+    wordfreq.py or any file outside the declared surface): a count-blind
+    alphabetical-sort mutant and a truncation-omitting mutant were
+    hand-constructed and confirmed to fail the new assertion.
+  - No other findings in review-03.md (no major/minor findings reported).
+  - Kept the existing test_top_n_orders_by_descending_count test
+    ("a a a b b c", n=3) unchanged — it's still valid coverage for the
+    exactly-n-when-distinct-equals-n case (AC4.2 "exactly n results");
+    the new test covers the previously-missing truncation/ordering
+    discrimination the review identified.
+  - Test results (from apps/wordfreq/), round 2:
+      `python3 -m pytest -v` -> 13 passed in 0.03s
+      `python3 -m pytest --collect-only -q` -> 13 tests collected; naming
+      contract substrings (tokeniz, case, top_n, tie, empty) still all
+      present (unchanged from round 1, plus the new test also matches
+      `top_n`).
+  - File-contact surface unchanged: only apps/wordfreq/test_core.py edited
+    (one test function added), plus this task file's own notes.

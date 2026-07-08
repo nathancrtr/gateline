@@ -41,6 +41,19 @@ def test_top_n_orders_by_descending_count():
     assert wordfreq.top_words(tokens, 3) == [("a", 3), ("b", 2), ("c", 1)]
 
 
+def test_top_n_truncates_and_orders_by_count_not_alphabet():
+    """AC4.2 — regression for two ways a wrong implementation can slip past
+    poorly-chosen inputs: (1) sorting by word alone, ignoring count, is
+    indistinguishable from correct ranking when the correct order also
+    happens to be alphabetical; (2) omitting the top-n truncation slice is
+    undetectable when the distinct-word count equals n. This input has more
+    distinct words (3) than n (2), and the highest-count word ('zebra') is
+    alphabetically last, so a count-blind sort and a missing truncation
+    slice would each produce a different result and fail this assertion."""
+    tokens = wordfreq.tokenize("zebra zebra zebra mango mango apple")
+    assert wordfreq.top_words(tokens, 2) == [("zebra", 3), ("mango", 2)]
+
+
 def test_top_n_larger_than_distinct_words_returns_all_no_padding():
     """AC4.3 — n larger than the distinct-word count returns all words,
     no error, no padding."""

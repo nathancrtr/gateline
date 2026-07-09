@@ -1,0 +1,186 @@
+# Contract: produced by Architect; consumed by exactly one Implementer.
+
+id: 04-cli-tests
+title: End-to-end CLI tests via subprocess (exit codes, stderr, exact stdout, constraints)
+requirements: [R1, R4, R5, R6, R7, R8, R9, R10]
+
+scope: |
+  Create apps/wordfreq/test_cli.py: pytest tests that run the finished CLI
+  (tasks 01 and 02 are merged) as a real process and assert on exit codes,
+  stdout bytes, and stderr. Per plan.md "Test-layout contract": locate the
+  script as pathlib.Path(__file__).parent / "wordfreq.py" and invoke it with
+  subprocess.run([sys.executable, str(script), ...], capture_output=True).
+  Use pytest's tmp_path fixture to create input files; write them with
+  encoding="utf-8". Do not duplicate task 03's function-level tests.
+
+  Required coverage (one test per bullet; names may follow the AC numbers):
+  - AC1.1 — existing readable file -> returncode 0.
+  - AC1.2 — no file argument -> returncode != 0, stderr non-empty (usage).
+  - AC4.1 — file with >10 distinct words, no flag -> exactly 10 stdout lines.
+  - AC4.2 — `-n 3` -> exactly 3 lines, most frequent first (build an input with
+    known counts and assert the full expected stdout).
+  - AC4.3 — `-n 100` against 5 distinct words -> exactly 5 lines, returncode 0.
+  - AC5.1 — input 'zebra apple zebra apple' with `-n 2` -> apple line before
+    zebra line; run the identical command twice and assert byte-identical stdout.
+  - AC6.1 — input file 'cat cat dog' -> stdout == b'cat\t2\ndog\t1\n' exactly.
+  - AC7.1 — nonexistent path -> returncode != 0, stderr non-empty and does not
+    contain 'Traceback'.
+  - AC7.2 — a directory path (use tmp_path itself) -> same assertions as AC7.1.
+  - AC8.1 — 0-byte file -> returncode 0, stdout == b''.
+  - AC8.2 — file containing '... !!! ,,,' -> returncode 0, stdout == b''.
+  - AC10.1 — exactly one non-test *.py source file in the deliverable directory
+    (glob apps/wordfreq/*.py; exclude names starting with test_ and conftest.py).
+  - AC10.2 — parse wordfreq.py with ast, collect Import/ImportFrom module roots,
+    assert each is in sys.stdlib_module_names.
+
+  Constraints: stdlib + pytest only; no changes to wordfreq.py or test_core.py.
+
+file_contact_surface:
+  - apps/wordfreq/test_cli.py
+
+acceptance_tests:
+  - "AC9.1 — `pytest` run from apps/wordfreq/ (both test files) exits 0"
+  - "Every AC listed in scope (AC1.1-1.2, AC4.1-4.3, AC5.1, AC6.1, AC7.1-7.2, AC8.1-8.2, AC10.1-10.2) has a distinct test that passes"
+
+depends_on: [02-cli-shell]
+
+status: in-review
+review_rounds: 0
+
+notes: |
+  Implementer round 1.
+
+  Built apps/wordfreq/test_cli.py per scope: 13 tests, one per required AC bullet
+  (AC1.1, AC1.2, AC4.1, AC4.2, AC4.3, AC5.1, AC6.1, AC7.1, AC7.2, AC8.1, AC8.2,
+  AC10.1, AC10.2). All invoke the script via subprocess.run([sys.executable,
+  str(script), ...], capture_output=True) per the test-layout contract; tmp_path
+  fixture used for all file inputs, written with encoding="utf-8". No changes to
+  wordfreq.py or test_core.py; stdlib + pytest only.
+
+  Deviation (flagging for Reviewer, same class as ADR-8): the task's scope text
+  for AC10.2 says "assert each is in sys.stdlib_module_names". That attribute does
+  not exist in Python 3.9.6 (this environment's only interpreter, per ADR-8) —
+  it was added in Python 3.10. Confirmed directly:
+    $ python3 -c "import sys; print(sys.stdlib_module_names)"
+    AttributeError: module 'sys' has no attribute 'stdlib_module_names'
+  Implemented an equivalent 3.9-compatible check instead: a helper
+  `_is_stdlib_module(name)` that treats a module as stdlib if it's in
+  `sys.builtin_module_names`, or if `importlib.util.find_spec(name).origin` is
+  `"built-in"`/`"frozen"`, or is a file path under
+  `sysconfig.get_paths()["stdlib"]`. Verified against wordfreq.py's actual
+  imports (argparse, re, sys, collections, typing) — all resolve correctly
+  (sys -> "built-in", the rest -> files under the 3.9 stdlib dir). Test asserts
+  every collected import root passes this check and that the root set is
+  non-empty (guards against an accidentally-vacuous assertion). Recommend the
+  Architect fold this into ADR-8 or a new ADR alongside it, since it's the same
+  root cause (3.9-only environment) affecting a second, independently-discovered
+  spot in the plan/task text.
+
+  Test results — full suite from apps/wordfreq/ (both test files):
+
+    $ python3 -m pytest -v
+    ============================= test session starts ==============================
+    platform darwin -- Python 3.9.6, pytest-8.4.2, pluggy-1.6.0
+    rootdir: /Users/nthncrtr/repos/agentic-sandbox/apps/wordfreq
+    collected 26 items
+
+    test_cli.py::test_ac1_1_existing_readable_file_exits_zero PASSED         [  3%]
+    test_cli.py::test_ac1_2_no_file_argument_exits_nonzero_with_stderr PASSED [  7%]
+    test_cli.py::test_ac4_1_no_flag_outputs_exactly_ten_lines PASSED         [ 11%]
+    test_cli.py::test_ac4_2_n_flag_outputs_exact_expected_stdout PASSED      [ 15%]
+    test_cli.py::test_ac4_3_n_larger_than_distinct_words_outputs_all_no_padding PASSED [ 19%]
+    test_cli.py::test_ac5_1_ties_break_alphabetically_and_are_reproducible PASSED [ 23%]
+    test_cli.py::test_ac6_1_stdout_is_byte_exact PASSED                      [ 26%]
+    test_cli.py::test_ac7_1_nonexistent_path_exits_nonzero_no_traceback PASSED [ 30%]
+    test_cli.py::test_ac7_2_directory_path_exits_nonzero_no_traceback PASSED [ 34%]
+    test_cli.py::test_ac8_1_zero_byte_file_exits_zero_no_stdout PASSED       [ 38%]
+    test_cli.py::test_ac8_2_punctuation_only_file_exits_zero_no_stdout PASSED [ 42%]
+    test_cli.py::test_ac10_1_exactly_one_non_test_source_file PASSED         [ 46%]
+    test_cli.py::test_ac10_2_only_stdlib_imports PASSED                      [ 50%]
+    test_core.py::test_tokenize_strips_surrounding_punctuation PASSED        [ 53%]
+    test_core.py::test_tokenize_keeps_internal_apostrophe PASSED             [ 57%]
+    test_core.py::test_tokenize_hyphen_splits_words PASSED                   [ 61%]
+    test_core.py::test_case_insensitive_tokenize_and_count PASSED            [ 65%]
+    test_core.py::test_top_n_orders_by_descending_count PASSED               [ 69%]
+    test_core.py::test_top_n_truncates_and_orders_by_count_not_alphabet PASSED [ 73%]
+    test_core.py::test_top_n_larger_than_distinct_words_returns_all_no_padding PASSED [ 76%]
+    test_core.py::test_tie_breaks_alphabetically_and_is_reproducible PASSED  [ 80%]
+    test_core.py::test_format_lines_tab_separated PASSED                     [ 84%]
+    test_core.py::test_empty_string_tokenizes_to_no_words PASSED             [ 88%]
+    test_core.py::test_empty_punctuation_only_tokenizes_to_no_words PASSED   [ 92%]
+    test_core.py::test_empty_token_list_yields_no_results PASSED             [ 96%]
+    test_core.py::test_empty_pairs_format_to_empty_string PASSED             [100%]
+
+    ============================== 26 passed in 0.79s ==============================
+
+  AC9.1 satisfied (pytest from apps/wordfreq/, both files, exit 0). File-contact
+  surface respected: only apps/wordfreq/test_cli.py added; no edits to
+  wordfreq.py or test_core.py.
+
+  --- Implementer round 2 (addressing review-04.md) ---
+
+  F1 (blocking, `_is_stdlib_module` misclassifies site-packages nested inside
+  the stdlib dir) — FIXED as proposed. Added an explicit rejection, before the
+  stdlib-dir check, of any resolved origin containing a `site-packages` or
+  `dist-packages` path component (`apps/wordfreq/test_cli.py`, in
+  `_is_stdlib_module`). Per the reviewer's warning, did NOT rely on
+  sysconfig's purelib/platlib alone — confirmed independently on this machine
+  that `sysconfig.get_paths()["purelib"]`
+  (`/Library/Python/3.9/site-packages`) is a distinct directory from where
+  pip/setuptools actually resolve
+  (`.../Python3.framework/Versions/3.9/lib/python3.9/site-packages/`), so a
+  purelib/platlib-only exclusion would have missed exactly the case F1
+  describes; the path-component check is origin-location-agnostic and covers
+  both.
+
+  Verified the fix actually discriminates, per dispatch instructions:
+    1. Reproduced the reviewer's exact scenario directly:
+         stdlib dir: /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9
+         setuptools origin: .../lib/python3.9/site-packages/setuptools/__init__.py
+         origin parts contain site-packages: True
+         origin under stdlib dir: True
+       confirming setuptools is nested inside the stdlib dir on this machine,
+       exactly as F1 describes.
+    2. Constructed the proposed mutant: prepended `import setuptools` to a
+       backed-up copy of wordfreq.py, then ran test_ac10_2 alone:
+         $ python3 -m pytest -v test_cli.py::test_ac10_2_only_stdlib_imports
+         FAILED test_cli.py::test_ac10_2_only_stdlib_imports
+         AssertionError: setuptools is not a standard-library module
+         1 failed in 0.10s
+       Confirms the fixed test now kills the mutant that review-04 showed
+       previously passed undetected.
+    3. Restored wordfreq.py from the backup (verified byte-identical via
+       `diff` before deleting the backup) and re-ran the full suite against
+       the real, unmodified code:
+         $ python3 -m pytest -v
+         collected 26 items
+         test_cli.py::test_ac1_1_existing_readable_file_exits_zero PASSED
+         test_cli.py::test_ac1_2_no_file_argument_exits_nonzero_with_stderr PASSED
+         test_cli.py::test_ac4_1_no_flag_outputs_exactly_ten_lines PASSED
+         test_cli.py::test_ac4_2_n_flag_outputs_exact_expected_stdout PASSED
+         test_cli.py::test_ac4_3_n_larger_than_distinct_words_outputs_all_no_padding PASSED
+         test_cli.py::test_ac5_1_ties_break_alphabetically_and_are_reproducible PASSED
+         test_cli.py::test_ac6_1_stdout_is_byte_exact PASSED
+         test_cli.py::test_ac7_1_nonexistent_path_exits_nonzero_no_traceback PASSED
+         test_cli.py::test_ac7_2_directory_path_exits_nonzero_no_traceback PASSED
+         test_cli.py::test_ac8_1_zero_byte_file_exits_zero_no_stdout PASSED
+         test_cli.py::test_ac8_2_punctuation_only_file_exits_zero_no_stdout PASSED
+         test_cli.py::test_ac10_1_exactly_one_non_test_source_file PASSED
+         test_cli.py::test_ac10_2_only_stdlib_imports PASSED
+         test_core.py:: (13 tests) ... all PASSED
+         26 passed in 0.78s
+       git diff confirms wordfreq.py and test_core.py are untouched (only
+       test_cli.py shows as modified) — file-contact surface respected.
+
+  F2 (minor/plausible, relative-import AST gap) — FIXED (cheap, as the
+  reviewer suggested). Added `assert node.level == 0` for every ImportFrom
+  node before adding its module root, with a comment explaining why: a
+  relative import in a single top-level script cannot resolve to a
+  third-party package (no parent package to be relative to), so it was
+  already not a real R10 hole, but the assertion now makes a mutant
+  introducing a relative import fail loudly and explicitly rather than being
+  silently skipped by the root-collection loop.
+
+  Full suite result pasted above (26 passed). Only apps/wordfreq/test_cli.py
+  touched this round, per file_contact_surface; did not touch
+  runs/wordfreq/plan.md (owned by a parallel agent this round).

@@ -1,0 +1,25 @@
+# Contract: maintained by Orchestrator (human in v0); read by everyone.
+# Lives at runs/<slug>/state.yaml — the single source of truth for a run.
+
+run: wordfreq
+branch: run/wordfreq
+phase: done               # spec | plan | implement | integrate | release | done | paused
+paused_reason: null       # set when phase=paused: budget-exhausted | round-cap | escalation | gate-declined
+
+budget:
+  cost_limit_usd: 5      # exhaustion pauses the run; it never silently degrades
+  cost_spent_usd: 0
+
+gates:                    # a gate entry is written ONLY by the named human
+  G0: {approved: true, by: nthncrtr, at: 2026-07-07, notes: all 8 assumptions accepted as resolved}
+  G1: {approved: true, by: nthncrtr, at: 2026-07-08, notes: all 7 ADRs accepted, incl. apps/<slug>/ convention (ADR-1)}
+  G2: {approved: true, by: nthncrtr, at: 2026-07-08, notes: merged; ADR-8/ADR-9 plan amendments acknowledged; budget-metering gap noted}
+  G3: {approved: true, by: nthncrtr, at: 2026-07-08, notes: N/A — local CLI, no deploy surface; Ops not dispatched}
+
+tasks:                    # mirrors tasks/*.yaml status for one-glance state
+  - {id: 01-core-logic, status: done, review_rounds: 1}
+  - {id: 02-cli-shell,  status: done, review_rounds: 1}
+  - {id: 03-unit-tests, status: done, review_rounds: 2}
+  - {id: 04-cli-tests,  status: done, review_rounds: 2}
+
+escalations: []           # append-only: {at, from_role, reason, resolved}

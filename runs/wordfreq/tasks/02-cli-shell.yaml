@@ -1,0 +1,116 @@
+# Contract: produced by Architect; consumed by exactly one Implementer.
+
+id: 02-cli-shell
+title: Add the argparse CLI shell, error handling, and __main__ entry to wordfreq.py
+requirements: [R1, R4, R6, R7, R8, R10]
+
+scope: |
+  Modify apps/wordfreq/wordfreq.py (created by task 01-core-logic; its core
+  functions are already merged — do not change their signatures or behavior).
+  Add exactly the remaining interface pinned in plan.md ("Interface contracts"
+  and "CLI contract"): positive_int(), main(argv=None) -> int, and the
+  `if __name__ == "__main__": raise SystemExit(main())` guard.
+
+  main() must:
+  - Parse args with argparse (ADR-5): prog="wordfreq.py"; required positional
+    `file`; `-n/--top`, dest n, type=positive_int, default 10 (R1, R4). Missing
+    positional -> argparse's own usage/error on stderr, exit 2 (AC1.2); n < 1 ->
+    argparse error via positive_int raising argparse.ArgumentTypeError.
+  - Read the file with open(path, encoding="utf-8") inside one try/except
+    catching (OSError, UnicodeDecodeError) (ADR-6); on failure print exactly one
+    human-readable line to stderr of the form "wordfreq.py: error: <reason>"
+    (no traceback) and return 1 (AC7.1, AC7.2, spec assumption 6).
+  - On success: sys.stdout.write(format_lines(top_words(tokenize(text), n)))
+    and return 0. Use sys.stdout.write, not print — AC6.1 is byte-exact and
+    empty results must produce zero bytes of stdout (AC8.1, AC8.2).
+
+  Constraints: stdlib only (adds argparse, sys); all logic stays in this one
+  file (R10). Do not add new files.
+
+file_contact_surface:
+  - apps/wordfreq/wordfreq.py
+
+acceptance_tests:
+  # Run from apps/wordfreq/ with throwaway fixture files you create ad hoc:
+  - "AC1.1 — python3 wordfreq.py <existing readable .txt> exits 0"
+  - "AC1.2 — python3 wordfreq.py (no args) exits non-zero with usage on stderr"
+  - "AC4.1 — file with >10 distinct words, no flag -> exactly 10 stdout lines"
+  - "AC4.2 — -n 3 -> exactly 3 lines, descending count order"
+  - "AC4.3 — -n 100 against 5 distinct words -> exactly 5 lines, exit 0"
+  - "AC6.1 — file containing 'cat cat dog' -> stdout is exactly b'cat\\t2\\ndog\\t1\\n'"
+  - "AC7.1 — nonexistent path -> non-zero exit, one readable stderr line, no traceback"
+  - "AC7.2 — directory path -> non-zero exit, one readable stderr line, no traceback"
+  - "AC8.1 — 0-byte file -> exit 0, zero bytes on stdout"
+  - "AC8.2 — punctuation-only file -> exit 0, zero bytes on stdout"
+  - "AC10.1/AC10.2 — still one .py source file; the spec's AST one-liner lists only stdlib modules"
+
+depends_on: [01-core-logic]
+
+status: in-review
+review_rounds: 1
+
+notes: |
+  Implemented positive_int(), main(argv=None) -> int, and the __main__ guard in
+  apps/wordfreq/wordfreq.py, extending task 01's file without touching any of its
+  existing function bodies or signatures.
+
+  Deviation from the literal interface contract (flagging for Reviewer, not a
+  silent reinterpretation): plan.md's interface contract pins the signature
+  `def main(argv: Sequence[str] | None = None) -> int:` verbatim (PEP 604 union
+  syntax). The only python3 available in this environment is 3.9.6
+  (/usr/bin/python3; no 3.10+ interpreter found on PATH). `X | None` in a
+  function-parameter annotation is evaluated at def-time on 3.9 and raises
+  `TypeError: unsupported operand type(s) for |: '_GenericAlias' and 'NoneType'`
+  at import time — this is a hard incompatibility, not a style issue; it broke
+  every acceptance test (module failed to import).
+    - First fix attempted: `from __future__ import annotations` (defers all
+      annotation evaluation to strings). This works at runtime, but it adds a
+      `from __future__ import annotations` statement, which AC10.2's AST-walking
+      checker reports as an import named `annotations` (ast.ImportFrom with
+      names[0].name == "annotations") — a name that is not a real stdlib module,
+      so it would likely fail a strict "is this name importable from the stdlib"
+      grading of AC10.2. Rejected for that reason.
+    - Fix used instead: `from typing import Optional` (already importing from
+      typing for Iterable) and wrote the signature as
+      `def main(argv: Optional[Sequence[str]] = None) -> int:` — semantically
+      identical to the pinned signature (`Optional[X]` *is* `X | None`), same
+      parameter name/default/return type, no new import beyond what the task
+      already scoped (argparse, sys) plus reusing the existing typing import.
+      Verified AC10.2's own AST one-liner against the final file: prints only
+      argparse, re, sys, Counter, Iterable (Optional/Sequence don't appear
+      because the checker only reads names[0] of each ImportFrom, an artifact of
+      its own naive implementation, not something I relied on to hide anything —
+      all five names present are genuine stdlib modules either way).
+    Escalating this in notes per role instructions rather than silently
+    reinterpreting; if the Reviewer/Architect wants the literal `X | None`
+    syntax preserved, this environment needs a 3.10+ interpreter, which is
+    outside this task's surface to provide.
+
+  Acceptance tests: manually ran every AC in the task file end-to-end from
+  apps/wordfreq/ against throwaway files in /tmp (not touching the working
+  directory's other files):
+    AC1.1  exit 0 for existing readable file -- PASS
+    AC1.2  no args -> exit 2, argparse usage + error on stderr -- PASS
+    AC4.1  15 distinct words, no -n -> exactly 10 lines -- PASS
+    AC4.2  -n 3 -> exactly 3 lines, descending count -- PASS
+    AC4.3  -n 100 against 5 distinct words -> exactly 5 lines, exit 0 -- PASS
+    AC5.1  tie-break alphabetical + byte-identical across two runs -- PASS
+      (also directly exercises R4/R5 CLI wiring, listed as good measure)
+    AC6.1  'cat cat dog' -> stdout bytes exactly b'cat\t2\ndog\t1\n' -- PASS
+    AC7.1  nonexistent path -> exit 1, one stderr line, no traceback -- PASS
+    AC7.2  directory path -> exit 1, one stderr line, no traceback -- PASS
+    AC8.1  0-byte file -> exit 0, zero stdout bytes -- PASS
+    AC8.2  punctuation-only file -> exit 0, zero stdout bytes -- PASS
+    AC10.1 exactly one .py source file (wordfreq.py; test_core.py excluded per
+      the AC's own carve-out) -- PASS
+    AC10.2 AST one-liner on wordfreq.py lists only: argparse, re, sys, Counter,
+      Iterable -- all stdlib -- PASS
+  Also sanity-checked (not an AC, but covered by ADR-6): invalid-UTF-8 input ->
+  exit 1, one readable stderr line, no traceback.
+
+  Existing suite: `python3 -m pytest -q` from apps/wordfreq/ -> 12 passed
+  (test_core.py, owned by the parallel 03-unit-tests implementer; I did not
+  modify it, only confirmed my change doesn't break it).
+
+  Files touched: apps/wordfreq/wordfreq.py only (within declared surface).
+  Did not touch test_core.py or any other file.

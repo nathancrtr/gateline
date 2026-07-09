@@ -1,0 +1,66 @@
+# Contract: produced by Architect; consumed by exactly one Implementer.
+
+id: 01-core-logic
+title: Create wordfreq.py with the pure core functions (tokenize, rank, format)
+requirements: [R2, R3, R4, R5, R6, R8, R10]
+
+scope: |
+  Create apps/wordfreq/wordfreq.py containing the pure core of the tool — no CLI
+  yet. Implement exactly the module-level interface pinned in plan.md
+  ("Interface contracts"): WORD_RE (the compiled regex from ADR-3), tokenize(),
+  top_words(), and format_lines(), with the documented signatures and semantics.
+  Include a short module docstring stating the word rule (R2).
+
+  Constraints: Python 3 stdlib only (expected imports: re, collections; typing
+  imports allowed) per R10. No I/O, no sys/argparse, no side effects at import
+  time other than compiling WORD_RE. Do NOT add main() or an
+  `if __name__ == "__main__"` block — that is task 02-cli-shell, which edits this
+  same file after you; leave the file import-clean for it.
+
+  Behavior to honor (all defined in plan.md ADR-3/ADR-4 and the spec):
+  - tokenize: Unicode-alphanumeric runs (underscore excluded), at most one
+    internal apostrophe kept (AC2.2), hyphens and all other punctuation are
+    delimiters (AC2.1, AC2.3), output lowercased via str.lower() (AC3.1),
+    wordless text -> [] (R8).
+  - top_words: Counter + sorted(key=(-count, word))[:n]; do not use
+    Counter.most_common() (ADR-4: its tie order violates R5/AC5.1). Fewer than n
+    distinct words -> fewer pairs, no error (AC4.3).
+  - format_lines: "word\tcount\n" per pair in given order, '' for empty input —
+    no trailing/lone newline for the empty case (AC6.1, AC8.1).
+
+file_contact_surface:
+  - apps/wordfreq/wordfreq.py
+
+acceptance_tests:
+  # Function-level checks mirroring the spec ACs (run from apps/wordfreq/):
+  - "python3 -c \"import wordfreq as w; assert w.tokenize('Hello, hello! World.') == ['hello','hello','world']\"  # AC2.1, AC3.1"
+  - "python3 -c \"import wordfreq as w; assert w.tokenize(\\\"don't stop\\\") == [\\\"don't\\\",'stop']\"  # AC2.2"
+  - "python3 -c \"import wordfreq as w; assert w.tokenize('co-located items') == ['co','located','items']\"  # AC2.3"
+  - "python3 -c \"import wordfreq as w; assert w.top_words(['the','the','the'], 10) == [('the',3)]\"  # AC3.1"
+  - "python3 -c \"import wordfreq as w; assert w.top_words(['zebra','apple','zebra','apple'], 2) == [('apple',2),('zebra',2)]\"  # AC5.1 tie-break"
+  - "python3 -c \"import wordfreq as w; assert len(w.top_words(list('abcde'), 100)) == 5\"  # AC4.3"
+  - "python3 -c \"import wordfreq as w; assert w.format_lines([('cat',2),('dog',1)]) == 'cat\\t2\\ndog\\t1\\n' and w.format_lines([]) == ''\"  # AC6.1, AC8.1"
+  - "python3 -c \"import wordfreq as w; assert w.tokenize('... !!! ,,,') == []\"  # AC8.2"
+  - "Module imports cleanly and contains no main(), no __main__ guard, no imports outside the stdlib (AC10.2)."
+
+depends_on: []
+
+status: in-review
+review_rounds: 1
+
+notes: |
+  Implemented apps/wordfreq/wordfreq.py exactly per the interface contract in
+  plan.md: module docstring stating the word rule (R2), WORD_RE, tokenize(),
+  top_words(), format_lines(). No main(), no __main__ guard, no non-stdlib
+  imports (re, collections.Counter, typing.Iterable only) — left import-clean
+  for task 02-cli-shell.
+
+  All nine acceptance tests in this task file pass verbatim (run from
+  apps/wordfreq/), including the module-import/no-main/stdlib-only check.
+  Verified with Python 3.9.6 (subscriptable builtin generics like list[str]
+  and tuple[str, int] are valid at runtime since 3.9, so no
+  `from __future__ import annotations` was needed).
+
+  No deviations from plan.md's ADR-3/ADR-4 or the spec's ACs. top_words uses
+  Counter + explicit sorted(key=(-count, word)) as ADR-4 mandates (not
+  Counter.most_common()).

@@ -1,0 +1,120 @@
+# Contract: produced by Architect; consumed by exactly one Implementer.
+
+id: 03-unit-tests
+title: Unit tests for the core functions (tokenization, case, ranking, ties, empty)
+requirements: [R2, R3, R4, R5, R6, R8, R9]
+
+scope: |
+  Create apps/wordfreq/test_core.py: pytest unit tests that `import wordfreq`
+  and exercise the pure functions directly (no subprocess, no CLI — that is
+  task 04-cli-tests' file). Test against the interface contract in plan.md;
+  wordfreq.py's core functions (task 01-core-logic) are already merged.
+
+  Naming contract (AC9.2, binding — see plan.md "Test-layout contract"):
+  individually named test functions whose names include the substrings
+  `tokeniz` (R2), `case` (R3), `top_n` (R4), `tie` (R5), `empty` (R8).
+
+  Minimum behaviors to cover (one small test each; more granular is fine):
+  - tokenize: AC2.1 punctuation stripped ('Hello, hello! World.'), AC2.2
+    internal apostrophe kept ("don't stop"), AC2.3 hyphen splits
+    ('co-located items').
+  - case: AC3.1 — tokenize('The the THE') yields ['the','the','the'] and
+    top_words reports a single entry ('the', 3).
+  - top_n: AC4.2 ordering (descending count, exactly n results) and AC4.3
+    (n larger than distinct-word count -> all words, no error, no padding).
+  - tie: AC5.1 — equal counts ordered alphabetically ascending ('apple' before
+    'zebra'), and the result is identical across two calls.
+  - empty: AC8.1/AC8.2 — tokenize('') == [] and tokenize('... !!! ,,,') == [];
+    top_words([], 10) == []; format_lines([]) == ''.
+  - format: AC6.1 — format_lines([('cat',2),('dog',1)]) == 'cat\t2\ndog\t1\n'.
+
+  Constraints: stdlib + pytest only; no fixtures on disk needed (pure
+  functions). Do not create __init__.py. If `import wordfreq` fails when pytest
+  runs from apps/wordfreq/, add an empty apps/wordfreq/conftest.py and record
+  that deviation in this task's notes (pre-authorized by plan.md Risks).
+
+file_contact_surface:
+  - apps/wordfreq/test_core.py
+
+acceptance_tests:
+  - "AC9.1 (partial) — `pytest test_core.py` run from apps/wordfreq/ exits 0"
+  - "AC9.2 — `pytest --collect-only` lists distinct named tests matching the substrings tokeniz, case, top_n, tie, empty"
+  - "All listed spec ACs (AC2.1-2.3, AC3.1, AC4.2, AC4.3, AC5.1, AC6.1, AC8.1, AC8.2) have a corresponding assertion at function level"
+
+depends_on: [01-core-logic]
+
+status: in-review
+review_rounds: 2
+
+notes: |
+  Implementer report:
+  - Created apps/wordfreq/test_core.py with 12 individually named test
+    functions covering all listed behaviors (AC2.1-2.3, AC3.1, AC4.2, AC4.3,
+    AC5.1, AC6.1, AC8.1, AC8.2). No changes made to wordfreq.py or any file
+    outside the declared surface.
+  - `import wordfreq` succeeded from apps/wordfreq/ with no conftest.py
+    needed — the plan's Risk about rootdir/sys.path did not materialize.
+    No conftest.py was added.
+  - Transient issue encountered and self-resolved (recording for
+    traceability, not an escalation): mid-session, wordfreq.py (owned by the
+    parallel task 02 implementer) briefly contained
+    `def main(argv: Sequence[str] | None = None) -> int:` without a
+    `from __future__ import annotations` guard, which raised
+    `TypeError: unsupported operand type(s) for |: '_GenericAlias' and
+    'NoneType'` at import time under this environment's only available
+    interpreter (system /usr/bin/python3, version 3.9.6 — PEP 604 `X | None`
+    syntax requires 3.10+ unless annotation evaluation is deferred). This
+    was task 02's in-flight edit, not a defect in my surface; by the next
+    pytest run task 02 had added `from __future__ import annotations` to
+    wordfreq.py and the error was gone. Flagging for the Reviewer/Architect:
+    since this environment's only python3 is 3.9.6, wordfreq.py's final
+    state must keep that `from __future__ import annotations` import (or
+    equivalent) for AC9.1/AC10.2 to hold here — worth an explicit check in
+    task 04/review rather than assuming a 3.10+ interpreter.
+  - Test results (from apps/wordfreq/):
+      `python3 -m pytest test_core.py -v` -> 12 passed in 0.02s
+      `python3 -m pytest --collect-only -q` -> 12 tests collected; names
+      individually contain tokeniz (4), case (1, overlapping with tokeniz),
+      top_n (2), tie (1), empty (4, some overlapping with tokeniz) —
+      satisfies AC9.2's substring requirement for each of R2/R3/R4/R5/R8.
+  - No other test files exist in the repo yet (test_cli.py is task 04's
+    surface, not yet created), so "the project's existing suite" and this
+    task's own suite are currently the same command; both pass.
+
+  Round 2 (review-03.md, verdict request-changes):
+  - F1 (blocking) — Descending-count ordering (AC4.2) never discriminated
+    from alphabetical order. Fixed. Added
+    test_top_n_truncates_and_orders_by_count_not_alphabet, using
+    tokenize("zebra zebra zebra mango mango apple") with n=2, expecting
+    [("zebra", 3), ("mango", 2)]. "zebra" (highest count) is alphabetically
+    last, so a count-blind `sorted(Counter(tokens).items())` mutant now
+    fails.
+  - F2 (blocking) — top-N truncation never exercised (no test has distinct
+    words > n). Fixed by the same test above: 3 distinct words with n=2
+    means the correctly-ordered-but-untruncated mutant
+    (`sorted(..., key=...)` without `[:n]`) now returns a 3-element list
+    that fails the 2-element equality assertion.
+  - Adopted the reviewer's exact proposed fix (one input, one test, kills
+    both mutants) rather than two separate tests — matches the review's own
+    recommendation ("A single added test with distinct > n and count-order
+    != alphabetical order resolves both F1 and F2") and keeps the suite
+    minimal per the task's "one small test each; more granular is fine"
+    guidance.
+  - Verified both mutants independently in a scratch script (not touching
+    wordfreq.py or any file outside the declared surface): a count-blind
+    alphabetical-sort mutant and a truncation-omitting mutant were
+    hand-constructed and confirmed to fail the new assertion.
+  - No other findings in review-03.md (no major/minor findings reported).
+  - Kept the existing test_top_n_orders_by_descending_count test
+    ("a a a b b c", n=3) unchanged — it's still valid coverage for the
+    exactly-n-when-distinct-equals-n case (AC4.2 "exactly n results");
+    the new test covers the previously-missing truncation/ordering
+    discrimination the review identified.
+  - Test results (from apps/wordfreq/), round 2:
+      `python3 -m pytest -v` -> 13 passed in 0.03s
+      `python3 -m pytest --collect-only -q` -> 13 tests collected; naming
+      contract substrings (tokeniz, case, top_n, tie, empty) still all
+      present (unchanged from round 1, plus the new test also matches
+      `top_n`).
+  - File-contact surface unchanged: only apps/wordfreq/test_core.py edited
+    (one test function added), plus this task file's own notes.

@@ -152,3 +152,96 @@ file touched (new file, 188 lines). The diff also updates
 report + deviation appended to `notes:`) — the same pipeline-bookkeeping
 pattern accepted in reviews 01-03; the `notes:` section is where the scope
 directs deviations to be recorded. In bounds.
+
+---
+
+# Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** commit 76892a6 (branch run/wordfreq)
+
+Correctness standard for the stdlib check this round is **ADR-9**
+(plan.md, amended commit 7801086), which supersedes the stale task-text
+mechanism (`sys.stdlib_module_names`) — per ADR-9's own consequences
+clause, the fixed helper is reviewed against the ADR, not the task text.
+
+## Findings
+
+None. Both round-1 findings are genuinely resolved; no new defects
+introduced.
+
+### F1 (blocking) — RESOLVED
+- **Where fixed:** `apps/wordfreq/test_cli.py:178-181` (in
+  `_is_stdlib_module`): the resolved origin is rejected if
+  `"site-packages" in origin.parts or "dist-packages" in origin.parts`,
+  *before* the stdlib-dir containment check at :182-186.
+- **Verified against ADR-9, clause by clause:** (1) builtin names check at
+  :169 ✓; (2) `"built-in"`/`"frozen"` origin check at :176 ✓; (3)
+  containment under `sysconfig.get_paths()["stdlib"]` gated by the
+  site-packages/dist-packages component rejection on the **resolved** path
+  (`Path(spec.origin).resolve().parts`), rejection ordered before
+  acceptance ✓ — this is the exact mechanism ADR-9 sanctions, including
+  the two properties ADR-9's rejected-alternatives list forbids (no bare
+  containment (c), no purelib/platlib-only exclusion (d)).
+- **Static re-trace of the round-1 failure scenario:** mutant
+  `import setuptools` → root `"setuptools"` → not builtin → spec origin
+  `.../lib/python3.9/site-packages/setuptools/__init__.py` (environment
+  fact established by round 1's diagnostic) → resolved parts contain
+  `site-packages` → `return False` → test fails with
+  `"setuptools is not a standard-library module"`. The mutant that
+  survived round 1 is now killed. Corroborated by the implementer's
+  round-2 evidence in the task notes (mutant run: 1 failed; restored
+  file: 26 passed), which matches the static trace exactly.
+- **No over-rejection:** `wordfreq.py`'s actual roots (argparse, re, sys,
+  collections, typing) — `sys` accepted at clause 1; the rest resolve to
+  files under the stdlib dir with no site-packages component → accepted.
+  A stdlib module cannot legitimately carry a `site-packages` path
+  component (the stdlib does not live inside site-packages on any layout
+  in scope), so the rejection cannot misfire on clause-3 acceptances.
+
+### F2 (minor, PLAUSIBLE) — RESOLVED
+- **Where fixed:** `apps/wordfreq/test_cli.py:198-203`:
+  `assert node.level == 0, "relative imports are not permitted"` for
+  every `ImportFrom` node, before root collection. A mutant introducing
+  `from . import x` (module=None, level=1 — previously silently skipped)
+  or `from .foo import x` now fails loudly. Placement before the
+  `node.module is not None` guard is correct — it fires for both forms.
+
+## Coverage (round 2)
+
+Delta review: `git diff c8917bc 76892a6` traced hunk-by-hunk; ADR-9 read
+in full against the fixed helper; no execution this round per dispatch
+(implementer's execution evidence in the task notes is consistent with
+the static trace and includes the discriminating mutant kill this review
+demanded in round 1).
+
+- The code delta to `test_cli.py` is exactly three things: the expanded
+  `_is_stdlib_module` docstring (accurate, matches ADR-9's context), the
+  3-line origin refactor + site-packages/dist-packages rejection (F1),
+  and the `node.level == 0` assertion + comment (F2). **No other test,
+  helper, or assertion was touched** — all round-1 clean verdicts
+  (AC1.x, AC4.x, AC5.1, AC6.1, AC7.x, AC8.x, AC10.1, test-layout
+  contract, constraints) carry over unchanged.
+- **Python 3.9 compatibility of the new lines** ✓ — `Path.parts`,
+  `Path.resolve()`, `is_relative_to` (3.9.0+), plain `assert`; no 3.10+
+  constructs.
+- **Equivalence scrutiny per the plan's risk note** ✓ — with the F1 fix,
+  the helper matches `sys.stdlib_module_names`' verdict for every import
+  class reachable in this environment (builtin, frozen, stdlib file,
+  lib-dynload, prefix site-packages nested under stdlib dir, user site,
+  local module); no reachable class remains where the substitute is
+  weaker.
+- **Not assessed:** pytest execution (dispatch restriction, as round 1);
+  the ADR-9 plan amendment itself (Architect-owned, separate commit
+  7801086, not part of this diff — noted as consistent with round 1's
+  recommendation to G2).
+
+## Boundary check (round 2)
+
+Commit 76892a6 touches exactly two files: `apps/wordfreq/test_cli.py`
+(the declared `file_contact_surface`) and
+`runs/wordfreq/tasks/04-cli-tests.yaml` (`notes:` round-2 report — the
+accepted bookkeeping pattern). `wordfreq.py` and `test_core.py`
+untouched. The plan amendment lives in a separate commit by the
+Architect; the implementer correctly did not touch `plan.md`. In bounds.

@@ -36,7 +36,14 @@ spec is the source of truth; drift between them is a bug.
   (PreToolUse path checks) can harden this later if instruction-level compliance
   proves insufficient in practice.
 - **The round cap and budget are enforced by you** (as v0 Orchestrator) via
-  `state.yaml`. The v1 orchestrated adapter automates this.
+  `state.yaml`. The v1 orchestrated adapter automates this. The wordfreq run showed
+  the budget half of this fails silently in practice — nothing surfaces per-dispatch
+  cost to the human — so treat `cost_spent_usd` as aspirational until metering exists.
+- **Parallel implementers share one working tree.** They see each other's mid-flight,
+  possibly-broken states (observed in the wordfreq run: task 03's agent hit task 02's
+  transient import error). Disjoint file-contact surfaces kept it harmless, but the
+  clean fix is dispatching each parallel implementer in its own git worktree and
+  merging results — adopt if mid-flight interference causes a real failure.
 
 ## Usage
 

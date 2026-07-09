@@ -103,7 +103,10 @@ Rules that keep the loop safe:
   agents arguing past three rounds are almost always stuck on an ambiguity in the spec,
   which is a G0/G1 defect, not an implementation defect.
 - **Budget cap.** Each run carries a token/cost budget in `state.yaml`; exhaustion
-  pauses the pipeline rather than degrading quality silently.
+  pauses the pipeline rather than degrading quality silently. *Known v0 gap:* nothing
+  meters spend automatically — the human orchestrator must update `cost_spent_usd`
+  from harness usage output, and the wordfreq pilot showed that in practice this
+  silently doesn't happen. Automated metering is a v1 prerequisite, not a nice-to-have.
 - **Gates are named humans, not "the team."** `state.yaml` records who approved what,
   when. This matters more as this generalizes up the org (Future Consideration #1).
 
@@ -185,6 +188,7 @@ never *widen* it. The role spec is the ceiling.
 | Infinite implement/review loops | 3-round cap → human escalation (§4) |
 | Context contamination (agent B inherits agent A's mistaken assumptions) | P1: artifacts only; no shared conversations; each agent starts cold from files |
 | Merge conflicts between parallel implementers | Architect must declare file-contact surfaces per task; overlapping tasks are serialized |
+| Parallel implementers observe each other's mid-flight (broken) states in a shared working tree | Disjoint surfaces limit the damage (observed harmlessly in the wordfreq run); adapters should isolate parallel implementers in per-task worktrees |
 | Spec drift (implementation quietly diverges from spec) | Reviewer and Verifier receive `spec.md` directly, not the implementer's summary of it |
 | Silent budget burn | Per-run budget in `state.yaml`; exhaustion pauses, never degrades |
 | Malformed handoffs | Contracts define required sections; consumers bounce, never guess |

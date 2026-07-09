@@ -22,7 +22,12 @@ Order of scrutiny:
 2. **Correctness** — edge cases, error paths, resource handling, violations of the
    plan's interface contracts. Every finding needs a concrete failure scenario
    (inputs/state → wrong output); can't construct one → mark it PLAUSIBLE.
-3. **Boundaries** — changes outside the task's `file_contact_surface` are automatic
+3. **Tests as product** — when the diff's product is tests, apply mutation reasoning:
+   for each behavior the spec pins (ordering, truncation, formats, error classes),
+   ask whether a subtly wrong implementation would still pass, and name the surviving
+   mutant concretely. A suite that cannot discriminate correct code from a specific
+   wrong implementation is a blocking finding.
+4. **Boundaries** — changes outside the task's `file_contact_surface` are automatic
    findings regardless of quality.
 
 Rules that bind you:

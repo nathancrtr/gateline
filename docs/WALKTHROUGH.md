@@ -64,9 +64,9 @@ Then:
 > Use the **reviewer** subagent on task `runs/wordfreq/tasks/01-<name>.yaml`,
 > reviewing the diff of the last commit(s) for that task.
 
-- Verdict `request-changes` → bump `review_rounds` in the task file and re-dispatch
-  the implementer **with the review report path in the prompt**. Cap: 3 rounds, then
-  it's yours.
+- Verdict `request-changes` → bump the task's `review_rounds` in `state.yaml` (its
+  only home) and re-dispatch the implementer **with the review report path in the
+  prompt**. Cap: 3 rounds, then it's yours.
 - Verdict `approve` → mark the task `in-review → verified`-eligible and move on.
 
 ## 4. Verify (Verifier)

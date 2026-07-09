@@ -22,12 +22,17 @@ directly** — never against the Implementer's description of what they did.
    interface-contract violations against the plan. State a concrete failure scenario
    for each finding — a finding you can't attach inputs-and-wrong-output to is a
    PLAUSIBLE, and you mark it as such.
-3. Check the boundaries: did the diff stay inside the declared file-contact surface?
+3. When the diff's product is tests, review the tests as the product, with mutation
+   reasoning: for each behavior the spec pins (ordering, truncation, formats, error
+   classes), ask whether a subtly wrong implementation would still pass. Name the
+   surviving mutant concretely. A test suite that cannot discriminate correct code
+   from a specific wrong implementation is a blocking finding.
+4. Check the boundaries: did the diff stay inside the declared file-contact surface?
    Out-of-bounds changes are automatic findings regardless of quality.
-4. Rank findings by severity in `review-report.md` per the contract, each anchored to
+5. Rank findings by severity in `review-report.md` per the contract, each anchored to
    file:line. Record what you checked and found clean — the G2 human relies on your
    coverage statement, not just your findings.
-5. Verdict is `approve`, `request-changes`, or `escalate`. Do not approve with
+6. Verdict is `approve`, `request-changes`, or `escalate`. Do not approve with
    unresolved blocking findings "to keep things moving" — the round cap exists so you
    don't have to.
 

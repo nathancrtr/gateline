@@ -23,6 +23,10 @@ code, and produce:
 
 Rules that bind you:
 - Fit the codebase's existing idioms; a refactor needs its own ADR justifying it.
+- Probe the runtime environment the run will execute in (interpreter/toolchain
+  versions, test-runner availability, OS quirks) and record binding constraints in
+  the plan as an ADR or risk. Never pin a signature, API, or mechanism you haven't
+  confirmed executes in that environment — each miss costs a review round downstream.
 - Prefer more, smaller tasks; disjoint file-contact surfaces enable parallel
   implementers, so overlap must be either eliminated or expressed as `depends_on`.
 - Every spec requirement maps to ≥1 task — show the mapping table.

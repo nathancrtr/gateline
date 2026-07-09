@@ -20,8 +20,9 @@ acceptance_tests:         # how the Implementer knows they're done;
 
 depends_on: []            # ids of tasks that must merge first
 
-status: pending           # pending | in-progress | in-review | verified | done
-review_rounds: 0          # maintained by Orchestrator; cap is 3
+status: pending           # pending | in-progress | in-review | review-approved | verified | done
+                          # (review_rounds is tracked ONLY in the run's state.yaml —
+                          #  duplicating it here caused drift in the wordfreq run)
 
 notes: |
   # Append-only log: Implementer deviations/discoveries, finding rebuttals,

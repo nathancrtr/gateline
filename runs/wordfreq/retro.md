@@ -1,7 +1,7 @@
 # Retro: wordfreq run
 
 Observations logged during the run (per WALKTHROUGH.md — these feed design
-iteration and the redacted pilot plan).
+iteration and the production pilot plan).
 
 ## 2026-07-08 — G1
 
@@ -28,7 +28,7 @@ iteration and the redacted pilot plan).
   broke the plan's pinned PEP 604 signature (task 02) and the task text's
   stdlib-check mechanism (task 04) independently. The amend-the-plan flow
   (ADR-8, ADR-9) worked well: cheap, auditable, and ADR-9's guidance was applied
-  by the round-2 reviewer as the correctness standard. Lesson for redacted pilot:
+  by the round-2 reviewer as the correctness standard. Lesson for the production pilot:
   Architect should probe the runtime environment (interpreter version, tool
   availability) at plan time, not discover it at implement time.
 - **Parallel implementers saw each other's mid-flight states.** Task 03's agent hit

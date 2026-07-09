@@ -222,11 +222,11 @@ becomes a shared role library teams import and narrow, and gate approvals in `st
 become policy hooks (e.g., "G3 requires someone with release authority"). The design
 keeps these as plain files precisely so that promotion is a lift, not a rewrite.
 
-**Concrete pilot on `redacted` (#2):** run v0 mode against a real, bounded change: write an
-intent brief for a small feature, let Analyst→Architect→Implementer→Reviewer→Verifier
-carry it to a PR, and measure gate-review burden. The concrete plan — integration
-layout, gate mapping to redacted's CI/CD, guardrails for a production CMS repo, phases,
-and metrics — is drafted in [PILOT-redacted.md](PILOT-redacted.md).
+**Concrete pilot (#2):** run v0 mode against a real, bounded change in a production
+repo: write an intent brief for a small feature, let Analyst→Architect→Implementer→
+Reviewer→Verifier carry it to a PR, and measure gate-review burden. The concrete
+plan — integration layout, gate mapping to the target's CI/CD, guardrails for a
+production repo, phases, and metrics — is maintained in the e14s copy of this repo.
 
 ---
 

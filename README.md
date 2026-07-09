@@ -37,5 +37,5 @@ customizability" are both satisfied by the same mechanism.
 v0.2 — design exercised end-to-end by the wordfreq run (`runs/wordfreq/`, G0→G3 with
 two adversarial-review cycles and independent verification); retro findings folded
 back into roles, contracts, and both adapters. Next: team review of the
-[`redacted` pilot plan](docs/PILOT-redacted.md) (CLAUDE.md Future Consideration #2), then
-Phase 0 scaffolding in that repo.
+production pilot plan (CLAUDE.md Future Consideration #2; maintained in the e14s
+copy of this repo), then Phase 0 scaffolding in that repo.

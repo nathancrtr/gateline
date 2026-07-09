@@ -105,4 +105,4 @@ The toy task's output is throwaway; the observations aren't. After the run, note
    working. Silent guessing is the failure mode, not bouncing.
 
 Log observations in `runs/wordfreq/retro.md` — these retros are the input to the
-`redacted` pilot plan (Future Consideration #2).
+production pilot plan (Future Consideration #2).

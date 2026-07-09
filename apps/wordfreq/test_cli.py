@@ -153,7 +153,18 @@ def _is_stdlib_module(name):
     `sys.stdlib_module_names` (the obvious one-liner for this check) is
     Python 3.10+ only; this environment's interpreter is 3.9.6 (plan.md
     ADR-8), so this computes the equivalent via each module's spec origin:
-    built-in/frozen, or a file under the interpreter's stdlib directory."""
+    built-in/frozen, or a file under the interpreter's stdlib directory.
+
+    The stdlib-directory check alone is NOT sufficient: on this machine
+    (and generally, for framework/Homebrew-style builds) the interpreter's
+    own `site-packages` is nested *inside* `sysconfig.get_paths()["stdlib"]`,
+    so a third-party package installed there (e.g. `setuptools`, `pip`)
+    would be misclassified as stdlib. Reject any origin with a
+    `site-packages`/`dist-packages` path component first -- this catches
+    that case regardless of where site-packages happens to live relative
+    to the stdlib directory (excluding sysconfig's purelib/platlib alone is
+    not enough, since on this machine purelib is a distinct, non-nested
+    directory from the site-packages where pip/setuptools actually live)."""
     if name in sys.builtin_module_names:
         return True
     try:
@@ -164,9 +175,12 @@ def _is_stdlib_module(name):
         return False
     if spec.origin in ("built-in", "frozen"):
         return True
+    origin = Path(spec.origin).resolve()
+    if "site-packages" in origin.parts or "dist-packages" in origin.parts:
+        return False
     stdlib_dir = Path(sysconfig.get_paths()["stdlib"]).resolve()
     try:
-        return Path(spec.origin).resolve().is_relative_to(stdlib_dir)
+        return origin.is_relative_to(stdlib_dir)
     except ValueError:
         return False
 
@@ -181,6 +195,12 @@ def test_ac10_2_only_stdlib_imports():
             for alias in node.names:
                 roots.add(alias.name.split(".")[0])
         elif isinstance(node, ast.ImportFrom):
+            # A relative import (`from . import x` / `from .foo import x`,
+            # node.level >= 1) cannot resolve to a third-party package in a
+            # single top-level script (there is no parent package to be
+            # relative to) -- but reject it explicitly rather than silently
+            # skipping it, so a mutant introducing one is still caught.
+            assert node.level == 0, "relative imports are not permitted"
             if node.module is not None:
                 roots.add(node.module.split(".")[0])
     assert roots

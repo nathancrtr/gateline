@@ -116,3 +116,71 @@ notes: |
   AC9.1 satisfied (pytest from apps/wordfreq/, both files, exit 0). File-contact
   surface respected: only apps/wordfreq/test_cli.py added; no edits to
   wordfreq.py or test_core.py.
+
+  --- Implementer round 2 (addressing review-04.md) ---
+
+  F1 (blocking, `_is_stdlib_module` misclassifies site-packages nested inside
+  the stdlib dir) — FIXED as proposed. Added an explicit rejection, before the
+  stdlib-dir check, of any resolved origin containing a `site-packages` or
+  `dist-packages` path component (`apps/wordfreq/test_cli.py`, in
+  `_is_stdlib_module`). Per the reviewer's warning, did NOT rely on
+  sysconfig's purelib/platlib alone — confirmed independently on this machine
+  that `sysconfig.get_paths()["purelib"]`
+  (`/Library/Python/3.9/site-packages`) is a distinct directory from where
+  pip/setuptools actually resolve
+  (`.../Python3.framework/Versions/3.9/lib/python3.9/site-packages/`), so a
+  purelib/platlib-only exclusion would have missed exactly the case F1
+  describes; the path-component check is origin-location-agnostic and covers
+  both.
+
+  Verified the fix actually discriminates, per dispatch instructions:
+    1. Reproduced the reviewer's exact scenario directly:
+         stdlib dir: /Library/Developer/CommandLineTools/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9
+         setuptools origin: .../lib/python3.9/site-packages/setuptools/__init__.py
+         origin parts contain site-packages: True
+         origin under stdlib dir: True
+       confirming setuptools is nested inside the stdlib dir on this machine,
+       exactly as F1 describes.
+    2. Constructed the proposed mutant: prepended `import setuptools` to a
+       backed-up copy of wordfreq.py, then ran test_ac10_2 alone:
+         $ python3 -m pytest -v test_cli.py::test_ac10_2_only_stdlib_imports
+         FAILED test_cli.py::test_ac10_2_only_stdlib_imports
+         AssertionError: setuptools is not a standard-library module
+         1 failed in 0.10s
+       Confirms the fixed test now kills the mutant that review-04 showed
+       previously passed undetected.
+    3. Restored wordfreq.py from the backup (verified byte-identical via
+       `diff` before deleting the backup) and re-ran the full suite against
+       the real, unmodified code:
+         $ python3 -m pytest -v
+         collected 26 items
+         test_cli.py::test_ac1_1_existing_readable_file_exits_zero PASSED
+         test_cli.py::test_ac1_2_no_file_argument_exits_nonzero_with_stderr PASSED
+         test_cli.py::test_ac4_1_no_flag_outputs_exactly_ten_lines PASSED
+         test_cli.py::test_ac4_2_n_flag_outputs_exact_expected_stdout PASSED
+         test_cli.py::test_ac4_3_n_larger_than_distinct_words_outputs_all_no_padding PASSED
+         test_cli.py::test_ac5_1_ties_break_alphabetically_and_are_reproducible PASSED
+         test_cli.py::test_ac6_1_stdout_is_byte_exact PASSED
+         test_cli.py::test_ac7_1_nonexistent_path_exits_nonzero_no_traceback PASSED
+         test_cli.py::test_ac7_2_directory_path_exits_nonzero_no_traceback PASSED
+         test_cli.py::test_ac8_1_zero_byte_file_exits_zero_no_stdout PASSED
+         test_cli.py::test_ac8_2_punctuation_only_file_exits_zero_no_stdout PASSED
+         test_cli.py::test_ac10_1_exactly_one_non_test_source_file PASSED
+         test_cli.py::test_ac10_2_only_stdlib_imports PASSED
+         test_core.py:: (13 tests) ... all PASSED
+         26 passed in 0.78s
+       git diff confirms wordfreq.py and test_core.py are untouched (only
+       test_cli.py shows as modified) — file-contact surface respected.
+
+  F2 (minor/plausible, relative-import AST gap) — FIXED (cheap, as the
+  reviewer suggested). Added `assert node.level == 0` for every ImportFrom
+  node before adding its module root, with a comment explaining why: a
+  relative import in a single top-level script cannot resolve to a
+  third-party package (no parent package to be relative to), so it was
+  already not a real R10 hole, but the assertion now makes a mutant
+  introducing a relative import fail loudly and explicitly rather than being
+  silently skipped by the root-collection loop.
+
+  Full suite result pasted above (26 passed). Only apps/wordfreq/test_cli.py
+  touched this round, per file_contact_surface; did not touch
+  runs/wordfreq/plan.md (owned by a parallel agent this round).

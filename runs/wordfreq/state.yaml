@@ -19,7 +19,7 @@ gates:                    # a gate entry is written ONLY by the named human
 tasks:                    # mirrors tasks/*.yaml status for one-glance state
   - {id: 01-core-logic, status: review-approved, review_rounds: 1}
   - {id: 02-cli-shell,  status: review-approved, review_rounds: 1}
-  - {id: 03-unit-tests, status: in-progress, review_rounds: 1}   # round 2: fixing review-03 F1/F2
-  - {id: 04-cli-tests,  status: pending, review_rounds: 0}   # depends_on: 02
+  - {id: 03-unit-tests, status: review-approved, review_rounds: 2}
+  - {id: 04-cli-tests,  status: in-review, review_rounds: 0}
 
 escalations: []           # append-only: {at, from_role, reason, resolved}

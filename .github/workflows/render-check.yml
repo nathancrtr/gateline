@@ -1,0 +1,14 @@
+name: Rendered agents up to date
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  render-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify rendered agent files match role specs
+        run: python3 scripts/render-agents.py --check

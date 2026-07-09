@@ -1,7 +1,9 @@
 # Review Report: <task id>
 
 <!-- Contract: produced by Reviewer; consumed by Implementer and gate G2.
-     All sections required. Findings ranked most-severe first. -->
+     All sections required. Findings ranked most-severe first.
+     BUDGET: one line + failure scenario per finding — no narrative. Reference
+     the spec and diff (requirement numbers, file:line); never re-quote them. -->
 
 **Verdict:** approve | request-changes | escalate
 **Round:** <n of 3>

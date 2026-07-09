@@ -1,0 +1,27 @@
+{
+  "adapter": "copilot-cli",
+  "output_dir": ".github/agents",
+  "filename": "{role}.agent.md",
+  "roles": ["analyst", "architect", "implementer", "reviewer", "verifier", "ops"],
+  "tools_style": "flow-list",
+  "tool_map": {
+    "read": ["read"],
+    "search": ["search"],
+    "write-artifacts": ["edit"],
+    "edit-code": ["edit"],
+    "shell": ["execute"]
+  },
+  "_comment_models": "Runner-specific spellings of the registry bindings. Multi-vendor harness: model_overrides implement the P5 vendor pins (reviewer/verifier decorrelated from the Claude-backed implementer).",
+  "model_map": {
+    "frontier-reasoning": "claude-fable-5",
+    "balanced": "claude-sonnet-5"
+  },
+  "model_overrides": {
+    "reviewer": "gpt-5.4",
+    "verifier": "gemini-3-flash"
+  },
+  "extra_frontmatter": {
+    "disable-model-invocation": true,
+    "user-invocable": true
+  }
+}

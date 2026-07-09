@@ -2,7 +2,10 @@
 
 <!-- Contract: produced by Verifier; consumed by gate G2.
      Every in-scope acceptance criterion gets a row and evidence.
-     Evidence = the command you ran and the output you observed, pasted. -->
+     Evidence = the command you ran and the output you observed.
+     BUDGET: paste FAILING output in full; for passing checks the command plus
+     its concluding line/exit code suffices. Never paste entire suites or
+     restate the spec — reference criteria by number. -->
 
 **Change verified:** <branch/commit>
 **Environment:** <where this ran: local, CI, staging + versions that matter>

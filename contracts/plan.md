@@ -1,7 +1,9 @@
 # Technical Plan: <title>
 
 <!-- Contract: produced by Architect; consumed by Implementers, Reviewer.
-     Gate: G1. All sections required. Accompanied by tasks/*.yaml. -->
+     Gate: G1. All sections required. Accompanied by tasks/*.yaml.
+     BUDGET: reference spec requirements by number, never re-quote them.
+     Approach in a few short paragraphs; the ADRs carry the argument. -->
 
 ## Approach
 <!-- The shape of the solution and how it fits the existing codebase.

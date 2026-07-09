@@ -1,6 +1,9 @@
-# Model registry — the ONLY place vendor/model IDs appear in this system.
+# Model registry — the authority for WHICH vendor/model each role gets.
 # Roles declare a capability_profile; this file resolves it to a concrete model.
 # Swapping vendors is an edit here, never in roles/ or contracts/.
+# Adapter manifests (adapters/*/manifest.json) re-spell these bindings in each
+# runner's model vocabulary (e.g. anthropic/claude-fable-5 -> "fable" in Claude
+# Code) — when you change a binding here, update the manifests and re-render.
 #
 # Model IDs below are ILLUSTRATIVE. Pin to your org's approved, current models
 # and re-verify pricing/limits when you do.

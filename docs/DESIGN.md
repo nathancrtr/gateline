@@ -117,6 +117,14 @@ deliberately short — they specify *required sections*, not prose style. An art
 missing a required section is malformed and the consuming agent's first duty is to
 bounce it, not to guess.
 
+Contracts also carry **budgets**: concision is a contract property, not a style hope.
+The rules are uniform — never restate an artifact you can reference (requirement
+numbers, file:line); evidence is pasted in full only for failures; no process
+narrative. This matters three ways: verbose artifacts dilute the signal for their
+model readers and beget verbose downstream artifacts (agents mirror the register they
+read), they tax the gate humans who are the system's deliberate bottleneck, and they
+are paid for repeatedly — once as output, then as input to every downstream reader.
+
 | Artifact | Producer → Consumer | Contract |
 |----------|--------------------|----------|
 | `intent-brief.md` | Human → Analyst | problem, motivation, constraints, out-of-scope |
@@ -179,6 +187,12 @@ maps them onto a specific harness:
 
 Adapter rule: an adapter may *narrow* a role (fewer tools, tighter permissions) but
 never *widen* it. The role spec is the ceiling.
+
+Adapter agent files are **rendered, not written**: `scripts/render-agents.py`
+generates them from the role specs plus a per-adapter `manifest.json` (frontmatter
+shape, abstract-capability→tool map, runner model spellings), and a CI check fails
+stale renders. A new runner costs one manifest (~30 lines); the roles are never
+restated per-runner.
 
 ## 9. Failure modes and mitigations
 

@@ -33,6 +33,8 @@ customizability" are both satisfied by the same mechanism.
 
 ## Status
 
-v0.1 — design drafted, Claude Code and Copilot CLI adapters built, unexercised. Next:
-team review of DESIGN.md, then a toy run per the walkthrough, then the `redacted` pilot
-plan (CLAUDE.md Future Consideration #2).
+v0.2 — design exercised end-to-end by the wordfreq run (`runs/wordfreq/`, G0→G3 with
+two adversarial-review cycles and independent verification); retro findings folded
+back into roles, contracts, and both adapters. Next: team review of the
+[`redacted` pilot plan](docs/PILOT-redacted.md) (CLAUDE.md Future Consideration #2), then
+Phase 0 scaffolding in that repo.

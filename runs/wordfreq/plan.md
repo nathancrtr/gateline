@@ -2,7 +2,8 @@
 
 <!-- Contract: produced by Architect; consumed by Implementers, Reviewer.
      Gate: G1. All sections required. Accompanied by tasks/*.yaml.
-     Amended 2026-07-08 per review-02 F1: main() signature spelling (ADR-8). -->
+     Amended 2026-07-08 per review-02 F1: main() signature spelling (ADR-8).
+     Amended 2026-07-08 per review-04 F1: AC10.2 stdlib-check mechanism on 3.9 (ADR-9). -->
 
 ## Approach
 
@@ -219,6 +220,63 @@ if __name__ == "__main__":
   implementer must not copy the stale `X | None` form. No task scope, dependency,
   or behavior changes — annotations have no runtime call-boundary effect.
 
+### ADR-9 (amendment, 2026-07-08): AC10.2's stdlib check on Python 3.9 — spec-origin classification with mandatory site-packages rejection
+- **Context:** Post-G1 amendment prompted by review-04 (finding F1 and its
+  deviation assessment). This is the **second independent surfacing** of the
+  Python 3.9.6-only environment breaking run text (first: review-02 F1 → ADR-8) —
+  this time in task text, not the plan's interface contract. Task 04's scope for
+  AC10.2 read "assert each is in `sys.stdlib_module_names`", an attribute added in
+  Python 3.10 and absent on 3.9.6 (`AttributeError`, confirmed by the implementer).
+  The implementer substituted a 3.9-compatible helper — builtin names +
+  `importlib.util.find_spec` origin classification against
+  `sysconfig.get_paths()["stdlib"]` — and logged the deviation. Review-04 validated
+  the *approach* as the right 3.9 equivalent but found the as-shipped version
+  strictly weaker (F1, blocking): on this machine the interpreter's prefix
+  `site-packages` is a **subdirectory** of the sysconfig stdlib directory
+  (`.../Python3.framework/Versions/3.9/lib/python3.9/site-packages/`, where `pip`
+  and `setuptools` resolve), so a bare stdlib-dir containment check classifies
+  those third-party imports as stdlib — exactly the R10 violation class AC10.2
+  exists to detect, and one `sys.stdlib_module_names` would have caught.
+- **Requirement vs. mechanism:** the spec is not defective and is unchanged.
+  AC10.2's wording — the AST one-liner "lists only modules present in the Python 3
+  standard library (no third-party package imports)" — **is the requirement**;
+  `sys.stdlib_module_names` was only ever the task-text *mechanism* for asserting
+  it, and only that mechanism was version-specific.
+- **Choice:** Sanction the following as the run's 3.9-compatible stdlib check. A
+  module root name is stdlib iff **any** of:
+  1. `name in sys.builtin_module_names`; or
+  2. `importlib.util.find_spec(name)` yields a spec whose `origin` is
+     `"built-in"` or `"frozen"`; or
+  3. the spec's `origin` is a file path under `sysconfig.get_paths()["stdlib"]`
+     **and** the resolved path contains no `site-packages` (or `dist-packages`)
+     component — i.e. `"site-packages" in Path(origin).resolve().parts` (and
+     likewise `dist-packages`) rejects the module *before* the containment check
+     can accept it.
+  The site-packages rejection in (3) is mandatory, not defensive garnish: without
+  it the check is unsound on any layout where site-packages nests inside the
+  stdlib directory, as it does here.
+- **Rejected:** (a) `sys.stdlib_module_names` as written in the task — does not
+  exist on 3.9.6, the environment's only interpreter (same rejection as ADR-8's
+  "require 3.10+"). (b) Vendoring a hard-coded frozenset of 3.10's stdlib names
+  into the test — a drifting, unverifiable copy of interpreter internals with no
+  authority on the 3.9 interpreter actually running the code. (c) Stdlib-dir
+  containment **without** the site-packages rejection (the as-shipped version) —
+  review-04 F1: admits any third-party package installed in the prefix
+  site-packages. (d) Excluding only the `sysconfig` `purelib`/`platlib` paths
+  instead of matching path components — insufficient on this machine, where
+  `purelib` (`/Library/Python/3.9/site-packages`) is a *different* directory from
+  the framework's own site-packages where pip/setuptools live (review-04 F1).
+- **Consequences:** Task 04's implementer is fixing F1 in
+  `apps/wordfreq/test_cli.py` against this mechanism (round 2, in flight); the
+  reviewer verifies the fixed helper against this ADR, not the stale task-text
+  mechanism. Any future stdlib-membership assertion in this run uses this
+  mechanism. Review-04 F2 (`ImportFrom` nodes with `level >= 1` escape root
+  collection) remains minor/optional — a relative import cannot resolve to a
+  third-party package in a top-level single-file script; asserting
+  `node.level == 0` may be folded into the same fix but is not required by this
+  ADR. No task scope, dependency, or deliverable-code changes; `wordfreq.py` is
+  untouched.
+
 ## Requirement → task mapping
 
 | Requirement | Task(s) |
@@ -259,8 +317,15 @@ if __name__ == "__main__":
   digits) could trigger review debate. *Guardrail:* ADR-3 fixes the rule; behavior
   not pinned by an AC follows the regex as written — Reviewer findings against
   non-spec'd behavior should cite a requirement or be rebutted in task notes.
-- **Python 3.9-only environment (resolved for `main()`, latent elsewhere)** — PEP 604
-  unions in evaluated annotations fail at import on 3.9.6 (see ADR-8). *Early
-  signal:* `TypeError: unsupported operand type(s) for |` at import. *Mitigation:*
-  ADR-8's rule — `Optional[...]`/`Union[...]` spellings only; applies to task 04's
-  test helpers and any future code in this run.
+- **Python 3.9-only environment (twice-realized; assume further latent instances)** —
+  the run's text has now twice specified 3.10+ constructs that fail on the 3.9.6
+  interpreter: PEP 604 union annotations (`TypeError` at import; review-02 F1 →
+  ADR-8) and `sys.stdlib_module_names` (`AttributeError`; review-04 → ADR-9).
+  *Early signal:* `TypeError: unsupported operand type(s) for |` or
+  `AttributeError` on a `sys`/stdlib attribute at first execution. *Mitigation:*
+  ADR-8's rule (`Optional[...]`/`Union[...]` spellings only) and ADR-9's sanctioned
+  stdlib-check mechanism; more generally, treat any construct or API not verified
+  on 3.9 as suspect, and note that 3.9-compatible *substitutes* need equivalence
+  scrutiny, not just runnability — review-04 F1 shows a substitute can execute
+  cleanly yet be strictly weaker (site-packages nested under the sysconfig stdlib
+  dir defeats naive path-containment checks).

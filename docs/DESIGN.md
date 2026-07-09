@@ -226,7 +226,7 @@ keeps these as plain files precisely so that promotion is a lift, not a rewrite.
 repo: write an intent brief for a small feature, let Analyst→Architect→Implementer→
 Reviewer→Verifier carry it to a PR, and measure gate-review burden. The concrete
 plan — integration layout, gate mapping to the target's CI/CD, guardrails for a
-production repo, phases, and metrics — is maintained in the e14s copy of this repo.
+production repo, phases, and metrics — is maintained outside this repository.
 
 ---
 

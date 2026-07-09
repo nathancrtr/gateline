@@ -22,5 +22,5 @@ Once we have designed a capable system of software development agents for a sing
 
 2. **Concrete implementation**
   a. Identify a real production application currently maintained by one of the operators and develop a concrete plan to integrate the agent system into that specific project
-    - The specific project is identified in the e14s copy of this repository
+    - The specific project is identified by the operators outside this repository
   b. Implement that plan

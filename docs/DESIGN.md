@@ -171,7 +171,7 @@ maps them onto a specific harness:
 | Adapter | Status | What it maps |
 |---------|--------|--------------|
 | [`adapters/claude-code/`](../adapters/claude-code/) | **Built (the skeleton)** | role specs → `.claude/agents/*.md` subagents; runnable today by every operator |
-| `adapters/<other-vendor-cli>/` | Future | role specs → that CLI's agent/config format (e.g., for P5-decorrelated Reviewer) |
+| [`adapters/copilot-cli/`](../adapters/copilot-cli/) | **Built** | role specs → `.github/agents/*.agent.md` custom agents; also the adapter that fully honors P5 — Copilot CLI hosts Anthropic/OpenAI/Google models natively, so Reviewer/Verifier bind to a genuinely different vendor than Implementer |
 | `adapters/orchestrated/` | Future (v1) | role specs → programmatic agent SDK workers under a scheduler |
 
 Adapter rule: an adapter may *narrow* a role (fewer tools, tighter permissions) but

@@ -113,6 +113,22 @@ def test_ac7_2_directory_path_exits_nonzero_no_traceback(tmp_path):
     assert b"Traceback" not in result.stderr
 
 
+def test_invalid_utf8_input_exits_nonzero_no_traceback(tmp_path):
+    """Verifier addition (not a numbered AC): spec assumption 6 resolves
+    non-UTF-8-decodable input as an R7 read error (non-zero exit, stderr
+    message, no traceback), not a silent fallback encoding. main()'s error
+    handler catches (OSError, UnicodeDecodeError) together (ADR-6), but
+    until this test, only the OSError branch (AC7.1/AC7.2) had automated
+    coverage — the UnicodeDecodeError branch was exercised only by this
+    Verifier's manual probing, not by the implementer's test suite."""
+    path = tmp_path / "not_utf8.txt"
+    path.write_bytes(b"caf\xe9 latin-1 bytes, invalid utf-8")
+    result = run_cli(str(path))
+    assert result.returncode != 0
+    assert result.stderr != b""
+    assert b"Traceback" not in result.stderr
+
+
 # --- empty / wordless input handling (R8) ------------------------------------
 
 def test_ac8_1_zero_byte_file_exits_zero_no_stdout(tmp_path):

@@ -13,14 +13,16 @@ const RUN_BRANCH_PREFIX = 'run/'
 const ZERO_OID = '0'.repeat(40)
 
 export class LocalGitSource implements RunSource {
+  readonly id: string
+  readonly dir: string
   readonly git: Git
   readonly templates: ContractTemplates
+  private readonly options: { push?: boolean }
 
-  constructor(
-    readonly id: string,
-    readonly dir: string,
-    private readonly options: { push?: boolean } = {},
-  ) {
+  constructor(id: string, dir: string, options: { push?: boolean } = {}) {
+    this.id = id
+    this.dir = dir
+    this.options = options
     this.git = new Git(dir)
     const git = this.git
     this.templates = {

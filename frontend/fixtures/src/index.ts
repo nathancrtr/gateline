@@ -23,7 +23,11 @@ export interface FixtureRepo {
 }
 
 class Repo {
-  constructor(readonly dir: string) {}
+  readonly dir: string
+
+  constructor(dir: string) {
+    this.dir = dir
+  }
 
   git(args: string[], date?: number): string {
     const env = { ...process.env }

@@ -1,0 +1,100 @@
+@import 'tailwindcss';
+
+/* Design tokens — calm, editorial, one accent. light-dark() + color-scheme
+   gives both themes from a single declaration; the OS preference decides. */
+@theme {
+  --color-ground: light-dark(#f6f7f5, #141816);
+  --color-surface: light-dark(#ffffff, #1b211e);
+  --color-raised: light-dark(#eef0ed, #232b27);
+  --color-ink: light-dark(#1d2420, #e3eae6);
+  --color-muted: light-dark(#5e6b64, #94a29b);
+  --color-faint: light-dark(#98a49d, #5c6963);
+  --color-line: light-dark(#dfe4e0, #2b3430);
+  --color-accent: light-dark(#0e7264, #4fc0ab);
+  --color-accent-soft: light-dark(#0e72641a, #4fc0ab24);
+  --color-ok: light-dark(#2e7d4f, #5cbf88);
+  --color-ok-soft: light-dark(#2e7d4f1a, #5cbf8824);
+  --color-warn: light-dark(#a8781f, #d3a44a);
+  --color-warn-soft: light-dark(#a8781f1a, #d3a44a24);
+  --color-bad: light-dark(#b4432f, #e07b63);
+  --color-bad-soft: light-dark(#b4432f14, #e07b6320);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  @apply bg-ground text-ink font-sans antialiased;
+}
+
+/* Focus is always visible; the accent does that job everywhere. */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Rendered markdown (artifacts). Reading, not operating: measure capped,
+   mono for evidence blocks, quiet rules. */
+.prose-artifact {
+  @apply text-[15px] leading-relaxed max-w-[74ch];
+}
+.prose-artifact h1 {
+  @apply text-xl font-semibold mt-2 mb-4 text-balance;
+}
+.prose-artifact h2 {
+  @apply text-base font-semibold mt-7 mb-2 pb-1 border-b border-line;
+}
+.prose-artifact h3 {
+  @apply text-[15px] font-semibold mt-5 mb-1.5;
+}
+.prose-artifact p {
+  @apply my-2.5;
+}
+.prose-artifact ul, .prose-artifact ol {
+  @apply my-2.5 pl-6;
+}
+.prose-artifact ul { list-style: disc; }
+.prose-artifact ol { list-style: decimal; }
+.prose-artifact li { @apply my-1; }
+.prose-artifact li::marker { color: var(--color-faint); }
+.prose-artifact code {
+  @apply font-mono text-[0.85em] px-1 py-0.5 rounded bg-raised;
+}
+.prose-artifact pre {
+  @apply font-mono text-xs leading-5 p-3.5 my-3 rounded-lg bg-raised overflow-x-auto;
+}
+.prose-artifact pre code { @apply p-0 bg-transparent; }
+.prose-artifact table {
+  @apply my-3 text-sm border-collapse;
+}
+.prose-artifact th {
+  @apply text-left font-semibold border-b border-line px-3 py-1.5 text-[11px] uppercase tracking-wide text-muted;
+}
+.prose-artifact td {
+  @apply border-b border-line px-3 py-1.5 align-top;
+}
+.prose-artifact blockquote {
+  @apply border-l-2 border-line pl-4 my-3 text-muted;
+}
+.prose-artifact a {
+  @apply text-accent underline underline-offset-2;
+}
+.prose-artifact hr {
+  @apply border-line my-6;
+}
+.prose-artifact input[type='checkbox'] {
+  accent-color: var(--color-accent);
+  margin-right: 0.4rem;
+}

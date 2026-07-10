@@ -6,13 +6,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 export class GitError extends Error {
-  constructor(
-    message: string,
-    readonly args: string[],
-    readonly stderr: string,
-  ) {
+  readonly args: string[]
+  readonly stderr: string
+
+  // No parameter properties anywhere in core/server: Node runs this source
+  // directly in strip-only mode, which rejects them.
+  constructor(message: string, args: string[], stderr: string) {
     super(message)
     this.name = 'GitError'
+    this.args = args
+    this.stderr = stderr
   }
 }
 
@@ -38,7 +41,11 @@ export interface WorktreeInfo {
 }
 
 export class Git {
-  constructor(readonly dir: string) {}
+  readonly dir: string
+
+  constructor(dir: string) {
+    this.dir = dir
+  }
 
   run(args: string[], opts: { input?: string; env?: Record<string, string> } = {}): Promise<string> {
     return new Promise((resolve, reject) => {

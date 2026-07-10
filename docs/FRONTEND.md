@@ -1,7 +1,14 @@
 # Human Interface Design — the Gate Frontend
 
-**Status:** v0.1 — draft for team review; intended to be translated into an
-architecture and implementation plan after review
+**Status:** v0.2 — the architecture and implementation plan exists
+([FRONTEND-PLAN.md](FRONTEND-PLAN.md)), and Stage C's *UX* has been pulled
+forward as a local-first build (`frontend/`): the decision inbox, portfolio,
+gate cards with burden capture, the `agentic` CLI, metrics, and PR-approval
+sync — all while refusing Stage C *infrastructure* (no hosting, no auth, no
+store; reads address git refs, writes are CAS commits to `state.yaml`). The
+staging logic below is unchanged: Stage A remains what a fresh adopter can run
+with zero build, and the §6 promotion triggers still say when the hosted
+multi-team Stage C is worth its weight.
 **Prerequisite reading:** [DESIGN.md](DESIGN.md) (esp. §4 gates, §7 operating modes),
 and the pilot plan (maintained outside this repository)
 

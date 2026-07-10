@@ -1,8 +1,10 @@
 // One run's story: header + gate ledger, the "needs you" panel, and tabs for
 // artifacts, diff, and state history. Decision affordances live in the cards
 // (M2 wires them to POST /api/decisions).
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useKeys } from '../use-keys.ts'
 import { api, formatAge, formatWhen, type InboxItem, type RunDetailResponse } from '../api.ts'
 import { AgeBadge, BudgetMeter, GateLedger, KindChip, PhaseChip, ValidationBadge } from '../components/chips.tsx'
 import { DecidePanel } from '../components/decide.tsx'
@@ -18,11 +20,34 @@ export function RunPage() {
   const tab = (params.get('tab') as Tab) ?? 'artifacts'
   const artifact = params.get('artifact')
 
+  const navigate = useNavigate()
   const { data, isLoading, error } = useQuery({
     queryKey: ['run', src, slug],
     queryFn: () => api.run(src!, slug!),
     enabled: Boolean(src && slug),
   })
+
+  // e cycles artifacts; esc returns to the inbox unless a decision is open.
+  const keyHandlers = useMemo(
+    () => ({
+      e: () => {
+        const paths = data?.artifacts ?? []
+        if (!paths.length) return
+        const current = new URLSearchParams(window.location.search).get('artifact')
+        const idx = current ? paths.indexOf(current) : -1
+        const nextPath = paths[(idx + 1) % paths.length]!
+        const next = new URLSearchParams(window.location.search)
+        next.set('tab', 'artifacts')
+        next.set('artifact', nextPath)
+        setParams(next, { replace: true })
+      },
+      Escape: () => {
+        if (document.body.dataset.deciding !== 'true') void navigate('/')
+      },
+    }),
+    [data, navigate, setParams],
+  )
+  useKeys(keyHandlers, Boolean(data))
 
   if (isLoading) return <PageStatus text="Reading run…" />
   if (error) return <PageStatus text={`Could not load run: ${(error as Error).message}`} bad />
@@ -61,7 +86,13 @@ export function RunPage() {
       {items.length > 0 && (
         <section className="mb-6 flex flex-col gap-3">
           {items.map((item, i) => (
-            <NeedsYouCard key={`${item.kind}-${item.gate ?? item.escalationIndex ?? i}`} item={item} now={now} detail={detail} />
+            <NeedsYouCard
+              key={`${item.kind}-${item.gate ?? item.escalationIndex ?? i}`}
+              item={item}
+              now={now}
+              detail={detail}
+              primary={i === items.findIndex((x) => x.reviewable)}
+            />
           ))}
         </section>
       )}
@@ -100,8 +131,8 @@ export function RunPage() {
   )
 }
 
-/** A pending decision, rendered as a card. M2 adds the decide affordances. */
-function NeedsYouCard({ item, now, detail }: { item: InboxItem; now: number; detail: RunDetailResponse }) {
+/** A pending decision, rendered as a card with its decide affordances. */
+function NeedsYouCard({ item, now, detail, primary }: { item: InboxItem; now: number; detail: RunDetailResponse; primary?: boolean }) {
   const urgent = item.since !== null && now - item.since > 3 * 86_400
   return (
     <section
@@ -140,7 +171,7 @@ function NeedsYouCard({ item, now, detail }: { item: InboxItem; now: number; det
             ))}
         </div>
       )}
-      <DecidePanel item={item} />
+      <DecidePanel item={item} primary={primary} />
     </section>
   )
 }

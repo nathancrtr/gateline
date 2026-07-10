@@ -2,9 +2,10 @@
 // deciding; decline requires a reason; escalations take a disposition note;
 // paused runs resume. A CAS conflict (409) re-presents rather than retrying —
 // the refusal is the designed outcome.
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ApiError, api, type Burden, type GateId, type InboxItem } from '../api.ts'
+import { useKeys } from '../use-keys.ts'
 
 const BURDEN_OPTIONS: { value: Burden; key: string; label: string; hint: string }[] = [
   { value: 'confirmation', key: '1', label: 'Confirmation', hint: 'looked right as delivered' },
@@ -14,12 +15,42 @@ const BURDEN_OPTIONS: { value: Burden; key: string; label: string; hint: string 
 
 type Mode = 'idle' | 'approve' | 'decline' | 'resolve'
 
-export function DecidePanel({ item }: { item: InboxItem }) {
+export function DecidePanel({ item, primary = false }: { item: InboxItem; primary?: boolean }) {
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<Mode>('idle')
   const [burden, setBurden] = useState<Burden | null>(null)
   const [notes, setNotes] = useState('')
   const [flash, setFlash] = useState<{ kind: 'ok' | 'conflict' | 'error'; text: string } | null>(null)
+
+  // Keyboard loop for the page's primary card: a approve · x decline ·
+  // 1/2/3 burden · esc back to idle.
+  const keyHandlers = useMemo(
+    () => ({
+      a: () => {
+        if (item.kind === 'gate' && item.reviewable) setMode('approve')
+        else if (item.kind === 'escalation') setMode('resolve')
+      },
+      x: () => {
+        if (item.kind === 'gate' && item.reviewable) setMode('decline')
+      },
+      '1': () => setBurden('confirmation'),
+      '2': () => setBurden('light-correction'),
+      '3': () => setBurden('heavy-correction'),
+      Escape: () => setMode('idle'),
+    }),
+    [item.kind, item.reviewable],
+  )
+  useKeys(keyHandlers, primary)
+
+  // Let page-level Escape (back to inbox) yield while a decision is open.
+  useEffect(() => {
+    if (mode !== 'idle') {
+      document.body.dataset.deciding = 'true'
+      return () => {
+        delete document.body.dataset.deciding
+      }
+    }
+  }, [mode])
 
   const mutation = useMutation({
     mutationFn: api.decide,

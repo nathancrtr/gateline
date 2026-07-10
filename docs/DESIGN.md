@@ -231,5 +231,6 @@ production repo, phases, and metrics — is maintained outside this repository.
 ---
 
 *Companion documents: [WALKTHROUGH.md](WALKTHROUGH.md) (run a toy task through the
-pipeline today), [`roles/`](../roles/), [`contracts/`](../contracts/),
+pipeline today), [INTEGRATION.md](INTEGRATION.md) (importing the framework into a
+host repo — design draft), [`roles/`](../roles/), [`contracts/`](../contracts/),
 [`registry/models.yaml`](../registry/models.yaml).*

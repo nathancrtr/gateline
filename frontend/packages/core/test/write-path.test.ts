@@ -1,0 +1,168 @@
+// The single write path (§3): comment-preserving mutation, plumbing commit,
+// CAS refusal on concurrent movement, and the checked-out-branch fallback.
+import { readFile, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { Git, planDecision, parseRunState, DecisionError, type RunRef } from '../src/index.ts'
+import { dropFixture, makeFixture, type FixtureContext } from './fixture.helper.ts'
+
+let ctx: FixtureContext
+const who = { name: 'Fixture Operator', email: 'operator@example.test' }
+
+beforeEach(async () => {
+  ctx = await makeFixture()
+})
+afterEach(() => dropFixture(ctx))
+
+async function refFor(slug: string): Promise<RunRef> {
+  const refs = await ctx.source.listRuns()
+  return refs.find((r) => r.slug === slug)!
+}
+
+describe('approve via the write path', () => {
+  it('commits a comment-preserving state edit authored by the named human', async () => {
+    const ref = await refFor('g0-pending')
+    const { state, raw } = await ctx.source.readState(ref)
+    expect(raw).toContain('# a gate entry is written ONLY by the named human')
+
+    const planned = planDecision(state!, { action: 'approve', gate: 'G0', burden: 'confirmation', notes: 'spec matches intent' }, who)
+    const result = await ctx.source.writeState(ref, planned.mutate, planned.message)
+    expect(result.ok).toBe(true)
+
+    const after = await ctx.source.readState(ref)
+    expect(after.state!.gates.G0).toMatchObject({ approved: true, by: 'Fixture Operator', burden: 'confirmation' })
+    expect(after.state!.phase).toBe('plan') // v0: approval advances the phase
+    // Contract commentary survives the round-trip (must not be worse than hand-editing).
+    expect(after.raw).toContain('# a gate entry is written ONLY by the named human')
+    expect(after.raw).toContain('# exhaustion pauses the run; it never silently degrades')
+
+    const [head] = await ctx.source.git.log(ref.ref, [], { maxCount: 1 })
+    expect(head!.author).toBe('Fixture Operator')
+    expect(head!.subject).toBe('state(g0-pending): G0 approved by Fixture Operator [burden: confirmation]')
+  })
+
+  it('refuses when the branch moved since read (CAS)', async () => {
+    const ref = await refFor('g0-pending')
+    const { state } = await ctx.source.readState(ref)
+    const git = ctx.source.git
+    const branchRef = `refs/heads/${ref.branch}`
+    const tip = (await git.revParse(branchRef))!
+
+    // Interleave: another actor commits between our read and our write. We
+    // simulate by pre-moving the ref and monkey-patching revParse's answer
+    // back to the stale tip for the write's first read.
+    const blob = await git.hashObject('interloper\n')
+    const tree = await git.writeTreeWithBlob(tip, 'runs/g0-pending/note.txt', blob)
+    const other = await git.commitTree(tree, tip, 'concurrent agent commit')
+
+    const staleRevParse = git.revParse.bind(git)
+    let first = true
+    git.revParse = async (rev: string) => {
+      if (rev === `${branchRef}^{commit}` || rev === branchRef) {
+        if (first) {
+          first = false
+          await git.run(['update-ref', branchRef, other, tip]) // the race, after our read
+          return tip
+        }
+      }
+      return staleRevParse(rev)
+    }
+
+    const planned = planDecision(state!, { action: 'approve', gate: 'G0', burden: 'confirmation' }, who)
+    const result = await ctx.source.writeState(ref, planned.mutate, planned.message)
+    expect(result.ok).toBe(false)
+    expect(result.reason).toBe('ref-moved')
+    // The interloper's commit is still the tip — nothing was clobbered.
+    expect(await staleRevParse(branchRef)).toBe(other)
+  })
+
+  it('commits through the worktree when the branch is checked out (clean file)', async () => {
+    const ref = await refFor('g1-pending')
+    const git = new Git(ctx.repo.dir)
+    await git.run(['checkout', '-q', 'run/g1-pending'])
+
+    const { state } = await ctx.source.readState(ref)
+    const planned = planDecision(state!, { action: 'approve', gate: 'G1', burden: 'light-correction', notes: 'ADRs accepted' }, who)
+    const result = await ctx.source.writeState(ref, planned.mutate, planned.message)
+    expect(result.ok).toBe(true)
+
+    // The checkout advanced with the ref — not silently diverged.
+    const status = await git.run(['status', '--porcelain'])
+    expect(status.trim()).toBe('')
+    const after = parseRunState(await readFile(join(ctx.repo.dir, 'runs/g1-pending/state.yaml'), 'utf8'))
+    expect(after.state!.gates.G1.approved).toBe(true)
+  })
+
+  it('refuses when the checked-out state file is dirty', async () => {
+    const ref = await refFor('g1-pending')
+    const git = new Git(ctx.repo.dir)
+    await git.run(['checkout', '-q', 'run/g1-pending'])
+    const statePath = join(ctx.repo.dir, 'runs/g1-pending/state.yaml')
+    await writeFile(statePath, (await readFile(statePath, 'utf8')) + '# local scribble\n')
+
+    const { state } = await ctx.source.readState(ref)
+    const planned = planDecision(state!, { action: 'approve', gate: 'G1', burden: 'confirmation' }, who)
+    const result = await ctx.source.writeState(ref, planned.mutate, planned.message)
+    expect(result.ok).toBe(false)
+    expect(result.reason).toBe('dirty-worktree')
+  })
+})
+
+describe('decision legality (planDecision)', () => {
+  it('approve without burden is rejected — burden capture is the point', async () => {
+    const ref = await refFor('g0-pending')
+    const { state } = await ctx.source.readState(ref)
+    expect(() => planDecision(state!, { action: 'approve', gate: 'G0' }, who)).toThrow(DecisionError)
+  })
+
+  it('decline without a reason is rejected', async () => {
+    const ref = await refFor('g0-pending')
+    const { state } = await ctx.source.readState(ref)
+    expect(() => planDecision(state!, { action: 'decline', gate: 'G0' }, who)).toThrow(/reason/)
+  })
+
+  it('approving an already-approved gate is rejected', async () => {
+    const ref = await refFor('g1-pending')
+    const { state } = await ctx.source.readState(ref)
+    expect(() => planDecision(state!, { action: 'approve', gate: 'G0', burden: 'confirmation' }, who)).toThrow(/already approved/)
+  })
+
+  it('decline pauses the run with gate-declined', async () => {
+    const ref = await refFor('g0-pending')
+    const { state } = await ctx.source.readState(ref)
+    const planned = planDecision(state!, { action: 'decline', gate: 'G0', notes: 'R2 contradicts the brief' }, who)
+    await ctx.source.writeState(ref, planned.mutate, planned.message)
+    const after = await ctx.source.readState(ref)
+    expect(after.state!.phase).toBe('paused')
+    expect(after.state!.paused_reason).toBe('gate-declined')
+    expect(after.state!.gates.G0).toMatchObject({ approved: false, by: 'Fixture Operator' })
+  })
+
+  it('resolve-escalation records who/when/how', async () => {
+    const ref = await refFor('escalated')
+    const { state } = await ctx.source.readState(ref)
+    const planned = planDecision(
+      state!,
+      { action: 'resolve-escalation', escalationIndex: 0, notes: 'sample committed as fixtures/sample.txt' },
+      who,
+    )
+    await ctx.source.writeState(ref, planned.mutate, planned.message)
+    const after = await ctx.source.readState(ref)
+    expect(after.state!.escalations[0]).toMatchObject({
+      resolved: true,
+      resolved_by: 'Fixture Operator',
+      resolution: 'sample committed as fixtures/sample.txt',
+    })
+  })
+
+  it('resume derives the correct phase from the gate ledger', async () => {
+    const ref = await refFor('paused-budget')
+    const { state } = await ctx.source.readState(ref)
+    const planned = planDecision(state!, { action: 'resume' }, who)
+    expect(planned.summary).toContain('"plan"') // G0 approved, G1 not → plan
+    await ctx.source.writeState(ref, planned.mutate, planned.message)
+    const after = await ctx.source.readState(ref)
+    expect(after.state!.phase).toBe('plan')
+    expect(after.state!.paused_reason).toBeNull()
+  })
+})

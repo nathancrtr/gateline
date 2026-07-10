@@ -1,0 +1,13 @@
+{
+  "name": "@agentic/fixtures",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Generates a demo git repository with pipeline runs in every interesting state — used by tests and `agentic ui --demo`.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "bin": {
+    "agentic-fixture": "./src/main.ts"
+  }
+}

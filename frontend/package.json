@@ -1,0 +1,24 @@
+{
+  "name": "agentic-frontend",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "packages/*",
+    "fixtures"
+  ],
+  "scripts": {
+    "build": "npm run build -w @agentic/web",
+    "dev": "npm run dev -w @agentic/server",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json && tsc -p packages/web/tsconfig.json",
+    "fixture": "node fixtures/src/main.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}

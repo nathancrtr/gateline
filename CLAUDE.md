@@ -13,6 +13,12 @@ The particular project that these agents may work on could vary across disciplin
 * We must be able to use different models for different agents rather than commit to a single model across the swarm
 * At this stage, we value flexibility over customizability (see Future Considerations #1)
 
+## Project posture
+
+* This is a fully open-source project (Apache-2.0) with a single maintainer. The repository is private only until the framework settles into a usable state; after that, consumers adopt it via the public repository and/or published package releases.
+* Downstream organizations — including any organization the maintainer works with — consume the framework as an ordinary open-source dependency. Assume maintainer-only code authorship; settling a contribution policy (CLA/DCO) is a prerequisite to accepting outside contributors.
+* This repository must remain consumer-agnostic: no document, issue, commit, or artifact in it may reference a specific downstream organization.
+
 ## Future Considerations
 
 Once we have designed a capable system of software development agents for a single team, there are two main directions that further work could take:

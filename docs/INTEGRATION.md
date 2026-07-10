@@ -62,7 +62,7 @@ How should framework files travel into a host repo?
 
 | Mechanism | Verdict | Why |
 |-----------|---------|-----|
-| **Vendored copy + lockfile** | **Recommended** | Works in private/offline repos; divergence is *expected* (the sandbox is a lab, not a dependency) and the lockfile makes it visible instead of silent; upgrade is a real 3-way merge (§6) |
+| **Vendored copy + lockfile** | **Recommended** | Works in private/offline repos; divergence is *expected* — host-local policy is a legitimate layer, not an error — and the lockfile makes it visible instead of silent; upgrade is a real 3-way merge (§6) |
 | Git submodule | Rejected | Couples host clones to framework repo access; role specs must be readable in-tree by agents that start cold; submodule UX taxes every operator |
 | Git subtree | Rejected for now | Better than submodule, but merges core and project layers into one history; revisit if lockfile bookkeeping proves painful |
 | Package registry (pip/npm) | Rejected for now | Infrastructure the team doesn't need at 1–3 repos; the natural v2 once the core is org-shared (Future Consideration #1) |
@@ -75,6 +75,11 @@ core-layer file**. Checksums are what turn "someone edited a copy" from silent d
 into a detectable state with two sanctioned resolutions: move the change to an
 overlay, or record the file as a deliberate fork (the lock gains a `forks:` entry,
 which becomes the review agenda at upgrade time).
+
+One more thing the lock pins down: **what travels is a tagged release, not a
+working copy.** The framework is a dependency with downstream consumers, not a lab
+whose copies drift by nature — consumers integrate against a version they can name,
+and the upstream owes them the tagging discipline that implies (§11).
 
 ## 4. The layering model
 
@@ -127,10 +132,11 @@ run pattern. Everything lands as **one scaffold PR** in the host repo.
 
 ### Stage 0 — `integrate.py init` (mechanical, minutes)
 
-Run from a framework checkout, pointed at the target:
+Run from a pinned framework release — a tagged checkout or its release tarball,
+never someone's working copy — pointed at the target:
 
 ```
-python3 <framework>/scripts/integrate.py init <target-repo> [--prefix .agentic] [--adapters auto]
+python3 <framework-release>/scripts/integrate.py init <target-repo> [--prefix .agentic] [--adapters auto]
 ```
 
 - Detects runners present (`.claude/`, `.github/`, …) and selects adapters
@@ -198,17 +204,21 @@ ran init.
 
 ## 6. Upgrades and flowback
 
-`integrate.py upgrade`, run from a newer framework checkout:
+`integrate.py upgrade`, run from a newer pinned framework release:
 
-1. Read the lock's source commit; that checkout's history supplies the **base** —
+1. Read the lock's pinned source tag; fetching that ref supplies the **base** —
    so core files get a true 3-way merge (base, upstream, local) rather than a
    clobber-and-pray.
 2. Unforked core files: replaced. Forked files: merged, conflicts surfaced. Seeded
    and project layers: untouched, with new upstream keys/sections reported as notes.
 3. Re-render, re-run `validate` static checks, bump the lock.
 
-Flowback stays deliberately manual: retros in host repos produce framework patches
-by hand, as today. What the lockfile adds is the census — *which* repos run *which*
+Flowback stays deliberately manual and **maintainer-mediated**: retros in host
+repos produce framework patches authored by the maintainer, as today — hosts do
+not push upstream (assume maintainer-only authorship until a contribution policy
+exists). And it is a rule of the path, not a courtesy, that host-confidential
+content never travels upstream: a retro lesson is redacted to its
+framework-general observation before it leaves the host. What the lockfile adds is the census — *which* repos run *which*
 version, so a retro lesson can say exactly who needs the upgrade. When a third repo
 adopts and the core wants to become org-shared infrastructure (Future
 Consideration #1), this lock/upgrade machinery is the substrate that promotion
@@ -234,15 +244,15 @@ core, and the generation is gated agent work, not templating.
 The whole operator surface, from zero to gate-ready, should be:
 
 ```
-python3 ~/repos/agentic-sandbox/scripts/integrate.py init ~/repos/my-app
+python3 <framework-release>/scripts/integrate.py init ~/repos/my-app
 cd ~/repos/my-app        # dispatch the Integrator with the prompt init printed
 python3 .agentic/scripts/integrate.py validate
 # open the scaffold PR
 ```
 
 Two tool invocations, one agent dispatch, one PR. The tool travels into
-`.agentic/scripts/`, so the host never needs the framework checkout again except to
-upgrade. Stdlib-only Python 3.9+, same constraint as the renderer and for the same
+`.agentic/scripts/`, so the host never needs the framework source again except to
+upgrade against a newer release. Stdlib-only Python 3.9+, same constraint as the renderer and for the same
 reason: host machines' interpreters vary, and the integration tool is precisely the
 thing that runs *before* the environment probe has fixed anything.
 
@@ -276,7 +286,9 @@ thing that runs *before* the environment probe has fixed anything.
 
 ## 11. Build phasing
 
-- **v0:** renderer overlay support + path-relativity; `integrate.py init|validate`
+- **v0:** a first **versioned, tagged release** of the framework — the lockfile's
+  `version` field needs something real to pin before the first arms-length
+  adoption; renderer overlay support + path-relativity; `integrate.py init|validate`
   (static checks only); lockfile; `roles/integrator.md` +
   `contracts/integration-profile.md`; canned smoke brief. Acceptance test: re-run
   integration against the pilot host and diff the result against its hand-built

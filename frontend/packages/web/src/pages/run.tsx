@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { api, formatAge, formatWhen, type InboxItem, type RunDetailResponse } from '../api.ts'
 import { AgeBadge, BudgetMeter, GateLedger, KindChip, PhaseChip, ValidationBadge } from '../components/chips.tsx'
+import { DecidePanel } from '../components/decide.tsx'
 import { DiffView } from '../components/diff-view.tsx'
 import { Markdown } from '../components/markdown.tsx'
 import { PageStatus } from './inbox.tsx'
@@ -139,6 +140,7 @@ function NeedsYouCard({ item, now, detail }: { item: InboxItem; now: number; det
             ))}
         </div>
       )}
+      <DecidePanel item={item} />
     </section>
   )
 }

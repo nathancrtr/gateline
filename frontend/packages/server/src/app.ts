@@ -152,7 +152,8 @@ export function createApp(deps: AppDeps): Hono {
     }
 
     try {
-      const planned = planDecision(state, body, who)
+      // source/slug/action were checked above; the rest planDecision validates.
+      const planned = planDecision(state, { ...body, action: body.action }, who)
       const result = await source.writeState(ref, planned.mutate, planned.message)
       if (!result.ok) {
         const status = result.reason === 'ref-moved' ? 409 : result.reason === 'dirty-worktree' ? 423 : 400

@@ -9,9 +9,10 @@ import { createApp } from '../src/app.ts'
 let fixture: FixtureRepo
 let app: Hono
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 const get = async (path: string) => {
   const res = await app.request(path)
-  return { status: res.status, body: await res.json() }
+  return { status: res.status, body: (await res.json()) as any }
 }
 
 beforeAll(() => {
@@ -80,7 +81,7 @@ describe('the write route (R2/R3)', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload),
     })
-    return { status: res.status, body: await res.json() }
+    return { status: res.status, body: (await res.json()) as any }
   }
 
   it('rejects approve on a bounced packet (R3 backstop)', async () => {

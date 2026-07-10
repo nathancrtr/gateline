@@ -1,0 +1,21 @@
+{
+  "name": "@agentic/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "agentic — the gate frontend in terminal form: status, inbox, and the same single decision write path.",
+  "bin": {
+    "agentic": "./src/main.ts"
+  },
+  "exports": {
+    ".": "./src/main.ts"
+  },
+  "dependencies": {
+    "@agentic/core": "*",
+    "@agentic/server": "*",
+    "commander": "^14.0.0"
+  },
+  "devDependencies": {
+    "@agentic/fixtures": "*"
+  }
+}

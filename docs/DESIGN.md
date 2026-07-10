@@ -170,7 +170,9 @@ apply to a new hire.
 **v1 — agent-orchestrated.** The Orchestrator role is bound to a model and a scheduler
 (cron, CI trigger, or long-running session). Humans interact only at gates. Promotion
 criterion: the team has run enough v0 cycles that gate reviews have become
-confirmations rather than corrections.
+confirmations rather than corrections. The v1 design — a stateless reconciler over
+`state.yaml` with an adapter-shaped dispatch seam and automated budget metering — is
+drafted in [ORCHESTRATOR.md](ORCHESTRATOR.md).
 
 The role specs are identical in both modes — only who executes `orchestrator.md` changes.
 

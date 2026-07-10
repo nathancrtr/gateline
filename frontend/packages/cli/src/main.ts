@@ -229,6 +229,38 @@ program
     await decide(slug, flags, { action: 'resume', resumePhase: flags.phase as Phase | undefined })
   })
 
+// --- sync ----------------------------------------------------------------------
+
+program
+  .command('sync')
+  .description('copy PR-review approvals into state.yaml G2 entries (dry-run unless --live)')
+  .option('--source <id>', 'only this source')
+  .option('--live', 'apply the plan (default: print it)')
+  .action(async (flags: { source?: string; live?: boolean }) => {
+    const { planSync, applySync, GhCliProvider } = await import('@agentic/core')
+    const { sources } = await resolveSources()
+    let any = false
+    for (const source of sources) {
+      if (flags.source && source.id !== flags.source) continue
+      const dir = (source as { dir?: string }).dir
+      if (!dir) continue
+      const plan = await planSync(source, new GhCliProvider(dir))
+      if (plan.length === 0) continue
+      any = true
+      if (!flags.live) {
+        for (const p of plan)
+          console.log(`would record: ${p.source}/${p.slug} ${p.gate} approved by ${p.approval.reviewer} (PR #${p.approval.number}, ${p.approval.submittedAt})`)
+      } else {
+        for (const r of await applySync(source, plan)) {
+          if (r.ok) console.log(`recorded: ${r.source}/${r.slug} ${r.gate} ← PR #${r.approval.number} → ${r.commit!.slice(0, 10)}`)
+          else console.error(`failed: ${r.source}/${r.slug} — ${r.error}`)
+        }
+      }
+    }
+    if (!any) console.log('nothing to sync — no undecided G2 with an approved PR review')
+    else if (!flags.live) console.log('\ndry-run; pass --live to record')
+  })
+
 // --- ui ----------------------------------------------------------------------
 
 program

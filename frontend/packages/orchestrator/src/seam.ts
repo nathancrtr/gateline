@@ -21,6 +21,8 @@ export interface DispatchOutcome {
   tokensIn: number | null
   tokensOut: number | null
   error: string | null
+  /** Retrying cannot help (e.g. a fold conflict = plan defect): escalate now. */
+  fatal?: boolean
 }
 
 export interface Dispatcher {

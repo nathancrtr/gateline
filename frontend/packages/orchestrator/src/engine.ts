@@ -12,7 +12,7 @@ import { observeRun, parseLedger, type RunObservation } from './observe.ts'
 import { promptBody } from './prompts.ts'
 import { resolveModel, type Registry } from './registry.ts'
 import type { Dispatcher, DispatchOutcome } from './seam.ts'
-import { ensureRunCheckout, removeRunCheckout } from './workspace.ts'
+import { ensureRunCheckout, ensureTaskCheckout, foldTaskBranch, removeRunCheckout, type TaskCheckout } from './workspace.ts'
 
 export interface EngineConfig {
   repoDir: string
@@ -218,17 +218,29 @@ export class Engine {
 
   private launch(ref: RunRef, obs: RunObservation, intent: DispatchIntent, openedAt: string): void {
     const key = jobKey(ref.slug, intent.role, intent.task, intent.round)
+    // Implementers get per-task isolation (§5.3): a private branch and
+    // worktree off the run tip, folded back serially on success — parallel
+    // implementers never observe each other's mid-flight state.
+    const isolate = intent.role === 'implementer' && intent.task !== null
     const job = (async () => {
       let outcome: DispatchOutcome
       try {
-        const cwd = await ensureRunCheckout(this.cfg.repoDir, ref.branch)
+        const checkout = isolate
+          ? await ensureTaskCheckout(this.cfg.repoDir, ref.branch, intent.task!)
+          : { path: await ensureRunCheckout(this.cfg.repoDir, ref.branch), branch: ref.branch }
         const taskPath = intent.task ? (obs.taskFiles.get(intent.task)?.path ?? null) : null
         outcome = await this.cfg.dispatcher.dispatch({
-          cwd,
+          cwd: checkout.path,
           role: intent.role,
           body: promptBody(ref.slug, intent, taskPath),
           timeoutMs: this.cfg.roleTimeoutMs ?? DEFAULT_ROLE_TIMEOUT_MS,
         })
+        if (isolate) {
+          const fold = await this.withLock(ref.slug, () => foldTaskBranch(this.cfg.repoDir, ref.branch, checkout as TaskCheckout))
+          if (outcome.ok && !fold.ok) {
+            outcome = { ok: false, costUsd: outcome.costUsd, tokensIn: outcome.tokensIn, tokensOut: outcome.tokensOut, error: fold.message, fatal: fold.conflict }
+          }
+        }
       } catch (e) {
         outcome = { ok: false, costUsd: null, tokensIn: null, tokensOut: null, error: (e as Error).message }
       }
@@ -283,7 +295,7 @@ export class Engine {
       const priorFailures = ledger.filter(
         (e) => e.failed && e.role === intent.role && e.task === (intent.task ?? null),
       ).length
-      const escalateNow = !outcome.ok && priorFailures >= 1 // one retry, then a human (§11)
+      const escalateNow = !outcome.ok && (outcome.fatal === true || priorFailures >= 1) // one retry, then a human (§11); fatal skips the retry
 
       const result = await this.source.writeState(
         ref,

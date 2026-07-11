@@ -17,6 +17,10 @@ Design: [docs/FRONTEND.md](../docs/FRONTEND.md) · Plan:
   pause/resume. No dispatch, no artifact edits, no second channel. Writes are
   compare-and-swap (`git update-ref` with the expected old value): if the run
   branch moved while you decided, the write refuses and the UI re-presents.
+  R2 scopes to the *human* surfaces (web, CLI, server): the v1 orchestrator
+  (`packages/orchestrator`) is the sanctioned machine co-writer, using the same
+  core write path under its own bot identity and commit grammar — it dispatches
+  agents; the human surfaces never do.
 - **R3 — A malformed packet never renders as reviewable.** Artifacts are
   validated against the target repo's *own* `contracts/` templates; a packet
   missing required sections gets a bounce view with no approve control — in the

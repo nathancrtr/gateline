@@ -1,7 +1,9 @@
 # The v1 Orchestrator — Design
 
-**Status:** v0.2 — maintainer review complete; the §12 open questions are resolved
-(2026-07-10, answers folded into §3, §4, §6, §10) and implementation is underway
+**Status:** v0.3 — implemented through the M0–M4 trust ladder in
+[`frontend/packages/orchestrator`](../frontend/packages/orchestrator/) (see its
+README for the runbook); the §12 open questions are resolved (2026-07-10, answers
+folded into §3, §4, §6, §10)
 **Prerequisite reading:** [DESIGN.md](DESIGN.md) §4 (gates and caps), §7 (operating
 modes), §8 (adapters); [`roles/orchestrator.md`](../roles/orchestrator.md); the gate
 frontend's FRONTEND.md and FRONTEND-PLAN.md §2–3 (readiness derivation and the write

@@ -25,6 +25,8 @@ export interface DispatchOutcome {
 
 export interface Dispatcher {
   readonly adapter: string
+  /** The adapter that would run this role (routing dispatchers differ per role). */
+  adapterFor?(role: string): string
   dispatch(req: DispatchRequest): Promise<DispatchOutcome>
 }
 

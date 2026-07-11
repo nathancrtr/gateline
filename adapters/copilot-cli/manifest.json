@@ -20,6 +20,13 @@
     "reviewer": "gpt-5.4",
     "verifier": "gemini-3-flash"
   },
+  "_comment_model_vendors": "Vendor of each runner spelling above, for the orchestrator's dispatch-time P5 check (avoid_vendor_of).",
+  "model_vendors": {
+    "claude-fable-5": "anthropic",
+    "claude-sonnet-5": "anthropic",
+    "gpt-5.4": "openai",
+    "gemini-3-flash": "google"
+  },
   "extra_frontmatter": {
     "disable-model-invocation": true,
     "user-invocable": true

@@ -13,6 +13,7 @@ import { formatShadowStep, shadowReplay } from './shadow.ts'
 import { Engine } from './engine.ts'
 import { HeadlessDispatcher } from './seam.ts'
 import { loadHeadlessManifest } from './manifest.ts'
+import { RoutingDispatcher } from './router.ts'
 import { runLoop } from './triggers.ts'
 
 /** One identity per orchestrator install (resolved question 4). */
@@ -27,7 +28,12 @@ program
   .description('Stateless reconciler for artifact-driven agent pipelines (docs/ORCHESTRATOR.md)')
   .version('0.1.0')
   .option('--repo <path>', 'repository to operate on (default: cwd)', process.cwd())
-  .option('--adapter <name>', 'adapter whose headless manifest dispatches agents', 'claude-code')
+  .option(
+    '--adapter <name>',
+    'headless adapter(s), repeatable; the first is the default runner, later ones satisfy avoid_vendor_of pins',
+    (value: string, acc: string[]) => [...acc, value],
+    [] as string[],
+  )
 
 interface Opened {
   dir: string
@@ -42,14 +48,24 @@ async function open(): Promise<Opened> {
 }
 
 async function buildEngine(opened: Opened): Promise<Engine> {
-  const adapter = program.opts<{ adapter: string }>().adapter
-  const manifest = await loadHeadlessManifest(opened.dir, adapter)
+  const names = program.opts<{ adapter: string[] }>().adapter
+  const log = (line: string) => console.log(line)
+  const adapters = await Promise.all(
+    (names.length ? names : ['claude-code']).map(async (name) => {
+      const manifest = await loadHeadlessManifest(opened.dir, name)
+      return { manifest, dispatcher: new HeadlessDispatcher(manifest) }
+    }),
+  )
+  const dispatcher =
+    adapters.length === 1 && !opened.registry
+      ? adapters[0]!.dispatcher
+      : new RoutingDispatcher(adapters, opened.registry ?? { profiles: {}, bindings: {}, pricing: {}, estimates: {} }, log)
   return new Engine({
     repoDir: opened.dir,
     identity: BOT_IDENTITY,
-    dispatcher: new HeadlessDispatcher(manifest),
+    dispatcher,
     registry: opened.registry,
-    log: (line) => console.log(line),
+    log,
   })
 }
 

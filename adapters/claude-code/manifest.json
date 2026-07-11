@@ -18,6 +18,12 @@
     "fast-cheap": "haiku"
   },
   "model_overrides": {},
+  "_comment_model_vendors": "Vendor of each runner spelling above, for the orchestrator's dispatch-time P5 check (avoid_vendor_of). Single-vendor harness: every spelling is one vendor, so the pins are satisfiable only via a second adapter (ORCHESTRATOR.md §5.3).",
+  "model_vendors": {
+    "fable": "anthropic",
+    "sonnet": "anthropic",
+    "haiku": "anthropic"
+  },
   "extra_frontmatter": {},
   "_comment_headless": "v1 orchestrator dispatch (docs/ORCHESTRATOR.md §5). {prompt} is the rendered dispatch prompt; the command runs with cwd at the repo root with the run branch checked out. No model flag: the rendered subagent's frontmatter pins the model, so naming the subagent in the prompt binds the role AND the model. permission_mode is what makes headless runs unattended; operators may narrow it via project settings allowlists (adapter rule: narrow, never widen).",
   "headless": {

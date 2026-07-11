@@ -195,7 +195,7 @@ export class Engine {
                   role: intent.role,
                   task: intent.task,
                   round: intent.round,
-                  adapter: this.cfg.dispatcher.adapter,
+                  adapter: this.cfg.dispatcher.adapterFor?.(intent.role) ?? this.cfg.dispatcher.adapter,
                   model: this.cfg.registry ? resolveModel(this.cfg.registry, intent.role) : null,
                   tokens_in: null,
                   tokens_out: null,

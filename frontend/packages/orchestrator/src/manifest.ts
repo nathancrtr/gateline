@@ -20,6 +20,12 @@ export interface HeadlessManifest {
     errorField?: string
     resultField?: string
   }
+  /** profile → this runner's model spelling (the manifest's model_map). */
+  modelMap: Record<string, string>
+  /** role → spelling overrides (how copilot-cli implements the P5 pins). */
+  modelOverrides: Record<string, string>
+  /** spelling → vendor, for the dispatch-time avoid_vendor_of check. */
+  modelVendors: Record<string, string>
 }
 
 export async function loadHeadlessManifest(repoDir: string, adapter: string): Promise<HeadlessManifest> {
@@ -33,6 +39,10 @@ export async function loadHeadlessManifest(repoDir: string, adapter: string): Pr
     throw new Error(`adapter "${adapter}": unknown usage_report.format "${String(usage.format)}"`)
   if (!Array.isArray(headless.command) || headless.command.length === 0)
     throw new Error(`adapter "${adapter}": headless.command must be a non-empty argv array`)
+  const strMap = (v: unknown): Record<string, string> => {
+    if (!v || typeof v !== 'object') return {}
+    return Object.fromEntries(Object.entries(v as Record<string, unknown>).filter(([, x]) => typeof x === 'string')) as Record<string, string>
+  }
   return {
     adapter,
     command: headless.command.map(String),
@@ -43,6 +53,9 @@ export async function loadHeadlessManifest(repoDir: string, adapter: string): Pr
       errorField: typeof usage.error_field === 'string' ? usage.error_field : undefined,
       resultField: typeof usage.result_field === 'string' ? usage.result_field : undefined,
     },
+    modelMap: strMap(raw.model_map),
+    modelOverrides: strMap(raw.model_overrides),
+    modelVendors: strMap(raw.model_vendors),
   }
 }
 

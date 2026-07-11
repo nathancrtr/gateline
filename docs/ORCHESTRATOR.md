@@ -1,6 +1,7 @@
 # The v1 Orchestrator — Design
 
-**Status:** v0.1 — draft for team review; nothing here is implemented yet
+**Status:** v0.2 — maintainer review complete; the §12 open questions are resolved
+(2026-07-10, answers folded into §3, §4, §6, §10) and implementation is underway
 **Prerequisite reading:** [DESIGN.md](DESIGN.md) §4 (gates and caps), §7 (operating
 modes), §8 (adapters); [`roles/orchestrator.md`](../roles/orchestrator.md); the gate
 frontend's FRONTEND.md and FRONTEND-PLAN.md §2–3 (readiness derivation and the write
@@ -70,7 +71,9 @@ makes it safe to automate first.
 only at the enumerated judgment points** (single-shot invocations through the same
 metered dispatch seam as everything else, bound per the registry — the
 `frontier-reasoning` binding survives, it just fires rarely). What this rules out: a
-model session driving every tick.
+model session driving every tick. Bounce-message composition stays **mechanical**
+(named missing sections, no model pass for tone) until evidence shows otherwise —
+resolved question 1.
 
 Why engine-first, beyond cost:
 
@@ -117,7 +120,7 @@ implementation time (one test per row, like the frontend's); its shape:
 | Role's artifact present but malformed | Bounce: re-dispatch the producer naming the missing sections |
 | Artifact well-formed, gate not decided | Rest (the frontend inbox surfaces it) |
 | Gate approved | Advance phase; dispatch the next role |
-| Gate declined | Rest as `paused: gate-declined` until a human resumes |
+| Gate declined | Rest as `paused: gate-declined`; a human resume re-dispatches the producing role with the decline notes as bounce input (resolved question 5) |
 | Task diff ready, `review_rounds` < 3 | Dispatch Reviewer (P5-constrained, §5.3) |
 | Review requests changes, rounds < 3 | Dispatch Implementer, round n+1 |
 | Round cap hit, or two bounces of the same artifact | Escalate; pause the run |
@@ -135,7 +138,8 @@ CAS refusal (a human decided mid-tick, an agent committed) → discard, re-tick.
 additions specific to a machine writer:
 
 - **Distinct identity.** Orchestrator commits are authored by a dedicated bot
-  identity, never a person's `git config`. Gate entries are written only by named
+  identity — one per orchestrator install, not per repo (resolved question 4) —
+  never a person's `git config`. Gate entries are written only by named
   humans (CLAUDE.md convention); provenance must make machine bookkeeping and human
   decisions distinguishable at a glance.
 - **Reserved grammar.** Commit messages follow the frontend's structured form —
@@ -241,9 +245,11 @@ autonomy multiplies the cost of a missing meter. The design:
   (model ID → $/Mtok in/out). The registry is already the only file where model IDs
   exist, so it is the only correct home for their prices — illustrative values,
   org-pinned like the IDs themselves.
-- **Enforcement is pre-flight.** Before any dispatch: ledger sum + a conservative
-  per-role estimate against `cost_limit_usd`; projected exceedance → pause
-  `budget-exhausted` + escalation. Pause-don't-degrade, unchanged.
+- **Enforcement is pre-flight.** Before any dispatch: ledger sum + the registry's
+  static per-role estimate (`dispatch_estimates_usd`; resolved question 2 — static
+  for v1, trailing ledger averages a possible later upgrade) against
+  `cost_limit_usd`; projected exceedance → pause `budget-exhausted` + escalation.
+  Pause-don't-degrade, unchanged.
 - **v0 benefits immediately.** The ledger contract lands first (M0); a human
   orchestrator appends a ledger entry from harness usage output — a smaller, more
   concrete ask than maintaining a total, and exactly the shape v1 automates. The
@@ -332,7 +338,7 @@ is now checkable from metrics rather than vibes.
 | # | Milestone | Contents | Exit criterion |
 |---|---|---|---|
 | M0 | Contracts land | §8 amendments; ledger usable by hand in v0 | Amendments merged; a v0 run carries a hand-recorded ledger entry |
-| M1 | Shadow mode | Engine + derivation rules; `tick --dry-run` prints each run's derived next action; no writes, no dispatches | Across at least one full v0 run, the engine's derived action matches what the human orchestrator actually did; every disagreement is dispositioned as an engine bug or a design finding |
+| M1 | Shadow mode | Engine + derivation rules; `tick --dry-run` prints each run's derived next action; no writes, no dispatches | Across at least **three** full v0 runs (resolved question 3: N=3), the engine's derived action matches what the human orchestrator actually did; every disagreement is dispositioned as an engine bug or a design finding |
 | M2 | Autonomous loop, one vendor | Dispatch seam + claude-code headless dispatcher; commit-then-launch; metering + pre-flight cap; watcher + heartbeat | A toy run completes G0→G3 in this repo with humans acting only at gates and escalations; the ledger is populated automatically; a mid-run human pause is honored |
 | M3 | Cross-vendor dispatch | copilot-cli headless dispatcher; `avoid_vendor_of` enforced at dispatch time | A run's Reviewer and Verifier demonstrably execute on a different vendor than its Implementer |
 | M4 | Hardening | Crash-recovery drill; per-task worktree isolation; trigger packaging (cron/launchd template); WALKTHROUGH v1 section | Killing the orchestrator mid-dispatch and restarting converges with no duplicate dispatch; a second operator can run v1 cold from the docs |
@@ -364,20 +370,24 @@ Extends DESIGN.md §9 for the autonomous mode:
 | Vendor or model outage mid-run | Dispatch failure → one retry → escalate and pause. Falling back to a registry alternate is a human decision — a silent model swap would invalidate the P5 reasoning recorded for the run |
 | Orchestrator host dies | All state is in git; restart anywhere, probe, converge — the process table is the only unpersisted state and is treated as cache |
 
-## 12. Open questions for team review
+## 12. Resolved questions (maintainer review, 2026-07-10)
 
-1. **Judgment-point inventory** — §3 enumerates two (escalation summaries, intent
-   triage). Is bounce-message composition mechanical enough (named missing
-   sections), or worth a model pass for tone and context?
-2. **Pre-flight estimates** — static per-role cost estimates in the registry, or
-   trailing averages computed from prior runs' ledgers?
-3. **Shadow-mode bar** — is one full run of agreement enough to exit M1, or should
-   it be N runs / N decisions?
-4. **Bot identity** — one identity per orchestrator install or per repo? (Matters
-   for org-level audit later, Future Consideration #1.)
-5. **Decline recovery** — after `gate-declined`, should a human `resume`
-   automatically re-dispatch the producing role with the decline notes as bounce
-   input, or only re-open the phase and wait?
+The v0.1 draft posed five open questions; all are settled and folded into the
+sections above. Recorded here so the reasoning survives:
+
+1. **Judgment-point inventory** — bounce-message composition stays mechanical
+   (named missing sections); a model pass for tone waits for evidence that the
+   mechanical form fails (§3).
+2. **Pre-flight estimates** — static per-role estimates in the registry
+   (`dispatch_estimates_usd` in `registry/models.yaml`) for v1; trailing ledger
+   averages are a possible later upgrade (§6).
+3. **Shadow-mode bar** — N = 3 full v0 runs of agreement to exit M1 (§10).
+4. **Bot identity** — one identity per orchestrator install (§4.3); per-repo
+   identities revisit with org-level audit, Future Consideration #1.
+5. **Decline recovery** — a human `resume` after `gate-declined` automatically
+   re-dispatches the producing role with the decline notes as bounce input
+   (§4.2); re-open-and-wait was rejected as an idle state a human must remember
+   to unstick.
 
 ---
 

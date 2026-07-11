@@ -31,6 +31,29 @@ profiles:
     alternates:
       - openai/<current-small-model>
 
+pricing:
+  # $ per million tokens, keyed by the model IDs above. ILLUSTRATIVE like the
+  # IDs themselves — re-verify against your org's rates when pinning models.
+  # The v1 orchestrator prices each dispatch's usage from this map into the
+  # run's budget.ledger[] (docs/ORCHESTRATOR.md §6). A model with no entry
+  # here cannot be metered; the dispatch seam refuses it rather than guessing.
+  anthropic/claude-fable-5:   {usd_per_mtok_in: 15, usd_per_mtok_out: 75}
+  anthropic/claude-sonnet-5:  {usd_per_mtok_in: 3,  usd_per_mtok_out: 15}
+  anthropic/claude-haiku-4-5: {usd_per_mtok_in: 1,  usd_per_mtok_out: 5}
+
+dispatch_estimates_usd:
+  # Conservative static per-dispatch estimates for the pre-flight budget check
+  # (settled 2026-07-10: static for v1; trailing ledger averages are a possible
+  # later upgrade). Before any dispatch: ledger sum + this estimate projected
+  # over the limit → pause `budget-exhausted` and escalate. Pause, never degrade.
+  orchestrator: 0.50   # single-shot judgment calls (escalation summary, triage)
+  analyst: 2
+  architect: 5
+  implementer: 8
+  reviewer: 4
+  verifier: 6
+  ops: 2
+
 bindings:
   orchestrator: {profile: frontier-reasoning}
   analyst:      {profile: balanced}

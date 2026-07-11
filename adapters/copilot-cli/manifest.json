@@ -23,5 +23,13 @@
   "extra_frontmatter": {
     "disable-model-invocation": true,
     "user-invocable": true
+  },
+  "_comment_headless": "v1 orchestrator dispatch, fast-follow milestone (docs/ORCHESTRATOR.md §5.3). --agent selects the rendered custom agent, whose frontmatter (incl. model_overrides above) pins the model — this is the P5-completing dispatcher. usage_report format static-estimate: Copilot CLI does not document per-invocation usage output; until verified live, metering falls back to the registry's dispatch_estimates_usd entry, recorded in the ledger with tokens null.",
+  "headless": {
+    "command": ["copilot", "-p", "{prompt}", "--agent", "{role}", "--allow-all-tools"],
+    "dispatch_prompt": "{body}",
+    "usage_report": {
+      "format": "static-estimate"
+    }
   }
 }

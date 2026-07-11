@@ -18,5 +18,20 @@
     "fast-cheap": "haiku"
   },
   "model_overrides": {},
-  "extra_frontmatter": {}
+  "extra_frontmatter": {},
+  "_comment_headless": "v1 orchestrator dispatch (docs/ORCHESTRATOR.md §5). {prompt} is the rendered dispatch prompt; the command runs with cwd at the repo root with the run branch checked out. No model flag: the rendered subagent's frontmatter pins the model, so naming the subagent in the prompt binds the role AND the model. permission_mode is what makes headless runs unattended; operators may narrow it via project settings allowlists (adapter rule: narrow, never widen).",
+  "headless": {
+    "command": ["claude", "-p", "{prompt}", "--output-format", "json", "--permission-mode", "bypassPermissions"],
+    "dispatch_prompt": "Use the {role} subagent. {body}",
+    "usage_report": {
+      "format": "json-stdout",
+      "fields": {
+        "cost_usd": "total_cost_usd",
+        "tokens_in": "usage.input_tokens",
+        "tokens_out": "usage.output_tokens"
+      },
+      "error_field": "is_error",
+      "result_field": "result"
+    }
+  }
 }

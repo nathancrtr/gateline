@@ -220,7 +220,20 @@ interface StateOpts {
   gates: Partial<Record<'G0' | 'G1' | 'G2' | 'G3', { by: string; at: string; notes?: string; burden?: string; approved?: boolean }>>
   tasks?: { id: string; status: string; rounds: number }[]
   escalations?: { at: string; from: string; reason: string; resolved: boolean }[]
-  budget?: { limit: number; spent: number }
+  budget?: { limit: number; spent: number; ledger?: LedgerLine[] }
+}
+
+interface LedgerLine {
+  at: string
+  role: string
+  task: string | null
+  round: number | null
+  adapter: string
+  model: string
+  /** Null when the adapter reports no per-invocation usage (static-estimate metering). */
+  tokensIn: number | null
+  tokensOut: number | null
+  costUsd: number
 }
 
 function stateYaml(o: StateOpts): string {
@@ -239,6 +252,12 @@ function stateYaml(o: StateOpts): string {
     .map((e) => `  - {at: ${e.at}, from_role: ${e.from}, reason: ${JSON.stringify(e.reason)}, resolved: ${e.resolved}}`)
     .join('\n')
   const budget = o.budget ?? { limit: 25, spent: 0 }
+  const ledger = (budget.ledger ?? [])
+    .map(
+      (l) =>
+        `  - {at: ${l.at}, role: ${l.role}, task: ${l.task ?? 'null'}, round: ${l.round ?? 'null'}, adapter: ${l.adapter}, model: ${l.model}, tokens_in: ${l.tokensIn ?? 'null'}, tokens_out: ${l.tokensOut ?? 'null'}, cost_usd: ${l.costUsd}}`,
+    )
+    .join('\n')
   return `# Contract: maintained by Orchestrator (human in v0); read by everyone.
 # Lives at runs/<slug>/state.yaml — the single source of truth for a run.
 
@@ -249,7 +268,8 @@ paused_reason: ${o.pausedReason ?? 'null'}
 
 budget:
   cost_limit_usd: ${budget.limit}      # exhaustion pauses the run; it never silently degrades
-  cost_spent_usd: ${budget.spent}
+  cost_spent_usd: ${budget.spent}      # derived: sum of ledger[].cost_usd
+  ledger:${ledger ? `\n${ledger}` : ' []'}
 
 gates:                    # a gate entry is written ONLY by the named human
 ${gate('G0')}
@@ -312,7 +332,18 @@ export function generateFixtureRepo(dir?: string): FixtureRepo {
         G3: { by: 'operator', at: '2026-06-24T10:00:00Z', burden: 'confirmation' },
       },
       tasks: [{ id: '01-core', status: 'done', rounds: 1 }],
-      budget: { limit: 25, spent: 6.4 },
+      budget: {
+        limit: 25,
+        spent: 6.4,
+        // Hand-recorded v0 ledger (the M0 shape the v1 dispatch seam automates).
+        ledger: [
+          { at: '2026-06-20T09:30:00Z', role: 'analyst', task: null, round: null, adapter: 'claude-code', model: 'anthropic/claude-sonnet-5', tokensIn: 180000, tokensOut: 9000, costUsd: 0.68 },
+          { at: '2026-06-21T09:30:00Z', role: 'architect', task: null, round: null, adapter: 'claude-code', model: 'anthropic/claude-fable-5', tokensIn: 120000, tokensOut: 11000, costUsd: 2.63 },
+          { at: '2026-06-22T10:00:00Z', role: 'implementer', task: '01-core', round: 1, adapter: 'claude-code', model: 'anthropic/claude-sonnet-5', tokensIn: 310000, tokensOut: 24000, costUsd: 1.29 },
+          { at: '2026-06-22T14:00:00Z', role: 'reviewer', task: '01-core', round: 1, adapter: 'copilot-cli', model: 'openai/gpt-5.4', tokensIn: null, tokensOut: null, costUsd: 1.1 },
+          { at: '2026-06-23T09:00:00Z', role: 'verifier', task: null, round: null, adapter: 'claude-code', model: 'anthropic/claude-sonnet-5', tokensIn: 150000, tokensOut: 17000, costUsd: 0.7 },
+        ],
+      },
     }),
   )
   repo.commitAll(`state(${doneSlug}): run complete`, now - 15 * DAY)

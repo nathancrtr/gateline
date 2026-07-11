@@ -16,6 +16,8 @@
     "packages/core/src/**/*.ts",
     "packages/core/test/**/*.ts",
     "packages/cli/src/**/*.ts",
+    "packages/orchestrator/src/**/*.ts",
+    "packages/orchestrator/test/**/*.ts",
     "packages/server/src/**/*.ts",
     "packages/server/test/**/*.ts",
     "fixtures/src/**/*.ts"

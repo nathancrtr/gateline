@@ -1,0 +1,388 @@
+# The v1 Orchestrator — Design
+
+**Status:** v0.1 — draft for team review; nothing here is implemented yet
+**Prerequisite reading:** [DESIGN.md](DESIGN.md) §4 (gates and caps), §7 (operating
+modes), §8 (adapters); [`roles/orchestrator.md`](../roles/orchestrator.md); the gate
+frontend's FRONTEND.md and FRONTEND-PLAN.md §2–3 (readiness derivation and the write
+path — on the `worktree-frontend-design` branch until it merges)
+
+---
+
+## 1. What v1 changes — and what it must not
+
+DESIGN.md §7 defines the v0 → v1 transition as a change of *executor*, not of role:
+"the role specs are identical in both modes — only who executes `orchestrator.md`
+changes." That sentence is this document's charter. v1 succeeds when
+`roles/orchestrator.md` is executed continuously, correctly, and cheaply without a
+human — and every other property of the system is preserved bit-for-bit: gates held
+by named humans, artifacts as the only interface between agents, `state.yaml`
+canonical, budgets that pause rather than degrade.
+
+The v1 orchestrator also arrives **second**. The gate frontend shipped first and
+established the discipline for machines that touch `state.yaml`: comment-preserving
+YAML edits, compare-and-swap ref updates, structured commit messages that the metrics
+reader parses, ISO-8601 timestamps, `review_rounds` living in exactly one place.
+FRONTEND-PLAN.md §11 even names the race this design must survive — "writing refs
+under a live agent session races the orchestrator; CAS refusal + re-present is the
+*designed* outcome." The orchestrator is therefore designed as a second well-behaved
+co-writer joining an ecosystem with established rules, not a privileged process the
+frontend must accommodate. A hard requirement follows:
+
+> **v1 requires zero frontend changes.** The orchestrator honors the frontend's
+> existing conventions (§7 lists them as a compatibility contract); anything the
+> frontend could *additionally* render about v1 is deferred and optional.
+
+## 2. Settled decisions
+
+Four maintainer decisions, settled before this draft. Close-call alternatives are
+noted where the choice was genuinely contested.
+
+| Decision | Choice |
+|---|---|
+| Execution model | **Stateless reconciler.** The orchestrator wakes on triggers, reads `state.yaml` at the run branch tip, derives the next action from files alone, executes it, commits, and exits. No conversation state survives between wakes — the purest expression of P1, and a gate wait costs nothing (it is simply "no action derivable"). Rejected: a long-running harness session (accrues exactly the conversation state P1 exists to eliminate; undefined crash recovery; a session burning while humans deliberate at a gate). |
+| Dispatch | **Adapter-shaped seam; one implementation first.** A runtime-neutral dispatch interface, implemented for the claude-code adapter first with copilot-cli as a fast-follow milestone — P5 decorrelation is designed in from day one and delivered incrementally. Rejected: single-harness-forever (bakes the P5 gap into the first autonomous mode) and cross-vendor-before-anything-works (delays the first trust-building loop). |
+| Metering | **Designed here, enforced by the orchestrator.** Automated budget metering is DESIGN.md §4's stated v1 prerequisite, and the enforcement hook — who checks the cap and flips `phase: paused` — is naturally the process that performs every dispatch. Folding it in (§6) keeps the meter and its enforcer from drifting apart. |
+| First deployment | **Local, this repo.** v1 runs on an operator's machine against this repository (the same local-first posture the frontend took), earning trust on toy runs before any host-repo or CI deployment. Host-repo delivery is designed-for-but-later (§10). |
+
+## 3. The judgment/mechanics split
+
+INTEGRATION.md §2 introduced the framework's decomposition rule: split any workflow
+along the judgment/mechanics line, make the mechanical half a tool and the judgment
+half a model invocation. Applying it to `roles/orchestrator.md`'s own operating
+instructions is clarifying:
+
+| Operating instruction | Classification |
+|---|---|
+| Initialize `runs/<slug>/` and `state.yaml`; dispatch the Analyst | Mechanical |
+| Validate artifacts against contracts (required sections); bounce naming the missing sections | Mechanical — the frontend's validator already implements exactly this, from the repo's own `contracts/*.md` |
+| Assemble gate packets; halt until a named human approves | Mechanical — "halt" is free for a reconciler |
+| Dispatch parallel Implementers only for non-overlapping file-contact surfaces | Mechanical — set intersection over declared surfaces |
+| Enforce round and budget caps; pause and escalate | Mechanical — counters and sums |
+| Summarize "where things stand" when escalating | **Judgment** |
+| Detect that an intent brief is missing constraints not inferable from the repo | **Judgment** |
+
+The role is almost entirely mechanical — unsurprising, since the spec itself forbids
+content judgment ("you own sequencing, state, and escalation — never content").
+Orchestration is the most mechanizable role in the roster, which is exactly what
+makes it safe to automate first.
+
+**The design: a deterministic engine executes the loop; the model binding is invoked
+only at the enumerated judgment points** (single-shot invocations through the same
+metered dispatch seam as everything else, bound per the registry — the
+`frontier-reasoning` binding survives, it just fires rarely). What this rules out: a
+model session driving every tick.
+
+Why engine-first, beyond cost:
+
+- **Structural safety.** The engine has *no code path* that writes
+  `gates.*.approved`. "The orchestrator never approves a gate" stops being an
+  instruction a model follows and becomes a property the code cannot violate.
+- **Auditability.** Same state in, same action out. Every tick's decision is
+  reproducible from the commit it read.
+- **Honest failure.** A deterministic loop that meets a state it has no rule for
+  escalates; a model in the same position improvises.
+
+## 4. The reconcile loop
+
+### 4.1 Triggers
+
+All triggers funnel into the same tick; no trigger carries information (the state
+does). Four sources:
+
+1. **Ref watcher** — `.git/refs` + `packed-refs`, debounced (the same mechanism the
+   frontend server uses for SSE freshness). Human decisions, agent artifact commits,
+   and other orchestrators' writes all surface here.
+2. **Dispatch completion** — a launched job exits.
+3. **Heartbeat** — cron-style, default every few minutes: catches missed events, ages
+   stale dispatches (§4.4), re-checks liveness.
+4. **Manual** — `tick` on demand, and `tick --dry-run` (shadow mode, §10).
+
+### 4.2 The tick
+
+For each active run: read `state.yaml` at the run branch tip → check invariants →
+derive the next action → execute it → record it with a CAS commit → done. At most
+one state transition per run per tick; a transition may carry several dispatches
+(parallel Implementers launch as one set).
+
+The derivation rules are the dual of the frontend's readiness table
+(FRONTEND-PLAN.md §2.3): that table derives *needs a human* from files; this one
+derives *needs a dispatch*. A run deriving as neither is at rest — gate waits,
+unresolved escalations, and pauses are all rest states, which is why a stateless
+orchestrator can hold them indefinitely for free. The full table is authored at
+implementation time (one test per row, like the frontend's); its shape:
+
+| State observed | Action |
+|---|---|
+| Phase entered, producing role not yet dispatched | Dispatch the role |
+| Role's artifact present but malformed | Bounce: re-dispatch the producer naming the missing sections |
+| Artifact well-formed, gate not decided | Rest (the frontend inbox surfaces it) |
+| Gate approved | Advance phase; dispatch the next role |
+| Gate declined | Rest as `paused: gate-declined` until a human resumes |
+| Task diff ready, `review_rounds` < 3 | Dispatch Reviewer (P5-constrained, §5.3) |
+| Review requests changes, rounds < 3 | Dispatch Implementer, round n+1 |
+| Round cap hit, or two bounces of the same artifact | Escalate; pause the run |
+| Budget pre-flight fails (§6) | Pause `budget-exhausted`; escalate |
+
+Two invariants govern every row: each action is derivable from committed files
+alone, and each action is **idempotent to re-derive** — a tick interrupted anywhere
+converges on re-run.
+
+### 4.3 Writes: the same discipline as the frontend
+
+Read at tip; comment-preserving edit (the `yaml` document API, not
+re-serialization); blob/tree/commit via plumbing; `update-ref` compare-and-swap.
+CAS refusal (a human decided mid-tick, an agent committed) → discard, re-tick. Two
+additions specific to a machine writer:
+
+- **Distinct identity.** Orchestrator commits are authored by a dedicated bot
+  identity, never a person's `git config`. Gate entries are written only by named
+  humans (CLAUDE.md convention); provenance must make machine bookkeeping and human
+  decisions distinguishable at a glance.
+- **Reserved grammar.** Commit messages follow the frontend's structured form —
+  `state(<slug>): <verb> …` — with the orchestrator using its own verbs
+  (`dispatched`, `bounced`, `advanced`, `escalated`, `paused`, `metered`) and never
+  the human decision grammar (`G2 approved by <name> …`), which the metrics reader
+  treats as authoritative for decisions.
+
+### 4.4 Dispatch protocol: commit-then-launch
+
+1. Derive a dispatch → **commit the intent first** (task/phase status →
+   `dispatched`, ledger entry opened) via CAS.
+2. On CAS success, launch the job.
+3. On completion, the agent's artifacts are already on the run branch (agents commit
+   their own work, as today); the orchestrator commits the closing bookkeeping —
+   status, rounds, spend.
+
+The CAS on step 1 is the duplicate-dispatch guard: two orchestrator instances, or a
+tick racing its own heartbeat, serialize on the ref update — the loser re-reads,
+sees `dispatched`, and rests. A crash between steps 1 and 2 leaves a `dispatched`
+entry with no living job and no artifact; the heartbeat detects exactly that
+signature and re-dispatches — agents are disposable by design (DESIGN.md §1), so a
+lost dispatch costs a retry, never corruption. Job handles (PIDs, harness session
+ids) are deliberately **not** committed: they are host-specific ephemera, treated as
+cache — the loop must always be able to reconstruct reality by probing, because git
+is the only store (the frontend's R1, inherited).
+
+### 4.5 Pause and resume
+
+`phase: paused` — written by a human (frontend, CLI, hand edit) or by the
+orchestrator itself (caps) — means: no new dispatches. In-flight jobs run to
+completion and their artifacts land harmlessly on the run branch; only
+`budget-exhausted` kills in-flight work. Resume is a human writing `phase` back (the
+frontend's resume control already derives the phase from the gate ledger); the
+watcher turns that commit into a tick. **`state.yaml` is the entire control plane,
+in both directions** — there is no orchestrator API, config channel, or command
+queue to keep consistent with it.
+
+## 5. The dispatch seam
+
+### 5.1 Interface
+
+```
+dispatch(run_ref, role, inputs: artifact paths, task?, round?, constraints?) → job
+```
+
+Completion yields exit status, a normalized usage record (§6), and the artifacts the
+agent committed. Nothing above the seam knows which harness ran — the seam is to
+runtimes what the registry is to models.
+
+### 5.2 Adapters grow a `headless` manifest section
+
+Each adapter's `manifest.json` — today the source for rendering agent files — gains
+a `headless` section: the invocation template (command, how the agent and model are
+named, output format flags) and the usage-report parsing spec. The adapter rule
+stands (narrow, never widen), and a new runner still costs one manifest. This
+**resolves DESIGN.md §8's reserved `adapters/orchestrated/` row**: v1 needs no
+separate orchestrated adapter tree, because the orchestrator is a framework
+component that *consumes* adapters through their manifests (amendment list, §8).
+
+### 5.3 Implementations
+
+- **claude-code (M2):** headless invocation of the already-rendered subagents
+  (print-mode runs with JSON output, which carries per-invocation usage — the
+  metering hook for free).
+- **copilot-cli (M3):** the P5-completing dispatcher. With two vendors live, the
+  registry's `avoid_vendor_of` pins stop being advisory: the seam *refuses* to bind
+  Reviewer or Verifier to the Implementer's vendor, closing the "P5 only partially
+  honored" limitation the claude-code adapter README documents today.
+- **Parallel Implementers run in per-task worktrees** (the wordfreq retro fix:
+  task 03 observed task 02's mid-flight broken state in the shared tree). Each
+  implementer works its task in isolation; the orchestrator folds results back into
+  the run branch serially — mechanical while file-contact surfaces are disjoint,
+  which the Architect already guarantees; an actual conflict escalates as a plan
+  defect.
+
+### 5.4 Dispatch prompts are templates, not compositions
+
+Rendered agents already inline their role spec (they start cold); the dispatch
+prompt carries only run-specific bindings — slug, artifact paths, task id, round,
+and on a bounce, the named missing sections. WALKTHROUGH.md's copy-pasteable
+dispatch prompts are the template source. No model composes prompts: one more
+judgment point removed by construction.
+
+## 6. Budget metering — the v1 prerequisite, designed in
+
+The wordfreq run proved that a human-maintained running total silently stays zero;
+DESIGN.md §4 names automated metering a v1 prerequisite because every increase in
+autonomy multiplies the cost of a missing meter. The design:
+
+- **The metering point is the seam.** Every model invocation in v1 — role
+  dispatches *and* the orchestrator's own judgment calls (§3) — flows through
+  `dispatch()`, so per-dispatch usage capture covers all spend with no second
+  mechanism. Harness-plural by construction: each adapter's `headless` manifest
+  section says how to read its usage output, normalized to one record shape.
+- **The record is a ledger, not a running total.**
+  `budget.ledger[]` in `state.yaml`:
+  `{at, role, task, round, adapter, model, tokens_in, tokens_out, cost_usd}`.
+  `cost_spent_usd` becomes the derived sum, updated in the same closing commit as
+  the dispatch bookkeeping. Append-only facts survive races and audits; running
+  totals don't.
+- **Prices live in the registry.** `registry/models.yaml` gains a `pricing:` map
+  (model ID → $/Mtok in/out). The registry is already the only file where model IDs
+  exist, so it is the only correct home for their prices — illustrative values,
+  org-pinned like the IDs themselves.
+- **Enforcement is pre-flight.** Before any dispatch: ledger sum + a conservative
+  per-role estimate against `cost_limit_usd`; projected exceedance → pause
+  `budget-exhausted` + escalation. Pause-don't-degrade, unchanged.
+- **v0 benefits immediately.** The ledger contract lands first (M0); a human
+  orchestrator appends a ledger entry from harness usage output — a smaller, more
+  concrete ask than maintaining a total, and exactly the shape v1 automates. The
+  frontend already renders budget fields "honestly, including never-updated"; a
+  populated ledger upgrades that view with zero frontend changes.
+
+## 7. Humans: gates, escalations, and the frontend contract
+
+`state.yaml` commits are the only channel between the orchestrator and humans, in
+both directions. Humans speak through it via the frontend and the `agentic` CLI
+(gate decisions, escalation resolutions, pause/resume); the orchestrator speaks
+through it by advancing state that the frontend's readiness rules recognize as
+"needs a human." I3 — escalations, "notice them, somehow" — is completed by this
+design: the orchestrator writes `escalations[]` entries promptly and the frontend
+inbox already ages and routes them. Push notifications (a Slack webhook on
+escalation and gate-ready commits) remain the FRONTEND.md Stage-A add-on: out of
+scope here, trivially attachable to the same commits later.
+
+**The co-writer contract** — the six conventions that make "zero frontend changes"
+true, stated once so implementation and review can check against them:
+
+1. All writes are CAS ref updates; refusal is normal and handled by re-deriving.
+2. YAML edits preserve comments and formatting (document API, never
+   re-serialization).
+3. Timestamps are ISO-8601.
+4. Commit messages use the structured grammar; the human decision grammar is
+   reserved for humans, and the orchestrator authors as a distinct bot identity.
+5. `review_rounds` lives in `state.yaml` and nowhere else.
+6. Phase, status, and pause values stay within the contract enums the readiness
+   table recognizes; new states go through a contract amendment first, never
+   improvisation (the wordfreq `review-approved` lesson).
+
+Deferred frontend nice-to-haves — explicitly *not* required for v1: a clarifying
+clause in the frontend README that R2's "exactly one write path" scopes to the human
+surfaces (the orchestrator being the sanctioned machine writer); rendering the
+dispatch/ledger timeline in run detail; cost-per-role in metrics (I8). All are
+renderers over data this design already commits to git — additive, whenever wanted.
+
+## 8. Contract, registry, and doc amendments
+
+Small and explicit, in the FRONTEND-PLAN §7 pattern; these are M0:
+
+1. `contracts/state.yaml` — document the task status enum including `dispatched`
+   and the wordfreq-improvised `review-approved`; add optional `budget.ledger[]`;
+   note the commit-message grammar and the bot-identity rule.
+2. `registry/models.yaml` — add the `pricing:` map.
+3. `docs/DESIGN.md` — §7 points here; §8's `adapters/orchestrated/` row is replaced
+   by the resolution in §5.2 (orchestrator component + per-adapter `headless`
+   manifest sections).
+4. `adapters/*/manifest.json` — `headless` section (schema settled at
+   implementation).
+5. `README.md` — repo-map row for the orchestrator component when it lands.
+
+## 9. Implementation home
+
+The engine's hard mechanics — run discovery, schema parsing, contract validation,
+readiness derivation, comment-preserving CAS writes — are already implemented,
+tested, and golden-filed once, in `@agentic/core` (`frontend/packages/core` on the
+frontend branch). **The orchestrator becomes a sibling package in that workspace,
+`frontend/packages/orchestrator`, consuming core** and adding what is genuinely new:
+the derivation rules' dispatch half, the seam, the metering normalizer, the triggers.
+
+- This does not violate the frontend's R2: R2 governs the human surfaces (web, CLI,
+  server — which stay dispatch-free); the orchestrator is the sanctioned dispatcher,
+  a sibling *consumer* of the same library, behind the same rules about what it may
+  write.
+- It is additive-only — no existing frontend surface changes — so it remains
+  compatible with holding further frontend work still.
+- Rejected: an independent implementation (Python, stdlib, like the renderer). It
+  would re-implement exactly the mechanics whose risks FRONTEND-PLAN §11 catalogs
+  (YAML round-trip fidelity, CAS, readiness drift), and two implementations of the
+  readiness rules is how they drift — the frontend's own risk table says so.
+- Rejected for now: hoisting core out of `frontend/` into a top-level shared
+  package. A real restructure buying no capability today; revisit when a non-Node
+  consumer of core appears.
+
+## 10. Trust ladder: milestones with promotion criteria
+
+DESIGN.md §7's promotion criterion — gate reviews have become confirmations rather
+than corrections — gates *autonomy*, not design. The milestones front-load
+trust-building and measurement, and defer autonomy until it is earned. The frontend
+supplies the measurement for free: the burden field it records on every gate
+decision is precisely the "confirmation vs correction" signal, so the promotion bar
+is now checkable from metrics rather than vibes.
+
+| # | Milestone | Contents | Exit criterion |
+|---|---|---|---|
+| M0 | Contracts land | §8 amendments; ledger usable by hand in v0 | Amendments merged; a v0 run carries a hand-recorded ledger entry |
+| M1 | Shadow mode | Engine + derivation rules; `tick --dry-run` prints each run's derived next action; no writes, no dispatches | Across at least one full v0 run, the engine's derived action matches what the human orchestrator actually did; every disagreement is dispositioned as an engine bug or a design finding |
+| M2 | Autonomous loop, one vendor | Dispatch seam + claude-code headless dispatcher; commit-then-launch; metering + pre-flight cap; watcher + heartbeat | A toy run completes G0→G3 in this repo with humans acting only at gates and escalations; the ledger is populated automatically; a mid-run human pause is honored |
+| M3 | Cross-vendor dispatch | copilot-cli headless dispatcher; `avoid_vendor_of` enforced at dispatch time | A run's Reviewer and Verifier demonstrably execute on a different vendor than its Implementer |
+| M4 | Hardening | Crash-recovery drill; per-task worktree isolation; trigger packaging (cron/launchd template); WALKTHROUGH v1 section | Killing the orchestrator mid-dispatch and restarting converges with no duplicate dispatch; a second operator can run v1 cold from the docs |
+
+**The autonomy gate:** M2 does not begin until the §7 promotion criterion is
+credibly met — sustained majority-`confirmation` burden across v0 gate decisions.
+M0–M1 are design and spike work, sanctioned early (they sharpen v0 rather than
+bypass it: M0 gives v0 a real ledger, M1's shadow disagreements are free design
+review).
+
+**Host-repo deployment is designed-for, not built.** Triggers are already an
+interface; a CI-triggered variant (scheduled + event-dispatched workflows) slots in
+without engine changes, and delivery into host repos rides INTEGRATION.md's
+vendored-release mechanism once both land. Out of scope until local v1 has earned
+trust on this repo.
+
+## 11. Failure modes
+
+Extends DESIGN.md §9 for the autonomous mode:
+
+| Failure mode | Mitigation |
+|---|---|
+| Duplicate dispatch (two instances, crash-restart, racing ticks) | Commit-then-launch: intent is a CAS commit; heartbeat probes liveness before re-dispatching |
+| Orchestrator races a human decision | CAS refusal → re-tick; both writers already treat refusal as the designed outcome |
+| Runaway spend | Every model invocation flows through the metered seam; pre-flight cap; pause-don't-degrade |
+| Hung or stuck dispatch job | Per-role wall-clock timeout on the heartbeat → kill, re-dispatch once, then escalate |
+| Engine rules drift from frontend readiness rules | One library (`@agentic/core`) hosts both derivations; the readiness table remains the shared spec with one test per row |
+| Machine writes masquerade as human decisions | Distinct bot author identity; reserved decision grammar; no code path writes `gates.*` |
+| Vendor or model outage mid-run | Dispatch failure → one retry → escalate and pause. Falling back to a registry alternate is a human decision — a silent model swap would invalidate the P5 reasoning recorded for the run |
+| Orchestrator host dies | All state is in git; restart anywhere, probe, converge — the process table is the only unpersisted state and is treated as cache |
+
+## 12. Open questions for team review
+
+1. **Judgment-point inventory** — §3 enumerates two (escalation summaries, intent
+   triage). Is bounce-message composition mechanical enough (named missing
+   sections), or worth a model pass for tone and context?
+2. **Pre-flight estimates** — static per-role cost estimates in the registry, or
+   trailing averages computed from prior runs' ledgers?
+3. **Shadow-mode bar** — is one full run of agreement enough to exit M1, or should
+   it be N runs / N decisions?
+4. **Bot identity** — one identity per orchestrator install or per repo? (Matters
+   for org-level audit later, Future Consideration #1.)
+5. **Decline recovery** — after `gate-declined`, should a human `resume`
+   automatically re-dispatch the producing role with the decline notes as bounce
+   input, or only re-open the phase and wait?
+
+---
+
+*Companion documents: [DESIGN.md](DESIGN.md) (architecture and operating modes),
+FRONTEND.md / FRONTEND-PLAN.md (the co-writer whose conventions §7 inherits),
+[INTEGRATION.md](INTEGRATION.md) (how v1 eventually travels to host repos),
+[`roles/orchestrator.md`](../roles/orchestrator.md) (the unchanged contract this
+design executes).*

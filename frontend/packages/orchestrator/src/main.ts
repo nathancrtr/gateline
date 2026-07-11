@@ -1,13 +1,25 @@
 #!/usr/bin/env node
-// agentic-orchestrator — the v1 orchestrator's CLI. M1 ships the read-only
-// surfaces: `tick --dry-run` (derive and print, write nothing) and
-// `shadow <slug>` (replay a run's history and compare derived vs actual).
+// agentic-orchestrator — the v1 orchestrator's CLI.
+//   tick --dry-run   derive and print each run's next action; write nothing
+//   tick             one live reconcile pass: dispatch, wait, meter, exit
+//   watch            resident mode: ref watcher + heartbeat + completions
+//   shadow <slug>    replay a run's history, derived vs actual (M1)
 import { Command } from 'commander'
-import { Git, LocalGitSource } from '@agentic/core'
-import { loadRegistry } from './registry.ts'
+import { Git, LocalGitSource, type Identity } from '@agentic/core'
+import { loadRegistry, type Registry } from './registry.ts'
 import { deriveAll } from './tick.ts'
 import { formatAction } from './derive.ts'
 import { formatShadowStep, shadowReplay } from './shadow.ts'
+import { Engine } from './engine.ts'
+import { HeadlessDispatcher } from './seam.ts'
+import { loadHeadlessManifest } from './manifest.ts'
+import { runLoop } from './triggers.ts'
+
+/** One identity per orchestrator install (resolved question 4). */
+export const BOT_IDENTITY: Identity = {
+  name: 'agentic-orchestrator',
+  email: 'orchestrator@agentic.invalid',
+}
 
 const program = new Command()
 program
@@ -15,13 +27,30 @@ program
   .description('Stateless reconciler for artifact-driven agent pipelines (docs/ORCHESTRATOR.md)')
   .version('0.1.0')
   .option('--repo <path>', 'repository to operate on (default: cwd)', process.cwd())
+  .option('--adapter <name>', 'adapter whose headless manifest dispatches agents', 'claude-code')
 
-async function openSource(): Promise<{ source: LocalGitSource; estimates: Record<string, number> }> {
+interface Opened {
+  dir: string
+  source: LocalGitSource
+  registry: Registry | null
+}
+
+async function open(): Promise<Opened> {
   const dir = program.opts<{ repo: string }>().repo
-  const source = new LocalGitSource('local', dir)
   const git = new Git(dir)
-  const registry = await loadRegistry(git, await git.defaultBranch())
-  return { source, estimates: registry?.estimates ?? {} }
+  return { dir, source: new LocalGitSource('local', dir), registry: await loadRegistry(git, await git.defaultBranch()) }
+}
+
+async function buildEngine(opened: Opened): Promise<Engine> {
+  const adapter = program.opts<{ adapter: string }>().adapter
+  const manifest = await loadHeadlessManifest(opened.dir, adapter)
+  return new Engine({
+    repoDir: opened.dir,
+    identity: BOT_IDENTITY,
+    dispatcher: new HeadlessDispatcher(manifest),
+    registry: opened.registry,
+    log: (line) => console.log(line),
+  })
 }
 
 program
@@ -29,15 +58,42 @@ program
   .description('one reconcile pass over every run')
   .option('--dry-run', 'derive and print each run’s next action; write nothing, dispatch nothing')
   .action(async (opts: { dryRun?: boolean }) => {
-    if (!opts.dryRun) {
-      console.error('live ticks arrive with the M2 dispatch seam; use --dry-run')
-      process.exitCode = 2
+    const opened = await open()
+    if (opts.dryRun) {
+      const cfg = {
+        estimates: opened.registry?.estimates ?? {},
+        isAncestor: (a: string, b: string) => opened.source.git.isAncestor(a, b),
+      }
+      for (const { ref, action } of await deriveAll(opened.source, cfg)) {
+        console.log(formatAction(ref.slug, action))
+      }
       return
     }
-    const { source, estimates } = await openSource()
-    for (const { ref, action } of await deriveAll(source, { estimates })) {
-      console.log(formatAction(ref.slug, action))
+    const engine = await buildEngine(opened)
+    const outcomes = await engine.tick()
+    for (const o of outcomes) console.log(`${o.slug}: ${o.action.kind} [${o.action.rule}]${o.launched ? ` launched ${o.launched}` : ''} — ${o.detail}`)
+    await engine.drain() // a one-shot tick owns its jobs to completion
+  })
+
+program
+  .command('watch')
+  .description('resident mode: reconcile on ref changes, dispatch completions, and a heartbeat')
+  .option('--heartbeat <seconds>', 'heartbeat interval', '180')
+  .action(async (opts: { heartbeat: string }) => {
+    const opened = await open()
+    const engine = await buildEngine(opened)
+    const loop = await runLoop(engine, opened.dir, {
+      heartbeatMs: Number(opts.heartbeat) * 1000,
+      log: (line) => console.log(line),
+    })
+    console.log(`watching ${opened.dir} (heartbeat ${opts.heartbeat}s; bot identity ${BOT_IDENTITY.name}) — ^C to stop`)
+    const stop = async () => {
+      console.log('draining in-flight dispatches…')
+      await loop.stop()
+      process.exit(0)
     }
+    process.on('SIGINT', () => void stop())
+    process.on('SIGTERM', () => void stop())
   })
 
 program
@@ -45,24 +101,18 @@ program
   .description('replay a run’s history: derived action vs what the human orchestrator actually did')
   .option('--ref <rev>', 'rev to walk (default: the run branch, else the default branch)')
   .action(async (slug: string, opts: { ref?: string }) => {
-    const { source, estimates } = await openSource()
-    const rev = opts.ref ?? (await pickRev(source, slug))
+    const opened = await open()
+    const runs = await opened.source.listRuns()
+    const rev = opts.ref ?? runs.find((r) => r.slug === slug)?.ref
     if (!rev) {
       console.error(`no branch or default-branch history found for run "${slug}"`)
       process.exitCode = 1
       return
     }
-    const steps = await shadowReplay(source, slug, rev, { estimates })
+    const steps = await shadowReplay(opened.source, slug, rev, { estimates: opened.registry?.estimates ?? {} })
     steps.forEach((s, i) => console.log(`${formatShadowStep(s, i)}\n`))
     const counts = steps.reduce<Record<string, number>>((acc, s) => ({ ...acc, [s.verdict]: (acc[s.verdict] ?? 0) + 1 }), {})
     console.log(`steps: ${steps.length}  ${Object.entries(counts).map(([k, v]) => `${k}: ${v}`).join('  ')}`)
   })
-
-async function pickRev(source: LocalGitSource, slug: string): Promise<string | null> {
-  const runs = await source.listRuns()
-  const ref = runs.find((r) => r.slug === slug)
-  if (ref) return ref.ref
-  return null
-}
 
 await program.parseAsync()

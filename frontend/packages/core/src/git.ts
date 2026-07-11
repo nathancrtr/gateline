@@ -239,8 +239,16 @@ export class Git {
     }
   }
 
-  async commitTree(tree: string, parent: string, message: string): Promise<string> {
-    return (await this.run(['commit-tree', tree, '-p', parent, '-m', message])).trim()
+  async commitTree(tree: string, parent: string, message: string, identity?: { name: string; email: string }): Promise<string> {
+    const env = identity
+      ? {
+          GIT_AUTHOR_NAME: identity.name,
+          GIT_AUTHOR_EMAIL: identity.email,
+          GIT_COMMITTER_NAME: identity.name,
+          GIT_COMMITTER_EMAIL: identity.email,
+        }
+      : undefined
+    return (await this.run(['commit-tree', tree, '-p', parent, '-m', message], env ? { env } : {})).trim()
   }
 
   /**

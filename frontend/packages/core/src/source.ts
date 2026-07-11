@@ -54,7 +54,11 @@ export interface RunSource {
   identity(): Promise<Identity | null>
   /**
    * The single write path (rule R2): apply a mutation to state.yaml and commit
-   * it to the run branch as the named human, compare-and-swap semantics.
+   * it to the run branch, compare-and-swap semantics. `expectedTip` extends
+   * the CAS window back to the caller's read: when given and the branch no
+   * longer points there, the write refuses with ref-moved — the machine
+   * co-writer's derive-then-write guard (ORCHESTRATOR.md §4.4). Human
+   * surfaces omit it: their reads happen inside this call.
    */
-  writeState(ref: RunRef, mutate: StateDocMutation, message: string): Promise<WriteResult>
+  writeState(ref: RunRef, mutate: StateDocMutation, message: string, options?: { expectedTip?: string }): Promise<WriteResult>
 }

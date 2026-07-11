@@ -4,6 +4,7 @@
 // snapshot — which is what makes one-test-per-row possible.
 import { parse as parseYaml } from 'yaml'
 import { validateArtifact, type GateId, type RunRef, type RunSource, type RunState, type Validation } from '@agentic/core'
+import { GATE_PRODUCER } from './derive.ts'
 import { parseReviewReport, type ReviewInfo } from './review-report.ts'
 
 export interface TaskFileInfo {
@@ -41,8 +42,13 @@ export interface RunObservation {
   reviews: ReviewInfo[]
   /** Run-relative path → newest commit epoch seconds touching it. */
   lastTouched: Record<string, number | null>
-  /** Most recent decline per gate, from state history (survives resume resets). */
-  declineEvents: Partial<Record<GateId, { at: number; notes: string | null }>>
+  /**
+   * Most recent decline per gate, from state history (survives resume
+   * resets). `redone` is true once the gate's packet artifact has landed
+   * again after the decline — decided by commit ancestry when available,
+   * commit time otherwise (same-second commits make wall clocks ambiguous).
+   */
+  declineEvents: Partial<Record<GateId, { at: number; notes: string | null; redone: boolean }>>
   /** Artifact → number of orchestrator bounce commits, from the commit grammar. */
   bounceCounts: Record<string, number>
   ledger: LedgerEntry[]
@@ -59,6 +65,8 @@ export interface RunObservation {
 
 export interface ObserveConfig {
   estimates?: Record<string, number>
+  /** git merge-base --is-ancestor, for decline-vs-artifact ordering (D9). */
+  isAncestor?: (maybeAncestor: string, of: string) => Promise<boolean>
 }
 
 const isTaskFile = (p: string) => p.startsWith('tasks/') && p.endsWith('.yaml')
@@ -107,6 +115,7 @@ export async function observeRun(source: RunSource, ref: RunRef, cfg: ObserveCon
   // History-derived facts: declines (which resume resets in the live entry)
   // and bounce counts (from the orchestrator's own commit grammar).
   const declineEvents: RunObservation['declineEvents'] = {}
+  const declineOids: Partial<Record<GateId, string>> = {}
   const bounceCounts: Record<string, number> = {}
   const history = await source.stateHistory(ref) // newest first
   for (const commit of history) {
@@ -116,8 +125,20 @@ export async function observeRun(source: RunSource, ref: RunRef, cfg: ObserveCon
     for (const gate of ['G0', 'G1', 'G2', 'G3'] as GateId[]) {
       if (declineEvents[gate]) continue // newest wins; already found
       const entry = commit.state.gates[gate]
-      if (!entry.approved && entry.by !== null) declineEvents[gate] = { at: commit.time, notes: entry.notes }
+      if (!entry.approved && entry.by !== null) {
+        declineEvents[gate] = { at: commit.time, notes: entry.notes, redone: false }
+        declineOids[gate] = commit.oid
+      }
     }
+  }
+  for (const gate of Object.keys(declineEvents) as GateId[]) {
+    const decline = declineEvents[gate]!
+    const touched = await source.lastTouched(ref, [GATE_PRODUCER[gate].artifact])
+    if (!touched) continue
+    const declineOid = declineOids[gate]!
+    decline.redone = cfg.isAncestor
+      ? touched.oid !== declineOid && (await cfg.isAncestor(declineOid, touched.oid))
+      : touched.time > decline.at
   }
 
   const ledger = parseLedger(state)

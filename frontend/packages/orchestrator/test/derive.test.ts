@@ -104,7 +104,7 @@ describe('the derivation table, one rule per row', () => {
         artifacts: ['intent-brief.md', 'spec.md'],
         validations: { 'spec.md': ok },
         lastTouched: { 'spec.md': 100 },
-        declineEvents: { G0: { at: 200, notes: 'requirement R2 is wrong' } },
+        declineEvents: { G0: { at: 200, notes: 'requirement R2 is wrong', redone: false } },
       }),
     )
     expect(a).toMatchObject({ kind: 'dispatch', rule: 'D9' })
@@ -117,7 +117,7 @@ describe('the derivation table, one rule per row', () => {
         artifacts: ['intent-brief.md', 'spec.md'],
         validations: { 'spec.md': ok },
         lastTouched: { 'spec.md': 300 },
-        declineEvents: { G0: { at: 200, notes: 'stale decline' } },
+        declineEvents: { G0: { at: 200, notes: 'stale decline', redone: true } },
       }),
     )
     expect(a).toMatchObject({ kind: 'rest', rule: 'D10' })
@@ -249,6 +249,18 @@ describe('the derivation table, one rule per row', () => {
       }),
     )
     expect(a).toMatchObject({ kind: 'escalate', rule: 'D17', pause: 'escalation' })
+  })
+
+  it('D19 — implement phase with empty state.tasks seeds it from the task files', () => {
+    const s = state({ phase: 'implement', tasks: [] })
+    const a = deriveAction(
+      obs({
+        state: s,
+        artifacts: ['spec.md', 'plan.md', 'tasks/01-a.yaml', 'tasks/02-b.yaml'],
+        taskFiles: new Map([taskFile('01-a'), taskFile('02-b')]),
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'record', rule: 'D19', updates: [{ field: 'seed-tasks', ids: ['01-a', '02-b'] }] })
   })
 
   it('D18 — all tasks review-complete with no verification dispatches the verifier', () => {

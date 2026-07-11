@@ -17,9 +17,15 @@ export class LocalGitSource implements RunSource {
   readonly dir: string
   readonly git: Git
   readonly templates: ContractTemplates
-  private readonly options: { push?: boolean }
+  private readonly options: { push?: boolean; identity?: Identity }
 
-  constructor(id: string, dir: string, options: { push?: boolean } = {}) {
+  /**
+   * `options.identity` pins the author of every write from this source —
+   * the v1 orchestrator's bot identity (ORCHESTRATOR.md §4.3). Human
+   * surfaces omit it and write as `git config user.name/email`, so machine
+   * bookkeeping and human decisions stay distinguishable at a glance.
+   */
+  constructor(id: string, dir: string, options: { push?: boolean; identity?: Identity } = {}) {
     this.id = id
     this.dir = dir
     this.options = options
@@ -136,18 +142,21 @@ export class LocalGitSource implements RunSource {
   }
 
   async identity(): Promise<Identity | null> {
+    if (this.options.identity) return this.options.identity
     const name = await this.git.configGet('user.name')
     const email = await this.git.configGet('user.email')
     if (!name || !email) return null
     return { name, email }
   }
 
-  async writeState(ref: RunRef, mutate: StateDocMutation, message: string): Promise<WriteResult> {
+  async writeState(ref: RunRef, mutate: StateDocMutation, message: string, options: { expectedTip?: string } = {}): Promise<WriteResult> {
     if (!(await this.identity()))
       return { ok: false, reason: 'no-identity', message: 'git user.name/user.email are unset — decisions must be attributable to a named human' }
 
     const branchRef = `refs/heads/${ref.branch}`
     let tip = await this.git.revParse(branchRef)
+    if (options.expectedTip && tip !== options.expectedTip)
+      return { ok: false, reason: 'ref-moved', message: `${ref.branch} moved past the observed tip — re-derive and retry` }
 
     if (!tip) {
       // Remote-only branch: materialize a local branch at the remote tip.
@@ -187,14 +196,19 @@ export class LocalGitSource implements RunSource {
         }
       await writeFile(join(worktree.path, statePath), updated, 'utf8')
       // Pathspec commit: records exactly this file, whatever else is staged.
-      await wtGit.run(['commit', '-m', message, '--', statePath])
+      const id = this.options.identity
+      await wtGit.run(['commit', '-m', message, '--', statePath], {
+        env: id
+          ? { GIT_AUTHOR_NAME: id.name, GIT_AUTHOR_EMAIL: id.email, GIT_COMMITTER_NAME: id.name, GIT_COMMITTER_EMAIL: id.email }
+          : undefined,
+      })
       const oid = await wtGit.revParse('HEAD')
       return { ok: true, commit: oid ?? undefined }
     }
 
     const blob = await this.git.hashObject(updated)
     const tree = await this.git.writeTreeWithBlob(tip, statePath, blob)
-    const commit = await this.git.commitTree(tree, tip, message)
+    const commit = await this.git.commitTree(tree, tip, message, this.options.identity)
     if (!(await this.git.updateRefCAS(branchRef, commit, tip)))
       return { ok: false, reason: 'ref-moved', message: `${ref.branch} moved while deciding — re-read and re-present` }
 

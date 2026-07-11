@@ -160,7 +160,15 @@ export function formatShadowStep(step: ShadowStep, index: number): string {
         ? step.action.dispatches.map((d) => `${d.role}${d.task ? `(${d.task})` : ''}`).join(' + ')
         : step.action.kind === 'record'
           ? step.action.updates
-              .map((u) => (u.field === 'phase' ? `phase→${u.to}` : u.field === 'review-rounds' ? `${u.task} rounds→${u.to}` : `${u.task}→${u.to}`))
+              .map((u) =>
+                u.field === 'phase'
+                  ? `phase→${u.to}`
+                  : u.field === 'review-rounds'
+                    ? `${u.task} rounds→${u.to}`
+                    : u.field === 'seed-tasks'
+                      ? `seed tasks [${u.ids.join(', ')}]`
+                      : `${u.task}→${u.to}`,
+              )
               .join(', ')
           : step.action.why
     }`,

@@ -137,13 +137,28 @@ export function planDecision(state: RunState, input: DecisionInput, who: Identit
       if (state.phase !== 'paused') throw new DecisionError(`run is not paused (phase: ${state.phase})`)
       const target = input.resumePhase ?? deriveResumePhase(state)
       if (!PHASES.includes(target) || target === 'paused') throw new DecisionError(`invalid resume phase: ${target}`)
+      // Resuming a gate-declined run re-opens the declined gate: the entry
+      // resets to undecided so it can be re-decided (the approve path's
+      // "resume the run to re-open it" made real). The decline stays in the
+      // state file's git history — which is where the v1 orchestrator finds
+      // the notes to bounce back to the producing role (resolved question 5).
+      const reopen =
+        state.paused_reason === 'gate-declined'
+          ? (['G0', 'G1', 'G2', 'G3'] as GateId[]).filter((g) => !state.gates[g].approved && state.gates[g].by !== null)
+          : []
       return {
         mutate: (doc: Document) => {
           doc.setIn(['phase'], target)
           doc.setIn(['paused_reason'], null)
+          for (const g of reopen) {
+            doc.setIn(['gates', g, 'approved'], false)
+            doc.setIn(['gates', g, 'by'], null)
+            doc.setIn(['gates', g, 'at'], null)
+            doc.setIn(['gates', g, 'notes'], null)
+          }
         },
-        message: `state(${slug}): resumed to ${target} by ${who.name}`,
-        summary: `Resume ${slug} at phase "${target}"`,
+        message: `state(${slug}): resumed to ${target} by ${who.name}${reopen.length ? ` (${reopen.join(', ')} re-opened)` : ''}`,
+        summary: `Resume ${slug} at phase "${target}"${reopen.length ? `, re-opening ${reopen.join(', ')}` : ''}`,
       }
     }
   }

@@ -25,6 +25,7 @@
 //   D16 latest verdict approve                       → record task status review-approved
 //   D17 reviewer verdict escalate                    → escalate + pause
 //   D18 all tasks review-approved+, no verification  → dispatch verifier
+//   D19 phase implement, state lists no tasks        → record: seed tasks[] from tasks/*.yaml (the v0 human's mirror step)
 //   DB  any dispatch would exceed the budget cap     → escalate + pause budget-exhausted
 //
 // Two invariants govern every row (§4.2): each action is derivable from
@@ -52,7 +53,7 @@ export const ROLES = ['analyst', 'architect', 'implementer', 'reviewer', 'verifi
 export type Role = (typeof ROLES)[number]
 
 /** What each gate's packet producer is, for the producer-phase rules. */
-const GATE_PRODUCER: Record<GateId, { role: Role; artifact: string }> = {
+export const GATE_PRODUCER: Record<GateId, { role: Role; artifact: string }> = {
   G0: { role: 'analyst', artifact: 'spec.md' },
   G1: { role: 'architect', artifact: 'plan.md' },
   G2: { role: 'verifier', artifact: 'verification-report.md' }, // G2's tail producer; tasks flow separately
@@ -78,6 +79,7 @@ export type Bookkeeping =
   | { field: 'phase'; to: Phase }
   | { field: 'task-status'; task: string; to: string }
   | { field: 'review-rounds'; task: string; to: number }
+  | { field: 'seed-tasks'; ids: string[] }
 
 export type DerivedAction =
   | { kind: 'rest'; rule: string; why: string }
@@ -180,8 +182,15 @@ function planPhase(obs: RunObservation): DerivedAction {
 function implementPhase(obs: RunObservation): DerivedAction {
   const { state } = obs
   if (!state) return rest('D0', 'unreachable: implementPhase without state')
-  if (state.tasks.length === 0)
-    return escalate('D4', 'phase is implement but state.yaml lists no tasks — the G1 packet did not carry into state', 'escalation')
+  if (state.tasks.length === 0) {
+    // D19 — the mirror step the v0 human performed by hand: tasks/*.yaml is
+    // the G1-approved breakdown; state.tasks tracks each task's pipeline
+    // status (and is review_rounds' only home). Seed it, pending, verbatim.
+    const ids = [...obs.taskFiles.keys()].sort()
+    if (ids.length > 0)
+      return record('D19', [{ field: 'seed-tasks', ids }], `seed state.tasks from ${ids.length} task file(s) — the G1 breakdown`)
+    return escalate('D4', 'phase is implement but the run has no task files — the G1 packet did not carry into state', 'escalation')
+  }
 
   const updates: Bookkeeping[] = []
   const dispatches: DispatchIntent[] = []
@@ -317,9 +326,7 @@ function declineRedispatch(obs: RunObservation, gate: GateId, role: Role, artifa
   const { state } = obs
   if (!state || !gateUndecided(state.gates[gate])) return null
   const decline = obs.declineEvents[gate]
-  if (!decline) return null
-  const landed = obs.lastTouched[artifact] ?? null
-  if (landed !== null && landed >= decline.at) return null // producer already redid it
+  if (!decline || decline.redone) return null // producer already redid the artifact
   return gatedDispatch(
     obs,
     [
@@ -369,7 +376,15 @@ export function formatAction(slug: string, action: DerivedAction): string {
         .join(' + ')} — ${action.why}`
     case 'record':
       return `${slug}: record [${action.rule}] ${action.updates
-        .map((u) => (u.field === 'phase' ? `phase→${u.to}` : u.field === 'review-rounds' ? `${u.task} rounds→${u.to}` : `${u.task}→${u.to}`))
+        .map((u) =>
+          u.field === 'phase'
+            ? `phase→${u.to}`
+            : u.field === 'review-rounds'
+              ? `${u.task} rounds→${u.to}`
+              : u.field === 'seed-tasks'
+                ? `seed tasks [${u.ids.join(', ')}]`
+                : `${u.task}→${u.to}`,
+        )
         .join(', ')} — ${action.why}`
     case 'escalate':
       return `${slug}: escalate [${action.rule}]${action.pause ? ` + pause(${action.pause})` : ''} — ${action.reason}`

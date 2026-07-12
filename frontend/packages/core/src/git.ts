@@ -175,8 +175,9 @@ export class Git {
   }
 
   /**
-   * The repo's default branch: origin/HEAD when set, else main/master, else
-   * the current HEAD's branch.
+   * The repo's default branch: origin/HEAD when set, else main/master (local,
+   * then remote-tracking — CI checkouts detach HEAD with no local branches),
+   * else the current HEAD's branch.
    */
   async defaultBranch(): Promise<string> {
     try {
@@ -189,6 +190,9 @@ export class Git {
     }
     for (const name of ['main', 'master']) {
       if (await this.revParse(`refs/heads/${name}`)) return name
+    }
+    for (const name of ['main', 'master']) {
+      if (await this.revParse(`refs/remotes/origin/${name}`)) return `origin/${name}`
     }
     const head = (await this.run(['symbolic-ref', '--short', '-q', 'HEAD']).catch(() => 'HEAD')).trim()
     return head || 'HEAD'
@@ -239,8 +243,16 @@ export class Git {
     }
   }
 
-  async commitTree(tree: string, parent: string, message: string): Promise<string> {
-    return (await this.run(['commit-tree', tree, '-p', parent, '-m', message])).trim()
+  async commitTree(tree: string, parent: string, message: string, identity?: { name: string; email: string }): Promise<string> {
+    const env = identity
+      ? {
+          GIT_AUTHOR_NAME: identity.name,
+          GIT_AUTHOR_EMAIL: identity.email,
+          GIT_COMMITTER_NAME: identity.name,
+          GIT_COMMITTER_EMAIL: identity.email,
+        }
+      : undefined
+    return (await this.run(['commit-tree', tree, '-p', parent, '-m', message], env ? { env } : {})).trim()
   }
 
   /**

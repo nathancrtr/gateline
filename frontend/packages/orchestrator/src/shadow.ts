@@ -7,6 +7,7 @@ import type { LocalGitSource, RunRef, RunState } from '@agentic/core'
 import { parseRunState } from '@agentic/core'
 import { deriveAction, type DerivedAction, type DispatchIntent } from './derive.ts'
 import { observeRun, type ObserveConfig } from './observe.ts'
+import { loadRegistry } from './registry.ts'
 
 export type ShadowVerdict = 'agree' | 'disagree' | 'note' | 'end'
 
@@ -24,7 +25,7 @@ export async function shadowReplay(
   source: LocalGitSource,
   slug: string,
   rev: string,
-  cfg: ObserveConfig = {},
+  cfg: Omit<ObserveConfig, 'estimates'> = {},
 ): Promise<ShadowStep[]> {
   const runDir = `runs/${slug}`
   const commits = (await source.git.log(rev, [runDir])).reverse() // oldest first
@@ -33,7 +34,11 @@ export async function shadowReplay(
   for (let i = 0; i < commits.length; i++) {
     const commit = commits[i]!
     const ref: RunRef = { source: source.id, slug, ref: commit.oid, kind: 'branch', branch: `run/${slug}` }
-    const obs = await observeRun(source, ref, cfg)
+    // The registry is read as of the replayed commit, like everything else the
+    // engine observes: the question is what the engine would have derived at
+    // that state, not what today's estimates make of a historical budget.
+    const registry = await loadRegistry(source.git, commit.oid)
+    const obs = await observeRun(source, ref, { ...cfg, estimates: registry?.estimates ?? {} })
     const action = deriveAction(obs)
 
     const next = commits[i + 1] ?? null

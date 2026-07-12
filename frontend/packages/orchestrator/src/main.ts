@@ -125,7 +125,7 @@ program
       process.exitCode = 1
       return
     }
-    const steps = await shadowReplay(opened.source, slug, rev, { estimates: opened.registry?.estimates ?? {} })
+    const steps = await shadowReplay(opened.source, slug, rev)
     steps.forEach((s, i) => console.log(`${formatShadowStep(s, i)}\n`))
     const counts = steps.reduce<Record<string, number>>((acc, s) => ({ ...acc, [s.verdict]: (acc[s.verdict] ?? 0) + 1 }), {})
     console.log(`steps: ${steps.length}  ${Object.entries(counts).map(([k, v]) => `${k}: ${v}`).join('  ')}`)

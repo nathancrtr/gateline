@@ -55,6 +55,11 @@ closing bookkeeping lands in the same commit as each dispatch's completion
 
 ## Matcher honesty notes
 
+- The registry is read as of each replayed commit, like everything else the
+  engine observes. wordfreq predates `dispatch_estimates_usd`, so its DB
+  pre-flight ran on the default per-role estimate against the run's $5 limit;
+  replaying under today's estimates would derive a budget escalation the human
+  never made.
 - The implementer-dispatch matcher treats any code commit as a landing for
   any derived implementer dispatch, which converted three class-1 states into
   soft `agree`s (steps 3, 4, 8). The class-1 disposition covers them; the

@@ -5,8 +5,7 @@
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { Git, LocalGitSource } from '@agentic/core'
-import { loadRegistry } from '../src/registry.ts'
+import { LocalGitSource } from '@agentic/core'
 import { shadowReplay, type ShadowStep } from '../src/shadow.ts'
 
 const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../../..')
@@ -17,12 +16,10 @@ const source = new LocalGitSource('sandbox', repoRoot)
 let cached: Promise<ShadowStep[]> | null = null
 function replay(): Promise<ShadowStep[]> {
   cached ??= (async () => {
-    const git = new Git(repoRoot)
-    const registry = await loadRegistry(git, await git.defaultBranch())
     const runs = await source.listRuns()
     const wordfreq = runs.find((r) => r.slug === 'wordfreq')
     expect(wordfreq).toBeDefined()
-    return shadowReplay(source, 'wordfreq', wordfreq!.ref, { estimates: registry?.estimates ?? {} })
+    return shadowReplay(source, 'wordfreq', wordfreq!.ref)
   })()
   return cached
 }

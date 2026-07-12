@@ -175,8 +175,9 @@ export class Git {
   }
 
   /**
-   * The repo's default branch: origin/HEAD when set, else main/master, else
-   * the current HEAD's branch.
+   * The repo's default branch: origin/HEAD when set, else main/master (local,
+   * then remote-tracking — CI checkouts detach HEAD with no local branches),
+   * else the current HEAD's branch.
    */
   async defaultBranch(): Promise<string> {
     try {
@@ -189,6 +190,9 @@ export class Git {
     }
     for (const name of ['main', 'master']) {
       if (await this.revParse(`refs/heads/${name}`)) return name
+    }
+    for (const name of ['main', 'master']) {
+      if (await this.revParse(`refs/remotes/origin/${name}`)) return `origin/${name}`
     }
     const head = (await this.run(['symbolic-ref', '--short', '-q', 'HEAD']).catch(() => 'HEAD')).trim()
     return head || 'HEAD'

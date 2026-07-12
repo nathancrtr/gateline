@@ -7,10 +7,13 @@ import { watch, type FSWatcher } from 'node:fs'
 import { join } from 'node:path'
 import { Git } from '@agentic/core'
 import type { Engine } from './engine.ts'
+import type { Scheduler } from './schedule.ts'
 
 export interface RunLoopConfig {
   heartbeatMs?: number
   debounceMs?: number
+  /** When present, every tick also reconciles orchestrator.yaml's schedules (§4.6). */
+  scheduler?: Scheduler
   log?: (line: string) => void
 }
 
@@ -39,6 +42,11 @@ export async function runLoop(engine: Engine, repoDir: string, cfg: RunLoopConfi
         const outcomes = await engine.tick()
         for (const o of outcomes) {
           if (o.action.kind !== 'rest') cfg.log?.(`[${why}] ${o.slug}: ${o.action.kind} (${o.action.rule}) ${o.detail}`)
+        }
+        if (cfg.scheduler) {
+          for (const s of await cfg.scheduler.tick()) {
+            if (s.kind !== 'rest') cfg.log?.(`[${why}] sweep(${s.slug ?? s.role}): ${s.kind}${s.rule ? ` (${s.rule})` : ''} ${s.detail}`)
+          }
         }
       } while (queued && !stopped)
     } catch (e) {
@@ -85,6 +93,7 @@ export async function runLoop(engine: Engine, repoDir: string, cfg: RunLoopConfi
       for (const w of watchers) w.close()
       engine.onSettled = null
       await engine.drain()
+      await cfg.scheduler?.drain()
     },
   }
 }

@@ -48,7 +48,9 @@ review/verification to a different lineage decorrelates failure modes cheaply.
 
 The SDLC distills to eight operations: capture intent, decide approach, build, check
 correctness, check quality, integrate/release, operate, and remember. We map them to
-seven core roles (remembering is distributed — every role appends to the decision log).
+eight core roles. Remembering is distributed at write time — every role appends to the
+decision log — and owned at read time by the Historian, which periodically reconciles
+the surrounding prose (docs, changelog, tracker) with that record.
 
 | Role | Mission (one line) | Capability profile | Consumes | Produces |
 |------|--------------------|--------------------|----------|----------|
@@ -59,6 +61,7 @@ seven core roles (remembering is distributed — every role appends to the decis
 | **Reviewer** | Adversarial review of a diff against spec, plan, and standards | frontier-reasoning (≠ implementer vendor) | diff, `spec.md`, `plan.md` | `review-report.md` |
 | **Verifier** | Independently exercise behavior end-to-end; author missing tests | balanced (≠ implementer vendor) | diff, `spec.md` | `verification-report.md` |
 | **Ops** | CI/CD, environments, release plan, rollback plan | balanced | verified diff, infra | `release-plan.md` |
+| **Historian** | Scheduled sweep: reconcile docs, changelog, and tracker with the run record | fast-cheap | run artifacts since last sweep, docs, tracker | `docs-delta.md` + doc edits |
 
 Notes on the roster:
 
@@ -70,9 +73,13 @@ Notes on the roster:
 - **Reviewer and Verifier are deliberately separate.** Review is reading (does this code
   say the right thing?); verification is running (does this system do the right thing?).
   Collapsing them recreates the rubber-stamp reviews we see in human teams.
-- **A Historian/Docs role is the worked example of P6:** when changelog and doc drift
-  become painful, add `roles/historian.md` and a `docs-delta.md` contract. Nothing else
-  changes.
+- **Historian is the worked example of P6, and it landed as predicted:** when changelog
+  and doc drift became painful, adding the role cost `roles/historian.md`, a
+  `contracts/docs-delta.md` contract, and a registry binding — no change to any other
+  role or contract. It differs from the gate roles in two deliberate ways: it is
+  *scheduled*, not gate-driven (`orchestrator.yaml` `schedules:`; each sweep is a
+  mini-run `runs/historian-<date>/` on its own branch), and its human approval is the
+  sweep branch's review-and-merge rather than a numbered gate.
 
 Full specs live in [`roles/`](../roles/) — one file per role, with mission, operating
 instructions, definition of done, and explicit escalation triggers.

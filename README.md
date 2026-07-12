@@ -13,6 +13,7 @@ pair-programming to multi-agent development.
 | Path | What it is | Portable? |
 |------|-----------|-----------|
 | [`docs/DESIGN.md`](docs/DESIGN.md) | The architecture: principles, roles, gates, failure modes | — |
+| [`docs/FRONTEND.md`](docs/FRONTEND.md) | Design for the gate frontend — the human interfaces to the pipeline (plan: [FRONTEND-PLAN.md](docs/FRONTEND-PLAN.md)) | — |
 | [`docs/INTEGRATION.md`](docs/INTEGRATION.md) | Design (draft) for the workflow that imports the framework into a host repo | — |
 | [`docs/ORCHESTRATOR.md`](docs/ORCHESTRATOR.md) | Design for the v1 agent-orchestrated operating mode (implemented in `frontend/packages/orchestrator`) | — |
 | [`frontend/`](frontend/) | The gate frontend (web, CLI, server over `@agentic/core`) and the v1 orchestrator (`packages/orchestrator`) | product component |
@@ -39,9 +40,11 @@ customizability" are both satisfied by the same mechanism.
 
 v0.2 — design exercised end-to-end by the wordfreq run (`runs/wordfreq/`, G0→G3 with
 two adversarial-review cycles and independent verification); retro findings folded
-back into roles, contracts, and both adapters. Next: team review of the
-production pilot plan (CLAUDE.md Future Consideration #2; maintained outside this
-repository), then Phase 0 scaffolding in that repo.
+back into roles, contracts, and both adapters. The gate frontend (web, CLI, server)
+and the v1 orchestrator are implemented in `frontend/`; autonomy stays gated on the
+DESIGN.md §7 promotion criterion. Next: finish the v1 trust ladder's exit evidence
+(shadow-agreement runs, live cross-vendor dispatch), then the integration workflow
+(docs/INTEGRATION.md) and a first tagged release.
 
 ## License
 

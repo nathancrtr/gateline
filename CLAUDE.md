@@ -3,9 +3,12 @@
 ## Orientation
 
 This repository **is the product**: a runtime-neutral framework of SDLC agent roles
-(`roles/`), handoff contracts (`contracts/`), a model registry (`registry/`), and thin
-runtime adapters (`adapters/`). Application code under `apps/` is the output of
-pipeline runs, kept as evidence — not software being maintained for its own sake.
+(`roles/`), handoff contracts (`contracts/`), a model registry (`registry/`), thin
+runtime adapters (`adapters/`), and the framework's product components under
+`frontend/` — the gate frontend (web, CLI, server over `@agentic/core`) and the v1
+orchestrator (`frontend/packages/orchestrator`). Application code under `apps/` is
+the output of pipeline runs, kept as evidence — not software being maintained for
+its own sake.
 
 Read [`docs/DESIGN.md`](docs/DESIGN.md) before changing the framework: it defines the
 principles (P1–P6), roles, gates, and failure modes that changes are judged against.
@@ -15,7 +18,8 @@ directory layout.
 
 Status: v0.2 — the design has been exercised end-to-end by the wordfreq run
 (`runs/wordfreq/`, G0→G3); retro findings feed back into roles, contracts, and
-adapters.
+adapters. The gate frontend and v1 orchestrator are implemented; autonomy remains
+gated on the DESIGN.md §7 promotion criterion.
 
 ## Invariants — check before editing
 
@@ -40,6 +44,8 @@ adapters.
 
 * Re-render adapter agent files after any `roles/` or manifest change:
   `python3 scripts/render-agents.py` (verify with `--check` — the same check CI runs)
+* Run the frontend/orchestrator tests: `npm test` in `frontend/` (typecheck:
+  `npm run typecheck`; needs `npm install` once, Node ≥ 24)
 * Run the tests for pipeline-run output: `pytest apps/wordfreq`
 
 ## Conventions

@@ -1,6 +1,13 @@
 # Framework Integration Workflow — Design
 
-**Status:** v0.1 — draft for team review; nothing here is implemented yet
+**Status:** v0.2 — updated against the field evidence this draft predicted. Since
+v0.1: the design's lockfile and forks mechanisms were hand-executed by a second
+integration — a non-SDLC, single-operator ops host (its integration retro is
+maintained outside this repository; framework-general findings are tracked as
+issues here) — and two framework components that postdate the draft shipped:
+the gate frontend ([FRONTEND.md](FRONTEND.md), `frontend/`) and the v1
+orchestrator ([ORCHESTRATOR.md](ORCHESTRATOR.md)). The tooling (`integrate.py`,
+renderer overlays, the tagged release) remains unbuilt; §11 tracks it.
 **Audience:** operators adopting the framework in a host repository, and whoever builds the tooling
 **Prerequisite reading:** [DESIGN.md](DESIGN.md); the production pilot's Phase 0 notes (maintained outside this repository)
 
@@ -37,6 +44,14 @@ Every one of these recurs for the next host repo. Integration should be a **prod
 surface of the framework** — designed, versioned, and validated — not a procedure in
 one operator's head.
 
+The prediction has since been tested: a second integration hand-executed *this
+design* (lockfile, forks mechanism, provenance split) against a non-SDLC host.
+The mechanisms held — the fork entry and checksums worked exactly as specified —
+and the retro added cost categories v0.1 missed, folded in below: deciding which
+files are core-layer is itself judgment the tool must encode (§2), provenance for
+private non-redistributing hosts (§5), vocabulary the renderer can't validate
+(§4), and a core contract that forced a fork in the first hour (§4).
+
 ## 2. What integration actually is
 
 Decompose the Phase 0 work and it splits cleanly along the framework's own
@@ -56,6 +71,15 @@ stdlib-only like the renderer). The judgment half becomes a **role with a contra
 and a human gate** — the framework onboards itself the same way it builds software.
 Integration is a run.
 
+One correction from integration #2: the "copy portable trees" row is not purely
+mechanical as written, because *which files are core-layer* is currently implicit.
+Hand-writing the lockfile meant deciding, file by file, what counts as a framework
+copy versus an instance-local file that merely follows framework conventions. The
+tool must own that boundary: the framework ships an explicit **copy manifest**
+(the list of core-layer files a release offers, from which a host takes what it
+needs), and `init` records the taken subset in the lock — partial adoption is a
+first-class outcome, not an anomaly (§4).
+
 ## 3. Distribution mechanism
 
 How should framework files travel into a host repo?
@@ -65,7 +89,7 @@ How should framework files travel into a host repo?
 | **Vendored copy + lockfile** | **Recommended** | Works in private/offline repos; divergence is *expected* — host-local policy is a legitimate layer, not an error — and the lockfile makes it visible instead of silent; upgrade is a real 3-way merge (§6) |
 | Git submodule | Rejected | Couples host clones to framework repo access; role specs must be readable in-tree by agents that start cold; submodule UX taxes every operator |
 | Git subtree | Rejected for now | Better than submodule, but merges core and project layers into one history; revisit if lockfile bookkeeping proves painful |
-| Package registry (pip/npm) | Rejected for now | Infrastructure the team doesn't need at 1–3 repos; the natural v2 once the core is org-shared (Future Consideration #1) |
+| Package registry (pip/npm) | Rejected for now, **for the core trees** | Infrastructure not needed at 1–3 repos; the natural v2 once the repo is public — the project posture already names "published package releases" as an eventual adoption channel, and the runnable components (below) are the artifacts that will want it first |
 | Runner plugin (e.g., a Claude Code plugin) | Adapter-layer option only | Could bundle one runner's rendered agents for install ergonomics, but the core must stay runtime-neutral files (P3); never the primary channel |
 
 The Phase 0 decision — copy, don't submodule — was right. What was missing is the
@@ -79,7 +103,39 @@ which becomes the review agenda at upgrade time).
 One more thing the lock pins down: **what travels is a tagged release, not a
 working copy.** The framework is a dependency with downstream consumers, not a lab
 whose copies drift by nature — consumers integrate against a version they can name,
-and the upstream owes them the tagging discipline that implies (§11).
+and the upstream owes them the tagging discipline that implies (§11). This debt is
+now overdue rather than theoretical: no tag exists, so integration #2 had to pin a
+bare commit hash and record the missing release as a retro item. The first tagged
+release is therefore the head of the build queue (§11), and the first `upgrade`
+must accept commit-pinned locks as its base — the lock format the field already
+contains (§6).
+
+### Vendored trees are not the only channel
+
+v0.1 assumed everything that travels is a file copy. Two framework components
+that shipped since are **runnable tools, not portable trees**, and they
+deliberately do not vendor:
+
+- **The gate frontend** (`frontend/`: the web UI, `agentic` CLI, and server) and
+  **the v1 orchestrator** (`frontend/packages/orchestrator`) run *from the
+  framework checkout or release*, pointed at host repos via `--repo` / the
+  multi-repo config. They are operators' instruments over host state, not host
+  files; a Node ≥ 24 workspace has no business being checked into every adopting
+  repo, and copying it would recreate the drift problem the lockfile exists to
+  solve.
+- The evidence that this works: pointed read-only at integration #2's non-SDLC
+  host, every frontend read surface — discovery, run enumeration, CLI, inbox, API,
+  bounce discipline — generalized with **zero code changes**. The single boundary
+  was the compiled-in run-state schema, which rejected the host's legitimately
+  forked `state.yaml`; the fix (a generic state core + SDLC extension, with state
+  validated against the host's own `contracts/state.yaml` per the frontend's R3
+  rule) is sequenced as an active run.
+
+Distribution is therefore **two channels pinned by one lock**: core trees vendor
+into the host; the toolchain runs from the same pinned release against the host.
+`framework-lock.json` records the release once, and both channels answer to it —
+"which framework version manages this repo?" has one answer whether the asker is
+`upgrade` or an operator launching the frontend.
 
 ## 4. The layering model
 
@@ -109,12 +165,38 @@ host-repo/
 | Project (overlays) | Freely edited; this is where the project lives | Never touched by upgrade |
 | Rendered | Never hand-edited (CI-enforced, as today) | Re-rendered after upgrade |
 
+**What the field did with this model.** Integration #2 adopted a *minimal core
+set* — the renderer, the render-staleness CI check, and the one contract its runs
+consume — placed at the host's repo root rather than under the prefix, with
+`.agentic/` holding only metadata (the lock, upstream copies of forked files, the
+framework license text). Its own roles, contracts, registry, and adapter manifest
+are instance-local originals that follow framework conventions, recorded in the
+lock as an instance-layer note rather than as copies. Two lessons folded into the
+design: (a) **partial adoption is the normal case** — the copy manifest (§2) is a
+menu, and the lock records the subset taken; (b) the prefix question is real —
+in-tree paths (`roles/`, `contracts/`) are what rendered agents and the renderer
+already expect, and a host whose *own* content is framework-shaped may
+legitimately keep the prefix for metadata only. `init` keeps `--prefix` as the
+knob; the lock, not the directory layout, is the authoritative record of what is
+core versus instance.
+
 **Renderer change required:** `render-agents.py` composes each agent body as
 *role spec + `overlays/_all.md` + `overlays/<role>.md`* (in that order, with marked
 splice boundaries), and resolves paths relative to its own location so the same
 script runs vendored. Policy text lives only in overlays; manifests stay pure
 mapping (tool aliases, model spellings, frontmatter shape) — this makes the Phase 0
-layering mistake structurally impossible rather than remembered.
+layering mistake structurally impossible rather than remembered. This remains
+unbuilt (tracked: renderer overlay support + path-relativity).
+
+**Vocabulary is part of the layering, and today nothing validates it.**
+Integration #2 added a capability (`web`) to its manifest's `tool_map` and
+instance gate names (`publish`, `none`) to its state files; both rendered without
+complaint — which means a *typo'd* capability or gate name in any host also
+renders without complaint. The overlay design must give instance-added vocabulary
+a declared home: manifests (or an overlay header) enumerate the capabilities and
+gate names the instance adds, and the renderer validates against the union of
+framework-declared and instance-declared vocabulary, failing on anything else.
+"Instance-added" and "misspelled" must be distinguishable states.
 
 **Contract extensions:** v0 keeps contracts as direct copies and treats any local
 edit as a lock-recorded fork. The pilot needed exactly one field added to one
@@ -124,6 +206,19 @@ the change upstream or give contracts the same overlay treatment as roles. (An
 upstreamed middle ground worth considering at that point: an optional
 `## Project fields` section in each contract template, so common extensions aren't
 forks at all.)
+
+The fork-and-record stance has now met its worst case, and the resolution route
+worked as designed: integration #2's brief-shaped runs could not be described by
+`contracts/state.yaml` — the SDLC phase ladder, the fixed G0–G3 gate block, and
+the tasks mirror don't apply — so the host forked the core state contract in its
+first hour and recorded it. A fork of the *state* contract is qualitatively worse
+than a fork of an artifact template: state is what the frontend, the orchestrator,
+and `validate` all read. The upstream fix is sequenced as an active run: split
+`contracts/state.yaml` into a generic core (run identity, gates-as-map,
+escalations, pause) and an SDLC extension (branch convention, G0–G3, tasks,
+budget), so non-SDLC hosts extend instead of forking. Related template SDLC-isms
+surfaced by the same retro (the `writes_code` role-spec key) are tracked as
+issues; none forced a fork.
 
 ## 5. The workflow
 
@@ -143,10 +238,19 @@ python3 <framework-release>/scripts/integrate.py init <target-repo> [--prefix .a
   (`--adapters` overrides).
 - Copies core, seeds registry/manifests/overlay stubs, writes the lockfile, renders
   agents, wires the render-staleness CI check.
-- Writes provenance: an `.agentic/README.md` pointing back to the source repo, a
-  NOTICE, and — if the host has a header-sweep tool — the exclusion configuration,
-  with the standing rule stated in every rendered agent: *if tooling demands a host
-  header on a framework file, escalate; never comply.*
+- Writes provenance in one of **two modes** — v0.1 assumed only the first:
+  - *Redistributing host* (the host's own tree is open source): repo-root
+    LICENSE/NOTICE additions naming the framework and its Apache-2.0 terms.
+  - *Private, non-redistributing host*: the host cannot take a repo-root
+    Apache LICENSE without mislicensing its own proprietary content. Provenance
+    lands instead as a NOTICE section enumerating the framework-derived files
+    (by reference to the lock), with the Apache-2.0 text kept at
+    `.agentic/LICENSE.framework.md`. Integration #2 invented this pattern by
+    hand; `init` templates it.
+  - In both modes: an `.agentic/README.md` pointing back to the source repo, and —
+    if the host has a header-sweep tool — the exclusion configuration, with the
+    standing rule stated in every rendered agent: *if tooling demands a host
+    header on a framework file, escalate; never comply.*
 - Idempotent: re-running refreshes core and rendered layers, never touches seeded or
   project layers.
 
@@ -191,13 +295,21 @@ The Phase 0 exit criterion, made executable and cheap enough that the *second*
 teammate runs it too:
 
 - **Static:** renders are current (`--check`), lockfile checksums hold, provenance
-  notices present, header-sweep exclusions effective (if applicable), overlay stubs
-  non-empty.
+  notices present and mode-appropriate, header-sweep exclusions effective (if
+  applicable), overlay stubs non-empty, instance vocabulary declared (§4), and the
+  host's run state parses against the host's *own* `contracts/state.yaml`.
 - **Smoke:** dispatch the Analyst on a canned dummy intent brief shipped with the
   framework, then verify the produced spec against the contract's required sections.
   In v0 the dispatch itself is manual (open the runner, paste the printed prompt);
   `validate --smoke-report runs/000-integration/` checks the artifact. Headless
-  dispatch is a v1 nicety, not a blocker.
+  dispatch is no longer hypothetical — the orchestrator's dispatch seam
+  (ORCHESTRATOR.md §5) is the implementation validate will ride once live dispatch
+  is verified — but it stays a v1 nicety, not a blocker.
+- **Frontend read check (new since v0.1, free):** point the gate frontend at the
+  host — `agentic status --repo <host>` — and confirm the smoke run renders
+  without bounces. This exercises the full read path (discovery, state parse,
+  contract validation) end-to-end at the cost of one command, and it is exactly
+  the check that caught the state-schema boundary at integration #2.
 
 Integration is *done* when validate passes for someone other than the operator who
 ran init.
@@ -208,7 +320,8 @@ ran init.
 
 1. Read the lock's pinned source tag; fetching that ref supplies the **base** —
    so core files get a true 3-way merge (base, upstream, local) rather than a
-   clobber-and-pray.
+   clobber-and-pray. (Locks written before the first tagged release pin a bare
+   commit; `upgrade` accepts either and re-pins to a tag on the way through.)
 2. Unforked core files: replaced. Forked files: merged, conflicts surfaced. Seeded
    and project layers: untouched, with new upstream keys/sections reported as notes.
 3. Re-render, re-run `validate` static checks, bump the lock.
@@ -237,7 +350,8 @@ core, and the generation is gated agent work, not templating.
 | Overlays (`_all.md`, per-role) | **Generated by the Integrator**, human-gated | Pure judgment: they encode the probe's conclusions |
 | `integration-profile.md` | **Generated by the Integrator** | The judgment artifact itself |
 | Provenance, README, CI wiring | Templated by the tool | Mechanical |
-| Genuinely new project roles (P6) | Not generated | Adding a role is a team decision; the workflow leaves room but doesn't presume |
+| Genuinely new project roles (P6) | Not generated | Adding a role is a team decision; the workflow leaves room but doesn't presume. Integration #2's experience: four instance roles fit the role-spec format with zero schema changes — the format travels even where the SDLC content doesn't |
+| Gate frontend, orchestrator | **Neither copied nor generated** — run from the pinned framework release against the host (§3) | Runnable tools, not portable trees; vendoring a Node workspace recreates the drift problem |
 
 ## 8. Ergonomics target
 
@@ -268,37 +382,65 @@ thing that runs *before* the environment probe has fixed anything.
 | Smoke run passes, real run fails | validate is necessary, not sufficient; the first real run stays supervised (the pilot's Phase 1 discipline is unchanged) |
 | Version drift across adopting repos | Lockfile census; upgrade is cheap enough to actually run |
 | Integrator hallucinates policy the host doesn't have | Every guardrail in the profile must trace to a probe finding or a cited host policy; untraceable rules are malformed (consumer bounces, per contract discipline) |
+| Framework tooling's compiled-in schema rejects a compliant host's runs | State validated against the host's own `contracts/state.yaml` per the frontend's R3 rule (state-contract split, active run); until it lands, foreign-schema runs render loudly as bounced, never silently wrong |
+| Open escalation invisible behind a schema error | Escalations parsed best-effort, independent of full state validity — for a governance surface, the one field worth reading from a run that otherwise fails to parse |
+| Typo'd capability or gate name renders silently | Declared instance vocabulary (§4); renderer fails on anything outside the declared union |
+| Private host mislicensed by a repo-root Apache LICENSE | Dual provenance modes in `init` (§5); validate checks the mode matches the host's posture |
 
 ## 10. Open questions for team review
 
-1. **Contract extensions** — is the v0 fork-and-record stance (§4) acceptable, or do
-   we want the `## Project fields` extension point in contract templates from day one?
+1. **Contract extensions** — *partially resolved by events.* The state contract's
+   answer is the core/extension split (§4, active run). Still open for the markdown
+   artifact contracts: fork-and-record, or the `## Project fields` extension point
+   from day one?
 2. **Integrator scope** — should it also draft the host's *pilot plan* (phases,
    ticket-selection criteria, metrics), or stop at profile + overlays? Phase 0
    suggests the plan wants human authorship with the profile as input.
 3. **Runs location default** — in-repo `runs/` unless the host's compliance posture
    objects, or sidecar-by-default? The profile captures the inputs either way.
 4. **Smoke brief** — one universal dummy intent brief, or per-domain variants
-   (service, pipeline, CLI)?
-5. **Re-integration of the pilot host** — do we replace its hand-built scaffold with
-   a tool-built one as the dogfood test (recommended, §11), or leave it and dogfood
-   on the next adopter?
+   (service, pipeline, CLI)? Integration #2 adds a datapoint: a non-SDLC host's
+   runs are brief-shaped, so a smoke brief that assumes the G0–G3 ladder wouldn't
+   exercise what that host actually runs.
+5. **Re-integration of the hand-built hosts** — two hand-built scaffolds now exist
+   (the pilot host and integration #2). Replaying the tool against each and
+   diffing is the recommended acceptance test (§11); do we also *adopt* the
+   tool-built result in those repos, or leave their scaffolds as-is?
+6. **Vocabulary declaration syntax** — do instance-added capabilities and gate
+   names live in the adapter manifest, an overlay header, or a dedicated
+   vocabulary file the renderer and validate both read?
+7. **Fleet registration** — should `init` also register the host in the operator's
+   frontend/orchestrator multi-repo config, or is pointing the toolchain at the
+   host a deliberately separate operator step?
 
 ## 11. Build phasing
 
+Sequencing note: the state-contract split (§4) is upstream of everything below —
+the lock's copy manifest, `validate`'s state checks, and the frontend read check
+all want the split schema, and cutting a tag *before* it lands would ship the
+about-to-fork shape as v1.0's frozen interface.
+
 - **v0:** a first **versioned, tagged release** of the framework — the lockfile's
   `version` field needs something real to pin before the first arms-length
-  adoption; renderer overlay support + path-relativity; `integrate.py init|validate`
-  (static checks only); lockfile; `roles/integrator.md` +
-  `contracts/integration-profile.md`; canned smoke brief. Acceptance test: re-run
-  integration against the pilot host and diff the result against its hand-built
-  scaffold — the deltas are either tool bugs or hand-integration mistakes, and both
-  are worth finding.
-- **v1:** `upgrade` with true 3-way merge; smoke-report checking in validate;
-  headless smoke dispatch where a runner supports it.
+  adoption (both existing integrations pin bare commits; the debt is live);
+  renderer overlay support + path-relativity; `integrate.py init|validate`
+  (static checks only); lockfile — its format is field-tested, integration #2's
+  hand-written instance is the reference; `roles/integrator.md` +
+  `contracts/integration-profile.md`; canned smoke brief. Release contents are
+  Apache-2.0 by construction; once the commercial-boundary convention lands
+  (active run), release tooling additionally excludes `ee/` paths. Acceptance
+  test: re-run integration against each hand-built host and diff the result
+  against its scaffold — the deltas are either tool bugs or hand-integration
+  mistakes, and both are worth finding.
+- **v1:** `upgrade` with true 3-way merge (accepting commit-pinned first-generation
+  locks, §6); smoke-report checking in validate; headless smoke dispatch through
+  the orchestrator's dispatch seam where a runner supports it.
 
 ---
 
 *Companion documents: [DESIGN.md](DESIGN.md) (the architecture this workflow
 distributes), [WALKTHROUGH.md](WALKTHROUGH.md) (what a host repo runs after
-integrating).*
+integrating), [FRONTEND.md](FRONTEND.md) and [ORCHESTRATOR.md](ORCHESTRATOR.md)
+(the runnable channel §3 distributes alongside the trees),
+[INTEGRATION-PLAN.md](INTEGRATION-PLAN.md) (the build plan that executes this
+design).*

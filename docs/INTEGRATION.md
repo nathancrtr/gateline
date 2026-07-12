@@ -7,7 +7,10 @@ maintained outside this repository; framework-general findings are tracked as
 issues here) — and two framework components that postdate the draft shipped:
 the gate frontend ([FRONTEND.md](FRONTEND.md), `frontend/`) and the v1
 orchestrator ([ORCHESTRATOR.md](ORCHESTRATOR.md)). The tooling (`integrate.py`,
-renderer overlays, the tagged release) remains unbuilt; §11 tracks it.
+renderer overlays, the tagged release) remains unbuilt; §11 tracks it, and
+[INTEGRATION-PLAN.md](INTEGRATION-PLAN.md) sequences the build. A round-1
+adversarial review of this revision is applied
+(`runs/integration-hardening/review-01.md`).
 **Audience:** operators adopting the framework in a host repository, and whoever builds the tooling
 **Prerequisite reading:** [DESIGN.md](DESIGN.md); the production pilot's Phase 0 notes (maintained outside this repository)
 
@@ -93,12 +96,31 @@ How should framework files travel into a host repo?
 | Runner plugin (e.g., a Claude Code plugin) | Adapter-layer option only | Could bundle one runner's rendered agents for install ergonomics, but the core must stay runtime-neutral files (P3); never the primary channel |
 
 The Phase 0 decision — copy, don't submodule — was right. What was missing is the
-lockfile: `.agentic/framework-lock.json` recording the source repo, source commit,
-framework version, the adapters rendered, and a **per-file checksum of every
-core-layer file**. Checksums are what turn "someone edited a copy" from silent drift
+lockfile, `.agentic/framework-lock.json`. Its schema is normative *here* — and
+ships as a JSON Schema beside `integrate.py` — because the field instances live in
+private hosts this repository cannot point at:
+
+- `source` — repo; pinned ref (a tag once releases exist, a bare commit before);
+  framework version
+- `integrated_at`; `method` (tool version, or hand-executed for pre-tool instances)
+- `adapters_rendered`
+- `taken[]` — the copy-manifest subset this host adopted (§2)
+- `files{}` — **per-file checksum of every taken core-layer file**
+- `forks{}` — per forked file: the base checksum it diverged from, the reason,
+  and a `review_at_upgrade` flag
+- `instance_layer` — the host-original trees that follow framework conventions
+  but are not copies (a host's own roles and contracts, e.g.)
+- `provenance_mode` — `redistribute | private` (§5); what validate checks the
+  notices against
+
+Checksums are what turn "someone edited a copy" from silent drift
 into a detectable state with two sanctioned resolutions: move the change to an
 overlay, or record the file as a deliberate fork (the lock gains a `forks:` entry,
-which becomes the review agenda at upgrade time).
+which becomes the review agenda at upgrade time). Forked files keep their
+**pristine upstream copy** under the prefix — field practice at integration #2,
+now design: the retained copy is the fork's recorded base, `validate` checksums
+the fork against *it* rather than against upstream HEAD, and `upgrade` uses it as
+the 3-way merge base with no network fetch (§6).
 
 One more thing the lock pins down: **what travels is a tagged release, not a
 working copy.** The framework is a dependency with downstream consumers, not a lab
@@ -106,9 +128,10 @@ whose copies drift by nature — consumers integrate against a version they can 
 and the upstream owes them the tagging discipline that implies (§11). This debt is
 now overdue rather than theoretical: no tag exists, so integration #2 had to pin a
 bare commit hash and record the missing release as a retro item. The first tagged
-release is therefore the head of the build queue (§11), and the first `upgrade`
-must accept commit-pinned locks as its base — the lock format the field already
-contains (§6).
+release therefore sits at the head of the build queue, immediately *behind* the
+state-contract split (§11's sequencing note — tagging first would freeze the
+about-to-fork schema), and the first `upgrade` must accept commit-pinned locks
+(§6).
 
 ### Vendored trees are not the only channel
 
@@ -129,7 +152,7 @@ deliberately do not vendor:
   was the compiled-in run-state schema, which rejected the host's legitimately
   forked `state.yaml`; the fix (a generic state core + SDLC extension, with state
   validated against the host's own `contracts/state.yaml` per the frontend's R3
-  rule) is sequenced as an active run.
+  rule, `frontend/README.md`) is sequenced as an active run.
 
 Distribution is therefore **two channels pinned by one lock**: core trees vendor
 into the host; the toolchain runs from the same pinned release against the host.
@@ -231,14 +254,29 @@ Run from a pinned framework release — a tagged checkout or its release tarball
 never someone's working copy — pointed at the target:
 
 ```
-python3 <framework-release>/scripts/integrate.py init <target-repo> [--prefix .agentic] [--adapters auto]
+python3 <framework-release>/scripts/integrate.py init <target-repo> \
+    [--take all|sdlc|<file list>] [--layout prefixed|root] [--prefix .agentic] \
+    [--provenance redistribute|private] [--adapters auto]
 ```
 
 - Detects runners present (`.claude/`, `.github/`, …) and selects adapters
   (`--adapters` overrides).
-- Copies core, seeds registry/manifests/overlay stubs, writes the lockfile, renders
-  agents, wires the render-staleness CI check.
-- Writes provenance in one of **two modes** — v0.1 assumed only the first:
+- `--take` selects the copy-manifest subset (§2): `all` (default), `sdlc` (the
+  role/contract set for software delivery), or an explicit file list — the
+  minimal-adoption path integration #2 took by hand. The taken subset is recorded
+  in the lock; everything downstream (overlay stubs, validate, smoke) scopes to it.
+- `--layout` chooses between the prefixed tree (§4 diagram) and the field's
+  endorsed root layout: core files at the conventional in-tree paths (`roles/`,
+  `contracts/`, `scripts/`) with `--prefix` holding metadata only (lock, retained
+  upstream copies, framework license). Rendered agents and the renderer expect the
+  in-tree paths either way; the lock, not the layout, is the record of what is core.
+- Copies the taken subset, seeds registry/manifests, seeds overlay stubs for the
+  taken roles only, writes the lockfile, renders agents, wires the
+  render-staleness CI check.
+- Writes provenance in one of **two modes** — v0.1 assumed only the first. The
+  mode is an explicit `init` input (`--provenance`, no default: the operator must
+  state the host's posture) and is recorded in the lock, which is what gives
+  `validate` something to check the notices against:
   - *Redistributing host* (the host's own tree is open source): repo-root
     LICENSE/NOTICE additions naming the framework and its Apache-2.0 terms.
   - *Private, non-redistributing host*: the host cannot take a repo-root
@@ -266,8 +304,11 @@ consumes the freshly scaffolded tree plus the host repo, and produces
   environment surprises at implement time; this makes the probe a required artifact
   at integration time.)
 - **Gate mapping** — the host's existing machine-enforced gates (CI, SAST, branch
-  protection, deploy-on-merge) mapped onto G0–G3, including any deploy weight a
-  merge already carries.
+  protection, deploy-on-merge) mapped onto the gate set the host actually adopts:
+  G0–G3 for SDLC hosts, the host's own gate map otherwise (integration #2 runs
+  `publish`-gated and ungated briefs; forcing those onto G0–G3 would make the
+  profile malformed by its own contract). Include any deploy weight a merge
+  already carries.
 - **Conventions map** — where the host's conventions actually live, and whether
   agents in fresh clones/worktrees can read them (a gitignored conventions file is a
   probe *finding*, with a remediation proposal).
@@ -278,6 +319,12 @@ consumes the freshly scaffolded tree plus the host repo, and produces
   and whether P5 is satisfiable or must be recorded as a known weakening.
 - **Runs-location decision input** — in-repo `runs/` vs. sidecar repo, with the
   host's compliance posture stated.
+- **Dispatch reality** — which operating modes the host actually runs:
+  interactive operator sessions, scheduled/self-dispatching runs (a scheduled
+  session with no dispatcher above it writes its own run state — gate entries
+  stay human-only regardless), or the autonomous orchestrator. Integration #2
+  runs standing briefs on a scheduler; a profile with no slot for that reality
+  can't record the host's most load-bearing operational fact.
 
 The Integrator then **drafts the project layer directly** — `overlays/_all.md`,
 per-role overlays, registry bindings, any contract fork — since those files are
@@ -294,22 +341,30 @@ lockfile. A named human approves, recorded in the profile like any gate.
 The Phase 0 exit criterion, made executable and cheap enough that the *second*
 teammate runs it too:
 
-- **Static:** renders are current (`--check`), lockfile checksums hold, provenance
-  notices present and mode-appropriate, header-sweep exclusions effective (if
-  applicable), overlay stubs non-empty, instance vocabulary declared (§4), and the
-  host's run state parses against the host's *own* `contracts/state.yaml`.
-- **Smoke:** dispatch the Analyst on a canned dummy intent brief shipped with the
-  framework, then verify the produced spec against the contract's required sections.
-  In v0 the dispatch itself is manual (open the runner, paste the printed prompt);
+- **Static:** renders are current (`--check`), lockfile checksums hold for the
+  taken subset, provenance notices match the lock's recorded mode, header-sweep
+  exclusions effective (if applicable), overlay stubs non-empty for the taken
+  roles, instance vocabulary declared (§4), and the host's run state parses
+  against the host's *own* `contracts/state.yaml`.
+- **Smoke:** dispatch the entry role of the taken set — the Analyst for SDLC
+  adopters, the host's own first role otherwise — on a canned brief shipped with
+  the framework (or, for non-SDLC adopters, the host's own brief template), then
+  verify the produced artifact against its contract's required sections. In v0
+  the dispatch itself is manual (open the runner, paste the printed prompt);
   `validate --smoke-report runs/000-integration/` checks the artifact. Headless
   dispatch is no longer hypothetical — the orchestrator's dispatch seam
   (ORCHESTRATOR.md §5) is the implementation validate will ride once live dispatch
   is verified — but it stays a v1 nicety, not a blocker.
-- **Frontend read check (new since v0.1, free):** point the gate frontend at the
-  host — `agentic status --repo <host>` — and confirm the smoke run renders
-  without bounces. This exercises the full read path (discovery, state parse,
-  contract validation) end-to-end at the cost of one command, and it is exactly
-  the check that caught the state-schema boundary at integration #2.
+- **Frontend read check (new since v0.1; an operator step, not part of
+  `validate`):** point the gate frontend at the host — `agentic status --repo
+  <host>` from the framework checkout — and confirm the smoke run renders without
+  bounces. `validate` (stdlib Python) prints the command; it does not run a Node
+  toolchain it doesn't ship. Precondition: the state-contract split — until it
+  lands, a host with instance gate vocabulary bounces by design and the check's
+  pass criterion applies only to SDLC-shaped hosts. This one command exercises
+  the full read path (discovery, state parse, contract validation) end-to-end,
+  and it is exactly the check that caught the state-schema boundary at
+  integration #2.
 
 Integration is *done* when validate passes for someone other than the operator who
 ran init.
@@ -318,12 +373,16 @@ ran init.
 
 `integrate.py upgrade`, run from a newer pinned framework release:
 
-1. Read the lock's pinned source tag; fetching that ref supplies the **base** —
-   so core files get a true 3-way merge (base, upstream, local) rather than a
-   clobber-and-pray. (Locks written before the first tagged release pin a bare
-   commit; `upgrade` accepts either and re-pins to a tag on the way through.)
-2. Unforked core files: replaced. Forked files: merged, conflicts surfaced. Seeded
-   and project layers: untouched, with new upstream keys/sections reported as notes.
+1. Establish the **base** for 3-way merges from the retained upstream copies the
+   lock records (§3) — no network fetch, so `upgrade` runs from a release tarball
+   in a private/offline host. When run from a git checkout instead, fetching the
+   lock's pinned ref is a cross-check, not a dependency. (Locks written before
+   the first tagged release pin a bare commit; `upgrade` reads either form and
+   records the new release's tag when it bumps the lock.)
+2. Unforked taken files: replaced. Forked files: merged against their recorded
+   base, conflicts surfaced. Seeded and project layers: untouched, with new
+   upstream keys/sections reported as notes. Files a newer release *adds* to the
+   copy manifest are offered to a partial adopter as notes, never auto-copied.
 3. Re-render, re-run `validate` static checks, bump the lock.
 
 Flowback stays deliberately manual and **maintainer-mediated**: retros in host
@@ -365,10 +424,16 @@ python3 .agentic/scripts/integrate.py validate
 ```
 
 Two tool invocations, one agent dispatch, one PR. The tool travels into
-`.agentic/scripts/`, so the host never needs the framework source again except to
-upgrade against a newer release. Stdlib-only Python 3.9+, same constraint as the renderer and for the same
-reason: host machines' interpreters vary, and the integration tool is precisely the
-thing that runs *before* the environment probe has fixed anything.
+`.agentic/scripts/`, so the **host repo** is self-sufficient: nothing checked into
+it depends on the framework source except at `upgrade` time. The **operator's
+cockpit** is a different matter under the two-channel model (§3): the gate
+frontend and the orchestrator run from the framework checkout/release for as long
+as the operator uses them — a standing instrument on the operator's machine, not
+a dependency of the host tree — and Stage 3's frontend read check is an operator
+step from that checkout. Everything that travels into the host stays stdlib-only
+Python 3.9+, same constraint as the renderer and for the same reason: host
+machines' interpreters vary, and the integration tool is precisely the thing that
+runs *before* the environment probe has fixed anything.
 
 ## 9. Failure modes and mitigations
 
@@ -382,8 +447,8 @@ thing that runs *before* the environment probe has fixed anything.
 | Smoke run passes, real run fails | validate is necessary, not sufficient; the first real run stays supervised (the pilot's Phase 1 discipline is unchanged) |
 | Version drift across adopting repos | Lockfile census; upgrade is cheap enough to actually run |
 | Integrator hallucinates policy the host doesn't have | Every guardrail in the profile must trace to a probe finding or a cited host policy; untraceable rules are malformed (consumer bounces, per contract discipline) |
-| Framework tooling's compiled-in schema rejects a compliant host's runs | State validated against the host's own `contracts/state.yaml` per the frontend's R3 rule (state-contract split, active run); until it lands, foreign-schema runs render loudly as bounced, never silently wrong |
-| Open escalation invisible behind a schema error | Escalations parsed best-effort, independent of full state validity — for a governance surface, the one field worth reading from a run that otherwise fails to parse |
+| Framework tooling's compiled-in schema rejects a compliant host's runs | State validated against the host's own `contracts/state.yaml` per the frontend's R3 rule (`frontend/README.md`; state-contract split, active run); until it lands, foreign-schema runs render loudly as bounced, never silently wrong |
+| Open escalation invisible behind a schema error | Frontend fix, sequenced as an active run: escalation entries stay readable even when full state validation fails |
 | Typo'd capability or gate name renders silently | Declared instance vocabulary (§4); renderer fails on anything outside the declared union |
 | Private host mislicensed by a repo-root Apache LICENSE | Dual provenance modes in `init` (§5); validate checks the mode matches the host's posture |
 
@@ -424,9 +489,10 @@ about-to-fork shape as v1.0's frozen interface.
   `version` field needs something real to pin before the first arms-length
   adoption (both existing integrations pin bare commits; the debt is live);
   renderer overlay support + path-relativity; `integrate.py init|validate`
-  (static checks only); lockfile — its format is field-tested, integration #2's
-  hand-written instance is the reference; `roles/integrator.md` +
-  `contracts/integration-profile.md`; canned smoke brief. Release contents are
+  (static checks only); the lockfile per §3's normative schema, shipped as a JSON
+  Schema beside the tool (the format is field-tested — two hand-written instances
+  exist — but §3 is the reference, not any private host's file);
+  `roles/integrator.md` + `contracts/integration-profile.md`; canned smoke brief. Release contents are
   Apache-2.0 by construction; once the commercial-boundary convention lands
   (active run), release tooling additionally excludes `ee/` paths. Acceptance
   test: re-run integration against each hand-built host and diff the result

@@ -1,0 +1,14 @@
+{
+  "name": "@agentic/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Schema, discovery, readiness, validation, write path, and metrics for the gate frontend. Runs from TypeScript source (Node >=24 type stripping); no build step.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "yaml": "^2.8.0",
+    "zod": "^3.25.0"
+  }
+}

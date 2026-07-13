@@ -46,13 +46,14 @@ fence) must not be treated as headings.
 ### R4 — GitHub-flavored anchor generation
 Each heading's link target must be an anchor computed the way GitHub computes
 auto-generated heading anchors: lowercase the heading text, remove every character
-that is not a Unicode letter, digit, space, or hyphen, then replace each space with a
-hyphen.
+that is not a Unicode letter, digit, space, hyphen, or underscore, then replace each
+space with a hyphen.
 **Acceptance criteria:**
 - [ ] AC4.1 — Heading `## Hello World` produces anchor `hello-world`.
 - [ ] AC4.2 — Heading `## Don't Repeat Yourself` produces anchor `dont-repeat-yourself` (apostrophe removed, not treated as a word boundary).
 - [ ] AC4.3 — Heading `### 1. What v1 changes — and what it must not` (taken from `docs/ORCHESTRATOR.md`) produces anchor `1-what-v1-changes--and-what-it-must-not` (the em dash is removed, leaving the double space around it to collapse to a double hyphen).
 - [ ] AC4.4 — Heading `` ## Code `example` `` produces anchor `code-example` (backticks removed).
+- [ ] AC4.5 — Heading `## Use snake_case Names` produces anchor `use-snake_case-names` (the underscore inside `snake_case` is preserved, not stripped, matching live GitHub behavior).
 
 ### R5 — Duplicate anchor disambiguation
 When two or more headings in the same document produce the same base anchor, the
@@ -97,7 +98,7 @@ duplicate disambiguation, nesting) must be verifiable independent of manual shel
 invocation.
 **Acceptance criteria:**
 - [ ] AC9.1 — Running `pytest` from the deliverable's directory exits with status code 0.
-- [ ] AC9.2 — `pytest --collect-only` lists distinct, individually named test cases exercising each of: ATX detection incl. non-heading `#` lines (R2), fenced-code-block exclusion (R3), anchor slug generation incl. the em-dash/apostrophe/backtick cases (R4), duplicate-anchor disambiguation (R5), and headingless input (R8).
+- [ ] AC9.2 — `pytest --collect-only` lists distinct, individually named test cases exercising each of: ATX detection incl. non-heading `#` lines (R2), fenced-code-block exclusion (R3), anchor slug generation incl. the em-dash/apostrophe/backtick/underscore cases (R4), duplicate-anchor disambiguation (R5), and headingless input (R8).
 
 ### R10 — Implementation constraints
 The delivered tool must be a single Python 3 source file, compatible with Python
@@ -109,7 +110,7 @@ The delivered tool must be a single Python 3 source file, compatible with Python
 
 ## Assumptions
 - **ASSUMPTION:** The brief doesn't say whether the document's own level-1 title heading belongs in the TOC → resolved as: every ATX heading found, levels 1–6 including level 1, is included with no special-casing of a "document title" (see R2, R6), because the brief says "ATX headings (# … ######) only" without carving out level 1, and inventing a title-skip rule is unrequested behavior a human reviewer should approve explicitly, not one Analyst should assume.
-- **ASSUMPTION:** The brief doesn't specify the anchor-slugging algorithm → resolved as GitHub's documented scheme — lowercase, strip everything but Unicode letters/digits/spaces/hyphens, spaces become hyphens, duplicates get `-1`/`-2`/… suffixes (see R4, R5) — because the brief explicitly asks for "GitHub's auto-generated heading anchors," and this is GitHub's actual algorithm, grounded in real headings from `docs/ORCHESTRATOR.md` (AC4.3).
+- **ASSUMPTION:** The brief doesn't specify the anchor-slugging algorithm → resolved as GitHub's documented scheme — lowercase, strip everything but Unicode letters/digits/spaces/hyphens, spaces become hyphens, duplicates get `-1`/`-2`/… suffixes (see R4, R5) — because the brief explicitly asks for "GitHub's auto-generated heading anchors," and this is GitHub's actual algorithm, grounded in real headings from `docs/ORCHESTRATOR.md` (AC4.3). **G1 correction (2026-07-13):** the plan's ADR-4, which had treated this assumption's character class as binding over live GitHub behavior, was DECLINED at G1 by nthncrtr — "ADR-4 should match live GitHub — preserve underscores." Live GitHub's anchor algorithm retains underscores as literal characters; this assumption's original wording (and R4's prior text) omitted them. R4 is amended accordingly (letter/digit/space/hyphen/underscore retained; see R4, AC4.5). This annotation preserves the original resolution for the record rather than silently rewriting it.
 - **ASSUMPTION:** The brief doesn't say whether the TOC link text should reflect the heading's literal source characters or a markdown-rendered/plain-text version of it → resolved as: link text is the heading's literal trailing text after the `#` markers and surrounding whitespace are stripped, with no further transformation (inline emphasis markers, code-span backticks, etc. are left as-is in the link text) — because rendering inline Markdown to plain text is unrequested parsing depth the brief doesn't ask for, and GitHub's own TOC-adjacent rendering shows the heading as authored.
 - **ASSUMPTION:** The brief doesn't address headings containing inline links or images (e.g. `## See [details](url)`), where GitHub's rendered-text-based anchor would differ from a literal-source-based one → resolved as: out of scope. The anchor algorithm (R4) operates on the heading's literal source text; a heading containing an inline link or image may not produce a byte-for-byte GitHub-matching anchor, because none of this run's target documents (DESIGN.md, ORCHESTRATOR.md, FRONTEND.md) contain such headings, and handling it correctly requires a markdown inline parser the brief doesn't request.
 - **ASSUMPTION:** The brief doesn't define TOC indentation → resolved as 2 spaces per level below level 1, computed from each heading's absolute level rather than renumbered relative to the shallowest level present in the document (see R6, AC6.2), because it's the smallest deterministic rule and matches common Markdown TOC-generator convention.

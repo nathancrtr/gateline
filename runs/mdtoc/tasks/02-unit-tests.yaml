@@ -63,3 +63,28 @@ depends_on: [01-mdtoc-cli]
 status: pending
 
 notes: |
+  Round 2 (review-02.md, request-changes, 5 findings) — all 5 addressed with
+  new tests in apps/mdtoc/test_core.py; no rebuttals, all findings accepted
+  as valid mutation-survival gaps.
+  - F1 (no source-hyphen slug fixture): added test_slug_source_hyphen_preserved
+    — slugify('Re-entry Vector') == 're-entry-vector'.
+  - F2 (no tab fixture pinning predicate filter over \w\s-regex): added
+    test_slug_tab_dropped_not_converted_to_hyphen — slugify('a\tb') == 'ab'.
+  - F3 (fence cross-dialect close / unclosed-at-EOF untested): added three
+    tests — test_fence_mixed_dialect_does_not_close (tilde never closes a
+    backtick fence), test_fence_close_requires_at_least_opening_length (a
+    closing run shorter than the opening length doesn't close; one >= the
+    opening length does), test_fence_unclosed_extends_to_end_of_file.
+  - F4 (dedup fixture can't distinguish raw-text keying from base-slug
+    keying): added test_duplicate_anchors_keyed_on_base_slug_not_raw_text —
+    [(1,'Foo Bar'), (1,'foo bar')] -> #foo-bar / #foo-bar-1.
+  - F5 (bare-marker '##' and .strip() semantics untested): added
+    test_heading_bare_marker_yields_empty_text (extract_headings('##\n') ==
+    [(2, '')]) and test_heading_text_is_stripped_of_trailing_whitespace
+    (extract_headings('# Title  \n') == [(1, 'Title')]).
+  Result: 24 tests, all passing (`pytest test_core.py` from apps/mdtoc/,
+  /usr/bin/python3 3.9.6, pytest 8.4.2 — "24 passed in 0.05s"). AC9.2
+  name-substring contract re-verified intact after the additions (heading
+  x7, fence x5, slug x7 incl. duplicate-substring overlap, duplicate x2,
+  empty x4). Only apps/mdtoc/test_core.py touched; mdtoc.py and test_cli.py
+  untouched. Not committed per dispatch instructions.

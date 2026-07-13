@@ -30,6 +30,18 @@ def test_heading_seven_hashes_is_not_a_heading():
     assert mdtoc.extract_headings("####### Seven\n") == []
 
 
+def test_heading_bare_marker_yields_empty_text():
+    # Review-02 F5 — plan interface contract: "a bare marker line ('#'..
+    # '######') yields text ''" — not treated as a non-heading.
+    assert mdtoc.extract_headings("##\n") == [(2, "")]
+
+
+def test_heading_text_is_stripped_of_trailing_whitespace():
+    # Review-02 F5 — plan interface contract: heading text is the
+    # remainder ".strip()ped", so trailing spaces are removed.
+    assert mdtoc.extract_headings("# Title  \n") == [(1, "Title")]
+
+
 # --- extract_headings: fenced code blocks are excluded (R3) ---------------
 
 
@@ -43,6 +55,30 @@ def test_fence_tilde_gives_identical_result():
     # AC3.2 — same fixture, tilde fences, identical result.
     text = "~~~\n# not a heading\nregular text\n~~~\n## Real Heading\n"
     assert mdtoc.extract_headings(text) == [(2, "Real Heading")]
+
+
+def test_fence_mixed_dialect_does_not_close():
+    # Review-02 F3 — R3: "the matching closing fence". A tilde line never
+    # closes a backtick fence; the still-open fence swallows the rest of
+    # the document, so no heading is found.
+    text = "```\n~~~\n## After\n"
+    assert mdtoc.extract_headings(text) == []
+
+
+def test_fence_close_requires_at_least_opening_length():
+    # Review-02 F3 — ADR-3: a closing run must be >= the opening fence's
+    # length. A shorter run of the same char does not close the fence; a
+    # run of at least the opening length does.
+    text = "````\n```\n## Hidden\n````\n## Shown\n"
+    assert mdtoc.extract_headings(text) == [(2, "Shown")]
+
+
+def test_fence_unclosed_extends_to_end_of_file():
+    # Review-02 F3 — ADR-3 "Behavior not covered by any AC": an unclosed
+    # fence extends to EOF, so a '#'-prefixed line after it is never a
+    # heading.
+    text = "```\n# hidden\n"
+    assert mdtoc.extract_headings(text) == []
 
 
 # --- slugify: GitHub anchor generation (R4, as amended by plan ADR-4) -----
@@ -79,6 +115,22 @@ def test_slug_underscore_preserved():
     assert mdtoc.slugify("Use snake_case Names") == "use-snake_case-names"
 
 
+def test_slug_source_hyphen_preserved():
+    # Review-02 F1 — R4's kept class explicitly includes hyphen; every
+    # hyphen in the earlier fixtures happens to originate from a space, so
+    # a mutant that drops source hyphens survived. A literal hyphen in the
+    # source text must remain in the anchor.
+    assert mdtoc.slugify("Re-entry Vector") == "re-entry-vector"
+
+
+def test_slug_tab_dropped_not_converted_to_hyphen():
+    # Review-02 F2 — pins the predicate-filter mechanism over the
+    # '\w\s'-regex idiom ADR-4 explicitly rejects: a tab is not in the
+    # kept class (only *space* is kept/mapped), so it is dropped entirely
+    # rather than surviving literally or becoming a hyphen.
+    assert mdtoc.slugify("a\tb") == "ab"
+
+
 # --- render_toc: duplicate anchor disambiguation (R5) ----------------------
 
 
@@ -90,6 +142,17 @@ def test_duplicate_anchors_get_numeric_suffixes_in_document_order():
         "- [Overview](#overview)\n"
         "  - [Overview](#overview-1)\n"
         "    - [Overview](#overview-2)\n"
+    )
+
+
+def test_duplicate_anchors_keyed_on_base_slug_not_raw_text():
+    # Review-02 F4 — R5: disambiguation triggers on the same *base anchor*,
+    # not the same raw heading text. Two headings with different text but
+    # the same slug ("Foo Bar" / "foo bar" both slug to "foo-bar") must
+    # still be disambiguated.
+    headings = [(1, "Foo Bar"), (1, "foo bar")]
+    assert mdtoc.render_toc(headings) == (
+        "- [Foo Bar](#foo-bar)\n" "- [foo bar](#foo-bar-1)\n"
     )
 
 

@@ -134,6 +134,14 @@ def test_ac2_2_ac2_3_symlinks_and_fifo_excluded_completes_within_timeout(tmp_pat
     assert expected_b.encode() in result.stdout
     assert expected_symlink.encode() not in result.stdout
     assert expected_fifo.encode() not in result.stdout
+    # Directory-symlink half of AC2.2: a followlinks=True mutant would
+    # self-terminate via ELOOP within the timeout and exit 0 with a huge
+    # group reached *through* cycle_back — kill it by exact stdout bytes:
+    # a single two-member group, sorted, no other content (review-03 F1).
+    assert b"cycle_back" not in result.stdout
+    expected_group = sorted([expected_a, expected_b])
+    expected_stdout = ("\n".join(expected_group) + "\n").encode()
+    assert result.stdout == expected_stdout
 
 
 # --- AC4.2 -----------------------------------------------------------------
@@ -239,9 +247,16 @@ def test_ac7_1_nonexistent_path_exits_nonzero_no_traceback(tmp_path):
 
     result = run_cli([missing])
 
-    assert result.returncode != 0
+    # Plan CLI contract: root errors exit exactly 1 (distinct from
+    # argparse's 2), one pinned stderr line, nothing on stdout
+    # (review-03 F2/F3).
+    assert result.returncode == 1
     assert result.stderr != b""
     assert b"Traceback" not in result.stderr
+    assert result.stdout == b""
+    assert result.stderr == "dupefind.py: error: no such directory: {}\n".format(
+        missing
+    ).encode()
 
 
 def test_ac7_2_path_to_regular_file_exits_nonzero_no_traceback(tmp_path):
@@ -250,9 +265,15 @@ def test_ac7_2_path_to_regular_file_exits_nonzero_no_traceback(tmp_path):
 
     result = run_cli([str(regular_file)])
 
-    assert result.returncode != 0
+    # Plan CLI contract: root errors exit exactly 1, one pinned stderr
+    # line, nothing on stdout (review-03 F2/F3).
+    assert result.returncode == 1
     assert result.stderr != b""
     assert b"Traceback" not in result.stderr
+    assert result.stdout == b""
+    assert result.stderr == "dupefind.py: error: not a directory: {}\n".format(
+        str(regular_file)
+    ).encode()
 
 
 # --- AC9.1 -----------------------------------------------------------------

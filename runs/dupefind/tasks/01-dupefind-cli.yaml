@@ -1,0 +1,78 @@
+# Contract: produced by Architect; consumed by exactly one Implementer.
+
+id: 01-dupefind-cli
+title: Create dupefind.py — core functions (scan_files, hash_file, find_duplicate_groups, render_groups) plus the CLI shell
+requirements: [R1, R2, R3, R4, R5, R6, R7, R9]
+
+scope: |
+  Create apps/dupefind/dupefind.py, the complete single-file tool. Implement
+  exactly the module-level interface pinned in plan.md ("Interface contracts"):
+  CHUNK_SIZE, scan_files(), hash_file(), find_duplicate_groups(),
+  render_groups(), main(), and the __main__ guard, with the documented
+  signatures and semantics. Include a short module docstring stating the
+  detection rule (size first, then SHA-256; R3) and the unconditional
+  empty-file exclusion (R4).
+
+  Constraints (R9 + plan ADR-8): Python 3 stdlib only — expected imports are
+  argparse, hashlib, os, stat, sys (typing imports allowed). Compatible with
+  Python 3.9.6, the environment's only interpreter: no PEP 604 unions in any
+  evaluated annotation (use Optional[...] from typing, exactly as the pinned
+  main() signature does); PEP 585 subscriptions (list[tuple[str, int]]) are
+  fine. Write to stdout only via sys.stdout.write(render_groups(...)) — never
+  print() (plan CLI contract; AC5.1/AC5.2 byte-exactness).
+
+  Behavior to honor (all defined in plan.md; the ADRs carry the details):
+  - scan_files: os.walk(root, followlinks=False); admit an entry from
+    `filenames` iff stat.S_ISREG(os.lstat(path).st_mode) — this one predicate
+    excludes file symlinks, broken symlinks, FIFOs, sockets, devices (R2,
+    ADR-2); directory symlinks are never descended, which breaks cycles
+    (AC2.2). path is os.path.join(dirpath, name) exactly as walked — no
+    normpath/abspath/realpath (R5). Size comes from the same lstat. OSError
+    on lstat -> skip that entry silently (ADR-6). 0-byte files ARE included
+    here (ADR-4).
+  - hash_file: hashlib.sha256, binary reads of CHUNK_SIZE (65536) until EOF,
+    return hexdigest (ADR-3). Let OSError propagate to the caller.
+  - find_duplicate_groups: drop size-0 entries first, unconditionally — no
+    parameter or mechanism to disable this, per the G0 veto (R4, ADR-4);
+    partition by size; hash ONLY files whose size is shared by >=2 entries
+    (R3, ADR-3 — unique sizes are never opened); OSError during hashing ->
+    skip that file silently (ADR-6); group by digest; keep groups of >=2;
+    sorted() each group (plain str/codepoint order), then sort the group list
+    by each group's first path (R5, ADR-5). No duplicates -> [].
+  - render_groups: '\n\n'.join('\n'.join(g) for g in groups) + '\n' when
+    non-empty, '' when empty — character-for-character (R5, R6, ADR-5).
+  - main: argparse with prog="dupefind.py", one required positional
+    directory argument, NO flags of any kind (R1; R4 as amended at G0 —
+    argparse itself rejects unknown flags with exit 2, and handles the
+    missing-argument case, AC1.2). Then the explicit LBYL root check (ADR-6
+    — os.walk swallows bad roots, so EAFP cannot satisfy AC7.1/AC7.2):
+    if not os.path.isdir(root): one line on stderr — 'dupefind.py: error:
+    no such directory: <root>' when os.path.exists(root) is false, else
+    'dupefind.py: error: not a directory: <root>' — return 1, never a
+    traceback (R7). Otherwise sys.stdout.write of the rendered groups,
+    return 0 (R6: no duplicates / empty dir is success with zero stdout
+    bytes).
+
+file_contact_surface:
+  - apps/dupefind/dupefind.py
+
+acceptance_tests:
+  # Function-level checks mirroring the spec ACs. Run from apps/dupefind/.
+  - "python3 -c \"import dupefind as d; assert d.render_groups([['a.txt','b.txt'],['c/d.txt','e.txt']]) == 'a.txt\\nb.txt\\n\\nc/d.txt\\ne.txt\\n'\"  # AC5.1 render formula"
+  - "python3 -c \"import dupefind as d; assert d.render_groups([]) == ''\"  # AC4.2/AC6.1/AC6.2 zero bytes"
+  - "python3 -c \"import dupefind as d, hashlib, tempfile, os; fd, p = tempfile.mkstemp(); os.write(fd, b'abc'); os.close(fd); r = d.hash_file(p); os.unlink(p); assert r == hashlib.sha256(b'abc').hexdigest()\"  # AC3.1 digest correctness"
+  - "python3 -c \"import dupefind as d; assert d.find_duplicate_groups([('a', 0), ('b', 0), ('c', 0)]) == []\"  # AC4.1 — size-0 dropped before any hashing (paths need not exist)"
+  - "python3 -c \"import dupefind as d; assert d.find_duplicate_groups([('a', 1), ('b', 2)]) == []\"  # ADR-3 — unique sizes never opened (paths need not exist)"
+  # Process-level smoke checks:
+  - "`python3 dupefind.py <dir containing two identical files at different depths>` exits 0 and prints one group with both root-joined paths, sorted (AC1.1, AC2.1, AC3.1)"
+  - "`python3 dupefind.py` with no argument exits 2 with argparse usage on stderr (AC1.2)"
+  - "`python3 dupefind.py --include-empty <dir>` exits 2 — no flags exist (R4/AC4.2, plan CLI contract)"
+  - "`python3 dupefind.py does-not-exist-dir` exits 1 with one 'dupefind.py: error: ...' line on stderr and no Traceback (AC7.1); same shape against a regular-file path (AC7.2)"
+  - "`python3 dupefind.py <dir with a symlink cycle and a FIFO>` completes promptly, exits 0, and neither the symlink nor the FIFO path appears in stdout (AC2.2, AC2.3)"
+  - "Module imports cleanly; only stdlib imports (AC9.2 sense); no PEP 604 annotations anywhere (AC9.3, plan ADR-8); exactly this one non-test .py file under apps/dupefind/ (AC9.1)"
+
+depends_on: []
+
+status: pending
+
+notes: |

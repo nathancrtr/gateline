@@ -1,0 +1,91 @@
+# Contract: produced by Architect; consumed by exactly one Implementer.
+
+id: 03-cli-tests
+title: End-to-end CLI tests via subprocess (exit codes, stderr, exact stdout bytes, double-run determinism, R9 constraint checks)
+requirements: [R1, R2, R4, R5, R6, R7, R8, R9]
+
+scope: |
+  Create apps/dupefind/test_cli.py: pytest tests that run the finished tool
+  (task 01 is merged) as a real process and assert on exit codes, stdout
+  bytes, and stderr. Per plan.md "Test-layout contract": locate the script as
+  pathlib.Path(__file__).parent / "dupefind.py" and invoke it with
+  subprocess.run([sys.executable, str(script), <root>], capture_output=True,
+  timeout=30) — the timeout is MANDATORY on every invocation (a FIFO
+  regression must fail, not hang; plan risk + AC2.3). Build fixture trees
+  under tmp_path; pass the root as a plain string and construct every
+  expected output path with os.path.join from that exact root string — never
+  .resolve()/realpath (the tool never resolves; macOS tmp dirs are
+  symlinked). Do not duplicate task 02's function-level tests; do not modify
+  dupefind.py or test_core.py.
+
+  Name contract (plan.md, for AC8.2): at least one test name must include
+  the substring 'reproduc' (the AC5.2 test below); other names may follow
+  the AC numbers.
+
+  Required coverage (one test per bullet):
+  - AC1.1 — existing readable directory (give it one duplicate pair) ->
+    returncode 0.
+  - AC1.2 — no argument -> returncode != 0 (argparse: 2), stderr non-empty
+    (usage).
+  - No-flags guarantee (R4/AC4.2, plan CLI contract) — `--include-empty
+    <root>` -> returncode 2, stderr non-empty; the tool accepts no flag
+    whatsoever beyond the positional argument.
+  - AC2.2/AC2.3 — a tree containing a duplicate pair, a file symlink to one
+    of them, a directory symlink pointing at an ancestor (cycle), and a
+    FIFO (os.mkfifo) -> process completes within the timeout, returncode 0,
+    stdout contains the two real paths and neither the symlink path nor the
+    FIFO path anywhere in the bytes.
+  - AC4.2 — a tree with exactly three 0-byte files and nothing else ->
+    returncode 0, stdout == b''.
+  - AC5.1 — the spec's exact fixture (a.txt/b.txt identical; c/d.txt and
+    e.txt identical; f.txt unique) -> stdout equals exactly the two groups:
+    the os.path.join-constructed paths of a.txt, b.txt, blank line, c/d.txt,
+    e.txt, single trailing newline, encoded to bytes; f.txt absent (also
+    covers AC5.3).
+  - AC5.2 ('reproduc' name) — run the tool twice, unmodified tree ->
+    stdout bytes identical across runs (compare the full bytes, and assert
+    non-empty so the test can't pass vacuously).
+  - AC6.1 — tree with files but no duplicate content -> returncode 0,
+    stdout == b''.
+  - AC6.2 — empty directory -> returncode 0, stdout == b''.
+  - AC7.1 — nonexistent path -> returncode != 0, stderr non-empty and not
+    containing 'Traceback'.
+  - AC7.2 — path to an existing regular file (create one in tmp_path) ->
+    same assertions.
+  - AC9.1 — exactly one non-test *.py source file under apps/dupefind/
+    (glob *.py beside the test file; exclude names starting with test_ and
+    conftest.py).
+  - AC9.2 — parse dupefind.py with ast, collect Import/ImportFrom root
+    module names (assert node.level == 0 on every ImportFrom; assert the
+    collected set is non-empty), and assert each root is stdlib using plan
+    ADR-8's mechanism VERBATIM: stdlib iff in sys.builtin_module_names, or
+    importlib.util.find_spec origin is "built-in"/"frozen", or origin is a
+    file under sysconfig.get_paths()["stdlib"] whose resolved path contains
+    no 'site-packages' or 'dist-packages' component. Do NOT use
+    sys.stdlib_module_names (absent on 3.9.6, this environment's only
+    interpreter) and do NOT drop the site-packages rejection (on this
+    machine site-packages nests inside the stdlib dir — wordfreq review-04
+    F1).
+  - AC9.3 — two assertions: (a) subprocess.run([sys.executable, "-m",
+    "py_compile", str(script)]) returns 0 (sys.executable is Python 3.9.6
+    here, per plan ADR-8); (b) walking dupefind.py's AST, no ast.BinOp node
+    occurs inside any annotation expression (function arg .annotation,
+    .returns, AnnAssign.annotation) — the interpreter-independent PEP 604
+    check.
+
+  Constraints: stdlib + pytest only; the test file itself must also be
+  3.9-safe per plan ADR-8 (no PEP 604 annotations).
+
+file_contact_surface:
+  - apps/dupefind/test_cli.py
+
+acceptance_tests:
+  - "AC8.1 — `pytest` run from apps/dupefind/ (both test files) exits 0"
+  - "Every bullet in scope (AC1.1-1.2, no-flags, AC2.2-2.3, AC4.2, AC5.1-5.2, AC6.1-6.2, AC7.1-7.2, AC9.1-9.3) has a distinct passing test"
+  - "`pytest --collect-only` includes a test whose name contains 'reproduc' (feeds AC8.2)"
+
+depends_on: [01-dupefind-cli]
+
+status: pending
+
+notes: |

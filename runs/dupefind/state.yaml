@@ -8,7 +8,7 @@ paused_reason: null       # set when phase=paused: budget-exhausted | round-cap 
 
 budget:
   cost_limit_usd: 50      # exhaustion pauses the run; it never silently degrades
-  cost_spent_usd: 6.41    # derived: the sum of ledger[].cost_usd
+  cost_spent_usd: 7.91    # derived: the sum of ledger[].cost_usd
   ledger:                 # append-only, one entry per model invocation:
                           #   {at, role, task, round, adapter, model,
                           #    tokens_in, tokens_out, cost_usd}
@@ -47,6 +47,9 @@ budget:
     - {at: 2026-07-13T04:01:47Z, role: reviewer, task: 02-unit-tests, round: 1,
        adapter: claude-code, model: anthropic/claude-fable-5,
        tokens_in: null, tokens_out: null, cost_usd: 1.22}  # 51,018 tok combined
+    - {at: 2026-07-13T04:03:21Z, role: reviewer, task: 03-cli-tests, round: 1,
+       adapter: claude-code, model: anthropic/claude-fable-5,
+       tokens_in: null, tokens_out: null, cost_usd: 1.50}  # 62,530 tok combined
 
 gates:                    # a gate entry is written ONLY by the named human
   G0: {approved: true, by: nthncrtr, at: 2026-07-13T03:03:02Z, notes: 6 assumptions accepted; assumption 2 vetoed (no override flag) — approval recorded against the amended spec, burden: confirmation}
@@ -57,6 +60,6 @@ gates:                    # a gate entry is written ONLY by the named human
 tasks:                    # mirrors tasks/*.yaml status; the ONLY home of review_rounds
   - {id: 01-dupefind-cli, status: review-approved, review_rounds: 2}
   - {id: 02-unit-tests, status: in-review, review_rounds: 1}
-  - {id: 03-cli-tests, status: in-review, review_rounds: 0}
+  - {id: 03-cli-tests, status: in-review, review_rounds: 1}
 
 escalations: []           # append-only: {at, from_role, reason, resolved}

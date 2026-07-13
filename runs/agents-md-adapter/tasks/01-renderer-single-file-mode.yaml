@@ -40,3 +40,29 @@ depends_on: []
 status: pending
 
 notes: |
+  Implementer (round 1): implemented as scoped, no deviations.
+  - render_agent(): model lookup + "model: %s" line now gated on
+    "model_map" in manifest; capability_profile added to the required-key
+    list only when model_map is present. dispatch/capabilities remain
+    unconditionally required. Missing-profile SystemExit message and
+    control flow unchanged (verified live with a synthetic model_map
+    manifest and an unmapped capability_profile -> SystemExit raised with
+    the original message format).
+  - Added render_single_file(manifest) per plan Interface contracts §2:
+    HEADER.format(role="*"), "# {title}" + preamble joined with "\n", then
+    one section per role (## heading, Dispatch line, generated Allowed
+    capabilities line via parse_list, body rstripped verbatim), single
+    trailing newline at file end. Requires only dispatch/capabilities from
+    role frontmatter; capability_profile not read.
+  - main() now dispatches on manifest.get("render", "per-role"); factored
+    compare/write/stale into a new _sync() helper shared by both branches
+    so --check semantics are identical for both modes with no duplicated
+    logic.
+  - No new imports (json, sys, pathlib.Path only, unchanged); no syntax
+    beyond Python 3.9.
+  - Acceptance evidence: `python3 scripts/render-agents.py` then
+    `git diff --stat -- .claude/agents/ .github/agents/` -> empty (byte
+    parity). `python3 scripts/render-agents.py --check` -> exit 0, "all
+    rendered agents up to date" (only the two existing manifests present;
+    agents-md manifest is task 02's responsibility). `git diff --stat --
+    roles/ contracts/` -> empty.

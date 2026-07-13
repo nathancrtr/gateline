@@ -58,28 +58,73 @@ def render_tools(capabilities, manifest):
 
 def render_agent(role, manifest):
     front, body = parse_role(REPO / "roles" / ("%s.md" % role))
-    for required in ("dispatch", "capabilities", "capability_profile"):
-        if required not in front:
-            raise SystemExit("roles/%s.md: missing '%s' in frontmatter" % (role, required))
-    model = manifest["model_overrides"].get(
-        role, manifest["model_map"].get(front["capability_profile"])
-    )
-    if model is None:
-        raise SystemExit(
-            "%s: no model for profile '%s' (role %s)"
-            % (manifest["adapter"], front["capability_profile"], role)
-        )
+    required = ["dispatch", "capabilities"]
+    if "model_map" in manifest:
+        required.append("capability_profile")
+    for key in required:
+        if key not in front:
+            raise SystemExit("roles/%s.md: missing '%s' in frontmatter" % (role, key))
     lines = [
         "---",
         "name: %s" % role,
         "description: %s" % front["dispatch"],
         "tools: %s" % render_tools(parse_list(front["capabilities"]), manifest),
-        "model: %s" % model,
     ]
+    if "model_map" in manifest:
+        model = manifest["model_overrides"].get(
+            role, manifest["model_map"].get(front["capability_profile"])
+        )
+        if model is None:
+            raise SystemExit(
+                "%s: no model for profile '%s' (role %s)"
+                % (manifest["adapter"], front["capability_profile"], role)
+            )
+        lines.append("model: %s" % model)
     for key, value in manifest.get("extra_frontmatter", {}).items():
         lines.append("%s: %s" % (key, json.dumps(value)))
     lines += ["---", "", HEADER.format(role=role), "", body.rstrip() + "\n"]
     return "\n".join(lines)
+
+
+def render_single_file(manifest):
+    """Render every role in manifest["roles"] into one AGENTS.md-dialect file."""
+    lines = [
+        HEADER.format(role="*"),
+        "",
+        "# %s" % manifest["title"],
+        "",
+        "\n".join(manifest["preamble"]),
+    ]
+    for role in manifest["roles"]:
+        front, body = parse_role(REPO / "roles" / ("%s.md" % role))
+        for required in ("dispatch", "capabilities"):
+            if required not in front:
+                raise SystemExit("roles/%s.md: missing '%s' in frontmatter" % (role, required))
+        capabilities = ", ".join(parse_list(front["capabilities"]))
+        lines += [
+            "",
+            "## %s" % role,
+            "",
+            "**Dispatch:** %s" % front["dispatch"],
+            "",
+            "**Allowed capabilities** (from `roles/%s.md` frontmatter; this list is "
+            "exhaustive — the role must not use any capability not named here): %s"
+            % (role, capabilities),
+            "",
+            body.rstrip(),
+        ]
+    return "\n".join(lines) + "\n"
+
+
+def _sync(out_path, rendered, check, stale):
+    """Compare rendered text against the file on disk; write, or record staleness."""
+    current = out_path.read_text(encoding="utf-8") if out_path.exists() else None
+    if current != rendered:
+        if check:
+            stale.append(str(out_path.relative_to(REPO)))
+        else:
+            out_path.write_text(rendered, encoding="utf-8")
+            print("rendered %s" % out_path.relative_to(REPO))
 
 
 def main():
@@ -89,16 +134,13 @@ def main():
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         out_dir = REPO / manifest["output_dir"]
         out_dir.mkdir(parents=True, exist_ok=True)
-        for role in manifest["roles"]:
-            rendered = render_agent(role, manifest)
-            out_path = out_dir / manifest["filename"].format(role=role)
-            current = out_path.read_text(encoding="utf-8") if out_path.exists() else None
-            if current != rendered:
-                if check:
-                    stale.append(str(out_path.relative_to(REPO)))
-                else:
-                    out_path.write_text(rendered, encoding="utf-8")
-                    print("rendered %s" % out_path.relative_to(REPO))
+        if manifest.get("render", "per-role") == "single-file":
+            out_path = out_dir / manifest["filename"]
+            _sync(out_path, render_single_file(manifest), check, stale)
+        else:
+            for role in manifest["roles"]:
+                out_path = out_dir / manifest["filename"].format(role=role)
+                _sync(out_path, render_agent(role, manifest), check, stale)
     if check:
         if stale:
             print("STALE (run: python3 scripts/render-agents.py):")

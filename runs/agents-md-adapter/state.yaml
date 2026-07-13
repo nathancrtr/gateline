@@ -8,7 +8,7 @@ paused_reason: null # set when phase=paused: budget-exhausted | round-cap | esca
 
 budget:
   cost_limit_usd: 50 # exhaustion pauses the run; it never silently degrades
-  cost_spent_usd: 1.45 # derived: the sum of ledger[].cost_usd
+  cost_spent_usd: 1.64 # derived: the sum of ledger[].cost_usd
   ledger:
     # append-only, one entry per model invocation:
     #   {at, role, task, round, adapter, model,
@@ -40,6 +40,17 @@ budget:
         tokens_out: null,
         cost_usd: 1.29
       } # 53,436 tok combined, incl. escalation-recovery resume (write refused mid-dispatch)
+    - {
+        at: 2026-07-13T23:28:19Z,
+        role: implementer,
+        task: 01-renderer-single-file-mode,
+        round: 0,
+        adapter: claude-code,
+        model: anthropic/claude-sonnet-5,
+        tokens_in: null,
+        tokens_out: null,
+        cost_usd: 0.19
+      } # 39,302 tok combined
 
 gates:
   # a gate entry is written ONLY by the named human.
@@ -63,7 +74,7 @@ gates:
   G3: { approved: false, by: null, at: null, notes: null }
 
 tasks: # mirrors tasks/*.yaml status; the ONLY home of review_rounds
-  - { id: 01-renderer-single-file-mode, status: dispatched, review_rounds: 0 }
+  - { id: 01-renderer-single-file-mode, status: in-review, review_rounds: 1 }
   - { id: 02-agents-md-manifest-and-output, status: pending, review_rounds: 0 }
 
 escalations:

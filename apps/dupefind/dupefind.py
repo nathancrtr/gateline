@@ -102,7 +102,7 @@ def render_groups(groups: list[list[str]]) -> str:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """Full CLI. argv excludes the program name (None -> sys.argv[1:]).
     Returns the exit code; never raises for anticipated errors (R7)."""
-    parser = argparse.ArgumentParser(prog="dupefind.py")
+    parser = argparse.ArgumentParser(prog="dupefind.py", add_help=False)
     parser.add_argument("root")
     args = parser.parse_args(argv)
     root = args.root

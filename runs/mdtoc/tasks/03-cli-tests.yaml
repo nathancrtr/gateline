@@ -1,0 +1,73 @@
+# Contract: produced by Architect; consumed by exactly one Implementer.
+
+id: 03-cli-tests
+title: End-to-end CLI tests via subprocess (exit codes, stderr, exact stdout, R10 constraint checks)
+requirements: [R1, R6, R7, R8, R9, R10]
+
+scope: |
+  Create apps/mdtoc/test_cli.py: pytest tests that run the finished tool (task
+  01 is merged) as a real process and assert on exit codes, stdout bytes, and
+  stderr. Per plan.md "Test-layout contract": locate the script as
+  pathlib.Path(__file__).parent / "mdtoc.py" and invoke it with
+  subprocess.run([sys.executable, str(script), ...], capture_output=True). Use
+  pytest's tmp_path fixture for input files, written with encoding="utf-8"
+  (except the deliberate invalid-UTF-8 case, written as bytes). Do not
+  duplicate task 02's function-level tests; do not modify mdtoc.py or
+  test_core.py.
+
+  Required coverage (one test per bullet; names may follow the AC numbers):
+  - AC1.1 — existing readable .md file with headings -> returncode 0, TOC on
+    stdout.
+  - AC1.2 — no file argument -> returncode != 0 (argparse: 2), stderr
+    non-empty (usage).
+  - AC1.3 — read-only behavior: create an input file in tmp_path, record its
+    bytes, run the tool with cwd=tmp_path; assert returncode 0, the input
+    file's bytes are unchanged, and tmp_path contains exactly the same entries
+    as before the run (no file created). (The Verifier separately runs the
+    spec's literal docs/DESIGN.md + git-diff form.)
+  - AC6.1 — input file with the spec's four headings -> stdout ==
+    b'- [Title](#title)\n  - [Section A](#section-a)\n    - [Sub A1](#sub-a1)\n  - [Section B](#section-b)\n'
+    exactly.
+  - AC7.1 — nonexistent path -> returncode != 0, stderr non-empty and not
+    containing 'Traceback'.
+  - AC7.2 — a directory path (use tmp_path itself) -> same assertions.
+  - AC7.3 — a file containing invalid UTF-8 (e.g. write bytes b'\x80\x81abc')
+    -> returncode != 0, stderr non-empty, no 'Traceback'.
+  - AC8.1 — file with body text but zero headings -> returncode 0,
+    stdout == b''.
+  - AC8.2 — 0-byte file -> returncode 0, stdout == b''.
+  - AC10.1 — exactly one non-test *.py source file under apps/mdtoc/ (glob
+    *.py beside the test file; exclude names starting with test_ and
+    conftest.py).
+  - AC10.2 — parse mdtoc.py with ast, collect Import/ImportFrom root module
+    names (assert node.level == 0 on every ImportFrom; assert the collected
+    set is non-empty), and assert each root is stdlib using plan ADR-8's
+    mechanism VERBATIM: stdlib iff in sys.builtin_module_names, or
+    importlib.util.find_spec origin is "built-in"/"frozen", or origin is a
+    file under sysconfig.get_paths()["stdlib"] whose resolved path contains
+    no 'site-packages' or 'dist-packages' component. Do NOT use
+    sys.stdlib_module_names (absent on 3.9.6, this environment's only
+    interpreter) and do NOT drop the site-packages rejection (on this machine
+    site-packages nests inside the stdlib dir — wordfreq review-04 F1).
+  - AC10.3 — two assertions: (a) subprocess.run([sys.executable, "-m",
+    "py_compile", str(script)]) returns 0 (sys.executable is Python 3.9.6
+    here, per plan ADR-8); (b) walking mdtoc.py's AST, no ast.BinOp node
+    occurs inside any annotation expression (function arg .annotation,
+    .returns, AnnAssign.annotation) — the interpreter-independent PEP 604
+    check.
+
+  Constraints: stdlib + pytest only; the test file itself must also be
+  3.9-safe per plan ADR-8 (no PEP 604 annotations).
+
+file_contact_surface:
+  - apps/mdtoc/test_cli.py
+
+acceptance_tests:
+  - "AC9.1 — `pytest` run from apps/mdtoc/ (both test files) exits 0"
+  - "Every AC bullet in scope (AC1.1-1.3, AC6.1, AC7.1-7.3, AC8.1-8.2, AC10.1-10.3) has a distinct passing test"
+
+depends_on: [01-mdtoc-cli]
+
+status: pending
+
+notes: |

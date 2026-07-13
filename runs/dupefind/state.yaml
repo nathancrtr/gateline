@@ -3,12 +3,12 @@
 
 run: dupefind
 branch: run/dupefind
-phase: implement          # spec | plan | implement | integrate | release | done | paused
+phase: integrate          # spec | plan | implement | integrate | release | done | paused
 paused_reason: null       # set when phase=paused: budget-exhausted | round-cap | escalation | gate-declined
 
 budget:
   cost_limit_usd: 50      # exhaustion pauses the run; it never silently degrades
-  cost_spent_usd: 10.09   # derived: the sum of ledger[].cost_usd
+  cost_spent_usd: 11.77   # derived: the sum of ledger[].cost_usd
   ledger:                 # append-only, one entry per model invocation:
                           #   {at, role, task, round, adapter, model,
                           #    tokens_in, tokens_out, cost_usd}
@@ -59,6 +59,9 @@ budget:
     - {at: 2026-07-13T04:08:01Z, role: reviewer, task: 02-unit-tests, round: 2,
        adapter: claude-code, model: anthropic/claude-fable-5,
        tokens_in: null, tokens_out: null, cost_usd: 1.51}  # 63,006 tok combined; verify round
+    - {at: 2026-07-13T04:09:30Z, role: reviewer, task: 03-cli-tests, round: 2,
+       adapter: claude-code, model: anthropic/claude-fable-5,
+       tokens_in: null, tokens_out: null, cost_usd: 1.68}  # 70,157 tok combined; verify round
 
 gates:                    # a gate entry is written ONLY by the named human
   G0: {approved: true, by: nthncrtr, at: 2026-07-13T03:03:02Z, notes: 6 assumptions accepted; assumption 2 vetoed (no override flag) — approval recorded against the amended spec, burden: confirmation}
@@ -69,6 +72,6 @@ gates:                    # a gate entry is written ONLY by the named human
 tasks:                    # mirrors tasks/*.yaml status; the ONLY home of review_rounds
   - {id: 01-dupefind-cli, status: review-approved, review_rounds: 2}
   - {id: 02-unit-tests, status: review-approved, review_rounds: 2}
-  - {id: 03-cli-tests, status: in-review, review_rounds: 1}
+  - {id: 03-cli-tests, status: review-approved, review_rounds: 2}
 
 escalations: []           # append-only: {at, from_role, reason, resolved}

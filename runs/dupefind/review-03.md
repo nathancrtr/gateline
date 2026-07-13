@@ -54,3 +54,26 @@ Checked against spec.md (R1, R2 process-level, R4–R7, R9; R3/R8-unit are task 
 ## Boundary check
 
 `apps/dupefind/test_cli.py` — inside the declared surface ✓; `dupefind.py` and `test_core.py` untouched by this commit ✓. The same commit modifies `runs/dupefind/state.yaml` (metering); attributed to the orchestrator and recorded as F4, consistent with review-01 F4. No other files touched.
+
+---
+
+# Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** commit 8f612f3 (delta cdfeb23..8f612f3 for this task, branch run/dupefind)
+
+## Finding resolutions
+
+- **F1 (blocking) — RESOLVED.** `test_cli.py:138-145` now asserts both `b"cycle_back" not in result.stdout` and exact stdout equality for the AC2.2/AC2.3 fixture. Re-derived the expectation against the approved implementation: `sorted([<root>/sub/real_a.txt, <root>/real_b.txt])` orders `real_b.txt` first (`'r' < 's'`), and the single-group render formula yields `<root>/real_b.txt\n<root>/sub/real_a.txt\n` — exactly what the correct tool emits, so no false-failure risk. Mutant kill confirmed by reasoning: the round-1 `followlinks=True` mutant floods stdout with `<root>/sub/cycle_back/...` paths, failing both the substring-absence and the exact-equality assertion; the exact-bytes pin also kills any other inclusion/ordering mutant on this fixture. The directory-symlink half of AC2.2 is now pinned at the process boundary.
+- **F2 (blocking) — RESOLVED.** `test_cli.py:255,275`: `assert result.stdout == b""` on both root-error paths. The round-1 echo-to-stdout mutant now fails; stdout exclusivity (plan CLI contract) is pinned on every rejection and error path in the suite.
+- **F3 (minor) — RESOLVED.** `test_cli.py:252,258-260,272,278-280`: exact `returncode == 1` (distinct from argparse's 2) and byte-exact stderr against both plan-pinned shapes — the format strings match `dupefind.py:112,114` character-for-character, with the root echoed verbatim from the exact string passed. The rc-2 and message-shape mutants now fail. The retained `stderr != b""` / no-`Traceback` asserts are subsumed but harmless.
+- **F4 (minor) — carried, disposition unchanged.** This commit again touches `runs/dupefind/state.yaml` (ledger entry 13, spent total); orchestrator metering per the operating mode, excepted by the round-2 dispatch. For G2's attention only.
+
+## Delta check (nothing new introduced)
+
+Additions only, inside three existing tests; no new subprocess calls (timeout contract undisturbed — all invocations still carry `timeout=30`); new code is 3.9-safe (`.format`, no PEP 604); fixture expectations still built via `os.path.join`/direct string from the exact root passed, no `resolve()`. The exact-stderr assertions cannot false-fail: the pinned path writes one line and exits via `SystemExit(main())` with an int, which prints nothing. `cdfeb23..8f612f3` also contains task 02's round-2 commit (808bfbf, `apps/dupefind/test_core.py`) and the two review-report commits — none of them part of this task's diff; `dupefind.py` is byte-identical across the range ✓.
+
+## Boundary check (round 2)
+
+`apps/dupefind/test_cli.py` — inside the declared surface ✓; `dupefind.py` and `test_core.py` untouched by commit 8f612f3 ✓; `runs/dupefind/state.yaml` metering recorded under F4's carried disposition. No other files touched.

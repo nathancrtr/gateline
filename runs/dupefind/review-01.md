@@ -49,3 +49,28 @@ Checked against spec.md (R1–R7, R9; R8 is tasks 02/03) and plan.md interface c
 ## Boundary check
 
 `apps/dupefind/dupefind.py` — inside the declared surface ✓. The same commit modifies `runs/dupefind/state.yaml` (ledger/status metering); attributed to the orchestrator, not the implementer's work product — recorded as F4 (minor) so the audit trail is explicit. No other files touched.
+
+---
+
+# Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** commit ff0e6ac (delta ea19be8..ff0e6ac, branch run/dupefind)
+
+## Finding resolutions
+
+- **F1 — resolved.** `apps/dupefind/dupefind.py:105` now `ArgumentParser(prog="dupefind.py", add_help=False)`. Mutant check: with `add_help=False` the parser defines zero optionals, so `-h`/`--help`/any flag-like token hits argparse's error path — usage to **stderr**, exit **2**, zero stdout bytes — exactly the plan CLI contract's "any flag-like argument is rejected by argparse itself". `add_help=False` does not suppress error-time usage printing, so AC1.2 (missing argument → exit 2, usage on stderr) is unaffected, and the stdout-exclusivity guarantee now holds with no exceptions.
+- **F2 — stands as written** (minor, PLAUSIBLE, plan-accepted race per ADR-6/ADR-3): line 52 untouched by the delta. Not gating.
+- **F3 — stands as written** (minor, PLAUSIBLE, plan-accepted race; matches plan verbatim): lines 72–74 untouched. Not gating.
+- **F4 — stands as written** (minor, attribution): this round's commit repeats the pattern — `runs/dupefind/state.yaml` metering only (ledger append, spent sum; gates untouched, ledger remains append-only). Orchestrator bookkeeping, dismissible at G2.
+
+## Delta coverage
+
+- `git log ea19be8..ff0e6ac -- apps/dupefind/` shows exactly one commit; `git diff ea19be8 ff0e6ac -- apps/dupefind/` is 1 insertion / 1 deletion — the single F1 line. No other code changed, so all round-1 clean findings (R1–R7, R9; TOCTOU sweep; no empty-file override path) carry forward without re-derivation.
+- `runs/dupefind/state.yaml` delta inspected: cost sum 3.28→3.51, one ledger entry appended (implementer, round 2), G0–G3 gate entries byte-identical. No agent self-approval.
+- Static review only; nothing executed but git, per dispatch. The implementer's claim of re-verified success/error paths is corroborated structurally (those paths are untouched by the diff), not by execution.
+
+## Boundary check (round 2)
+
+`apps/dupefind/dupefind.py` — inside the declared surface ✓. `runs/dupefind/state.yaml` — orchestrator metering, per F4 (unchanged position). No other files touched.

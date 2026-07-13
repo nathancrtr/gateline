@@ -1,0 +1,73 @@
+# Contract: produced by Architect; consumed by exactly one Implementer.
+
+id: 02-unit-tests
+title: Unit tests for the core functions (traversal/skip rules, size-then-hash detection, empty exclusion, grouping/ordering, no-duplicates)
+requirements: [R2, R3, R4, R5, R6, R8]
+
+scope: |
+  Create apps/dupefind/test_core.py: pytest unit tests that `import dupefind`
+  (task 01 is merged) and exercise the functions directly — no subprocess.
+  Fixture trees are built under pytest's tmp_path (this domain is the
+  filesystem, so file I/O in unit tests is expected); symlinks via os.symlink,
+  the FIFO via os.mkfifo (available on this darwin environment, plan ADR-8).
+  Per plan.md "Test-layout contract": run pytest from apps/dupefind/; do not
+  add __init__.py; do not modify dupefind.py. Pass roots to scan_files as
+  str(tmp_path)-derived strings and build expected paths with os.path.join
+  from that same root string — never .resolve()/realpath (plan risk: macOS
+  /tmp symlinking). Do not duplicate task 03's process-level tests (exit
+  codes, stderr, stdout bytes, double-run reproducibility).
+
+  Test-name contract (plan.md, for AC8.2): individually named tests whose
+  names include these substrings — 'symlink' and 'fifo' (R2), 'same_size'
+  (R3), 'empty' (R4), 'order' (R5), 'no_duplicates' (R6).
+
+  Required coverage (one or more tests per bullet):
+  - AC2.1 — two byte-identical files at different depths (root/a/x.txt,
+    root/b/c/y.txt): scan_files lists both; find_duplicate_groups puts both
+    root-joined paths in one group.
+  - AC2.2 (symlink) — a file symlink to duplicate content and a directory
+    symlink pointing back at an ancestor (cycle): scan_files returns, the
+    symlink paths are absent from its output, and no group ever contains
+    them. NOTE: assert on scan_files/find_duplicate_groups over the real
+    files only; the cycle case's pass criterion is that scan_files
+    terminates with the symlink excluded.
+  - AC2.3 (fifo) — os.mkfifo inside the tree: scan_files output excludes the
+    FIFO path. Assert on scan_files ONLY — listing never opens entries, so
+    this test cannot hang (plan risk + ADR-2).
+  - ADR-4 boundary — a 0-byte file IS present in scan_files output (with
+    size 0) and never present in any find_duplicate_groups group: traversal
+    semantics and detection policy tested independently.
+  - AC3.1 — two identical files -> one group with both paths.
+  - AC3.2 (same_size) — two files of equal size but different bytes ->
+    find_duplicate_groups returns no group containing them together.
+  - AC3.3 — three identical files -> a single group of all three, not
+    pairwise groups.
+  - AC4.1/AC4.2 (empty) — two-or-more 0-byte files -> []; a tree of ONLY
+    0-byte files -> [] and render_groups of it == ''.
+  - AC5.1/AC5.3 (order) — a tree with two duplicate sets plus a unique file:
+    find_duplicate_groups returns exactly two groups, each internally sorted
+    ascending, group list ordered by first member, unique file absent.
+    Feed find_duplicate_groups a deliberately shuffled files list and assert
+    the same output (ADR-5: order independent of input order).
+  - render formula — render_groups([['a','b'],['c','d']]) ==
+    'a\nb\n\nc\nd\n' exactly; render_groups([]) == '' (zero characters).
+  - AC6.1/AC6.2 (no_duplicates) — a tree with files but no duplicate
+    content -> find_duplicate_groups == []; an empty directory ->
+    scan_files == [] and find_duplicate_groups == [].
+
+  Constraints: stdlib + pytest only; the test file itself must be 3.9-safe
+  per plan ADR-8 (no PEP 604 annotations).
+
+file_contact_surface:
+  - apps/dupefind/test_core.py
+
+acceptance_tests:
+  - "`pytest test_core.py` run from apps/dupefind/ exits 0 (feeds AC8.1)"
+  - "`pytest --collect-only` lists distinct tests whose names include the substrings symlink, fifo, same_size, empty, order, no_duplicates (AC8.2)"
+  - "Every bullet in scope (AC2.1-2.3, ADR-4 boundary, AC3.1-3.3, AC4.1-4.2, AC5.1/AC5.3, render formula, AC6.1-6.2) has a passing test"
+
+depends_on: [01-dupefind-cli]
+
+status: pending
+
+notes: |

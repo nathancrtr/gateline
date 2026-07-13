@@ -3,8 +3,8 @@
 
 run: mdtoc
 branch: run/mdtoc
-phase: paused             # spec | plan | implement | integrate | release | done | paused
-paused_reason: gate-declined  # set when phase=paused: budget-exhausted | round-cap | escalation | gate-declined
+phase: plan               # spec | plan | implement | integrate | release | done | paused
+paused_reason: null       # set when phase=paused: budget-exhausted | round-cap | escalation | gate-declined
 
 budget:
   cost_limit_usd: 50      # exhaustion pauses the run; it never silently degrades
@@ -26,7 +26,7 @@ budget:
 
 gates:                    # a gate entry is written ONLY by the named human
   G0: {approved: true, by: nthncrtr, at: 2026-07-13T01:18:34Z, notes: all 7 assumptions accepted, burden: confirmation}
-  G1: {approved: false, by: nthncrtr, at: 2026-07-13T01:33:19Z, notes: ADR-4 should match live GitHub — preserve underscores}
+  G1: {approved: false, by: null, at: null, notes: null}  # declined 2026-07-13, see history; awaiting redone plan
   G2: {approved: false, by: null, at: null, notes: null}
   G3: {approved: false, by: null, at: null, notes: null}
 

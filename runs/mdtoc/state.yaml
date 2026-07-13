@@ -44,7 +44,7 @@ gates:                    # a gate entry is written ONLY by the named human
 
 tasks:                    # mirrors tasks/*.yaml status; the ONLY home of review_rounds
   - {id: 01-mdtoc-cli, status: review-approved, review_rounds: 1}
-  - {id: 02-unit-tests, status: pending, review_rounds: 0}
-  - {id: 03-cli-tests, status: pending, review_rounds: 0}
+  - {id: 02-unit-tests, status: dispatched, review_rounds: 0}
+  - {id: 03-cli-tests, status: dispatched, review_rounds: 0}
 
 escalations: []           # append-only: {at, from_role, reason, resolved}

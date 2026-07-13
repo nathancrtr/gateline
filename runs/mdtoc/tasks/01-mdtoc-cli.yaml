@@ -1,4 +1,5 @@
 # Contract: produced by Architect; consumed by exactly one Implementer.
+# Amended 2026-07-13 with plan ADR-4 (G1 decline): slugify preserves underscores.
 
 id: 01-mdtoc-cli
 title: Create mdtoc.py — core functions (extract_headings, slugify, render_toc) plus the CLI shell
@@ -10,7 +11,7 @@ scope: |
   HEADING_RE (the compiled regex from ADR-2), extract_headings(), slugify(),
   render_toc(), main(), and the __main__ guard, with the documented signatures
   and semantics. Include a short module docstring stating the heading rule (R2)
-  and the anchor rule (R4).
+  and the anchor rule (R4 as amended by plan ADR-4).
 
   Constraints (R10 + plan ADR-8): Python 3 stdlib only — expected imports are
   argparse, re, sys (typing imports allowed). Compatible with Python 3.9.6, the
@@ -31,7 +32,10 @@ scope: |
     No headings -> [] (R8). Heading text is literal source — do not transform
     inline markup (spec assumptions 3-4).
   - slugify: over text.lower(), keep exactly chars where ch.isalpha() or
-    ch.isdigit() or ch in " -", then map each " " to "-" (ADR-4; AC4.1-AC4.4).
+    ch.isdigit() or ch in " -_", then map each " " to "-" (plan ADR-4 as
+    amended at G1: underscores are PRESERVED, matching live GitHub; the G1
+    decline notes supersede R4's prose character class pending a spec
+    amendment). Covers AC4.1-AC4.4 plus the underscore case below.
   - render_toc: per heading, indent '  ' * (level - 1) from the absolute level
     (AC6.2), line '<indent>- [<text>](#<anchor>)\n' (AC6.1); duplicate base
     slugs get -1, -2, ... suffixes via an occurrence-count dict, first
@@ -60,6 +64,7 @@ acceptance_tests:
   - "python3 -c \"import mdtoc as m; assert m.slugify(\\\"Don't Repeat Yourself\\\") == 'dont-repeat-yourself'\"  # AC4.2"
   - "python3 -c \"import mdtoc as m; assert m.slugify('1. What v1 changes — and what it must not') == '1-what-v1-changes--and-what-it-must-not'\"  # AC4.3"
   - "python3 -c \"import mdtoc as m; b = chr(96); assert m.slugify('Code ' + b + 'example' + b) == 'code-example'\"  # AC4.4"
+  - "python3 -c \"import mdtoc as m; assert m.slugify('foo_bar baz') == 'foo_bar-baz'\"  # plan ADR-4 (G1 decline): underscores preserved"
   - "python3 -c \"import mdtoc as m; out = m.render_toc([(2,'Overview'),(2,'Overview'),(3,'Overview')]); assert '(#overview)' in out and '(#overview-1)' in out and '(#overview-2)' in out\"  # AC5.1"
   - "python3 -c \"import mdtoc as m; assert m.render_toc([(1,'Title'),(2,'Section A'),(3,'Sub A1'),(2,'Section B')]) == '- [Title](#title)\\n  - [Section A](#section-a)\\n    - [Sub A1](#sub-a1)\\n  - [Section B](#section-b)\\n'\"  # AC6.1"
   - "python3 -c \"import mdtoc as m; assert m.render_toc([(3,'Deep Start')]) == '    - [Deep Start](#deep-start)\\n'\"  # AC6.2"

@@ -2,6 +2,9 @@
 
 <!-- Contract: produced by Architect; consumed by Implementers, Reviewer.
      Gate: G1. All sections required. Accompanied by tasks/*.yaml.
+     Amended 2026-07-13 per G1 decline (nthncrtr): slugify preserves underscores
+     to match live GitHub (ADR-4); R4's character class is superseded pending a
+     separate spec amendment (spec.md untouched — Analyst's artifact).
      BUDGET: reference spec requirements by number, never re-quote them. -->
 
 ## Approach
@@ -51,9 +54,11 @@ def extract_headings(text: str) -> list[tuple[int, str]]:
     str.splitlines(). Returns [] when no headings (R8)."""
 
 def slugify(text: str) -> str:
-    """Base GitHub anchor for one heading's text (R4): lowercase, drop every
-    char that is not a Unicode letter, digit, space, or hyphen, then map each
-    space to a hyphen (mechanism in ADR-4). No duplicate handling here."""
+    """Base GitHub anchor for one heading's text (R4 as amended by ADR-4):
+    lowercase, drop every char that is not a Unicode letter, digit, space,
+    hyphen, or underscore — underscores are PRESERVED, matching live GitHub
+    (G1 decline direction; mechanism in ADR-4) — then map each space to a
+    hyphen. No duplicate handling here."""
 
 def render_toc(headings: Iterable[tuple[int, str]]) -> str:
     """The full TOC: one '<indent>- [<text>](#<anchor>)\\n' line per heading,
@@ -103,7 +108,9 @@ if __name__ == "__main__":
 - Test-name contract for AC9.2 — `test_core.py` must contain individually named
   tests whose names include these substrings: `heading` (R2, incl. rejection of
   `#1234` and 7-`#` lines), `fence` (R3, both fence dialects), `slug` (R4, incl.
-  the em-dash/apostrophe/backtick cases), `duplicate` (R5), `empty` (R8).
+  the em-dash/apostrophe/backtick cases **and an underscore-preservation case per
+  ADR-4's amendment** — the exact behavior the G1 decline corrected), `duplicate`
+  (R5), `empty` (R8).
 
 ### Behavior not covered by any AC (defined here so it can't drift)
 
@@ -113,6 +120,10 @@ if __name__ == "__main__":
   markers (backticks, `*`, links) pass through into the link text unchanged.
 - An unclosed fence extends to end of file (ADR-3); indented code blocks are not
   fences (spec out-of-scope).
+- A heading containing `_` keeps it in the anchor (`## foo_bar baz` →
+  `#foo_bar-baz`) — live-GitHub behavior per the G1 decline (ADR-4). No spec AC
+  covers it yet (AC4.1–AC4.4 contain no underscores), so task 02 carries the unit
+  case via the test-name contract above.
 
 ## Decisions (ADRs)
 
@@ -158,20 +169,40 @@ if __name__ == "__main__":
   deliberate and cite R3 — Reviewer findings proposing more fence dialect support
   must cite a requirement.
 
-### ADR-4: `slugify` is a per-character filter on `str` predicates, not a `\w`-class regex
+### ADR-4 (amended 2026-07-13, G1 decline): `slugify` matches live GitHub — underscores preserved; per-character filter, not a `\w`-class regex
+- **Context:** The original ADR-4 implemented R4's literal character class
+  (letter/digit/space/hyphen only), which drops underscores, and its consequences
+  declared "where GitHub's unpublished behavior and R4 diverge, R4 wins." G1 was
+  **declined** by nthncrtr with the verbatim note: *"ADR-4 should match live
+  GitHub — preserve underscores."* That inverts the priority: live-GitHub fidelity
+  is the governing intent (R4's own preamble asks for anchors computed the way
+  GitHub computes them), and R4's prose character class was the defect. The
+  decline notes are the authority for this amendment. **Spec-delta, recorded
+  explicitly:** R4's sentence "remove every character that is not a Unicode
+  letter, digit, space, or hyphen" contradicts this direction and is superseded
+  pending a spec amendment; `spec.md` is the Analyst's artifact and is not edited
+  here — a separate spec amendment will be dispatched.
 - **Choice:** Over `text.lower()`, keep exactly the characters where
-  `ch.isalpha() or ch.isdigit() or ch in " -"`, then replace each `" "` with
-  `"-"`. Python's `isalpha`/`isdigit` are the Unicode letter/digit tests R4 names.
-- **Rejected:** (a) `re.sub(r"[^\w\s-]", "", ...)` — the common idiom, but wrong on
-  two spec-relevant details: `\w` keeps underscores (R4 says drop them) and `\s`
-  keeps tabs (R4 replaces only *spaces*; a kept tab would leak into the anchor).
-  (b) Reproducing GitHub's private implementation quirks (e.g., GitHub actually
-  preserves underscores) — R4 is the binding definition, verified against a real
-  `docs/ORCHESTRATOR.md` heading in AC4.3; where GitHub's unpublished behavior and
-  R4 diverge, R4 wins.
-- **Consequences:** AC4.1–AC4.4 follow mechanically (the em dash in AC4.3 is
-  dropped, leaving two spaces → `--`). A heading containing `_` slugs without it —
-  documented divergence from live GitHub, per spec.
+  `ch.isalpha() or ch.isdigit() or ch in " -_"`, then replace each `" "` with
+  `"-"`. Same predicate-filter mechanism as before; the kept class widens by
+  exactly one character, the underscore.
+- **Rejected:** (a) R4's literal character class (drop underscores) — the
+  pre-amendment choice, declined at G1. (b) `re.sub(r"[^\w\s-]", "", ...)` — the
+  common idiom, and post-amendment it is *closer* (`\w` keeps underscores), but
+  still wrong on a spec-relevant detail: `\s` keeps tabs, and only *spaces* map to
+  hyphens, so a kept tab would leak into the anchor; the predicate filter stays.
+  (c) Vendoring github-slugger's full implementation (its exact regex and Unicode
+  tables) — the four AC cases plus underscore preservation pin everything this
+  run's inputs exercise; further fidelity has no AC and no occurrence in the
+  target docs.
+- **Consequences:** AC4.1–AC4.4 stand unchanged — verified: none of their four
+  headings contains an underscore, and the em-dash/apostrophe/backtick behavior
+  (including AC4.3's double-space → `--`) is untouched by widening the kept class.
+  `## foo_bar baz` → `#foo_bar-baz`, matching GitHub. Until the spec amendment
+  lands, R4's character-class sentence and this ADR disagree: Reviewer and
+  Verifier judge slug behavior against this ADR (G1-decline authority), and the
+  AC4.x commands as written still pass. Task 01's scope text and task 02's
+  coverage list are amended to the widened class (underscore unit case added).
 
 ### ADR-5: Duplicate anchors via an occurrence-count dict, no re-collision check
 - **Choice:** `render_toc` keeps `dict[str, int]` of base-slug occurrences; the
@@ -255,7 +286,7 @@ if __name__ == "__main__":
 | R1 — CLI input, stdout-only | 01-mdtoc-cli, 03-cli-tests |
 | R2 — ATX heading detection | 01-mdtoc-cli, 02-unit-tests |
 | R3 — fenced-block exclusion | 01-mdtoc-cli, 02-unit-tests |
-| R4 — GitHub anchor generation | 01-mdtoc-cli, 02-unit-tests |
+| R4 — GitHub anchor generation (as amended by ADR-4) | 01-mdtoc-cli, 02-unit-tests |
 | R5 — duplicate disambiguation | 01-mdtoc-cli, 02-unit-tests |
 | R6 — nested list output | 01-mdtoc-cli, 02-unit-tests, 03-cli-tests (byte-exact e2e) |
 | R7 — invalid input handling | 01-mdtoc-cli, 03-cli-tests |
@@ -265,6 +296,13 @@ if __name__ == "__main__":
 
 ## Risks
 
+- **Spec–plan divergence window on R4's character class** — until the Analyst's
+  spec amendment lands, R4's "letter, digit, space, or hyphen" sentence contradicts
+  ADR-4's underscore preservation. *Early signal:* a Reviewer or Verifier finding
+  flags underscore handling citing R4's prose. *Mitigation:* amended ADR-4 cites
+  the G1 decline notes verbatim as the authority; AC4.1–AC4.4 are underscore-free
+  and remain valid as written; the gate human acknowledges the amendment at the
+  next gate.
 - **Environment drift since the wordfreq run** — ADR-8's constraints are inherited
   evidence, not re-probed in this dispatch. *Early signal:* task 01's first
   `python3 -c "import mdtoc"` or task 02's first `pytest` fails on

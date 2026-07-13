@@ -83,3 +83,56 @@ status → in-review, ledger entry 7, spent total); orchestrator bookkeeping
 with the gates section untouched, consistent with the review-01 precedent. In
 bounds. No untracked `test_cli.py` was present in the working tree at review
 time.
+
+---
+
+## Round 2 (verify)
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** commit 784b195 (range 38d4a7d..784b195) — `apps/mdtoc/test_core.py` additions only (+63 lines, 8 tests, 16 → 24), plus sanctioned notes in `runs/mdtoc/tasks/02-unit-tests.yaml` and ledger bookkeeping in `runs/mdtoc/state.yaml`
+
+### Round-1 finding resolution
+
+- **F1 resolved** — `test_core.py:118`: `slugify("Re-entry Vector") == "re-entry-vector"`. The kept-class-drops-hyphen mutant (`ch in " _"`) yields `reentry-vector` and fails. Mutant killed.
+- **F2 resolved** — `test_core.py:126`: `slugify("a\tb") == "ab"`. The `\w\s`-regex mutant keeps the tab literally (`a\tb`); a tab-to-hyphen mutant yields `a-b` — both fail. Mutant killed.
+- **F3 resolved for both named mutants; one residual (F6)** — `test_core.py:60` kills the any-dialect-closes mutant (`"```\n~~~\n## After\n"` → mutant `[(2, "After")]` vs asserted `[]`); `test_core.py:76` kills the unclosed-state-discarded-at-EOF mutant (`"```\n# hidden\n"` → mutant `[(1, "hidden")]` vs asserted `[]`); `test_core.py:68` additionally kills the shorter-run-closes and fence_len-ignoring close mutants (either would surface `Hidden`; the test asserts only `Shown`).
+- **F4 resolved** — `test_core.py:148`: `[(1, "Foo Bar"), (1, "foo bar")]` → `#foo-bar` / `#foo-bar-1`. The raw-text-keyed mutant emits `#foo-bar` twice and fails. Mutant killed.
+- **F5 resolved** — `test_core.py:33` (`"##\n"` → `[(2, "")]`) and `test_core.py:39` (`"# Title  \n"` → `[(1, "Title")]`). The mandatory-space/mandatory-text/no-strip regex mutant fails both. Mutant killed.
+
+### New findings
+
+#### F6 — minor (non-blocking) — longer-than-opening fence close still undiscriminated: an exact-length-match close mutant survives all 24 tests
+- **Where:** `apps/mdtoc/test_core.py:68` — the fixture closes a length-4 fence with a run of exactly 4; no fixture closes any fence with a run *longer* than its opener
+- **Failure scenario:** mutant close rule `run_len == fence_len` (instead of `>=`): all 24 tests pass; input `"```\n# hidden\n````\n## After\n"` → mutant `[]` (fence never closes, `After` swallowed) vs correct `[(2, "After")]`. The test's name claims `at_least_opening_length` but proves only the equal and shorter cases.
+- **Requirement:** plan ADR-3 consequence (a 4-backtick line closes a 3-backtick fence); R3 has no AC pinning length semantics — plan-pinned only, same tier as round-1 F4/F5
+- **Disposition:** residual sliver of F3's headline ("≥ fence_len close untested"), not of its named failure scenarios, which are both dead. One added assertion closes it. Not blocking approval — flagged for the G2 human; fold in if any future round touches this file.
+
+### Coverage (round 2)
+
+Static verification per dispatch (git only, no pytest run). All 8 added tests
+traced by hand through the approved `mdtoc.py` (HEADING_RE, fence scanner,
+`slugify`, `render_toc`): every assertion is correct against the
+implementation and would pass. The fence-length fixture in particular:
+`"````"` opens char backtick len 4; `"```"` (run 3 < 4) does not close;
+the second `"````"` (4 >= 4) does → `[(2, "Shown")]` as asserted.
+
+- **AC9.2 name contract** ✓ intact post-additions — distinct, individually
+  named tests containing each required substring: `heading` ×7, `fence` ×5,
+  `slug` ×8 (incl. the F4 test's `base_slug`), `duplicate` ×2, `empty` ×4.
+- **No regressions** ✓ — the 16 round-1 tests are byte-identical (the diff is
+  pure additions); task constraints hold: pure-function tests only, no
+  subprocess/file I/O, `import mdtoc` only, no `__init__.py`, no annotations
+  (3.9/ADR-8 safe), `mdtoc.py` untouched.
+- **Implementer notes** — checked against the diff and accurate per finding;
+  used as context only, resolution verified against spec/plan directly.
+- **Not assessed:** AC9.1 execution (the commit message's "24 passed on
+  3.9.6" is unverified context — my pass/fail tracing is static).
+
+### Boundary check (round 2)
+
+`apps/mdtoc/test_core.py` — in surface (additions only). `runs/mdtoc/tasks/
+02-unit-tests.yaml` — per-finding notes, sanctioned by the round-2 dispatch.
+`runs/mdtoc/state.yaml` — ledger entry 11 and spent total only; gates section
+untouched, consistent with prior-round precedent. `mdtoc.py` and `test_cli.py`
+untouched (commit stat confirms). In bounds.

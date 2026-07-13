@@ -1,0 +1,71 @@
+# Contract: maintained by Orchestrator (human in v0); read by everyone.
+# Lives at runs/<slug>/state.yaml — the single source of truth for a run.
+
+run: mdtoc
+branch: run/mdtoc
+phase: done               # spec | plan | implement | integrate | release | done | paused
+paused_reason: null       # set when phase=paused: budget-exhausted | round-cap | escalation | gate-declined
+
+budget:
+  cost_limit_usd: 50      # exhaustion pauses the run; it never silently degrades
+  cost_spent_usd: 10.10   # derived: the sum of ledger[].cost_usd
+  ledger:                 # append-only, one entry per model invocation:
+                          #   {at, role, task, round, adapter, model,
+                          #    tokens_in, tokens_out, cost_usd}
+                          # v0: appended by hand after each dispatch (M0).
+                          # This harness reports combined subagent tokens only
+                          # (no in/out split): raw total in the entry comment;
+                          # cost_usd estimated at the model's registry pricing
+                          # assuming an ~85/15 in/out split.
+    - {at: 2026-07-13T01:08:01Z, role: analyst, task: null, round: null,
+       adapter: claude-code, model: anthropic/claude-sonnet-5,
+       tokens_in: null, tokens_out: null, cost_usd: 0.15}  # 31,899 tok combined
+    - {at: 2026-07-13T01:31:00Z, role: architect, task: null, round: null,
+       adapter: claude-code, model: anthropic/claude-fable-5,
+       tokens_in: null, tokens_out: null, cost_usd: 1.57}  # 65,517 tok combined
+    - {at: 2026-07-13T01:37:53Z, role: analyst, task: null, round: null,
+       adapter: claude-code, model: anthropic/claude-sonnet-5,
+       tokens_in: null, tokens_out: null, cost_usd: 0.21}  # 43,770 tok combined; R4 amendment (G1 decline ripple)
+    - {at: 2026-07-13T01:41:29Z, role: architect, task: null, round: null,
+       adapter: claude-code, model: anthropic/claude-fable-5,
+       tokens_in: null, tokens_out: null, cost_usd: 2.37}  # 98,603 tok combined; D9 re-dispatch with G1 decline notes
+    - {at: 2026-07-13T01:52:57Z, role: implementer, task: 01-mdtoc-cli, round: 0,
+       adapter: claude-code, model: anthropic/claude-sonnet-5,
+       tokens_in: null, tokens_out: null, cost_usd: 0.20}  # 41,160 tok combined
+    - {at: 2026-07-13T01:56:51Z, role: reviewer, task: 01-mdtoc-cli, round: 1,
+       adapter: claude-code, model: anthropic/claude-fable-5,
+       tokens_in: null, tokens_out: null, cost_usd: 1.02}  # 42,514 tok combined; P5 vendor pin advisory (single-vendor v0 session)
+    - {at: 2026-07-13T01:59:39Z, role: implementer, task: 02-unit-tests, round: 0,
+       adapter: claude-code, model: anthropic/claude-sonnet-5,
+       tokens_in: null, tokens_out: null, cost_usd: 0.19}  # 38,599 tok combined
+    - {at: 2026-07-13T02:01:13Z, role: implementer, task: 03-cli-tests, round: 0,
+       adapter: claude-code, model: anthropic/claude-sonnet-5,
+       tokens_in: null, tokens_out: null, cost_usd: 0.22}  # 45,055 tok combined
+    - {at: 2026-07-13T02:05:02Z, role: reviewer, task: 02-unit-tests, round: 1,
+       adapter: claude-code, model: anthropic/claude-fable-5,
+       tokens_in: null, tokens_out: null, cost_usd: 1.11}  # 46,133 tok combined
+    - {at: 2026-07-13T02:06:41Z, role: reviewer, task: 03-cli-tests, round: 1,
+       adapter: claude-code, model: anthropic/claude-fable-5,
+       tokens_in: null, tokens_out: null, cost_usd: 1.17}  # 48,532 tok combined
+    - {at: 2026-07-13T02:10:30Z, role: implementer, task: 02-unit-tests, round: 2,
+       adapter: claude-code, model: anthropic/claude-sonnet-5,
+       tokens_in: null, tokens_out: null, cost_usd: 0.26}  # 54,007 tok combined; response to review-02 F1-F5
+    - {at: 2026-07-13T02:17:28Z, role: reviewer, task: 02-unit-tests, round: 2,
+       adapter: claude-code, model: anthropic/claude-fable-5,
+       tokens_in: null, tokens_out: null, cost_usd: 1.24}  # 51,503 tok combined; verify round (fresh agent after user-stopped session)
+    - {at: 2026-07-13T02:30:47Z, role: verifier, task: null, round: null,
+       adapter: claude-code, model: anthropic/claude-sonnet-5,
+       tokens_in: null, tokens_out: null, cost_usd: 0.39}  # 81,346 tok combined
+
+gates:                    # a gate entry is written ONLY by the named human
+  G0: {approved: true, by: nthncrtr, at: 2026-07-13T01:18:34Z, notes: all 7 assumptions accepted, burden: confirmation}
+  G1: {approved: true, by: nthncrtr, at: 2026-07-13T01:47:46Z, notes: round 2 after decline — ADR-4/R4 underscore amendments accepted, burden: light-correction}
+  G2: {approved: true, by: nthncrtr, at: 2026-07-13T02:34:27Z, notes: full packet accepted; two open review minors verifier-probed as coverage-only. burden recorded as confirmation (inferred — approval carried no corrections), burden: confirmation}
+  G3: {approved: true, by: nthncrtr, at: 2026-07-13T02:34:27Z, notes: N/A — local CLI, no CI/deploy surface (walkthrough §6); recorded per founder's merge-and-proceed}
+
+tasks:                    # mirrors tasks/*.yaml status; the ONLY home of review_rounds
+  - {id: 01-mdtoc-cli, status: verified, review_rounds: 1}
+  - {id: 02-unit-tests, status: verified, review_rounds: 2}
+  - {id: 03-cli-tests, status: verified, review_rounds: 1}
+
+escalations: []           # append-only: {at, from_role, reason, resolved}

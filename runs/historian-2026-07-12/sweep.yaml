@@ -1,0 +1,16 @@
+# Sweep dispatch marker — the sweep's one-entry ledger. Merging this branch is
+# the human approval and makes this marker the next sweep's interval cutoff.
+# This first sweep was dispatched manually (v0-style, human-orchestrated): the
+# scheduler and its orchestrator.yaml config land in PR #25 and drive sweeps
+# from the next interval on.
+sweep: historian-2026-07-12
+role: historian
+every: null            # manual dispatch; schedule (7d) applies once #25 merges
+at: 2026-07-12T04:00:00.000Z
+covering_since: null   # first sweep: full repository history, at main c3a821f
+adapter: manual
+model: null
+cost_limit_usd: null
+tokens_in: null
+tokens_out: null
+cost_usd: null

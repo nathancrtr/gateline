@@ -3,30 +3,47 @@
 
 run: agents-md-adapter
 branch: run/agents-md-adapter
-phase: spec               # spec | plan | implement | integrate | release | done | paused
-paused_reason: null       # set when phase=paused: budget-exhausted | round-cap | escalation | gate-declined
+phase: plan # spec | plan | implement | integrate | release | done | paused
+paused_reason: null # set when phase=paused: budget-exhausted | round-cap | escalation | gate-declined
 
 budget:
-  cost_limit_usd: 50      # exhaustion pauses the run; it never silently degrades
-  cost_spent_usd: 0.16    # derived: the sum of ledger[].cost_usd
-  ledger:                 # append-only, one entry per model invocation:
-                          #   {at, role, task, round, adapter, model,
-                          #    tokens_in, tokens_out, cost_usd}
-                          # v0: appended by hand after each dispatch. This
-                          # harness reports combined subagent tokens only
-                          # (no in/out split): raw total in the entry comment;
-                          # cost_usd estimated at the model's registry pricing
-                          # assuming an ~85/15 in/out split.
-    - {at: 2026-07-13T22:04:07Z, role: analyst, task: null, round: null,
-       adapter: claude-code, model: anthropic/claude-sonnet-5,
-       tokens_in: null, tokens_out: null, cost_usd: 0.16}  # 34,242 tok combined
+  cost_limit_usd: 50 # exhaustion pauses the run; it never silently degrades
+  cost_spent_usd: 0.16 # derived: the sum of ledger[].cost_usd
+  ledger:
+    # append-only, one entry per model invocation:
+    #   {at, role, task, round, adapter, model,
+    #    tokens_in, tokens_out, cost_usd}
+    # v0: appended by hand after each dispatch. This
+    # harness reports combined subagent tokens only
+    # (no in/out split): raw total in the entry comment;
+    # cost_usd estimated at the model's registry pricing
+    # assuming an ~85/15 in/out split.
+    - {
+        at: 2026-07-13T22:04:07Z,
+        role: analyst,
+        task: null,
+        round: null,
+        adapter: claude-code,
+        model: anthropic/claude-sonnet-5,
+        tokens_in: null,
+        tokens_out: null,
+        cost_usd: 0.16
+      } # 34,242 tok combined
 
-gates:                    # a gate entry is written ONLY by the named human.
-  G0: {approved: false, by: null, at: null, notes: null}
-  G1: {approved: false, by: null, at: null, notes: null}
-  G2: {approved: false, by: null, at: null, notes: null}
-  G3: {approved: false, by: null, at: null, notes: null}
+gates:
+  # a gate entry is written ONLY by the named human.
+  G0:
+    {
+      approved: true,
+      by: Nathan Carter,
+      at: 2026-07-13T22:46:56.282Z,
+      notes: null,
+      burden: confirmation
+    }
+  G1: { approved: false, by: null, at: null, notes: null }
+  G2: { approved: false, by: null, at: null, notes: null }
+  G3: { approved: false, by: null, at: null, notes: null }
 
-tasks: []                 # populated from tasks/*.yaml after G1
+tasks: [] # populated from tasks/*.yaml after G1
 
-escalations: []           # append-only: {at, from_role, reason, resolved}
+escalations: [] # append-only: {at, from_role, reason, resolved}

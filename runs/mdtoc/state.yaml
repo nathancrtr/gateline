@@ -8,11 +8,18 @@ paused_reason: null       # set when phase=paused: budget-exhausted | round-cap 
 
 budget:
   cost_limit_usd: 50      # exhaustion pauses the run; it never silently degrades
-  cost_spent_usd: 0       # derived: the sum of ledger[].cost_usd
-  ledger: []              # append-only, one entry per model invocation:
+  cost_spent_usd: 0.15    # derived: the sum of ledger[].cost_usd
+  ledger:                 # append-only, one entry per model invocation:
                           #   {at, role, task, round, adapter, model,
                           #    tokens_in, tokens_out, cost_usd}
-                          # v0: appended by hand after each dispatch (M0)
+                          # v0: appended by hand after each dispatch (M0).
+                          # This harness reports combined subagent tokens only
+                          # (no in/out split): raw total in the entry comment;
+                          # cost_usd estimated at the model's registry pricing
+                          # assuming an ~85/15 in/out split.
+    - {at: 2026-07-13T01:08:01Z, role: analyst, task: null, round: null,
+       adapter: claude-code, model: anthropic/claude-sonnet-5,
+       tokens_in: null, tokens_out: null, cost_usd: 0.15}  # 31,899 tok combined
 
 gates:                    # a gate entry is written ONLY by the named human
   G0: {approved: false, by: null, at: null, notes: null}

@@ -1,0 +1,47 @@
+# Contract: produced by Architect; consumed by exactly one Implementer.
+
+id: 02-agents-md-manifest-and-output
+title: Add adapters/agents-md/manifest.json and commit the rendered root AGENTS.md
+requirements: [R1, R2, R3, R4, R5, R6]
+
+scope: |
+  (1) Create adapters/agents-md/manifest.json exactly per plan.md "Interface
+  contracts" §1: adapter "agents-md", render "single-file", output_dir ".",
+  filename "AGENTS.md" (the shape chosen by plan ADR-1 / the dialect survey —
+  AC2.2), the same seven roles as the existing manifests, plus "title" and
+  "preamble". Deliberately omit tools_style, tool_map, model_map,
+  model_overrides, model_vendors, extra_frontmatter, and headless — the
+  single-file path (task 01) must not need them. Author the preamble to
+  plan §3's constraints: it must state (a) the file is rendered from roles/*.md
+  into the AGENTS.md convention, (b) each "##" section is one dispatchable role,
+  adopted only when explicitly dispatched as that role — otherwise the file is
+  reference documentation, and (c) each role's Allowed-capabilities line is a
+  ceiling the executing runtime must not exceed. The preamble must not contain
+  (case-insensitively) sonnet, haiku, fable, claude, gpt, or gemini, must not
+  start any line with "model:" or "vendor:", must not name the other adapters'
+  output paths, and must not enumerate the full capability vocabulary. A brief
+  _comment key noting that model/vendor binding stays in registry/models.yaml
+  and that R3 narrowing is prose-only is welcome (manifest keys, not rendered).
+  (2) Run python3 scripts/render-agents.py and commit the rendered /AGENTS.md
+  in the same change, so render-agents.py --check passes on the branch.
+
+file_contact_surface:
+  - adapters/agents-md/manifest.json
+  - AGENTS.md
+
+acceptance_tests:
+  - "AC1.1 — python3 scripts/render-agents.py runs clean and writes AGENTS.md covering all 7 roles (grep -c '^## ' AGENTS.md == 7)"
+  - "AC1.2 / AC7.1 — git diff --stat -- roles/ contracts/ .claude/agents/ .github/agents/ is empty"
+  - "AC2.2 — manifest output_dir/filename is the single root AGENTS.md per plan ADR-1"
+  - "AC3.1 — for each role, AGENTS.md's '**Allowed capabilities**' line in that role's section names exactly the capabilities in roles/<role>.md frontmatter"
+  - "AC3.2 — no '**Allowed capabilities**' line names a capability absent from that role's frontmatter (scope the grep to those lines per plan §3)"
+  - "AC4.1 — AGENTS.md begins with the rendered-from-roles/*.md DO NOT EDIT header"
+  - "AC5.1 — hand-edit one byte of AGENTS.md; python3 scripts/render-agents.py --check exits 1 and lists AGENTS.md under STALE"
+  - "AC5.2 — python3 scripts/render-agents.py then --check exits 0"
+  - "AC6.1 — grep -Ei '^model:|^vendor:|sonnet|haiku|fable|claude|gpt|gemini' AGENTS.md returns no matches"
+
+depends_on: [01-renderer-single-file-mode]
+
+status: pending
+
+notes: |

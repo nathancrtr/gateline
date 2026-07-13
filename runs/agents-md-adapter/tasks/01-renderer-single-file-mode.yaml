@@ -1,0 +1,42 @@
+# Contract: produced by Architect; consumed by exactly one Implementer.
+
+id: 01-renderer-single-file-mode
+title: Add manifest-selected single-file render mode; make the model line adapter-optional
+requirements: [R1, R3, R4, R5, R6, R7]
+
+scope: |
+  Edit scripts/render-agents.py only, per plan.md "Interface contracts" §2.
+  (1) In render_agent(), emit the model lookup and the "model: %s" frontmatter
+  line only when "model_map" is in the manifest; when it is present, keep the
+  existing missing-profile SystemExit exactly. (2) Add
+  render_single_file(manifest) -> str producing: HEADER.format(role="*"), then
+  "# {title}" plus the manifest's "preamble" lines joined with "\n", then one
+  section per role in manifest["roles"] order with the exact section shape in
+  plan §2 — generated "## {role}" heading, "**Dispatch:** ..." line from the
+  role's dispatch frontmatter, the "**Allowed capabilities**" line built
+  verbatim from parse_list(front["capabilities"]), then the role body
+  byte-verbatim (rstripped, trailing newline at file end). Required frontmatter
+  in this mode: dispatch, capabilities — SystemExit in the existing style if
+  missing; capability_profile is neither required nor read. (3) In main(),
+  dispatch on manifest.get("render", "per-role"): single-file mode computes one
+  out_path = REPO / output_dir / filename (no .format) and reuses the identical
+  compare/write/stale logic so --check covers it; per-role mode is behaviorally
+  unchanged. No new imports; no syntax newer than Python 3.9; do not edit
+  roles/, contracts/, or either existing manifest. The agents-md manifest does
+  not exist yet in this task — the single-file path is exercised end-to-end by
+  task 02.
+
+file_contact_surface:
+  - scripts/render-agents.py
+
+acceptance_tests:
+  - "AC7.2 — script imports nothing beyond the Python 3.9 stdlib and uses no 3.10+-only syntax (inspect the diff: json, sys, pathlib only)"
+  - "AC7.1 (renderer half) — python3 scripts/render-agents.py then git diff --stat -- .claude/agents/ .github/agents/ is empty (byte-parity for both existing adapters)"
+  - "python3 scripts/render-agents.py --check exits 0 with only the two existing manifests present"
+  - "render_agent() with a model_map-bearing manifest still raises SystemExit for an unmapped capability_profile (unchanged error path)"
+
+depends_on: []
+
+status: pending
+
+notes: |

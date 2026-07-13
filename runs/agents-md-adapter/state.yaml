@@ -8,7 +8,7 @@ paused_reason: null # set when phase=paused: budget-exhausted | round-cap | esca
 
 budget:
   cost_limit_usd: 50 # exhaustion pauses the run; it never silently degrades
-  cost_spent_usd: 0.16 # derived: the sum of ledger[].cost_usd
+  cost_spent_usd: 1.45 # derived: the sum of ledger[].cost_usd
   ledger:
     # append-only, one entry per model invocation:
     #   {at, role, task, round, adapter, model,
@@ -29,6 +29,17 @@ budget:
         tokens_out: null,
         cost_usd: 0.16
       } # 34,242 tok combined
+    - {
+        at: 2026-07-13T23:08:57Z,
+        role: architect,
+        task: null,
+        round: null,
+        adapter: claude-code,
+        model: anthropic/claude-fable-5,
+        tokens_in: null,
+        tokens_out: null,
+        cost_usd: 1.29
+      } # 53,436 tok combined, incl. escalation-recovery resume (write refused mid-dispatch)
 
 gates:
   # a gate entry is written ONLY by the named human.
@@ -46,4 +57,14 @@ gates:
 
 tasks: [] # populated from tasks/*.yaml after G1
 
-escalations: [] # append-only: {at, from_role, reason, resolved}
+escalations: # append-only: {at, from_role, reason, resolved}
+  - {
+      at: 2026-07-13T22:57:00Z,
+      from_role: architect,
+      reason: "v0 orchestrator switched session worktrees mid-dispatch (to an
+        unrelated fix branch), revoking the Architect's write access; task-02
+        write refused. Resolved by restoring the run worktree and re-issuing
+        the write, content byte-identical. Finding: v0 operator must not
+        change worktree isolation while a dispatch is in flight.",
+      resolved: true
+    }

@@ -94,6 +94,25 @@ def test_scan_files_excludes_fifo(tmp_path):
     assert real_file in paths
 
 
+def test_scan_files_includes_dotfiles(tmp_path):
+    # F5 (review round 2) — hidden files (dotfiles) are ordinary regular
+    # files; R2 names no hidden-file exclusion, but "skip names starting
+    # with '.'" is a plausible drift many real dedup tools have. A hidden
+    # duplicate pair must still be scanned and grouped.
+    root = str(tmp_path)
+    a = os.path.join(root, ".h1")
+    b = os.path.join(root, ".h2")
+    _write(a, "hidden dup content")
+    _write(b, "hidden dup content")
+
+    paths = [p for p, _size in dupefind.scan_files(root)]
+    assert a in paths
+    assert b in paths
+
+    groups = dupefind.find_duplicate_groups(dupefind.scan_files(root))
+    assert groups == [sorted([a, b])]
+
+
 # --- 0-byte boundary: traversal (R2) vs detection policy (R4, ADR-4) -------
 
 
@@ -146,6 +165,23 @@ def test_find_duplicate_groups_only_empty_files_yields_no_groups(tmp_path):
     groups = dupefind.find_duplicate_groups(dupefind.scan_files(root))
     assert groups == []
     assert dupefind.render_groups(groups) == ""
+
+
+def test_find_duplicate_groups_one_byte_duplicate_pair_is_grouped(tmp_path):
+    # F3 (review round 2) — the size==0 exclusion boundary must be exact.
+    # A 1-byte duplicate pair, placed right next to the 0-byte exclusion
+    # tests, catches an off-by-one threshold mutant (e.g. `size <= 1`) that
+    # would silently drop legitimate 1-byte duplicates while every 0-byte
+    # fixture in this file keeps passing.
+    root = str(tmp_path)
+    a = os.path.join(root, "a.txt")
+    b = os.path.join(root, "b.txt")
+    _write(a, "x")
+    _write(b, "x")
+    assert os.path.getsize(a) == 1
+
+    groups = dupefind.find_duplicate_groups(dupefind.scan_files(root))
+    assert groups == [sorted([a, b])]
 
 
 def test_find_duplicate_groups_has_no_empty_file_override_parameter():
@@ -203,19 +239,37 @@ def test_find_duplicate_groups_three_identical_files_single_group(tmp_path):
     assert len(groups[0]) == 3
 
 
-def test_find_duplicate_groups_unique_size_files_never_opened():
+def test_find_duplicate_groups_unique_size_files_never_opened(tmp_path, monkeypatch):
     # ADR-3 consequence — files whose size is unique in the input are never
-    # hashed (opened) at all. Feed nonexistent paths with distinct sizes
-    # directly (bypassing scan_files): if the implementation hashed before
-    # checking size-sharing, hash_file's open() would raise OSError/
-    # FileNotFoundError here. No exception means the size partition
-    # correctly skipped these paths before ever touching the filesystem.
-    fake_files = [
-        ("/does/not/exist/one", 111),
-        ("/does/not/exist/two", 222),
-        ("/does/not/exist/three", 333),
-    ]
-    assert dupefind.find_duplicate_groups(fake_files) == []
+    # hashed (opened) at all. F1 (review round 2): a nonexistent-path probe
+    # is false assurance here, because find_duplicate_groups' own
+    # `except OSError: continue` (ADR-6) swallows the FileNotFoundError a
+    # hash-everything mutant would raise, so that mutant still passes.
+    # Instead, monkeypatch dupefind.hash_file itself over a real tree of
+    # unique-size files and assert it is never called; the recorder raises
+    # AssertionError (not OSError) if it is, so the failure propagates
+    # instead of being swallowed by ADR-6's skip policy.
+    root = str(tmp_path)
+    for name, content in (("one.txt", "a"), ("two.txt", "bb"), ("three.txt", "ccc")):
+        _write(os.path.join(root, name), content)
+
+    scanned = dupefind.scan_files(root)
+    sizes = [size for _path, size in scanned]
+    assert len(sizes) == len(set(sizes))  # sanity: every size is unique
+
+    calls = []
+
+    def recording_hash_file(path):
+        calls.append(path)
+        raise AssertionError(
+            "hash_file must not be called for a unique-size file: {}".format(path)
+        )
+
+    monkeypatch.setattr(dupefind, "hash_file", recording_hash_file)
+
+    groups = dupefind.find_duplicate_groups(scanned)
+    assert groups == []
+    assert calls == []
 
 
 # --- output grouping/ordering/determinism (R5, ADR-5) -----------------------
@@ -258,6 +312,74 @@ def test_find_duplicate_groups_order_independent_of_input_order(tmp_path):
     shuffled = list(reversed(scanned))
     shuffled_groups = dupefind.find_duplicate_groups(shuffled)
     assert shuffled_groups == expected
+
+
+def test_find_duplicate_groups_member_sort_uses_full_path_not_basename(tmp_path):
+    # F2 (review round 2) — R5/ADR-5: within a group, members are sorted by
+    # the full path string, not by basename. `root/b/a.txt` and
+    # `root/a/z.txt` are chosen so path order and basename order disagree:
+    # by path, `root/a/z.txt` < `root/b/a.txt` (directory prefix decides);
+    # by basename, `a.txt` < `z.txt` would put them the other way around.
+    root = str(tmp_path)
+    os.makedirs(os.path.join(root, "a"))
+    os.makedirs(os.path.join(root, "b"))
+    path_b_a = os.path.join(root, "b", "a.txt")
+    path_a_z = os.path.join(root, "a", "z.txt")
+    _write(path_b_a, "path-vs-basename")
+    _write(path_a_z, "path-vs-basename")
+
+    groups = dupefind.find_duplicate_groups(dupefind.scan_files(root))
+    assert groups == [[path_a_z, path_b_a]]
+
+
+def test_find_duplicate_groups_group_list_sort_uses_full_path_not_basename(tmp_path):
+    # F2 (review round 2) — the group *list* itself is ordered by each
+    # group's first member's full path, not its basename. Group "low" lives
+    # under directory "aaaa" but its files have basenames starting "zzz";
+    # group "high" lives under "zzzz" with basenames starting "aaa". By
+    # full path, "aaaa/zzz1.txt" < "zzzz/aaa1.txt" (directory prefix
+    # decides) — group "low" first. By first-member basename alone,
+    # "aaa1.txt" < "zzz1.txt" would reverse that order. Basenames agree
+    # with path order *within* each group (same directory), so this
+    # isolates the group-list-level key from the member-level one.
+    root = str(tmp_path)
+    os.makedirs(os.path.join(root, "aaaa"))
+    os.makedirs(os.path.join(root, "zzzz"))
+    low_1 = os.path.join(root, "aaaa", "zzz1.txt")
+    low_2 = os.path.join(root, "aaaa", "zzz2.txt")
+    high_1 = os.path.join(root, "zzzz", "aaa1.txt")
+    high_2 = os.path.join(root, "zzzz", "aaa2.txt")
+    _write(low_1, "group-low")
+    _write(low_2, "group-low")
+    _write(high_1, "group-high")
+    _write(high_2, "group-high")
+
+    groups = dupefind.find_duplicate_groups(dupefind.scan_files(root))
+    assert groups == [[low_1, low_2], [high_1, high_2]]
+
+
+def test_scan_files_through_symlinked_root_does_not_resolve_paths(tmp_path):
+    # F4 (review round 2) — R5: paths are constructed from the given root
+    # exactly, never resolved to a real/absolute path. pytest's tmp_path is
+    # already fully resolved on this darwin host, so every comparison built
+    # from tmp_path directly would pass even under a realpath()/resolve()
+    # mutant. Routing through an explicit symlink root exposes it: the
+    # expected path is built by os.path.join from the symlink root string
+    # (never os.path.realpath), and must not equal the resolved-target path.
+    real_root = os.path.join(str(tmp_path), "real_root")
+    link_root = os.path.join(str(tmp_path), "link_root")
+    os.mkdir(real_root)
+    os.symlink(real_root, link_root)
+    os.makedirs(os.path.join(real_root, "nested"))
+    _write(os.path.join(real_root, "nested", "f.txt"), "via symlinked root")
+
+    scanned = dupefind.scan_files(link_root)
+    paths = [p for p, _size in scanned]
+
+    expected_path = os.path.join(link_root, "nested", "f.txt")
+    resolved_path = os.path.join(real_root, "nested", "f.txt")
+    assert expected_path in paths
+    assert resolved_path not in paths
 
 
 def test_render_groups_formats_multiple_groups_exactly():

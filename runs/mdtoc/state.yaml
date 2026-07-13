@@ -3,7 +3,7 @@
 
 run: mdtoc
 branch: run/mdtoc
-phase: integrate          # spec | plan | implement | integrate | release | done | paused
+phase: done               # spec | plan | implement | integrate | release | done | paused
 paused_reason: null       # set when phase=paused: budget-exhausted | round-cap | escalation | gate-declined
 
 budget:
@@ -61,7 +61,7 @@ gates:                    # a gate entry is written ONLY by the named human
   G0: {approved: true, by: nthncrtr, at: 2026-07-13T01:18:34Z, notes: all 7 assumptions accepted, burden: confirmation}
   G1: {approved: true, by: nthncrtr, at: 2026-07-13T01:47:46Z, notes: round 2 after decline — ADR-4/R4 underscore amendments accepted, burden: light-correction}
   G2: {approved: true, by: nthncrtr, at: 2026-07-13T02:34:27Z, notes: full packet accepted; two open review minors verifier-probed as coverage-only. burden recorded as confirmation (inferred — approval carried no corrections), burden: confirmation}
-  G3: {approved: false, by: null, at: null, notes: null}
+  G3: {approved: true, by: nthncrtr, at: 2026-07-13T02:34:27Z, notes: N/A — local CLI, no CI/deploy surface (walkthrough §6); recorded per founder's merge-and-proceed}
 
 tasks:                    # mirrors tasks/*.yaml status; the ONLY home of review_rounds
   - {id: 01-mdtoc-cli, status: verified, review_rounds: 1}

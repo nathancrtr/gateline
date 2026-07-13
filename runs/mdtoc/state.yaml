@@ -8,7 +8,7 @@ paused_reason: null       # set when phase=paused: budget-exhausted | round-cap 
 
 budget:
   cost_limit_usd: 50      # exhaustion pauses the run; it never silently degrades
-  cost_spent_usd: 4.30    # derived: the sum of ledger[].cost_usd
+  cost_spent_usd: 4.50    # derived: the sum of ledger[].cost_usd
   ledger:                 # append-only, one entry per model invocation:
                           #   {at, role, task, round, adapter, model,
                           #    tokens_in, tokens_out, cost_usd}
@@ -29,6 +29,9 @@ budget:
     - {at: 2026-07-13T01:41:29Z, role: architect, task: null, round: null,
        adapter: claude-code, model: anthropic/claude-fable-5,
        tokens_in: null, tokens_out: null, cost_usd: 2.37}  # 98,603 tok combined; D9 re-dispatch with G1 decline notes
+    - {at: 2026-07-13T01:52:57Z, role: implementer, task: 01-mdtoc-cli, round: 0,
+       adapter: claude-code, model: anthropic/claude-sonnet-5,
+       tokens_in: null, tokens_out: null, cost_usd: 0.20}  # 41,160 tok combined
 
 gates:                    # a gate entry is written ONLY by the named human
   G0: {approved: true, by: nthncrtr, at: 2026-07-13T01:18:34Z, notes: all 7 assumptions accepted, burden: confirmation}
@@ -37,7 +40,7 @@ gates:                    # a gate entry is written ONLY by the named human
   G3: {approved: false, by: null, at: null, notes: null}
 
 tasks:                    # mirrors tasks/*.yaml status; the ONLY home of review_rounds
-  - {id: 01-mdtoc-cli, status: dispatched, review_rounds: 0}
+  - {id: 01-mdtoc-cli, status: in-review, review_rounds: 0}
   - {id: 02-unit-tests, status: pending, review_rounds: 0}
   - {id: 03-cli-tests, status: pending, review_rounds: 0}
 

@@ -2,7 +2,7 @@
   "adapter": "claude-code",
   "output_dir": ".claude/agents",
   "filename": "{role}.md",
-  "roles": ["analyst", "architect", "implementer", "reviewer", "verifier", "ops"],
+  "roles": ["analyst", "architect", "implementer", "reviewer", "verifier", "ops", "historian"],
   "tools_style": "comma",
   "tool_map": {
     "read": ["Read"],

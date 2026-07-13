@@ -180,6 +180,43 @@ watcher turns that commit into a tick. **`state.yaml` is the entire control plan
 in both directions** — there is no orchestrator API, config channel, or command
 queue to keep consistent with it.
 
+### 4.6 Scheduled roles: the Historian sweep
+
+Some roles are periodic, not gate-driven — the Historian (DESIGN.md §3) sweeps the
+interval since its last run and reconciles docs, changelog, and tracker with the run
+record. The orchestrator derives these dispatches the same way it derives everything
+else: from committed files, on the same tick.
+
+Schedules live in **`orchestrator.yaml` at the repository root**, read at the
+default-branch tip like the registry. This is committed project policy, not a runtime
+command channel — any orchestrator instance pointed at the repo derives the same
+sweeps, and changing the cadence is a reviewed commit:
+
+```yaml
+schedules:
+  historian:
+    every: 7d            # <n>d | <n>h | <n>m
+    cost_limit_usd: 5    # pre-flight cap for one sweep dispatch
+    enabled: true
+```
+
+A due sweep is dispatched as a **mini-run**: `runs/<role>-<date>/` on branch
+`run/<role>-<date>`, seeded by commit-then-launch (§4.4 — the branch is created from
+the zero OID, so two instances racing a schedule resolve at the ref). The seed commit
+carries `sweep.yaml`, the sweep's one-entry ledger: the closing commit meters real
+usage into it through the same dispatch seam as every run dispatch (§6). Deliberately
+absent: `state.yaml` — runs are recognized by their state file, so sweeps stay out of
+the derivation table, the readiness table, and the frontend inbox entirely. The human
+surface is the branch itself: review the `docs-delta.md` and the applied doc edits,
+merge to approve (P4). The merged marker's `at` is what makes the next sweep's
+interval derivable.
+
+The schedule rules mirror the D-table's discipline (one test per row, S0–S4 + SB in
+`schedule.ts`): a schedule rests while a sweep for its role is open — dispatched,
+failed, or awaiting review — so sweeps never pile up on an unmerged predecessor, and
+a role's estimate exceeding its schedule's cap is a config defect that skips with a
+warning rather than dispatching (pause-don't-degrade, applied to schedules).
+
 ## 5. The dispatch seam
 
 ### 5.1 Interface

@@ -35,7 +35,7 @@ stdlib-only Python and markdown; there is nothing to install and no service to
 sign up for. Details: [`docs/INTEGRATION.md`](docs/INTEGRATION.md).
 
 Prefer to see it run first? [`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md) drives
-a toy task through the full pipeline in this repo in about an hour.
+a toy task through the full pipeline in this repo in a single session.
 
 ## Why teams pick ADS
 

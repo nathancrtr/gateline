@@ -1,0 +1,75 @@
+# Release: fires on a v* tag push. Verifies the tag against package.json,
+# proves the tarball with the same tests CI runs, stamps the release manifest
+# (which integrate.py prefers over git metadata), publishes to npm with
+# provenance, and creates the GitHub Release with the tarball attached.
+#
+# Prerequisites (one-time, before the first tag):
+#   - npm: configure this repo as a Trusted Publisher for the ads-core package
+#     (npmjs.com → package → Settings → Trusted Publisher: GitHub Actions,
+#     this repo, this workflow file). Provenance requires a public repo.
+#     Fallback if trusted publishing isn't set up yet: create an automation
+#     token and add it as the NPM_TOKEN secret; the publish step uses it
+#     automatically when present.
+name: release
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+  id-token: write   # npm provenance attestation
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"   # floor version: proves the stdlib-only 3.9 constraint
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Verify tag matches package.json version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "tag $GITHUB_REF_NAME does not match package.json version $PKG_VERSION"
+            exit 1
+          fi
+
+      - name: Tests and render check
+        run: |
+          python3 scripts/render-agents.py --check
+          pip install pytest
+          pytest scripts/test_integrate.py scripts/test_package.py -q
+
+      - name: Stamp release manifest
+        run: |
+          python3 - <<'EOF'
+          import json, os
+          tag = os.environ["GITHUB_REF_NAME"]
+          json.dump(
+              {
+                  "repo": "https://github.com/%s" % os.environ["GITHUB_REPOSITORY"],
+                  "ref": tag,
+                  "version": tag.lstrip("v"),
+              },
+              open("scripts/release-manifest.json", "w"),
+              indent=2,
+          )
+          EOF
+
+      - name: Publish to npm (provenance)
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
+
+      - name: Pack tarball and create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          npm pack
+          gh release create "$GITHUB_REF_NAME" ads-core-*.tgz \
+            --title "ADS $GITHUB_REF_NAME" --generate-notes

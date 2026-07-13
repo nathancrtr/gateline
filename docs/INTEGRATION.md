@@ -9,7 +9,9 @@ the gate frontend ([FRONTEND.md](FRONTEND.md), `frontend/`) and the v1
 orchestrator ([ORCHESTRATOR.md](ORCHESTRATOR.md)). A v0 of the tooling now
 ships: `integrate.py init|validate|fork`, the copy manifest, the normative lock
 schema, and renderer overlay splicing (`scripts/`, tested by
-`scripts/test_integrate.py`); the tagged release, instance-vocabulary
+`scripts/test_integrate.py`), plus the npm delivery vehicle (§3: the
+`ads-core` package, its shim, and the tag-triggered release workflow, tested
+by `scripts/test_package.py`); the first tag itself, instance-vocabulary
 validation (open question 6), and `upgrade` remain open — §11 tracks them, and
 [INTEGRATION-PLAN.md](INTEGRATION-PLAN.md) sequences the build. A round-1
 adversarial review of this revision is applied
@@ -95,7 +97,7 @@ How should framework files travel into a host repo?
 | **Vendored copy + lockfile** | **Recommended** | Works in private/offline repos; divergence is *expected* — host-local policy is a legitimate layer, not an error — and the lockfile makes it visible instead of silent; upgrade is a real 3-way merge (§6) |
 | Git submodule | Rejected | Couples host clones to framework repo access; role specs must be readable in-tree by agents that start cold; submodule UX taxes every operator |
 | Git subtree | Rejected for now | Better than submodule, but merges core and project layers into one history; revisit if lockfile bookkeeping proves painful |
-| Package registry (pip/npm) | Rejected for now, **for the core trees** | Infrastructure not needed at 1–3 repos; the natural v2 once the repo is public — the project posture already names "published package releases" as an eventual adoption channel, and the runnable components (below) are the artifacts that will want it first |
+| Package registry (pip/npm) | **Adopted as the delivery vehicle** — never as a dependency mechanism | The `ads-core` npm package carries the release tarball (copy manifest, `integrate.py`, a Node shim), so `npx ads-core init` replaces "clone the repo" as the fetch step. The *mechanism* is unchanged: files still vendor into the host with a lockfile; the host never imports a package at runtime. The tarball ships `scripts/release-manifest.json` (stamped by the release workflow), which `integrate.py` treats as the authoritative source pin |
 | Runner plugin (e.g., a Claude Code plugin) | Adapter-layer option only | Could bundle one runner's rendered agents for install ergonomics, but the core must stay runtime-neutral files (P3); never the primary channel |
 
 The Phase 0 decision — copy, don't submodule — was right. What was missing is the
@@ -422,11 +424,16 @@ core, and the generation is gated agent work, not templating.
 The whole operator surface, from zero to gate-ready, should be:
 
 ```
-python3 <framework-release>/scripts/integrate.py init ~/repos/my-app
+npx ads-core init ~/repos/my-app --provenance private
 cd ~/repos/my-app        # dispatch the Integrator with the prompt init printed
-python3 .agentic/scripts/integrate.py validate
+npx ads-core validate    # runs the host's vendored copy when one exists
 # open the scaffold PR
 ```
+
+(Equivalently, without Node: `python3 <framework-release>/scripts/integrate.py
+init …` from a checkout or release tarball — the npm package is only the fetch
+vehicle, §3, and its shim defers to the host's vendored `integrate.py` for
+`validate`/`fork` so the host's pinned version stays authoritative.)
 
 Two tool invocations, one agent dispatch, one PR. The tool travels into
 `.agentic/scripts/`, so the **host repo** is self-sufficient: nothing checked into

@@ -89,7 +89,18 @@ def detect_adapters(target):
 
 
 def source_info():
-    """Pin the source: git metadata when available, tarball placeholders otherwise."""
+    """Pin the source. A release artifact (npm tarball, release tarball) ships
+    scripts/release-manifest.json, written by the release workflow — it is
+    authoritative when present. Git metadata is the fallback for running from
+    a checkout; bare placeholders are the last resort."""
+    manifest_path = SOURCE / "scripts" / "release-manifest.json"
+    if manifest_path.exists():
+        manifest = load_json(manifest_path)
+        return {
+            "repo": manifest.get("repo"),
+            "ref": manifest["ref"],
+            "version": manifest["version"],
+        }
     info = {"repo": None, "ref": "unknown", "version": "unreleased"}
     git = ["git", "-C", str(SOURCE)]
     try:

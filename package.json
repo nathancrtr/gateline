@@ -1,0 +1,47 @@
+{
+  "name": "ads-core",
+  "version": "0.3.0",
+  "description": "Run the SDLC as a governed team of AI agents — typed artifacts in git, four human gates, any model, any runtime.",
+  "license": "Apache-2.0",
+  "author": "Nathan Carter",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nathancrtr/agentic-sandbox.git"
+  },
+  "keywords": [
+    "ai-agents",
+    "multi-agent",
+    "sdlc",
+    "code-review",
+    "governance",
+    "llm"
+  ],
+  "bin": {
+    "ads-core": "bin/ads-core.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "pytest scripts/test_integrate.py scripts/test_package.py"
+  },
+  "files": [
+    "bin/",
+    "roles/",
+    "contracts/",
+    "registry/",
+    "adapters/",
+    "scripts/render-agents.py",
+    "scripts/integrate.py",
+    "scripts/copy-manifest.json",
+    "scripts/framework-lock.schema.json",
+    "scripts/release-manifest.json",
+    "docs/DESIGN.md",
+    "docs/INTEGRATION.md",
+    "docs/WALKTHROUGH.md",
+    "NOTICE.md"
+  ]
+}

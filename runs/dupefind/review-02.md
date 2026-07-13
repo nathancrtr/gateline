@@ -47,3 +47,29 @@
 ## Boundary check
 
 Declared surface is `apps/dupefind/test_core.py` only; the diff also touches `runs/dupefind/state.yaml` (ledger entry 8, task 02 → in-review, spent total). That is orchestrator bookkeeping identical in kind to every prior task commit on this branch (e.g. ea19be8, ff0e6ac) and contains no gate-approval writes — not charged as a finding. No other files touched; `dupefind.py` untouched as mandated.
+
+---
+
+# Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** 808bfbf (delta over 72b597a; `apps/dupefind/test_core.py`, 16 → 21 tests)
+
+## Resolution of round-1 findings
+
+- **F1 (blocking) — RESOLVED.** `test_core.py:242-274`: the nonexistent-path probe is replaced by a monkeypatch recorder over a real unique-size tree (1/2/3-byte files, uniqueness sanity-asserted). Traced: `find_duplicate_groups` resolves `hash_file` via the module global, so `monkeypatch.setattr(dupefind, "hash_file", ...)` intercepts it; the recorder raises `AssertionError`, which `except OSError` (dupefind.py:86-88) cannot swallow — under the guard-deletion mutant the first singleton size class now fails the test. Belt-and-braces `assert calls == []` also kills a hypothetical broad-except mutant. Correct implementation never calls the recorder → passes.
+- **F2 (blocking) — RESOLVED, both sort sites.** `test_core.py:317-333`: `root/b/a.txt` vs `root/a/z.txt` identical — path order `[a/z, b/a]`, basename order the reverse; the member-level `key=os.path.basename` mutant now fails. `test_core.py:335-358`: groups under `aaaa/` (basenames `zzz*`) vs `zzzz/` (basenames `aaa*`) — full-path first-member order `[low, high]`, basename-of-first-member order the reverse; the group-list-key mutant now fails. Within-group basenames agree with path order (same directory), so the two sites are correctly isolated from each other.
+- **F3 (major) — RESOLVED.** `test_core.py:170-184`: 1-byte duplicate pair (`getsize == 1` sanity-asserted) must form a group; the `size <= 1` off-by-one mutant now fails while all 0-byte exclusion tests still pass.
+- **F4 (major) — RESOLVED.** `test_core.py:361-382`: scan through an explicit symlinked root (`link_root → real_root`); expected path built by `os.path.join` from the link-root string, and the resolved-target spelling asserted absent. Traced: `os.walk(link_root)` lists through the symlink (followlinks only governs sub-entries), yields link-root-spelled paths under the correct implementation; the `realpath` mutant emits `real_root`-spelled paths → both assertions fail it. Test-layout contract respected (no `.resolve()`/`realpath` in expectation-building — `realpath` appears only in a comment and the *negative* expectation constructed via join).
+- **F5 (minor) — RESOLVED.** `test_core.py:97-114`: hidden duplicate pair `.h1`/`.h2` scanned and grouped; the skip-dotfiles mutant now fails.
+
+## Delta coverage
+
+- **AC8.2 name contract survived:** `symlink` (2 tests), `fifo`, `same_size`, `empty` (4), `order`, `no_duplicates` (2) all still present as distinct test-name substrings; all 16 round-1 tests intact and unmodified except the F1 rewrite, which keeps its original name.
+- **New tests checked for self-consistency against the approved implementation:** all five pass by trace (unique sizes in the F1 fixture; distinct content/sizes per group in the F2 fixtures with ≥2 members per size class; lstat through a followed intermediate symlink still `S_ISREG` for the F4 file). No new imports; `monkeypatch`/`tmp_path` are pytest fixtures (stdlib + pytest constraint holds); no annotations (3.9-safe); no `__init__.py`; `dupefind.py` untouched; still no process-level duplication of task 03.
+- **No new surviving mutants identified in the delta:** the added fixtures are assertion-tightening only; they introduce no behavior the round-1 analysis did not already cover.
+
+## Boundary check (round 2)
+
+`apps/dupefind/test_core.py` plus `runs/dupefind/state.yaml` (ledger entry 12, spent total — metering only, no task-status or gate writes). Within surface; bookkeeping excepted per round 1.

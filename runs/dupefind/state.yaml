@@ -8,7 +8,7 @@ paused_reason: null       # set when phase=paused: budget-exhausted | round-cap 
 
 budget:
   cost_limit_usd: 50      # exhaustion pauses the run; it never silently degrades
-  cost_spent_usd: 0.17    # derived: the sum of ledger[].cost_usd
+  cost_spent_usd: 0.42    # derived: the sum of ledger[].cost_usd
   ledger:                 # append-only, one entry per model invocation:
                           #   {at, role, task, round, adapter, model,
                           #    tokens_in, tokens_out, cost_usd}
@@ -20,6 +20,9 @@ budget:
     - {at: 2026-07-13T02:54:40Z, role: analyst, task: null, round: null,
        adapter: claude-code, model: anthropic/claude-sonnet-5,
        tokens_in: null, tokens_out: null, cost_usd: 0.17}  # 35,940 tok combined
+    - {at: 2026-07-13T03:02:34Z, role: analyst, task: null, round: null,
+       adapter: claude-code, model: anthropic/claude-sonnet-5,
+       tokens_in: null, tokens_out: null, cost_usd: 0.25}  # 52,579 tok combined; G0 veto amendment (assumption 2)
 
 gates:                    # a gate entry is written ONLY by the named human
   G0: {approved: false, by: null, at: null, notes: null}

@@ -47,12 +47,13 @@ produces no false-positive groupings.
 - [ ] AC3.3 — Given three or more files sharing identical content, all of them appear together in a single group (not split into separate pairs).
 
 ### R4 — Empty-file handling
-Files of size 0 bytes are excluded from duplicate detection by default (per the
-brief); they must not be reported as a duplicate group even though they are
-trivially byte-identical to one another. An opt-in mechanism exists to include them.
+Files of size 0 bytes are unconditionally excluded from duplicate detection; they
+must never be reported as a duplicate group, even though they are trivially
+byte-identical to one another. There is no CLI mechanism — no flag, environment
+variable, or other override — to include them; this behavior is not configurable.
 **Acceptance criteria:**
-- [ ] AC4.1 — Given two or more 0-byte files in the tree, the default invocation does not report them as a duplicate group.
-- [ ] AC4.2 — Given the same fixture, running with the include-empty override (illustrated as `--include-empty`) reports the 0-byte files as a duplicate group.
+- [ ] AC4.1 — Given two or more 0-byte files in the tree, the tool does not report them as a duplicate group.
+- [ ] AC4.2 — Given a tree with three 0-byte files and no other duplicate content, stdout is empty; there is no argument or configuration this tool accepts that causes 0-byte files to appear in the output.
 
 ### R5 — Output format and determinism
 Output is one duplicate group per set of byte-identical files with two or more
@@ -88,7 +89,7 @@ handling, grouping/ordering, no-duplicates case) must be verifiable independent 
 manual shell invocation.
 **Acceptance criteria:**
 - [ ] AC8.1 — Running `pytest` from the deliverable's directory exits with status code 0.
-- [ ] AC8.2 — `pytest --collect-only` lists distinct, individually named test cases exercising each of: recursive traversal with symlinks/non-regular files skipped (R2), size-then-hash detection correctness including the same-size-different-content case (R3), empty-file exclusion and its override (R4), output grouping/ordering/reproducibility (R5), and the no-duplicates case (R6).
+- [ ] AC8.2 — `pytest --collect-only` lists distinct, individually named test cases exercising each of: recursive traversal with symlinks/non-regular files skipped (R2), size-then-hash detection correctness including the same-size-different-content case (R3), unconditional empty-file exclusion (R4), output grouping/ordering/reproducibility (R5), and the no-duplicates case (R6).
 
 ### R9 — Implementation constraints
 The delivered tool must be a single Python 3 source file, compatible with Python
@@ -100,7 +101,7 @@ The delivered tool must be a single Python 3 source file, compatible with Python
 
 ## Assumptions
 - **ASSUMPTION:** The brief doesn't specify the CLI invocation shape → resolved as: a single required positional argument, the root directory path (see R1), mirroring the one-required-positional-argument shape used by both prior runs (`wordfreq.py <file>`, `mdtoc.py <file>`), because that is this codebase's only established CLI convention and the brief gives no reason to deviate.
-- **ASSUMPTION:** "empty files excluded by default" (brief, Constraints) implies but does not name an override → resolved as: an opt-in flag (illustrated as `--include-empty`) exists to include 0-byte files (see R4), because "by default" is a conditional phrase that only makes sense if a non-default mode exists; the flag's exact name is an Architect-level detail, not a mandated requirement. **G0 may veto this reading** in favor of "0-byte files are unconditionally excluded, no override" if that is the intended, simpler behavior.
+- **ASSUMPTION:** "empty files excluded by default" (brief, Constraints) implies but does not name an override → originally resolved as: an opt-in flag (illustrated as `--include-empty`) exists to include 0-byte files, because "by default" is a conditional phrase that only makes sense if a non-default mode exists; the flag's exact name was framed as an Architect-level detail, not a mandated requirement. **G0 VETO (2026-07-13, nthncrtr):** this reading is rejected. Chosen resolution: empty files are unconditionally excluded from duplicate detection; there is no override flag or other mechanism to include them (see R4, AC4.1–AC4.2). The CLI takes exactly one positional argument and no flags. This entry preserves the original resolution and reasoning for the record rather than silently rewriting it, per the mdtoc precedent for G0/G1 corrections.
 - **ASSUMPTION:** The brief doesn't specify output formatting (separators, per-group ordering, path form) → resolved as: blank-line-separated groups, one sorted path per line within a group, groups ordered by their first sorted member path, paths printed as root-joined-with-relative-location rather than resolved to absolute/real paths (see R5), because this is the minimal, unambiguous, deterministic scheme consistent with the brief's literal "one group per duplicate set, paths sorted."
 - **ASSUMPTION:** The brief's exclusion of "cross-filesystem deduplication semantics" doesn't say whether hardlinks (multiple paths, same inode, trivially identical content) get special treatment → resolved as: no inode-awareness; hardlinked paths are compared and grouped by content like any other files, with no special-case exclusion or annotation, because the brief scopes out filesystem-identity semantics as a non-goal rather than asking for hardlink-aware exclusion.
 - **ASSUMPTION:** The brief's "following symlinks" out-of-scope note doesn't say whether encountering a symlink is a silent skip or an error condition → resolved as: silent skip, no error (see R2), grounded in the Python standard library's documented default (`os.walk(..., followlinks=False)` does not descend into symlinked directories) — this is verified against the Python 3 stdlib documentation, not merely inferred, but the extension to file symlinks (also skipped, not read) is this Analyst's choice for consistency, since the brief only names symlink-*following* as out of scope, not symlinked-file handling generally.
@@ -117,5 +118,7 @@ The delivered tool must be a single Python 3 source file, compatible with Python
 - A persistent CLI installed on `PATH`; invocation is via `python3 <file>.py <dir>` only.
 - Output formats other than the plain grouped-path text defined in R5 (e.g. JSON, CSV).
 - Configurable hash algorithm, chunked/streaming performance tuning, or parallelism — not requested by the brief.
-- Glob/pattern-based include/exclude filters, minimum/maximum file size filters (beyond the default empty-file exclusion in R4), or a scan-depth limit — not requested by the brief.
+- Glob/pattern-based include/exclude filters, minimum/maximum file size filters, or a scan-depth limit — not requested by the brief.
+- Any flag, environment variable, or other mechanism to include 0-byte files in duplicate detection (e.g. an `--include-empty` flag) — empty-file exclusion is unconditional, per the G0 veto of the original override-flag assumption (see R4, Assumptions).
 - Reading input from stdin; only a directory-path argument is accepted.
+- Any CLI flags whatsoever beyond the single required positional directory argument (see R1, R4).

@@ -69,12 +69,12 @@ budget:
 gates:                    # a gate entry is written ONLY by the named human
   G0: {approved: true, by: nthncrtr, at: 2026-07-13T03:03:02Z, notes: 6 assumptions accepted; assumption 2 vetoed (no override flag) — approval recorded against the amended spec, burden: confirmation}
   G1: {approved: true, by: nthncrtr, at: 2026-07-13T03:36:56Z, notes: all 8 ADRs accepted incl. ADR-6 LBYL departure, burden: confirmation}
-  G2: {approved: false, by: null, at: null, notes: null}
+  G2: {approved: true, by: nthncrtr, at: 2026-07-13T04:24:29Z, notes: full packet accepted; TOCTOU minors verifier-reproduced as accepted races. burden recorded as confirmation (inferred — approval carried no corrections), burden: confirmation}
   G3: {approved: false, by: null, at: null, notes: null}
 
 tasks:                    # mirrors tasks/*.yaml status; the ONLY home of review_rounds
-  - {id: 01-dupefind-cli, status: review-approved, review_rounds: 2}
-  - {id: 02-unit-tests, status: review-approved, review_rounds: 2}
-  - {id: 03-cli-tests, status: review-approved, review_rounds: 2}
+  - {id: 01-dupefind-cli, status: verified, review_rounds: 2}
+  - {id: 02-unit-tests, status: verified, review_rounds: 2}
+  - {id: 03-cli-tests, status: verified, review_rounds: 2}
 
 escalations: []           # append-only: {at, from_role, reason, resolved}

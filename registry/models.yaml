@@ -55,6 +55,8 @@ dispatch_estimates_usd:
   verifier: 6
   ops: 2
   historian: 1     # one sweep: read an interval's artifacts, edit docs, write the delta
+  ux-researcher: 3 # one survey: web research + product-surface read, write the report
+  designer: 6      # one candidate: rationale + one static mockup per in-scope screen
 
 bindings:
   orchestrator: {profile: frontier-reasoning}
@@ -73,3 +75,13 @@ bindings:
   # Historian is scheduled, not gate-driven (orchestrator.yaml `schedules:`);
   # its sweep branch is human-reviewed before merge, so the cheap tier is safe.
   historian:    {profile: fast-cheap}
+
+  # Design extension roles (P6), dispatched pre-G1 in design runs; v0
+  # human-orchestrated — the v1 reconciler's gate loop (derive.ts ROLES) does
+  # not dispatch them. Designer is where aesthetic judgment concentrates, so it
+  # gets the frontier tier. When a run dispatches several designers in
+  # parallel, spread them across this profile's default and alternates —
+  # candidates that share one model family share its taste (the P5 argument,
+  # applied to look-and-feel instead of blind spots).
+  ux-researcher: {profile: balanced}
+  designer:      {profile: frontier-reasoning}

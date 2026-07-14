@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>candidate-b · run-history — Signal Deck</title>
+<!-- Candidate B "Signal Deck" — screen: run-history (run detail, history tab).
+     Self-contained: no scripts, no external assets, no network requests.
+     States shown: populated timeline (newest first) with phase-transition
+     markers, "no state history" empty, loading, error. -->
+<style>
+:root { color-scheme: light dark; }
+:root{
+  --ground: light-dark(#eef2f5,#0a0e11);
+  --surface: light-dark(#ffffff,#111820);
+  --inset: light-dark(#f3f6f8,#0d141a);
+  --raised: light-dark(#e4ebef,#18222b);
+  --ink: light-dark(#10202a,#dbe7ec);
+  --muted: light-dark(#4c5d67,#8ba1ac);
+  --faint: light-dark(#8598a2,#566771);
+  --line: light-dark(#d3dde3,#223039);
+  --accent: light-dark(#0b6f89,#45c8ec);
+  --accent-soft: light-dark(rgba(11,111,137,.12),rgba(69,200,236,.14));
+  --ok: light-dark(#157a4a,#4ec98d);
+  --warn: light-dark(#8a6410,#e0b24e);
+  --bad: light-dark(#b23b28,#ff7f63);
+  --on-solid: light-dark(#ffffff,#06121a);
+  --glow: light-dark(rgba(11,111,137,.30),rgba(69,200,236,.40));
+  --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --mono: ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--ground);color:var(--ink);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+@keyframes pulse{0%,100%{box-shadow:0 0 6px var(--glow)}50%{box-shadow:0 0 15px var(--glow),0 0 4px var(--glow)}}
+@keyframes sweep{0%{background-position:180% 0}100%{background-position:-80% 0}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-duration:.01ms!important}}
+
+.deck{display:grid;grid-template-columns:200px 1fr;min-height:100vh;max-width:1280px;margin:0 auto}
+.rail{position:sticky;top:0;height:100vh;border-right:1px solid var(--line);background:var(--surface);padding:16px 12px;display:flex;flex-direction:column;gap:22px}
+.brand{padding:6px 8px}
+.brand b{font:600 15px/1 var(--mono);letter-spacing:.16em}
+.brand small{display:block;margin-top:6px;font:400 10.5px/1.35 var(--sans);color:var(--faint)}
+.navsec{display:flex;flex-direction:column;gap:2px}
+.nav{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:4px;font:12px/1 var(--sans);color:var(--muted);transition:background .14s,color .14s}
+.nav .dot{width:6px;height:6px;border-radius:50%;background:var(--faint)}
+.nav:hover{background:var(--raised);color:var(--ink)}
+.nav[aria-current="page"]{background:var(--accent-soft);color:var(--accent)}
+.nav[aria-current="page"] .dot{background:var(--accent);box-shadow:0 0 8px var(--glow)}
+.nav .count{margin-left:auto;font:600 11px/1 var(--mono);font-variant-numeric:tabular-nums;padding:2px 7px;border-radius:999px;background:var(--accent);color:var(--on-solid);animation:pulse 2.4s ease-in-out infinite}
+.railfoot{margin-top:auto;padding:8px;font:10px/1.6 var(--mono);color:var(--faint)}
+
+.readout{min-width:0;padding:22px 30px 90px;max-width:1040px}
+.proof{font:10px/1.4 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:18px}
+
+.runhead{display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding-bottom:16px;margin-bottom:14px;border-bottom:1px solid var(--line)}
+.runhead h1{font:600 20px/1 var(--mono);letter-spacing:.06em}
+.runhead .ref{margin-left:auto;font:11px var(--mono);color:var(--faint)}
+.phase{display:inline-flex;align-items:center;gap:7px;font:12px/1 var(--sans);color:var(--ok)}
+.phase .led{width:7px;height:7px;border-radius:50%;box-shadow:0 0 6px currentColor}
+.phase .txt{color:var(--ink)}
+
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:22px}
+.tab{padding:9px 16px;font:600 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;background:none;cursor:pointer}
+.tab.on{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* Timeline as an instrument log: a signal spine on the left, newest first.
+   Phase transitions light up a node on the spine + a mono → phase stamp. */
+.log{list-style:none;position:relative;margin-left:6px}
+.log::before{content:"";position:absolute;left:6px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.ev{position:relative;display:grid;grid-template-columns:120px 1fr auto auto;align-items:baseline;gap:14px;padding:9px 0 9px 26px;border-bottom:1px solid var(--line)}
+.ev:last-child{border-bottom:0}
+.ev::before{content:"";position:absolute;left:2px;top:14px;width:10px;height:10px;border-radius:50%;background:var(--inset);border:2px solid var(--faint)}
+.ev.mark::before{background:var(--accent);border-color:var(--accent);box-shadow:0 0 10px var(--glow)}
+.ev .when{font:11.5px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint)}
+.ev .subj{font:13px/1.4 var(--sans);min-width:0}
+.ev .to{font:11px var(--mono);color:var(--accent);white-space:nowrap}
+.ev .to .arrow{opacity:.8}
+.ev .who{font:11.5px var(--sans);color:var(--muted);text-align:right;white-space:nowrap}
+.ev .oid{font:11px var(--mono);color:var(--faint)}
+
+.states{margin-top:44px}
+.sect{border-top:1px solid var(--line);padding-top:14px;margin-bottom:16px;display:flex;align-items:baseline;gap:12px}
+.kick{font:600 10.5px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.sect .note{font:12px var(--sans);color:var(--faint)}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.demo{border:1px solid var(--line);border-radius:5px;background:var(--surface);padding:14px;min-width:0}
+.demo .lab{display:block;font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:12px}
+.status{text-align:center;padding:26px 16px;font:13px var(--sans);color:var(--muted)}
+.status.bad{color:var(--bad)}
+.skel{border-radius:4px;background:linear-gradient(100deg,var(--inset) 30%,var(--raised) 50%,var(--inset) 70%);background-size:220% 100%;animation:sweep 1.5s linear infinite}
+</style>
+</head>
+<body>
+<div class="deck">
+  <aside class="rail">
+    <div class="brand"><b>GATE</b><small>fleet console · pipeline decisions</small></div>
+    <nav class="navsec">
+      <a class="nav" href="#"><span class="dot"></span>Inbox<span class="count">7</span></a>
+      <a class="nav" href="#"><span class="dot"></span>Portfolio</a>
+      <a class="nav" href="#"><span class="dot"></span>Metrics</a>
+    </nav>
+    <div class="railfoot">the repo is the<br>database — every<br>view renders git</div>
+  </aside>
+
+  <main class="readout">
+    <p class="proof">candidate-b · signal deck · screen: run-history · states: populated (phase-transition markers) / no-history / loading / error</p>
+
+    <div class="runhead">
+      <h1>wordfreq</h1>
+      <span class="phase"><span class="led"></span><span class="txt">done</span></span>
+      <span class="ref" title="read at fb22431">agentic-sandbox · fb22431</span>
+    </div>
+
+    <div class="tabs">
+      <button class="tab">Artifacts</button>
+      <button class="tab">Diff</button>
+      <button class="tab on">History</button>
+    </div>
+
+    <ol class="log">
+      <li class="ev mark">
+        <span class="when">Jul 13, 04:12 PM</span>
+        <span class="subj">G3 approved by nathan — release plan accepted</span>
+        <span class="to"><span class="arrow">→</span> done</span>
+        <span class="who">nathan</span>
+        <span class="oid">fb22431</span>
+      </li>
+      <li class="ev">
+        <span class="when">Jul 13, 02:47 PM</span>
+        <span class="subj">ops: release-plan.md + rollback plan committed</span>
+        <span class="to"></span>
+        <span class="who">ops</span>
+        <span class="oid">c306d01</span>
+      </li>
+      <li class="ev mark">
+        <span class="when">Jul 12, 11:30 AM</span>
+        <span class="subj">G2 approved by nathan (light-correction) after review round 2</span>
+        <span class="to"><span class="arrow">→</span> release</span>
+        <span class="who">nathan</span>
+        <span class="oid">34bea8c</span>
+      </li>
+      <li class="ev">
+        <span class="when">Jul 12, 09:05 AM</span>
+        <span class="subj">verifier: acceptance criteria proven, evidence pasted</span>
+        <span class="to"></span>
+        <span class="who">verifier</span>
+        <span class="oid">9a75877</span>
+      </li>
+      <li class="ev mark">
+        <span class="when">Jul 11, 03:20 PM</span>
+        <span class="subj">G1 approved by nathan — plan and task breakdown accepted</span>
+        <span class="to"><span class="arrow">→</span> implement</span>
+        <span class="who">nathan</span>
+        <span class="oid">32c940b</span>
+      </li>
+      <li class="ev">
+        <span class="when">Jul 11, 10:02 AM</span>
+        <span class="subj">architect: plan.md + tasks/01–04 written</span>
+        <span class="to"></span>
+        <span class="who">architect</span>
+        <span class="oid">7d1e8a4</span>
+      </li>
+      <li class="ev mark">
+        <span class="when">Jul 10, 05:44 PM</span>
+        <span class="subj">G0 approved by nathan — spec accepted, 3 assumptions surfaced</span>
+        <span class="to"><span class="arrow">→</span> plan</span>
+        <span class="who">nathan</span>
+        <span class="oid">a1f0c22</span>
+      </li>
+      <li class="ev">
+        <span class="when">Jul 10, 01:15 PM</span>
+        <span class="subj">analyst: spec.md written from intent-brief.md</span>
+        <span class="to"></span>
+        <span class="who">analyst</span>
+        <span class="oid">e88b301</span>
+      </li>
+    </ol>
+
+    <div class="states">
+      <div class="sect"><span class="kick">Required states</span><span class="note">no-history · loading · error</span></div>
+      <div class="sgrid">
+        <div class="demo">
+          <span class="lab">No state history</span>
+          <p class="status">No state history at this ref.</p>
+        </div>
+        <div class="demo">
+          <span class="lab">Loading · signal sweep</span>
+          <span class="skel" style="display:block;height:14px;width:88%;margin-bottom:9px"></span>
+          <span class="skel" style="display:block;height:14px;width:72%;margin-bottom:9px"></span>
+          <span class="skel" style="display:block;height:14px;width:80%"></span>
+          <p class="status">Reading run…</p>
+        </div>
+        <div class="demo">
+          <span class="lab">Error</span>
+          <p class="status bad">Could not read history: shallow clone — state.yaml log truncated at fb22431</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

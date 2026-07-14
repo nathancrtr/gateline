@@ -38,6 +38,9 @@ jobs:
           # trip git's dubious-ownership check during the in-container clone.
           sudo chown -R root:root /tmp/seed
 
+      - name: Dispatch harness present
+        run: docker run --rm --entrypoint claude fleetview-ci --version
+
       - name: Run container against the scratch repo
         run: |
           docker run -d --name fleetview -p 4310:4310 \
@@ -45,6 +48,7 @@ jobs:
             -e REPO_URL=/seed \
             -e GIT_USER_NAME="CI Smoke" -e GIT_USER_EMAIL=ci@example.test \
             -e PUSH_DECISIONS=false \
+            -e GITHUB_WEBHOOK_SECRET=smoke-secret \
             fleetview-ci
 
       - name: Smoke test
@@ -57,6 +61,25 @@ jobs:
           curl -fsS http://localhost:4310/api/health | grep -q '"ok":true'
           curl -fsS http://localhost:4310/api/runs > /dev/null
           curl -fsS http://localhost:4310/ | grep -qi '<!doctype html'
+          # Container runs unprivileged (claude refuses bypass modes as root).
+          docker exec fleetview id -u | grep -qv '^0$'
+
+      - name: Webhook smoke (HMAC is the gate)
+        run: |
+          body='{"zen":"Design for failure."}'
+          sig="sha256=$(printf '%s' "$body" | openssl dgst -sha256 -hmac smoke-secret | awk '{print $NF}')"
+          set -x
+          curl -fsS -X POST http://localhost:4310/api/webhooks/github \
+            -H "x-hub-signature-256: $sig" -H "x-github-event: ping" \
+            -d "$body" | grep -q pong
+          code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:4310/api/webhooks/github \
+            -H "x-hub-signature-256: sha256=deadbeef" -H "x-github-event: push" -d "$body")
+          test "$code" = "401"
+
+      - name: Orchestrator dry-run in the image
+        run: |
+          docker exec fleetview node /app/frontend/packages/orchestrator/src/main.ts \
+            --repo /data/repo tick --dry-run
 
       - name: Container logs
         if: failure()

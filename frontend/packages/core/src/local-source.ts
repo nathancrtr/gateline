@@ -17,7 +17,7 @@ export class LocalGitSource implements RunSource {
   readonly dir: string
   readonly git: Git
   readonly templates: ContractTemplates
-  private readonly options: { push?: boolean; identity?: Identity }
+  private readonly options: { push?: boolean; identity?: Identity; fetchIntervalSeconds?: number }
 
   /**
    * `options.identity` pins the author of every write from this source —
@@ -25,7 +25,7 @@ export class LocalGitSource implements RunSource {
    * surfaces omit it and write as `git config user.name/email`, so machine
    * bookkeeping and human decisions stay distinguishable at a glance.
    */
-  constructor(id: string, dir: string, options: { push?: boolean; identity?: Identity } = {}) {
+  constructor(id: string, dir: string, options: { push?: boolean; identity?: Identity; fetchIntervalSeconds?: number } = {}) {
     this.id = id
     this.dir = dir
     this.options = options
@@ -41,6 +41,39 @@ export class LocalGitSource implements RunSource {
 
   private runDir(slug: string): string {
     return `runs/${slug}`
+  }
+
+  /** Seconds between remote syncs, when this source is configured to poll. */
+  get fetchIntervalSeconds(): number | undefined {
+    return this.options.fetchIntervalSeconds
+  }
+
+  /**
+   * Pull remote state into this clone. Remote-tracking refs always update
+   * (listRuns already reads refs/remotes/*); existing local branches are
+   * fast-forwarded only when the same branch exists on origin, so a branch
+   * holding an unpushed decision commit is never clobbered — the decision's
+   * own push reconciles it. New remote branches are not materialized locally;
+   * writeState does that lazily on the first decision.
+   */
+  async syncFromRemote(): Promise<void> {
+    await this.git.run(['fetch', '--prune', 'origin'])
+    // Prefix patterns (no glob): `*` in for-each-ref doesn't cross `/`, and
+    // run branches live at refs/heads/run/<slug>.
+    const remoteBranches = new Set(
+      (await this.git.forEachRef(['refs/remotes/origin'])).map((r) => r.ref.replace('refs/remotes/origin/', '')),
+    )
+    const specs = (await this.git.forEachRef(['refs/heads']))
+      .map((l) => l.ref.replace('refs/heads/', ''))
+      .filter((b) => remoteBranches.has(b))
+      .map((b) => `refs/heads/${b}:refs/heads/${b}`)
+    if (specs.length === 0) return
+    try {
+      await this.git.run(['fetch', 'origin', ...specs])
+    } catch {
+      // Expected refusals: non-fast-forward (local unpushed work) and the
+      // checked-out branch. The remote-tracking refs above carry the news.
+    }
   }
 
   async listRuns(): Promise<RunRef[]> {

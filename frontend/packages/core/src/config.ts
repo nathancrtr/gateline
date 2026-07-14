@@ -11,7 +11,8 @@ const sourceEntrySchema = z.object({
   name: z.string().optional(),
   path: z.string(),
   push: z.boolean().optional().default(false),
-  fetch_interval: z.number().optional(),
+  /** Seconds between `git fetch`es of origin; unset = never poll. */
+  fetch_interval: z.number().positive().optional(),
 })
 
 const configSchema = z.object({
@@ -82,7 +83,7 @@ export async function loadSources(opts: {
       let id = entry.name ?? slugForPath(top)
       while (seen.has(id)) id = `${id}-2`
       seen.add(id)
-      sources.push(new LocalGitSource(id, top, { push: entry.push }))
+      sources.push(new LocalGitSource(id, path, { push: entry.push, fetchIntervalSeconds: entry.fetch_interval }))
     }
     if (sources.length === 0) {
       warnings.push(`config at ${configPath} yielded no usable sources; falling back to current repo`)

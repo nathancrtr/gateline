@@ -271,6 +271,21 @@ export async function isGitRepo(dir: string): Promise<boolean> {
   }
 }
 
+/**
+ * The work-tree toplevel containing `dir`, or null when `dir` is not inside
+ * one. Sources must be rooted here, never at a subdirectory: pathspec reads
+ * (`ls-tree`/`log -- <path>`) resolve relative to the cwd's prefix inside a
+ * work tree while `show(ref:path)` is root-relative, so a subdirectory
+ * source lists no artifacts and silently empties the inbox (#83).
+ */
+export async function repoToplevel(dir: string): Promise<string | null> {
+  try {
+    return await new Git(dir).toplevel()
+  } catch {
+    return null
+  }
+}
+
 export async function readFileIfExists(path: string): Promise<string | null> {
   try {
     return await readFile(path, 'utf8')

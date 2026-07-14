@@ -8,7 +8,7 @@ paused_reason: null # set when phase=paused: budget-exhausted | round-cap | esca
 
 budget:
   cost_limit_usd: 50 # exhaustion pauses the run; it never silently degrades
-  cost_spent_usd: 2.87 # derived: the sum of ledger[].cost_usd
+  cost_spent_usd: 3.97 # derived: the sum of ledger[].cost_usd
   ledger:
     # append-only, one entry per model invocation:
     #   {at, role, task, round, adapter, model,
@@ -73,6 +73,17 @@ budget:
         tokens_out: null,
         cost_usd: 0.18
       } # 37,218 tok combined; 1 deviation logged (AC1.1 literal grep vs ADR-3 verbatim bodies)
+    - {
+        at: 2026-07-14T00:42:07Z,
+        role: reviewer,
+        task: 02-agents-md-manifest-and-output,
+        round: 1,
+        adapter: claude-code,
+        model: anthropic/claude-fable-5,
+        tokens_in: null,
+        tokens_out: null,
+        cost_usd: 1.10
+      } # 45,769 tok combined; verdict escalate (F1 blocking, plan-traced)
 
 gates:
   # a gate entry is written ONLY by the named human.
@@ -110,4 +121,19 @@ escalations:
         write, content byte-identical. Finding: v0 operator must not change
         worktree isolation while a dispatch is in flight.",
       resolved: true
+    }
+  - {
+      at: 2026-07-14T00:42:07Z,
+      from_role: reviewer,
+      reason: "review-02 F1 (blocking, plan-traced): spec AC6.1's vendor grep
+        fails on the committed AGENTS.md — roles/historian.md's body references
+        the literal path .claude/agents/ and is included byte-verbatim per
+        ADR-3. Unfixable inside the task surface (roles/ frozen by R1/AC1.2;
+        body transforms barred by ADR-3). Plan Risk 3's 'roles are already
+        vendor-clean' premise is false. Human decision needed: (a) amend spec
+        AC6.1 to scope the grep to adapter-authored content, (b) reword
+        roles/historian.md on main as its own framework change (P2 hygiene)
+        and rebase the run, or (c) record a G2 waiver. F3/F4 (preamble) are
+        in-surface round-2 fixes held pending this decision.",
+      resolved: false
     }

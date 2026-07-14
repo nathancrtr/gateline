@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>candidate-a · run-artifacts — The Ledger</title>
+<!-- Candidate A "The Ledger" — screen: run-artifacts (run detail, artifacts tab).
+     Self-contained: no scripts, no external assets, no network requests.
+     States shown: populated (needs-you card with OPEN approve flow + burden
+     picker, packet links, task board, artifact rail with validation marks,
+     rendered artifact), malformed run-state banner, bounced no-approval
+     card, failing-contract artifact banner, CAS 409 conflict flash,
+     committed flash, empty, loading, error. -->
+<style>
+:root { color-scheme: light dark; }
+:root {
+  --ground: light-dark(#f6f3ea, #16140f);
+  --surface: light-dark(#fdfbf4, #1d1a14);
+  --raised: light-dark(#ece7d8, #262218);
+  --ink: light-dark(#211e16, #eae4d4);
+  --muted: light-dark(#575145, #a89f8a);
+  --faint: light-dark(#837c6a, #746c5a);
+  --line: light-dark(#ded7c4, #38321f);
+  --rule: light-dark(#211e16, #eae4d4);
+  --accent: light-dark(#1e4f8f, #92b4e3);
+  --accent-deep: light-dark(#153a6b, #6f97c9);
+  --ok: light-dark(#2f6b40, #86c28f);
+  --warn: light-dark(#8a5d0f, #d3a94e);
+  --bad: light-dark(#a03123, #e2836a);
+  --on-solid: light-dark(#fdfbf4, #16140f);
+  --wash-accent: light-dark(rgba(30,79,143,.07), rgba(146,180,227,.10));
+  --wash-ok: light-dark(rgba(47,107,64,.10), rgba(134,194,143,.13));
+  --wash-warn: light-dark(rgba(138,93,15,.10), rgba(211,169,78,.14));
+  --wash-bad: light-dark(rgba(160,49,35,.08), rgba(226,131,106,.12));
+  --shadow: light-dark(rgba(33,30,22,.16), rgba(0,0,0,.55));
+  --serif: 'Iowan Old Style','Palatino Linotype',Palatino,Georgia,'Times New Roman',serif;
+  --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --mono: ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+}
+* { box-sizing: border-box; margin: 0; }
+body { background: var(--ground); color: var(--ink); font: 14px/1.55 var(--sans); -webkit-font-smoothing: antialiased; padding: 0 32px 80px; }
+.sheet { max-width: 1080px; margin: 0 auto; }
+a { color: inherit; text-decoration: none; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+.proof { font: 10px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); padding: 10px 0 0; }
+.masthead { display: flex; align-items: baseline; gap: 26px; padding: 18px 0 10px; }
+.wordmark { font: 600 20px/1 var(--serif); }
+.wordmark small { display: block; font: 400 11px/1.5 var(--sans); color: var(--faint); }
+.mastnav { display: flex; gap: 22px; margin-left: 18px; }
+.mastnav a { font: 600 11px/1 var(--sans); letter-spacing: .13em; text-transform: uppercase; color: var(--muted); padding: 8px 2px 10px; border-bottom: 3px solid transparent; transition: color .12s ease-out, border-color .12s ease-out; }
+.mastnav a:hover { color: var(--ink); }
+.mastnav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+.stamp-count { display: inline-block; min-width: 18px; text-align: center; background: var(--accent); color: var(--on-solid); border-radius: 999px; font: 700 10.5px/1 var(--mono); padding: 3px 6px; margin-left: 6px; vertical-align: 1px; }
+.motto { margin-left: auto; font: italic 12px/1.45 var(--serif); color: var(--faint); text-align: right; }
+.rule-tt { border-top: 2.5px solid var(--rule); }
+.rule-tt::after { content: ''; display: block; border-top: 1px solid var(--rule); margin-top: 2px; }
+
+/* Run head: the slug is evidence, so it stays mono even at display size */
+.runhead { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin: 28px 0 22px; }
+.runhead h1 { font: 600 24px/1.1 var(--mono); letter-spacing: -.02em; }
+.runhead .right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+.ref { font: 11px var(--mono); color: var(--faint); }
+.phase { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); padding: 3px 8px; font: 600 11px/1 var(--mono); }
+.phase .dot { font-size: 8px; color: var(--warn); }
+.gates { display: inline-flex; gap: 4px; }
+.gcell { display: inline-flex; align-items: center; justify-content: center; gap: 3px; width: 36px; height: 22px; font: 11px var(--mono); background: var(--surface); border: 1px solid var(--line); }
+.gcell .gid { font-size: 9px; color: var(--faint); }
+.gcell.approved { border-color: var(--ok); color: var(--ok); }
+.gcell.pending { border-style: dashed; color: var(--faint); }
+.meter { display: inline-flex; align-items: center; gap: 8px; }
+.track { position: relative; width: 64px; height: 5px; background: var(--raised); overflow: hidden; }
+.fill { position: absolute; inset: 0 auto 0 0; background: var(--faint); }
+.num { font: 11.5px var(--mono); font-variant-numeric: tabular-nums; }
+.dim { color: var(--faint); }
+
+/* THE decision object. The only raised thing on the page: surface plate,
+   3px accent spine, hard offset shadow. Everything else lies flat. */
+.decision { background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent); box-shadow: 4px 4px 0 var(--shadow); padding: 18px 20px; margin-bottom: 26px; }
+.decision.bounced { border-left-color: var(--bad); }
+.dhead { display: flex; align-items: baseline; gap: 12px; }
+.dhead .title { font: 600 17px/1.3 var(--serif); }
+.dhead .age { margin-left: auto; }
+.age { flex-shrink: 0; border-radius: 999px; padding: 3px 9px; font: 11px/1 var(--mono); font-variant-numeric: tabular-nums; background: var(--raised); color: var(--muted); }
+.stamp { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; padding: 4px 7px; font: 700 10.5px/1 var(--mono); letter-spacing: .06em; }
+.stamp-gate { border: 1px solid var(--accent); color: var(--accent); background: var(--wash-accent); }
+.stamp-gate-bounced { border: 1px dashed var(--bad); color: var(--bad); background: var(--wash-bad); text-decoration: line-through; }
+.decision .detail { margin-top: 6px; font-size: 13px; color: var(--muted); max-width: 68ch; }
+.packet { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.packet a { border: 1px solid var(--line); background: var(--ground); padding: 3px 8px; font: 11px var(--mono); color: var(--muted); transition: color .12s ease-out, border-color .12s ease-out; }
+.packet a:hover { color: var(--accent); border-color: var(--accent); }
+.decide { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 14px; }
+.legendline { font: 600 10.5px/1 var(--sans); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+.burdenrow { display: flex; flex-wrap: wrap; gap: 8px; }
+.burden { display: flex; align-items: baseline; gap: 9px; border: 1px solid var(--line); background: var(--surface); padding: 8px 12px; font-size: 13px; cursor: pointer; transition: border-color .12s ease-out; }
+.burden:hover { border-color: var(--accent); }
+.burden .key { font: 11px var(--mono); color: var(--faint); }
+.burden .hint { font-size: 11.5px; color: var(--muted); margin-left: 6px; }
+.burden.on { border: 2px solid var(--accent); background: var(--wash-accent); font-weight: 600; color: var(--accent); padding: 7px 11px; }
+.kbd-focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+textarea.notes { width: 100%; margin-top: 12px; border: 1px solid var(--line); background: var(--ground); color: var(--ink); font: 13px/1.5 var(--sans); padding: 9px 11px; resize: vertical; }
+textarea.notes::placeholder { color: var(--faint); }
+.btnrow { display: flex; gap: 8px; margin-top: 12px; }
+.btn { font: 600 13px/1 var(--sans); padding: 9px 15px; border: 1px solid var(--line); background: var(--surface); color: var(--muted); cursor: pointer; transition: color .12s ease-out, border-color .12s ease-out, opacity .12s ease-out; }
+.btn:hover { color: var(--ink); border-color: var(--accent); }
+.btn-primary { background: var(--accent); border: 1px solid var(--accent); border-bottom: 3px solid var(--accent-deep); color: var(--on-solid); padding-bottom: 7px; }
+.btn-primary:hover { opacity: .92; color: var(--on-solid); }
+.keyhint { font: 11px var(--mono); color: var(--faint); align-self: center; margin-left: 6px; }
+.bounceline { font-size: 12.5px; font-weight: 600; color: var(--bad); }
+.problems { list-style: none; padding: 0; margin-top: 8px; }
+.problems li { font-size: 12px; font-weight: 600; color: var(--bad); }
+.flash { padding: 9px 12px; font-size: 12.5px; font-weight: 600; margin-bottom: 12px; border-left: 3px solid; }
+.flash.ok { background: var(--wash-ok); border-color: var(--ok); color: var(--ok); }
+.flash.conflict { background: var(--wash-warn); border-color: var(--warn); color: var(--warn); }
+.flash.err { background: var(--wash-bad); border-color: var(--bad); color: var(--bad); }
+
+/* Task board: printed tallies, flat */
+.tasks { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 30px; }
+.task { display: inline-flex; align-items: center; gap: 9px; border: 1px solid var(--line); background: var(--surface); padding: 5px 10px; font: 11.5px var(--mono); }
+.task .st-done { color: var(--ok); }
+.task .st-doing { color: var(--muted); }
+.task .rounds { color: var(--faint); font-variant-numeric: tabular-nums; }
+.task .rounds.hot { color: var(--bad); font-weight: 700; }
+
+/* Tab strip: same grammar as the masthead nav */
+.tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--rule); margin: 34px 0 20px; }
+.tabs a { font: 600 11px/1 var(--sans); letter-spacing: .13em; text-transform: uppercase; color: var(--muted); padding: 8px 2px 10px; border-bottom: 3px solid transparent; margin-bottom: -1px; transition: color .12s ease-out; }
+.tabs a:hover { color: var(--ink); }
+.tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+
+/* Artifact rail + evidence plate */
+.split { display: flex; gap: 26px; align-items: flex-start; }
+.rail { width: 230px; flex-shrink: 0; }
+.rail ul { list-style: none; padding: 0; }
+.rail a { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 6px 9px; font: 11.5px var(--mono); color: var(--muted); border-left: 2px solid transparent; transition: color .12s ease-out, background .12s ease-out; }
+.rail a:hover { background: var(--wash-accent); color: var(--ink); }
+.rail a.current { background: var(--wash-accent); color: var(--accent); font-weight: 700; border-left-color: var(--accent); }
+.vmark-ok { font: 11px var(--mono); color: var(--ok); }
+.vmark-bad { font: 700 11px var(--mono); color: var(--bad); }
+.plate { min-width: 0; flex: 1; background: var(--surface); border: 1px solid var(--line); padding: 26px 30px; }
+.contractfail { background: var(--wash-bad); border-left: 3px solid var(--bad); color: var(--bad); font-size: 12px; font-weight: 600; padding: 8px 11px; margin-bottom: 18px; }
+
+/* Rendered artifact prose: serif headings, capped measure, quiet rules */
+.prose { max-width: 72ch; font-size: 14.5px; }
+.prose h2 { font: 600 21px/1.2 var(--serif); margin-bottom: 14px; }
+.prose h3 { font: 600 16px/1.3 var(--serif); margin: 22px 0 8px; padding-bottom: 5px; border-bottom: 1px solid var(--line); }
+.prose p { margin: 8px 0; }
+.prose ul { margin: 8px 0 8px 22px; }
+.prose li { margin: 4px 0; }
+.prose li::marker { color: var(--faint); }
+.prose code { font: 12px var(--mono); background: var(--raised); padding: 1px 4px; }
+.prose .chk { font: 12px var(--mono); color: var(--muted); }
+
+/* Malformed run-state banner: the run page's loudest object when present */
+.malformed { background: var(--wash-bad); border: 1px solid var(--bad); border-left: 4px solid var(--bad); padding: 14px 16px; }
+.malformed .head { font: 700 14px/1.3 var(--serif); color: var(--bad); }
+.malformed .why { margin-top: 4px; font-size: 12.5px; color: var(--muted); }
+.malformed pre { margin-top: 10px; background: var(--surface); border: 1px solid var(--line); padding: 10px 12px; font: 11.5px/1.6 var(--mono); overflow-x: auto; }
+
+.sketches { margin-top: 64px; }
+.sect-head { border-top: 2px solid var(--rule); padding-top: 8px; display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+.kicker { font: 600 10.5px/1 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.sect-head .note { font: italic 12.5px var(--serif); color: var(--muted); }
+.sketchgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+.sketch { border: 1px dashed var(--line); padding: 14px; }
+.sketch > .kicker { display: block; margin-bottom: 12px; color: var(--faint); }
+.status { text-align: center; padding: 34px 18px; font-size: 13px; color: var(--muted); }
+.status.bad { color: var(--bad); }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <p class="proof">candidate-a · the ledger · screen: run-artifacts · states: populated + open decide / malformed / bounced / flashes / empty / loading / error</p>
+
+  <div class="masthead">
+    <div class="wordmark">Gate<small>pipeline decisions</small></div>
+    <nav class="mastnav">
+      <a href="#inbox">Inbox<span class="stamp-count">7</span></a>
+      <a href="#portfolio">Portfolio</a>
+      <a href="#metrics">Metrics</a>
+    </nav>
+    <p class="motto">The repo is the database.<br>Every view renders git.</p>
+  </div>
+  <div class="rule-tt"></div>
+
+  <div class="runhead">
+    <h1>wordfreq</h1>
+    <span class="phase"><span class="dot">●</span>integrate</span>
+    <span class="gates">
+      <span class="gcell approved"><span class="gid">0</span>✓</span>
+      <span class="gcell approved"><span class="gid">1</span>✓</span>
+      <span class="gcell pending"><span class="gid">2</span>·</span>
+      <span class="gcell pending"><span class="gid">3</span>·</span>
+    </span>
+    <span class="right">
+      <span class="meter" title="$0.00 of $5.00"><span class="track"><span class="fill" style="width:4%"></span></span><span class="num dim">unmetered</span></span>
+      <span class="ref" title="read at run/wordfreq">agentic-sandbox · run/wordfreq @ 41c9e2d</span>
+    </span>
+  </div>
+
+  <!-- The pending decision: approve mode open, burden picker live -->
+  <section class="decision" aria-label="pending decision">
+    <div class="dhead">
+      <span class="stamp stamp-gate">G2</span>
+      <span class="title">G2 · integration packet ready</span>
+      <span class="age">waiting 1h</span>
+    </div>
+    <p class="detail">4 tasks verified across 2 review rounds max — verification-report.md pins every acceptance criterion with pasted evidence; the full diff is one tab over.</p>
+    <div class="packet">
+      <a href="#a">spec.md</a><a href="#a">plan.md</a><a href="#a">review-04.md</a><a href="#a">verification-report.md</a><a href="#a">state.yaml</a>
+    </div>
+    <div class="decide">
+      <p class="legendline">How much work was this review? (recorded with the approval)</p>
+      <div class="burdenrow">
+        <label class="burden"><span class="key">1</span><span>Confirmation<span class="hint">looked right as delivered</span></span></label>
+        <label class="burden on kbd-focus"><span class="key">2</span><span>Light correction<span class="hint">approved, notes attached</span></span></label>
+        <label class="burden"><span class="key">3</span><span>Heavy correction<span class="hint">took real work to accept</span></span></label>
+      </div>
+      <textarea class="notes" rows="2">Verifier evidence checked against AC3.2 by hand; counting rule holds on the em-dash corpus. Note the budget ledger was never updated — carry to retro.</textarea>
+      <div class="btnrow">
+        <button class="btn btn-primary">Approve G2</button>
+        <button class="btn">Cancel</button>
+        <span class="keyhint">a approve · x decline · 1/2/3 burden · esc close</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="tasks" aria-label="task board">
+    <span class="task">01-core-logic <span class="st-done">done</span> <span class="rounds">⟲1</span></span>
+    <span class="task">02-cli-shell <span class="st-done">done</span> <span class="rounds">⟲1</span></span>
+    <span class="task">03-unit-tests <span class="st-done">done</span> <span class="rounds">⟲2</span></span>
+    <span class="task">04-cli-tests <span class="st-done">done</span> <span class="rounds">⟲2</span></span>
+  </section>
+
+  <nav class="tabs">
+    <a href="#artifacts" aria-current="page">Artifacts</a>
+    <a href="#diff">Diff</a>
+    <a href="#history">History</a>
+  </nav>
+
+  <div class="split">
+    <nav class="rail" aria-label="artifacts">
+      <ul>
+        <li><a href="#a">intent-brief.md <span class="vmark-ok">✓</span></a></li>
+        <li><a href="#a" class="current">spec.md <span class="vmark-ok">✓</span></a></li>
+        <li><a href="#a">plan.md <span class="vmark-ok">✓</span></a></li>
+        <li><a href="#a">review-01.md <span class="vmark-ok">✓</span></a></li>
+        <li><a href="#a">review-02.md <span class="vmark-ok">✓</span></a></li>
+        <li><a href="#a">review-03.md <span class="vmark-bad" title="missing: Verdict">✕</span></a></li>
+        <li><a href="#a">review-04.md <span class="vmark-ok">✓</span></a></li>
+        <li><a href="#a">verification-report.md <span class="vmark-ok">✓</span></a></li>
+        <li><a href="#a">state.yaml</a></li>
+      </ul>
+    </nav>
+    <article class="plate">
+      <div class="prose">
+        <h2>Specification: wordfreq CLI</h2>
+        <h3>Requirements</h3>
+        <p><strong>R1 — Counting rule.</strong> A word is a maximal run of letters and apostrophes, lowercased before counting; hyphens split. Ties in frequency order lexicographically ascending.</p>
+        <p><strong>R2 — Input surface.</strong> Reads UTF-8 text from stdin or from each path argument in order; a missing path is a hard error naming the path, exit code 2.</p>
+        <ul>
+          <li><span class="chk">[x]</span> AC1.1 — <code>don't</code> counts as one word; <code>well-known</code> counts as two.</li>
+          <li><span class="chk">[x]</span> AC1.2 — output is <code>count&#8201;word</code> per line, count descending, top N per <code>--top</code>.</li>
+          <li><span class="chk">[x]</span> AC2.1 — empty input produces empty output and exit code 0.</li>
+        </ul>
+        <h3>Assumptions</h3>
+        <p><strong>ASSUMPTION:</strong> the brief says “common words” without a stoplist → resolved as no stoplist; the count is honest and filtering is the caller's job.</p>
+      </div>
+    </article>
+  </div>
+
+  <section class="sketches">
+    <div class="sect-head"><span class="kicker">State sketches</span><span class="note">the selected burden tile above carries the live focus ring; tab order runs masthead → run head → decision card → tasks → tabs → rail → plate</span></div>
+    <div class="sketchgrid">
+      <div class="sketch">
+        <span class="kicker">Malformed run state — banner above everything, nothing reviewable</span>
+        <div class="malformed">
+          <p class="head">Malformed run state</p>
+          <p class="why">state.yaml: mapping values are not allowed here at line 12, column 18. Fix the file on run/historian-2026-07-12 — no decision affordance renders while the packet fails to parse.</p>
+          <pre>gates:
+  G0: {approved: true, by: nthncrtr
+       at: 2026-07-12T21:04:11Z}</pre>
+        </div>
+      </div>
+      <div class="sketch">
+        <span class="kicker">Bounced gate — no approval offered</span>
+        <div class="decision bounced" style="margin-bottom:0; box-shadow: 3px 3px 0 var(--shadow)">
+          <div class="dhead">
+            <span class="stamp stamp-gate-bounced">G0</span>
+            <span class="title">G0 · spec ready for review</span>
+            <span class="age">waiting 4d</span>
+          </div>
+          <ul class="problems">
+            <li>✕ spec.md missing required section: Out of scope</li>
+          </ul>
+          <div class="decide">
+            <p class="bounceline">Bounced — fix the artifacts (or the contract) and the card returns; no approval is offered for a malformed packet.</p>
+          </div>
+        </div>
+      </div>
+      <div class="sketch">
+        <span class="kicker">Decide outcomes — committed / CAS 409 / error</span>
+        <p class="flash ok">Approved G2 with light correction — committed 8f3c1a2d90 (state.yaml updated on run/wordfreq)</p>
+        <p class="flash conflict">The run moved while you were deciding — re-read and decide again. (state.yaml changed at 5b07e94)</p>
+        <p class="flash err">Decision rejected: gate G2 already decided by nthncrtr at 2026-07-14T09:12:40Z</p>
+      </div>
+      <div class="sketch">
+        <span class="kicker">Artifact fails its contract — renders, but marked</span>
+        <div class="plate" style="padding:16px">
+          <p class="contractfail">Fails its review-report contract — missing: Verdict</p>
+          <p style="font: 12px var(--mono); color: var(--muted)">review-03.md renders read-only; the gate card upstream is bounced until the section lands.</p>
+        </div>
+      </div>
+      <div class="sketch">
+        <span class="kicker">Empty — no artifacts yet</span>
+        <p class="status">No artifacts yet. The analyst's spec.md is the first thing that will appear here.</p>
+      </div>
+      <div class="sketch">
+        <span class="kicker">Loading / error</span>
+        <p class="status">Reading run…</p>
+        <p class="status bad">Could not load run: 404 — no state.yaml at runs/wordfreq on run/wordfreq</p>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

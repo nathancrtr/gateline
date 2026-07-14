@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>candidate-a · run-history — The Ledger</title>
+<!-- Candidate A "The Ledger" — screen: run-history (run detail, history tab).
+     Self-contained: no scripts, no external assets, no network requests.
+     States shown: populated timeline with phase-transition markers,
+     no-state-history empty, loading, error. -->
+<style>
+:root { color-scheme: light dark; }
+:root {
+  --ground: light-dark(#f6f3ea, #16140f);
+  --surface: light-dark(#fdfbf4, #1d1a14);
+  --raised: light-dark(#ece7d8, #262218);
+  --ink: light-dark(#211e16, #eae4d4);
+  --muted: light-dark(#575145, #a89f8a);
+  --faint: light-dark(#837c6a, #746c5a);
+  --line: light-dark(#ded7c4, #38321f);
+  --rule: light-dark(#211e16, #eae4d4);
+  --accent: light-dark(#1e4f8f, #92b4e3);
+  --ok: light-dark(#2f6b40, #86c28f);
+  --warn: light-dark(#8a5d0f, #d3a94e);
+  --bad: light-dark(#a03123, #e2836a);
+  --on-solid: light-dark(#fdfbf4, #16140f);
+  --wash-accent: light-dark(rgba(30,79,143,.07), rgba(146,180,227,.10));
+  --serif: 'Iowan Old Style','Palatino Linotype',Palatino,Georgia,'Times New Roman',serif;
+  --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --mono: ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+}
+* { box-sizing: border-box; margin: 0; }
+body { background: var(--ground); color: var(--ink); font: 14px/1.55 var(--sans); -webkit-font-smoothing: antialiased; padding: 0 32px 80px; }
+.sheet { max-width: 1080px; margin: 0 auto; }
+a { color: inherit; text-decoration: none; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+.proof { font: 10px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); padding: 10px 0 0; }
+.masthead { display: flex; align-items: baseline; gap: 26px; padding: 18px 0 10px; }
+.wordmark { font: 600 20px/1 var(--serif); }
+.wordmark small { display: block; font: 400 11px/1.5 var(--sans); color: var(--faint); }
+.mastnav { display: flex; gap: 22px; margin-left: 18px; }
+.mastnav a { font: 600 11px/1 var(--sans); letter-spacing: .13em; text-transform: uppercase; color: var(--muted); padding: 8px 2px 10px; border-bottom: 3px solid transparent; transition: color .12s ease-out, border-color .12s ease-out; }
+.mastnav a:hover { color: var(--ink); }
+.stamp-count { display: inline-block; min-width: 18px; text-align: center; background: var(--accent); color: var(--on-solid); border-radius: 999px; font: 700 10.5px/1 var(--mono); padding: 3px 6px; margin-left: 6px; vertical-align: 1px; }
+.motto { margin-left: auto; font: italic 12px/1.45 var(--serif); color: var(--faint); text-align: right; }
+.rule-tt { border-top: 2.5px solid var(--rule); }
+.rule-tt::after { content: ''; display: block; border-top: 1px solid var(--rule); margin-top: 2px; }
+.runhead { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin: 28px 0 22px; }
+.runhead h1 { font: 600 24px/1.1 var(--mono); letter-spacing: -.02em; }
+.runhead .right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+.ref { font: 11px var(--mono); color: var(--faint); }
+.phase { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); padding: 3px 8px; font: 600 11px/1 var(--mono); }
+.phase .dot { font-size: 8px; color: var(--ok); }
+.gates { display: inline-flex; gap: 4px; }
+.gcell { display: inline-flex; align-items: center; justify-content: center; gap: 3px; width: 36px; height: 22px; font: 11px var(--mono); background: var(--surface); border: 1px solid var(--line); }
+.gcell .gid { font-size: 9px; color: var(--faint); }
+.gcell.approved { border-color: var(--ok); color: var(--ok); }
+.tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--rule); margin: 10px 0 22px; }
+.tabs a { font: 600 11px/1 var(--sans); letter-spacing: .13em; text-transform: uppercase; color: var(--muted); padding: 8px 2px 10px; border-bottom: 3px solid transparent; margin-bottom: -1px; transition: color .12s ease-out; }
+.tabs a:hover { color: var(--ink); }
+.tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+
+/* The register: newest first, ruled rows. Phase transitions are the
+   structure of a run's story, so they get a heavier rule and a printed
+   accent stamp — visible before any text is read. */
+.register { list-style: none; padding: 0; border-top: 2px solid var(--rule); }
+.entry { display: flex; align-items: baseline; gap: 14px; padding: 9px 8px; border-bottom: 1px solid var(--line); }
+.entry.turn { border-top: 2px solid var(--accent); }
+.when { width: 108px; flex-shrink: 0; font: 11px var(--mono); font-variant-numeric: tabular-nums; color: var(--faint); }
+.subject { min-width: 0; flex: 1; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.turnstamp { flex-shrink: 0; border: 1px solid var(--accent); color: var(--accent); background: var(--wash-accent); font: 700 10.5px/1 var(--mono); padding: 3px 7px; }
+.turnstamp.done { border-color: var(--ok); color: var(--ok); background: transparent; }
+.who { width: 84px; flex-shrink: 0; text-align: right; font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.oid { flex-shrink: 0; font: 11px var(--mono); color: var(--faint); }
+
+.sketches { margin-top: 64px; }
+.sect-head { border-top: 2px solid var(--rule); padding-top: 8px; display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+.kicker { font: 600 10.5px/1 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.sect-head .note { font: italic 12.5px var(--serif); color: var(--muted); }
+.sketchgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+.sketch { border: 1px dashed var(--line); padding: 14px; }
+.sketch .kicker { display: block; margin-bottom: 12px; color: var(--faint); }
+.status { text-align: center; padding: 34px 18px; font-size: 13px; color: var(--muted); }
+.status.bad { color: var(--bad); }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <p class="proof">candidate-a · the ledger · screen: run-history · states: populated / no-history / loading / error</p>
+
+  <div class="masthead">
+    <div class="wordmark">Gate<small>pipeline decisions</small></div>
+    <nav class="mastnav">
+      <a href="#inbox">Inbox<span class="stamp-count">7</span></a>
+      <a href="#portfolio">Portfolio</a>
+      <a href="#metrics">Metrics</a>
+    </nav>
+    <p class="motto">The repo is the database.<br>Every view renders git.</p>
+  </div>
+  <div class="rule-tt"></div>
+
+  <div class="runhead">
+    <h1>dupefind</h1>
+    <span class="phase"><span class="dot">●</span>done</span>
+    <span class="gates">
+      <span class="gcell approved"><span class="gid">0</span>✓</span>
+      <span class="gcell approved"><span class="gid">1</span>✓</span>
+      <span class="gcell approved"><span class="gid">2</span>✓</span>
+      <span class="gcell approved"><span class="gid">3</span>✓</span>
+    </span>
+    <span class="right"><span class="ref">agentic-sandbox · run/dupefind @ 9d20c4e</span></span>
+  </div>
+
+  <nav class="tabs">
+    <a href="#artifacts">Artifacts</a>
+    <a href="#diff">Diff</a>
+    <a href="#history" aria-current="page">History</a>
+  </nav>
+
+  <ol class="register">
+    <li class="entry turn">
+      <span class="when">Jul 13, 04:24</span>
+      <span class="subject">dupefind: G2 + G3 approved — full packet accepted; TOCTOU minors verifier-reproduced as accepted races</span>
+      <span class="turnstamp done">→ done</span>
+      <span class="who">nthncrtr</span>
+      <span class="oid">9d20c4e</span>
+    </li>
+    <li class="entry">
+      <span class="when">Jul 13, 04:21</span>
+      <span class="subject">dupefind: verification-report.md — every AC exercised with pasted evidence</span>
+      <span class="who">nthncrtr</span>
+      <span class="oid">e51ab90</span>
+    </li>
+    <li class="entry">
+      <span class="when">Jul 13, 04:09</span>
+      <span class="subject">dupefind: review-03 verify round — 03-cli-tests accepted at round 2</span>
+      <span class="who">nthncrtr</span>
+      <span class="oid">7c30d1f</span>
+    </li>
+    <li class="entry">
+      <span class="when">Jul 13, 04:07</span>
+      <span class="subject">dupefind: 03-cli-tests round 2 — response to review-03 F1–F3</span>
+      <span class="who">nthncrtr</span>
+      <span class="oid">b8e2261</span>
+    </li>
+    <li class="entry">
+      <span class="when">Jul 13, 04:05</span>
+      <span class="subject">dupefind: 02-unit-tests round 2 — response to review-02 F1–F5, pinning test added</span>
+      <span class="who">nthncrtr</span>
+      <span class="oid">3fd90aa</span>
+    </li>
+    <li class="entry">
+      <span class="when">Jul 13, 03:43</span>
+      <span class="subject">dupefind: 01-dupefind-cli — scan, size-then-hash grouping, CLI shell</span>
+      <span class="who">nthncrtr</span>
+      <span class="oid">5a1c777</span>
+    </li>
+    <li class="entry turn">
+      <span class="when">Jul 13, 03:36</span>
+      <span class="subject">dupefind: G1 approved — all 8 ADRs accepted incl. ADR-6 LBYL departure</span>
+      <span class="turnstamp">→ implement</span>
+      <span class="who">nthncrtr</span>
+      <span class="oid">0e94b12</span>
+    </li>
+    <li class="entry">
+      <span class="when">Jul 13, 03:13</span>
+      <span class="subject">dupefind: plan.md + tasks/ — 3 tasks, conflict-free file contact surfaces</span>
+      <span class="who">nthncrtr</span>
+      <span class="oid">c2f68d3</span>
+    </li>
+    <li class="entry turn">
+      <span class="when">Jul 13, 03:03</span>
+      <span class="subject">dupefind: G0 approved against amended spec — assumption 2 vetoed (no override flag)</span>
+      <span class="turnstamp">→ plan</span>
+      <span class="who">nthncrtr</span>
+      <span class="oid">88a01be</span>
+    </li>
+    <li class="entry">
+      <span class="when">Jul 13, 02:54</span>
+      <span class="subject">dupefind: spec.md from intent-brief.md — 6 assumptions surfaced for G0</span>
+      <span class="who">nthncrtr</span>
+      <span class="oid">14d7e09</span>
+    </li>
+  </ol>
+
+  <section class="sketches">
+    <div class="sect-head"><span class="kicker">State sketches</span><span class="note">phase turns carry a 2px accent rule + printed stamp — scannable without reading subjects</span></div>
+    <div class="sketchgrid">
+      <div class="sketch">
+        <span class="kicker">Empty — no state history</span>
+        <p class="status">No state history at this ref.</p>
+      </div>
+      <div class="sketch">
+        <span class="kicker">Loading</span>
+        <p class="status">Reading run…</p>
+      </div>
+      <div class="sketch">
+        <span class="kicker">Error</span>
+        <p class="status bad">Could not load run: git log failed — shallow clone has no state.yaml history</p>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

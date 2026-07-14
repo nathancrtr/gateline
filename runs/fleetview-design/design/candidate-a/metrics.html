@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>candidate-a · metrics — The Ledger</title>
+<!-- Candidate A "The Ledger" — screen: metrics.
+     Self-contained: no scripts, no external assets, no network requests.
+     States shown: populated (gate table + approval meter with 90% tick and
+     over-triggering flag + burden mix + latency, rounds distribution,
+     budget honesty incl. "never updated"), no-decisions empty, loading, error. -->
+<style>
+:root { color-scheme: light dark; }
+:root {
+  --ground: light-dark(#f6f3ea, #16140f);
+  --surface: light-dark(#fdfbf4, #1d1a14);
+  --raised: light-dark(#ece7d8, #262218);
+  --ink: light-dark(#211e16, #eae4d4);
+  --muted: light-dark(#575145, #a89f8a);
+  --faint: light-dark(#837c6a, #746c5a);
+  --line: light-dark(#ded7c4, #38321f);
+  --rule: light-dark(#211e16, #eae4d4);
+  --accent: light-dark(#1e4f8f, #92b4e3);
+  --ok: light-dark(#2f6b40, #86c28f);
+  --warn: light-dark(#8a5d0f, #d3a94e);
+  --bad: light-dark(#a03123, #e2836a);
+  --on-solid: light-dark(#fdfbf4, #16140f);
+  --wash-accent: light-dark(rgba(30,79,143,.07), rgba(146,180,227,.10));
+  --wash-warn: light-dark(rgba(138,93,15,.10), rgba(211,169,78,.14));
+  --ramp1: light-dark(#cfdcee, #33517c);
+  --ramp2: light-dark(#6f94c4, #6d94c6);
+  --ramp3: light-dark(#1e4f8f, #b3cbea);
+  --unrec: light-dark(#d9d3c2, #3d3828);
+  --serif: 'Iowan Old Style','Palatino Linotype',Palatino,Georgia,'Times New Roman',serif;
+  --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --mono: ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+}
+* { box-sizing: border-box; margin: 0; }
+body { background: var(--ground); color: var(--ink); font: 14px/1.55 var(--sans); -webkit-font-smoothing: antialiased; padding: 0 32px 80px; }
+.sheet { max-width: 980px; margin: 0 auto; }
+a { color: inherit; text-decoration: none; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+.proof { font: 10px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); padding: 10px 0 0; }
+.masthead { display: flex; align-items: baseline; gap: 26px; padding: 18px 0 10px; }
+.wordmark { font: 600 20px/1 var(--serif); }
+.wordmark small { display: block; font: 400 11px/1.5 var(--sans); color: var(--faint); }
+.mastnav { display: flex; gap: 22px; margin-left: 18px; }
+.mastnav a { font: 600 11px/1 var(--sans); letter-spacing: .13em; text-transform: uppercase; color: var(--muted); padding: 8px 2px 10px; border-bottom: 3px solid transparent; transition: color .12s ease-out, border-color .12s ease-out; }
+.mastnav a:hover { color: var(--ink); }
+.mastnav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+.stamp-count { display: inline-block; min-width: 18px; text-align: center; background: var(--accent); color: var(--on-solid); border-radius: 999px; font: 700 10.5px/1 var(--mono); padding: 3px 6px; margin-left: 6px; vertical-align: 1px; }
+.motto { margin-left: auto; font: italic 12px/1.45 var(--serif); color: var(--faint); text-align: right; }
+.rule-tt { border-top: 2.5px solid var(--rule); }
+.rule-tt::after { content: ''; display: block; border-top: 1px solid var(--rule); margin-top: 2px; }
+.pagehead { display: flex; align-items: flex-end; gap: 16px; margin: 30px 0 6px; }
+.pagehead h1 { font: 600 30px/1.1 var(--serif); letter-spacing: -.005em; }
+.pagehead .aside { margin-left: auto; text-align: right; font: italic 12.5px var(--serif); color: var(--muted); }
+
+/* Sections open with a ruled head: 2px ink rule, small caps, serif gloss.
+   Metrics is a scanning surface — table rhythm is compact (10px rows). */
+.sect { margin-top: 42px; }
+.sect-head { border-top: 2px solid var(--rule); padding-top: 8px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.kicker { font: 600 10.5px/1 var(--sans); letter-spacing: .14em; text-transform: uppercase; }
+.sect-head .note { font: italic 12.5px var(--serif); color: var(--muted); max-width: 66ch; }
+.scroller { overflow-x: auto; margin-top: 14px; }
+table.ledger { width: 100%; min-width: 700px; border-collapse: collapse; font-size: 12.5px; }
+.ledger thead th { font: 600 10.5px/1.2 var(--sans); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.ledger thead th.num, .ledger td.num { text-align: right; }
+.ledger td { padding: 10px; border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
+.num { font: 11.5px var(--mono); font-variant-numeric: tabular-nums; }
+.gid { font: 700 11.5px var(--mono); }
+.dim { color: var(--faint); }
+.mutedtx { color: var(--muted); }
+
+/* Approval meter: thin track, 90% threshold tick, warn fill + printed
+   label past the tick — never color alone. */
+.meter { display: inline-flex; align-items: center; gap: 8px; }
+.track { position: relative; width: 140px; height: 6px; background: var(--raised); }
+.fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); }
+.fill.warned { background: var(--warn); }
+.tick { position: absolute; top: -3px; bottom: -3px; left: 90%; width: 1.5px; background: var(--ink); }
+.flag { border: 1px solid var(--warn); background: var(--wash-warn); color: var(--warn); font: 700 10.5px/1 var(--mono); padding: 3px 6px; }
+
+/* Burden mix: ordered sequential ramp, 2px paper gaps, square segments */
+.mix { display: inline-flex; width: 150px; height: 13px; gap: 2px; }
+.mix span { height: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 10px; font-size: 11.5px; color: var(--muted); }
+.legend .sw { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; }
+
+/* Rounds distribution: horizontal count strips on the raised track */
+.dist { max-width: 460px; margin-top: 14px; display: flex; flex-direction: column; gap: 7px; }
+.dist .drow { display: flex; align-items: center; gap: 12px; }
+.dist .dlabel { width: 58px; text-align: right; font: 11.5px var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); flex-shrink: 0; }
+.dist .dtrack { flex: 1; height: 13px; background: var(--raised); }
+.dist .dfill { height: 100%; background: var(--accent); }
+.dist .dfill.capped { background: var(--bad); }
+.dist .dnum { width: 26px; font: 11.5px var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); }
+
+.okline { color: var(--ok); font-size: 12px; }
+.warnline { color: var(--warn); font-size: 12px; font-weight: 600; }
+
+.sketches { margin-top: 64px; }
+.sketchgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; margin-top: 14px; }
+.sketch { border: 1px dashed var(--line); padding: 14px; }
+.sketch .kicker { display: block; margin-bottom: 12px; color: var(--faint); }
+.centered { text-align: center; padding: 40px 18px; }
+.centered .lede { font: 600 17px/1.3 var(--serif); }
+.centered .sub { margin-top: 5px; font-size: 12px; color: var(--muted); }
+.centered .orn { display: block; font: 18px var(--serif); color: var(--faint); margin-bottom: 10px; }
+.status { text-align: center; padding: 40px 18px; font-size: 13px; color: var(--muted); }
+.status.bad { color: var(--bad); }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <p class="proof">candidate-a · the ledger · screen: metrics · states: populated / no-decisions / loading / error</p>
+
+  <div class="masthead">
+    <div class="wordmark">Gate<small>pipeline decisions</small></div>
+    <nav class="mastnav">
+      <a href="#inbox">Inbox<span class="stamp-count">7</span></a>
+      <a href="#portfolio">Portfolio</a>
+      <a href="#metrics" aria-current="page">Metrics</a>
+    </nav>
+    <p class="motto">The repo is the database.<br>Every view renders git.</p>
+  </div>
+  <div class="rule-tt"></div>
+
+  <div class="pagehead">
+    <h1>Metrics</h1>
+    <p class="aside">computed from state.yaml git history — nothing is logged separately</p>
+  </div>
+
+  <section class="sect">
+    <div class="sect-head">
+      <span class="kicker">Gate decisions</span>
+      <span class="note">Sustained approval above 90% means the gate is over-triggering (or reviews have gone reflexive) — its scope should move down the tier ladder.</span>
+    </div>
+    <div class="scroller">
+      <table class="ledger">
+        <thead>
+          <tr>
+            <th>Gate</th><th class="num">Decisions</th><th>Approval rate</th><th>Burden mix</th><th class="num">Median latency</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="gid">G0</td>
+            <td class="num">6</td>
+            <td><span class="meter"><span class="track"><span class="fill" style="width:83%"></span><span class="tick" title="90% over-triggering threshold"></span></span><span class="num">83%</span></span></td>
+            <td><span class="mix" role="img" aria-label="confirmation: 3, light correction: 2, unrecorded: 1">
+              <span style="background:var(--ramp1); flex-grow:3" title="confirmation: 3 of 6"></span>
+              <span style="background:var(--ramp2); flex-grow:2" title="light correction: 2 of 6"></span>
+              <span style="background:var(--unrec); flex-grow:1" title="unrecorded: 1 of 6"></span>
+            </span></td>
+            <td class="num mutedtx">41m</td>
+          </tr>
+          <tr>
+            <td class="gid">G1</td>
+            <td class="num">5</td>
+            <td><span class="meter"><span class="track"><span class="fill warned" style="width:100%"></span><span class="tick" title="90% over-triggering threshold"></span></span><span class="num">100%</span><span class="flag" title="sustained over 90% approval — consider moving this gate down the tier ladder">⚠ OVER-TRIGGERING?</span></span></td>
+            <td><span class="mix" role="img" aria-label="confirmation: 2, light correction: 1, heavy correction: 1, unrecorded: 1">
+              <span style="background:var(--ramp1); flex-grow:2" title="confirmation: 2 of 5"></span>
+              <span style="background:var(--ramp2); flex-grow:1" title="light correction: 1 of 5"></span>
+              <span style="background:var(--ramp3); flex-grow:1" title="heavy correction: 1 of 5"></span>
+              <span style="background:var(--unrec); flex-grow:1" title="unrecorded: 1 of 5"></span>
+            </span></td>
+            <td class="num mutedtx">2h</td>
+          </tr>
+          <tr>
+            <td class="gid">G2</td>
+            <td class="num">5</td>
+            <td><span class="meter"><span class="track"><span class="fill" style="width:80%"></span><span class="tick" title="90% over-triggering threshold"></span></span><span class="num">80%</span></span></td>
+            <td><span class="mix" role="img" aria-label="confirmation: 2, light correction: 1, heavy correction: 1, unrecorded: 1">
+              <span style="background:var(--ramp1); flex-grow:2" title="confirmation: 2 of 5"></span>
+              <span style="background:var(--ramp2); flex-grow:1" title="light correction: 1 of 5"></span>
+              <span style="background:var(--ramp3); flex-grow:1" title="heavy correction: 1 of 5"></span>
+              <span style="background:var(--unrec); flex-grow:1" title="unrecorded: 1 of 5"></span>
+            </span></td>
+            <td class="num mutedtx">3h</td>
+          </tr>
+          <tr>
+            <td class="gid">G3</td>
+            <td class="num">3</td>
+            <td><span class="meter"><span class="track"><span class="fill" style="width:67%"></span><span class="tick" title="90% over-triggering threshold"></span></span><span class="num">67%</span></span></td>
+            <td><span class="mix" role="img" aria-label="confirmation: 2, unrecorded: 1">
+              <span style="background:var(--ramp1); flex-grow:2" title="confirmation: 2 of 3"></span>
+              <span style="background:var(--unrec); flex-grow:1" title="unrecorded: 1 of 3"></span>
+            </span></td>
+            <td class="num mutedtx">12m</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="legend">
+      <span><span class="sw" style="background:var(--ramp1)"></span>confirmation</span>
+      <span><span class="sw" style="background:var(--ramp2)"></span>light correction</span>
+      <span><span class="sw" style="background:var(--ramp3)"></span>heavy correction</span>
+      <span><span class="sw" style="background:var(--unrec)"></span>unrecorded (predates burden capture)</span>
+    </div>
+  </section>
+
+  <section class="sect">
+    <div class="sect-head">
+      <span class="kicker">Review rounds per task</span>
+      <span class="note">Round 4 escalates by rule; tasks at 3+ usually mean a spec ambiguity, not an implementation defect.</span>
+    </div>
+    <div class="dist">
+      <div class="drow"><span class="dlabel">0</span><span class="dtrack"><span class="dfill" style="width:33%" title="2 tasks"></span></span><span class="dnum">2</span></div>
+      <div class="drow"><span class="dlabel">1</span><span class="dtrack"><span class="dfill" style="width:100%" title="6 tasks"></span></span><span class="dnum">6</span></div>
+      <div class="drow"><span class="dlabel">2</span><span class="dtrack"><span class="dfill" style="width:67%" title="4 tasks"></span></span><span class="dnum">4</span></div>
+      <div class="drow"><span class="dlabel">3+ (cap)</span><span class="dtrack"><span class="dfill capped" style="width:17%" title="1 task"></span></span><span class="dnum">1</span></div>
+    </div>
+  </section>
+
+  <section class="sect">
+    <div class="sect-head">
+      <span class="kicker">Budget honesty</span>
+      <span class="note">Spend is whatever the run's orchestrator recorded. “Never updated” is a real finding — automated metering is a v1 prerequisite.</span>
+    </div>
+    <div class="scroller">
+      <table class="ledger">
+        <thead>
+          <tr><th>Run</th><th class="num">Limit</th><th class="num">Recorded spend</th><th>Metering</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="num">agentic-sandbox/fleetview-design</td>
+            <td class="num">$120</td><td class="num">$18.25</td>
+            <td class="okline">✓ updated during the run</td>
+          </tr>
+          <tr>
+            <td class="num">agentic-sandbox/agents-md-adapter</td>
+            <td class="num">$60</td><td class="num">$4.10</td>
+            <td class="okline">✓ updated during the run</td>
+          </tr>
+          <tr>
+            <td class="num">agentic-sandbox/integration-hardening</td>
+            <td class="num">$80</td><td class="num">$31.60</td>
+            <td class="okline">✓ updated during the run</td>
+          </tr>
+          <tr>
+            <td class="num">agentic-sandbox/dupefind</td>
+            <td class="num">$50</td><td class="num">$12.15</td>
+            <td class="okline">✓ updated during the run</td>
+          </tr>
+          <tr>
+            <td class="num">agentic-sandbox/mdtoc</td>
+            <td class="num">$25</td><td class="num">$9.40</td>
+            <td class="okline">✓ updated during the run</td>
+          </tr>
+          <tr>
+            <td class="num">agentic-sandbox/wordfreq</td>
+            <td class="num">$5</td><td class="num">$0</td>
+            <td class="warnline">⚠ never updated</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="sketches">
+    <div class="sect-head"><span class="kicker">State sketches</span></div>
+    <div class="sketchgrid">
+      <div class="sketch">
+        <span class="kicker">Empty — no decisions yet</span>
+        <div class="centered">
+          <span class="orn">❧</span>
+          <p class="lede">No gate decisions recorded yet.</p>
+          <p class="sub">Decisions made through the app or CLI will appear here from their commits.</p>
+        </div>
+      </div>
+      <div class="sketch">
+        <span class="kicker">Loading</span>
+        <p class="status">Computing metrics from state history…</p>
+      </div>
+      <div class="sketch">
+        <span class="kicker">Error</span>
+        <p class="status bad">Could not compute metrics: git log failed on run/historian-2026-07-12</p>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

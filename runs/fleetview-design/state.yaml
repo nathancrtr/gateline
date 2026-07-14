@@ -21,4 +21,12 @@ gates:
 
 tasks: []
 
-escalations: []
+escalations:
+  # G0 was approved by the founder in the orchestrating session on 2026-07-14
+  # ("G0 approved — I've signed state.yaml; proceed with research and design"),
+  # but no signature landed on any branch or checkout — the signing write was
+  # lost. Design-phase dispatches proceed on that written instruction; the G0
+  # entry above must be written by the approver before G1 is decided.
+  - {at: 2026-07-14T21:05:00Z, from_role: orchestrator,
+     reason: "G0 approved in session but signature not found in state.yaml; approver must re-sign before G1",
+     resolved: false}

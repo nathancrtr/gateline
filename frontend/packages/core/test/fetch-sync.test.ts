@@ -109,6 +109,27 @@ describe('syncFromRemote', () => {
   })
 })
 
+describe('push through the worktree write path', () => {
+  it('a decision committed via a checked-out branch still reaches origin', async () => {
+    await addUpstreamRun('checked-out')
+    const pusher = new LocalGitSource('clone', cloneDir, { push: true })
+    await pusher.syncFromRemote()
+    const ref = (await pusher.listRuns()).find((r) => r.slug === 'checked-out')!
+
+    // Materialize the local branch, then check it out in a worktree so
+    // writeState takes the worktree commit path instead of plumbing+CAS.
+    const git = pusher.git
+    await git.run(['branch', 'run/checked-out', 'origin/run/checked-out'])
+    const wt = join(scratch, 'wt-checked-out')
+    await git.run(['worktree', 'add', '--quiet', wt, 'run/checked-out'])
+
+    const write = await pusher.writeState(ref, (doc) => doc.set('phase', 'plan'), 'state(checked-out): decision via worktree')
+    expect(write.ok).toBe(true)
+    expect(write.message ?? '').not.toContain('push failed')
+    expect(await upstream.source.git.revParse('refs/heads/run/checked-out')).toBe(write.commit)
+  })
+})
+
 describe('fetch_interval config plumbing', () => {
   it('reaches the source as fetchIntervalSeconds', async () => {
     const configPath = join(scratch, 'config.yaml')

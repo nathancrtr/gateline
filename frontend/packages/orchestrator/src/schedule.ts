@@ -166,6 +166,8 @@ export interface SchedulerConfig {
   registry: Registry | null
   /** Dispatch wall clock before the sweep job is killed (default 30 min). */
   sweepTimeoutMs?: number
+  /** Push every sweep commit to origin (hosted mode). */
+  push?: boolean
   now?: () => Date
   log?: (line: string) => void
 }
@@ -308,6 +310,7 @@ export class Scheduler {
     )
     if (!(await this.git.updateRefCAS(`refs/heads/${branch}`, commit, ZERO_OID)))
       return { role: entry.role, slug, kind: 'lost-cas', rule: 'S4', detail: 'sweep branch appeared mid-tick — another instance won; rest' }
+    await this.pushBranch(branch)
 
     const job = (async () => {
       let outcome: { ok: boolean; costUsd: number | null; tokensIn: number | null; tokensOut: number | null; error: string | null }
@@ -337,6 +340,16 @@ export class Scheduler {
   }
 
   /** The closing commit: real usage into the marker, on top of whatever the agent committed. */
+  /** Best-effort push (hosted mode): a failed push is a warning; the closing commit's push retries. */
+  private async pushBranch(branch: string): Promise<void> {
+    if (!this.cfg.push) return
+    try {
+      await this.git.run(['push', 'origin', `${branch}:${branch}`])
+    } catch (e) {
+      this.log(`sweep push of ${branch} failed: ${(e as Error).message} — commits stay local until the next push`)
+    }
+  }
+
   private async closeSweep(
     entry: ScheduleEntry,
     branch: string,
@@ -365,6 +378,7 @@ export class Scheduler {
       )
       if (await this.git.updateRefCAS(`refs/heads/${branch}`, commit, tip)) {
         this.log(`sweep(${slug}): metered ${entry.role} $${cost.toFixed(2)} ${outcome.ok ? 'ok' : `FAILED (${outcome.error})`}`)
+        await this.pushBranch(branch)
         return
       }
       // The agent (or a human) committed mid-close: re-read the tip and retry.

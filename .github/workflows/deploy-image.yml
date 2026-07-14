@@ -61,8 +61,10 @@ jobs:
           curl -fsS http://localhost:4310/api/health | grep -q '"ok":true'
           curl -fsS http://localhost:4310/api/runs > /dev/null
           curl -fsS http://localhost:4310/ | grep -qi '<!doctype html'
-          # Container runs unprivileged (claude refuses bypass modes as root).
-          docker exec fleetview id -u | grep -qv '^0$'
+          # PID 1 (the server) runs unprivileged — the entrypoint drops root
+          # after owning the volume. (docker exec itself enters as root since
+          # the image sets no USER, so check the process, not the exec shell.)
+          test "$(docker exec fleetview stat -c %u /proc/1)" = "10001"
 
       - name: Webhook smoke (HMAC is the gate)
         run: |

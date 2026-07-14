@@ -15,7 +15,9 @@ DATA_DIR="${DATA_DIR:-/data}"
 if [ "$(id -u)" = "0" ]; then
   mkdir -p "$DATA_DIR"
   chown -R "$APP_USER" "$DATA_DIR"
-  exec runuser -u "$APP_USER" -- "$0" "$@"
+  # setpriv execs in place (unlike runuser/su, which stay resident as a root
+  # parent): PID 1 ends up unprivileged and receives the platform's signals.
+  exec setpriv --reuid "$APP_USER" --regid "$APP_USER" --init-groups "$0" "$@"
 fi
 
 : "${REPO_URL:?REPO_URL is required (clone URL of the pipeline repository)}"

@@ -1,0 +1,25 @@
+{
+  "adapter": "agents-md",
+  "render": "single-file",
+  "output_dir": ".",
+  "filename": "AGENTS.md",
+  "roles": ["analyst", "architect", "implementer", "reviewer", "verifier", "ops", "historian"],
+  "title": "Agent roles",
+  "preamble": [
+    "This file is rendered from `roles/*.md` into the AGENTS.md convention that",
+    "this and other repo-context-reading tools recognize. Do not hand-edit it;",
+    "see the header below.",
+    "",
+    "Each `##` section below is one dispatchable role from this project's agentic",
+    "development pipeline. An agent adopts a role's instructions only when it has",
+    "been explicitly dispatched as that role; absent an explicit dispatch, treat",
+    "this file as reference documentation describing the pipeline, not as",
+    "standing instructions to act as any of these roles.",
+    "",
+    "Each role section's **Allowed capabilities** line is a ceiling: whatever",
+    "runtime executes a role must not use capabilities outside the ones named on",
+    "that line, even though this file format has no machine-enforced allowlist",
+    "field to hold the runtime to it."
+  ],
+  "_comment_scope": "Deliberately no tools_style/tool_map/model_map/model_overrides/model_vendors/extra_frontmatter/headless: this render path emits no model or vendor binding at all. Model/vendor binding stays exclusively in registry/models.yaml and the runtime-specific adapters; the capability-narrowing statement rendered per role here is prose only (R3) and not enforced by any AGENTS.md-reading tool."
+}

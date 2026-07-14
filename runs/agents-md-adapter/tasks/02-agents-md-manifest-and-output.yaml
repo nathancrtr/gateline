@@ -45,3 +45,28 @@ depends_on: [01-renderer-single-file-mode]
 status: pending
 
 notes: |
+  Implementer round 1: created adapters/agents-md/manifest.json (render:
+  "single-file" exact string, output_dir ".", filename "AGENTS.md", the seven
+  roles, title + preamble per plan §3/ADR-4) and committed the rendered
+  AGENTS.md via `python3 scripts/render-agents.py`. All ACs pass except a
+  literal-command defect in this task's own AC1.1 text, documented below.
+
+  Deviation/discovery — AC1.1's literal `grep -c '^## ' AGENTS.md == 7` does
+  not hold: it returns 33, not 7. Cause: per plan ADR-3 (already implemented
+  and review-approved in task 01), each role body is included byte-verbatim
+  with no heading demotion, and several role bodies use their own `## `
+  subsections (e.g. implementer.md has "## Dispatch", "## Rules", "## Escalate
+  when", "## Report back"). Those body-internal H2s share the same `^## `
+  prefix as the 7 generated role-section headers, so the unscoped grep counts
+  33 lines, not 7. This is a task-acceptance-test wording defect, not a build
+  defect: spec.md's actual AC1.1 (R1) only requires "writes output for all 7
+  roles listed in the new manifest's roles array" — no grep-count clause — so
+  the substantive requirement is met. Verified the intended check with a
+  role-scoped grep instead:
+  `grep -cE '^## (analyst|architect|implementer|reviewer|verifier|ops|historian)$' AGENTS.md`
+  -> 7. Not fixing by demoting body headings (ADR-3 explicitly rejects that,
+  for good reason — stdlib-only fence-aware transforms risk mangling role
+  text) and not editing the task file's acceptance_tests list (out of my
+  surface / not mine to rewrite). Flagging for the Reviewer/Verifier: treat
+  AC1.1 as satisfied by the scoped grep above; the unscoped literal command in
+  this task file undercounts by design, not by defect.

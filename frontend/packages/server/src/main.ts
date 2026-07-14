@@ -62,6 +62,30 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
     )
   }
 
+  // Periodic remote sync: a source configured with fetch_interval polls its
+  // origin so runs pushed elsewhere show up here; each fetch moves refs, and
+  // the ref watcher above turns that into an SSE change signal.
+  const syncTimers: NodeJS.Timeout[] = []
+  for (const source of sources) {
+    const s = source as { id: string; fetchIntervalSeconds?: number; syncFromRemote?: () => Promise<void> }
+    if (!s.fetchIntervalSeconds || !s.syncFromRemote) continue
+    let inFlight = false
+    const sync = async () => {
+      if (inFlight) return
+      inFlight = true
+      try {
+        await s.syncFromRemote!()
+      } catch (e) {
+        console.warn(`warning: sync of ${s.id} failed: ${(e as Error).message}`)
+      } finally {
+        inFlight = false
+      }
+    }
+    void sync()
+    syncTimers.push(setInterval(sync, s.fetchIntervalSeconds * 1000))
+    console.log(`syncing ${s.id} from origin every ${s.fetchIntervalSeconds}s`)
+  }
+
   const app = createApp({
     sources,
     cache,
@@ -99,6 +123,7 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
   return {
     url,
     close: () => {
+      for (const t of syncTimers) clearInterval(t)
       for (const u of unwatchers) u()
       server.close()
     },

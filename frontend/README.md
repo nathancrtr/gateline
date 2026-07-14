@@ -48,7 +48,9 @@ node packages/cli/src/main.ts status        # portfolio in the terminal
 
 `agentic ui` binds to `127.0.0.1` and opens the browser. `--host` exists, but
 multi-user serving (auth, routing, rotation) is Stage C's problem and
-deliberately not this build's — see FRONTEND.md §6.
+deliberately not this build's — see FRONTEND.md §6. A *single-user* hosted
+instance (one URL, you behind an authenticating proxy) is supported: see
+[docs/DEPLOY.md](../docs/DEPLOY.md).
 
 ## CLI
 
@@ -78,6 +80,7 @@ sources:
   - name: product
     path: ~/repos/product-app
     push: true          # push run branches after each decision commit
+    fetch_interval: 60  # seconds between `git fetch`es of origin; unset = never poll
 ```
 
 No config file → the current repository, zero setup.

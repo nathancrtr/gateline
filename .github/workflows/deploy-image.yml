@@ -1,0 +1,63 @@
+# Builds the hosted-FleetView image and smoke-tests it end to end: the
+# container clones a scratch repo, serves the SPA and API, and reports the
+# source healthy. This is the build-process proof for docs/DEPLOY.md.
+name: deploy-image
+
+on:
+  pull_request:
+    paths:
+      - 'deploy/**'
+      - 'frontend/**'
+      - '.dockerignore'
+      - '.github/workflows/deploy-image.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'deploy/**'
+      - 'frontend/**'
+      - '.dockerignore'
+      - '.github/workflows/deploy-image.yml'
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -f deploy/Dockerfile -t fleetview-ci .
+
+      - name: Seed a scratch pipeline repo
+        run: |
+          git init -q -b main /tmp/seed
+          cd /tmp/seed
+          git config user.name "CI Seed" && git config user.email ci@example.test
+          echo smoke > README.md
+          git add . && git commit -qm init
+          # The container runs as root; the runner's uid owning the repo would
+          # trip git's dubious-ownership check during the in-container clone.
+          sudo chown -R root:root /tmp/seed
+
+      - name: Run container against the scratch repo
+        run: |
+          docker run -d --name fleetview -p 4310:4310 \
+            -v /tmp/seed:/seed:ro \
+            -e REPO_URL=/seed \
+            -e GIT_USER_NAME="CI Smoke" -e GIT_USER_EMAIL=ci@example.test \
+            -e PUSH_DECISIONS=false \
+            fleetview-ci
+
+      - name: Smoke test
+        run: |
+          for i in $(seq 1 30); do
+            curl -fsS -o /dev/null http://localhost:4310/api/health && break
+            sleep 1
+          done
+          set -x
+          curl -fsS http://localhost:4310/api/health | grep -q '"ok":true'
+          curl -fsS http://localhost:4310/api/runs > /dev/null
+          curl -fsS http://localhost:4310/ | grep -qi '<!doctype html'
+
+      - name: Container logs
+        if: failure()
+        run: docker logs fleetview

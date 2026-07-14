@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>candidate-c · run-artifacts — Wayfinder</title>
+<!-- Candidate C "Wayfinder" — screen: run-artifacts (run detail, artifacts tab).
+     Self-contained: no scripts, no external assets, no network requests.
+     States shown: run head with gate strip + budget meter; the NEEDS YOU
+     decision block with an OPEN approve flow (burden picker, option 2 selected
+     and focused, notes); packet links; task board; artifact rail with
+     validation marks; rendered ux-research.md. Annexes: malformed run-state
+     banner (with raw yaml), bounced no-approval block, decide flashes
+     (committed / CAS-409 / error), failing-contract artifact banner,
+     no-artifacts empty, loading, error. -->
+<style>
+:root{color-scheme:light dark}
+:root{
+  --ground:light-dark(#f1f1f3,#161619);
+  --surface:light-dark(#ffffff,#1e1e22);
+  --raised:light-dark(#e6e6ea,#2a2a31);
+  --ink:light-dark(#1b1b20,#ebebee);
+  --muted:light-dark(#565660,#a3a3ad);
+  --faint:light-dark(#8f8f99,#6d6d77);
+  --line:light-dark(#d7d7dc,#34343b);
+  --band:light-dark(#1b1b20,#0f0f12);
+  --band-ink:#f2f2f4;
+  --band-muted:#9a9aa4;
+  --strip:#6d63e8;
+  --accent:light-dark(#4f46c8,#a7a1f2);
+  --accent-soft:light-dark(rgba(79,70,200,.10),rgba(167,161,242,.14));
+  --ok:light-dark(#1e7a46,#5fc98c);
+  --ok-soft:light-dark(rgba(30,122,70,.12),rgba(95,201,140,.15));
+  --warn:light-dark(#8a6206,#d8ab4b);
+  --warn-soft:light-dark(rgba(138,98,6,.13),rgba(216,171,75,.15));
+  --bad:light-dark(#b23227,#f2836f);
+  --bad-soft:light-dark(rgba(178,50,39,.11),rgba(242,131,111,.15));
+  --on-solid:light-dark(#ffffff,#111114);
+  --display:'Avenir Next','Avenir',Futura,'Century Gothic','Segoe UI',system-ui,sans-serif;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--ground);color:var(--ink);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@keyframes crawl{to{background-position:-28px 0}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-duration:.01ms!important}}
+
+.band{background:var(--band);color:var(--band-ink)}
+.band-in{max-width:1160px;margin:0 auto;display:flex;align-items:stretch;gap:28px;padding:0 28px;height:54px}
+.brand{display:flex;flex-direction:column;justify-content:center}
+.brand b{font:800 17px/1 var(--display);letter-spacing:.06em}
+.brand small{font:10px/1.3 var(--sans);color:var(--band-muted)}
+.tabs{display:flex}
+.tab{position:relative;display:flex;align-items:center;gap:9px;padding:0 16px;font:700 11.5px/1 var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--band-muted);transition:color .1s linear}
+.tab:hover{color:var(--band-ink)}
+.tab[aria-current="page"]{color:var(--band-ink)}
+.tab[aria-current="page"]::after{content:"";position:absolute;left:12px;right:12px;bottom:0;height:4px;background:var(--strip)}
+.tab .count{padding:3px 8px;border-radius:2px;background:var(--strip);color:#fff;font:700 11px/1 var(--mono);font-variant-numeric:tabular-nums}
+.band-note{margin-left:auto;align-self:center;font:10px/1.5 var(--mono);color:var(--band-muted);text-align:right}
+.keyline{height:3px;background:var(--strip)}
+
+.wrap{max-width:1160px;margin:0 auto;padding:26px 28px 90px}
+.runhead{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-bottom:20px}
+.runhead h1{font:700 21px/1 var(--mono);letter-spacing:-.01em}
+.runhead .right{margin-left:auto;display:flex;align-items:center;gap:16px}
+.ref{font:11px var(--mono);color:var(--faint)}
+
+.phase{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:2px;border:1px solid var(--line);background:var(--surface);font:600 11.5px/1.4 var(--sans);white-space:nowrap}
+.phase i{font-style:normal;font-size:9px;line-height:1;color:var(--accent)}
+.gates{display:inline-flex;border:1px solid var(--line);border-radius:2px;overflow:hidden}
+.gc{display:inline-flex;align-items:center;justify-content:center;gap:3px;width:36px;height:22px;font:700 11px var(--mono);border-left:1px solid var(--line);background:var(--surface);color:var(--faint)}
+.gc:first-child{border-left:0}
+.gc small{font-size:9px;font-weight:400;opacity:.75}
+.gc.ok{background:var(--ok);color:var(--on-solid)}
+.meter{display:inline-flex;align-items:center;gap:8px}
+.meter .track{width:64px;height:8px;border-radius:2px;background:var(--raised);overflow:hidden}
+.meter .fill{display:block;height:100%;background:var(--accent)}
+.meter em{font:600 11px var(--mono);font-style:normal;font-variant-numeric:tabular-nums;color:var(--muted)}
+
+/* ——— NEEDS YOU: the only ink-block-headed surface on the page ——— */
+.needs{border:1px solid var(--line);border-left:6px solid var(--accent);border-radius:2px;background:var(--surface);margin-bottom:18px;overflow:hidden}
+.needs-head{display:flex;align-items:center;gap:12px;background:var(--band);color:var(--band-ink);padding:10px 16px}
+.needs-head .t{font:700 15px/1.2 var(--display)}
+.needs-head .keys{margin-left:auto;font:11px var(--mono);color:var(--band-muted)}
+.tag{display:inline-flex;align-items:center;justify-content:center;min-width:42px;padding:4px 9px;border-radius:2px;font:700 11px/1 var(--display);letter-spacing:.08em;white-space:nowrap}
+.tag-gate{background:var(--strip);color:#fff}
+.age{font:600 11px/1 var(--mono);font-variant-numeric:tabular-nums;padding:5px 8px;border-radius:2px;background:rgba(255,255,255,.14);color:var(--band-ink)}
+.needs-body{padding:14px 16px}
+.needs-body .d{font:13.5px/1.5 var(--sans);color:var(--muted);max-width:70ch}
+.packet{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.packet a{font:11px var(--mono);padding:4px 8px;border-radius:2px;background:var(--raised);color:var(--muted);transition:background .1s linear}
+.packet a:hover{background:var(--accent-soft);color:var(--accent)}
+
+.decide{border-top:2px solid var(--ink);margin-top:14px;padding-top:14px}
+.legend{font:700 10.5px/1 var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.tiles{display:flex;flex-wrap:wrap;gap:8px}
+.tile{display:flex;align-items:baseline;gap:10px;padding:10px 14px;border-radius:2px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font:13.5px var(--sans)}
+.tile .k{font:700 11px var(--mono);color:var(--faint);background:var(--raised);padding:2px 6px;border-radius:2px}
+.tile .hint{font-size:12px;color:var(--muted)}
+.tile.sel{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 3px 0 0 var(--accent);font-weight:600;color:var(--accent)}
+.tile.sel .hint{color:var(--muted);font-weight:400}
+.tile.focus{outline:2px solid var(--accent);outline-offset:2px}
+textarea{width:100%;margin-top:12px;resize:vertical;border:1px solid var(--line);border-radius:2px;background:var(--surface);color:var(--ink);padding:9px 12px;font:13.5px/1.5 var(--sans)}
+textarea::placeholder{color:var(--faint)}
+.actions{display:flex;gap:8px;margin-top:12px}
+.btn{display:inline-flex;align-items:center;padding:10px 18px;border-radius:2px;font:700 11.5px/1 var(--display);letter-spacing:.1em;text-transform:uppercase;border:0;cursor:pointer;transition:opacity .1s linear}
+.btn:hover{opacity:.88}
+.btn-primary{background:var(--accent);color:var(--on-solid)}
+.btn-quiet{background:transparent;color:var(--muted);box-shadow:inset 0 0 0 2px var(--line)}
+
+/* task board: solid status blocks */
+.tasks{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:22px}
+.task{display:inline-flex;align-items:center;gap:9px;padding:6px 10px;border:1px solid var(--line);border-radius:2px;background:var(--surface);font:12px var(--sans)}
+.task b{font:600 11.5px var(--mono)}
+.task .st{font:700 10px/1 var(--display);letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border-radius:2px}
+.st-done{background:var(--ok);color:var(--on-solid)}
+.st-rev{background:var(--warn-soft);color:var(--warn)}
+.st-pend{background:var(--raised);color:var(--muted)}
+.task .rounds{font:11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint)}
+.task .rounds.hot{color:var(--bad);font-weight:700}
+
+/* section tabs (artifacts / diff / history): signage underline */
+.sectabs{display:flex;gap:2px;border-bottom:2px solid var(--ink);margin-bottom:16px}
+.sectab{position:relative;padding:9px 16px;font:700 11.5px/1 var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);background:none;border:0;cursor:pointer}
+.sectab:hover{color:var(--ink)}
+.sectab.on{color:var(--ink)}
+.sectab.on::after{content:"";position:absolute;left:0;right:0;bottom:-2px;height:4px;background:var(--strip)}
+
+/* artifact rail + body */
+.split{display:flex;gap:22px;align-items:flex-start}
+.rail{width:250px;flex-shrink:0}
+.rail ul{list-style:none;padding:0;display:flex;flex-direction:column;gap:2px}
+.rail button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border:0;border-left:3px solid transparent;border-radius:2px;background:none;color:var(--muted);font:12px var(--mono);text-align:left;cursor:pointer;transition:background .1s linear}
+.rail button:hover{background:var(--raised);color:var(--ink)}
+.rail button.on{background:var(--accent-soft);border-left-color:var(--accent);color:var(--accent);font-weight:700}
+.v-ok{font:700 11px var(--mono);color:var(--ok)}
+.v-no{font:700 11px var(--mono);color:var(--bad)}
+.artbody{min-width:0;flex:1;border:1px solid var(--line);border-radius:2px;background:var(--surface);padding:22px 26px}
+
+/* rendered markdown: reading rhythm, 72ch cap */
+.prose{font:14px/1.65 var(--sans);max-width:72ch}
+.prose h1{font:800 21px/1.2 var(--display);letter-spacing:-.01em;margin:0 0 14px}
+.prose h2{font:700 15px/1.25 var(--display);margin:22px 0 8px;padding-bottom:5px;border-bottom:2px solid var(--ink)}
+.prose h3{font:700 13.5px/1.3 var(--display);margin:16px 0 6px}
+.prose p{margin:8px 0}
+.prose code{font:12px var(--mono);background:var(--raised);padding:1px 5px;border-radius:2px}
+.prose .mut{color:var(--muted)}
+
+.annex{margin-top:48px}
+.rule{border-top:2px solid var(--ink);padding-top:12px;margin-bottom:14px;display:flex;align-items:baseline;gap:12px}
+.kick{font:700 10.5px/1 var(--display);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.rule .note{font:12px var(--sans);color:var(--faint)}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+.demo{border:1px solid var(--line);border-radius:2px;background:var(--surface);padding:16px;min-width:0}
+.demo .lab{display:block;font:700 10px/1 var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:12px}
+.malformed{border:1px solid var(--bad);border-left:6px solid var(--bad);border-radius:2px;background:var(--bad-soft);padding:12px 14px}
+.malformed .t{font:700 13.5px var(--display);color:var(--bad)}
+.malformed p{margin-top:4px;font:12.5px/1.5 var(--sans);color:var(--muted)}
+.malformed pre{margin-top:10px;padding:10px 12px;border-radius:2px;background:var(--surface);font:11.5px/1.7 var(--mono);overflow-x:auto}
+.voidhead{background:repeating-linear-gradient(45deg,var(--bad-soft) 0 8px,transparent 8px 16px)!important;color:var(--ink)!important}
+.voidhead .keys{color:var(--muted)!important}
+.tag-void{color:var(--bad);box-shadow:inset 0 0 0 1px var(--bad);background:var(--surface);text-decoration:line-through}
+.bounce-msg{font:600 12.5px var(--sans);color:var(--bad)}
+.flash{padding:9px 12px;border-radius:2px;font:600 12.5px var(--sans);margin-bottom:8px}
+.flash.ok{background:var(--ok-soft);color:var(--ok);box-shadow:inset 3px 0 0 var(--ok)}
+.flash.conflict{background:var(--warn-soft);color:var(--warn);box-shadow:inset 3px 0 0 var(--warn)}
+.flash.err{background:var(--bad-soft);color:var(--bad);box-shadow:inset 3px 0 0 var(--bad)}
+.contractfail{padding:9px 12px;border-radius:2px;background:var(--bad-soft);color:var(--bad);font:600 12px var(--sans);box-shadow:inset 3px 0 0 var(--bad)}
+.empty{text-align:center;padding:30px 18px}
+.empty .glyph{display:block;font:800 22px/1 var(--display);color:var(--accent);margin-bottom:10px}
+.empty .big{font:700 15px/1.3 var(--display)}
+.empty .sub{margin-top:6px;font:12px/1.55 var(--sans);color:var(--muted);max-width:44ch;margin-left:auto;margin-right:auto}
+.status{text-align:center;padding:26px 16px;font:13px var(--sans);color:var(--muted)}
+.status.bad{color:var(--bad);font-weight:600}
+.stripe{height:6px;border-radius:2px;background:repeating-linear-gradient(45deg,var(--accent-soft) 0 10px,var(--raised) 10px 20px);animation:crawl 1s linear infinite;margin-bottom:14px}
+.skb{background:var(--raised);border-radius:2px;display:block;margin-top:10px}
+</style>
+</head>
+<body>
+<header class="band">
+  <div class="band-in">
+    <div class="brand"><b>GATE</b><small>pipeline decisions</small></div>
+    <nav class="tabs" aria-label="Sections">
+      <a class="tab" href="#">Inbox <span class="count">7</span></a>
+      <a class="tab" href="#" aria-current="page">Portfolio</a>
+      <a class="tab" href="#">Metrics</a>
+    </nav>
+    <div class="band-note">the repo is the database<br>every view renders git</div>
+  </div>
+</header>
+<div class="keyline"></div>
+
+<main class="wrap">
+  <div class="runhead">
+    <h1>fleetview-design</h1>
+    <span class="phase"><i>●</i>plan</span>
+    <span class="gates"><span class="gc ok"><small>0</small>✓</span><span class="gc"><small>1</small>·</span><span class="gc"><small>2</small>·</span><span class="gc"><small>3</small>·</span></span>
+    <span class="right">
+      <span class="meter" title="$6.80 of $40.00"><span class="track"><span class="fill" style="width:17%"></span></span><em>$7/40</em></span>
+      <span class="ref" title="read at run/fleetview-design">agentic-sandbox · run/fleetview-design</span>
+    </span>
+  </div>
+
+  <!-- the one ink-block-headed surface: a pending decision -->
+  <section class="needs" data-needs-card>
+    <div class="needs-head">
+      <span class="tag tag-gate">G1</span>
+      <span class="t">Three design candidates ready for G1</span>
+      <span class="keys">a approve · x decline · 1/2/3 burden · esc</span>
+      <span class="age">waiting 2d</span>
+    </div>
+    <div class="needs-body">
+      <p class="d">ux-research.md and three design candidates are committed on run/fleetview-design. Approve to pick the direction at the gate, or decline with notes — notes are the correction channel back to the Designers.</p>
+      <div class="packet">
+        <a href="#">spec.md</a>
+        <a href="#">ux-research.md</a>
+        <a href="#">design/candidate-a/design-candidate.md</a>
+        <a href="#">design/candidate-b/design-candidate.md</a>
+        <a href="#">design/candidate-c/design-candidate.md</a>
+        <a href="#">state.yaml</a>
+      </div>
+
+      <!-- OPEN approve flow: burden picker (option 2 selected + focused), notes -->
+      <div class="decide" data-decide-panel>
+        <p class="legend">How much work was this review? (recorded with the approval)</p>
+        <div class="tiles">
+          <label class="tile"><span class="k">1</span>Confirmation <span class="hint">looked right as delivered</span></label>
+          <label class="tile sel focus"><span class="k">2</span>Light correction <span class="hint">approved, notes attached</span></label>
+          <label class="tile"><span class="k">3</span>Heavy correction <span class="hint">took real work to accept</span></label>
+        </div>
+        <textarea rows="2">candidate-c signage direction — the tag hierarchy reads at a glance; tighten the diff gutter before build.</textarea>
+        <div class="actions">
+          <button class="btn btn-primary" data-decide="approve-confirm">Approve G1</button>
+          <button class="btn btn-quiet">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- task board -->
+  <section class="tasks">
+    <span class="task"><b>01-ux-research</b><span class="st st-done">done</span><span class="rounds" title="review rounds">⟲1</span></span>
+    <span class="task"><b>02-candidate-a</b><span class="st st-done">done</span><span class="rounds" title="review rounds">⟲1</span></span>
+    <span class="task"><b>03-candidate-b</b><span class="st st-done">done</span><span class="rounds" title="review rounds">⟲2</span></span>
+    <span class="task"><b>04-candidate-c</b><span class="st st-rev">in review</span><span class="rounds" title="review rounds">⟲1</span></span>
+    <span class="task"><b>05-implement-winner</b><span class="st st-pend">pending</span></span>
+  </section>
+
+  <nav class="sectabs" aria-label="Run views">
+    <button class="sectab on">Artifacts</button>
+    <button class="sectab">Diff</button>
+    <button class="sectab">History</button>
+    <span style="margin-left:auto;align-self:center;font:11px var(--mono);color:var(--faint)">e cycles artifacts · esc back to inbox</span>
+  </nav>
+
+  <div class="split">
+    <nav class="rail" aria-label="Artifacts">
+      <ul>
+        <li><button>intent-brief.md <span class="v-ok" title="contract sections present">✓</span></button></li>
+        <li><button>spec.md <span class="v-ok" title="contract sections present">✓</span></button></li>
+        <li><button class="on">ux-research.md <span class="v-ok" title="contract sections present">✓</span></button></li>
+        <li><button>design/candidate-a/design-candidate.md <span class="v-ok" title="contract sections present">✓</span></button></li>
+        <li><button>design/candidate-b/design-candidate.md <span class="v-ok" title="contract sections present">✓</span></button></li>
+        <li><button>design/candidate-c/design-candidate.md <span class="v-no" title="missing: Research traceability">✕</span></button></li>
+        <li><button>state.yaml</button></li>
+      </ul>
+    </nav>
+    <article class="artbody">
+      <div class="prose">
+        <h1>UX Research: FleetView gate-frontend look-and-feel redesign</h1>
+        <h2>Scope</h2>
+        <p>The surveyed surface is <code>frontend/packages/web</code> (React 19/Tailwind 4/Vite): the four page components named in the brief — inbox, run detail, portfolio, metrics — plus the shared chip and meter components and the token layer that back all six screens.</p>
+        <h2>Patterns</h2>
+        <h3>P1 — Status carried by glyph or shape, not color alone</h3>
+        <p><code>GateCell</code> renders ✓/✕/· plus a color tone; <code>ValidationBadge</code> renders ✓/✕; the approval meter adds a text label rather than relying on the warn hue alone. <span class="mut">The file's own header comment names this as deliberate: “status is encoded in form, not just color.”</span></p>
+        <h3>P2 — Two distinct numeric-alignment mechanisms, not one</h3>
+        <p>A full monospace font-swap for evidence content (diff hunks, ids, oids), and a <code>tabular-nums</code> utility for aligning ordinary numeric columns in tables…</p>
+      </div>
+    </article>
+  </div>
+
+  <!-- ——— sketched states ——— -->
+  <section class="annex">
+    <div class="rule"><span class="kick">State annexes — run detail</span><span class="note">malformed state · bounced gate · decide flashes · failing contract · empty · loading · error</span></div>
+    <div class="sgrid">
+      <div class="demo"><span class="lab">Malformed run state (banner above everything)</span>
+        <div class="malformed">
+          <p class="t">Malformed run state</p>
+          <p>state.yaml: phase "revew" is not one of spec | plan | implement | integrate | release | done | paused. This run renders read-only; no approval is offered.</p>
+          <pre>run: spec-kit-watch
+branch: run/spec-kit-watch
+phase: revew
+budget: {cost_limit_usd: 20, cost_spent_usd: 3.10}</pre>
+        </div>
+      </div>
+
+      <div class="demo"><span class="lab">Bounced gate — no approval offered</span>
+        <div class="needs" style="margin:0;border-left-color:var(--bad)">
+          <div class="needs-head voidhead">
+            <span class="tag tag-void">G2</span>
+            <span class="t">Integration packet ready for G2</span>
+            <span class="age" style="background:var(--raised);color:var(--muted)">waiting 31h</span>
+          </div>
+          <div class="needs-body">
+            <p class="bounce-msg">Bounced — fix the artifacts (or the contract) and the card returns; no approval is offered for a malformed packet.</p>
+            <p class="d" style="margin-top:6px">verification-report.md fails its contract — missing: Evidence, AC coverage.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="demo"><span class="lab">Decide flashes — committed · CAS 409 · error</span>
+        <p class="flash ok">G1 approved — committed 3f9c2d41ea (state.yaml)</p>
+        <p class="flash conflict">The run moved while you were deciding — re-read and decide again. (state.yaml changed on run/fleetview-design)</p>
+        <p class="flash err">POST /api/decisions → 500 could not write commit: index.lock held</p>
+      </div>
+
+      <div class="demo"><span class="lab">Artifact failing its contract</span>
+        <p class="contractfail">Fails its design-candidate contract — missing: Research traceability, Ergonomics notes</p>
+        <p class="status" style="text-align:left;padding:12px 2px">The artifact still renders below the banner — a G1 human can read it, but the gate card for its packet bounces until the sections exist.</p>
+      </div>
+
+      <div class="demo"><span class="lab">No artifacts yet</span>
+        <div class="empty">
+          <span class="glyph">∅</span>
+          <p class="big">No artifacts yet.</p>
+          <p class="sub">Nothing committed under runs/fleetview-design/ at this ref beyond state.yaml.</p>
+        </div>
+      </div>
+
+      <div class="demo"><span class="lab">Loading</span>
+        <div class="stripe" title="reading"></div>
+        <span class="skb" style="width:38%;height:14px"></span>
+        <span class="skb" style="width:90%;height:9px"></span>
+        <span class="skb" style="width:74%;height:9px"></span>
+        <p class="status">Reading run…</p>
+      </div>
+
+      <div class="demo"><span class="lab">Error</span>
+        <p class="status bad">Could not load run: GET /api/runs/agentic-sandbox/fleetview-design → 404 no run/fleetview-design ref in source agentic-sandbox</p>
+      </div>
+    </div>
+  </section>
+</main>
+</body>
+</html>

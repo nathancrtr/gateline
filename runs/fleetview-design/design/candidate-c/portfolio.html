@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>candidate-c · portfolio — Wayfinder</title>
+<!-- Candidate C "Wayfinder" — screen: portfolio.
+     Self-contained: no scripts, no external assets, no network requests.
+     States shown: populated board (malformed-run row, paused/over-budget run,
+     needs + escalation blocks, gate strips), zero-runs (the new state),
+     loading, error. -->
+<style>
+:root{color-scheme:light dark}
+:root{
+  --ground:light-dark(#f1f1f3,#161619);
+  --surface:light-dark(#ffffff,#1e1e22);
+  --raised:light-dark(#e6e6ea,#2a2a31);
+  --ink:light-dark(#1b1b20,#ebebee);
+  --muted:light-dark(#565660,#a3a3ad);
+  --faint:light-dark(#8f8f99,#6d6d77);
+  --line:light-dark(#d7d7dc,#34343b);
+  --band:light-dark(#1b1b20,#0f0f12);
+  --band-ink:#f2f2f4;
+  --band-muted:#9a9aa4;
+  --strip:#6d63e8;
+  --accent:light-dark(#4f46c8,#a7a1f2);
+  --accent-soft:light-dark(rgba(79,70,200,.10),rgba(167,161,242,.14));
+  --ok:light-dark(#1e7a46,#5fc98c);
+  --ok-soft:light-dark(rgba(30,122,70,.12),rgba(95,201,140,.15));
+  --warn:light-dark(#8a6206,#d8ab4b);
+  --warn-soft:light-dark(rgba(138,98,6,.13),rgba(216,171,75,.15));
+  --bad:light-dark(#b23227,#f2836f);
+  --bad-soft:light-dark(rgba(178,50,39,.11),rgba(242,131,111,.15));
+  --on-solid:light-dark(#ffffff,#111114);
+  --display:'Avenir Next','Avenir',Futura,'Century Gothic','Segoe UI',system-ui,sans-serif;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--ground);color:var(--ink);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@keyframes crawl{to{background-position:-28px 0}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-duration:.01ms!important}}
+
+.band{background:var(--band);color:var(--band-ink)}
+.band-in{max-width:1160px;margin:0 auto;display:flex;align-items:stretch;gap:28px;padding:0 28px;height:54px}
+.brand{display:flex;flex-direction:column;justify-content:center}
+.brand b{font:800 17px/1 var(--display);letter-spacing:.06em}
+.brand small{font:10px/1.3 var(--sans);color:var(--band-muted)}
+.tabs{display:flex}
+.tab{position:relative;display:flex;align-items:center;gap:9px;padding:0 16px;font:700 11.5px/1 var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--band-muted);transition:color .1s linear}
+.tab:hover{color:var(--band-ink)}
+.tab[aria-current="page"]{color:var(--band-ink)}
+.tab[aria-current="page"]::after{content:"";position:absolute;left:12px;right:12px;bottom:0;height:4px;background:var(--strip)}
+.tab .count{padding:3px 8px;border-radius:2px;background:var(--strip);color:#fff;font:700 11px/1 var(--mono);font-variant-numeric:tabular-nums}
+.band-note{margin-left:auto;align-self:center;font:10px/1.5 var(--mono);color:var(--band-muted);text-align:right}
+.keyline{height:3px;background:var(--strip)}
+
+.wrap{max-width:1160px;margin:0 auto;padding:26px 28px 90px}
+.sign{display:flex;align-items:flex-end;gap:18px;margin-bottom:20px}
+.sign h1{font:800 26px/1.05 var(--display);letter-spacing:-.01em}
+.sign .meta{margin-left:auto;font:12px var(--sans);color:var(--muted)}
+
+/* ——— departures-board table: tight scanning rhythm (8–10px rows) ——— */
+.boardwrap{overflow-x:auto;border:1px solid var(--line);border-radius:2px;background:var(--surface)}
+table{width:100%;min-width:760px;border-collapse:collapse;font-size:13px}
+thead th{background:var(--band);color:var(--band-ink);font:700 10px/1 var(--display);letter-spacing:.14em;text-transform:uppercase;text-align:left;padding:9px 12px;white-space:nowrap}
+thead th:first-child{padding-left:16px}
+thead th.num{text-align:right}
+tbody td{border-top:1px solid var(--line);padding:9px 12px;vertical-align:middle}
+tbody td:first-child{padding-left:10px;border-left:6px solid transparent}
+tbody tr:hover{background:var(--raised)}
+tbody tr.needs td:first-child{border-left-color:var(--accent)}
+tbody tr.hot td:first-child{border-left-color:var(--bad)}
+tbody tr.hold td:first-child{border-left-color:var(--warn)}
+.slug{font:700 13px var(--display);color:var(--accent)}
+.slug:hover{text-decoration:underline}
+.src{margin-left:8px;font:11px var(--mono);color:var(--faint)}
+.mal{margin-top:3px;font:600 11.5px var(--sans);color:var(--bad)}
+.num{text-align:right;font:12px var(--mono);font-variant-numeric:tabular-nums}
+.num.hot{font-weight:700;color:var(--bad)}
+td.dim{color:var(--muted)}
+.dash{color:var(--faint)}
+
+.phase{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:2px;border:1px solid var(--line);background:var(--surface);font:600 11.5px/1.4 var(--sans);white-space:nowrap}
+.phase i{font-style:normal;font-size:9px;line-height:1}
+.ph-go i{color:var(--accent)}.ph-work i{color:var(--warn)}.ph-done i{color:var(--ok)}.ph-stop i{color:var(--bad)}
+.phase .why{color:var(--muted)}
+
+.gates{display:inline-flex;border:1px solid var(--line);border-radius:2px;overflow:hidden;vertical-align:middle}
+.gc{display:inline-flex;align-items:center;justify-content:center;gap:3px;width:36px;height:22px;font:700 11px var(--mono);border-left:1px solid var(--line);background:var(--surface);color:var(--faint)}
+.gc:first-child{border-left:0}
+.gc small{font-size:9px;font-weight:400;opacity:.75}
+.gc.ok{background:var(--ok);color:var(--on-solid)}
+.gc.no{background:var(--bad);color:var(--on-solid)}
+
+.meter{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.meter .track{width:64px;height:8px;border-radius:2px;background:var(--raised);overflow:hidden}
+.meter .fill{display:block;height:100%;background:var(--accent)}
+.meter .fill.over{background:var(--bad)}
+.meter .fill.zero{background:var(--faint)}
+.meter em{font:600 11px var(--mono);font-style:normal;font-variant-numeric:tabular-nums;color:var(--muted)}
+.meter em.over{color:var(--bad);font-weight:700}
+
+.needpill{display:inline-flex;min-width:26px;justify-content:center;padding:3px 8px;border-radius:2px;background:var(--accent);color:var(--on-solid);font:700 11px var(--mono);font-variant-numeric:tabular-nums}
+.escnote{font:700 11px var(--mono);color:var(--bad)}
+
+.annex{margin-top:48px}
+.rule{border-top:2px solid var(--ink);padding-top:12px;margin-bottom:14px;display:flex;align-items:baseline;gap:12px}
+.kick{font:700 10.5px/1 var(--display);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.rule .note{font:12px var(--sans);color:var(--faint)}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.demo{border:1px solid var(--line);border-radius:2px;background:var(--surface);padding:16px;min-width:0}
+.demo .lab{display:block;font:700 10px/1 var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:12px}
+.empty{text-align:center;padding:34px 18px}
+.empty .glyph{display:block;font:800 22px/1 var(--display);color:var(--accent);margin-bottom:10px}
+.empty .big{font:700 15px/1.3 var(--display)}
+.empty .sub{margin-top:6px;font:12px/1.55 var(--sans);color:var(--muted);max-width:46ch;margin-left:auto;margin-right:auto}
+.empty code{font:11px var(--mono);background:var(--raised);padding:1px 5px;border-radius:2px}
+.status{text-align:center;padding:30px 16px;font:13px var(--sans);color:var(--muted)}
+.status.bad{color:var(--bad);font-weight:600}
+.stripe{height:6px;border-radius:2px;background:repeating-linear-gradient(45deg,var(--accent-soft) 0 10px,var(--raised) 10px 20px);animation:crawl 1s linear infinite;margin-bottom:14px}
+.skrow{display:flex;align-items:center;gap:12px;padding:11px 4px;border-top:1px solid var(--line)}
+.skb{background:var(--raised);border-radius:2px}
+</style>
+</head>
+<body>
+<header class="band">
+  <div class="band-in">
+    <div class="brand"><b>GATE</b><small>pipeline decisions</small></div>
+    <nav class="tabs" aria-label="Sections">
+      <a class="tab" href="#">Inbox <span class="count">7</span></a>
+      <a class="tab" href="#" aria-current="page">Portfolio</a>
+      <a class="tab" href="#">Metrics</a>
+    </nav>
+    <div class="band-note">the repo is the database<br>every view renders git</div>
+  </div>
+</header>
+<div class="keyline"></div>
+
+<main class="wrap">
+  <div class="sign">
+    <h1>Portfolio</h1>
+    <span class="meta">9 runs · every run × source at a glance</span>
+  </div>
+
+  <div class="boardwrap">
+  <table>
+    <thead><tr>
+      <th>Run</th><th>Phase</th><th>Gates</th><th class="num">Tasks</th><th class="num">Rounds</th><th>Budget</th><th class="num">Updated</th><th class="num">Needs</th>
+    </tr></thead>
+    <tbody>
+      <tr class="needs">
+        <td><a class="slug" href="#">agents-md-adapter</a><span class="src">agentic-sandbox</span></td>
+        <td><span class="phase ph-go"><i>●</i>spec</span></td>
+        <td><span class="gates"><span class="gc"><small>0</small>·</span><span class="gc"><small>1</small>·</span><span class="gc"><small>2</small>·</span><span class="gc"><small>3</small>·</span></span></td>
+        <td class="num"><span class="dash">—</span></td>
+        <td class="num"><span class="dash">—</span></td>
+        <td><span class="meter"><span class="track"><span class="fill zero" style="width:4%"></span></span><em>unmetered</em></span></td>
+        <td class="num dim">4d</td>
+        <td class="num"><span class="needpill">1</span></td>
+      </tr>
+      <tr class="needs">
+        <td><a class="slug" href="#">fleetview-design</a><span class="src">agentic-sandbox</span></td>
+        <td><span class="phase ph-go"><i>●</i>plan</span></td>
+        <td><span class="gates"><span class="gc ok"><small>0</small>✓</span><span class="gc"><small>1</small>·</span><span class="gc"><small>2</small>·</span><span class="gc"><small>3</small>·</span></span></td>
+        <td class="num">3/5</td>
+        <td class="num">1</td>
+        <td><span class="meter"><span class="track"><span class="fill" style="width:17%"></span></span><em>$7/40</em></span></td>
+        <td class="num dim">2h</td>
+        <td class="num"><span class="needpill">1</span></td>
+      </tr>
+      <tr class="hot">
+        <td><a class="slug" href="#">budget-metering</a><span class="src">agentic-sandbox</span></td>
+        <td><span class="phase ph-work"><i>●</i>integrate</span></td>
+        <td><span class="gates"><span class="gc ok"><small>0</small>✓</span><span class="gc ok"><small>1</small>✓</span><span class="gc"><small>2</small>·</span><span class="gc"><small>3</small>·</span></span></td>
+        <td class="num">4/4</td>
+        <td class="num hot">3</td>
+        <td><span class="meter"><span class="track"><span class="fill" style="width:46%"></span></span><em>$18/40</em></span></td>
+        <td class="num dim">3h</td>
+        <td class="num"><span class="escnote">1 esc</span></td>
+      </tr>
+      <tr class="needs">
+        <td><a class="slug" href="#">token-ledger</a><span class="src">agentic-sandbox</span></td>
+        <td><span class="phase ph-work"><i>●</i>implement</span></td>
+        <td><span class="gates"><span class="gc ok"><small>0</small>✓</span><span class="gc ok"><small>1</small>✓</span><span class="gc"><small>2</small>·</span><span class="gc"><small>3</small>·</span></span></td>
+        <td class="num">1/3</td>
+        <td class="num hot">3</td>
+        <td><span class="meter"><span class="track"><span class="fill" style="width:36%"></span></span><em>$9/25</em></span></td>
+        <td class="num dim">9h</td>
+        <td class="num"><span class="needpill">1</span></td>
+      </tr>
+      <tr class="hold">
+        <td><a class="slug" href="#">dupefind-portable</a><span class="src">agentic-sandbox</span></td>
+        <td><span class="phase ph-stop"><i>●</i>paused <span class="why">· budget-exhausted</span></span></td>
+        <td><span class="gates"><span class="gc ok"><small>0</small>✓</span><span class="gc ok"><small>1</small>✓</span><span class="gc"><small>2</small>·</span><span class="gc"><small>3</small>·</span></span></td>
+        <td class="num">2/3</td>
+        <td class="num">2</td>
+        <td><span class="meter"><span class="track"><span class="fill over" style="width:100%"></span></span><em class="over">$30/30</em></span></td>
+        <td class="num dim">5h</td>
+        <td class="num"><span class="needpill">1</span></td>
+      </tr>
+      <tr class="hot"><!-- malformed run: unknown phase + the parse error inline -->
+        <td><a class="slug" href="#">spec-kit-watch</a><span class="src">agentic-sandbox</span>
+          <p class="mal">state.yaml: phase "revew" is not one of spec | plan | implement | integrate | release | done | paused</p></td>
+        <td><span class="phase ph-stop"><i>●</i>unknown</span></td>
+        <td><span class="gates"><span class="gc"><small>0</small>·</span><span class="gc"><small>1</small>·</span><span class="gc"><small>2</small>·</span><span class="gc"><small>3</small>·</span></span></td>
+        <td class="num"><span class="dash">—</span></td>
+        <td class="num"><span class="dash">—</span></td>
+        <td><em class="dash" style="font:11px var(--mono)">no budget</em></td>
+        <td class="num dim">1h</td>
+        <td class="num"><span class="dash">—</span></td>
+      </tr>
+      <tr>
+        <td><a class="slug" href="#">dupefind</a><span class="src">agentic-sandbox</span></td>
+        <td><span class="phase ph-done"><i>●</i>done</span></td>
+        <td><span class="gates"><span class="gc ok"><small>0</small>✓</span><span class="gc ok"><small>1</small>✓</span><span class="gc ok"><small>2</small>✓</span><span class="gc ok"><small>3</small>✓</span></span></td>
+        <td class="num">3/3</td>
+        <td class="num">2</td>
+        <td><span class="meter"><span class="track"><span class="fill" style="width:24%"></span></span><em>$12/50</em></span></td>
+        <td class="num dim">1d</td>
+        <td class="num"><span class="dash">—</span></td>
+      </tr>
+      <tr>
+        <td><a class="slug" href="#">mdtoc</a><span class="src">agentic-sandbox</span></td>
+        <td><span class="phase ph-done"><i>●</i>done</span></td>
+        <td><span class="gates"><span class="gc ok"><small>0</small>✓</span><span class="gc ok"><small>1</small>✓</span><span class="gc ok"><small>2</small>✓</span><span class="gc ok"><small>3</small>✓</span></span></td>
+        <td class="num">3/3</td>
+        <td class="num">2</td>
+        <td><span class="meter"><span class="track"><span class="fill" style="width:34%"></span></span><em>$8/25</em></span></td>
+        <td class="num dim">2d</td>
+        <td class="num"><span class="dash">—</span></td>
+      </tr>
+      <tr>
+        <td><a class="slug" href="#">wordfreq</a><span class="src">agentic-sandbox</span></td>
+        <td><span class="phase ph-done"><i>●</i>done</span></td>
+        <td><span class="gates"><span class="gc ok"><small>0</small>✓</span><span class="gc ok"><small>1</small>✓</span><span class="gc ok"><small>2</small>✓</span><span class="gc ok"><small>3</small>✓</span></span></td>
+        <td class="num">4/4</td>
+        <td class="num">2</td>
+        <td><span class="meter"><span class="track"><span class="fill zero" style="width:4%"></span></span><em>unmetered</em></span></td>
+        <td class="num dim">6d</td>
+        <td class="num"><span class="dash">—</span></td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <section class="annex">
+    <div class="rule"><span class="kick">State annexes — portfolio</span><span class="note">zero-runs (new state) · loading · error</span></div>
+    <div class="sgrid">
+      <div class="demo"><span class="lab">Zero runs</span>
+        <div class="empty">
+          <span class="glyph">∅</span>
+          <p class="big">No runs yet.</p>
+          <p class="sub">Point the gate server at a repo that has <code>runs/&lt;slug&gt;/state.yaml</code> on a <code>run/&lt;slug&gt;</code> branch, and the board fills itself from git.</p>
+        </div>
+      </div>
+      <div class="demo"><span class="lab">Loading</span>
+        <div class="stripe" title="reading repositories"></div>
+        <div class="skrow"><span class="skb" style="width:26%;height:12px"></span><span class="skb" style="width:64px;height:18px"></span><span class="skb" style="width:150px;height:18px"></span><span class="skb" style="width:56px;height:12px;margin-left:auto"></span></div>
+        <div class="skrow"><span class="skb" style="width:32%;height:12px"></span><span class="skb" style="width:64px;height:18px"></span><span class="skb" style="width:150px;height:18px"></span><span class="skb" style="width:56px;height:12px;margin-left:auto"></span></div>
+        <p class="status">Reading repositories…</p>
+      </div>
+      <div class="demo"><span class="lab">Error</span>
+        <p class="status bad">Could not load runs: GET /api/runs → 500 git for-each-ref failed in source agentic-sandbox</p>
+      </div>
+    </div>
+  </section>
+</main>
+</body>
+</html>

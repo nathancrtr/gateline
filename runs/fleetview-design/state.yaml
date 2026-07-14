@@ -5,13 +5,28 @@ paused_reason: null
 
 budget:
   cost_limit_usd: 75
-  cost_spent_usd: 2
+  cost_spent_usd: 23
   ledger:
-    # v0 hand-appended; cost is the registry static estimate (harness reported
-    # 78k combined subagent tokens without an in/out split to price exactly).
+    # v0 hand-appended; costs are the registry static estimates (harness
+    # reports combined subagent tokens without an in/out split to price
+    # exactly). Designer spread: fable/opus/fable — the frontier tier's two
+    # available lineages in this single-vendor harness; a third designer
+    # repeats a lineage rather than dropping a tier (registry binding holds).
     - {at: 2026-07-14T20:45:00Z, role: analyst, task: null, round: null,
        adapter: claude-code, model: anthropic/claude-sonnet-5,
        tokens_in: null, tokens_out: null, cost_usd: 2}
+    - {at: 2026-07-14T21:25:00Z, role: ux-researcher, task: null, round: null,
+       adapter: claude-code, model: anthropic/claude-sonnet-5,
+       tokens_in: null, tokens_out: null, cost_usd: 3}
+    - {at: 2026-07-14T21:50:00Z, role: designer, task: candidate-a, round: null,
+       adapter: claude-code, model: anthropic/claude-fable-5,
+       tokens_in: null, tokens_out: null, cost_usd: 6}
+    - {at: 2026-07-14T22:15:00Z, role: designer, task: candidate-b, round: null,
+       adapter: claude-code, model: anthropic/claude-opus-4-8,
+       tokens_in: null, tokens_out: null, cost_usd: 6}
+    - {at: 2026-07-14T22:45:00Z, role: designer, task: candidate-c, round: null,
+       adapter: claude-code, model: anthropic/claude-fable-5,
+       tokens_in: null, tokens_out: null, cost_usd: 6}
 
 gates:
   G0: {approved: false, by: null, at: null, notes: null}

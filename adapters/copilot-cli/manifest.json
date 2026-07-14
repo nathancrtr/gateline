@@ -2,7 +2,8 @@
   "adapter": "copilot-cli",
   "output_dir": ".github/agents",
   "filename": "{role}.agent.md",
-  "roles": ["analyst", "architect", "implementer", "reviewer", "verifier", "ops", "historian"],
+  "roles": ["analyst", "architect", "implementer", "reviewer", "verifier", "ops", "historian", "designer"],
+  "_comment_roles": "ux-researcher is not rendered here: its web-research capability has no verified tool mapping in this runner yet. Add the tool_map entry and the role together once verified live (adapter rule: narrow, never widen).",
   "tools_style": "flow-list",
   "tool_map": {
     "read": ["read"],

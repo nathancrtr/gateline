@@ -2,14 +2,15 @@
   "adapter": "claude-code",
   "output_dir": ".claude/agents",
   "filename": "{role}.md",
-  "roles": ["analyst", "architect", "implementer", "reviewer", "verifier", "ops", "historian"],
+  "roles": ["analyst", "architect", "implementer", "reviewer", "verifier", "ops", "historian", "ux-researcher", "designer"],
   "tools_style": "comma",
   "tool_map": {
     "read": ["Read"],
     "search": ["Grep", "Glob"],
     "write-artifacts": ["Write"],
     "edit-code": ["Write", "Edit"],
-    "shell": ["Bash"]
+    "shell": ["Bash"],
+    "web-research": ["WebSearch", "WebFetch"]
   },
   "_comment_models": "Runner-specific spellings of the registry bindings (registry/models.yaml is the authority for WHICH model each role gets; this maps profile -> this runner's model name). Single-vendor harness: P5 vendor pins fall back to lineage split (fable reviews sonnet).",
   "model_map": {

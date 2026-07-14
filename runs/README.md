@@ -8,6 +8,9 @@ runs/<slug>/
 ├── state.yaml               # phase, gate ledger, budgets, task statuses (Orchestrator-owned)
 ├── intent-brief.md          # human-authored input
 ├── spec.md                  # Analyst  → gate G0
+├── ux-research.md           # UX Researcher → Designers + gate G1 (design runs only)
+├── design/
+│   └── <candidate>/         # one Designer each: design-candidate.md + static mockups (design runs only)
 ├── plan.md                  # Architect → gate G1
 ├── tasks/
 │   └── NN-name.yaml         # one work item per Implementer (status + notes live here)

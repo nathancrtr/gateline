@@ -1,11 +1,11 @@
 run: fleetview-intake
 branch: run/fleetview-intake
-phase: implement
-paused_reason: null
+phase: paused
+paused_reason: escalation
 
 budget:
   cost_limit_usd: 40
-  cost_spent_usd: 23.58
+  cost_spent_usd: 26.82
   ledger:
     # analyst: total tokens only (50855), split unavailable, cost estimated at registry rates
     - {
@@ -136,9 +136,10 @@ budget:
       round: 1
       adapter: claude-code
       model: anthropic/claude-fable-5
-      tokens_in: null
-      tokens_out: null
-      cost_usd: null
+      tokens_in: 0
+      tokens_out: 0
+      cost_usd: 3.2370646000000005
+      failed: true
     - at: 2026-07-15T23:40:21.567Z
       role: implementer
       task: 01-candidate-import-desk
@@ -284,5 +285,13 @@ escalations:
         resolved_by: Nathan Carter,
         resolved_at: 2026-07-15T23:34:38.532Z,
         resolution: reached API limit
+      },
+    {
+        at: 2026-07-15T23:41:38.882Z,
+        from_role: orchestrator,
+        reason: "reviewer (03-intake-seam-reference) failed twice: Command failed:
+          claude -p Use the reviewer subagent. on task
+          `runs/fleetview-intake/tasks/03-intake-seam-reference.yaml…",
+        resolved: false
       }
   ]

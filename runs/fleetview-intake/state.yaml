@@ -5,8 +5,12 @@ paused_reason: null
 
 budget:
   cost_limit_usd: 30
-  cost_spent_usd: 0
-  ledger: []
+  cost_spent_usd: 0.60
+  ledger:
+    # harness reported total tokens only (89843); in/out split unavailable, cost estimated
+    - {at: 2026-07-15T15:40:38Z, role: ux-researcher, task: null, round: null,
+       adapter: claude-code, model: claude-sonnet-5, tokens_in: 89843, tokens_out: null,
+       cost_usd: 0.60}
 
 gates:
   G0: {approved: false, by: null, at: null, notes: null}

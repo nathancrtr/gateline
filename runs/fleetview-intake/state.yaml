@@ -1,6 +1,6 @@
 run: fleetview-intake
 branch: run/fleetview-intake
-phase: spec
+phase: plan
 paused_reason: null
 
 budget:
@@ -8,24 +8,109 @@ budget:
   cost_spent_usd: 2.40
   ledger:
     # analyst: total tokens only (50855), split unavailable, cost estimated at registry rates
-    - {at: 2026-07-15T15:58:17Z, role: analyst, task: null, round: null,
-       adapter: claude-code, model: claude-sonnet-5, tokens_in: 50855, tokens_out: null,
-       cost_usd: 0.30}
+    - {
+        at: 2026-07-15T15:58:17Z,
+        role: analyst,
+        task: null,
+        round: null,
+        adapter: claude-code,
+        model: claude-sonnet-5,
+        tokens_in: 50855,
+        tokens_out: null,
+        cost_usd: 0.30
+      }
     # tech-researcher: role is a run-local extension (architect-style research);
     # total tokens only (93933), split unavailable, cost estimated at registry rates
-    - {at: 2026-07-15T15:44:53Z, role: tech-researcher, task: null, round: null,
-       adapter: claude-code, model: claude-fable-5, tokens_in: 93933, tokens_out: null,
-       cost_usd: 1.50}
+    - {
+        at: 2026-07-15T15:44:53Z,
+        role: tech-researcher,
+        task: null,
+        round: null,
+        adapter: claude-code,
+        model: claude-fable-5,
+        tokens_in: 93933,
+        tokens_out: null,
+        cost_usd: 1.50
+      }
     # harness reported total tokens only (89843); in/out split unavailable, cost estimated
-    - {at: 2026-07-15T15:40:38Z, role: ux-researcher, task: null, round: null,
-       adapter: claude-code, model: claude-sonnet-5, tokens_in: 89843, tokens_out: null,
-       cost_usd: 0.60}
+    - {
+        at: 2026-07-15T15:40:38Z,
+        role: ux-researcher,
+        task: null,
+        round: null,
+        adapter: claude-code,
+        model: claude-sonnet-5,
+        tokens_in: 89843,
+        tokens_out: null,
+        cost_usd: 0.60
+      }
 
 gates:
-  G0: {approved: false, by: null, at: null, notes: null}
-  G1: {approved: false, by: null, at: null, notes: null}
-  G2: {approved: false, by: null, at: null, notes: null}
-  G3: {approved: false, by: null, at: null, notes: null}
+  G0:
+    {
+      approved: true,
+      by: Nathan Carter,
+      at: 2026-07-15T18:32:05.314Z,
+      notes: "Reviewer responses:
+
+
+        * **Utterance-to-brief translation**
+
+        To clarify, you mentioned \"[s]upport both a free-text entry point that
+        the surface parses into the intent-brief shape, and a structured
+        field-level fallback for the same underlying fields\" as a suggested
+        path forward. Does that _also_ mesh with the task integration (i.e. is
+        the text of the Jira ticket/GitHub issue representative of an intent
+        brief? If so, we can LLM-parse it into the expected brief format)? If by
+        \"free-text entry point\" you mean a simple text box that I user could
+        type in something like \"add pagination to the widget search page\" and
+        the intent brief could be compiled from that fragment via LLM? If so,
+        that's probably the case I would be least likely to support. I'm
+        picturing either 1) \"import task management platform issue -> LLM ->
+        intent brief\" or 2) a textarea with the actual intent brief template
+        that could be filled out manually by the user in the browser and
+        submitted. I'm not terribly excited about the latter, either, as it adds
+        an additional write path to FleetView. Ultimately, I'm flexible, but I
+        think the GitHub/Jira/etc issue-to-intent-brief pipeline is the critical
+        one.
+
+
+        * **Source-picker visibility with one source live**
+
+        Let's go ahead and do the source-picker, it will be good to set this out
+        early
+
+
+        * **Who sets the budget at intake**
+
+        Let's tier it: budget can be an optional field in the UI, configurable
+        by the intent brief author, with defaults if not provided
+
+
+        * **Is run-creation a gate-grade write, or a lighter action?**
+
+        This is an extremely interesting question. My leaning is that is _does_
+        represent a human gate, especially given that we've already suggested we
+        would be de facto implementing it that way in workflows - runs are
+        initialized paused and must be explicitly kicked off, to avoid surprise
+        runs and billing. However, this is a good time to analyze the
+        https://claude.ai/code/artifact/d3fbdd2c-8654-4787-94d1-684387de3986
+        document to keep our eyes on the North Star: between these two options,
+        which would reflect a more powerful or flexible predicate that would be
+        maximally desirable to potential consumers mentioned in the doc?
+
+
+        * **Where \"queue new work\" lives in the web UI**
+
+        \  * I accept a button-type \"new\" trigger rather than a fourth nav
+        item if that's the stronger and better-established pattern. If we
+        struggle to fit it neatly into our existing design, we can pivot during
+        wireframe review",
+      burden: light-correction
+    }
+  G1: { approved: false, by: null, at: null, notes: null }
+  G2: { approved: false, by: null, at: null, notes: null }
+  G3: { approved: false, by: null, at: null, notes: null }
 
 tasks: []
 

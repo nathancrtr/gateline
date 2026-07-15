@@ -5,7 +5,7 @@ paused_reason: null
 
 budget:
   cost_limit_usd: 40
-  cost_spent_usd: 7.31
+  cost_spent_usd: 9.89
   ledger:
     # analyst: total tokens only (50855), split unavailable, cost estimated at registry rates
     - {
@@ -77,9 +77,9 @@ budget:
       round: 1
       adapter: claude-code
       model: anthropic/claude-sonnet-5
-      tokens_in: null
-      tokens_out: null
-      cost_usd: null
+      tokens_in: 12
+      tokens_out: 2523
+      cost_usd: 2.5778647499999994
 
 gates:
   G0:
@@ -159,7 +159,7 @@ tasks:
   [
     { id: 01-candidate-import-desk, status: dispatched, review_rounds: 0 },
     { id: 02-candidate-single-thread, status: dispatched, review_rounds: 0 },
-    { id: 03-intake-seam-reference, status: dispatched, review_rounds: 0 }
+    { id: 03-intake-seam-reference, status: in-review, review_rounds: 0 }
   ]
 
 escalations:

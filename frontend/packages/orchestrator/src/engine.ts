@@ -23,6 +23,16 @@ export interface EngineConfig {
   roleTimeoutMs?: number
   /** Age at which an open ledger entry with no live job is declared lost (default 5 min). */
   staleMs?: number
+  /** Push every orchestrator commit to origin (hosted mode): the machine is disposable, origin is not. */
+  push?: boolean
+  /**
+   * Host-wide ceiling (hosted mode): refuse new dispatches when projected
+   * spend across every active run exceeds this, escalating like DB does.
+   * Per-run cost_limit_usd still applies; this bounds their sum.
+   */
+  spendLimitUsd?: number | null
+  /** Refuse dispatch on a run missing budget.cost_limit_usd (hosted mode): unattended dispatch needs a ceiling. */
+  requireBudget?: boolean
   now?: () => Date
   log?: (line: string) => void
 }
@@ -55,7 +65,7 @@ export class Engine {
 
   constructor(cfg: EngineConfig) {
     this.cfg = cfg
-    this.source = new LocalGitSource('orchestrator', cfg.repoDir, { identity: cfg.identity })
+    this.source = new LocalGitSource('orchestrator', cfg.repoDir, { identity: cfg.identity, push: cfg.push })
   }
 
   private nowIso(): string {
@@ -92,8 +102,11 @@ export class Engine {
   /** One reconcile pass over every active run. Idempotent to re-run. */
   async tick(): Promise<TickOutcome[]> {
     const outcomes: TickOutcome[] = []
-    for (const ref of await this.source.listRuns()) {
-      if (ref.kind === 'default') continue // merged runs are historical records
+    const refs = (await this.source.listRuns()).filter((r) => r.kind !== 'default') // merged runs are historical records
+    // The host ceiling is measured once per tick across every active run's
+    // ledger; dispatches granted within the tick add their estimates.
+    const host = this.cfg.spendLimitUsd != null ? { projected: await this.hostProjectedUsd(refs) } : null
+    for (const ref of refs) {
       await this.sweepStale(ref)
       // Pin the tip: observe at this exact commit and CAS every write against
       // it, so nothing decided from a stale read can land (§4.4's guard,
@@ -106,9 +119,45 @@ export class Engine {
         isAncestor: (a, b) => this.source.git.isAncestor(a, b),
       })
       const action = deriveAction(obs)
-      outcomes.push(await this.execute(ref, tip, obs, action))
+      outcomes.push(await this.execute(ref, tip, obs, this.hostGuards(obs, action, host)))
     }
     return outcomes
+  }
+
+  /**
+   * Hosted-mode guards wrapping the per-run derivation (§6's DB, lifted to
+   * the host): a dispatch is downgraded to an escalation when the run has no
+   * budget ceiling (RB) or the host-wide projection would exceed the global
+   * cap (HB). Pause rather than degrade, same as DB.
+   */
+  private hostGuards(obs: RunObservation, action: DerivedAction, host: { projected: number } | null): DerivedAction {
+    if (action.kind !== 'dispatch') return action
+    if (this.cfg.requireBudget && (obs.state?.budget?.cost_limit_usd ?? null) === null) {
+      const reason = 'no cost_limit_usd set — this orchestrator requires a per-run budget cap before dispatch (--require-budget)'
+      return { kind: 'escalate', rule: 'RB', reason, pause: 'budget-exhausted', why: reason }
+    }
+    if (host && this.cfg.spendLimitUsd != null) {
+      const add = action.dispatches.reduce((sum, d) => sum + (this.estimates()[d.role] ?? DEFAULT_ESTIMATE_USD), 0)
+      if (host.projected + add > this.cfg.spendLimitUsd) {
+        const reason = `projected host spend $${(host.projected + add).toFixed(2)} across active runs exceeds --spend-limit-usd $${this.cfg.spendLimitUsd} — pausing rather than degrading`
+        return { kind: 'escalate', rule: 'HB', reason, pause: 'budget-exhausted', why: reason }
+      }
+      host.projected += add
+    }
+    return action
+  }
+
+  /** Spend committed or in flight across the given runs: closed ledger costs plus estimates for open entries. */
+  private async hostProjectedUsd(refs: RunRef[]): Promise<number> {
+    let total = 0
+    for (const ref of refs) {
+      const { state } = await this.source.readState(ref)
+      if (!state) continue
+      for (const entry of parseLedger(state)) {
+        total += entry.cost_usd ?? (entry.failed ? 0 : (this.estimates()[entry.role] ?? DEFAULT_ESTIMATE_USD))
+      }
+    }
+    return total
   }
 
   /**
@@ -240,6 +289,9 @@ export class Engine {
           if (outcome.ok && !fold.ok) {
             outcome = { ok: false, costUsd: outcome.costUsd, tokensIn: outcome.tokensIn, tokensOut: outcome.tokensOut, error: fold.message, fatal: fold.conflict }
           }
+          // The fold moves the run ref outside writeState; push it explicitly
+          // so agent work reaches origin even if the closing commit fails.
+          if (fold.ok) await this.pushBranch(ref.branch)
         }
       } catch (e) {
         outcome = { ok: false, costUsd: null, tokensIn: null, tokensOut: null, error: (e as Error).message }
@@ -338,6 +390,16 @@ export class Engine {
       if ((await this.withLock(ref.slug, attemptOnce)) === 'done') return
     }
     this.log(`${ref.slug}: closing commit lost CAS 5×; the heartbeat will age the open entry`)
+  }
+
+  /** Best-effort push (hosted mode): a failed push is a warning, never a stop — the next write retries. */
+  private async pushBranch(branch: string): Promise<void> {
+    if (!this.cfg.push) return
+    try {
+      await this.source.git.run(['push', 'origin', `${branch}:${branch}`])
+    } catch (e) {
+      this.log(`push of ${branch} failed: ${(e as Error).message} — commits stay local until the next push`)
+    }
   }
 
   private computeCost(role: string, outcome: DispatchOutcome): number | null {

@@ -36,6 +36,11 @@ program
     (value: string, acc: string[]) => [...acc, value],
     [] as string[],
   )
+  // Hosted mode (ORCHESTRATOR.md §2 first deployment): the machine is
+  // disposable, origin is the record; unattended dispatch needs hard ceilings.
+  .option('--push', 'push every orchestrator commit to origin (hosted mode)')
+  .option('--spend-limit-usd <usd>', 'refuse new dispatches when projected spend across all active runs exceeds this', parseFloat)
+  .option('--require-budget', 'refuse dispatch on any run missing budget.cost_limit_usd')
 
 interface Opened {
   dir: string
@@ -63,11 +68,15 @@ async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler:
     adapters.length === 1 && !opened.registry
       ? adapters[0]!.dispatcher
       : new RoutingDispatcher(adapters, opened.registry ?? { profiles: {}, bindings: {}, pricing: {}, estimates: {} }, log)
+  const hosted = program.opts<{ push?: boolean; spendLimitUsd?: number; requireBudget?: boolean }>()
   const engine = new Engine({
     repoDir: opened.dir,
     identity: BOT_IDENTITY,
     dispatcher,
     registry: opened.registry,
+    push: hosted.push,
+    spendLimitUsd: hosted.spendLimitUsd ?? null,
+    requireBudget: hosted.requireBudget,
     log,
   })
   const scheduler = new Scheduler({
@@ -75,6 +84,7 @@ async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler:
     identity: BOT_IDENTITY,
     dispatcher,
     registry: opened.registry,
+    push: hosted.push,
     log,
   })
   return { engine, scheduler }

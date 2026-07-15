@@ -236,6 +236,16 @@ export class LocalGitSource implements RunSource {
           : undefined,
       })
       const oid = await wtGit.revParse('HEAD')
+      // push follows every decision commit, whichever write path carried it —
+      // a hosted source that only pushed the plumbing path would strand the
+      // commits made while a checkout exists.
+      if (this.options.push) {
+        try {
+          await this.git.run(['push', 'origin', `${ref.branch}:${ref.branch}`])
+        } catch (e) {
+          return { ok: true, commit: oid ?? undefined, message: `committed locally; push failed: ${(e as Error).message}` }
+        }
+      }
       return { ok: true, commit: oid ?? undefined }
     }
 

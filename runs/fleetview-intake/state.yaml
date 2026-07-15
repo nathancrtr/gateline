@@ -1,7 +1,7 @@
 run: fleetview-intake
 branch: run/fleetview-intake
-phase: implement
-paused_reason: null
+phase: paused
+paused_reason: escalation
 
 budget:
   cost_limit_usd: 40
@@ -107,9 +107,10 @@ budget:
       round: 1
       adapter: claude-code
       model: anthropic/claude-fable-5
-      tokens_in: null
-      tokens_out: null
-      cost_usd: null
+      tokens_in: 0
+      tokens_out: 0
+      cost_usd: 0
+      failed: true
     - at: 2026-07-15T23:12:56.470Z
       role: reviewer
       task: 03-intake-seam-reference
@@ -232,5 +233,13 @@ escalations:
         resolved_by: Nathan Carter,
         resolved_at: 2026-07-15T22:52:52.327Z,
         resolution: raised budget
+      },
+    {
+        at: 2026-07-15T23:14:18.546Z,
+        from_role: orchestrator,
+        reason: "reviewer (01-candidate-import-desk) failed twice: Command failed:
+          claude -p Use the reviewer subagent. on task
+          `runs/fleetview-intake/tasks/01-candidate-import-desk.yaml…",
+        resolved: false
       }
   ]

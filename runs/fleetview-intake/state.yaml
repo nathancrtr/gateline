@@ -5,8 +5,13 @@ paused_reason: null
 
 budget:
   cost_limit_usd: 30
-  cost_spent_usd: 0.60
+  cost_spent_usd: 2.10
   ledger:
+    # tech-researcher: role is a run-local extension (architect-style research);
+    # total tokens only (93933), split unavailable, cost estimated at registry rates
+    - {at: 2026-07-15T15:44:53Z, role: tech-researcher, task: null, round: null,
+       adapter: claude-code, model: claude-fable-5, tokens_in: 93933, tokens_out: null,
+       cost_usd: 1.50}
     # harness reported total tokens only (89843); in/out split unavailable, cost estimated
     - {at: 2026-07-15T15:40:38Z, role: ux-researcher, task: null, round: null,
        adapter: claude-code, model: claude-sonnet-5, tokens_in: 89843, tokens_out: null,

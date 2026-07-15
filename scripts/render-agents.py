@@ -13,11 +13,31 @@ Stdlib-only and Python 3.9-compatible on purpose (see plan ADR-8 of the wordfreq
 run): JSON manifests instead of YAML, no PEP 604 annotations.
 """
 import json
+import re
 import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 HEADER = "<!-- RENDERED from roles/{role}.md by scripts/render-agents.py - DO NOT EDIT.\n     Edit the role spec, then run: python3 scripts/render-agents.py -->"
+
+
+def overlay_for(role):
+    """Project policy layer (docs/INTEGRATION.md §4): overlays/_all.md is
+    spliced into every agent, overlays/<role>.md into that role's agent.
+    A stub that is only HTML comments splices nothing."""
+    parts = []
+    for name in ("_all", role):
+        path = REPO / "overlays" / ("%s.md" % name)
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        if not re.sub(r"<!--.*?-->", "", text, flags=re.S).strip():
+            continue
+        parts.append(
+            "<!-- OVERLAY from overlays/%s.md - project policy layer -->\n\n%s"
+            % (name, text.strip())
+        )
+    return parts
 
 
 def parse_role(path):
@@ -78,8 +98,10 @@ def render_agent(role, manifest):
     ]
     for key, value in manifest.get("extra_frontmatter", {}).items():
         lines.append("%s: %s" % (key, json.dumps(value)))
-    lines += ["---", "", HEADER.format(role=role), "", body.rstrip() + "\n"]
-    return "\n".join(lines)
+    lines += ["---", "", HEADER.format(role=role), "", body.rstrip()]
+    for overlay in overlay_for(role):
+        lines += ["", overlay.rstrip()]
+    return "\n".join(lines) + "\n"
 
 
 def main():

@@ -241,7 +241,10 @@ escalations:
         reason: "reviewer (01-candidate-import-desk) failed twice: Command failed:
           claude -p Use the reviewer subagent. on task
           `runs/fleetview-intake/tasks/01-candidate-import-desk.yaml…",
-        resolved: false
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-15T23:34:33.369Z,
+        resolution: reached API limit
       },
     {
         at: 2026-07-15T23:14:26.944Z,

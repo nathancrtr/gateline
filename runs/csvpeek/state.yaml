@@ -1,6 +1,6 @@
 run: csvpeek
 branch: run/csvpeek
-phase: spec # spec | plan | implement | integrate | release | done | paused
+phase: plan # spec | plan | implement | integrate | release | done | paused
 paused_reason: null
 
 budget:
@@ -23,7 +23,14 @@ budget:
 
 gates:
   # a gate entry is written ONLY by the named human
-  G0: { approved: false, by: null, at: null, notes: null }
+  G0:
+    {
+      approved: true,
+      by: Nathan Carter,
+      at: 2026-07-15T06:14:34.838Z,
+      notes: null,
+      burden: confirmation
+    }
   G1: { approved: false, by: null, at: null, notes: null }
   G2: { approved: false, by: null, at: null, notes: null }
   G3: { approved: false, by: null, at: null, notes: null }

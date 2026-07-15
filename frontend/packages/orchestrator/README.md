@@ -132,5 +132,9 @@ anywhere; restart converges (`test/hardening.test.ts` drills exactly this).
 Running M2+ against real work is gated on the DESIGN.md §7 promotion criterion:
 sustained majority-`confirmation` burden across v0 gate decisions, and the
 shadow bar of **three** full v0 runs whose disagreements are all dispositioned
-(`shadow-wordfreq.md` is run 1 of 3). Until then, `tick --dry-run` and `shadow`
-are the sanctioned modes outside toy runs.
+— met 2026-07-13 (`shadow-wordfreq.md`, `shadow-mdtoc.md`, `shadow-dupefind.md`).
+M2 begins with a toy run in this repo, humans at every gate, on the operator's
+laptop or their hosted cockpit machine (docs/DEPLOY.md, `ORCH_ENABLED=1` —
+which wires in `--push`, `--require-budget`, and `--spend-limit-usd`). Until
+that toy run closes, `tick --dry-run` and `shadow` remain the sanctioned modes
+outside toy runs.

@@ -2,9 +2,11 @@
 
 This guide deploys the gate frontend (FleetView) as a hosted single-user
 instance: a URL you can open in any browser to read runs and record gate
-decisions on your pipeline repository. It hosts the **frontend only** — the
-orchestrator never runs on the host; agent dispatch stays wherever it runs
-today.
+decisions on your pipeline repository. The v1 orchestrator can run on the
+same machine as an **opt-in second process** (`ORCH_ENABLED=1`, see
+[the orchestrator section](#enable-the-orchestrator-hosted-dispatch)) — off
+by default, and gated by the autonomy policy in
+[ORCHESTRATOR.md](ORCHESTRATOR.md) §10 regardless of where it runs.
 
 It is written for one concrete stack (Docker image, Fly.io, Cloudflare Tunnel
 + Access) because that is the stack the recipe was proven on, but the image is
@@ -78,6 +80,13 @@ re-presents rather than corrupting state.
 | `PORT` | no | `4310` | Server port inside the container. |
 | `HOST` | no | `127.0.0.1` with tunnel, else `0.0.0.0` | Bind address; leave the default. |
 | `DATA_DIR` | no | `/data` | Volume mount point holding the clone. |
+| `GITHUB_WEBHOOK_SECRET` | no | — | Arms `POST /api/webhooks/github`; unset → the route does not exist. |
+| `GITHUB_TOKEN` | no | — | Enables PR-approval sync on review webhooks (token needs Pull requests: Read). |
+| `ORCH_ENABLED` | no | `0` | `1` runs the v1 orchestrator against the same clone. Read the orchestrator section first. |
+| `ANTHROPIC_API_KEY` | with `ORCH_ENABLED=1` | — | Model auth for the claude-code dispatch harness. |
+| `ORCH_SPEND_LIMIT_USD` | recommended | — | Host-wide ceiling: refuse dispatch when projected spend across all active runs exceeds it. |
+| `ORCH_HEARTBEAT_SECONDS` | no | `180` | Orchestrator heartbeat (stale-dispatch aging, missed-event sweep). |
+| `ORCH_ADAPTER` | no | `claude-code` | Headless adapter name (`adapters/<name>/manifest.json` in your repo). |
 
 ## Try it locally
 
@@ -139,6 +148,69 @@ In the Cloudflare dashboard (Zero Trust), with a domain on your account:
 
 Order matters: create the Access application **before** you share or use the
 hostname — the tunnel is reachable the moment it connects.
+
+## GitHub webhooks: push-driven freshness + PR-approval sync
+
+Without webhooks the instance polls origin every `FETCH_INTERVAL` seconds.
+With them, a push appears in the UI immediately, and a PR review approving a
+run's G2 is recorded into `state.yaml` minutes-to-seconds after it happens.
+
+1. Set the secret: generate a long random string, then
+   `fly secrets set GITHUB_WEBHOOK_SECRET=...` (and `GITHUB_TOKEN=...` if you
+   want review sync — add **Pull requests: Read** to the fine-grained PAT).
+2. On the repository: Settings → Webhooks → Add. Payload URL
+   `https://<hostname>/api/webhooks/github`, content type
+   `application/json`, the same secret, events: **Pushes** and
+   **Pull request reviews**.
+3. **Cloudflare Access bypass for the webhook path.** GitHub's deliveries
+   can't log in through Access, so add a second Access application scoped to
+   `<hostname>/api/webhooks/*` with a single **Bypass** policy (Everyone).
+   This is safe because the route authenticates every request itself: the
+   HMAC signature over the raw body, verified in constant time, with the
+   route entirely absent unless the secret is configured. Nothing else moves
+   out from behind Access.
+4. Verify with the webhook's "Recent deliveries": the ping should show
+   `200` and `pong`.
+
+## Enable the orchestrator (hosted dispatch)
+
+`ORCH_ENABLED=1` runs the v1 orchestrator (`agentic-orchestrator watch`) as a
+second process against the same clone. Read this section — and
+[ORCHESTRATOR.md](ORCHESTRATOR.md) §10's autonomy gate — before flipping it.
+
+**What it does and does not do.** The orchestrator dispatches agents *within*
+phases, meters their cost into each run's ledger, and escalates when things
+go wrong. It structurally cannot write `gates.*` — every gate remains a named
+human's decision, made in this frontend. Decisions you record here move refs;
+the orchestrator's watcher picks the change up within seconds.
+
+**Hard lines wired into the hosted invocation:**
+
+* `--push` — every orchestrator commit goes to origin. The machine is
+  disposable; origin is the record.
+* `--require-budget` — a run without `budget.cost_limit_usd` escalates and
+  pauses instead of dispatching. No ceiling, no dispatch.
+* `--spend-limit-usd $ORCH_SPEND_LIMIT_USD` — a host-wide cap across all
+  active runs, on top of the per-run caps. Set it.
+
+**Prerequisites, in order:**
+
+1. Your repo's `registry/models.yaml` must bind roles to **real model IDs**
+   with real pricing — the orchestrator dispatches whatever the registry
+   names, and template registries ship with illustrative placeholders.
+2. `fly secrets set ANTHROPIC_API_KEY=...` (API billing, not a login
+   session), and set `ORCH_SPEND_LIMIT_USD` in `fly.toml`'s `[env]`.
+3. Prove the plumbing before real dispatch: from the machine, run the
+   one-prompt live smoke (`fly ssh console`, then `ORCH_LIVE_SMOKE=1` per
+   `frontend/packages/orchestrator/README.md`) — it costs cents and verifies
+   auth + usage metering in the real environment.
+4. First live work should be a **toy run** with humans at every gate
+   (ORCHESTRATOR.md §10 M2) — not a real feature.
+
+**Stopping it.** Pausing a run in the UI (`phase: paused`) stops new
+dispatches for that run; in-flight work lands harmlessly. `ORCH_ENABLED=0` +
+`fly deploy` (or `fly machine stop`) stops the process entirely — state is
+in git, restart converges, kills are safe.
 
 ## Verify the deployment
 

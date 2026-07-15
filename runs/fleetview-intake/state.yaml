@@ -89,6 +89,15 @@ budget:
       tokens_in: null
       tokens_out: null
       cost_usd: null
+    - at: 2026-07-15T23:08:39.741Z
+      role: reviewer
+      task: 01-candidate-import-desk
+      round: 1
+      adapter: claude-code
+      model: anthropic/claude-fable-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
 
 gates:
   G0:

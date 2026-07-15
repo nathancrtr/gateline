@@ -110,8 +110,15 @@ export class Engine {
       await this.sweepStale(ref)
       // Pin the tip: observe at this exact commit and CAS every write against
       // it, so nothing decided from a stale read can land (§4.4's guard,
-      // stretched over the whole derive-then-write span).
-      const tip = await this.source.git.revParse(`refs/heads/${ref.branch}`)
+      // stretched over the whole derive-then-write span). A hosted clone sees
+      // a new run only as a remote-tracking ref until the first write
+      // materializes the local branch (LocalGitSource.syncFromRemote), so
+      // resolve the tip where listRuns actually found the run — pinning only
+      // refs/heads would silently skip every not-yet-written remote run.
+      const tip =
+        ref.kind === 'remote'
+          ? await this.source.git.revParse(ref.ref)
+          : await this.source.git.revParse(`refs/heads/${ref.branch}`)
       if (!tip) continue
       const pinned = { ...ref, ref: tip }
       const obs = await observeRun(this.source, pinned, {

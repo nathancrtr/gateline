@@ -117,9 +117,10 @@ budget:
       round: 1
       adapter: claude-code
       model: anthropic/claude-fable-5
-      tokens_in: null
-      tokens_out: null
-      cost_usd: null
+      tokens_in: 0
+      tokens_out: 0
+      cost_usd: 0
+      failed: true
 
 gates:
   G0:
@@ -240,6 +241,14 @@ escalations:
         reason: "reviewer (01-candidate-import-desk) failed twice: Command failed:
           claude -p Use the reviewer subagent. on task
           `runs/fleetview-intake/tasks/01-candidate-import-desk.yaml…",
+        resolved: false
+      },
+    {
+        at: 2026-07-15T23:14:26.944Z,
+        from_role: orchestrator,
+        reason: "reviewer (03-intake-seam-reference) failed twice: Command failed:
+          claude -p Use the reviewer subagent. on task
+          `runs/fleetview-intake/tasks/03-intake-seam-reference.yaml…",
         resolved: false
       }
   ]

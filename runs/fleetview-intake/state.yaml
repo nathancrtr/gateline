@@ -1,7 +1,7 @@
 run: fleetview-intake
 branch: run/fleetview-intake
-phase: implement
-paused_reason: null
+phase: paused
+paused_reason: budget-exhausted
 
 budget:
   cost_limit_usd: 30
@@ -135,4 +135,13 @@ tasks:
     { id: 03-intake-seam-reference, status: pending, review_rounds: 0 }
   ]
 
-escalations: []
+escalations:
+  [
+    {
+        at: 2026-07-15T18:51:41.084Z,
+        from_role: orchestrator,
+        reason: projected spend $31.31 (ledger $7.31 + estimates) exceeds cost_limit_usd
+          $30 — pausing rather than degrading,
+        resolved: false
+      }
+  ]

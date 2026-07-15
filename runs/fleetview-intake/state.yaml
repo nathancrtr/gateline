@@ -5,8 +5,12 @@ paused_reason: null
 
 budget:
   cost_limit_usd: 30
-  cost_spent_usd: 2.10
+  cost_spent_usd: 2.40
   ledger:
+    # analyst: total tokens only (50855), split unavailable, cost estimated at registry rates
+    - {at: 2026-07-15T15:58:17Z, role: analyst, task: null, round: null,
+       adapter: claude-code, model: claude-sonnet-5, tokens_in: 50855, tokens_out: null,
+       cost_usd: 0.30}
     # tech-researcher: role is a run-local extension (architect-style research);
     # total tokens only (93933), split unavailable, cost estimated at registry rates
     - {at: 2026-07-15T15:44:53Z, role: tech-researcher, task: null, round: null,

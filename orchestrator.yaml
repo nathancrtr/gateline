@@ -1,0 +1,17 @@
+# Orchestrator runtime config (docs/ORCHESTRATOR.md §4.6) — read by the v1
+# orchestrator at the default-branch tip, like the registry. Committed here
+# because a schedule is project policy, not host configuration: any orchestrator
+# instance pointed at this repo derives the same sweeps.
+#
+# schedules: periodic role dispatches that are not tied to a pipeline run.
+# Each sweep lands as runs/<role>-<date>/ on branch run/<role>-<date>; a human
+# reviews and merges the branch — that merge is the approval (P4), and its
+# marker (sweep.yaml) on the default branch is what makes the next sweep's
+# interval derivable. One sweep per role may be open at a time; sub-daily
+# intervals clamp to one sweep per day (the slug is date-grained).
+
+schedules:
+  historian:
+    every: 7d            # interval between sweeps: <n>d | <n>h | <n>m
+    cost_limit_usd: 5    # pre-flight cap for one sweep dispatch
+    enabled: true

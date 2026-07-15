@@ -9,7 +9,8 @@
     "reviewer",
     "verifier",
     "ops",
-    "integrator"
+    "integrator",
+    "historian"
   ],
   "tools_style": "comma",
   "tool_map": {

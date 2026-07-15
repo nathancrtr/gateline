@@ -108,16 +108,33 @@ function dispatchLanded(d: DispatchIntent, facts: NextFacts): boolean {
   }
 }
 
+/**
+ * The §4.4 commit-then-launch intent: the next commit flips the derived
+ * dispatch's task to `dispatched` before any artifact exists. That commit IS
+ * the engine's own dispatch protocol, performed by hand (M0 discipline) —
+ * refusing to credit it made a disciplined v0 run "disagree" with the engine
+ * for doing exactly what the engine would do (mdtoc replay, steps 8/11).
+ */
+function dispatchIntentCommitted(d: DispatchIntent, facts: NextFacts): boolean {
+  if (d.task === null || !facts.prevState || !facts.nextState) return false
+  const before = facts.prevState.tasks.find((t) => t.id === d.task)
+  const after = facts.nextState.tasks.find((t) => t.id === d.task)
+  return before !== undefined && after !== undefined && before.status !== 'dispatched' && after.status === 'dispatched'
+}
+
 function matchStep(action: DerivedAction, facts: NextFacts): { verdict: ShadowVerdict; note: string } {
   const { prevState, nextState } = facts
   switch (action.kind) {
     case 'dispatch': {
       const landed = action.dispatches.filter((d) => dispatchLanded(d, facts))
       if (landed.length === action.dispatches.length) return { verdict: 'agree', note: 'every derived dispatch’s artifact landed next' }
-      if (landed.length > 0)
+      const performed = action.dispatches.filter((d) => dispatchLanded(d, facts) || dispatchIntentCommitted(d, facts))
+      if (performed.length === action.dispatches.length)
+        return { verdict: 'agree', note: 'dispatch intent committed next (§4.4 commit-then-launch)' }
+      if (performed.length > 0)
         return {
           verdict: 'note',
-          note: `${landed.length}/${action.dispatches.length} derived dispatches landed next — v0 human serialized what the engine would parallelize`,
+          note: `${performed.length}/${action.dispatches.length} derived dispatches landed next — v0 human serialized what the engine would parallelize`,
         }
       return { verdict: 'disagree', note: 'derived a dispatch but the next commit shows no matching artifact' }
     }
@@ -130,9 +147,20 @@ function matchStep(action: DerivedAction, facts: NextFacts): { verdict: ShadowVe
           const before = prevState.tasks.find((p) => p.id === t.id)
           return before !== undefined && before.status !== t.status
         })
+      // review_rounds updates previously fell through to `disagree` even when
+      // the next commit performed exactly that bookkeeping (mdtoc replay,
+      // step 15) — the record matcher knew phase and task-status only.
+      const roundsChanged =
+        prevState &&
+        nextState.tasks.some((t) => {
+          const before = prevState.tasks.find((p) => p.id === t.id)
+          return before !== undefined && before.review_rounds !== t.review_rounds
+        })
       if (action.updates.some((u) => u.field === 'phase') && phaseChanged) return { verdict: 'agree', note: 'phase advanced next' }
       if (action.updates.some((u) => u.field === 'task-status') && statusChanged)
         return { verdict: 'agree', note: 'task status recorded next' }
+      if (action.updates.some((u) => u.field === 'review-rounds') && roundsChanged)
+        return { verdict: 'agree', note: 'review round recorded next' }
       return { verdict: 'disagree', note: 'derived bookkeeping the next commit did not perform' }
     }
     case 'escalate': {

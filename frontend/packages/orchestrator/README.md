@@ -46,7 +46,19 @@ node packages/orchestrator/src/main.ts --repo ~/repos/myproject watch
 # the registry's avoid_vendor_of pins (reviewer/verifier off the implementer's vendor)
 node packages/orchestrator/src/main.ts --repo ~/repos/myproject \
   --adapter claude-code --adapter copilot-cli watch
+
+# Force a scheduled sweep now (dueness bypassed; the open-sweep and
+# same-day guards still apply)
+node packages/orchestrator/src/main.ts --repo ~/repos/myproject sweep historian
 ```
+
+Scheduled roles (design §4.6): when the target repo commits an
+`orchestrator.yaml` with a `schedules:` section, every tick also reconciles
+those schedules — a due Historian sweep is seeded as `runs/historian-<date>/`
+on branch `run/historian-<date>` (a `sweep.yaml` marker as its one-entry
+ledger, no `state.yaml`), the role is dispatched through the same seam, and
+the branch waits for a human to review the docs-delta and merge. No
+`orchestrator.yaml`, no sweeps — the feature is entirely opt-in per repo.
 
 Driving a live toy run end-to-end (the M2 exit criterion):
 
@@ -106,6 +118,7 @@ has earned trust (design §10).
 | `router.ts` | Dispatch-time P5: `avoid_vendor_of` routes reviewer/verifier to an adapter on a different vendor than the implementer; refuses when two adapters both violate the pin; advisory when one single-vendor adapter makes it unsatisfiable. |
 | `workspace.ts` | Run checkouts as disposable worktrees; per-task isolation for parallel implementers with serial fold-back (a fold conflict = plan defect → escalate). |
 | `triggers.ts` | Ref watcher, heartbeat, dispatch-completion, manual — all funnel into one non-overlapping tick loop. |
+| `schedule.ts` | Scheduled roles (S0–S4 + SB, one test per row): `orchestrator.yaml` schedules → due sweeps seeded as marker-only mini-runs by commit-then-launch, metered through the same seam. |
 | `shadow.ts` | M1: replay history, derived vs actual, disagreements dispositioned (see `shadow-wordfreq.md`). |
 
 Crash recovery: job handles are never committed (host ephemera). A `dispatched`
@@ -119,5 +132,9 @@ anywhere; restart converges (`test/hardening.test.ts` drills exactly this).
 Running M2+ against real work is gated on the DESIGN.md §7 promotion criterion:
 sustained majority-`confirmation` burden across v0 gate decisions, and the
 shadow bar of **three** full v0 runs whose disagreements are all dispositioned
-(`shadow-wordfreq.md` is run 1 of 3). Until then, `tick --dry-run` and `shadow`
-are the sanctioned modes outside toy runs.
+— met 2026-07-13 (`shadow-wordfreq.md`, `shadow-mdtoc.md`, `shadow-dupefind.md`).
+M2 begins with a toy run in this repo, humans at every gate, on the operator's
+laptop or their hosted cockpit machine (docs/DEPLOY.md, `ORCH_ENABLED=1` —
+which wires in `--push`, `--require-budget`, and `--spend-limit-usd`). Until
+that toy run closes, `tick --dry-run` and `shadow` remain the sanctioned modes
+outside toy runs.

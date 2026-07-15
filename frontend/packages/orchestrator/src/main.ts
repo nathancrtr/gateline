@@ -4,6 +4,7 @@
 //   tick             one live reconcile pass: dispatch, wait, meter, exit
 //   watch            resident mode: ref watcher + heartbeat + completions
 //   shadow <slug>    replay a run's history, derived vs actual (M1)
+//   sweep <role>     force a scheduled sweep now (ignores dueness, not the guards)
 import { Command } from 'commander'
 import { Git, LocalGitSource, type Identity } from '@agentic/core'
 import { loadRegistry, type Registry } from './registry.ts'
@@ -14,6 +15,7 @@ import { Engine } from './engine.ts'
 import { HeadlessDispatcher } from './seam.ts'
 import { loadHeadlessManifest } from './manifest.ts'
 import { RoutingDispatcher } from './router.ts'
+import { Scheduler, type SweepOutcome } from './schedule.ts'
 import { runLoop } from './triggers.ts'
 
 /** One identity per orchestrator install (resolved question 4). */
@@ -34,6 +36,11 @@ program
     (value: string, acc: string[]) => [...acc, value],
     [] as string[],
   )
+  // Hosted mode (ORCHESTRATOR.md §2 first deployment): the machine is
+  // disposable, origin is the record; unattended dispatch needs hard ceilings.
+  .option('--push', 'push every orchestrator commit to origin (hosted mode)')
+  .option('--spend-limit-usd <usd>', 'refuse new dispatches when projected spend across all active runs exceeds this', parseFloat)
+  .option('--require-budget', 'refuse dispatch on any run missing budget.cost_limit_usd')
 
 interface Opened {
   dir: string
@@ -47,7 +54,8 @@ async function open(): Promise<Opened> {
   return { dir, source: new LocalGitSource('local', dir), registry: await loadRegistry(git, await git.defaultBranch()) }
 }
 
-async function buildEngine(opened: Opened): Promise<Engine> {
+/** Engine and scheduler share one dispatcher, so sweeps meter through the same seam (§6). */
+async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler: Scheduler }> {
   const names = program.opts<{ adapter: string[] }>().adapter
   const log = (line: string) => console.log(line)
   const adapters = await Promise.all(
@@ -60,14 +68,30 @@ async function buildEngine(opened: Opened): Promise<Engine> {
     adapters.length === 1 && !opened.registry
       ? adapters[0]!.dispatcher
       : new RoutingDispatcher(adapters, opened.registry ?? { profiles: {}, bindings: {}, pricing: {}, estimates: {} }, log)
-  return new Engine({
+  const hosted = program.opts<{ push?: boolean; spendLimitUsd?: number; requireBudget?: boolean }>()
+  const engine = new Engine({
     repoDir: opened.dir,
     identity: BOT_IDENTITY,
     dispatcher,
     registry: opened.registry,
+    push: hosted.push,
+    spendLimitUsd: hosted.spendLimitUsd ?? null,
+    requireBudget: hosted.requireBudget,
     log,
   })
+  const scheduler = new Scheduler({
+    repoDir: opened.dir,
+    identity: BOT_IDENTITY,
+    dispatcher,
+    registry: opened.registry,
+    push: hosted.push,
+    log,
+  })
+  return { engine, scheduler }
 }
+
+const printSweep = (s: SweepOutcome) =>
+  console.log(`sweep(${s.slug ?? s.role}): ${s.kind}${s.rule ? ` [${s.rule}]` : ''} — ${s.detail}`)
 
 program
   .command('tick')
@@ -85,10 +109,12 @@ program
       }
       return
     }
-    const engine = await buildEngine(opened)
+    const { engine, scheduler } = await buildEngine(opened)
     const outcomes = await engine.tick()
     for (const o of outcomes) console.log(`${o.slug}: ${o.action.kind} [${o.action.rule}]${o.launched ? ` launched ${o.launched}` : ''} — ${o.detail}`)
+    for (const s of await scheduler.tick()) printSweep(s)
     await engine.drain() // a one-shot tick owns its jobs to completion
+    await scheduler.drain()
   })
 
 program
@@ -97,9 +123,10 @@ program
   .option('--heartbeat <seconds>', 'heartbeat interval', '180')
   .action(async (opts: { heartbeat: string }) => {
     const opened = await open()
-    const engine = await buildEngine(opened)
+    const { engine, scheduler } = await buildEngine(opened)
     const loop = await runLoop(engine, opened.dir, {
       heartbeatMs: Number(opts.heartbeat) * 1000,
+      scheduler,
       log: (line) => console.log(line),
     })
     console.log(`watching ${opened.dir} (heartbeat ${opts.heartbeat}s; bot identity ${BOT_IDENTITY.name}) — ^C to stop`)
@@ -110,6 +137,23 @@ program
     }
     process.on('SIGINT', () => void stop())
     process.on('SIGTERM', () => void stop())
+  })
+
+program
+  .command('sweep <role>')
+  .description('run a scheduled sweep now, ignoring dueness (the open-sweep and same-day guards still apply)')
+  .action(async (role: string) => {
+    const opened = await open()
+    const { scheduler } = await buildEngine(opened)
+    const outcomes = await scheduler.tick({ force: role })
+    const mine = outcomes.filter((s) => s.role === role)
+    if (mine.length === 0) {
+      console.error(`no schedule for role "${role}" in orchestrator.yaml`)
+      process.exitCode = 1
+      return
+    }
+    for (const s of mine) printSweep(s)
+    await scheduler.drain()
   })
 
 program

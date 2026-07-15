@@ -1,6 +1,7 @@
 # Agentic Development System — Design
 
-**Status:** v0.1 — draft for team review
+**Status:** v0.2 — exercised end-to-end by the wordfreq run (`runs/wordfreq/`); the
+gate frontend and the v1 orchestrator it describes in §7 are implemented (`frontend/`)
 **Audience:** senior engineers moving from single-stream AI pair-programming to multi-agent, semi-autonomous development
 
 ---
@@ -48,7 +49,9 @@ review/verification to a different lineage decorrelates failure modes cheaply.
 
 The SDLC distills to eight operations: capture intent, decide approach, build, check
 correctness, check quality, integrate/release, operate, and remember. We map them to
-seven core roles (remembering is distributed — every role appends to the decision log).
+eight core roles. Remembering is distributed at write time — every role appends to the
+decision log — and owned at read time by the Historian, which periodically reconciles
+the surrounding prose (docs, changelog, tracker) with that record.
 
 | Role | Mission (one line) | Capability profile | Consumes | Produces |
 |------|--------------------|--------------------|----------|----------|
@@ -59,6 +62,7 @@ seven core roles (remembering is distributed — every role appends to the decis
 | **Reviewer** | Adversarial review of a diff against spec, plan, and standards | frontier-reasoning (≠ implementer vendor) | diff, `spec.md`, `plan.md` | `review-report.md` |
 | **Verifier** | Independently exercise behavior end-to-end; author missing tests | balanced (≠ implementer vendor) | diff, `spec.md` | `verification-report.md` |
 | **Ops** | CI/CD, environments, release plan, rollback plan | balanced | verified diff, infra | `release-plan.md` |
+| **Historian** | Scheduled sweep: reconcile docs, changelog, and tracker with the run record | fast-cheap | run artifacts since last sweep, docs, tracker | `docs-delta.md` + doc edits |
 
 Notes on the roster:
 
@@ -70,9 +74,13 @@ Notes on the roster:
 - **Reviewer and Verifier are deliberately separate.** Review is reading (does this code
   say the right thing?); verification is running (does this system do the right thing?).
   Collapsing them recreates the rubber-stamp reviews we see in human teams.
-- **A Historian/Docs role is the worked example of P6:** when changelog and doc drift
-  become painful, add `roles/historian.md` and a `docs-delta.md` contract. Nothing else
-  changes.
+- **Historian is the worked example of P6, and it landed as predicted:** when changelog
+  and doc drift became painful, adding the role cost `roles/historian.md`, a
+  `contracts/docs-delta.md` contract, and a registry binding — no change to any other
+  role or contract. It differs from the gate roles in two deliberate ways: it is
+  *scheduled*, not gate-driven (`orchestrator.yaml` `schedules:`; each sweep is a
+  mini-run `runs/historian-<date>/` on its own branch), and its human approval is the
+  sweep branch's review-and-merge rather than a numbered gate.
 
 Full specs live in [`roles/`](../roles/) — one file per role, with mission, operating
 instructions, definition of done, and explicit escalation triggers.
@@ -103,10 +111,12 @@ Rules that keep the loop safe:
   agents arguing past three rounds are almost always stuck on an ambiguity in the spec,
   which is a G0/G1 defect, not an implementation defect.
 - **Budget cap.** Each run carries a token/cost budget in `state.yaml`; exhaustion
-  pauses the pipeline rather than degrading quality silently. *Known v0 gap:* nothing
-  meters spend automatically — the human orchestrator must update `cost_spent_usd`
-  from harness usage output, and the wordfreq pilot showed that in practice this
-  silently doesn't happen. Automated metering is a v1 prerequisite, not a nice-to-have.
+  pauses the pipeline rather than degrading quality silently. In v1 every dispatch is
+  metered automatically through the orchestrator's dispatch seam into
+  `budget.ledger[]`, with a pre-flight cap check (ORCHESTRATOR.md §6) — the wordfreq
+  pilot proved the earlier honor-system approach silently records nothing. *Remaining
+  v0 gap:* in human-orchestrated mode the ledger entry after each dispatch is still
+  hand-appended from harness usage output (WALKTHROUGH.md).
 - **Gates are named humans, not "the team."** `state.yaml` records who approved what,
   when. This matters more as this generalizes up the org (Future Consideration #1).
 
@@ -172,7 +182,10 @@ apply to a new hire.
 criterion: the team has run enough v0 cycles that gate reviews have become
 confirmations rather than corrections. The v1 design — a stateless reconciler over
 `state.yaml` with an adapter-shaped dispatch seam and automated budget metering — is
-drafted in [ORCHESTRATOR.md](ORCHESTRATOR.md).
+specified in [ORCHESTRATOR.md](ORCHESTRATOR.md) and implemented in
+[`frontend/packages/orchestrator`](../frontend/packages/orchestrator/) (runbook in
+its README; WALKTHROUGH.md closes with the v1 form of the same pipeline). Autonomy
+remains gated on the promotion criterion, measured by the frontend's burden metric.
 
 The role specs are identical in both modes — only who executes `orchestrator.md` changes.
 
@@ -204,7 +217,7 @@ restated per-runner.
 | Infinite implement/review loops | 3-round cap → human escalation (§4) |
 | Context contamination (agent B inherits agent A's mistaken assumptions) | P1: artifacts only; no shared conversations; each agent starts cold from files |
 | Merge conflicts between parallel implementers | Architect must declare file-contact surfaces per task; overlapping tasks are serialized |
-| Parallel implementers observe each other's mid-flight (broken) states in a shared working tree | Disjoint surfaces limit the damage (observed harmlessly in the wordfreq run); adapters should isolate parallel implementers in per-task worktrees |
+| Parallel implementers observe each other's mid-flight (broken) states in a shared working tree | Disjoint surfaces limit the damage (observed harmlessly in the wordfreq run); the v1 orchestrator isolates each parallel implementer in a per-task worktree with serial fold-back (ORCHESTRATOR.md §5.3). v0 human dispatch still shares one tree |
 | Spec drift (implementation quietly diverges from spec) | Reviewer and Verifier receive `spec.md` directly, not the implementer's summary of it |
 | Silent budget burn | Per-run budget in `state.yaml`; exhaustion pauses, never degrades |
 | Malformed handoffs | Contracts define required sections; consumers bounce, never guess |

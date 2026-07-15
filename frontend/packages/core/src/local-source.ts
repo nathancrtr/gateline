@@ -17,7 +17,7 @@ export class LocalGitSource implements RunSource {
   readonly dir: string
   readonly git: Git
   readonly templates: ContractTemplates
-  private readonly options: { push?: boolean; identity?: Identity }
+  private readonly options: { push?: boolean; identity?: Identity; fetchIntervalSeconds?: number }
 
   /**
    * `options.identity` pins the author of every write from this source —
@@ -25,7 +25,7 @@ export class LocalGitSource implements RunSource {
    * surfaces omit it and write as `git config user.name/email`, so machine
    * bookkeeping and human decisions stay distinguishable at a glance.
    */
-  constructor(id: string, dir: string, options: { push?: boolean; identity?: Identity } = {}) {
+  constructor(id: string, dir: string, options: { push?: boolean; identity?: Identity; fetchIntervalSeconds?: number } = {}) {
     this.id = id
     this.dir = dir
     this.options = options
@@ -41,6 +41,39 @@ export class LocalGitSource implements RunSource {
 
   private runDir(slug: string): string {
     return `runs/${slug}`
+  }
+
+  /** Seconds between remote syncs, when this source is configured to poll. */
+  get fetchIntervalSeconds(): number | undefined {
+    return this.options.fetchIntervalSeconds
+  }
+
+  /**
+   * Pull remote state into this clone. Remote-tracking refs always update
+   * (listRuns already reads refs/remotes/*); existing local branches are
+   * fast-forwarded only when the same branch exists on origin, so a branch
+   * holding an unpushed decision commit is never clobbered — the decision's
+   * own push reconciles it. New remote branches are not materialized locally;
+   * writeState does that lazily on the first decision.
+   */
+  async syncFromRemote(): Promise<void> {
+    await this.git.run(['fetch', '--prune', 'origin'])
+    // Prefix patterns (no glob): `*` in for-each-ref doesn't cross `/`, and
+    // run branches live at refs/heads/run/<slug>.
+    const remoteBranches = new Set(
+      (await this.git.forEachRef(['refs/remotes/origin'])).map((r) => r.ref.replace('refs/remotes/origin/', '')),
+    )
+    const specs = (await this.git.forEachRef(['refs/heads']))
+      .map((l) => l.ref.replace('refs/heads/', ''))
+      .filter((b) => remoteBranches.has(b))
+      .map((b) => `refs/heads/${b}:refs/heads/${b}`)
+    if (specs.length === 0) return
+    try {
+      await this.git.run(['fetch', 'origin', ...specs])
+    } catch {
+      // Expected refusals: non-fast-forward (local unpushed work) and the
+      // checked-out branch. The remote-tracking refs above carry the news.
+    }
   }
 
   async listRuns(): Promise<RunRef[]> {
@@ -155,11 +188,12 @@ export class LocalGitSource implements RunSource {
 
     const branchRef = `refs/heads/${ref.branch}`
     let tip = await this.git.revParse(branchRef)
-    if (options.expectedTip && tip !== options.expectedTip)
-      return { ok: false, reason: 'ref-moved', message: `${ref.branch} moved past the observed tip — re-derive and retry` }
-
     if (!tip) {
       // Remote-only branch: materialize a local branch at the remote tip.
+      // This happens BEFORE the expectedTip CAS check — a caller that
+      // observed the run at its remote-tracking ref (a hosted clone, where
+      // new runs have no local branch until the first write) pins that tip,
+      // and materialization is what makes the two comparable.
       const remotes = await this.git.forEachRef([`refs/remotes/*/${ref.branch}`])
       const remoteTip = remotes[0]?.oid
       if (!remoteTip)
@@ -172,6 +206,8 @@ export class LocalGitSource implements RunSource {
         return { ok: false, reason: 'ref-moved', message: 'branch appeared concurrently; re-read and retry' }
       tip = remoteTip
     }
+    if (options.expectedTip && tip !== options.expectedTip)
+      return { ok: false, reason: 'ref-moved', message: `${ref.branch} moved past the observed tip — re-derive and retry` }
 
     const statePath = `${this.runDir(ref.slug)}/state.yaml`
     const current = await this.git.show(tip, statePath)
@@ -203,6 +239,16 @@ export class LocalGitSource implements RunSource {
           : undefined,
       })
       const oid = await wtGit.revParse('HEAD')
+      // push follows every decision commit, whichever write path carried it —
+      // a hosted source that only pushed the plumbing path would strand the
+      // commits made while a checkout exists.
+      if (this.options.push) {
+        try {
+          await this.git.run(['push', 'origin', `${ref.branch}:${ref.branch}`])
+        } catch (e) {
+          return { ok: true, commit: oid ?? undefined, message: `committed locally; push failed: ${(e as Error).message}` }
+        }
+      }
       return { ok: true, commit: oid ?? undefined }
     }
 
@@ -235,6 +281,21 @@ export async function isGitRepo(dir: string): Promise<boolean> {
     } catch {
       return false
     }
+  }
+}
+
+/**
+ * The work-tree toplevel containing `dir`, or null when `dir` is not inside
+ * one. Sources must be rooted here, never at a subdirectory: pathspec reads
+ * (`ls-tree`/`log -- <path>`) resolve relative to the cwd's prefix inside a
+ * work tree while `show(ref:path)` is root-relative, so a subdirectory
+ * source lists no artifacts and silently empties the inbox (#83).
+ */
+export async function repoToplevel(dir: string): Promise<string | null> {
+  try {
+    return await new Git(dir).toplevel()
+  } catch {
+    return null
   }
 }
 

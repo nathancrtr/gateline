@@ -25,8 +25,9 @@ profiles:
       - google/<current-workhorse-model>
 
   fast-cheap:
-    # High-volume, low-stakes work. No core role binds here yet; reserved for
-    # extension roles (triage, summarization, formatting).
+    # High-volume, low-stakes work: triage, summarization, formatting.
+    # First binding: historian — evidence-gathering and doc reconciliation,
+    # with a human reviewing every sweep branch before merge.
     default: anthropic/claude-haiku-4-5
     alternates:
       - openai/<current-small-model>
@@ -37,7 +38,7 @@ pricing:
   # The v1 orchestrator prices each dispatch's usage from this map into the
   # run's budget.ledger[] (docs/ORCHESTRATOR.md §6). A model with no entry
   # here cannot be metered; the dispatch seam refuses it rather than guessing.
-  anthropic/claude-fable-5:   {usd_per_mtok_in: 15, usd_per_mtok_out: 75}
+  anthropic/claude-fable-5:   {usd_per_mtok_in: 10, usd_per_mtok_out: 50}
   anthropic/claude-sonnet-5:  {usd_per_mtok_in: 3,  usd_per_mtok_out: 15}
   anthropic/claude-haiku-4-5: {usd_per_mtok_in: 1,  usd_per_mtok_out: 5}
 
@@ -53,6 +54,7 @@ dispatch_estimates_usd:
   reviewer: 4
   verifier: 6
   ops: 2
+  historian: 1     # one sweep: read an interval's artifacts, edit docs, write the delta
 
 bindings:
   orchestrator: {profile: frontier-reasoning}
@@ -67,3 +69,7 @@ bindings:
   verifier:     {profile: balanced,           avoid_vendor_of: implementer}
 
   ops:          {profile: balanced}
+
+  # Historian is scheduled, not gate-driven (orchestrator.yaml `schedules:`);
+  # its sweep branch is human-reviewed before merge, so the cheap tier is safe.
+  historian:    {profile: fast-cheap}

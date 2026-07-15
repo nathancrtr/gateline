@@ -45,7 +45,7 @@ noted where the choice was genuinely contested.
 | Execution model | **Stateless reconciler.** The orchestrator wakes on triggers, reads `state.yaml` at the run branch tip, derives the next action from files alone, executes it, commits, and exits. No conversation state survives between wakes — the purest expression of P1, and a gate wait costs nothing (it is simply "no action derivable"). Rejected: a long-running harness session (accrues exactly the conversation state P1 exists to eliminate; undefined crash recovery; a session burning while humans deliberate at a gate). |
 | Dispatch | **Adapter-shaped seam; one implementation first.** A runtime-neutral dispatch interface, implemented for the claude-code adapter first with copilot-cli as a fast-follow milestone — P5 decorrelation is designed in from day one and delivered incrementally. Rejected: single-harness-forever (bakes the P5 gap into the first autonomous mode) and cross-vendor-before-anything-works (delays the first trust-building loop). |
 | Metering | **Designed here, enforced by the orchestrator.** Automated budget metering is DESIGN.md §4's stated v1 prerequisite, and the enforcement hook — who checks the cap and flips `phase: paused` — is naturally the process that performs every dispatch. Folding it in (§6) keeps the meter and its enforcer from drifting apart. |
-| First deployment | **Local, this repo.** v1 runs on an operator's machine against this repository (the same local-first posture the frontend took), earning trust on toy runs before any host-repo or CI deployment. Host-repo delivery is designed-for-but-later (§10). |
+| First deployment | **Single-user, this repo — the operator's laptop or their hosted cockpit machine.** v1 runs against this repository on a machine the operator owns: locally, or as a second process on the hosted single-user instance that serves FleetView ([DEPLOY.md](DEPLOY.md)), with gates decided in the hosted frontend. Humans remain at every gate either way — hosting changes where the process sleeps, not who decides. *Amended 2026-07-14 from "Local, this repo" so the M2 toy run proves the shape a production user actually runs; hosted mode adds hard ceilings (`--push`, `--require-budget`, `--spend-limit-usd`).* Host-repo delivery (repositories the operator does not own the machine for) is designed-for-but-later (§10). |
 
 ## 3. The judgment/mechanics split
 
@@ -179,6 +179,43 @@ frontend's resume control already derives the phase from the gate ledger); the
 watcher turns that commit into a tick. **`state.yaml` is the entire control plane,
 in both directions** — there is no orchestrator API, config channel, or command
 queue to keep consistent with it.
+
+### 4.6 Scheduled roles: the Historian sweep
+
+Some roles are periodic, not gate-driven — the Historian (DESIGN.md §3) sweeps the
+interval since its last run and reconciles docs, changelog, and tracker with the run
+record. The orchestrator derives these dispatches the same way it derives everything
+else: from committed files, on the same tick.
+
+Schedules live in **`orchestrator.yaml` at the repository root**, read at the
+default-branch tip like the registry. This is committed project policy, not a runtime
+command channel — any orchestrator instance pointed at the repo derives the same
+sweeps, and changing the cadence is a reviewed commit:
+
+```yaml
+schedules:
+  historian:
+    every: 7d            # <n>d | <n>h | <n>m
+    cost_limit_usd: 5    # pre-flight cap for one sweep dispatch
+    enabled: true
+```
+
+A due sweep is dispatched as a **mini-run**: `runs/<role>-<date>/` on branch
+`run/<role>-<date>`, seeded by commit-then-launch (§4.4 — the branch is created from
+the zero OID, so two instances racing a schedule resolve at the ref). The seed commit
+carries `sweep.yaml`, the sweep's one-entry ledger: the closing commit meters real
+usage into it through the same dispatch seam as every run dispatch (§6). Deliberately
+absent: `state.yaml` — runs are recognized by their state file, so sweeps stay out of
+the derivation table, the readiness table, and the frontend inbox entirely. The human
+surface is the branch itself: review the `docs-delta.md` and the applied doc edits,
+merge to approve (P4). The merged marker's `at` is what makes the next sweep's
+interval derivable.
+
+The schedule rules mirror the D-table's discipline (one test per row, S0–S4 + SB in
+`schedule.ts`): a schedule rests while a sweep for its role is open — dispatched,
+failed, or awaiting review — so sweeps never pile up on an unmerged predecessor, and
+a role's estimate exceeding its schedule's cap is a config defect that skips with a
+warning rather than dispatching (pause-don't-degrade, applied to schedules).
 
 ## 5. The dispatch seam
 

@@ -188,11 +188,12 @@ export class LocalGitSource implements RunSource {
 
     const branchRef = `refs/heads/${ref.branch}`
     let tip = await this.git.revParse(branchRef)
-    if (options.expectedTip && tip !== options.expectedTip)
-      return { ok: false, reason: 'ref-moved', message: `${ref.branch} moved past the observed tip — re-derive and retry` }
-
     if (!tip) {
       // Remote-only branch: materialize a local branch at the remote tip.
+      // This happens BEFORE the expectedTip CAS check — a caller that
+      // observed the run at its remote-tracking ref (a hosted clone, where
+      // new runs have no local branch until the first write) pins that tip,
+      // and materialization is what makes the two comparable.
       const remotes = await this.git.forEachRef([`refs/remotes/*/${ref.branch}`])
       const remoteTip = remotes[0]?.oid
       if (!remoteTip)
@@ -205,6 +206,8 @@ export class LocalGitSource implements RunSource {
         return { ok: false, reason: 'ref-moved', message: 'branch appeared concurrently; re-read and retry' }
       tip = remoteTip
     }
+    if (options.expectedTip && tip !== options.expectedTip)
+      return { ok: false, reason: 'ref-moved', message: `${ref.branch} moved past the observed tip — re-derive and retry` }
 
     const statePath = `${this.runDir(ref.slug)}/state.yaml`
     const current = await this.git.show(tip, statePath)

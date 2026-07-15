@@ -143,3 +143,39 @@ describe('--require-budget: no ceiling, no dispatch (RB)', () => {
     expect(state?.paused_reason).toBe('budget-exhausted')
   })
 })
+
+describe('hosted clone: a run that exists only as a remote-tracking ref', () => {
+  // The M2 csvpeek wedge: a hosted machine clones from origin, so a newly
+  // pushed run/<slug> branch exists only as refs/remotes/origin/run/<slug>
+  // until the first write materializes it. The engine must dispatch such a
+  // run — pinning only refs/heads silently skips it on every tick.
+  it('dispatches, materializes the local branch, and pushes the bookkeeping', async () => {
+    const { dir, clock } = toyRepo()
+    const bare = addOrigin(dir)
+    execFileSync('git', ['-C', dir, 'push', '--quiet', 'origin', 'run/toy'])
+
+    const clone = `${dir}-clone`
+    cleanups.push(clone)
+    execFileSync('git', ['clone', '--quiet', bare, clone])
+    execFileSync('git', ['-C', clone, 'config', 'user.name', BOT.name])
+    execFileSync('git', ['-C', clone, 'config', 'user.email', BOT.email])
+    expect(() => refAt(clone, 'refs/heads/run/toy')).toThrow() // remote-only
+
+    const dispatcher = new FakeDispatcher((req) => {
+      agentCommit(req.cwd, clock as Clock, { 'runs/toy/spec.md': SPEC }, 'toy: spec')
+      return {}
+    })
+    const engine = makeEngine(clone, dispatcher, { push: true })
+
+    const outcomes = await engine.tick()
+    await engine.drain()
+
+    expect(outcomes.find((o) => o.slug === 'toy')?.launched).toBe(1)
+    // Local branch was materialized by the intent write, and every commit —
+    // intent, agent work, closing meter — reached origin.
+    const localTip = refAt(clone, 'refs/heads/run/toy')
+    expect(refAt(bare, 'refs/heads/run/toy')).toBe(localTip)
+    const originState = execFileSync('git', ['-C', bare, 'show', 'refs/heads/run/toy:runs/toy/state.yaml'], { encoding: 'utf8' })
+    expect(originState).toContain('cost_usd: 1.25')
+  })
+})

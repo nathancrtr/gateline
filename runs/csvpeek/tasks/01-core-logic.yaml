@@ -1,0 +1,82 @@
+# Contract: produced by Architect; consumed by exactly one Implementer.
+
+id: 01-core-logic
+title: Create csvpeek.py with the pure core (parse, profile, format — no CLI)
+requirements: [R2, R3, R4, R5, R6, R7, R8, R10, R12]
+
+scope: |
+  FIRST — environment pre-check (plan.md ADR-2): run `python3 --version` and
+  `python3 -m pytest --version`. If either command is missing, STOP and
+  escalate as environment provisioning; do not work around it (no Node
+  substitutes, no skipped checks). Record the reported Python version in this
+  task's notes (plan.md ADR-3 depends on that evidence).
+
+  Create apps/csvpeek/csvpeek.py containing the pure core of the tool — no CLI
+  yet. Implement exactly the module-level interface pinned in plan.md
+  ("Interface contracts"): TOP_N (= 5), detect_delimiter(), parse_csv(),
+  column_values(), infer_type(), count_missing(), top_values(), and
+  format_report(), with the documented signatures and semantics, and the exact
+  output format pinned in plan.md ("Report format"). Include a short module
+  docstring stating what is reported and the blank rule (a field is blank iff
+  it is exactly '' after CSV parsing).
+
+  Constraints: Python 3 stdlib only (expected imports: csv, io, collections;
+  typing imports allowed) per R12. 3.9-safe spellings only (plan.md ADR-3): no
+  `X | None` in annotations; PEP 585 subscriptions (list[str], tuple[str, int])
+  are fine. No I/O, no sys/argparse, no side effects at import time. Do NOT
+  add main() or an `if __name__ == "__main__"` block — that is task
+  02-cli-shell, which edits this same file after you; leave the file
+  import-clean for it.
+
+  Behavior to honor (defined in plan.md ADR-4, ADR-5, ADR-6, ADR-8 and the
+  spec):
+  - detect_delimiter: csv.Sniffer().sniff(text).delimiter over the whole text;
+    ',' for empty text or when Sniffer raises csv.Error; never raises (R4).
+  - parse_csv: csv.reader over io.StringIO(text, newline='') with the detected
+    delimiter; first record is the header, all remaining records are data
+    rows, kept ragged as-is; '' -> ([], []) (R2, R3, R8, R10).
+  - column_values: one list per header column; short rows contribute '' for
+    their missing trailing columns; fields beyond len(header) are ignored
+    (R8 + spec ragged assumption).
+  - infer_type: judged over non-blank values only (blank == '' exactly;
+    AC6.2). 'integer' iff every non-blank value parses via int(); 'float' iff
+    every non-blank parses via float() and at least one does not parse via
+    int(); else 'string'. No non-blank values -> 'string' (R5, AC10.2).
+  - count_missing: entries exactly equal to '' (R6).
+  - top_values: Counter over non-blank values, then
+    sorted(counter.items(), key=lambda p: (-p[1], p[0]))[:n], default
+    n=TOP_N=5. Do NOT use Counter.most_common() — its tie order violates the
+    spec's ascending-value tie-break (plan.md ADR-6) (R7, AC7.1, AC7.2).
+  - format_report: the exact format in plan.md "Report format" — 'Rows: N' and
+    'Columns: M' summary lines, then per header-order column one blank line
+    plus a 'Column: <name>' block with '  Type: ...', '  Missing: ...',
+    '  Common: ...' lines; '  Common: (none)' when top_values is empty; every
+    line ends with \n; no trailing blank line (R2, R3, R5, R6, R7, R10).
+
+file_contact_surface:
+  - apps/csvpeek/csvpeek.py
+
+acceptance_tests:
+  # Function-level checks mirroring the spec ACs (run from apps/csvpeek/):
+  - "python3 -c \"import csvpeek as c; h,r=c.parse_csv('name,age,city\\na,1,x\\nb,2,y\\nc,3,z\\nd,4,w\\ne,5,v\\n'); assert h==['name','age','city'] and len(r)==5\"  # AC2.1, AC3.1, AC4.2"
+  - "python3 -c \"import csvpeek as c; h,r=c.parse_csv('name;age;city\\nalice;30;paris\\n'); assert h==['name','age','city'] and r==[['alice','30','paris']]\"  # AC4.1"
+  - "python3 -c \"import csvpeek as c; h,r=c.parse_csv('name,age,city\\n'); assert h==['name','age','city'] and r==[]\"  # AC2.2, AC10.2"
+  - "python3 -c \"import csvpeek as c; assert c.parse_csv('')==([],[])\"  # AC10.1"
+  - "python3 -c \"import csvpeek as c; assert c.infer_type(['1','2','-3'])=='integer'\"  # AC5.1"
+  - "python3 -c \"import csvpeek as c; assert c.infer_type(['1.5','2','3'])=='float'\"  # AC5.2"
+  - "python3 -c \"import csvpeek as c; assert c.infer_type(['a','b','c'])=='string' and c.infer_type(['1','a','3'])=='string'\"  # AC5.3"
+  - "python3 -c \"import csvpeek as c; assert c.infer_type(['1','','3'])=='integer' and c.count_missing(['1','','3'])==1\"  # AC6.1, AC6.2"
+  - "python3 -c \"import csvpeek as c; assert c.infer_type([])=='string' and c.infer_type(['',''])=='string' and c.top_values(['',''])==[]\"  # AC10.2 support"
+  - "python3 -c \"import csvpeek as c; r=c.top_values(['x']*10+['y']*5+['z']); assert r[0]==('x',10) and r[1]==('y',5)\"  # AC7.1"
+  - "python3 -c \"import csvpeek as c; assert len(c.top_values([str(i) for i in range(7)]))==5\"  # AC7.2"
+  - "python3 -c \"import csvpeek as c; assert c.top_values(['b','a','b','a'])==[('a',2),('b',2)]\"  # tie-break, spec Assumptions"
+  - "python3 -c \"import csvpeek as c; assert c.column_values(['a','b','c'],[['1','2']])==[['1'],['2'],['']]\"  # AC8.1 semantics"
+  - "python3 -c \"import csvpeek as c; assert c.format_report([],[])=='Rows: 0\\nColumns: 0\\n'\"  # AC10.1"
+  - "Module imports cleanly; contains no main(), no __main__ guard, no imports outside the stdlib (AC12.2)."
+  - "Python version recorded in this task's notes (plan.md ADR-2/ADR-3)."
+
+depends_on: []
+
+status: pending
+
+notes: ""

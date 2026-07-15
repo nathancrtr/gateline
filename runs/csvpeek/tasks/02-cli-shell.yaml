@@ -1,0 +1,59 @@
+# Contract: produced by Architect; consumed by exactly one Implementer.
+
+id: 02-cli-shell
+title: Add the argparse CLI shell, error handling, and __main__ entry to csvpeek.py
+requirements: [R1, R9, R10, R12]
+
+scope: |
+  Modify apps/csvpeek/csvpeek.py (created by task 01-core-logic; its core
+  functions are already merged — do not change their signatures or behavior).
+  Add exactly the remaining interface pinned in plan.md ("Interface contracts"
+  and "CLI contract"): main(argv=None) -> int and the
+  `if __name__ == "__main__": raise SystemExit(main())` guard. 3.9-safe
+  spellings only (plan.md ADR-3): the signature is
+  `def main(argv: Optional[Sequence[str]] = None) -> int:` with Optional and
+  Sequence imported from typing — never `X | None`.
+
+  main() must:
+  - Parse args with argparse: prog="csvpeek.py"; one required positional
+    `file`; no other arguments or flags of any kind (spec Assumptions /
+    Out of scope). Missing positional -> argparse's own usage/error on stderr,
+    exit 2 (AC1.2).
+  - Read the file with open(path, encoding="utf-8", newline="") inside one
+    try/except catching (OSError, UnicodeDecodeError) (plan.md ADR-7); on
+    failure print exactly one human-readable line to stderr of the form
+    "csvpeek.py: error: <reason>" (never a traceback) and return 1 (AC9.1,
+    AC9.2).
+  - On success: header, rows = parse_csv(text);
+    sys.stdout.write(format_report(header, rows)); return 0. Use
+    sys.stdout.write, not print — task 04's report test is byte-exact
+    (plan.md ADR-8). Empty and header-only files are success paths: exit 0
+    (AC10.1, AC10.2).
+
+  Constraints: stdlib only (adds argparse, sys); all logic stays in this one
+  file (R12). Do not add new files. If the environment pre-check fails
+  (python3 or pytest missing), escalate per plan.md ADR-2 — do not work
+  around.
+
+file_contact_surface:
+  - apps/csvpeek/csvpeek.py
+
+acceptance_tests:
+  # Run from apps/csvpeek/ with throwaway fixture files created ad hoc (e.g. in /tmp):
+  - "AC1.1 — python3 csvpeek.py <existing readable .csv> exits 0"
+  - "AC1.2 — python3 csvpeek.py (no args) exits non-zero with usage on stderr"
+  - "AC2.1 — header + 5 data rows -> stdout contains the line 'Rows: 5'"
+  - "AC3.1/AC4.2 — comma file with header name,age,city -> 'Column: name', 'Column: age', 'Column: city' blocks appear in that order"
+  - "AC4.1 — semicolon file (name;age;city + data) -> stdout contains 'Columns: 3' and the three Column blocks, not one column with literal semicolons"
+  - "AC8.1 — 3-column header, one 2-field data row -> exit 0, no traceback, row included in 'Rows:'"
+  - "AC9.1 — nonexistent path -> exit 1, one readable stderr line, no traceback"
+  - "AC9.2 — directory path -> exit 1, one readable stderr line, no traceback"
+  - "AC10.1 — 0-byte file -> exit 0, stdout is exactly 'Rows: 0\\nColumns: 0\\n'"
+  - "AC10.2 — header-only file -> exit 0, columns listed by name, 'Rows: 0', no traceback"
+  - "AC12.1/AC12.2 — still exactly one non-test .py source file; the spec's AST one-liner lists only stdlib modules"
+
+depends_on: [01-core-logic]
+
+status: pending
+
+notes: ""

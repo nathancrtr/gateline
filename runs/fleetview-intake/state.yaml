@@ -53,6 +53,33 @@ budget:
       tokens_in: 22
       tokens_out: 7644
       cost_usd: 4.91090425
+    - at: 2026-07-15T22:52:58.768Z
+      role: implementer
+      task: 01-candidate-import-desk
+      round: 1
+      adapter: claude-code
+      model: anthropic/claude-sonnet-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
+    - at: 2026-07-15T22:52:58.768Z
+      role: implementer
+      task: 02-candidate-single-thread
+      round: 1
+      adapter: claude-code
+      model: anthropic/claude-sonnet-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
+    - at: 2026-07-15T22:52:58.768Z
+      role: implementer
+      task: 03-intake-seam-reference
+      round: 1
+      adapter: claude-code
+      model: anthropic/claude-sonnet-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
 
 gates:
   G0:
@@ -130,9 +157,9 @@ gates:
 
 tasks:
   [
-    { id: 01-candidate-import-desk, status: pending, review_rounds: 0 },
-    { id: 02-candidate-single-thread, status: pending, review_rounds: 0 },
-    { id: 03-intake-seam-reference, status: pending, review_rounds: 0 }
+    { id: 01-candidate-import-desk, status: dispatched, review_rounds: 0 },
+    { id: 02-candidate-single-thread, status: dispatched, review_rounds: 0 },
+    { id: 03-intake-seam-reference, status: dispatched, review_rounds: 0 }
   ]
 
 escalations:

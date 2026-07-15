@@ -10,6 +10,7 @@ import { loadSources } from '@agentic/core'
 import { createApp } from './app.ts'
 import { GenerationCache } from './cache.ts'
 import { watchRepoRefs } from './watch.ts'
+import { buildWebhook } from './webhook.ts'
 
 export interface ServeOptions {
   port?: number
@@ -86,6 +87,16 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
     console.log(`syncing ${s.id} from origin every ${s.fetchIntervalSeconds}s`)
   }
 
+  // Webhook intake (hosted mode): GITHUB_WEBHOOK_SECRET arms the route;
+  // GITHUB_TOKEN additionally enables PR-approval sync on review events.
+  const webhook = buildWebhook({
+    sources,
+    secret: process.env.GITHUB_WEBHOOK_SECRET,
+    githubToken: process.env.GITHUB_TOKEN,
+    log: (line) => console.log(line),
+  })
+  if (webhook) console.log('github webhook armed at /api/webhooks/github')
+
   const app = createApp({
     sources,
     cache,
@@ -93,6 +104,7 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
       clients.add(send)
       return () => clients.delete(send)
     },
+    webhook,
   })
 
   // Static SPA (when built). In dev, Vite serves the UI and proxies /api here.

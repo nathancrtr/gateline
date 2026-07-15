@@ -1,9 +1,10 @@
 # FleetView hosted single-user image — see docs/DEPLOY.md.
 # Build from the repository root:  docker build -f deploy/Dockerfile .
 #
-# The image carries the gate frontend only (server + built SPA). The
-# orchestrator is deliberately absent: a hosted cockpit reads runs and records
-# gate decisions; it never dispatches agents.
+# The image carries the gate frontend (server + built SPA) and, opt-in via
+# ORCH_ENABLED=1, the v1 orchestrator with the claude-code adapter. Humans
+# still decide every gate — the orchestrator dispatches within phases and
+# structurally cannot write gates.*.
 
 FROM node:24-slim AS build
 WORKDIR /app
@@ -21,6 +22,16 @@ ARG TARGETARCH=amd64
 RUN curl -fsSL -o /usr/local/bin/cloudflared \
       "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${TARGETARCH}" \
  && chmod +x /usr/local/bin/cloudflared
+
+# The claude CLI is the orchestrator's dispatch harness (adapters/claude-code).
+# Overridable pin; `latest` keeps the recipe usable without tracking releases.
+ARG CLAUDE_CODE_VERSION=latest
+RUN npm install -g --no-audit --no-fund "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
+
+# Unprivileged runtime user: the claude CLI refuses permission-bypass modes
+# as root, and nothing here needs root past the volume chown in entrypoint.
+RUN useradd --uid 10001 --create-home --home-dir /home/agentic agentic
+ENV HOME=/home/agentic
 
 # Server and core run straight from TypeScript source (Node >= 24 strip-only
 # mode); only the SPA needs the build stage.

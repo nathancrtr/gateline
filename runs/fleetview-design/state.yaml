@@ -94,5 +94,8 @@ escalations:
       from_role: orchestrator,
       reason: "G0 approved in session but signature not found in state.yaml; approver
         must re-sign before G1",
-      resolved: false
+      resolved: true,
+      resolved_by: Nathan Carter,
+      resolved_at: 2026-07-15T23:49:07.580Z,
+      resolution: G0 signed
     }

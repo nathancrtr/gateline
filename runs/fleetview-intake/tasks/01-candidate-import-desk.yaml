@@ -1,0 +1,76 @@
+id: 01-candidate-import-desk
+title: Design candidate "import-desk" — two-pane, provenance-first intake for web + CLI
+requirements: [R1, R2, R3, R4, R5, R6, R7, R9, R11, R12, R13, R14]
+
+scope: |
+  Produce one complete design candidate per contracts/design-candidate.md at
+  runs/fleetview-intake/design/import-desk/ — rationale file plus self-contained
+  single-file HTML mockups (styles embedded, open from disk, no build step).
+  Execute under the Designer role spec (roles/designer.md); read spec.md,
+  plan.md (especially G0 bindings in Approach, IC-1..IC-6, ADR-6/7/8), and both
+  research reports (ux-research.md, tech-research.md) in this run directory.
+
+  THESIS for this candidate (must stay distinguishable from 02's): a two-pane
+  "import desk." Left pane: source-picker (visible and pre-selected even with
+  only GitHub live) + external ref capture + fetched-item summary. Right pane:
+  the draft intent brief (LLM-drafted, or verbatim body when no drafting model
+  is configured — sketch that state) under active human edit, with the brief's
+  four contract sections visibly scaffolded. Provenance is the organizing idea:
+  where this came from, who is confirming it, and what commit will exist are
+  legible at every step. Below the panes: the staging preview (source ref,
+  auto-suggested editable slug, branch name, pre-filled budget default with
+  one-interaction override) ahead of a single explicit "Stage run" control,
+  then a distinct arm affordance (staged-vs-armed states clearly different).
+
+  Must-cover screens/states, web: entry trigger (button-type "new", not a
+  fourth nav item) reachable in <=2 interactions from existing FleetView
+  surfaces; import flow happy path; free-text capture as a secondary mode
+  feeding the same draft->review->stage path (never compile-and-run); the
+  structured field-level fallback (AC2.1); no-drafting-model degradation;
+  already-exists and concurrent-conflict states, distinguishable from generic
+  errors (per plan ADR-8); failed-submit with focus moved to the first invalid
+  field and a message naming field + fix; a staged run as it appears in the
+  existing inbox/portfolio. First paint: <=6 required-looking fields, budget
+  pre-filled never blank. Real labels on every field (no placeholder-as-label).
+  Avoid the generic-generated-dashboard signature (uniform card radius/shadow,
+  gradient numeric readouts); panel styling varies by semantic weight.
+
+  Must-cover, CLI (as HTML-rendered terminal transcripts in the same candidate):
+  `agentic new` and `agentic arm` per plan IC-6 — fully-flagged non-interactive
+  run with --yes; no-flags interactive run with prompts + $EDITOR brief review;
+  preview-before-confirm in both; exists/conflict/no-identity refusals. The
+  state.yaml/intent-brief skeleton shown anywhere must match plan IC-4 verbatim,
+  identical between web and CLI renderings (AC5.2).
+
+  Research traceability section must cite ux P/A/REC and tech P/A/REC numbers
+  applied and avoided; argue any deviation in one line. Write only inside
+  runs/fleetview-intake/design/import-desk/.
+
+file_contact_surface:
+  - runs/fleetview-intake/design/import-desk/design-candidate.md
+  - runs/fleetview-intake/design/import-desk/*.html
+
+acceptance_tests:
+  - AC1.1 (web half — entry control reachable in <=2 interactions; CLI shown via IC-6 transcripts)
+  - AC1.2 (button-type trigger per G0 binding)
+  - AC2.1
+  - AC3.1
+  - AC3.2
+  - AC5.2 (skeletons rendered match plan IC-4 exactly, web and CLI)
+  - AC6.2
+  - AC7.1
+  - AC7.2
+  - AC9.1
+  - AC11.1 and AC11.2 (as designed transcripts)
+  - AC12.1
+  - AC12.2
+  - AC13.1
+  - "No-drafting-model degradation state is sketched (plan ADR-6)"
+  - "design-candidate.md has all six contract sections; every mockup opens from disk with no external assets"
+  - "Thesis is distinguishable at a glance from candidate 02's"
+
+depends_on: []
+
+status: pending
+
+notes: |

@@ -1,0 +1,98 @@
+id: 03-intake-seam-reference
+title: Seam reference — buildable specification of the creation seam, drivers, registry, and staged lifecycle
+requirements: [R1, R2, R4, R5, R6, R7, R8, R9, R10, R11, R14]
+
+scope: |
+  Produce runs/fleetview-intake/design/seam-reference.md: the normative,
+  buildable elaboration of plan.md IC-1..IC-6 and ADR-2..ADR-8 that the
+  follow-on implementation run plans from. This task writes NO code and edits
+  NOTHING outside runs/fleetview-intake/ — contracts/, registry/, and frontend/
+  changes it describes are proposals quoted in this document, to be applied by
+  the follow-on run. Read spec.md, plan.md, tech-research.md, and the actual
+  code paths named below before writing; where the plan's proposed signatures
+  conflict with what you find in source, follow source and record the
+  discrepancy in notes (do not silently diverge from the plan).
+
+  Required sections:
+
+  1. Contract deltas, as exact quotable text: (a) contracts/state.yaml — the
+     `staged` phase enum amendment, the `intake:` provenance block (source id,
+     external ref, url, client_key, staged_by) with comments, and the staging /
+     arming commit-message grammar additions; (b) contracts/intent-brief.md —
+     a header provenance comment for imported items. Justify each against R10
+     and R14.
+  2. registry/task-sources.yaml — full proposed schema plus the complete
+     GitHub Issues entry (driver id, label, ref_format, auth env var), with the
+     driver isolation rule stated (tracker nouns only inside the driver module;
+     AC4.1) and the add-a-source procedure (driver + registry entry, no
+     core/contract edit; AC4.2).
+  3. Creation seam — elaborate IC-3 against the real code: TaskItem,
+     TaskSourceDriver, IntakeDraft, planRunScaffold, RunSource.stageRun,
+     StageOutcome, with the create-only CAS mechanism spelled out against
+     git.ts updateRefCAS/commitTree and local-source.ts writeState as the
+     existing idiom (AC5.1: exactly one branch-minting path; enumerate the
+     callers — web route, CLI, future triggers).
+  4. Idempotency and collision decision table (plan ADR-8): identity =
+     (source.id, source.ref) or client_key; replay -> exists naming the slug;
+     different-identity slug collision -> refused naming the existing run
+     (including merged historical runs — cite how listRuns already enumerates
+     default-branch runs); concurrent race -> one CAS winner, loser conflict,
+     re-presented (AC6.1, AC7.3: no unattended path stages anything — every
+     stage traces to an authenticated human action).
+  5. Staged lifecycle blast radius: enumerate every consumer of PHASES that
+     the follow-on must touch — core schema.ts (PHASES, deriveResumePhase,
+     GATE_PHASES interplay), readiness/inbox/portfolio presentation,
+     orchestrator derive.ts (a new rest rule for staged, the D2 shape), and
+     docs. State the arming action: DecisionAction 'arm', legal only from
+     staged, mutation phase->spec, message grammar, through
+     planDecision/writeState (plan ADR-3).
+  6. HTTP route table elaborated from IC-5: request/response bodies, status
+     codes, and error shapes for /api/intake/sources, /api/intake/item,
+     /api/intake/draft (incl. 501 no-drafting-model degradation), /api/intake/
+     runs, and the arm action on the existing /api/decisions. Auth: every
+     route sits behind the deployment access proxy per docs/DEPLOY.md; state
+     explicitly that no Access-bypass is added beyond the existing webhook
+     path (AC8.1).
+  7. CLI contract elaborated from IC-6: full flag table for `agentic new` and
+     `agentic arm`, prompt flow (promptBurden TTY precedent from
+     frontend/packages/cli/src/main.ts), $EDITOR brief review, preview text,
+     exit codes, and the named no-identity refusal via the existing identity()
+     path (AC8.2, AC11.1, AC11.2, AC1.1 positional utterance/ref argument,
+     AC2.2 flag parity with every structured web field).
+  8. Provenance and identity mechanics: the staging commit is authored under
+     the confirming human's git identity, never the bot identity (AC9.2 —
+     contrast with LocalGitSource's options.identity bot pinning); drafting
+     cost accounting per plan ADR-6 (draft cost into the staged run's opening
+     ledger entry; abandoned drafts logged host-side against the host-wide
+     spend limit).
+  9. Worked example: the complete committed artifacts for one staged run
+     imported from a GitHub issue — intent-brief.md and state.yaml matching
+     plan IC-4 exactly — plus the same for a free-form (client_key) staging.
+  10. Follow-on verification notes: for each implementation-grade AC (4.1,
+      4.2, 5.1, 6.1, 7.3, 8.1, 8.2, 9.2, 10.1, 14.1) one named check the
+      follow-on run can execute (grep target, restart scenario, replay
+      scenario).
+
+  Write only inside runs/fleetview-intake/design/.
+
+file_contact_surface:
+  - runs/fleetview-intake/design/seam-reference.md
+
+acceptance_tests:
+  - "All ten required sections present; consuming agents bounce a missing section"
+  - AC4.1 and AC4.2 (designed mechanism + verification note)
+  - AC5.1 (single-seam design with caller enumeration)
+  - AC6.1 (idempotency decision table)
+  - AC7.3 (no unattended staging path exists in the design)
+  - AC8.1 and AC8.2 (auth mapping + named CLI refusal)
+  - AC9.2 (human-identity commit mechanics)
+  - AC10.1 (staged state readable from the run branch; no pending store, plan ADR-7)
+  - AC14.1 (intake: provenance block specified in committed artifacts)
+  - "Worked examples match plan IC-4 verbatim"
+  - "Every code reference (file/function) verified against this checkout, not assumed"
+
+depends_on: []
+
+status: pending
+
+notes: |

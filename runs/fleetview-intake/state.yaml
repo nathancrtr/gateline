@@ -252,6 +252,9 @@ escalations:
         reason: "reviewer (03-intake-seam-reference) failed twice: Command failed:
           claude -p Use the reviewer subagent. on task
           `runs/fleetview-intake/tasks/03-intake-seam-reference.yaml…",
-        resolved: false
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-15T23:34:38.532Z,
+        resolution: reached API limit
       }
   ]

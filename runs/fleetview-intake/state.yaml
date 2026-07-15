@@ -5,7 +5,7 @@ paused_reason: null
 
 budget:
   cost_limit_usd: 40
-  cost_spent_usd: 13.03
+  cost_spent_usd: 16.79
   ledger:
     # analyst: total tokens only (50855), split unavailable, cost estimated at registry rates
     - {
@@ -68,9 +68,10 @@ budget:
       round: 1
       adapter: claude-code
       model: anthropic/claude-sonnet-5
-      tokens_in: null
-      tokens_out: null
-      cost_usd: null
+      tokens_in: 4
+      tokens_out: 1627
+      cost_usd: 3.7654134
+      failed: true
     - at: 2026-07-15T22:52:58.768Z
       role: implementer
       task: 03-intake-seam-reference

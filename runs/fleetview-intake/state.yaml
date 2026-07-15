@@ -139,6 +139,15 @@ budget:
       tokens_in: null
       tokens_out: null
       cost_usd: null
+    - at: 2026-07-15T23:40:21.567Z
+      role: implementer
+      task: 01-candidate-import-desk
+      round: 2
+      adapter: claude-code
+      model: anthropic/claude-sonnet-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
 
 gates:
   G0:
@@ -216,7 +225,7 @@ gates:
 
 tasks:
   [
-    { id: 01-candidate-import-desk, status: in-review, review_rounds: 1 },
+    { id: 01-candidate-import-desk, status: dispatched, review_rounds: 1 },
     { id: 02-candidate-single-thread, status: dispatched, review_rounds: 0 },
     { id: 03-intake-seam-reference, status: in-review, review_rounds: 0 }
   ]

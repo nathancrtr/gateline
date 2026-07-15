@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<!--
+  Candidate: import-desk — Screen: staged run in the existing Inbox/Portfolio
+  Shows how a staged-but-not-armed run reads inside FleetView's existing
+  surfaces without inventing a parallel "queue" view. Proposes extending the
+  InboxItem 'kind' union with a 'staged' kind (STAGE chip) and the phase-tone
+  map with a 'staged' entry — flagged as a follow-on decision in
+  Implementation notes, not something this candidate can bind on its own.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>import-desk — staged run in Inbox/Portfolio</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+:root {
+  --color-ground: light-dark(#f6f7f5, #141816);
+  --color-surface: light-dark(#ffffff, #1b211e);
+  --color-raised: light-dark(#eef0ed, #232b27);
+  --color-ink: light-dark(#1d2420, #e3eae6);
+  --color-muted: light-dark(#5e6b64, #94a29b);
+  --color-faint: light-dark(#98a49d, #5c6963);
+  --color-line: light-dark(#dfe4e0, #2b3430);
+  --color-accent: light-dark(#0e7264, #4fc0ab);
+  --color-accent-soft: light-dark(#0e72641a, #4fc0ab24);
+  --color-ok: light-dark(#2e7d4f, #5cbf88);
+  --color-ok-soft: light-dark(#2e7d4f1a, #5cbf8824);
+  --color-warn: light-dark(#a8781f, #d3a44a);
+  --color-warn-soft: light-dark(#a8781f1a, #d3a44a24);
+  --color-bad: light-dark(#b4432f, #e07b63);
+  --color-bad-soft: light-dark(#b4432f14, #e07b6320);
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+}
+body { margin: 0; background: var(--color-ground); color: var(--color-ink); font-family: var(--font-sans); font-size: 14px; line-height: 1.55; }
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 2px; }
+a { color: var(--color-accent); }
+.meta { max-width: 920px; margin: 0 auto; padding: 20px 20px 0; }
+.meta h1 { font-size: 16px; font-weight: 600; }
+.meta p { color: var(--color-muted); font-size: 13px; max-width: 74ch; }
+.frame { border: 1px dashed var(--color-line); border-radius: 12px; padding: 18px; margin: 20px auto; max-width: 920px; background: var(--color-ground); }
+.frame-label { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--color-muted); display: block; margin-bottom: 12px; }
+.panel { border: 1px solid var(--color-line); border-radius: 10px; background: var(--color-surface); padding: 18px 22px; }
+.panel h2 { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+.row { display: flex; align-items: center; gap: 10px; border: 1px solid var(--color-line); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; }
+.row.new { border-color: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent) inset; }
+.chip { font-family: var(--font-mono); font-size: 11px; font-weight: 700; min-width: 40px; text-align: center; border-radius: 6px; padding: 2px 6px; background: var(--color-accent-soft); color: var(--color-accent); }
+.chip.esc { background: var(--color-bad-soft); color: var(--color-bad); }
+.chip.stage { background: var(--color-accent); color: var(--color-surface); }
+.title { font-size: 13px; font-weight: 500; }
+.slug { font-family: var(--font-mono); font-size: 11px; color: var(--color-faint); margin-left: 8px; }
+.age { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--color-muted); background: var(--color-raised); border-radius: 999px; padding: 2px 8px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }
+th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--color-muted); border-bottom: 1px solid var(--color-line); padding: 6px 10px; }
+td { padding: 8px 10px; border-bottom: 1px solid var(--color-line); }
+tr.new td { background: var(--color-accent-soft); }
+.phase { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--color-line); border-radius: 999px; padding: 1px 9px; font-size: 12px; }
+.dot { font-size: 8px; }
+.dot.staged { color: var(--color-accent); }
+.dot.impl { color: var(--color-warn); }
+.dot.pause { color: var(--color-bad); }
+.budget { display: inline-flex; align-items: center; gap: 6px; }
+.bar { width: 60px; height: 5px; border-radius: 999px; background: var(--color-raised); overflow: hidden; }
+.bar span { display: block; height: 100%; background: var(--color-faint); }
+.note { font-size: 11.5px; color: var(--color-muted); margin-top: 12px; }
+</style>
+</head>
+<body>
+<div class="meta">
+  <h1>import-desk — the staged run in existing Inbox/Portfolio</h1>
+  <p>After "Stage run" commits the scaffold, <code>search-pagination</code> shows up exactly where an operator already looks — no separate "drafts" or "queue" screen. It reads as "needs a human" (to arm it) in the Inbox and as its own phase in the Portfolio, budget meter unmetered at $0 spent.</p>
+</div>
+
+<div class="frame">
+  <span class="frame-label">Inbox — the staged run appears as a new inbox kind, oldest-not-yet at the top since it was just created</span>
+  <div class="panel">
+    <h2>Inbox — 4 waiting, oldest first</h2>
+    <div class="row"><span class="chip esc">ESC</span><span class="title">Escalation: retries exceeded budget on payment gateway timeout</span><span class="slug">github/checkout-latency-fix</span><span class="age">1d</span></div>
+    <div class="row"><span class="chip">G2</span><span class="title">Review PR for token refresh middleware</span><span class="slug">github/auth-token-rotation</span><span class="age">6h</span></div>
+    <div class="row new"><span class="chip stage">STAGE</span><span class="title">Ready to arm — staged from acme/widgets#482</span><span class="slug">github/search-pagination</span><span class="age">2m</span></div>
+    <div class="row"><span class="chip">G2</span><span class="title">Review PR for token refresh middleware</span><span class="slug">github/billing-webhook-retry</span><span class="age">2d</span></div>
+    <p class="note">Design decision for the follow-on build: an inbox item kind ("staged") distinct from "gate", so a staged-not-armed run surfaces without inventing a parallel view — see Implementation notes.</p>
+  </div>
+</div>
+
+<div class="frame">
+  <span class="frame-label">Portfolio — new row, phase "staged", $0 spent, no gates decided yet</span>
+  <div class="panel">
+    <h2>Portfolio — 5 runs</h2>
+    <table>
+      <thead><tr><th>Run</th><th>Phase</th><th>Budget</th><th>Updated</th><th>Needs</th></tr></thead>
+      <tbody>
+        <tr class="new">
+          <td>search-pagination</td>
+          <td><span class="phase"><span class="dot staged">●</span> staged</span></td>
+          <td><span class="budget"><span class="bar"><span style="width:4%"></span></span> unmetered</span></td>
+          <td>2m</td>
+          <td><span class="chip stage" style="min-width:22px;border-radius:999px;">1</span></td>
+        </tr>
+        <tr><td>auth-token-rotation</td><td><span class="phase"><span class="dot impl">●</span> integrate</span></td><td>$11/$30</td><td>6h</td><td>—</td></tr>
+        <tr><td>checkout-latency-fix</td><td><span class="phase"><span class="dot pause">●</span> paused</span></td><td>$28/$30</td><td>1d</td><td>1 esc</td></tr>
+        <tr><td>billing-webhook-retry</td><td><span class="phase"><span class="dot pause">●</span> paused</span></td><td>$18/$18</td><td>2d</td><td>—</td></tr>
+        <tr><td>wordfreq</td><td><span class="phase">● done</span></td><td>$4/$20</td><td>9d</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>

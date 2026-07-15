@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<!--
+  Candidate: import-desk — Screen: the import desk (core screen)
+  States sketched: (1) first paint / empty, (2) happy path — fetched item +
+  drafted brief + staging preview, (3) free-text secondary capture mode,
+  (4) structured field-level fallback (AC2.1). All three modes feed the same
+  draft -> review -> stage path; none compiles-and-runs.
+  Running example threaded through this whole candidate: GitHub issue
+  acme/widgets#482 -> slug "search-pagination", staged by Nathan Carter,
+  budget $25. The state.yaml skeleton in the staging preview reproduces plan
+  IC-4 verbatim (AC5.2) — identical text appears in cli-flagged-session.html
+  and run-detail-stage-arm.html.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>import-desk — the import desk</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+:root {
+  --color-ground: light-dark(#f6f7f5, #141816);
+  --color-surface: light-dark(#ffffff, #1b211e);
+  --color-raised: light-dark(#eef0ed, #232b27);
+  --color-ink: light-dark(#1d2420, #e3eae6);
+  --color-muted: light-dark(#5e6b64, #94a29b);
+  --color-faint: light-dark(#98a49d, #5c6963);
+  --color-line: light-dark(#dfe4e0, #2b3430);
+  --color-accent: light-dark(#0e7264, #4fc0ab);
+  --color-accent-soft: light-dark(#0e72641a, #4fc0ab24);
+  --color-ok: light-dark(#2e7d4f, #5cbf88);
+  --color-ok-soft: light-dark(#2e7d4f1a, #5cbf8824);
+  --color-warn: light-dark(#a8781f, #d3a44a);
+  --color-warn-soft: light-dark(#a8781f1a, #d3a44a24);
+  --color-bad: light-dark(#b4432f, #e07b63);
+  --color-bad-soft: light-dark(#b4432f14, #e07b6320);
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+}
+body { margin: 0; background: var(--color-ground); color: var(--color-ink); font-family: var(--font-sans); font-size: 14px; line-height: 1.55; }
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 2px; }
+a { color: var(--color-accent); }
+.meta { max-width: 1040px; margin: 0 auto; padding: 20px 20px 0; }
+.meta h1 { font-size: 16px; font-weight: 600; }
+.meta p { color: var(--color-muted); font-size: 13px; max-width: 76ch; }
+.frame { border: 1px dashed var(--color-line); border-radius: 12px; padding: 18px; margin: 20px auto; max-width: 1040px; background: var(--color-ground); }
+.frame-label { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--color-muted); display: block; margin-bottom: 12px; }
+
+.desk { border: 1px solid var(--color-line); border-radius: 10px; overflow: hidden; background: var(--color-surface); }
+.desk-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid var(--color-line); }
+.desk-header h2 { font-size: 14px; font-weight: 600; }
+.tabs { display: flex; gap: 4px; }
+.tab { border: 1px solid var(--color-line); background: var(--color-surface); border-radius: 999px; padding: 5px 13px; font-size: 12px; font-weight: 600; color: var(--color-muted); cursor: pointer; font: inherit; }
+.tab.active { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-surface); }
+
+.grid { display: grid; grid-template-columns: 340px 1fr; min-height: 380px; }
+.pane-left { background: var(--color-raised); border-right: 1px solid var(--color-line); padding: 18px 20px; }
+.pane-right { padding: 20px 26px; }
+
+.label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 5px; }
+.help { font-size: 11.5px; color: var(--color-muted); margin-top: 4px; }
+.field { margin-bottom: 16px; }
+select, input[type=text], input[type=number], input[type=url] {
+  width: 100%; font: inherit; font-size: 13px; padding: 7px 9px; border: 1px solid var(--color-line);
+  border-radius: 6px; background: var(--color-surface); color: var(--color-ink);
+}
+textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 10px; border: 1px solid var(--color-line); border-radius: 6px; background: var(--color-surface); color: var(--color-ink); resize: vertical; line-height: 1.5; }
+
+.btn { border-radius: 6px; border: 1px solid var(--color-line); background: var(--color-surface); color: var(--color-ink); font: inherit; font-size: 13px; font-weight: 600; padding: 7px 13px; cursor: pointer; }
+.btn.primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-surface); }
+.btn.pill { border-radius: 999px; }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+
+.fetched { border: 1px solid var(--color-line); border-radius: 8px; padding: 12px 14px; background: var(--color-surface); margin-top: 14px; }
+.fetched .src-title { font-size: 13px; font-weight: 600; }
+.fetched .src-meta { font-family: var(--font-mono); font-size: 11px; color: var(--color-faint); margin-top: 3px; }
+.fetched .src-labels { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+.fetched .tag { font-size: 10.5px; border-radius: 999px; padding: 1px 8px; background: var(--color-warn-soft); color: var(--color-warn); }
+.fetched .src-body { font-size: 12.5px; color: var(--color-muted); margin-top: 8px; }
+.empty-note { border: 1px dashed var(--color-line); border-radius: 8px; padding: 22px 16px; text-align: center; color: var(--color-faint); font-size: 12.5px; margin-top: 14px; }
+
+.brief-section { border-top: 1px solid var(--color-line); padding-top: 12px; margin-top: 12px; }
+.brief-section:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+.brief-section h3 { font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--color-muted); margin-bottom: 6px; }
+.drafted-note { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--color-accent); background: var(--color-accent-soft); border-radius: 999px; padding: 2px 10px; margin-bottom: 14px; }
+
+.strip { border-top: 1px dashed var(--color-line); background: var(--color-ground); padding: 16px 26px; display: flex; align-items: flex-end; gap: 26px; flex-wrap: wrap; }
+.strip .field { margin-bottom: 0; min-width: 150px; }
+.strip .field.grow { flex: 1; min-width: 220px; }
+.strip .readonly { font-family: var(--font-mono); font-size: 12.5px; padding: 7px 9px; border: 1px solid var(--color-line); border-radius: 6px; background: var(--color-raised); color: var(--color-muted); }
+.strip .stage-cta { margin-left: auto; text-align: right; }
+.strip .stage-note { font-size: 11px; color: var(--color-muted); max-width: 220px; margin-top: 6px; }
+
+.mode-note { font-size: 12px; color: var(--color-muted); background: var(--color-raised); border-radius: 8px; padding: 8px 12px; margin-bottom: 14px; }
+</style>
+</head>
+<body>
+<div class="meta">
+  <h1>import-desk — the import desk (AC1.1, AC2.1, AC3.1, AC3.2, AC7.1, AC7.2, AC9.1, AC12.1, AC5.2)</h1>
+  <p>Left pane: source-picker, external ref capture, fetched-item summary — the provenance rail. Right pane: the draft intent brief under active human edit, four contract sections visibly scaffolded. Below both: a single staging strip (source ref, editable slug, derived branch, pre-filled budget) ahead of one "Stage run" control. Three tabs share this one path — Import (primary), Free text (secondary), Fill in manually (AC2.1) — none skips the review step.</p>
+</div>
+
+<div class="frame">
+  <span class="frame-label">State 1 of 4 — first paint (empty, before fetch). Required-looking fields visible: 2 (Source, Issue reference) — well under the ≤6 budget (AC3.1).</span>
+  <div class="desk">
+    <div class="desk-header">
+      <h2>New run</h2>
+      <div class="tabs">
+        <button class="tab active" type="button">Import</button>
+        <button class="tab" type="button">Free text</button>
+        <button class="tab" type="button">Fill in manually</button>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="pane-left">
+        <div class="field">
+          <label class="label" for="src1">Source</label>
+          <select id="src1">
+            <option selected>GitHub Issues</option>
+          </select>
+          <p class="help">Shown and pre-selected even with one source live, so pluggability stays visible (spec R4/ux open Q2, resolved by G0).</p>
+        </div>
+        <div class="field">
+          <label class="label" for="ref1">Issue reference</label>
+          <input type="text" id="ref1" value="" aria-describedby="ref1-help">
+          <p class="help" id="ref1-help">owner/repo#N, or paste a full issue URL</p>
+        </div>
+        <button class="btn" type="button" disabled>Fetch</button>
+      </div>
+      <div class="pane-right">
+        <div class="empty-note">Fetched item appears here once you fetch — the draft brief follows automatically underneath it.</div>
+      </div>
+    </div>
+    <div class="strip">
+      <div class="field grow">
+        <span class="help">Preview appears once a brief exists — nothing to stage yet.</span>
+      </div>
+      <div class="stage-cta"><button class="btn primary pill" type="button" disabled>Stage run</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="frame">
+  <span class="frame-label">State 2 of 4 — happy path: fetched item + drafted brief + staging preview (import mode)</span>
+  <div class="desk">
+    <div class="desk-header">
+      <h2>New run</h2>
+      <div class="tabs">
+        <button class="tab active" type="button">Import</button>
+        <button class="tab" type="button">Free text</button>
+        <button class="tab" type="button">Fill in manually</button>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="pane-left">
+        <div class="field">
+          <label class="label" for="src2">Source</label>
+          <select id="src2"><option selected>GitHub Issues</option></select>
+        </div>
+        <div class="field">
+          <label class="label" for="ref2">Issue reference</label>
+          <input type="text" id="ref2" value="acme/widgets#482">
+        </div>
+        <button class="btn" type="button">Re-fetch</button>
+        <div class="fetched">
+          <div class="src-title">Add pagination to the widget search results</div>
+          <div class="src-meta">#482 · acme/widgets · opened by mchen · 2d ago · <a href="#">github.com/acme/widgets/issues/482</a></div>
+          <div class="src-labels"><span class="tag">performance</span><span class="tag">customer-reported</span></div>
+          <p class="src-body">"Search results page loads all matching widgets in one page; with &gt;500 results the page takes 8-12s to render and the tab hangs on lower-end machines. Support has flagged this twice this month (#463, #479)…" <a href="#">show full body</a></p>
+        </div>
+      </div>
+      <div class="pane-right">
+        <span class="drafted-note">✎ Drafted from the issue body — edit before staging · cost $0.02</span>
+        <div class="brief-section">
+          <h3>Problem</h3>
+          <textarea rows="2" aria-label="Problem">The widget search results page loads every matching row in one response; result sets above ~500 widgets take 8-12s to render and the tab becomes unresponsive on lower-end machines. Support has logged two duplicate reports this month (#463, #479).</textarea>
+        </div>
+        <div class="brief-section">
+          <h3>Motivation</h3>
+          <textarea rows="2" aria-label="Motivation">Two customers have flagged the slow search as a blocker ahead of their Q3 renewal conversations. Support is manually asking customers to narrow filters as a workaround.</textarea>
+        </div>
+        <div class="brief-section">
+          <h3>Constraints</h3>
+          <textarea rows="2" aria-label="Constraints">- Preserve the existing filter/sort query parameters across pages.
+- No new backend datastore — paginate against the existing search index.
+- Ship behind the existing search-widgets feature flag.</textarea>
+        </div>
+        <div class="brief-section">
+          <h3>Out of scope</h3>
+          <textarea rows="2" aria-label="Out of scope">- Redesigning the search filters themselves.
+- Infinite scroll (page-relative URLs were explicitly requested so results stay linkable).</textarea>
+        </div>
+      </div>
+    </div>
+    <div class="strip">
+      <div class="field">
+        <span class="label">Source ref</span>
+        <span class="readonly">acme/widgets#482</span>
+      </div>
+      <div class="field">
+        <label class="label" for="slug2">Slug</label>
+        <input type="text" id="slug2" value="search-pagination">
+      </div>
+      <div class="field">
+        <span class="label">Branch</span>
+        <span class="readonly">run/search-pagination</span>
+      </div>
+      <div class="field">
+        <label class="label" for="budget2">Budget ceiling ($)</label>
+        <input type="number" id="budget2" value="25" min="0" step="5">
+        <p class="help">Pre-filled from the deployment default — override in one interaction.</p>
+      </div>
+      <div class="stage-cta">
+        <button class="btn primary pill" type="button">Stage run</button>
+        <p class="stage-note">Commits the scaffold now, under your identity. Nothing runs — arming is a separate, later act.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="frame">
+  <span class="frame-label">State 3 of 4 — free-text mode (secondary capture, R1/AC1.1 — feeds the same draft → review → stage path, never compile-and-run)</span>
+  <div class="desk">
+    <div class="desk-header">
+      <h2>New run</h2>
+      <div class="tabs">
+        <button class="tab" type="button">Import</button>
+        <button class="tab active" type="button">Free text</button>
+        <button class="tab" type="button">Fill in manually</button>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="pane-left">
+        <div class="field">
+          <label class="label" for="src3">Source</label>
+          <select id="src3"><option selected>GitHub Issues</option></select>
+          <p class="help">No item to attach yet — the source stays visible so it can still be linked before staging.</p>
+        </div>
+        <div class="field">
+          <label class="label" for="utter">Describe the work</label>
+          <textarea id="utter" rows="5">add pagination to the widget search page, results are too slow above ~500 rows</textarea>
+          <p class="help">One utterance, same as the v0 cockpit benchmark.</p>
+        </div>
+        <button class="btn primary" type="button">Draft brief →</button>
+      </div>
+      <div class="pane-right">
+        <span class="mode-note">Drafting turns this utterance into the same four-section brief shown in the Import happy path — it lands here for review before anything is staged. Nothing runs on click; "Draft brief" only fills the editor.</span>
+        <div class="empty-note">Draft brief appears here after drafting, editable exactly like the Import path.</div>
+      </div>
+    </div>
+    <div class="strip">
+      <div class="field grow"><span class="help">Preview appears once a brief exists (same staging strip as the Import path, keyed on a client idempotency key instead of a source ref).</span></div>
+      <div class="stage-cta"><button class="btn primary pill" type="button" disabled>Stage run</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="frame">
+  <span class="frame-label">State 4 of 4 — fill in manually (structured field-level fallback, AC2.1 — discoverable without going through free text)</span>
+  <div class="desk">
+    <div class="desk-header">
+      <h2>New run</h2>
+      <div class="tabs">
+        <button class="tab" type="button">Import</button>
+        <button class="tab" type="button">Free text</button>
+        <button class="tab active" type="button">Fill in manually</button>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="pane-left">
+        <div class="field">
+          <label class="label" for="src4">Source</label>
+          <select id="src4"><option selected>GitHub Issues</option></select>
+        </div>
+        <div class="field">
+          <label class="label" for="title4">Title</label>
+          <input type="text" id="title4" value="Add pagination to the widget search results">
+        </div>
+        <div class="field">
+          <label class="label" for="ref4">External reference (optional)</label>
+          <input type="text" id="ref4" value="acme/widgets#482">
+          <p class="help">Recorded for future write-back (R14) even though this path skips re-fetching.</p>
+        </div>
+        <p class="help">No fetch, no drafting model call — every field below is typed by hand, same underlying shape as the other two tabs.</p>
+      </div>
+      <div class="pane-right">
+        <div class="brief-section">
+          <h3>Problem</h3>
+          <textarea rows="2" aria-label="Problem" placeholder=""></textarea>
+        </div>
+        <div class="brief-section">
+          <h3>Motivation</h3>
+          <textarea rows="2" aria-label="Motivation" placeholder=""></textarea>
+        </div>
+        <div class="brief-section">
+          <h3>Constraints</h3>
+          <textarea rows="2" aria-label="Constraints" placeholder=""></textarea>
+        </div>
+        <div class="brief-section">
+          <h3>Out of scope</h3>
+          <textarea rows="2" aria-label="Out of scope" placeholder=""></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="strip">
+      <div class="field">
+        <span class="label">Source ref</span>
+        <span class="readonly">acme/widgets#482</span>
+      </div>
+      <div class="field">
+        <label class="label" for="slug4">Slug</label>
+        <input type="text" id="slug4" value="search-pagination">
+      </div>
+      <div class="field">
+        <span class="label">Branch</span>
+        <span class="readonly">run/search-pagination</span>
+      </div>
+      <div class="field">
+        <label class="label" for="budget4">Budget ceiling ($)</label>
+        <input type="number" id="budget4" value="25" min="0" step="5">
+      </div>
+      <div class="stage-cta"><button class="btn primary pill" type="button">Stage run</button></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

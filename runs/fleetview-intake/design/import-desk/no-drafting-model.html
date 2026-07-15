@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<!--
+  Candidate: import-desk — Screen: no-drafting-model degradation (plan ADR-6)
+  Structural degradation, not an error: with no drafting model configured,
+  the verbatim fetched body becomes the editable draft. Mechanical template
+  rendering only (Problem pre-filled verbatim; the other three sections are
+  left for the human to write — no judgment is available to split them).
+  Doubles as the failed-submit / focus-moves-to-first-invalid-field state
+  (AC12.2), since staging with empty required sections is the most natural
+  place that failure occurs in this degraded flow.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>import-desk — no drafting model configured</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+:root {
+  --color-ground: light-dark(#f6f7f5, #141816);
+  --color-surface: light-dark(#ffffff, #1b211e);
+  --color-raised: light-dark(#eef0ed, #232b27);
+  --color-ink: light-dark(#1d2420, #e3eae6);
+  --color-muted: light-dark(#5e6b64, #94a29b);
+  --color-faint: light-dark(#98a49d, #5c6963);
+  --color-line: light-dark(#dfe4e0, #2b3430);
+  --color-accent: light-dark(#0e7264, #4fc0ab);
+  --color-accent-soft: light-dark(#0e72641a, #4fc0ab24);
+  --color-ok: light-dark(#2e7d4f, #5cbf88);
+  --color-ok-soft: light-dark(#2e7d4f1a, #5cbf8824);
+  --color-warn: light-dark(#a8781f, #d3a44a);
+  --color-warn-soft: light-dark(#a8781f1a, #d3a44a24);
+  --color-bad: light-dark(#b4432f, #e07b63);
+  --color-bad-soft: light-dark(#b4432f14, #e07b6320);
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+}
+body { margin: 0; background: var(--color-ground); color: var(--color-ink); font-family: var(--font-sans); font-size: 14px; line-height: 1.55; }
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 2px; }
+a { color: var(--color-accent); }
+.meta { max-width: 1040px; margin: 0 auto; padding: 20px 20px 0; }
+.meta h1 { font-size: 16px; font-weight: 600; }
+.meta p { color: var(--color-muted); font-size: 13px; max-width: 76ch; }
+.frame { border: 1px dashed var(--color-line); border-radius: 12px; padding: 18px; margin: 20px auto; max-width: 1040px; background: var(--color-ground); }
+.frame-label { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--color-muted); display: block; margin-bottom: 12px; }
+.desk { border: 1px solid var(--color-line); border-radius: 10px; overflow: hidden; background: var(--color-surface); }
+.desk-header { padding: 12px 20px; border-bottom: 1px solid var(--color-line); }
+.desk-header h2 { font-size: 14px; font-weight: 600; }
+.grid { display: grid; grid-template-columns: 340px 1fr; min-height: 300px; }
+.pane-left { background: var(--color-raised); border-right: 1px solid var(--color-line); padding: 18px 20px; }
+.pane-right { padding: 20px 26px; }
+.label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 5px; }
+.help { font-size: 11.5px; color: var(--color-muted); margin-top: 4px; }
+.field { margin-bottom: 16px; }
+select, input[type=text], input[type=number] { width: 100%; font: inherit; font-size: 13px; padding: 7px 9px; border: 1px solid var(--color-line); border-radius: 6px; background: var(--color-surface); color: var(--color-ink); }
+textarea { width: 100%; font: inherit; font-size: 13px; padding: 9px 10px; border: 1px solid var(--color-line); border-radius: 6px; background: var(--color-surface); color: var(--color-ink); resize: vertical; line-height: 1.5; }
+textarea.invalid { border-color: var(--color-bad); border-width: 2px; }
+.btn { border-radius: 6px; border: 1px solid var(--color-line); background: var(--color-surface); color: var(--color-ink); font: inherit; font-size: 13px; font-weight: 600; padding: 7px 13px; cursor: pointer; }
+.btn.primary { background: var(--color-accent); border-color: var(--color-accent); color: var(--color-surface); }
+.btn.pill { border-radius: 999px; }
+.fetched { border: 1px solid var(--color-line); border-radius: 8px; padding: 12px 14px; background: var(--color-surface); margin-top: 14px; }
+.fetched .src-title { font-size: 13px; font-weight: 600; }
+.fetched .src-meta { font-family: var(--font-mono); font-size: 11px; color: var(--color-faint); margin-top: 3px; }
+.banner { display: flex; gap: 10px; align-items: flex-start; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 12.5px; }
+.banner.info { background: var(--color-accent-soft); color: var(--color-accent); }
+.banner .glyph { font-weight: 700; }
+.brief-section { border-top: 1px solid var(--color-line); padding-top: 12px; margin-top: 12px; }
+.brief-section:first-child { border-top: none; padding-top: 0; margin-top: 0; }
+.brief-section h3 { font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--color-muted); margin-bottom: 6px; }
+.brief-section .req-note { font-size: 11px; color: var(--color-bad); margin-top: 5px; font-weight: 600; }
+.strip { border-top: 1px dashed var(--color-line); background: var(--color-ground); padding: 16px 26px; display: flex; align-items: flex-start; gap: 26px; flex-wrap: wrap; }
+.strip .stage-cta { margin-left: auto; text-align: right; }
+.alert { display: flex; gap: 8px; align-items: flex-start; background: var(--color-bad-soft); color: var(--color-bad); border-radius: 8px; padding: 10px 14px; margin: 0 26px 16px; font-size: 12.5px; font-weight: 600; }
+</style>
+</head>
+<body>
+<div class="meta">
+  <h1>import-desk — no-drafting-model degradation (plan ADR-6) + failed submit (AC12.2)</h1>
+  <p>Hosted deployments with no drafting model configured (no <code>ORCH_ENABLED</code> model auth) still stage runs — drafting is an optional capability, never a hard requirement. Scaffold rendering stays mechanical: the fetched body lands verbatim in Problem; Motivation/Constraints/Out of scope are left for the human to write by hand, since no model is available to split the text. This is a structural degradation, styled informationally (accent), never as an error.</p>
+</div>
+
+<div class="frame">
+  <span class="frame-label">State: degraded draft, before submit attempt</span>
+  <div class="desk">
+    <div class="desk-header"><h2>New run — acme/widgets#482</h2></div>
+    <div class="grid">
+      <div class="pane-left">
+        <div class="field"><span class="label">Source</span><span class="help">GitHub Issues</span></div>
+        <div class="field"><span class="label">Issue reference</span><span class="help">acme/widgets#482</span></div>
+        <div class="fetched">
+          <div class="src-title">Add pagination to the widget search results</div>
+          <div class="src-meta">#482 · acme/widgets · opened by mchen · 2d ago</div>
+        </div>
+      </div>
+      <div class="pane-right">
+        <div class="banner info"><span class="glyph">ⓘ</span><span>No drafting model is configured for this deployment — showing the issue body verbatim below. Nothing is auto-summarized; write the remaining sections yourself before staging.</span></div>
+        <div class="brief-section">
+          <h3>Problem</h3>
+          <textarea rows="3" aria-label="Problem">Search results page loads all matching widgets in one page; with &gt;500 results the page takes 8-12s to render and the browser tab hangs on lower-end machines. Support asked for pagination twice this month (#463, #479). Propose 25 results per page with page-relative URLs so search state survives a refresh. No hard deadline but two customers have flagged this as a blocker for their Q3 renewal.</textarea>
+        </div>
+        <div class="brief-section">
+          <h3>Motivation</h3>
+          <textarea rows="2" aria-label="Motivation" id="motivation-field"></textarea>
+          <p class="req-note">Required before staging — not pre-filled (no drafting model configured).</p>
+        </div>
+        <div class="brief-section">
+          <h3>Constraints</h3>
+          <textarea rows="2" aria-label="Constraints"></textarea>
+          <p class="req-note">Required before staging — not pre-filled (no drafting model configured).</p>
+        </div>
+        <div class="brief-section">
+          <h3>Out of scope</h3>
+          <textarea rows="2" aria-label="Out of scope"></textarea>
+          <p class="req-note">Required before staging — not pre-filled (no drafting model configured).</p>
+        </div>
+      </div>
+    </div>
+    <div class="strip">
+      <div class="stage-cta"><button class="btn primary pill" type="button">Stage run</button></div>
+    </div>
+  </div>
+</div>
+
+<div class="frame">
+  <span class="frame-label">State: failed submit — focus moved to first invalid field, message names field + fix (AC12.2)</span>
+  <div class="desk">
+    <div class="desk-header"><h2>New run — acme/widgets#482</h2></div>
+    <div class="alert" role="alert">✕ Can't stage yet: <strong>Motivation</strong> is empty. Add at least a sentence describing why this matters now and for whom — focus has moved to that field below.</div>
+    <div class="grid">
+      <div class="pane-left">
+        <div class="field"><span class="label">Source</span><span class="help">GitHub Issues</span></div>
+        <div class="field"><span class="label">Issue reference</span><span class="help">acme/widgets#482</span></div>
+      </div>
+      <div class="pane-right">
+        <div class="brief-section">
+          <h3>Problem</h3>
+          <textarea rows="2" aria-label="Problem">Search results page loads all matching widgets in one page; with &gt;500 results the page takes 8-12s to render…</textarea>
+        </div>
+        <div class="brief-section">
+          <h3>Motivation</h3>
+          <textarea rows="2" aria-label="Motivation" class="invalid" aria-invalid="true" aria-describedby="motivation-err" autofocus></textarea>
+          <p class="req-note" id="motivation-err">Required — this field now has focus.</p>
+        </div>
+        <div class="brief-section">
+          <h3>Constraints</h3>
+          <textarea rows="2" aria-label="Constraints"></textarea>
+        </div>
+        <div class="brief-section">
+          <h3>Out of scope</h3>
+          <textarea rows="2" aria-label="Out of scope"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="strip">
+      <div class="stage-cta"><button class="btn primary pill" type="button">Stage run</button></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

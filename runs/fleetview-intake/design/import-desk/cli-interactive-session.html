@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<!--
+  Candidate: import-desk — CLI: no-flags interactive session (IC-6, promptBurden precedent)
+  Prompts only because stdin is a TTY and no flags were given (AC11.2); same
+  fields the flags would have supplied. $EDITOR review stands in for the
+  web's right-pane brief editor. Preview prints before the y/N confirm in
+  both the "new" and the "arm" commands (AC7.1/7.2).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>import-desk — CLI: interactive session</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+:root {
+  --color-ground: light-dark(#f6f7f5, #141816);
+  --color-muted: light-dark(#5e6b64, #94a29b);
+  --color-line: light-dark(#dfe4e0, #2b3430);
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  --term-bg: #101512;
+  --term-fg: #dbe3de;
+  --term-dim: #78877e;
+  --term-accent: #57cbb2;
+  --term-ok: #79c88f;
+  --term-warn: #d8ac54;
+  --term-bad: #e28572;
+}
+body { margin: 0; background: var(--color-ground); color: var(--color-muted); font-family: var(--font-sans); font-size: 14px; }
+.meta { max-width: 780px; margin: 0 auto; padding: 20px 20px 0; }
+.meta h1 { font-size: 16px; font-weight: 600; color: light-dark(#1d2420,#e3eae6); }
+.meta p { color: var(--color-muted); font-size: 13px; max-width: 74ch; }
+.frame { border: 1px dashed var(--color-line); border-radius: 12px; padding: 18px; margin: 20px auto; max-width: 780px; background: var(--color-ground); }
+.frame-label { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--color-muted); display: block; margin-bottom: 12px; }
+.term { background: var(--term-bg); color: var(--term-fg); border-radius: 10px; padding: 18px 20px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.65; overflow-x: auto; }
+.term .prompt { color: var(--term-accent); }
+.term .dim { color: var(--term-dim); }
+.term .ok { color: var(--term-ok); }
+.term .warn { color: var(--term-warn); }
+.term .input { color: var(--term-fg); text-decoration: underline; }
+.term .cmt { color: var(--term-dim); }
+.term pre { margin: 6px 0 10px; white-space: pre-wrap; }
+.editor-note { color: var(--term-dim); }
+</style>
+</head>
+<body>
+<div class="meta">
+  <h1>import-desk — CLI: no-flags interactive session (AC11.2)</h1>
+  <p>Same command, same fields as the flagged session — this time every value comes from a prompt because no flags were passed and stdin is a TTY. The budget prompt shows a pre-filled default that Enter alone accepts (never a blank prompt), satisfying AC3.2 in the terminal.</p>
+</div>
+<div class="frame">
+  <span class="frame-label">Terminal — new, prompted, with $EDITOR brief review, then arm</span>
+  <div class="term"><pre><span class="prompt">$</span> agentic new
+<span class="dim">source? [1] GitHub Issues (only source configured): </span><span class="input">1</span>
+<span class="dim">issue reference (owner/repo#N or URL): </span><span class="input">acme/widgets#482</span>
+<span class="dim">resolving identity… Nathan Carter &lt;nathan@example.com&gt;
+fetching acme/widgets#482…</span>
+  Add pagination to the widget search results
+  opened by mchen · 2d ago · performance, customer-reported
+
+<span class="dim">drafting brief from the fetched body… ($0.02)
+opening $EDITOR to review the draft brief…</span>
+
+<span class="editor-note">--- $EDITOR buffer (contracts/intent-brief.md shape) -------
+## Problem
+The widget search results page loads every matching row in one
+response; result sets above ~500 widgets take 8-12s to render and
+the tab becomes unresponsive on lower-end machines. Support has
+logged two duplicate reports this month (#463, #479).
+
+## Motivation
+Two customers have flagged the slow search as a blocker ahead of
+their Q3 renewal conversations. Support is manually asking
+customers to narrow filters as a workaround.
+
+## Constraints
+- Preserve the existing filter/sort query parameters across pages.
+- No new backend datastore — paginate against the existing search
+  index.
+- Ship behind the existing search-widgets feature flag.
+
+## Out of scope
+- Redesigning the search filters themselves.
+- Infinite scroll (page-relative URLs were explicitly requested so
+  results stay linkable).
+:wq
+-------------------------------------------------------------</span>
+<span class="dim">brief saved and closed.</span>
+
+<span class="dim">slug [search-pagination]: </span><span class="input">⏎ (accepted default)</span>
+<span class="dim">budget ceiling in USD [25]: </span><span class="input">⏎ (accepted default)</span>
+
+<span class="cmt">--- preview ---------------------------------------------</span>
+  source   acme/widgets#482
+  slug     search-pagination
+  branch   run/search-pagination
+  budget   $25.00
+<span class="cmt">-----------------------------------------------------------</span>
+<span class="dim">stage this run? [y/N]: </span><span class="input">y</span>
+<span class="ok">staged run/search-pagination</span>
+→ a1c9e02d1e state(search-pagination): staged by Nathan Carter [source: github acme/widgets#482]
+
+<span class="dim"># same state.yaml/intent-brief.md skeleton as cli-flagged-session.html — identical bytes for identical input (AC5.2)</span>
+
+<span class="prompt">$</span> agentic arm search-pagination
+<span class="dim">resolving identity… Nathan Carter &lt;nathan@example.com&gt;
+run/search-pagination is staged — arming moves phase: staged → spec
+and allows dispatch under the $25.00 ceiling.</span>
+<span class="warn">arm this run? type the slug to confirm: </span><span class="input">search-pagination</span>
+<span class="ok">armed run/search-pagination</span>
+→ 7f4b21a0c3 state(search-pagination): armed by Nathan Carter
+</pre></div>
+</div>
+</body>
+</html>

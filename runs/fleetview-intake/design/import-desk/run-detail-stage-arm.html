@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<!--
+  Candidate: import-desk — Screen: run detail, staged vs. armed (R7, IC-4)
+  The provenance block is rendered prominently and the two lifecycle states
+  get visually distinct primary actions (pill/accent "Stage" already spent;
+  here the follow-on action is a squared-off warn-colored "Arm" button) so
+  staged-vs-armed is unmistakable, never the same control twice. The raw
+  scaffold shown here reproduces plan IC-4's state.yaml skeleton verbatim,
+  and contracts/intent-brief.md's four sections filled with the same content
+  as import-desk.html's happy path — identical text to
+  cli-flagged-session.html (AC5.2).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>import-desk — run detail: staged vs armed</title>
+<style>
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+:root {
+  --color-ground: light-dark(#f6f7f5, #141816);
+  --color-surface: light-dark(#ffffff, #1b211e);
+  --color-raised: light-dark(#eef0ed, #232b27);
+  --color-ink: light-dark(#1d2420, #e3eae6);
+  --color-muted: light-dark(#5e6b64, #94a29b);
+  --color-faint: light-dark(#98a49d, #5c6963);
+  --color-line: light-dark(#dfe4e0, #2b3430);
+  --color-accent: light-dark(#0e7264, #4fc0ab);
+  --color-accent-soft: light-dark(#0e72641a, #4fc0ab24);
+  --color-ok: light-dark(#2e7d4f, #5cbf88);
+  --color-ok-soft: light-dark(#2e7d4f1a, #5cbf8824);
+  --color-warn: light-dark(#a8781f, #d3a44a);
+  --color-warn-soft: light-dark(#a8781f1a, #d3a44a24);
+  --color-bad: light-dark(#b4432f, #e07b63);
+  --color-bad-soft: light-dark(#b4432f14, #e07b6320);
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+}
+body { margin: 0; background: var(--color-ground); color: var(--color-ink); font-family: var(--font-sans); font-size: 14px; line-height: 1.55; }
+:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 2px; }
+a { color: var(--color-accent); }
+.meta { max-width: 980px; margin: 0 auto; padding: 20px 20px 0; }
+.meta h1 { font-size: 16px; font-weight: 600; }
+.meta p { color: var(--color-muted); font-size: 13px; max-width: 76ch; }
+.frame { border: 1px dashed var(--color-line); border-radius: 12px; padding: 18px; margin: 20px auto; max-width: 980px; background: var(--color-ground); }
+.frame-label { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--color-muted); display: block; margin-bottom: 12px; }
+.panel { border: 1px solid var(--color-line); border-radius: 10px; background: var(--color-surface); padding: 20px 24px; }
+.run-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+.run-head h2 { font-size: 15px; font-weight: 700; }
+.run-head .branch { font-family: var(--font-mono); font-size: 11.5px; color: var(--color-faint); margin-left: 8px; }
+.phase-chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--color-line); border-radius: 999px; padding: 2px 11px; font-size: 12.5px; font-weight: 600; }
+.phase-chip.staged { color: var(--color-accent); border-color: color-mix(in srgb, var(--color-accent) 40%, transparent); }
+.phase-chip.spec { color: var(--color-accent); border-color: color-mix(in srgb, var(--color-accent) 40%, transparent); }
+.provenance { border-left: 3px solid var(--color-accent); background: var(--color-raised); border-radius: 0 8px 8px 0; padding: 12px 16px; margin-bottom: 16px; }
+.provenance dl { display: grid; grid-template-columns: 110px 1fr; gap: 4px 10px; margin: 0; font-size: 12.5px; }
+.provenance dt { color: var(--color-muted); }
+.provenance dd { margin: 0; font-family: var(--font-mono); font-size: 12px; }
+.cta { border-radius: 8px; padding: 14px 18px; margin-bottom: 18px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.cta.staged { background: var(--color-accent-soft); }
+.cta.armed { background: var(--color-ok-soft); }
+.cta p { font-size: 12.5px; margin: 0; max-width: 52ch; }
+.btn-arm { border: none; border-radius: 4px; background: var(--color-warn); color: var(--color-surface); font: inherit; font-size: 13px; font-weight: 700; padding: 9px 16px; cursor: pointer; }
+.btn-arm.confirm-open { background: var(--color-surface); color: var(--color-warn); border: 2px solid var(--color-warn); }
+.confirm-box { border: 1px solid var(--color-warn); border-radius: 6px; background: var(--color-surface); padding: 10px 14px; font-size: 12px; max-width: 320px; }
+.confirm-box strong { color: var(--color-warn); }
+.gate-strip { display: flex; gap: 6px; margin-top: 6px; }
+.gate-cell { font-family: var(--font-mono); font-size: 11px; border: 1px solid var(--color-line); border-radius: 4px; padding: 3px 8px; color: var(--color-faint); }
+pre { background: var(--color-raised); border-radius: 8px; padding: 14px 16px; font-family: var(--font-mono); font-size: 12px; line-height: 1.6; overflow-x: auto; margin: 0; }
+pre .cmt { color: var(--color-faint); }
+h3.section-h { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--color-muted); margin: 18px 0 8px; }
+.brief-block h4 { font-size: 12.5px; font-weight: 700; margin: 14px 0 4px; }
+.brief-block h4:first-child { margin-top: 0; }
+.brief-block p, .brief-block ul { font-size: 12.5px; margin: 0 0 4px; color: var(--color-ink); }
+.brief-block ul { padding-left: 18px; }
+</style>
+</head>
+<body>
+<div class="meta">
+  <h1>import-desk — run detail: staged vs. armed (R7, ADR-2, ADR-3, AC5.2)</h1>
+  <p>Staged and armed never share a control: staging's confirm was the pill "Stage run" button already spent on the import desk; the follow-on act here is a squared, warn-colored "Arm this run" button, requiring its own explicit confirm — a different shape, a different color, a different gesture.</p>
+</div>
+
+<div class="frame">
+  <span class="frame-label">State: staged, not armed. Nothing has run; budget shows $0 spent.</span>
+  <div class="panel">
+    <div class="run-head">
+      <div><h2>search-pagination<span class="branch">run/search-pagination</span></h2></div>
+      <span class="phase-chip staged">● staged</span>
+    </div>
+    <div class="provenance">
+      <dl>
+        <dt>Source</dt><dd>github · acme/widgets#482</dd>
+        <dt>URL</dt><dd><a href="#">github.com/acme/widgets/issues/482</a></dd>
+        <dt>Staged by</dt><dd>Nathan Carter</dd>
+        <dt>Staged at</dt><dd>2026-07-15 22:41</dd>
+        <dt>Budget</dt><dd>$0.00 / $25.00</dd>
+      </dl>
+    </div>
+    <div class="cta staged">
+      <p>This run is staged but not armed — no work has begun and no budget has been spent. Arming is a separate, explicit act, recorded like any other gate decision.</p>
+      <button class="btn-arm confirm-open" type="button">Arm this run…</button>
+    </div>
+    <div class="confirm-box">Arming will move <strong>phase → spec</strong> and let the pipeline begin dispatching under the $25.00 ceiling. <button class="btn-arm" type="button" style="margin-top:8px;">Confirm arm</button></div>
+    <h3 class="section-h">Gates (all undecided — arming does not decide G0)</h3>
+    <div class="gate-strip"><span class="gate-cell">G0 ·</span><span class="gate-cell">G1 ·</span><span class="gate-cell">G2 ·</span><span class="gate-cell">G3 ·</span></div>
+
+    <h3 class="section-h">state.yaml (as committed by "Stage run" — plan IC-4, verbatim)</h3>
+    <pre>run: search-pagination
+branch: run/search-pagination
+phase: staged
+paused_reason: null
+intake:                       <span class="cmt"># R14: neutral provenance block, canonical home of the external ref</span>
+  source: github              <span class="cmt"># null for free-form</span>
+  ref: acme/widgets#482
+  url: https://github.com/acme/widgets/issues/482
+  client_key: null
+  staged_by: Nathan Carter
+budget: { cost_limit_usd: 25, cost_spent_usd: 0, ledger: [] }
+gates: { G0/G1/G2/G3 all undecided }
+tasks: []
+escalations: []</pre>
+
+    <h3 class="section-h">intent-brief.md (as confirmed before staging — contracts/intent-brief.md's four sections)</h3>
+    <div class="brief-block">
+      <h4>Problem</h4>
+      <p>The widget search results page loads every matching row in one response; result sets above ~500 widgets take 8-12s to render and the tab becomes unresponsive on lower-end machines. Support has logged two duplicate reports this month (#463, #479).</p>
+      <h4>Motivation</h4>
+      <p>Two customers have flagged the slow search as a blocker ahead of their Q3 renewal conversations. Support is manually asking customers to narrow filters as a workaround.</p>
+      <h4>Constraints</h4>
+      <ul><li>Preserve the existing filter/sort query parameters across pages.</li><li>No new backend datastore — paginate against the existing search index.</li><li>Ship behind the existing search-widgets feature flag.</li></ul>
+      <h4>Out of scope</h4>
+      <ul><li>Redesigning the search filters themselves.</li><li>Infinite scroll (page-relative URLs were explicitly requested so results stay linkable).</li></ul>
+    </div>
+  </div>
+</div>
+
+<div class="frame">
+  <span class="frame-label">State: armed. phase → spec via the existing decision write path (ADR-3); the analyst dispatch derives from here, same as any other run.</span>
+  <div class="panel">
+    <div class="run-head">
+      <div><h2>search-pagination<span class="branch">run/search-pagination</span></h2></div>
+      <span class="phase-chip spec">● spec</span>
+    </div>
+    <div class="provenance">
+      <dl>
+        <dt>Source</dt><dd>github · acme/widgets#482</dd>
+        <dt>Staged by</dt><dd>Nathan Carter</dd>
+        <dt>Armed by</dt><dd>Nathan Carter · 2026-07-15 22:44</dd>
+        <dt>Budget</dt><dd>$0.00 / $25.00</dd>
+      </dl>
+    </div>
+    <div class="cta armed">
+      <p>Armed — the analyst dispatch derives on the next tick, same as any run that reaches <code>phase: spec</code>. Nothing about arming skips G0; the spec it produces is still gated normally.</p>
+    </div>
+    <h3 class="section-h">Gates</h3>
+    <div class="gate-strip"><span class="gate-cell">G0 ·</span><span class="gate-cell">G1 ·</span><span class="gate-cell">G2 ·</span><span class="gate-cell">G3 ·</span></div>
+  </div>
+</div>
+</body>
+</html>

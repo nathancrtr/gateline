@@ -101,6 +101,24 @@ budget:
       tokens_out: 1874
       cost_usd: 0.186382
       failed: true
+    - at: 2026-07-15T23:12:56.470Z
+      role: reviewer
+      task: 01-candidate-import-desk
+      round: 1
+      adapter: claude-code
+      model: anthropic/claude-fable-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
+    - at: 2026-07-15T23:12:56.470Z
+      role: reviewer
+      task: 03-intake-seam-reference
+      round: 1
+      adapter: claude-code
+      model: anthropic/claude-fable-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
 
 gates:
   G0:

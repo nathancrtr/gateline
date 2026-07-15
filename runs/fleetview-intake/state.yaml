@@ -1,7 +1,7 @@
 run: fleetview-intake
 branch: run/fleetview-intake
-phase: paused
-paused_reason: budget-exhausted
+phase: implement
+paused_reason: null
 
 budget:
   cost_limit_usd: 40

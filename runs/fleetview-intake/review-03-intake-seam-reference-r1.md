@@ -47,3 +47,45 @@ Checked clean against spec/plan/task, by number:
 ## Boundary check
 
 Clean. The commit adds exactly one file, `runs/fleetview-intake/design/seam-reference.md` (925 lines), matching the declared `file_contact_surface`. No code, contracts/, registry/, or frontend/ files touched — the document's proposals stay quoted, as the task's scope demands.
+
+---
+
+## Round 2
+
+**Verdict:** request-changes
+**Round:** 2 of 3
+**Diff reviewed:** 66fbaa1 (66fbaa1^..66fbaa1), branch run/fleetview-intake
+
+### Prior-finding resolution (re-verified against current content, not the implementer's notes)
+
+- **F1 — NOT resolved** (see F6 below). The primary self-trip is genuinely fixed: `registry/task-sources.yaml` is out of the grep target (`:890-893`) and the new structural check (`:902-909`) does verify what the isolation rule actually constrains at the registry layer — only the four generic keys `driver`/`label`/`ref_format`/`auth`, tracker-shaped *keys* (not prose values) as the violation. But check 1 as written still cannot return zero matches against this checkout plus the document's own §1b proposal — verified by running the exact grep (F6).
+- **F2 — resolved.** Discrepancy note present at `:754-770`, directly under 9a's state.yaml: names IC-4's literal skeleton (`plan.md:174` — citation exact, re-verified), the AC5.2 "verbatim" binding (plan Risks `:367-369`), ADR-6's requirement (`plan.md:307` — citation exact), contrasts 9b's `--no-draft` case, states the document follows ADR-6, and hands the IC-4-vs-ADR-6 call to the G1/G2 human. Indexed in the bottom discrepancy summary at `:985-989`. 9b (`:819-841`) still matches IC-4's literal skeleton exactly (`cost_spent_usd: 0`, `ledger: []`, null source/ref/url, gates block matching contracts/state.yaml).
+- **F3 — resolved.** AC4.2 check (`:910-932`) now exercises all three of §2's steps: driver module at `task-sources/<placeholder>.ts`, registry entry, and the single `index.ts` barrel line, and asserts `/api/intake/item?source=<placeholder>&ref=...` resolves through the new driver. It explicitly names the registry-entry-only configuration as broken (the §6-undefined case r1 flagged) rather than a smaller test, and carries the reconciling sentences for spec AC4.2's "driver plus registry entry" phrasing and §2:167-168's "no core edit" framing (cross-reference re-verified: `:167-168` is that text). Residual (acceptable at minor, noted in coverage): §6's status table still defines no response for a registered-source-with-missing-driver misconfiguration if it ever occurs at runtime.
+- **F4 — resolved.** `:660-662` now cites `local-source.ts:28` (the option) and `:257` (the plumbing-path use) separately; re-verified against source — `local-source.ts:257` is exactly `const commit = await this.git.commitTree(tree, tip, message, this.options.identity)` (the document's quote matches verbatim, including `tip`), `:28` is the constructor declaring `identity?: Identity`, `:246-251` is the worktree-path push block as r1 found. Matches §3.2's citation.
+- **F5 — resolved.** `:491-498` now describes the real failure mode: label lookup at `chips.tsx:34` yields `undefined` for an unhandled kind, React renders an undefined child as nothing (`chips.tsx:41-45` JSX re-verified — `{label}` as sole child), so the badge renders empty, not literal "undefined". Correct, and the tone fallback (`:35-40` → `bg-bad-soft`) is consistent with the document's "blank badge reads as broken" framing. Remediation unchanged.
+
+### Findings
+
+#### F6 — blocking — AC4.1 check 1 still cannot pass: it fails against today's checkout (`schema.ts`) and against the document's own §1b delta (`contracts/intent-brief.md`)
+- **Where:** `runs/fleetview-intake/design/seam-reference.md:890-901` vs `frontend/packages/core/src/schema.ts:108,112` and `seam-reference.md:106-115` (the §1b quotable delta, URL at `:109`)
+- **Failure scenario:** Ran the check verbatim against this checkout: `grep -rniE "issue|label|assignee|milestone" contracts/state.yaml contracts/intent-brief.md frontend/packages/core/src/*.ts` → two hits **today**, before any intake code exists: `schema.ts:108` (`const issues = result.error.issues` — zod's error API, unrenamable) and `schema.ts:112` (interpolates `${issues}`). Additionally, the follow-on applying §1b's exact quotable text plants `https://github.com/acme/widgets/issues/482` into `contracts/intent-brief.md` (`:109`), a third guaranteed hit — this is r1 F1's secondary concern, now definite, and the round-2 rework left `contracts/intent-brief.md` in the target with no exclusion or genericized example. Net: a perfect implementation still reports AC4.1 failed and the follow-on discards/loosens the headline check ad hoc — the same defect class F1 was blocking for, on two different targets. Fix options are small: word-boundary/identifier-aware pattern or a named `schema.ts` zod false-positive exclusion, plus either excluding `contracts/intent-brief.md` (checking it structurally like the registry) or stripping the tracker-noun URL from §1b's example text.
+- **Requirement:** task §10 + acceptance "AC4.1 … verification note"; spec AC4.1.
+
+#### F7 — minor — §2's committed isolation-rule text still contradicts §10 check 2's keys-not-values reading (and its own entry two lines below)
+- **Where:** `runs/fleetview-intake/design/seam-reference.md:153-156` ("may never appear … or in this registry file itself") vs `:173-174` (`label: GitHub Issues`, `ref_format: "… issue URL"`) and `:902-909` ("a `label`/`ref_format` *value* naming the tracker in prose … is expected and compliant")
+- **Failure scenario:** §2 is the exact quotable text committed to `registry/task-sources.yaml`; on a plain reading its rule prohibits tracker nouns "in this registry file itself" while the entry beneath it contains "GitHub Issues"/"issue URL". §10 now interprets the rule as keys-not-values, but the file that ships carries the stricter self-violating wording — a follow-on (or later source-adder) reading only the committed registry inherits the r1-F1 confusion locally. One-sentence rewording of the §2 comment to the keys-not-values formulation closes it.
+- **Requirement:** spec AC4.1; task §2 (isolation rule stated).
+
+### Coverage (round 2)
+
+- **Round-2 delta reviewed in full** (`git show 66fbaa1` — four hunks in seam-reference.md plus the task-yaml notes append; nothing else in the commit). Each fix verified against current line numbers by direct read, and against source files by direct read, not against the implementer's claimed lines (which are accurate for F1/F2/F3 body text; the notes' cites for F4 (":655-657" → actually `:660-662`) and the F2 index (":929-933" → actually `:985-989`) are off by a few lines — immaterial, document itself is what was checked).
+- **Plan citations in the new F2 note re-verified exact:** `plan.md:174` (IC-4 budget line), `plan.md:307` (ADR-6 carried-cost sentence), Risks "verbatim"/AC5.2 binding at `plan.md:367-369`.
+- **Source re-verified for F4/F5:** `local-source.ts:20,28,246-251,255-259`; `chips.tsx:30-46`. Both document claims now match source verbatim.
+- **New AC4.1 structural check assessed for sufficiency:** it discriminates the actual mutant (a tracker-API-shaped key like `issue_number` leaking into the registry schema) that the old grep conflated with permitted display prose — genuine improvement; check 2 is sound. Check 1 is F6.
+- **New AC4.2 check assessed for executability:** all three steps concrete (file path, entry, barrel line), the resolve-through-the-driver assertion closes r1's undefined-status hole in the test path, and the `git diff --stat` allowlist is internally consistent (`index.ts` named, "any other core/src/*.ts" phrasing correct). Clean.
+- **Swept the round-2 additions for new defects:** no broken cross-references (`§2:167-168`, `§1a(ii)`, `§8`, `§9b`, `plan.md` cites all resolve); discrepancy summary now indexes all eight inline notes including the new §9a bullet; no new code-reference errors found beyond F6/F7's design-level issues; document grep for tracker nouns re-run — no *new* self-trip surfaces introduced by the round-2 text itself (the §10 discussion of the words lives in `runs/`, outside every check target).
+- Not re-assessed (unchanged since round 1, r1 coverage stands): §3-§7 substance, blast-radius completeness, route/CLI tables, AC5.1/6.1/7.3/8.x/9.2/10.1/14.1 checks other than 4.1/4.2.
+
+### Boundary check (round 2)
+
+Clean. The commit touches `runs/fleetview-intake/design/seam-reference.md` (the declared `file_contact_surface`) and appends round-2 notes to the previously-empty `notes:` field of `tasks/03-intake-seam-reference.yaml` — the latter is outside the declared surface but is the exact append-only channel `contracts/work-item.yaml:27-29` reserves for implementer deviation notes and finding responses, and the append preserved all prior yaml content; not a violation. No code, contracts/, registry/, or frontend/ files touched.

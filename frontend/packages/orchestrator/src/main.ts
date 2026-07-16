@@ -6,23 +6,17 @@
 //   shadow <slug>    replay a run's history, derived vs actual (M1)
 //   sweep <role>     force a scheduled sweep now (ignores dueness, not the guards)
 import { Command } from 'commander'
-import { Git, LocalGitSource, type Identity } from '@agentic/core'
+import { Git, LocalGitSource } from '@agentic/core'
 import { loadRegistry, type Registry } from './registry.ts'
 import { deriveAll } from './tick.ts'
 import { formatAction } from './derive.ts'
 import { formatShadowStep, shadowReplay } from './shadow.ts'
-import { Engine } from './engine.ts'
-import { HeadlessDispatcher } from './seam.ts'
-import { loadHeadlessManifest } from './manifest.ts'
-import { RoutingDispatcher } from './router.ts'
-import { Scheduler, type SweepOutcome } from './schedule.ts'
+import type { Engine } from './engine.ts'
+import type { Scheduler, SweepOutcome } from './schedule.ts'
 import { runLoop } from './triggers.ts'
+import { assembleOrchestrator, BOT_IDENTITY } from './start.ts'
 
-/** One identity per orchestrator install (resolved question 4). */
-export const BOT_IDENTITY: Identity = {
-  name: 'agentic-orchestrator',
-  email: 'orchestrator@agentic.invalid',
-}
+export { BOT_IDENTITY }
 
 const program = new Command()
 program
@@ -64,42 +58,19 @@ async function open(): Promise<Opened> {
   }
 }
 
-/** Engine and scheduler share one dispatcher, so sweeps meter through the same seam (§6). */
+/** CLI flags → the shared assembly (start.ts): one construction path for the binary and `agentic up`. */
 async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler: Scheduler }> {
   const names = program.opts<{ adapter: string[] }>().adapter
-  const log = (line: string) => console.log(line)
-  const adapters = await Promise.all(
-    (names.length ? names : ['claude-code']).map(async (name) => {
-      const manifest = await loadHeadlessManifest(opened.dir, name, opened.frameworkPrefix)
-      return { manifest, dispatcher: new HeadlessDispatcher(manifest) }
-    }),
-  )
-  const dispatcher =
-    adapters.length === 1 && !opened.registry
-      ? adapters[0]!.dispatcher
-      : new RoutingDispatcher(adapters, opened.registry ?? { profiles: {}, bindings: {}, pricing: {}, estimates: {} }, log)
   const hosted = program.opts<{ push?: boolean; spendLimitUsd?: number; requireBudget?: boolean }>()
-  const engine = new Engine({
+  return assembleOrchestrator({
     repoDir: opened.dir,
-    identity: BOT_IDENTITY,
-    dispatcher,
-    registry: opened.registry,
+    adapters: names,
     frameworkPrefix: opened.frameworkPrefix,
     push: hosted.push,
     spendLimitUsd: hosted.spendLimitUsd ?? null,
     requireBudget: hosted.requireBudget,
-    log,
+    log: (line: string) => console.log(line),
   })
-  const scheduler = new Scheduler({
-    repoDir: opened.dir,
-    identity: BOT_IDENTITY,
-    dispatcher,
-    registry: opened.registry,
-    frameworkPrefix: opened.frameworkPrefix,
-    push: hosted.push,
-    log,
-  })
-  return { engine, scheduler }
 }
 
 const printSweep = (s: SweepOutcome) =>

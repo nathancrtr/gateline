@@ -15,10 +15,12 @@ primary_region = "iad"
 
 [env]
   FETCH_INTERVAL = "60"
-  # Orchestrator (hosted dispatch) — see docs/DEPLOY.md before flipping this.
-  # Requires secrets: ANTHROPIC_API_KEY. Recommended: ORCH_SPEND_LIMIT_USD.
-  ORCH_ENABLED = "0"
-  # ORCH_SPEND_LIMIT_USD = "25"
+  # Orchestrator (hosted dispatch) — the blessed default is co-located
+  # (one machine, one clone, one authority; docs/TOPOLOGY.md §3.1). Billing
+  # is by API key (ANTHROPIC_API_KEY secret); flip to "0" for a viewer-only
+  # deployment. See docs/DEPLOY.md before first enabling.
+  ORCH_ENABLED = "1"
+  ORCH_SPEND_LIMIT_USD = "25"
 
 # Secrets (fly secrets set ...): REPO_URL, GIT_TOKEN, GIT_USER_NAME,
 # GIT_USER_EMAIL, TUNNEL_TOKEN, GITHUB_WEBHOOK_SECRET, GITHUB_TOKEN,

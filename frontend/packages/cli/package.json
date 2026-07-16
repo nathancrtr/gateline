@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "agentic — the gate frontend in terminal form: status, inbox, and the same single decision write path.",
+  "description": "agentic \u2014 the gate frontend in terminal form: status, inbox, and the same single decision write path.",
   "bin": {
     "agentic": "./src/main.ts"
   },
@@ -13,7 +13,8 @@
   "dependencies": {
     "@agentic/core": "*",
     "@agentic/server": "*",
-    "commander": "^14.0.0"
+    "commander": "^14.0.0",
+    "@agentic/orchestrator": "*"
   },
   "devDependencies": {
     "@agentic/fixtures": "*"

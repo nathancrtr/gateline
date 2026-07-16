@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { NavLink, Outlet } from 'react-router-dom'
-import { api } from './api.ts'
+import { api, formatAge } from './api.ts'
 import { useLiveInvalidation } from './use-live.ts'
 
 function NavItem({ to, label, badge, end }: { to: string; label: string; badge?: number; end?: boolean }) {
@@ -19,6 +19,25 @@ function NavItem({ to, label, badge, end }: { to: string; label: string; badge?:
         <span className="rounded-full bg-accent px-1.5 py-px font-mono text-[11px] font-semibold tabular-nums text-surface">{badge}</span>
       )}
     </NavLink>
+  )
+}
+
+/**
+ * The Airflow lesson (#100): decisions landing with no engine consuming them
+ * must read as an outage, never as "waiting on gate". Shown only when an
+ * engine has reported on this deployment before and has gone silent —
+ * viewer-only installs (no heartbeat file, engines[id] === null) get nothing.
+ */
+function EngineOutageBanner() {
+  const health = useQuery({ queryKey: ['engine-health'], queryFn: api.engineHealth, refetchInterval: 60_000 })
+  const stale = Object.entries(health.data?.engines ?? {}).filter(([, h]) => h?.stale)
+  if (stale.length === 0) return null
+  return (
+    <div className="mb-4 rounded-md border border-bad/40 bg-bad/10 px-4 py-2.5 text-sm text-ink" role="alert">
+      <span className="font-semibold">The orchestrator does not appear to be running.</span>{' '}
+      Decisions will be recorded but nothing will dispatch — last heartbeat{' '}
+      {stale.map(([id, h]) => `${formatAge(Math.floor(Date.parse(h!.at) / 1000), health.data!.now)} ago (${id})`).join(', ')}.
+    </div>
   )
 }
 
@@ -55,6 +74,7 @@ export function App() {
       </div>
 
       <main className="min-w-0 flex-1 px-6 py-6 max-md:pt-16">
+        <EngineOutageBanner />
         <Outlet />
       </main>
     </div>

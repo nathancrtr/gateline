@@ -580,7 +580,7 @@ tasks:
     { id: 04-status-components, status: dispatched, review_rounds: 1 },
     { id: 05-decide-panel, status: review-approved, review_rounds: 2 },
     { id: 06-inbox-screen, status: in-review, review_rounds: 0 },
-    { id: 07-portfolio-screen, status: in-review, review_rounds: 0 },
+    { id: 07-portfolio-screen, status: in-review, review_rounds: 1 },
     { id: 08-metrics-screen, status: in-review, review_rounds: 0 },
     { id: 09-run-screen, status: in-review, review_rounds: 0 },
     { id: 10-diff-view, status: review-approved, review_rounds: 1 },

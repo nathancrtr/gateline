@@ -429,22 +429,26 @@ gates:
   G3: { approved: false, by: null, at: null, notes: null }
 
 tasks:
-  # 2026-07-16 second reset (Nathan Carter): the 06:16Z round-1 re-dispatches
-  # of 03/04/06-10 also ran against the hosted machine's frozen pre-#113
-  # manifest and committed nothing — reset to pending again for the local
-  # orchestrator. 05-decide-panel's round 1 landed (folded 72125ea) and stays
-  # in-review.
+  # 2026-07-16 third reset (Nathan Carter): the 18:08Z parallel round-1
+  # dispatches of 03/04/06-10 failed in the local orchestrator too — the
+  # long-running process had loaded the pre-#113 adapter manifest at its
+  # 05:30Z startup and cached it (manifests are read once, at process start),
+  # so the fixed dispatch prompt on disk never took effect. The failed
+  # dispatches left these tasks stranded at `dispatched` (issue #115), which
+  # the engine reads as in-flight — reset to pending after restarting the
+  # orchestrator with the fixed manifest. 05-decide-panel converged post-fix
+  # (review-approved, round 2) and is untouched.
   [
     { id: 01-g1-evidence-audit, status: review-approved, review_rounds: 2 },
     { id: 02-ledger-foundations, status: review-approved, review_rounds: 1 },
-    { id: 03-shell-masthead, status: dispatched, review_rounds: 0 },
-    { id: 04-status-components, status: dispatched, review_rounds: 0 },
+    { id: 03-shell-masthead, status: pending, review_rounds: 0 },
+    { id: 04-status-components, status: pending, review_rounds: 0 },
     { id: 05-decide-panel, status: review-approved, review_rounds: 2 },
-    { id: 06-inbox-screen, status: dispatched, review_rounds: 0 },
-    { id: 07-portfolio-screen, status: dispatched, review_rounds: 0 },
-    { id: 08-metrics-screen, status: dispatched, review_rounds: 0 },
-    { id: 09-run-screen, status: dispatched, review_rounds: 0 },
-    { id: 10-diff-view, status: dispatched, review_rounds: 0 },
+    { id: 06-inbox-screen, status: pending, review_rounds: 0 },
+    { id: 07-portfolio-screen, status: pending, review_rounds: 0 },
+    { id: 08-metrics-screen, status: pending, review_rounds: 0 },
+    { id: 09-run-screen, status: pending, review_rounds: 0 },
+    { id: 10-diff-view, status: pending, review_rounds: 0 },
     { id: 11-integration-verification, status: pending, review_rounds: 0 }
   ]
 

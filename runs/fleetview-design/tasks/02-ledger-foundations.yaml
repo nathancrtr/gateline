@@ -49,3 +49,21 @@ depends_on: []
 status: pending
 
 notes: |
+  Implementer r1: rewrote styles.css per C1 verbatim (theme tokens, :root
+  properties, three keyframes, three motion classes) and restyled
+  .prose-artifact to the artbody reading voice (14/1.6 sans body, 76ch cap,
+  h1 18/600, h2 14/600 + line hairline, inline code 12.5px/raised/3px radius,
+  pre 12/20 mono/inset/4px radius). Grepped src/ first: no file referenced
+  pulse-glow/pulse-panel/skel/--ramp-*/--glow/--color-inset/-accent-deep/
+  -on-solid before this change (wholly new additions, not renames), so no
+  token/class was removed out from under another task.
+  Discoveries: (1) contrary to plan Risk 1, this sandbox has network access —
+  `npm install` succeeded and full verification ran (not blocked/escalated).
+  (2) h3 isn't named in C1/C2 explicitly (only h1/h2); kept a sans-semibold h3
+  sized between h2 and body (13px) for markdown depth, consistent with the
+  reading voice, since spec.md/artifact markdown can contain ###.
+  Verification from frontend/: `npm install` ok; `npm run typecheck` passes
+  (2 tsc projects, no errors); `npm test` — 17 files / 127 tests passed, 1
+  skipped (live-smoke, expected offline skip); `npm run build -w @agentic/web`
+  succeeds. `grep -rn '@keyframes' src/` matches pulse/pulsepanel/sweep, all
+  in styles.css only; no `rounded-lg` remains under .prose-artifact.

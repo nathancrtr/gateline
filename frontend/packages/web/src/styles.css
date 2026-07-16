@@ -1,23 +1,27 @@
 @import 'tailwindcss';
 
-/* Design tokens — calm, editorial, one accent. light-dark() + color-scheme
-   gives both themes from a single declaration; the OS preference decides. */
+/* Design tokens — Signal Deck: cool, dark-native, one accent-as-signal.
+   light-dark() + color-scheme gives both themes from a single declaration;
+   the OS preference decides. Dark is the identity theme (plan ADR-1/C1). */
 @theme {
-  --color-ground: light-dark(#f6f7f5, #141816);
-  --color-surface: light-dark(#ffffff, #1b211e);
-  --color-raised: light-dark(#eef0ed, #232b27);
-  --color-ink: light-dark(#1d2420, #e3eae6);
-  --color-muted: light-dark(#5e6b64, #94a29b);
-  --color-faint: light-dark(#98a49d, #5c6963);
-  --color-line: light-dark(#dfe4e0, #2b3430);
-  --color-accent: light-dark(#0e7264, #4fc0ab);
-  --color-accent-soft: light-dark(#0e72641a, #4fc0ab24);
-  --color-ok: light-dark(#2e7d4f, #5cbf88);
-  --color-ok-soft: light-dark(#2e7d4f1a, #5cbf8824);
-  --color-warn: light-dark(#a8781f, #d3a44a);
-  --color-warn-soft: light-dark(#a8781f1a, #d3a44a24);
-  --color-bad: light-dark(#b4432f, #e07b63);
-  --color-bad-soft: light-dark(#b4432f14, #e07b6320);
+  --color-ground: light-dark(#eef2f5, #0a0e11);
+  --color-surface: light-dark(#ffffff, #111820);
+  --color-inset: light-dark(#f3f6f8, #0d141a);
+  --color-raised: light-dark(#e4ebef, #18222b);
+  --color-ink: light-dark(#10202a, #dbe7ec);
+  --color-muted: light-dark(#4c5d67, #8ba1ac);
+  --color-faint: light-dark(#8598a2, #566771);
+  --color-line: light-dark(#d3dde3, #223039);
+  --color-accent: light-dark(#0b6f89, #45c8ec);
+  --color-accent-deep: light-dark(#075365, #8adcf5);
+  --color-ok: light-dark(#157a4a, #4ec98d);
+  --color-warn: light-dark(#8a6410, #e0b24e);
+  --color-bad: light-dark(#b23b28, #ff7f63);
+  --color-on-solid: light-dark(#ffffff, #06121a);
+  --color-accent-soft: light-dark(rgba(11, 111, 137, .12), rgba(69, 200, 236, .14));
+  --color-ok-soft: light-dark(rgba(21, 122, 74, .13), rgba(78, 201, 141, .15));
+  --color-warn-soft: light-dark(rgba(138, 100, 16, .13), rgba(224, 178, 78, .15));
+  --color-bad-soft: light-dark(rgba(178, 59, 40, .12), rgba(255, 127, 99, .16));
 
   --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
   --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
@@ -25,6 +29,16 @@
 
 :root {
   color-scheme: light dark;
+
+  /* Signal bloom + burden ramp — plain custom properties (not @theme
+     tokens) because they carry light-dark()/rgba into shadows and
+     gradients, which Tailwind's arbitrary-value utilities choke on
+     (plan Risk 6). Consumers reach these via var(--…), never inline. */
+  --glow: light-dark(rgba(11, 111, 137, .30), rgba(69, 200, 236, .40));
+  --ramp-1: light-dark(#cfe8e2, #2a5c52);
+  --ramp-2: light-dark(#3f9e8c, #4a9c8a);
+  --ramp-3: light-dark(#0b6f61, #8fdccb);
+  --unrecorded: light-dark(#d9dedb, #3a423e);
 }
 
 body {
@@ -38,26 +52,65 @@ body {
   border-radius: 2px;
 }
 
+/* Motion as functional signal (candidate B thesis) — the only animation
+   definitions allowed anywhere in the app (plan ADR-6). Consumers apply
+   these class names only; a task needing a new one escalates rather than
+   adding local @keyframes. */
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 6px var(--glow); }
+  50% { box-shadow: 0 0 15px var(--glow), 0 0 4px var(--glow); }
+}
+@keyframes pulsepanel {
+  0%, 100% { box-shadow: 0 0 0 1px var(--color-accent-soft), 0 0 14px var(--glow); }
+  50% { box-shadow: 0 0 0 1px var(--color-accent-soft), 0 0 28px var(--glow); }
+}
+@keyframes sweep {
+  0% { background-position: 180% 0; }
+  100% { background-position: -80% 0; }
+}
+
+.pulse-glow {
+  animation: pulse 2.4s ease-in-out infinite;
+}
+.pulse-panel {
+  box-shadow: 0 0 0 1px var(--color-accent-soft), 0 0 18px var(--glow);
+  animation: pulsepanel 2.8s ease-in-out infinite;
+}
+.skel {
+  border-radius: 4px;
+  background: linear-gradient(100deg, var(--color-inset) 30%, var(--color-raised) 50%, var(--color-inset) 70%);
+  background-size: 220% 100%;
+  animation: sweep 1.5s linear infinite;
+}
+
+/* Reduced motion: animation stops outright (a 0.01ms infinite animation is
+   still a running animation, plan ADR-6) — every animated base style above
+   is designed to stay meaningful when static: .pulse-panel keeps its
+   static glow ring, .skel reads as a static inset block, the pulsing
+   count pill stays a solid accent pill. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
-    animation-duration: 0.01ms !important;
+    animation: none !important;
     transition-duration: 0.01ms !important;
   }
 }
 
-/* Rendered markdown (artifacts). Reading, not operating: measure capped,
-   mono for evidence blocks, quiet rules. */
+/* Rendered markdown (artifacts). Reading, not operating: Signal Deck's
+   reading voice — sans body/headings, measure capped at 76ch, mono
+   evidence chips/blocks, small (3-4px) radii — per the candidate-b
+   run-artifacts.html .artbody region and design-candidate.md's
+   look-and-feel spec. */
 .prose-artifact {
-  @apply text-[15px] leading-relaxed max-w-[74ch];
+  @apply text-[14px] leading-[1.6] max-w-[76ch];
 }
 .prose-artifact h1 {
-  @apply text-xl font-semibold mt-2 mb-4 text-balance;
+  @apply text-[18px] font-semibold mt-2 mb-3.5 text-balance;
 }
 .prose-artifact h2 {
-  @apply text-base font-semibold mt-7 mb-2 pb-1 border-b border-line;
+  @apply text-[14px] font-semibold mt-6 mb-2 pb-1 border-b border-line;
 }
 .prose-artifact h3 {
-  @apply text-[15px] font-semibold mt-5 mb-1.5;
+  @apply text-[13px] font-semibold mt-5 mb-1.5;
 }
 .prose-artifact p {
   @apply my-2.5;
@@ -70,10 +123,10 @@ body {
 .prose-artifact li { @apply my-1; }
 .prose-artifact li::marker { color: var(--color-faint); }
 .prose-artifact code {
-  @apply font-mono text-[0.85em] px-1 py-0.5 rounded bg-raised;
+  @apply font-mono text-[12.5px] px-1.5 py-0.5 rounded-[3px] bg-raised;
 }
 .prose-artifact pre {
-  @apply font-mono text-xs leading-5 p-3.5 my-3 rounded-lg bg-raised overflow-x-auto;
+  @apply font-mono text-[12px] leading-[20px] p-3.5 my-3 rounded-[4px] bg-inset overflow-x-auto;
 }
 .prose-artifact pre code { @apply p-0 bg-transparent; }
 .prose-artifact table {

@@ -5,7 +5,7 @@ paused_reason: escalation
 
 budget:
   cost_limit_usd: 200
-  cost_spent_usd: 60.66
+  cost_spent_usd: 61.01
   ledger:
     # v0 hand-appended; costs are the registry static estimates (harness
     # reports combined subagent tokens without an in/out split to price
@@ -237,9 +237,10 @@ budget:
       round: 1
       adapter: claude-code
       model: anthropic/claude-sonnet-5
-      tokens_in: null
-      tokens_out: null
-      cost_usd: null
+      tokens_in: 20
+      tokens_out: 4351
+      cost_usd: 0.3505944
+      failed: true
     - at: 2026-07-16T06:16:28.002Z
       role: implementer
       task: 05-decide-panel
@@ -472,4 +473,10 @@ escalations:
     reason: "implementer (03-shell-masthead) failed twice: rebase of
       run/fleetview-design--task/03-shell-masthead onto run/fleetview-design
       conflicted — overlapping file-contact …"
+    resolved: false
+  - at: 2026-07-16T06:27:40.801Z
+    from_role: orchestrator
+    reason: "implementer (04-status-components) failed twice: rebase of
+      run/fleetview-design--task/04-status-components onto run/fleetview-design
+      conflicted — overlapping file-conta…"
     resolved: false

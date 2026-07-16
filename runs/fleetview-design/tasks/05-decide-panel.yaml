@@ -40,3 +40,34 @@ depends_on: [02-ledger-foundations]
 status: pending
 
 notes: |
+  Round 2 (response to runs/fleetview-design/review-03.md):
+
+  F1 (blocking) — fixed. The burden-tile label carried `bg-inset` on the shared
+  base string and `bg-accent-soft` only in the selected branch, so both classes
+  landed on the element and `bg-inset`'s later cascade position won. Moved
+  `bg-inset` into the unselected branch so the two backgrounds are mutually
+  exclusive again (mirrors the pre-diff bg-surface pattern the reviewer
+  pointed to): selected -> `border-accent bg-accent-soft font-semibold
+  text-accent`, unselected -> `border-line bg-inset hover:border-accent`.
+
+  F2 (minor) — fixed. Moved `font-semibold` out of the per-tone strings and
+  into the shared `<button>` className (applies to primary/danger/quiet
+  alike), matching mockup `.btn{font:600 13px ...}` which sets weight 600 on
+  the shared class before any tone-specific override.
+
+  F3 (minor) — fixed. Added a shared `border` (width) utility to every
+  Button plus a border-color per tone: `border-accent` on primary,
+  `border-bad` on danger, `border-line` on quiet (quiet already had a
+  border; it now gets its color from the tone branch instead of a separate
+  `border border-line` pair) — matches mockup `.btn{border:1px solid
+  var(--line)}` with `.btn.primary`/`.btn.danger` overriding
+  `border-color` to accent/bad. All three capsules in a row now share the
+  same 1px border width, closing the 2px height mismatch.
+
+  Verification: `cd frontend && npm run typecheck` clean; `npm test` 127
+  passed/1 skipped; `npx playwright test` 5/5 passed (had to `npm run build`
+  first so the server package-serves the built SPA for the e2e fixture
+  server — dist/ is gitignored, not committed). `git diff` on decide.tsx
+  touches only className strings (the <button> JSX gained multi-line
+  formatting but no new props/handlers). `grep -E
+  'keyframes|animation-|motion-'` on decide.tsx: zero hits.

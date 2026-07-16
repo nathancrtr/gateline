@@ -135,8 +135,8 @@ export function DecidePanel({ item, primary = false }: { item: InboxItem; primar
               {BURDEN_OPTIONS.map((o) => (
                 <label
                   key={o.value}
-                  className={`flex cursor-pointer items-baseline gap-2 rounded-[5px] border bg-inset px-3 py-2 text-sm transition-colors ${
-                    burden === o.value ? 'border-accent bg-accent-soft font-semibold text-accent' : 'border-line hover:border-accent'
+                  className={`flex cursor-pointer items-baseline gap-2 rounded-[5px] border px-3 py-2 text-sm transition-colors ${
+                    burden === o.value ? 'border-accent bg-accent-soft font-semibold text-accent' : 'border-line bg-inset hover:border-accent'
                   }`}
                 >
                   <input
@@ -203,11 +203,16 @@ function Button({
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { primary?: boolean; danger?: boolean }) {
   const tone = primary
-    ? 'bg-accent text-on-solid font-semibold shadow-[0_0_12px_var(--glow)] hover:opacity-90'
+    ? 'border-accent bg-accent text-on-solid shadow-[0_0_12px_var(--glow)] hover:opacity-90'
     : danger
-      ? 'bg-bad text-on-solid font-semibold hover:opacity-90'
-      : 'border border-line bg-inset text-muted hover:text-ink hover:border-accent'
-  return <button {...props} className={`rounded-full px-4 py-[7px] text-sm transition-all disabled:cursor-not-allowed disabled:opacity-40 ${tone}`} />
+      ? 'border-bad bg-bad text-on-solid hover:opacity-90'
+      : 'border-line bg-inset text-muted hover:text-ink hover:border-accent'
+  return (
+    <button
+      {...props}
+      className={`rounded-full border px-4 py-[7px] text-sm font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-40 ${tone}`}
+    />
+  )
 }
 
 function NotesField({

@@ -5,7 +5,7 @@ paused_reason: null
 
 budget:
   cost_limit_usd: 200
-  cost_spent_usd: 36.37
+  cost_spent_usd: 38.53
   ledger:
     # analyst: total tokens only (50855), split unavailable, cost estimated at registry rates
     - {
@@ -193,9 +193,9 @@ budget:
       round: 3
       adapter: claude-code
       model: anthropic/claude-sonnet-5
-      tokens_in: null
-      tokens_out: null
-      cost_usd: null
+      tokens_in: 52
+      tokens_out: 5310
+      cost_usd: 2.1655205
 
 gates:
   G0:
@@ -283,7 +283,7 @@ tasks:
   # machine) were discarded with the hold. 03 returns to in-review: its round-2
   # verdict was request-changes and the round-3 implementer response never
   # landed, so the reconciler re-derives that dispatch.
-  [ { id: 03-intake-seam-reference, status: dispatched, review_rounds: 2 } ]
+  [ { id: 03-intake-seam-reference, status: in-review, review_rounds: 2 } ]
 
 escalations:
   [

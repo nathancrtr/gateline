@@ -177,6 +177,15 @@ budget:
       tokens_in: 16
       tokens_out: 3131
       cost_usd: 3.0805847999999996
+    - at: 2026-07-16T05:31:07.918Z
+      role: implementer
+      task: 03-intake-seam-reference
+      round: 3
+      adapter: claude-code
+      model: anthropic/claude-sonnet-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
 
 gates:
   G0:
@@ -256,7 +265,7 @@ tasks:
   [
     { id: 01-candidate-import-desk, status: dispatched, review_rounds: 1 },
     { id: 02-candidate-single-thread, status: dispatched, review_rounds: 0 },
-    { id: 03-intake-seam-reference, status: in-review, review_rounds: 2 }
+    { id: 03-intake-seam-reference, status: dispatched, review_rounds: 2 }
   ]
 
 escalations:

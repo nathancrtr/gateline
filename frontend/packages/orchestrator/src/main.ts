@@ -110,6 +110,10 @@ program
       return
     }
     const { engine, scheduler } = await buildEngine(opened)
+    // A live one-shot tick owns its own freshness (#104); --dry-run stays
+    // read-only end to end — it derives from whatever the clone has and
+    // moves no refs, not even fast-forwards.
+    await engine.syncFromRemote()
     const outcomes = await engine.tick()
     for (const o of outcomes) console.log(`${o.slug}: ${o.action.kind} [${o.action.rule}]${o.launched ? ` launched ${o.launched}` : ''} — ${o.detail}`)
     for (const s of await scheduler.tick()) printSweep(s)

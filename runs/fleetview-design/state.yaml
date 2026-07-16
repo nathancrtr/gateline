@@ -5,7 +5,7 @@ paused_reason: escalation
 
 budget:
   cost_limit_usd: 200
-  cost_spent_usd: 102.34
+  cost_spent_usd: 103.11
   ledger:
     # v0 hand-appended; costs are the registry static estimates (harness
     # reports combined subagent tokens without an in/out split to price
@@ -530,9 +530,9 @@ budget:
       round: 2
       adapter: claude-code
       model: anthropic/claude-sonnet-5
-      tokens_in: null
-      tokens_out: null
-      cost_usd: null
+      tokens_in: 10
+      tokens_out: 2611
+      cost_usd: 0.7765468499999999
     - at: 2026-07-16T22:00:07.359Z
       role: reviewer
       task: 09-run-screen
@@ -577,7 +577,7 @@ tasks:
     { id: 01-g1-evidence-audit, status: review-approved, review_rounds: 2 },
     { id: 02-ledger-foundations, status: review-approved, review_rounds: 1 },
     { id: 03-shell-masthead, status: review-approved, review_rounds: 1 },
-    { id: 04-status-components, status: dispatched, review_rounds: 1 },
+    { id: 04-status-components, status: in-review, review_rounds: 1 },
     { id: 05-decide-panel, status: review-approved, review_rounds: 2 },
     { id: 06-inbox-screen, status: in-review, review_rounds: 0 },
     { id: 07-portfolio-screen, status: in-review, review_rounds: 1 },

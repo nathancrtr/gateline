@@ -37,6 +37,12 @@ export async function runLoop(engine: Engine, repoDir: string, cfg: RunLoopConfi
     }
     ticking = true
     try {
+      // Freshness is the engine's own job in a standalone topology (#104):
+      // sync on heartbeat and startup, where the trigger cause is known.
+      // Never on refs/completion ticks — our own fetch writes FETCH_HEAD
+      // under the watched .git dir, so syncing there would re-trigger the
+      // watcher forever; the heartbeat bounds staleness instead.
+      if (why === 'heartbeat' || why === 'startup') await engine.syncFromRemote()
       do {
         queued = false
         const outcomes = await engine.tick()

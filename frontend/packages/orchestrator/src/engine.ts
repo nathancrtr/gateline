@@ -103,6 +103,27 @@ export class Engine {
     return this.jobs.size
   }
 
+  /**
+   * Fast-forward local run branches from origin before deriving (#104). A
+   * standalone orchestrator has no co-located server fetch loop to lean on,
+   * and an engine reading a materialized local branch never sees remote
+   * decisions otherwise — it re-derives yesterday's state forever. ff-only
+   * and idempotent (LocalGitSource.syncFromRemote): a diverged branch is
+   * refused and left for a human, never resolved silently. Failure is
+   * tolerated — a clone with no origin is a legal dev/test topology.
+   *
+   * Callers choose when: the run loop syncs on heartbeat/startup ticks only,
+   * because our own fetch touches FETCH_HEAD under the watched .git dir and
+   * a sync inside every refs-triggered tick would re-trigger itself.
+   */
+  async syncFromRemote(): Promise<void> {
+    try {
+      await this.source.syncFromRemote()
+    } catch (e) {
+      this.log(`sync from origin failed: ${(e as Error).message}`)
+    }
+  }
+
   /** Await every in-flight job (their closing commits included). */
   async drain(): Promise<void> {
     while (this.jobs.size > 0) await Promise.allSettled([...this.jobs.values()])

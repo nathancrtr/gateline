@@ -299,29 +299,68 @@ const CONTRACTS: Record<string, string> = {
 
 // --- The generator ----------------------------------------------------------
 
-export function generateFixtureRepo(dir?: string): FixtureRepo {
+export interface FixtureLayoutOpts {
+  /**
+   * `prefixed` mirrors `integrate.py init --layout prefixed` (its own
+   * default): runs/contracts live under `prefix/` and a minimal
+   * framework-lock.json records it, so a source must probe rather than
+   * assume root layout (#94). Defaults to `root`, the shape every existing
+   * fixture consumer expects.
+   */
+  layout?: 'root' | 'prefixed'
+  /** Metadata prefix directory when `layout: 'prefixed'`. Defaults to `.agentic`. */
+  prefix?: string
+}
+
+export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts = {}): FixtureRepo {
   const root = dir ?? mkdtempSync(join(tmpdir(), 'agentic-fixture-'))
   const repo = new Repo(root)
   const now = Math.floor(Date.now() / 1000)
+  const prefix = layoutOpts.prefix ?? '.agentic'
+  const prefixed = layoutOpts.layout === 'prefixed'
+  const runsRoot = prefixed ? `${prefix}/runs` : 'runs'
+  const contractsRoot = prefixed ? `${prefix}/contracts` : 'contracts'
 
   repo.git(['init', '-q', '-b', 'main'])
   repo.git(['config', 'user.name', 'Fixture Operator'])
   repo.git(['config', 'user.email', 'operator@example.test'])
 
   // main: contracts + a merged, fully-done run (the wordfreq shape).
-  for (const [name, content] of Object.entries(CONTRACTS)) repo.write(`contracts/${name}`, content)
+  for (const [name, content] of Object.entries(CONTRACTS)) repo.write(`${contractsRoot}/${name}`, content)
   repo.write('README.md', '# fixture\n\nGenerated demo repository for the gate frontend.\n')
+  if (prefixed) {
+    repo.write(
+      `${prefix}/framework-lock.json`,
+      JSON.stringify(
+        {
+          source: { repo: null, ref: 'fixture', version: 'unreleased' },
+          integrated_at: '2026-01-01',
+          method: 'fixture',
+          adapters_rendered: [],
+          taken: [],
+          files: {},
+          forks: {},
+          instance_layer: [],
+          provenance_mode: 'private',
+          layout: 'prefixed',
+          prefix,
+        },
+        null,
+        2,
+      ),
+    )
+  }
   repo.commitAll('Seed contracts', now - 30 * DAY)
 
   const doneSlug = 'done-merged'
-  repo.write(`runs/${doneSlug}/intent-brief.md`, brief('archived pipeline'))
-  repo.write(`runs/${doneSlug}/spec.md`, spec('archived pipeline'))
-  repo.write(`runs/${doneSlug}/plan.md`, plan('archived pipeline'))
-  repo.write(`runs/${doneSlug}/tasks/01-core.yaml`, workItem('01-core', 'R1', 'done'))
-  repo.write(`runs/${doneSlug}/review-01.md`, review('01-core', 1, 'approve'))
-  repo.write(`runs/${doneSlug}/verification-report.md`, verification())
+  repo.write(`${runsRoot}/${doneSlug}/intent-brief.md`, brief('archived pipeline'))
+  repo.write(`${runsRoot}/${doneSlug}/spec.md`, spec('archived pipeline'))
+  repo.write(`${runsRoot}/${doneSlug}/plan.md`, plan('archived pipeline'))
+  repo.write(`${runsRoot}/${doneSlug}/tasks/01-core.yaml`, workItem('01-core', 'R1', 'done'))
+  repo.write(`${runsRoot}/${doneSlug}/review-01.md`, review('01-core', 1, 'approve'))
+  repo.write(`${runsRoot}/${doneSlug}/verification-report.md`, verification())
   repo.write(
-    `runs/${doneSlug}/state.yaml`,
+    `${runsRoot}/${doneSlug}/state.yaml`,
     stateYaml({
       slug: doneSlug,
       phase: 'done',
@@ -532,12 +571,12 @@ export function generateFixtureRepo(dir?: string): FixtureRepo {
   for (const r of branchRuns) {
     repo.git(['checkout', '-q', '-b', `run/${r.slug}`, 'main'])
     for (const [path, content] of Object.entries(r.files)) {
-      repo.write(path.startsWith('../../') ? path.slice(6) : `runs/${r.slug}/${path}`, content)
+      repo.write(path.startsWith('../../') ? path.slice(6) : `${runsRoot}/${r.slug}/${path}`, content)
     }
     repo.commitAll(`state(${r.slug}): artifacts`, now - r.age * DAY)
     for (const extra of r.commits ?? []) {
       for (const [path, content] of Object.entries(extra.files)) {
-        repo.write(path.startsWith('../../') ? path.slice(6) : `runs/${r.slug}/${path}`, content)
+        repo.write(path.startsWith('../../') ? path.slice(6) : `${runsRoot}/${r.slug}/${path}`, content)
       }
       repo.commitAll(extra.message, now - extra.age * DAY)
     }

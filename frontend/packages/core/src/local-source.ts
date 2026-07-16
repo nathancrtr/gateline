@@ -5,6 +5,7 @@ import { constants } from 'node:fs'
 import { join } from 'node:path'
 import { parseDocument } from 'yaml'
 import { Git, type CommitInfo } from './git.ts'
+import { resolveFrameworkRoots, type FrameworkRoots } from './framework-roots.ts'
 import { parseRunState } from './schema.ts'
 import type { ContractTemplates } from './validate.ts'
 import type { Identity, RunRef, RunSource, StateCommit, StateDocMutation, WriteResult } from './source.ts'
@@ -17,30 +18,54 @@ export class LocalGitSource implements RunSource {
   readonly dir: string
   readonly git: Git
   readonly templates: ContractTemplates
-  private readonly options: { push?: boolean; identity?: Identity; fetchIntervalSeconds?: number }
+  private readonly options: { push?: boolean; identity?: Identity; fetchIntervalSeconds?: number; frameworkPrefix?: string }
+  private rootsPromise: Promise<FrameworkRoots> | null = null
 
   /**
    * `options.identity` pins the author of every write from this source —
    * the v1 orchestrator's bot identity (ORCHESTRATOR.md §4.3). Human
    * surfaces omit it and write as `git config user.name/email`, so machine
    * bookkeeping and human decisions stay distinguishable at a glance.
+   *
+   * `options.frameworkPrefix` overrides the default `.agentic` probe location
+   * for a host integrated with a custom `integrate.py --prefix` (#94).
    */
-  constructor(id: string, dir: string, options: { push?: boolean; identity?: Identity; fetchIntervalSeconds?: number } = {}) {
+  constructor(
+    id: string,
+    dir: string,
+    options: { push?: boolean; identity?: Identity; fetchIntervalSeconds?: number; frameworkPrefix?: string } = {},
+  ) {
     this.id = id
     this.dir = dir
     this.options = options
     this.git = new Git(dir)
     const git = this.git
+    const roots = () => this.roots()
     this.templates = {
       async read(name: string): Promise<string | null> {
         const defaultBranch = await git.defaultBranch()
-        return git.show(defaultBranch, `contracts/${name}`)
+        const { contracts } = await roots()
+        return git.show(defaultBranch, `${contracts}/${name}`)
       },
     }
   }
 
-  private runDir(slug: string): string {
-    return `runs/${slug}`
+  /**
+   * Resolved `runs`/`contracts` roots, cached for the life of this source —
+   * a host's integration layout doesn't change within a process's lifetime.
+   */
+  private roots(): Promise<FrameworkRoots> {
+    if (!this.rootsPromise) {
+      this.rootsPromise = this.git
+        .defaultBranch()
+        .then((rev) => resolveFrameworkRoots(this.git, rev, this.options.frameworkPrefix))
+    }
+    return this.rootsPromise
+  }
+
+  private async runDir(slug: string): Promise<string> {
+    const { runs } = await this.roots()
+    return `${runs}/${slug}`
   }
 
   /** Seconds between remote syncs, when this source is configured to poll. */
@@ -78,6 +103,7 @@ export class LocalGitSource implements RunSource {
 
   async listRuns(): Promise<RunRef[]> {
     const defaultBranch = await this.git.defaultBranch()
+    const { runs: runsRoot } = await this.roots()
     const bySlug = new Map<string, RunRef>()
 
     // Local run branches win; remote-only branches next.
@@ -101,7 +127,7 @@ export class LocalGitSource implements RunSource {
     const defaultTip = await this.git.revParse(defaultBranch)
     for (const [slug, runRef] of bySlug) {
       if (defaultTip && (await this.git.isAncestor(runRef.ref, defaultBranch))) {
-        const onDefault = await this.git.show(defaultBranch, `${this.runDir(slug)}/state.yaml`)
+        const onDefault = await this.git.show(defaultBranch, `${await this.runDir(slug)}/state.yaml`)
         if (onDefault !== null) {
           bySlug.set(slug, { source: this.id, slug, ref: defaultBranch, kind: 'default', branch: runRef.branch })
         }
@@ -109,9 +135,9 @@ export class LocalGitSource implements RunSource {
     }
 
     // Runs that live only on the default branch (merged, branch deleted).
-    for (const slug of await this.git.lsTreeDirs(defaultBranch, 'runs')) {
+    for (const slug of await this.git.lsTreeDirs(defaultBranch, runsRoot)) {
       if (bySlug.has(slug)) continue
-      const state = await this.git.show(defaultBranch, `${this.runDir(slug)}/state.yaml`)
+      const state = await this.git.show(defaultBranch, `${await this.runDir(slug)}/state.yaml`)
       if (state === null) continue
       bySlug.set(slug, {
         source: this.id,
@@ -126,7 +152,7 @@ export class LocalGitSource implements RunSource {
     const result: RunRef[] = []
     for (const runRef of bySlug.values()) {
       if (runRef.kind !== 'default') {
-        const state = await this.git.show(runRef.ref, `${this.runDir(runRef.slug)}/state.yaml`)
+        const state = await this.git.show(runRef.ref, `${await this.runDir(runRef.slug)}/state.yaml`)
         if (state === null) continue
       }
       result.push(runRef)
@@ -135,29 +161,30 @@ export class LocalGitSource implements RunSource {
   }
 
   async readState(ref: RunRef) {
-    const raw = await this.git.show(ref.ref, `${this.runDir(ref.slug)}/state.yaml`)
+    const raw = await this.git.show(ref.ref, `${await this.runDir(ref.slug)}/state.yaml`)
     if (raw === null) return { raw, state: null, error: 'state.yaml missing' }
     return { raw, ...parseRunState(raw) }
   }
 
   async listArtifacts(ref: RunRef): Promise<string[]> {
-    return this.git.lsTree(ref.ref, this.runDir(ref.slug))
+    return this.git.lsTree(ref.ref, await this.runDir(ref.slug))
   }
 
   async readArtifact(ref: RunRef, path: string): Promise<string | null> {
     if (path.includes('..')) return null
-    return this.git.show(ref.ref, `${this.runDir(ref.slug)}/${path}`)
+    return this.git.show(ref.ref, `${await this.runDir(ref.slug)}/${path}`)
   }
 
   async readDiff(ref: RunRef): Promise<string> {
     const defaultBranch = await this.git.defaultBranch()
     if (ref.kind === 'default') return '' // merged: the run's diff is history now
     // The reviewable change is the code; run artifacts render separately.
-    return this.git.diff(defaultBranch, ref.ref, [':(exclude)runs'])
+    const { runs: runsRoot } = await this.roots()
+    return this.git.diff(defaultBranch, ref.ref, [`:(exclude)${runsRoot}`])
   }
 
   async stateHistory(ref: RunRef): Promise<StateCommit[]> {
-    const path = `${this.runDir(ref.slug)}/state.yaml`
+    const path = `${await this.runDir(ref.slug)}/state.yaml`
     const commits = await this.git.log(ref.ref, [path])
     const result: StateCommit[] = []
     for (const c of commits) {
@@ -168,9 +195,10 @@ export class LocalGitSource implements RunSource {
   }
 
   async lastTouched(ref: RunRef, paths: string[]): Promise<CommitInfo | null> {
+    const runDir = await this.runDir(ref.slug)
     return this.git.lastTouched(
       ref.ref,
-      paths.map((p) => `${this.runDir(ref.slug)}/${p}`),
+      paths.map((p) => `${runDir}/${p}`),
     )
   }
 
@@ -209,7 +237,7 @@ export class LocalGitSource implements RunSource {
     if (options.expectedTip && tip !== options.expectedTip)
       return { ok: false, reason: 'ref-moved', message: `${ref.branch} moved past the observed tip — re-derive and retry` }
 
-    const statePath = `${this.runDir(ref.slug)}/state.yaml`
+    const statePath = `${await this.runDir(ref.slug)}/state.yaml`
     const current = await this.git.show(tip, statePath)
     if (current === null) return { ok: false, reason: 'error', message: `${statePath} missing at ${ref.branch} tip` }
 

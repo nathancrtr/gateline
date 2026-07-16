@@ -621,7 +621,10 @@ escalations:
     reason: "implementer (06-inbox-screen) failed twice: Command failed: claude -p
       Use the implementer subagent. on task
       `runs/fleetview-design/tasks/06-inbox-screen.yaml`. Whe…"
-    resolved: false
+    resolved: true
+    resolved_by: Nathan Carter
+    resolved_at: 2026-07-16T18:16:17.096Z
+    resolution: budget cap - reset
   - at: 2026-07-16T18:11:51.638Z
     from_role: orchestrator
     reason: "implementer (09-run-screen) failed twice: Command failed: claude -p Use

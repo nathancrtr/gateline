@@ -45,3 +45,40 @@ depends_on: [02-ledger-foundations]
 status: pending
 
 notes: |
+  Implementer r1: restyled inbox.tsx per candidate-b/inbox.html — header as
+  readout head (mono 600 20px uppercase +0.14em tracking, 1px line bottom
+  border, sans-muted count meta, mono-faint j/k hint, all strings verbatim);
+  row list is now one instrument panel (1px line border, rounded-[5px],
+  bg-surface, hairline-divided <li> rows, no per-row cards); rows at ~12/14px
+  padding with a 3px transparent left border, hover:bg-raised; selection =
+  bg-accent-soft + 3px accent left border + accent-colored title (aria-current
+  and the global :focus-visible ring both preserved, untouched); titles sans
+  medium 13.5px, source/slug mono faint 11px, detail line muted with a
+  max-w-[78ch] cap; bounced line kept bad-toned and byte-for-byte verbatim.
+  Inbox-zero: centered, decorative mono accent glyph "— ·· —", sans-semibold
+  15px lede, muted sub, dashed box removed. isLoading branch now renders 3
+  hairline-divided skeleton rows (pill .skel rounded-full, flexible-line
+  .skel, small-block .skel) above the untouched PageStatus "Reading
+  repositories…" call — render-only addition per C3, no conditional-logic
+  change. PageStatus restyled as the static centered status line (sans 13px
+  muted / bad variant); it defines no skeleton markup itself. itemHref, the
+  j/k/Enter cursor logic, data-inbox-row, row link targets, and every
+  user-facing string are untouched (byte-diffed against original — only
+  className/JSX-structure changed). No new tokens/keyframes/animation-
+  properties were added; only existing C1 utilities/vars and the .skel class
+  are used (grep for @keyframes/animation- in the file: no matches).
+  Verification from frontend/ (network available in this sandbox, contrary to
+  plan Risk 1): npm install; npm run typecheck passes (2 tsc projects, no
+  errors); npm test (vitest) — 118 passed/1 skipped in the packages this task
+  touches, but 9 tests failed/timed-out in packages/orchestrator (router,
+  hardening, three shadow-replay suites) — pre-existing and unrelated: those
+  suites spawn worktrees/subprocesses, never import anything under
+  packages/web, and time out identically with inbox.tsx stashed back to
+  its original content (resource-constrained sandbox, not a regression from
+  this change). npx playwright install chromium + npm run build -w
+  @agentic/web (needed once so the e2e server has a dist/ to serve — the
+  playwright.config.ts comment notes the SPA is served "when built") + npx
+  playwright test: all 5 e2e/smoke.spec.ts tests pass, including the two
+  asserting "escalated" on the first row and "Bounced" on the malformed-spec
+  row. Only frontend/packages/web/src/pages/inbox.tsx was touched (git diff
+  --stat confirms); dist/ and test-results/ are gitignored and untracked.

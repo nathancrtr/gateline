@@ -106,7 +106,20 @@ gates:
   G2: { approved: false, by: null, at: null, notes: null }
   G3: { approved: false, by: null, at: null, notes: null }
 
-tasks: []
+tasks:
+  [
+    { id: 01-g1-evidence-audit, status: pending, review_rounds: 0 },
+    { id: 02-ledger-foundations, status: pending, review_rounds: 0 },
+    { id: 03-shell-masthead, status: pending, review_rounds: 0 },
+    { id: 04-status-components, status: pending, review_rounds: 0 },
+    { id: 05-decide-panel, status: pending, review_rounds: 0 },
+    { id: 06-inbox-screen, status: pending, review_rounds: 0 },
+    { id: 07-portfolio-screen, status: pending, review_rounds: 0 },
+    { id: 08-metrics-screen, status: pending, review_rounds: 0 },
+    { id: 09-run-screen, status: pending, review_rounds: 0 },
+    { id: 10-diff-view, status: pending, review_rounds: 0 },
+    { id: 11-integration-verification, status: pending, review_rounds: 0 }
+  ]
 
 escalations:
   # G0 was approved by the founder in the orchestrating session on 2026-07-14

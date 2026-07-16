@@ -5,7 +5,7 @@ paused_reason: escalation
 
 budget:
   cost_limit_usd: 200
-  cost_spent_usd: 103.11
+  cost_spent_usd: 106.77
   ledger:
     # v0 hand-appended; costs are the registry static estimates (harness
     # reports combined subagent tokens without an in/out split to price
@@ -521,9 +521,9 @@ budget:
       round: 1
       adapter: claude-code
       model: anthropic/claude-fable-5
-      tokens_in: null
-      tokens_out: null
-      cost_usd: null
+      tokens_in: 30
+      tokens_out: 6887
+      cost_usd: 3.6554901
     - at: 2026-07-16T22:00:07.359Z
       role: implementer
       task: 04-status-components

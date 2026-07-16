@@ -286,7 +286,10 @@ escalations:
     reason: "implementer (04-status-components) failed twice: rebase of
       run/fleetview-design--task/04-status-components onto run/fleetview-design
       conflicted — overlapping file-conta…"
-    resolved: false
+    resolved: true
+    resolved_by: Nathan Carter
+    resolved_at: 2026-07-16T06:15:16.294Z
+    resolution: "background-subagent CLI regression, see PR #113"
   - at: 2026-07-16T05:43:06.658Z
     from_role: orchestrator
     reason: "implementer (05-decide-panel) failed twice: rebase of

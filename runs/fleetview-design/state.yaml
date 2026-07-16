@@ -146,8 +146,8 @@ gates:
 
 tasks:
   [
-    { id: 01-g1-evidence-audit, status: in-review, review_rounds: 0 },
-    { id: 02-ledger-foundations, status: in-review, review_rounds: 0 },
+    { id: 01-g1-evidence-audit, status: in-review, review_rounds: 1 },
+    { id: 02-ledger-foundations, status: in-review, review_rounds: 1 },
     { id: 03-shell-masthead, status: pending, review_rounds: 0 },
     { id: 04-status-components, status: pending, review_rounds: 0 },
     { id: 05-decide-panel, status: pending, review_rounds: 0 },

@@ -4,7 +4,7 @@ phase: paused
 paused_reason: budget-exhausted
 
 budget:
-  cost_limit_usd: 100
+  cost_limit_usd: 200
   cost_spent_usd: 46.31
   ledger:
     # v0 hand-appended; costs are the registry static estimates (harness

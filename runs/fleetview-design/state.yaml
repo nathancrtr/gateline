@@ -639,7 +639,10 @@ escalations:
     reason: "implementer (03-shell-masthead) failed twice: Command failed: claude -p
       Use the implementer subagent. on task
       `runs/fleetview-design/tasks/03-shell-masthead.yaml`. W…"
-    resolved: false
+    resolved: true
+    resolved_by: Nathan Carter
+    resolved_at: 2026-07-16T18:16:27.809Z
+    resolution: budget cap - reset
   - at: 2026-07-16T18:12:05.597Z
     from_role: orchestrator
     reason: "implementer (07-portfolio-screen) failed twice: Command failed: claude

@@ -4,7 +4,7 @@ phase: paused
 paused_reason: budget-exhausted
 
 budget:
-  cost_limit_usd: 100
+  cost_limit_usd: 200
   cost_spent_usd: 36.09
   ledger:
     # analyst: total tokens only (50855), split unavailable, cost estimated at registry rates

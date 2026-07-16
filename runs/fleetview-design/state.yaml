@@ -479,6 +479,15 @@ budget:
       tokens_in: null
       tokens_out: null
       cost_usd: null
+    - at: 2026-07-16T21:46:08.188Z
+      role: reviewer
+      task: 04-status-components
+      round: 1
+      adapter: claude-code
+      model: anthropic/claude-fable-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
 
 gates:
   G0:

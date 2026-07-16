@@ -1,9 +1,9 @@
 id: 11-integration-verification
-title: Full regression floor, cross-screen coherence pass, and AC6.1 fidelity evidence
+title: Full regression floor, motion/reduced-motion check, coherence pass, AC6.1 fidelity evidence
 requirements: [R5, R6]
 
 scope: |
-  Runs after every other task merges. Three jobs:
+  Runs after every other task merges. Four jobs:
   1. Regression floor (AC5.1-AC5.4): from frontend/ on Node >= 24 — npm install,
      npx playwright install chromium, then npm test, npm run typecheck, and
      npx playwright test with smoke.spec.ts assertions unmodified. Verify by diff
@@ -15,10 +15,22 @@ scope: |
      re-present (decide on a run whose branch moved underneath the open tab, e.g.
      commit to the fixture run branch between opening the card and confirming —
      AC6.4) against the fixture repo (`node fixtures/src/main.ts` / --demo).
-  3. Coherence + fidelity: compare each of the six R1 screens as built against
-     runs/fleetview-design/design/candidate-a/*.html and the Look-and-feel spec;
-     fix recipe drift between screens (plan Risk 2: paddings, kickers, rules,
-     stamp sizes) — this is the ONLY task allowed to touch any file under
+  3. Motion and reduced-motion floor (plan ADR-6, Risk 4): grep the built src tree —
+     '@keyframes' appears only in styles.css (exactly pulse/pulsepanel/sweep) and no
+     'animation' property outside it (motion classes only). In the browser, default
+     mode: the pending-decision signal panel pulses (~2.8s), the inbox nav count
+     pulses (~2.4s), loading skeletons sweep, and nothing else animates or moves
+     layout. With prefers-reduced-motion emulated (DevTools rendering emulation):
+     no animation runs anywhere; the signal panel still reads as the page's one
+     live object via its accent rail + static glow ring + gate chip; skeletons are
+     static blocks. Record both results in notes.
+  4. Coherence + fidelity: compare each of the six R1 screens as built against
+     runs/fleetview-design/design/candidate-b/*.html and the Look-and-feel spec —
+     primarily in the DARK theme (B is dark-native), with a light-theme pass
+     checking contrast and that the glow still separates the pending panel (plan
+     Risk 5; if it doesn't, tune the --glow light alpha token only). Fix recipe
+     drift between screens (plan Risk 2: radii, LED sizes, tracking, panel borders,
+     chip weights) — this is the ONLY task allowed to touch any file under
      frontend/packages/web/src/ for such fixes, still under freeze contract C3
      (class strings only). Record a match-or-deviation line per screen in notes as
      the Reviewer/Verifier's AC6.1 input. Fidelity comparison is made on one named
@@ -44,7 +56,7 @@ acceptance_tests:
   - AC6.2
   - AC6.3
   - AC6.4
-  - "notes contain: command outputs summarized, the manual keyboard + 409 check results, and six per-screen match/deviation lines"
+  - "notes contain: command outputs summarized, the manual keyboard + 409 check results, the motion + reduced-motion check results (both modes), and six per-screen match/deviation lines with the comparison OS and themes named"
 
 depends_on:
   - 02-ledger-foundations

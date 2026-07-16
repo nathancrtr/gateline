@@ -1,19 +1,26 @@
 id: 03-shell-masthead
-title: Convert the app shell from left rail to the Ledger masthead (app.tsx only)
+# id keeps its v1 slug so depends_on references stay stable across the G1 redo;
+# candidate B keeps the left rail (plan ADR-4) — there is no masthead. This task
+# restyles the existing rail into the console spine.
+title: Restyle the app shell's left rail into the console spine (app.tsx only)
 requirements: [R5]
 
 scope: |
-  Restyle App in frontend/packages/web/src/app.tsx per plan ADR-4 and the masthead
-  in runs/fleetview-design/design/candidate-a/inbox.html (any candidate-a mockup
-  shows it): wordmark ("Gate", font-display) with its small gloss, horizontal nav of
-  the same three NavLinks (uppercase tracked labels, 3px accent underline on the
-  active item via aria-current styling), the inbox count as a rounded-full accent
-  stamp (one of the two pills C2 allows), and the "repo is the database" motto in
-  italic font-display on the right; a 2px --color-rule closes the masthead. Converge
-  the current desktop rail + separate mobile top-nav into this one responsive
-  masthead (wrap/hide the motto on narrow viewports). Freeze contract C3 applies:
-  same routes, same NavLink targets/end props, same useQuery inbox badge logic,
-  <main> still renders <Outlet/>; main.tsx is untouched. Use only C1 tokens/utilities.
+  Restyle App and NavItem in frontend/packages/web/src/app.tsx per plan ADR-4 and
+  the rail in runs/fleetview-design/design/candidate-b/inbox.html (any candidate-b
+  mockup shows it). The rail structure stays: sticky desktop rail + mobile top bar,
+  same NavLink targets/end props, same useQuery inbox badge logic, <main> still
+  renders <Outlet/>; main.tsx untouched. Restyle: rail on bg-surface with a 1px
+  line right border; brand as the mono 600 uppercase-tracked wordmark (+0.16em; DOM
+  text "Gate" stays — uppercase via CSS) with its faint tagline; each nav row gets a
+  6px round LED dot span (faint by default; active row: accent-soft bg, accent
+  text, accent dot with a static 0 0 8px var(--glow) shadow), 4px radius rows,
+  140ms color/background transitions; the inbox count becomes the fully-round
+  solid-accent mono tabular pill in text-on-solid carrying the .pulse-glow class
+  from C1 — this is one of the two sanctioned pulses, and the only animation in
+  this file; the rail-foot motto restyles to mono ~10px faint (text verbatim).
+  Apply the same recipes to the mobile top bar. Use only C1 tokens/utilities and
+  the .pulse-glow class — define no keyframes or animation properties here.
 
 file_contact_surface:
   - frontend/packages/web/src/app.tsx
@@ -22,7 +29,8 @@ acceptance_tests:
   - AC5.2
   - "cd frontend && npm run typecheck && npm test pass"
   - "npx playwright test passes (no smoke assertion targets the shell, but navigation must still work)"
-  - "masthead matches candidate-a mockups: wordmark, 3 nav items with active underline, count pill, rule"
+  - "rail matches candidate-b mockups: mono tracked wordmark, LED nav dots, glowing active dot, pulsing count pill, mono faint motto"
+  - "grep of app.tsx: no @keyframes, no animation- property; motion enters only via the .pulse-glow class"
 
 depends_on: [02-ledger-foundations]
 

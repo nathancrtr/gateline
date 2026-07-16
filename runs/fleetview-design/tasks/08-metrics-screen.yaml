@@ -4,18 +4,32 @@ requirements: [R1, R5]
 
 scope: |
   Restyle frontend/packages/web/src/pages/metrics.tsx per
-  runs/fleetview-design/design/candidate-a/metrics.html: each section opens with a
-  2px rule + kicker + italic font-display gloss (the current explanatory captions
-  become the glosses — keep their text verbatim, C3), tables unboxed at scanning
-  density, meters square-cornered. Replace the BURDEN_RAMP/UNRECORDED inline
-  light-dark() strings with the C1 custom properties (background:
-  'var(--burden-ramp-1)' etc.) — delete the local constants; the legend and
-  BurdenBar keep their aria-label/title logic. ApprovalMeter keeps the 90% tick and
-  the warn "over-triggering?" label (glyph + text, never color alone). Headings
-  "Gate decisions" and "Budget honesty" are asserted by smoke — verbatim. The
-  no-decisions empty state becomes the serif rule-opened treatment (no dashed box).
-  All data logic, bucketing, and strings frozen (C3); PageStatus consumed unmodified.
-  Use only C1 tokens.
+  runs/fleetview-design/design/candidate-b/metrics.html: readout page head; each
+  section opens with an h2 in mono 600 ~13px uppercase tracked (DOM text verbatim —
+  "Gate decisions" and "Budget honesty" are smoke-asserted; uppercase via CSS
+  only) over the existing explanatory caption restyled as a muted sans lede capped
+  ~74ch (text verbatim, C3). Tables sit on instrument panels (1px line border, 5px
+  radius, thead on bg-inset with mono uppercase tracked column heads, instrument
+  density) — B boxes its tables, it does not unbox them. Gate ids mono 600;
+  numerals mono 12px tabular right-aligned.
+  ApprovalMeter: ~140px track on bg-inset with 1px line border and 4px radius,
+  accent fill with a static 0 0 6px var(--glow) shadow, the 90% tick kept; over
+  threshold = warn fill without glow + the "over-triggering?" flag restyled as a
+  fully-round warn capsule (1px warn border, warn-soft wash, glyph + text kept —
+  never color alone).
+  Burden ramp: replace the BURDEN_RAMP/UNRECORDED inline light-dark() strings with
+  the C1 custom properties (background: 'var(--ramp-1)' … 'var(--ramp-3)',
+  'var(--unrecorded)') — delete the local constants; the bar becomes 16px tall with
+  2px gaps and 4px radius; legend swatches 11px at 3px radius; keep all
+  aria-label/title logic. Rounds distribution: mono tabular labels/counts, inset
+  tracks with 1px line borders, accent fill with glow, cap bucket = bad fill
+  without glow.
+  The no-decisions empty state becomes the centered mockup treatment (mono accent
+  "0 / 0" glyph, sans 600 lede, muted sub) — no dashed box. Loading: skeleton
+  blocks per the mockup above the preserved PageStatus text.
+  All data logic, bucketing, and strings frozen (C3); PageStatus consumed
+  unmodified. Use only C1 tokens and .skel; no keyframes or animation properties
+  defined here.
 
 file_contact_surface:
   - frontend/packages/web/src/pages/metrics.tsx
@@ -24,8 +38,9 @@ acceptance_tests:
   - AC5.1
   - AC5.2
   - "cd frontend && npm run typecheck && npm test && npx playwright test pass"
-  - "no light-dark() string literal remains in metrics.tsx (ramp reads var(--burden-*))"
-  - "sections match candidate-a/metrics.html: ruled heads, unboxed tables, ramp legend"
+  - "no light-dark() string literal remains in metrics.tsx (ramp reads var(--ramp-*) / var(--unrecorded))"
+  - "sections match candidate-b/metrics.html: mono section heads, bordered panels with inset theads, glowing approval fill with 90% tick, warn capsule flag, gapped ramp"
+  - "grep of metrics.tsx: no @keyframes, no animation- property; motion enters only via .skel"
 
 depends_on: [02-ledger-foundations]
 

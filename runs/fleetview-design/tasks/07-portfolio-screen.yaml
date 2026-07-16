@@ -1,21 +1,33 @@
 id: 07-portfolio-screen
-title: Restyle the portfolio ledger table and add the zero-runs render branch
+title: Restyle the portfolio instrument grid and add the zero-runs render branch
 requirements: [R1, R5, R6]
 
 scope: |
   Restyle frontend/packages/web/src/pages/portfolio.tsx per
-  runs/fleetview-design/design/candidate-a/portfolio.html: section head with 2px
-  rule, the table unboxed (rule opens it, hairline row dividers, ground shows
-  through — the current rounded-lg/border/bg-surface wrapper goes away), scanning
-  rhythm (8-10px rows, 12.5px text), mono slugs/numerals with tabular-nums, the
-  needs count as a solid accent stamp, malformed-run line stays bad-toned.
+  runs/fleetview-design/design/candidate-b/portfolio.html: readout page head (mono
+  uppercase tracked h1, 1px line bottom border, muted meta); the table sits on an
+  instrument panel — 1px line border, 5px radius, bg-surface, horizontal scroll
+  wrapper kept — with thead cells on bg-inset (mono 600 10px uppercase +0.12em
+  tracked, muted), instrument-grid rhythm (~8px cell padding at 12-13px), 1px line
+  row dividers, row hover bg-raised. Run names as accent 600 links (hover
+  underline) with mono faint source beside; numeric columns mono 12px tabular-nums
+  right-aligned; the malformed-run row keeps its bad-toned explanation line under
+  the run name; phase/gates/budget cells consume the restyled chips as-is. The
+  needs count = fully-round solid-accent mono pill in text-on-solid with a static
+  0 0 8px var(--glow) shadow (no pulse — only the nav count pulses, C2); "1 esc" /
+  "BAD" stay mono bad.
   The one behavioral addition of the whole run (spec R1, AC6.3, Assumption 4): when
   runs.length === 0, render the zero-runs empty state exactly as sketched in the
-  mockup — a static conditional branch, no filtering/sorting/interaction, keeping
-  the <table> absent only in that branch. A <table> element must still render
-  whenever runs exist (smoke asserts getByRole('table') contains 'done-merged').
-  Everything else frozen (C3): columns, cell content, link targets, PageStatus
-  usage (do not edit inbox.tsx), chips imports as-is. Use only C1 tokens.
+  mockup — centered, decorative mono accent "[ ]" glyph, "No runs found." lede,
+  muted sub naming runs/<slug> in mono — a static conditional branch, no
+  filtering/sorting/interaction, the <table> absent only in that branch. A <table>
+  element must still render whenever runs exist (smoke asserts getByRole('table')
+  contains 'done-merged').
+  Loading: the isLoading branch renders 3 skeleton rows per the mockup (.skel
+  blocks sized like table cells, hairline-divided) above the preserved PageStatus
+  text. Everything else frozen (C3): columns, cell content, link targets,
+  PageStatus usage (do not edit inbox.tsx), chips imports as-is. Use only C1 tokens
+  and .skel; no keyframes or animation properties defined here.
 
 file_contact_surface:
   - frontend/packages/web/src/pages/portfolio.tsx
@@ -26,7 +38,8 @@ acceptance_tests:
   - AC6.3
   - "cd frontend && npm run typecheck && npm test && npx playwright test pass"
   - "zero-runs branch renders the mockup's empty state when the runs array is empty (verify against a bare fixture or by temporarily forcing the branch during dev — not in committed code)"
-  - "table matches candidate-a/portfolio.html: unboxed ledger, ink column heads, scanning density"
+  - "table matches candidate-b/portfolio.html: bordered panel, inset mono column heads, instrument density, glowing needs pill"
+  - "grep of portfolio.tsx: no @keyframes, no animation- property; motion enters only via .skel"
 
 depends_on: [02-ledger-foundations]
 

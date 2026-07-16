@@ -1,18 +1,22 @@
 id: 10-diff-view
-title: Restyle the diff view to the Ledger evidence plate (diff-view.tsx)
+title: Restyle the diff view to the Signal Deck evidence readout (diff-view.tsx)
 requirements: [R1, R5]
 
 scope: |
   Restyle frontend/packages/web/src/components/diff-view.tsx per
-  runs/fleetview-design/design/candidate-a/run-diff.html: each file on an evidence
-  plate (1px line border on surface, square corners — the rounded-lg wrapper goes
-  away), file header as a raised strip with mono path and +/- stats (ok/bad tones
-  kept), hunk headers accent-washed, add/del rows keep their ok/bad washes, gutters
-  in faint tabular-nums with hairline separators, evidence density (12px/20px mono,
-  zero vertical line padding). The "No diff" empty line adopts the Ledger centered
-  serif empty treatment. Behavior and signatures frozen (C3): DiffView/FileHeader
-  props, line/sign/number logic, select-none gutters, all strings verbatim
-  ("No diff — the run branch matches the default branch."). Use only C1 tokens.
+  runs/fleetview-design/design/candidate-b/run-diff.html: each file on an evidence
+  panel — 1px line border on bg-surface, 6px radius, overflow hidden, no glow (the
+  diff is a readout, not a signal); file header as an inset strip (bg-inset, 1px
+  line bottom border) with mono 600 12px path and mono tabular +/− stats (ok/bad
+  tones kept, "added"/kind note muted); hunk header rows accent-soft washed with
+  accent mono ~11px text; add/del rows keep their ok-soft/bad-soft washes; gutters
+  ~44px right-aligned faint tabular-nums with a 1px line right border, select-none
+  kept; code cells evidence-density mono 12px/20px with zero vertical padding.
+  The "No diff" empty line keeps the static centered status treatment (string
+  verbatim: "No diff — the run branch matches the default branch."). Behavior and
+  signatures frozen (C3): DiffView/FileHeader props, line/sign/number logic, all
+  strings verbatim. Use only C1 tokens; no rounded-lg remains; no keyframes,
+  animation properties, or motion classes in this file.
 
 file_contact_surface:
   - frontend/packages/web/src/components/diff-view.tsx
@@ -20,7 +24,8 @@ file_contact_surface:
 acceptance_tests:
   - AC5.2
   - "cd frontend && npm run typecheck && npm test pass"
-  - "diff matches candidate-a/run-diff.html: evidence plate, gutters, hunk strips, add/del washes"
+  - "diff matches candidate-b/run-diff.html: bordered evidence panel, inset file header, accent hunk strips, add/del washes, faint bordered gutters"
+  - "grep of diff-view.tsx: no @keyframes, no animation- property, no motion class"
 
 depends_on: [02-ledger-foundations]
 

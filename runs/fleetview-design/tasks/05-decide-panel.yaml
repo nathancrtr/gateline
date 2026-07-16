@@ -4,19 +4,25 @@ requirements: [R5, R6]
 
 scope: |
   Restyle frontend/packages/web/src/components/decide.tsx in place per plan C2 and
-  the open-approve-flow region of
-  runs/fleetview-design/design/candidate-a/run-artifacts.html: burden options as
-  square selectable tiles (mono key numeral, label + hint; selected = accent border
-  + wash + focus treatment), Button becomes the Ledger set (primary solid accent
-  with 3px accent-deep bottom edge; danger solid bad; quiet 1px outline — all square),
-  NotesField square on ground, Flash keeps role="status" with ok/conflict/error
-  washes. Behavior is entirely frozen (C3): modes, mutation logic, CAS-409 conflict
-  copy, dataset.deciding effect, key handlers (a/x/1/2/3/esc), every
+  the open-approve-flow (.decide) region of
+  runs/fleetview-design/design/candidate-b/run-artifacts.html: the decide region
+  opens under a 1px line top border with a mono uppercase-tracked legend; burden
+  options become 5px-radius selectable tiles on bg-inset with 1px line borders
+  (mono key numeral in faint, label + sans hint in muted; selected = accent border
+  + accent-soft wash + accent text at 600, focus treatment kept); Button becomes the
+  Signal Deck capsule set (rounded-full): primary = solid accent + text-on-solid +
+  a static 0 0 12px var(--glow) shadow; danger = solid bad + text-on-solid, no
+  glow; quiet = bg-inset + 1px line border + muted text, hover accent border.
+  NotesField: inset well — bg-inset, 1px line border, 5px radius. Flash keeps
+  role="status" with ok/warn(conflict)/bad washes on 5px radius.
+  Behavior is entirely frozen (C3): modes, mutation logic, CAS-409 conflict copy,
+  dataset.deciding effect, key handlers (a/x/1/2/3/esc), every
   data-decide/data-decide-panel hook, and every user-visible string verbatim —
-  including the bounced "no approval is offered" copy, burden labels, "Notes
-  (optional)" placeholder prefix, and "committed" flash text (smoke.spec.ts asserts
-  on all of these). Use only C1 tokens; no rounded-lg/md remains (sr-only radio
-  pattern stays).
+  including the bounced copy containing "no approval is offered", burden labels,
+  "Notes (optional)" placeholder prefix, and "committed" flash text (smoke.spec.ts
+  asserts on all of these). The panel pulse is task 09's surface (run.tsx owns the
+  signal panel wrapper) — this file gets static styles only: use only C1 tokens, no
+  keyframes, no animation properties, no motion classes.
 
 file_contact_surface:
   - frontend/packages/web/src/components/decide.tsx
@@ -27,6 +33,7 @@ acceptance_tests:
   - AC5.3
   - "cd frontend && npm run typecheck && npm test && npx playwright test pass"
   - "git diff shows class-string changes only: no string literal, handler, or hook changed"
+  - "grep of decide.tsx: no @keyframes, no animation- property, no motion class"
 
 depends_on: [02-ledger-foundations]
 

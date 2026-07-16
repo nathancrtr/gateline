@@ -1,25 +1,43 @@
 id: 09-run-screen
-title: Restyle the run page (head, needs-you plate, task board, tabs, artifacts, history)
+title: Restyle the run page (head, signal panel, task board, tabs, artifacts, history)
 requirements: [R1, R5, R6]
 
 scope: |
   Restyle frontend/packages/web/src/pages/run.tsx per
-  runs/fleetview-design/design/candidate-a/run-artifacts.html and run-history.html:
-  run head (mono display-size slug, phase stamp, gate cells, budget meter, mono
-  source/ref), malformed run-state banner (bad spine + raw yaml pre, still never
-  reviewable), NeedsYouCard as THE decision plate — the page's only raised object:
-  surface plate, 3px accent left spine (bad spine when item is not reviewable),
-  box-shadow var(--shadow-plate), packet links as square mono tags. Task board as
-  square mono tiles. Tabs as uppercase tracked labels with a 3px accent underline
-  on the active tab (buttons, same onClick logic). ArtifactsTab rail: square
-  selected treatment + validation marks; ArtifactBody on an evidence plate (1px
-  line border; failing-contract banner stays bad-washed). HistoryTab as the ruled
-  register: hairline rows, phase transitions marked by a 2px accent rule + mono
-  "-> phase" stamp (keep the existing transition-detection logic). Behavior frozen
+  runs/fleetview-design/design/candidate-b/run-artifacts.html and run-history.html:
+  run head under a 1px line bottom border — mono 600 20px slug (+0.06em tracking,
+  no uppercase), phase LED, gate readout strip, budget meter (all consumed from
+  chips.tsx as-is), mono faint source · ref on the right. Malformed run-state
+  banner: bad-soft panel with 1px bad border, 5px radius, raw yaml pre on bg-inset —
+  still never reviewable.
+  NeedsYouCard becomes THE signal panel — the page's only live object: bg-surface,
+  1px accent border + 3px accent left rail, 6px radius, carrying the .pulse-panel
+  class from C1 (static glow ring + 2.8s pulse — this is the sanctioned panel
+  pulse). When the item is not reviewable (bounced): bad border + bad left rail,
+  NO glow, NO pulse — omit the motion class entirely. Panel title sans 600 ~15px,
+  detail muted capped 76ch, "waiting" age chip; packet links as mono 11px tags on
+  bg-inset (1px line border, 4px radius, hover accent text/border). The inner
+  decide flow is task 05's surface (decide.tsx) — consume DecidePanel unmodified.
+  Task board: 5px-radius chips on bg-surface with 1px line borders — mono task id,
+  status word toned (done = ok, in-progress/review = muted, capped = bad 700),
+  mono faint round-count. Tabs: mono 600 12px uppercase +0.06em tracked buttons,
+  2px accent bottom border on the active tab (same onClick logic).
+  ArtifactsTab rail: 4px-radius mono 12px buttons, hover raised, selected
+  accent-soft + accent 600; validation marks consumed as-is. ArtifactBody on an
+  instrument panel (1px line border, 6px radius, 76ch cap; failing-contract banner
+  stays bad-washed with 1px bad border, 5px radius).
+  HistoryTab as the instrument log per run-history.html: a 2px line spine down the
+  left (::before or a border), each event a hairline-divided row with a 10px round
+  node (bg-inset + 2px faint border); phase transitions light the node accent with
+  a static 0 0 10px var(--glow) shadow and print the mono accent "→ phase" stamp
+  (keep the existing transition-detection logic); when/oid mono faint, actor muted.
+  Loading branches ("Reading run…", "Reading artifact…", "Computing diff…"): 2-3
+  .skel lines per the mockups above the preserved PageStatus text. Behavior frozen
   (C3): tab/param handling, e/Escape key handlers, data-needs-card, DecidePanel and
   chips consumed as-is (do not edit their files), all strings verbatim. Diff tab
-  content is task 10's surface — only the surrounding tab chrome is yours.
-  Use only C1 tokens.
+  content is task 10's surface — only the surrounding tab chrome is yours. Use only
+  C1 tokens and the .pulse-panel/.skel classes; no keyframes or animation
+  properties defined here.
 
 file_contact_surface:
   - frontend/packages/web/src/pages/run.tsx
@@ -30,7 +48,8 @@ acceptance_tests:
   - AC5.3
   - AC6.4
   - "cd frontend && npm run typecheck && npm test && npx playwright test pass"
-  - "run page matches candidate-a/run-artifacts.html and run-history.html: decision plate is the sole shadowed element; malformed banner and bounce card render per mockups"
+  - "run page matches candidate-b/run-artifacts.html and run-history.html: the signal panel is the sole glowing/pulsing element; bounced panel shows bad rail with no glow and no pulse; spine nodes mark phase transitions"
+  - "grep of run.tsx: no @keyframes, no animation- property; motion enters only via .pulse-panel and .skel"
 
 depends_on: [02-ledger-foundations]
 

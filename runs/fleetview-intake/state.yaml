@@ -187,6 +187,15 @@ budget:
       tokens_out: 2820
       cost_usd: 0.2719686
       failed: true
+    - at: 2026-07-16T21:36:11.962Z
+      role: implementer
+      task: 03-intake-seam-reference
+      round: 3
+      adapter: claude-code
+      model: anthropic/claude-sonnet-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
 
 gates:
   G0:
@@ -274,9 +283,7 @@ tasks:
   # machine) were discarded with the hold. 03 returns to in-review: its round-2
   # verdict was request-changes and the round-3 implementer response never
   # landed, so the reconciler re-derives that dispatch.
-  [
-    { id: 03-intake-seam-reference, status: in-review, review_rounds: 2 }
-  ]
+  [ { id: 03-intake-seam-reference, status: dispatched, review_rounds: 2 } ]
 
 escalations:
   [
@@ -372,11 +379,11 @@ escalations:
         resolved: true,
         resolved_by: Nathan Carter,
         resolved_at: 2026-07-16T17:43:06.000Z,
-        resolution: "not a plan defect: the hosted machine's /data/repo working
-          tree was frozen pre-#113, so dispatches still launched background
-          subagents whose work never landed; the dirty task worktree made the
-          fold's rebase refuse (misclassified per #114). Hosted instance torn
-          down; resuming on the local orchestrator, whose manifest carries the
-          #113 fix"
+        resolution: "not a plan defect: the hosted machine's /data/repo working tree was
+          frozen pre-#113, so dispatches still launched background subagents
+          whose work never landed; the dirty task worktree made the fold's
+          rebase refuse (misclassified per #114). Hosted instance torn down;
+          resuming on the local orchestrator, whose manifest carries the #113
+          fix"
       }
   ]

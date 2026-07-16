@@ -1,7 +1,7 @@
 run: fleetview-design
 branch: run/fleetview-design
-phase: paused
-paused_reason: escalation
+phase: implement
+paused_reason: null
 
 budget:
   cost_limit_usd: 200
@@ -322,17 +322,22 @@ gates:
   G3: { approved: false, by: null, at: null, notes: null }
 
 tasks:
+  # 2026-07-16 second reset (Nathan Carter): the 06:16Z round-1 re-dispatches
+  # of 03/04/06-10 also ran against the hosted machine's frozen pre-#113
+  # manifest and committed nothing — reset to pending again for the local
+  # orchestrator. 05-decide-panel's round 1 landed (folded 72125ea) and stays
+  # in-review.
   [
     { id: 01-g1-evidence-audit, status: review-approved, review_rounds: 2 },
     { id: 02-ledger-foundations, status: review-approved, review_rounds: 1 },
-    { id: 03-shell-masthead, status: dispatched, review_rounds: 0 },
-    { id: 04-status-components, status: dispatched, review_rounds: 0 },
+    { id: 03-shell-masthead, status: pending, review_rounds: 0 },
+    { id: 04-status-components, status: pending, review_rounds: 0 },
     { id: 05-decide-panel, status: in-review, review_rounds: 0 },
-    { id: 06-inbox-screen, status: dispatched, review_rounds: 0 },
-    { id: 07-portfolio-screen, status: dispatched, review_rounds: 0 },
-    { id: 08-metrics-screen, status: dispatched, review_rounds: 0 },
-    { id: 09-run-screen, status: dispatched, review_rounds: 0 },
-    { id: 10-diff-view, status: dispatched, review_rounds: 0 },
+    { id: 06-inbox-screen, status: pending, review_rounds: 0 },
+    { id: 07-portfolio-screen, status: pending, review_rounds: 0 },
+    { id: 08-metrics-screen, status: pending, review_rounds: 0 },
+    { id: 09-run-screen, status: pending, review_rounds: 0 },
+    { id: 10-diff-view, status: pending, review_rounds: 0 },
     { id: 11-integration-verification, status: pending, review_rounds: 0 }
   ]
 
@@ -449,34 +454,76 @@ escalations:
     reason: "implementer (09-run-screen) failed twice: rebase of
       run/fleetview-design--task/09-run-screen onto run/fleetview-design
       conflicted — overlapping file-contact surf…"
-    resolved: false
+    resolved: true
+    resolved_by: Nathan Carter
+    resolved_at: 2026-07-16T17:43:06.000Z
+    resolution: "not a plan defect: the hosted machine's working tree was frozen
+      pre-#113, so this round still dispatched background subagents that
+      committed nothing; the fold's rebase refusal was misclassified as an
+      overlap (#114). Hosted instance destroyed; task reset to pending for
+      re-dispatch by the local orchestrator"
   - at: 2026-07-16T06:27:04.293Z
     from_role: orchestrator
     reason: "implementer (10-diff-view) failed twice: rebase of
       run/fleetview-design--task/10-diff-view onto run/fleetview-design
       conflicted — overlapping file-contact surfa…"
-    resolved: false
+    resolved: true
+    resolved_by: Nathan Carter
+    resolved_at: 2026-07-16T17:43:06.000Z
+    resolution: "not a plan defect: the hosted machine's working tree was frozen
+      pre-#113, so this round still dispatched background subagents that
+      committed nothing; the fold's rebase refusal was misclassified as an
+      overlap (#114). Hosted instance destroyed; task reset to pending for
+      re-dispatch by the local orchestrator"
   - at: 2026-07-16T06:27:13.597Z
     from_role: orchestrator
     reason: "implementer (07-portfolio-screen) failed twice: rebase of
       run/fleetview-design--task/07-portfolio-screen onto run/fleetview-design
       conflicted — overlapping file-contac…"
-    resolved: false
+    resolved: true
+    resolved_by: Nathan Carter
+    resolved_at: 2026-07-16T17:43:06.000Z
+    resolution: "not a plan defect: the hosted machine's working tree was frozen
+      pre-#113, so this round still dispatched background subagents that
+      committed nothing; the fold's rebase refusal was misclassified as an
+      overlap (#114). Hosted instance destroyed; task reset to pending for
+      re-dispatch by the local orchestrator"
   - at: 2026-07-16T06:27:15.484Z
     from_role: orchestrator
     reason: "implementer (06-inbox-screen) failed twice: rebase of
       run/fleetview-design--task/06-inbox-screen onto run/fleetview-design
       conflicted — overlapping file-contact su…"
-    resolved: false
+    resolved: true
+    resolved_by: Nathan Carter
+    resolved_at: 2026-07-16T17:43:06.000Z
+    resolution: "not a plan defect: the hosted machine's working tree was frozen
+      pre-#113, so this round still dispatched background subagents that
+      committed nothing; the fold's rebase refusal was misclassified as an
+      overlap (#114). Hosted instance destroyed; task reset to pending for
+      re-dispatch by the local orchestrator"
   - at: 2026-07-16T06:27:26.748Z
     from_role: orchestrator
     reason: "implementer (03-shell-masthead) failed twice: rebase of
       run/fleetview-design--task/03-shell-masthead onto run/fleetview-design
       conflicted — overlapping file-contact …"
-    resolved: false
+    resolved: true
+    resolved_by: Nathan Carter
+    resolved_at: 2026-07-16T17:43:06.000Z
+    resolution: "not a plan defect: the hosted machine's working tree was frozen
+      pre-#113, so this round still dispatched background subagents that
+      committed nothing; the fold's rebase refusal was misclassified as an
+      overlap (#114). Hosted instance destroyed; task reset to pending for
+      re-dispatch by the local orchestrator"
   - at: 2026-07-16T06:27:40.801Z
     from_role: orchestrator
     reason: "implementer (04-status-components) failed twice: rebase of
       run/fleetview-design--task/04-status-components onto run/fleetview-design
       conflicted — overlapping file-conta…"
-    resolved: false
+    resolved: true
+    resolved_by: Nathan Carter
+    resolved_at: 2026-07-16T17:43:06.000Z
+    resolution: "not a plan defect: the hosted machine's working tree was frozen
+      pre-#113, so this round still dispatched background subagents that
+      committed nothing; the fold's rebase refusal was misclassified as an
+      overlap (#114). Hosted instance destroyed; task reset to pending for
+      re-dispatch by the local orchestrator"

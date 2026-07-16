@@ -666,4 +666,7 @@ escalations:
     reason: "implementer (08-metrics-screen) failed twice: Command failed: claude -p
       Use the implementer subagent. on task
       `runs/fleetview-design/tasks/08-metrics-screen.yaml`. W…"
-    resolved: false
+    resolved: true
+    resolved_by: Nathan Carter
+    resolved_at: 2026-07-16T18:16:42.386Z
+    resolution: budget cap - reset

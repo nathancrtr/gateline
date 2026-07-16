@@ -439,7 +439,7 @@ tasks:
     { id: 02-ledger-foundations, status: review-approved, review_rounds: 1 },
     { id: 03-shell-masthead, status: dispatched, review_rounds: 0 },
     { id: 04-status-components, status: dispatched, review_rounds: 0 },
-    { id: 05-decide-panel, status: in-review, review_rounds: 2 },
+    { id: 05-decide-panel, status: review-approved, review_rounds: 2 },
     { id: 06-inbox-screen, status: dispatched, review_rounds: 0 },
     { id: 07-portfolio-screen, status: dispatched, review_rounds: 0 },
     { id: 08-metrics-screen, status: dispatched, review_rounds: 0 },

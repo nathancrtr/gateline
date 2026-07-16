@@ -4,7 +4,7 @@ phase: plan
 paused_reason: null
 
 budget:
-  cost_limit_usd: 75
+  cost_limit_usd: 100
   cost_spent_usd: 35.98
   ledger:
     # v0 hand-appended; costs are the registry static estimates (harness

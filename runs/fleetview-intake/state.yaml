@@ -329,6 +329,9 @@ escalations:
         from_role: orchestrator,
         reason: projected spend $44.09 (ledger $36.09 + estimates) exceeds
           cost_limit_usd $40 — pausing rather than degrading,
-        resolved: false
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-16T02:53:12.520Z,
+        resolution: budget increased
       }
   ]

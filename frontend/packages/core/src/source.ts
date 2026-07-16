@@ -30,6 +30,14 @@ export interface WriteResult {
   commit?: string
   reason?: WriteFailure
   message?: string
+  /**
+   * Set when the commit landed locally but origin rejected the push (#103).
+   * `ok` stays true — the local write succeeded — but a pushing writer must
+   * treat this as "origin moved past the observed tip": the derivation
+   * behind the commit is stale, and acting on it (launching a dispatch)
+   * would act on state another writer already changed.
+   */
+  pushFailed?: string
 }
 
 export interface Identity {

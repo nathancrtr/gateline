@@ -389,6 +389,15 @@ budget:
       tokens_in: 1072
       tokens_out: 3394
       cost_usd: 2.5972712
+    - at: 2026-07-16T18:27:18.270Z
+      role: implementer
+      task: 05-decide-panel
+      round: 2
+      adapter: claude-code
+      model: anthropic/claude-sonnet-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
 
 gates:
   G0:
@@ -421,7 +430,7 @@ tasks:
     { id: 02-ledger-foundations, status: review-approved, review_rounds: 1 },
     { id: 03-shell-masthead, status: dispatched, review_rounds: 0 },
     { id: 04-status-components, status: dispatched, review_rounds: 0 },
-    { id: 05-decide-panel, status: in-review, review_rounds: 1 },
+    { id: 05-decide-panel, status: dispatched, review_rounds: 1 },
     { id: 06-inbox-screen, status: dispatched, review_rounds: 0 },
     { id: 07-portfolio-screen, status: dispatched, review_rounds: 0 },
     { id: 08-metrics-screen, status: dispatched, review_rounds: 0 },

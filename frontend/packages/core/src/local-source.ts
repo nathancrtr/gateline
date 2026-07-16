@@ -275,7 +275,8 @@ export class LocalGitSource implements RunSource {
         try {
           await this.git.run(['push', 'origin', `${ref.branch}:${ref.branch}`])
         } catch (e) {
-          return { ok: true, commit: oid ?? undefined, message: `committed locally; push failed: ${(e as Error).message}` }
+          const msg = (e as Error).message
+          return { ok: true, commit: oid ?? undefined, pushFailed: msg, message: `committed locally; push failed: ${msg}` }
         }
       }
       return { ok: true, commit: oid ?? undefined }
@@ -291,7 +292,8 @@ export class LocalGitSource implements RunSource {
       try {
         await this.git.run(['push', 'origin', `${ref.branch}:${ref.branch}`])
       } catch (e) {
-        return { ok: true, commit, message: `committed locally; push failed: ${(e as Error).message}` }
+        const msg = (e as Error).message
+        return { ok: true, commit, pushFailed: msg, message: `committed locally; push failed: ${msg}` }
       }
     }
     return { ok: true, commit }

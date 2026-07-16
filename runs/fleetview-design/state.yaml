@@ -657,7 +657,10 @@ escalations:
     reason: "implementer (10-diff-view) failed twice: Command failed: claude -p Use
       the implementer subagent. on task
       `runs/fleetview-design/tasks/10-diff-view.yaml`. When y…"
-    resolved: false
+    resolved: true
+    resolved_by: Nathan Carter
+    resolved_at: 2026-07-16T18:16:40.447Z
+    resolution: budget cap - reset
   - at: 2026-07-16T18:13:21.075Z
     from_role: orchestrator
     reason: "implementer (08-metrics-screen) failed twice: Command failed: claude -p

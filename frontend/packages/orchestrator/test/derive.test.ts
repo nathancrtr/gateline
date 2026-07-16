@@ -63,6 +63,16 @@ describe('the derivation table, one rule per row', () => {
     expect(a).toMatchObject({ kind: 'rest', rule: 'D2' })
   })
 
+  it('D2 — an approve-and-hold rests even though the signed gate would otherwise converge forward (D5) and dispatch (D6)', () => {
+    const s = state({
+      phase: 'paused',
+      paused_reason: 'awaiting design-candidate selection',
+      gates: { G0: gate({ approved: true, by: 'Operator', at: '2026-07-15T00:00:00Z' }), G1: gate(), G2: gate(), G3: gate() },
+    })
+    const a = deriveAction(obs({ state: s, artifacts: ['intent-brief.md', 'spec.md'] }))
+    expect(a).toMatchObject({ kind: 'rest', rule: 'D2' })
+  })
+
   it('D3 — unresolved escalation rests', () => {
     const s = state({ escalations: [{ at: null, from_role: 'verifier', reason: 'x', resolved: false, resolved_by: null, resolved_at: null, resolution: null }] })
     expect(deriveAction(obs({ state: s }))).toMatchObject({ kind: 'rest', rule: 'D3' })

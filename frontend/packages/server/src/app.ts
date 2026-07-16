@@ -152,6 +152,8 @@ export function createApp(deps: AppDeps): Hono {
       escalationIndex?: number
       pauseReason?: string
       resumePhase?: Phase
+      hold?: boolean
+      holdReason?: string
     }
     try {
       body = await c.req.json()

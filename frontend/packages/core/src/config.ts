@@ -13,6 +13,11 @@ const sourceEntrySchema = z.object({
   push: z.boolean().optional().default(false),
   /** Seconds between `git fetch`es of origin; unset = never poll. */
   fetch_interval: z.number().positive().optional(),
+  /**
+   * Override the `.agentic` default when this source was integrated with a
+   * custom `integrate.py --prefix` (#94) — otherwise auto-detected.
+   */
+  agentic_prefix: z.string().optional(),
 })
 
 const configSchema = z.object({
@@ -83,7 +88,13 @@ export async function loadSources(opts: {
       let id = entry.name ?? slugForPath(top)
       while (seen.has(id)) id = `${id}-2`
       seen.add(id)
-      sources.push(new LocalGitSource(id, path, { push: entry.push, fetchIntervalSeconds: entry.fetch_interval }))
+      sources.push(
+        new LocalGitSource(id, path, {
+          push: entry.push,
+          fetchIntervalSeconds: entry.fetch_interval,
+          frameworkPrefix: entry.agentic_prefix,
+        }),
+      )
     }
     if (sources.length === 0) {
       warnings.push(`config at ${configPath} yielded no usable sources; falling back to current repo`)

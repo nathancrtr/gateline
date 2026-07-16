@@ -1,5 +1,6 @@
 export * from './schema.ts'
 export * from './git.ts'
+export * from './framework-roots.ts'
 export * from './validate.ts'
 export * from './unidiff.ts'
 export * from './source.ts'

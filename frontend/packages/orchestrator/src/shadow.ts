@@ -27,7 +27,8 @@ export async function shadowReplay(
   rev: string,
   cfg: Omit<ObserveConfig, 'estimates'> = {},
 ): Promise<ShadowStep[]> {
-  const runDir = `runs/${slug}`
+  const { runs: runsRoot } = await source.frameworkRoots()
+  const runDir = `${runsRoot}/${slug}`
   const commits = (await source.git.log(rev, [runDir])).reverse() // oldest first
   const steps: ShadowStep[] = []
 
@@ -53,7 +54,7 @@ export async function shadowReplay(
     const nextStateRaw = await source.git.show(next.oid, `${runDir}/state.yaml`)
     const nextState = nextStateRaw === null ? null : parseRunState(nextStateRaw).state
 
-    const { verdict, note } = matchStep(action, { changed, runDir, prevState, nextState })
+    const { verdict, note } = matchStep(action, { changed, runDir, runsRoot, prevState, nextState })
     steps.push({
       oid: commit.oid,
       time: commit.time,
@@ -70,6 +71,7 @@ export async function shadowReplay(
 interface NextFacts {
   changed: string[]
   runDir: string
+  runsRoot: string
   prevState: RunState | null
   nextState: RunState | null
 }
@@ -80,7 +82,7 @@ function artifactsTouched(facts: NextFacts): string[] {
 }
 
 function codeTouched(facts: NextFacts): boolean {
-  return facts.changed.some((p) => !p.startsWith('runs/'))
+  return facts.changed.some((p) => !p.startsWith(`${facts.runsRoot}/`))
 }
 
 function gateDecided(facts: NextFacts): boolean {

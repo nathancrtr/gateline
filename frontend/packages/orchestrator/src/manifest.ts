@@ -4,6 +4,7 @@
 // runner still costs one manifest, never orchestrator code.
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { resolveFrameworkRootsFromDisk } from '@agentic/core'
 
 export type UsageFormat = 'json-stdout' | 'static-estimate'
 
@@ -28,8 +29,14 @@ export interface HeadlessManifest {
   modelVendors: Record<string, string>
 }
 
-export async function loadHeadlessManifest(repoDir: string, adapter: string): Promise<HeadlessManifest> {
-  const path = join(repoDir, 'adapters', adapter, 'manifest.json')
+/**
+ * `prefixHint` overrides the default `.agentic` probe location for a host
+ * integrated with a custom `integrate.py --prefix` (#95); auto-detected from
+ * the checkout's own framework-lock.json otherwise.
+ */
+export async function loadHeadlessManifest(repoDir: string, adapter: string, prefixHint?: string): Promise<HeadlessManifest> {
+  const { adapters: adaptersRoot } = await resolveFrameworkRootsFromDisk(repoDir, prefixHint)
+  const path = join(repoDir, adaptersRoot, adapter, 'manifest.json')
   const raw = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
   const headless = raw.headless as Record<string, unknown> | undefined
   if (!headless) throw new Error(`adapter "${adapter}" has no headless section in ${path} — it cannot be dispatched`)

@@ -182,9 +182,18 @@ program
   .option('--burden <category>', BURDENS.join(' | '))
   .option('--notes <text>', 'approval notes')
   .option('--no-advance', 'record the approval without moving the phase')
-  .action(async (slug: string, gate: string, flags: DecideFlags & { advance?: boolean }) => {
+  .option('--hold <reason>', 'approve but pause the run in the same commit — the dispatch-safe way to wait on a human decision before the next phase runs')
+  .action(async (slug: string, gate: string, flags: DecideFlags & { advance?: boolean; hold?: string }) => {
     const burden = await promptBurden(flags.burden)
-    await decide(slug, flags, { action: 'approve', gate: gate.toUpperCase() as GateId, burden, notes: flags.notes, advancePhase: flags.advance })
+    await decide(slug, flags, {
+      action: 'approve',
+      gate: gate.toUpperCase() as GateId,
+      burden,
+      notes: flags.notes,
+      advancePhase: flags.advance,
+      hold: flags.hold !== undefined || undefined,
+      holdReason: flags.hold,
+    })
   })
 
 program

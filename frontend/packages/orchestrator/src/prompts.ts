@@ -13,8 +13,8 @@ import type { DispatchIntent } from './derive.ts'
 const COMMIT_LINE = (slug: string, what: string) =>
   `When your work is complete, commit it on the current branch (git add the files you produced or changed) with a message starting "${slug}: ${what}".`
 
-export function promptBody(slug: string, intent: DispatchIntent, taskPath: string | null): string {
-  const runDir = `runs/${slug}`
+export function promptBody(slug: string, intent: DispatchIntent, taskPath: string | null, runsRoot = 'runs'): string {
+  const runDir = `${runsRoot}/${slug}`
   const parts: string[] = []
   switch (intent.role) {
     case 'analyst':

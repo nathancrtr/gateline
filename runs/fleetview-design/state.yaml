@@ -1,11 +1,11 @@
 run: fleetview-design
 branch: run/fleetview-design
-phase: implement
-paused_reason: null
+phase: paused
+paused_reason: escalation
 
 budget:
   cost_limit_usd: 200
-  cost_spent_usd: 47.2
+  cost_spent_usd: 47.34
   ledger:
     # v0 hand-appended; costs are the registry static estimates (harness
     # reports combined subagent tokens without an in/out split to price
@@ -147,9 +147,10 @@ budget:
       round: 1
       adapter: claude-code
       model: anthropic/claude-sonnet-5
-      tokens_in: null
-      tokens_out: null
-      cost_usd: null
+      tokens_in: 6
+      tokens_out: 1028
+      cost_usd: 0.1390904
+      failed: true
     - at: 2026-07-16T05:31:25.275Z
       role: implementer
       task: 05-decide-panel
@@ -273,3 +274,9 @@ escalations:
     resolved_by: Nathan Carter
     resolved_at: 2026-07-16T05:31:15.551Z
     resolution: budget increased
+  - at: 2026-07-16T05:43:03.317Z
+    from_role: orchestrator
+    reason: "implementer (04-status-components) failed twice: rebase of
+      run/fleetview-design--task/04-status-components onto run/fleetview-design
+      conflicted — overlapping file-conta…"
+    resolved: false

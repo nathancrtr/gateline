@@ -612,7 +612,10 @@ escalations:
     reason: "implementer (04-status-components) failed twice: Command failed: claude
       -p Use the implementer subagent. on task
       `runs/fleetview-design/tasks/04-status-components.yaml`…"
-    resolved: false
+    resolved: true
+    resolved_by: Nathan Carter
+    resolved_at: 2026-07-16T18:16:11.734Z
+    resolution: budget cap - reset
   - at: 2026-07-16T18:11:46.126Z
     from_role: orchestrator
     reason: "implementer (06-inbox-screen) failed twice: Command failed: claude -p

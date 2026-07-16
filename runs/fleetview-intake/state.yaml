@@ -1,11 +1,11 @@
 run: fleetview-intake
 branch: run/fleetview-intake
-phase: implement
-paused_reason: null
+phase: paused
+paused_reason: escalation
 
 budget:
   cost_limit_usd: 200
-  cost_spent_usd: 36.09
+  cost_spent_usd: 36.37
   ledger:
     # analyst: total tokens only (50855), split unavailable, cost estimated at registry rates
     - {
@@ -183,9 +183,10 @@ budget:
       round: 3
       adapter: claude-code
       model: anthropic/claude-sonnet-5
-      tokens_in: null
-      tokens_out: null
-      cost_usd: null
+      tokens_in: 7398
+      tokens_out: 2820
+      cost_usd: 0.2719686
+      failed: true
 
 gates:
   G0:
@@ -352,5 +353,13 @@ escalations:
         resolved_by: Nathan Carter,
         resolved_at: 2026-07-16T05:30:57.813Z,
         resolution: budget increased
+      },
+    {
+        at: 2026-07-16T05:42:03.775Z,
+        from_role: orchestrator,
+        reason: "implementer (03-intake-seam-reference) failed twice: rebase of
+          run/fleetview-intake--task/03-intake-seam-reference onto
+          run/fleetview-intake conflicted — overlapping file-c…",
+        resolved: false
       }
   ]

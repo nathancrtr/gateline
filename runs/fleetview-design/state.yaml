@@ -85,6 +85,24 @@ budget:
       tokens_in: 20
       tokens_out: 4795
       cost_usd: 7.628696200000002
+    - at: 2026-07-16T02:54:14.549Z
+      role: implementer
+      task: 01-g1-evidence-audit
+      round: 1
+      adapter: claude-code
+      model: anthropic/claude-sonnet-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
+    - at: 2026-07-16T02:54:14.549Z
+      role: implementer
+      task: 02-ledger-foundations
+      round: 1
+      adapter: claude-code
+      model: anthropic/claude-sonnet-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
 
 gates:
   G0:
@@ -108,8 +126,8 @@ gates:
 
 tasks:
   [
-    { id: 01-g1-evidence-audit, status: pending, review_rounds: 0 },
-    { id: 02-ledger-foundations, status: pending, review_rounds: 0 },
+    { id: 01-g1-evidence-audit, status: dispatched, review_rounds: 0 },
+    { id: 02-ledger-foundations, status: dispatched, review_rounds: 0 },
     { id: 03-shell-masthead, status: pending, review_rounds: 0 },
     { id: 04-status-components, status: pending, review_rounds: 0 },
     { id: 05-decide-panel, status: pending, review_rounds: 0 },

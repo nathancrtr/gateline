@@ -1,8 +1,8 @@
 // Metrics (I8): computed from state.yaml git history plus the burden field —
 // no scribe, no store (rule R1). Latency is readiness-commit → decision-commit;
 // approval rate carries the >90% over-triggering flag from FRONTEND.md §4.4.
-import { GATE_IDS, gateUndecided, type Burden, type GateId } from './schema.ts'
-import type { RunRef, RunSource, StateCommit } from './source.ts'
+import { GATE_IDS, gateUndecided, type Burden, type GateId } from '../record/schema.ts'
+import type { RunRef, RunSource, StateCommit } from '../sources/source.ts'
 
 export interface GateDecisionRecord {
   source: string

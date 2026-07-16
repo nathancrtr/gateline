@@ -89,3 +89,37 @@ Clean. The commit adds exactly one file, `runs/fleetview-intake/design/seam-refe
 ### Boundary check (round 2)
 
 Clean. The commit touches `runs/fleetview-intake/design/seam-reference.md` (the declared `file_contact_surface`) and appends round-2 notes to the previously-empty `notes:` field of `tasks/03-intake-seam-reference.yaml` — the latter is outside the declared surface but is the exact append-only channel `contracts/work-item.yaml:27-29` reserves for implementer deviation notes and finding responses, and the append preserved all prior yaml content; not a violation. No code, contracts/, registry/, or frontend/ files touched.
+
+---
+
+## Round 3
+
+**Verdict:** approve
+**Round:** 3 of 3
+**Diff reviewed:** 2840dfc (2840dfc^..2840dfc), branch run/fleetview-intake
+
+### Prior-finding resolution (re-verified against current content and this checkout, not the implementer's notes)
+
+- **F6 — resolved**, all three legs re-verified empirically. (a) `contracts/intent-brief.md` is out of check 1's lexical target (`:896-901`) and replaced by a structural check (step 2, `:917-931`): HTML-comment-only, no new `##` heading, count pinned at 4 — I ran `grep -cE '^##[[:space:]]' contracts/intent-brief.md` → `4`, and §1b's comment text (`:107-114`) contains no line matching `^##`, so the post-splice count stays 4; the `extractSections()`/`BUILTIN_SECTIONS` cites (`validate.ts:18-28`, `:34`) are exact, and intent-brief's four `BUILTIN_SECTIONS` entries match the four headings. (b) The two `schema.ts` hits are a named, permanent exception (`:901-909`) quoted verbatim-correct: `schema.ts:108` is `const issues = result.error.issues` and `:112` interpolates `${issues}` — zod's `ZodError.issues`, as claimed. (c) Ran check 1's final grep verbatim against this checkout (`grep -rniE "issue|label|assignee|milestone" contracts/state.yaml frontend/packages/core/src/*.ts`) → exactly the two documented `schema.ts` lines, nothing else; `contracts/state.yaml` is clean today, and §1a's quotable delta keeps it clean post-implementation (the `url:` comment deliberately carries no example URL; refs use `acme/widgets#482`, no flagged word). Check 3 (registry structural, `:932-939`) is unchanged in substance from round 2's already-sound check 2; `registry/` still contains only `models.yaml`.
+- **F7 — resolved.** The committed isolation-rule comment (`:149-159`) now states the keys-not-values rule directly ("The rule is keys-only, never values") and explicitly whitelists the four schema keys by name (`driver`, `label`, `ref_format`, `auth`), so the `label: GitHub Issues` / `ref_format: "… issue URL"` entries beneath it (`:176-177`) are compliant on a plain reading of the file alone — a reader of just the shipped registry no longer needs §10 to resolve the contradiction. Substance matches §10 check 3's reading exactly (same four keys, same values-in-prose-compliant carve-out).
+
+### Findings
+
+#### F8 — minor (PLAUSIBLE) — check 1 greps top-level `core/src/*.ts` for `label`, but the document never pins where the `registry/task-sources.yaml` parser (which must reference the `label`/`ref_format` key names) may live
+- **Where:** `runs/fleetview-intake/design/seam-reference.md:896` (check 1 target) vs `:557` (`/api/intake/sources` "read from `registry/task-sources.yaml`") — no section assigns the registry-loading code a home
+- **Failure scenario:** Follow-on implements the sources route by adding a registry zod schema to `frontend/packages/core/src/schema.ts` — the file where every committed-artifact schema lives today, the natural idiom — whose keys are necessarily `label` and `ref_format`; check 1's grep then hits `label` in a top-level `core/src/*.ts` on fully compliant code, a third instance of the F1/F6 false-positive class. Passable placements exist (under `task-sources/`, the excluded dir and arguably the subsystem's natural home, or in the server package), so this is contingent on an open placement choice, not deterministic like F6 — hence minor/PLAUSIBLE. One sentence in §2 or §10 pinning registry parsing under `task-sources/` (or outside core) closes it.
+- **Requirement:** spec AC4.1; task §10.
+
+### Coverage (round 3)
+
+- **Round-3 delta reviewed in full** (`git show 2840dfc` — three hunks in seam-reference.md: the §2 comment rewrite, the §10 AC4.1 block rewrite, the one-line `:958` cross-ref fix; plus the append-only task-yaml notes, 63 insertions, 0 deletions, round-2 notes preserved intact). Nothing else in the commit.
+- **All named checks re-run by me against this checkout**, not taken from the notes: check 1 grep (two `schema.ts` hits only, quotes verbatim-exact), check 2 heading count (4; §1b splice keeps it 4), `ls registry/` (only `models.yaml`, matching §2's "no file exists" claim).
+- **Post-implementation passability of check 1 traced through the document's own proposals:** §1a's state.yaml delta clean; §3's proposed top-level core additions (`intake.ts` types, `source.ts` `stageRun`) clean of all four words; `TaskItem`/`TaskSourceDriver` live under the excluded `task-sources/types.ts`; every other proposed occurrence of a flagged word lands outside the target (server route table `:557`, CLI preview `:624`, web `chips.tsx`, orchestrator `derive.ts` labels, `runs/<slug>/` worked-example artifacts) — except the unpinned registry loader (F8).
+- **Reworded §2 comment checked for new self-contradiction:** the "labels" in the tracker-noun list vs the generic `label:` schema key is disambiguated by the explicit four-key whitelist in the same sentence — internally consistent.
+- **Stale-citation sweep claim verified independently:** grep for `§N:NNN`-form self-references finds exactly one (`:958`, `§2:170-171` — target text confirmed at `:170-171`); no `seam-reference.md:N` self-cites anywhere; the discrepancy summary (`:1001-1019`) references sections only and is correctly unchanged. F1-F5 regions confirmed intact after the +3/+30 line shifts (F2 note now `:757-773`, F4 `:660-665`, F5 `:492-498`, AC4.2 block `:940-962`, its `git diff --stat` allowlist consistent with §2's three steps).
+- **Implementer notes accuracy:** cites for the regions edited this round (`:149-159`, `:885-939`, `:958`, `:1001-1019`) are exact; cites for the untouched F2/F3/F4/F5 regions are stale by this round's own shift (e.g. ":910-932" for the AC4.2 block, actually `:940-962`) — immaterial, the document itself is what was verified, but the notes' "read each cited region against current content" claim is loose on those four.
+- Not re-assessed: §3-§9 substance beyond the targeted scans above (untouched by this round's hunks; r1/r2 coverage stands).
+
+### Boundary check (round 3)
+
+Clean. The commit touches `runs/fleetview-intake/design/seam-reference.md` (the declared `file_contact_surface`) and appends to the task yaml's `notes:` field — the same sanctioned append-only channel round 2 accepted (`contracts/work-item.yaml:27-29`), with all prior yaml content preserved (verified: 0 deletions). No code, contracts/, registry/, or frontend/ files touched.

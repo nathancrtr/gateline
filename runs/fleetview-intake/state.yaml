@@ -1,7 +1,7 @@
 run: fleetview-intake
 branch: run/fleetview-intake
-phase: implement
-paused_reason: null
+phase: paused
+paused_reason: round-cap
 
 budget:
   cost_limit_usd: 200
@@ -394,5 +394,12 @@ escalations:
           rebase refuse (misclassified per #114). Hosted instance torn down;
           resuming on the local orchestrator, whose manifest carries the #113
           fix"
+      },
+    {
+        at: 2026-07-16T21:54:30.517Z,
+        from_role: orchestrator,
+        reason: "task 03-intake-seam-reference: 3 review rounds without convergence —
+          usually a spec ambiguity",
+        resolved: false
       }
   ]

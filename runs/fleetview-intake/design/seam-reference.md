@@ -146,14 +146,17 @@ that core code resolves at runtime, never edits).
 # "Swapping vendors is an edit here, never in roles/ or contracts/" — read
 # "task sources" for "vendor" and "frontend/packages/core/src/*.ts" for "roles/").
 #
-# Driver isolation rule (AC4.1): tracker-specific nouns — issue numbers,
-# labels, assignees, milestones, project fields, anything a specific tracker's
-# API calls its own — may appear ONLY inside the driver module this entry's
-# `driver:` id names (frontend/packages/core/src/task-sources/<driver>.ts).
-# They may never appear in contracts/*, in @agentic/core's top-level
-# src/*.ts files, or in this registry file itself: `label` and `ref_format`
-# below are the driver's *display* strings, chosen to be readable by an
-# operator who has never seen the tracker, not fields the tracker's API uses.
+# Driver isolation rule (AC4.1): tracker-specific nouns AS SCHEMA KEYS —
+# issue numbers, labels, assignees, milestones, project fields, anything a
+# specific tracker's API calls its own as a field name — may appear ONLY
+# inside the driver module this entry's `driver:` id names
+# (frontend/packages/core/src/task-sources/<driver>.ts). The rule is
+# keys-only, never values: such a key may never appear in contracts/*, in
+# @agentic/core's top-level src/*.ts files, or as a key in this registry's
+# own schema (only `driver`, `label`, `ref_format`, `auth` are permitted
+# below) — but `label` and `ref_format` *values* naming the tracker in
+# prose (e.g. "GitHub Issues", "issue URL") are expected and compliant,
+# chosen to be readable by an operator who has never seen the tracker.
 #
 # Add or swap a source (AC4.2), and nothing else:
 #   1. Write a driver module implementing TaskSourceDriver (§3) at
@@ -879,27 +882,54 @@ Commit message: `state(tune-search-ranking): staged by Jordan Alvarez [client-ke
 
 One named, executable check per implementation-grade AC:
 
-- **AC4.1** — Two checks, not one, because `registry/task-sources.yaml`
-  itself legitimately names the tracker in its display strings (§2's
-  isolation rule constrains the registry's *schema keys* and everywhere
-  outside the registry+driver module, not the registry's own human-readable
-  values — a lexical grep of the registry file for these words is guaranteed
-  to hit its own permitted `label: GitHub Issues` / `ref_format: "owner/
-  repo#N or issue URL"` content and the isolation-rule comment's own prose,
-  even when §2 is implemented exactly as proposed):
-  1. `grep -rniE "issue|label|assignee|milestone" contracts/state.yaml contracts/intent-brief.md frontend/packages/core/src/*.ts`
+- **AC4.1** — Three checks, not one. Two proposed artifacts legitimately
+  name the tracker in permitted, non-code prose (`registry/task-sources.yaml`'s
+  display strings, and `contracts/intent-brief.md`'s optional provenance
+  comment from §1b, which is *designed* to quote the upstream URL verbatim
+  as a human-readable echo) — a blind lexical grep of either file is
+  guaranteed to hit its own permitted content even when §1b/§2 are
+  implemented exactly as proposed. Separately, and unrelated to either
+  proposal, the lexical grep's own target already has one standing false
+  positive in **today's** checkout, before any intake code exists — a zod
+  API surface, not a tracker noun, and unrenamable away from that
+  vocabulary:
+  1. `grep -rniE "issue|label|assignee|milestone" contracts/state.yaml frontend/packages/core/src/*.ts`
      (top-level `core/src/*.ts` only — **not** recursing into
-     `task-sources/`, which is the one permitted exception, and **not**
-     including `registry/task-sources.yaml`, checked separately below) must
-     return zero matches. **Known false-positive to exclude if the target is
-     ever widened**: `contracts/docs-delta.md` already contains the word
-     "issue" in its generic sense (drift-evidence citation, e.g.
-     `docs-delta.md:8, 18, 28` — "gh issue close" as an *example* of
-     evidence, unrelated to task-tracker nouns) — the target above
-     deliberately does not include `docs-delta.md`; if the follow-on widens
-     it to all of `contracts/`, it must special-case that file rather than
-     treat the hit as a violation.
-  2. `registry/task-sources.yaml` is checked structurally, not lexically:
+     `task-sources/`, which is the one permitted exception; **not**
+     including `registry/task-sources.yaml`, checked structurally as step 3
+     below, and **not** including `contracts/intent-brief.md`, checked
+     structurally as step 2 below) must return zero matches, with one
+     standing, permanent exception verified against this checkout right
+     now: `schema.ts:108` (`const issues = result.error.issues`) and `:112`
+     (`` `${issues}` ``, interpolating that same local) are zod's own
+     `ZodError.issues` property — the validation library's error-list API,
+     not a task-tracker noun. **Known false-positives to exclude**: the two
+     `schema.ts` lines above (re-run the grep against this checkout with no
+     intake code at all and confirm these are the *only* two hits, before
+     trusting the check post-implementation); and, if the target is ever
+     widened to all of `contracts/`, `contracts/docs-delta.md` already
+     contains the word "issue" in its generic sense (drift-evidence
+     citation, e.g. `docs-delta.md:8, 18, 28` — "gh issue close" as an
+     *example* of evidence, unrelated to task-tracker nouns) — the target
+     above deliberately excludes `docs-delta.md` for this reason; a widened
+     target must special-case that file rather than treat the hit as a
+     violation.
+  2. `contracts/intent-brief.md` is checked structurally, not lexically, for
+     the same reason as step 3 below: §1b's provenance comment is *designed*
+     to name the tracker and quote the real upstream URL in prose — it is
+     the human-readable echo of `state.yaml`'s `intake:` block (§1b's
+     Justification, above) — so a lexical grep for "issue" is guaranteed to
+     hit its own permitted content (the literal `.../issues/482` example
+     URL), the same false-positive shape a lexical grep of the registry
+     produces against `label: GitHub Issues`. What the isolation rule
+     actually constrains here: confirm the addition is an HTML comment, not
+     a `##` heading — `grep -cE '^##[[:space:]]' contracts/intent-brief.md`
+     must read `4` both before and after the comment is added — so
+     `extractSections()` (`validate.ts:18-28`) still finds exactly the four
+     `BUILTIN_SECTIONS` entries (`validate.ts:34`) and no fifth. Prose
+     inside the comment naming the tracker (source id, ref, url) is expected
+     and compliant, not a hit to fix.
+  3. `registry/task-sources.yaml` is checked structurally, not lexically:
      confirm every entry under `sources:` uses only the four generic schema
      keys this document defines (`driver`, `label`, `ref_format`, `auth`) —
      any additional tracker-API-shaped key (e.g. `issue_number`,
@@ -925,7 +955,7 @@ One named, executable check per implementation-grade AC:
   Spec AC4.2's "a driver plus a registry entry" should be read together with
   this one-line, addition-only barrel export, not as excluding it: `index.ts`
   is a mechanical re-export, not a new type, interface, or logic added to
-  core's surface, which is what §2:167-168's "no core edit… for step 1-3"
+  core's surface, which is what §2:170-171's "no core edit… for step 1-3"
   is actually claiming — it is a real touch to a file under
   `frontend/packages/core/src/`, just not one that extends core's behavior or
   vocabulary, and this document's phrasing should not be read as denying

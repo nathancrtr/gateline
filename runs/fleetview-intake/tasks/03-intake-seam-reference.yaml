@@ -144,3 +144,66 @@ notes: |
   Corrected §5 item 7's wording to describe the actual failure mode (empty
   badge) while keeping the same remediation (add a `staged` case). See
   seam-reference.md:488-497.
+
+  Round 3 (review-03-intake-seam-reference-r1.md, F6-F7, round 2) — both
+  fixed; none rebutted. Re-verified F1-F5's round-2 fixes still hold (read
+  each cited region against current content: F2's discrepancy note at
+  :754-770, F3's three-step AC4.2 check at :910-932, F4's split
+  local-source.ts:28/:257 citation at :660-662, F5's empty-badge wording at
+  :491-498 — all unchanged by this round's edits, which touched only §2's
+  isolation-rule comment and §10's AC4.1 block):
+
+  F6 (blocking, AC4.1 check 1 still fails against today's checkout and
+  against §1b's own delta): fixed, on both sub-issues review found.
+  (1) schema.ts self-trip: re-ran `grep -rniE "issue|label|assignee|
+  milestone" contracts/state.yaml contracts/intent-brief.md
+  frontend/packages/core/src/*.ts` against this checkout before editing —
+  confirmed exactly two hits, both `schema.ts` (:108 `const issues =
+  result.error.issues`, :112 `${issues}`), zod's ZodError.issues API, not a
+  tracker noun. Rather than silently narrow the pattern (which would also
+  suppress camelCase/snake_case tracker identifiers a real violation would
+  use, e.g. `issueNumber`), kept the original substring-matching grep and
+  added a named, permanent false-positive exception for these two lines,
+  documented in the same style as the pre-existing `docs-delta.md`
+  exception two paragraphs below it. (2) contracts/intent-brief.md
+  self-trip: §1b's provenance comment is *designed* to quote the real
+  upstream URL in prose (the human-readable echo of state.yaml's `intake:`
+  block) — the same false-positive shape check 2 already established for
+  the registry's `label`/`ref_format` values, so rather than genericize a
+  realistic worked example across the 7 places it's quoted (§1a(iii), §1b,
+  §3.1, §8 preview, §9a state.yaml/intent-brief.md), removed
+  `contracts/intent-brief.md` from the lexical grep target and added a new
+  structural check (step 2, alongside the registry's existing structural
+  check, renumbered step 3): confirm the addition is an HTML comment, not a
+  new `##` heading, via `grep -cE '^##[[:space:]]' contracts/intent-brief.md`
+  reading `4` both before and after — re-verified empirically: ran this
+  exact count against the live file (4), then against a copy with §1b's
+  exact comment text spliced in (still 4). Rewrote §10's AC4.1 block
+  entirely (now 3 named checks instead of 2) at seam-reference.md:885-939.
+  Re-ran the final check-1 grep (`contracts/state.yaml` +
+  `frontend/packages/core/src/*.ts`, no intent-brief.md, no registry)
+  against this checkout: returns exactly the two documented schema.ts
+  lines and nothing else — the check design is sound and executable as
+  written.
+
+  F7 (minor, §2's committed isolation-rule text contradicts §10 check 2's
+  keys-not-values reading and its own entry two lines below): fixed.
+  Reworded the isolation-rule comment itself (the text literally committed
+  to registry/task-sources.yaml) to state the keys-not-values distinction
+  directly — "The rule is keys-only, never values" — rather than the
+  original "may never appear ... or in this registry file itself," which a
+  plain reading contradicted the very `label: GitHub Issues` /
+  `ref_format: "... issue URL"` entry two lines beneath it. A reader of
+  just the committed registry file (without this design document's §10
+  discussion) now gets the same keys-vs-values rule inline. See
+  seam-reference.md:149-159. This insertion shifted every subsequent line
+  in the document by +2 (then +27 more from F6's larger AC4.1 rewrite);
+  swept the whole document for self-referential line-number citations
+  (`§N:NNN` forms) and found exactly one, `§2:167-168` inside §10's AC4.2
+  discussion — corrected to `§2:170-171` (seam-reference.md:958). All other
+  internal cross-references use section numbers only (§1b, §2, §3.3, §8,
+  etc.), not raw line numbers, so no other citation needed updating; the
+  bottom discrepancy-summary index (:1001-1019) references sections, not
+  lines, and doesn't index F6/F7 (they're review-process fixes to §2/§10,
+  not plan-vs-source discrepancies for the G1/G2 human) — correctly left
+  unchanged.

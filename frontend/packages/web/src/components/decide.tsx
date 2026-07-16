@@ -91,7 +91,7 @@ export function DecidePanel({ item, primary = false }: { item: InboxItem; primar
   if (flash?.kind === 'ok') return <Flash kind="ok" text={flash.text} />
 
   return (
-    <div className="mt-3 border-t border-line/70 pt-3" data-decide-panel>
+    <div className="mt-3.5 border-t border-line pt-3.5" data-decide-panel>
       {flash && <Flash kind={flash.kind} text={flash.text} />}
 
       {mode === 'idle' && (
@@ -107,7 +107,7 @@ export function DecidePanel({ item, primary = false }: { item: InboxItem; primar
             </>
           )}
           {item.kind === 'gate' && !item.reviewable && (
-            <p className="text-xs font-medium text-bad">Bounced — fix the artifacts (or the contract) and the card returns; no approval is offered for a malformed packet.</p>
+            <p className="text-[12.5px] font-semibold text-bad">Bounced — fix the artifacts (or the contract) and the card returns; no approval is offered for a malformed packet.</p>
           )}
           {item.kind === 'escalation' && (
             <Button primary onClick={() => setMode('resolve')} data-decide="resolve">
@@ -130,13 +130,13 @@ export function DecidePanel({ item, primary = false }: { item: InboxItem; primar
       {mode === 'approve' && (
         <div className="flex flex-col gap-3">
           <fieldset>
-            <legend className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">How much work was this review? (recorded with the approval)</legend>
+            <legend className="mb-[9px] font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted">How much work was this review? (recorded with the approval)</legend>
             <div className="flex flex-wrap gap-2">
               {BURDEN_OPTIONS.map((o) => (
                 <label
                   key={o.value}
-                  className={`flex cursor-pointer items-baseline gap-2 rounded-md border px-3 py-1.5 text-sm transition-colors ${
-                    burden === o.value ? 'border-accent bg-accent-soft font-medium text-accent' : 'border-line bg-surface hover:border-accent/40'
+                  className={`flex cursor-pointer items-baseline gap-2 rounded-[5px] border bg-inset px-3 py-2 text-sm transition-colors ${
+                    burden === o.value ? 'border-accent bg-accent-soft font-semibold text-accent' : 'border-line hover:border-accent'
                   }`}
                 >
                   <input
@@ -146,7 +146,7 @@ export function DecidePanel({ item, primary = false }: { item: InboxItem; primar
                     checked={burden === o.value}
                     onChange={() => setBurden(o.value)}
                   />
-                  <span className="font-mono text-[11px] text-faint">{o.key}</span>
+                  <span className={`font-mono text-[11px] ${burden === o.value ? 'text-accent' : 'text-faint'}`}>{o.key}</span>
                   <span>
                     {o.label}
                     <span className="ml-1.5 text-xs font-normal text-muted">{o.hint}</span>
@@ -203,11 +203,11 @@ function Button({
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { primary?: boolean; danger?: boolean }) {
   const tone = primary
-    ? 'bg-accent text-surface font-semibold hover:opacity-90'
+    ? 'bg-accent text-on-solid font-semibold shadow-[0_0_12px_var(--glow)] hover:opacity-90'
     : danger
-      ? 'bg-bad text-surface font-semibold hover:opacity-90'
-      : 'border border-line bg-surface text-muted hover:text-ink hover:border-accent/40'
-  return <button {...props} className={`rounded-md px-3.5 py-1.5 text-sm transition-all disabled:cursor-not-allowed disabled:opacity-40 ${tone}`} />
+      ? 'bg-bad text-on-solid font-semibold hover:opacity-90'
+      : 'border border-line bg-inset text-muted hover:text-ink hover:border-accent'
+  return <button {...props} className={`rounded-full px-4 py-[7px] text-sm transition-all disabled:cursor-not-allowed disabled:opacity-40 ${tone}`} />
 }
 
 function NotesField({
@@ -228,7 +228,7 @@ function NotesField({
       placeholder={placeholder}
       autoFocus={autoFocus}
       rows={2}
-      className="w-full resize-y rounded-md border border-line bg-surface px-3 py-2 text-sm placeholder:text-faint"
+      className="w-full resize-y rounded-[5px] border border-line bg-inset px-[11px] py-[9px] text-sm placeholder:text-faint"
     />
   )
 }
@@ -236,7 +236,7 @@ function NotesField({
 function Flash({ kind, text }: { kind: 'ok' | 'conflict' | 'error'; text: string }) {
   const tone = kind === 'ok' ? 'bg-ok-soft text-ok' : kind === 'conflict' ? 'bg-warn-soft text-warn' : 'bg-bad-soft text-bad'
   return (
-    <p className={`mb-2 rounded-md px-3 py-2 text-xs font-medium ${tone}`} role="status">
+    <p className={`mb-2 rounded-[5px] px-3 py-2 text-xs font-semibold ${tone}`} role="status">
       {text}
     </p>
   )

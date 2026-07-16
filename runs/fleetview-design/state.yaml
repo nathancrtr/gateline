@@ -1,11 +1,11 @@
 run: fleetview-design
 branch: run/fleetview-design
-phase: implement
-paused_reason: null
+phase: paused
+paused_reason: escalation
 
 budget:
   cost_limit_usd: 200
-  cost_spent_usd: 51.73
+  cost_spent_usd: 59.73
   ledger:
     # v0 hand-appended; costs are the registry static estimates (harness
     # reports combined subagent tokens without an in/out split to price
@@ -274,7 +274,8 @@ budget:
       model: anthropic/claude-sonnet-5
       tokens_in: null
       tokens_out: null
-      cost_usd: null
+      cost_usd: 8
+      failed: true
     - at: 2026-07-16T06:16:28.002Z
       role: implementer
       task: 09-run-screen
@@ -425,3 +426,12 @@ escalations:
     resolved_by: Nathan Carter
     resolved_at: 2026-07-16T06:15:51.134Z
     resolution: "background-subagent CLI regression, see PR #113"
+  - at: 2026-07-16T06:16:29.426Z
+    from_role: orchestrator
+    reason: >-
+      implementer (08-metrics-screen) failed twice: git worktree failed:
+      Preparing worktree (new branch
+      'run/fleetview-design--task/08-metrics-screen')
+
+      fatal: failed to re…
+    resolved: false

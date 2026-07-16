@@ -1,11 +1,11 @@
 run: fleetview-design
 branch: run/fleetview-design
-phase: implement
-paused_reason: null
+phase: paused
+paused_reason: escalation
 
 budget:
   cost_limit_usd: 200
-  cost_spent_usd: 63.59
+  cost_spent_usd: 64.17
   ledger:
     # v0 hand-appended; costs are the registry static estimates (harness
     # reports combined subagent tokens without an in/out split to price
@@ -315,9 +315,10 @@ budget:
       round: 1
       adapter: claude-code
       model: anthropic/claude-sonnet-5
-      tokens_in: null
-      tokens_out: null
-      cost_usd: null
+      tokens_in: 0
+      tokens_out: 0
+      cost_usd: 0.5758325
+      failed: true
     - at: 2026-07-16T18:08:58.712Z
       role: reviewer
       task: 05-decide-panel
@@ -599,3 +600,9 @@ escalations:
       committed nothing; the fold's rebase refusal was misclassified as an
       overlap (#114). Hosted instance destroyed; task reset to pending for
       re-dispatch by the local orchestrator"
+  - at: 2026-07-16T18:11:40.712Z
+    from_role: orchestrator
+    reason: "implementer (04-status-components) failed twice: Command failed: claude
+      -p Use the implementer subagent. on task
+      `runs/fleetview-design/tasks/04-status-components.yaml`…"
+    resolved: false

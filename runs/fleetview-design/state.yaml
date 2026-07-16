@@ -349,4 +349,7 @@ escalations:
     reason: "implementer (08-metrics-screen) failed twice: rebase of
       run/fleetview-design--task/08-metrics-screen onto run/fleetview-design
       conflicted — overlapping file-contact …"
-    resolved: false
+    resolved: true
+    resolved_by: Nathan Carter
+    resolved_at: 2026-07-16T06:15:51.134Z
+    resolution: "background-subagent CLI regression, see PR #113"

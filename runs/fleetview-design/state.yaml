@@ -123,6 +123,87 @@ budget:
       tokens_out: null
       cost_usd: 4
       failed: true
+    - at: 2026-07-16T05:31:25.275Z
+      role: implementer
+      task: 01-g1-evidence-audit
+      round: 2
+      adapter: claude-code
+      model: anthropic/claude-sonnet-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
+    - at: 2026-07-16T05:31:25.275Z
+      role: implementer
+      task: 03-shell-masthead
+      round: 1
+      adapter: claude-code
+      model: anthropic/claude-sonnet-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
+    - at: 2026-07-16T05:31:25.275Z
+      role: implementer
+      task: 04-status-components
+      round: 1
+      adapter: claude-code
+      model: anthropic/claude-sonnet-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
+    - at: 2026-07-16T05:31:25.275Z
+      role: implementer
+      task: 05-decide-panel
+      round: 1
+      adapter: claude-code
+      model: anthropic/claude-sonnet-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
+    - at: 2026-07-16T05:31:25.275Z
+      role: implementer
+      task: 06-inbox-screen
+      round: 1
+      adapter: claude-code
+      model: anthropic/claude-sonnet-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
+    - at: 2026-07-16T05:31:25.275Z
+      role: implementer
+      task: 07-portfolio-screen
+      round: 1
+      adapter: claude-code
+      model: anthropic/claude-sonnet-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
+    - at: 2026-07-16T05:31:25.275Z
+      role: implementer
+      task: 08-metrics-screen
+      round: 1
+      adapter: claude-code
+      model: anthropic/claude-sonnet-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
+    - at: 2026-07-16T05:31:25.275Z
+      role: implementer
+      task: 09-run-screen
+      round: 1
+      adapter: claude-code
+      model: anthropic/claude-sonnet-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
+    - at: 2026-07-16T05:31:25.275Z
+      role: implementer
+      task: 10-diff-view
+      round: 1
+      adapter: claude-code
+      model: anthropic/claude-sonnet-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
 
 gates:
   G0:
@@ -146,16 +227,16 @@ gates:
 
 tasks:
   [
-    { id: 01-g1-evidence-audit, status: in-review, review_rounds: 1 },
+    { id: 01-g1-evidence-audit, status: dispatched, review_rounds: 1 },
     { id: 02-ledger-foundations, status: review-approved, review_rounds: 1 },
-    { id: 03-shell-masthead, status: pending, review_rounds: 0 },
-    { id: 04-status-components, status: pending, review_rounds: 0 },
-    { id: 05-decide-panel, status: pending, review_rounds: 0 },
-    { id: 06-inbox-screen, status: pending, review_rounds: 0 },
-    { id: 07-portfolio-screen, status: pending, review_rounds: 0 },
-    { id: 08-metrics-screen, status: pending, review_rounds: 0 },
-    { id: 09-run-screen, status: pending, review_rounds: 0 },
-    { id: 10-diff-view, status: pending, review_rounds: 0 },
+    { id: 03-shell-masthead, status: dispatched, review_rounds: 0 },
+    { id: 04-status-components, status: dispatched, review_rounds: 0 },
+    { id: 05-decide-panel, status: dispatched, review_rounds: 0 },
+    { id: 06-inbox-screen, status: dispatched, review_rounds: 0 },
+    { id: 07-portfolio-screen, status: dispatched, review_rounds: 0 },
+    { id: 08-metrics-screen, status: dispatched, review_rounds: 0 },
+    { id: 09-run-screen, status: dispatched, review_rounds: 0 },
+    { id: 10-diff-view, status: dispatched, review_rounds: 0 },
     { id: 11-integration-verification, status: pending, review_rounds: 0 }
   ]
 

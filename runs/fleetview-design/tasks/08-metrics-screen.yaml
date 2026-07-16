@@ -1,0 +1,34 @@
+id: 08-metrics-screen
+title: Restyle the metrics screen (gate table, burden ramp, rounds, budget honesty)
+requirements: [R1, R5]
+
+scope: |
+  Restyle frontend/packages/web/src/pages/metrics.tsx per
+  runs/fleetview-design/design/candidate-a/metrics.html: each section opens with a
+  2px rule + kicker + italic font-display gloss (the current explanatory captions
+  become the glosses — keep their text verbatim, C3), tables unboxed at scanning
+  density, meters square-cornered. Replace the BURDEN_RAMP/UNRECORDED inline
+  light-dark() strings with the C1 custom properties (background:
+  'var(--burden-ramp-1)' etc.) — delete the local constants; the legend and
+  BurdenBar keep their aria-label/title logic. ApprovalMeter keeps the 90% tick and
+  the warn "over-triggering?" label (glyph + text, never color alone). Headings
+  "Gate decisions" and "Budget honesty" are asserted by smoke — verbatim. The
+  no-decisions empty state becomes the serif rule-opened treatment (no dashed box).
+  All data logic, bucketing, and strings frozen (C3); PageStatus consumed unmodified.
+  Use only C1 tokens.
+
+file_contact_surface:
+  - frontend/packages/web/src/pages/metrics.tsx
+
+acceptance_tests:
+  - AC5.1
+  - AC5.2
+  - "cd frontend && npm run typecheck && npm test && npx playwright test pass"
+  - "no light-dark() string literal remains in metrics.tsx (ramp reads var(--burden-*))"
+  - "sections match candidate-a/metrics.html: ruled heads, unboxed tables, ramp legend"
+
+depends_on: [02-ledger-foundations]
+
+status: pending
+
+notes: |

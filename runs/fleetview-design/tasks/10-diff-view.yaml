@@ -1,0 +1,29 @@
+id: 10-diff-view
+title: Restyle the diff view to the Ledger evidence plate (diff-view.tsx)
+requirements: [R1, R5]
+
+scope: |
+  Restyle frontend/packages/web/src/components/diff-view.tsx per
+  runs/fleetview-design/design/candidate-a/run-diff.html: each file on an evidence
+  plate (1px line border on surface, square corners — the rounded-lg wrapper goes
+  away), file header as a raised strip with mono path and +/- stats (ok/bad tones
+  kept), hunk headers accent-washed, add/del rows keep their ok/bad washes, gutters
+  in faint tabular-nums with hairline separators, evidence density (12px/20px mono,
+  zero vertical line padding). The "No diff" empty line adopts the Ledger centered
+  serif empty treatment. Behavior and signatures frozen (C3): DiffView/FileHeader
+  props, line/sign/number logic, select-none gutters, all strings verbatim
+  ("No diff — the run branch matches the default branch."). Use only C1 tokens.
+
+file_contact_surface:
+  - frontend/packages/web/src/components/diff-view.tsx
+
+acceptance_tests:
+  - AC5.2
+  - "cd frontend && npm run typecheck && npm test pass"
+  - "diff matches candidate-a/run-diff.html: evidence plate, gutters, hunk strips, add/del washes"
+
+depends_on: [02-ledger-foundations]
+
+status: pending
+
+notes: |

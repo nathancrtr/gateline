@@ -1,0 +1,35 @@
+id: 05-decide-panel
+title: Restyle the decide flow (burden picker, buttons, flashes) in decide.tsx
+requirements: [R5, R6]
+
+scope: |
+  Restyle frontend/packages/web/src/components/decide.tsx in place per plan C2 and
+  the open-approve-flow region of
+  runs/fleetview-design/design/candidate-a/run-artifacts.html: burden options as
+  square selectable tiles (mono key numeral, label + hint; selected = accent border
+  + wash + focus treatment), Button becomes the Ledger set (primary solid accent
+  with 3px accent-deep bottom edge; danger solid bad; quiet 1px outline — all square),
+  NotesField square on ground, Flash keeps role="status" with ok/conflict/error
+  washes. Behavior is entirely frozen (C3): modes, mutation logic, CAS-409 conflict
+  copy, dataset.deciding effect, key handlers (a/x/1/2/3/esc), every
+  data-decide/data-decide-panel hook, and every user-visible string verbatim —
+  including the bounced "no approval is offered" copy, burden labels, "Notes
+  (optional)" placeholder prefix, and "committed" flash text (smoke.spec.ts asserts
+  on all of these). Use only C1 tokens; no rounded-lg/md remains (sr-only radio
+  pattern stays).
+
+file_contact_surface:
+  - frontend/packages/web/src/components/decide.tsx
+
+acceptance_tests:
+  - AC5.1
+  - AC5.2
+  - AC5.3
+  - "cd frontend && npm run typecheck && npm test && npx playwright test pass"
+  - "git diff shows class-string changes only: no string literal, handler, or hook changed"
+
+depends_on: [02-ledger-foundations]
+
+status: pending
+
+notes: |

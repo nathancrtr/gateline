@@ -1,0 +1,39 @@
+id: 09-run-screen
+title: Restyle the run page (head, needs-you plate, task board, tabs, artifacts, history)
+requirements: [R1, R5, R6]
+
+scope: |
+  Restyle frontend/packages/web/src/pages/run.tsx per
+  runs/fleetview-design/design/candidate-a/run-artifacts.html and run-history.html:
+  run head (mono display-size slug, phase stamp, gate cells, budget meter, mono
+  source/ref), malformed run-state banner (bad spine + raw yaml pre, still never
+  reviewable), NeedsYouCard as THE decision plate — the page's only raised object:
+  surface plate, 3px accent left spine (bad spine when item is not reviewable),
+  box-shadow var(--shadow-plate), packet links as square mono tags. Task board as
+  square mono tiles. Tabs as uppercase tracked labels with a 3px accent underline
+  on the active tab (buttons, same onClick logic). ArtifactsTab rail: square
+  selected treatment + validation marks; ArtifactBody on an evidence plate (1px
+  line border; failing-contract banner stays bad-washed). HistoryTab as the ruled
+  register: hairline rows, phase transitions marked by a 2px accent rule + mono
+  "-> phase" stamp (keep the existing transition-detection logic). Behavior frozen
+  (C3): tab/param handling, e/Escape key handlers, data-needs-card, DecidePanel and
+  chips consumed as-is (do not edit their files), all strings verbatim. Diff tab
+  content is task 10's surface — only the surrounding tab chrome is yours.
+  Use only C1 tokens.
+
+file_contact_surface:
+  - frontend/packages/web/src/pages/run.tsx
+
+acceptance_tests:
+  - AC5.1
+  - AC5.2
+  - AC5.3
+  - AC6.4
+  - "cd frontend && npm run typecheck && npm test && npx playwright test pass"
+  - "run page matches candidate-a/run-artifacts.html and run-history.html: decision plate is the sole shadowed element; malformed banner and bounce card render per mockups"
+
+depends_on: [02-ledger-foundations]
+
+status: pending
+
+notes: |

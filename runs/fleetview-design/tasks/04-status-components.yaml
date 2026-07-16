@@ -1,0 +1,36 @@
+id: 04-status-components
+title: Restyle the shared status vocabulary in chips.tsx to Ledger stamps/cells/meters
+requirements: [R5]
+
+scope: |
+  Restyle every export of frontend/packages/web/src/components/chips.tsx in place —
+  PhaseChip, KindChip, AgeBadge, GateCell, GateLedger, ValidationBadge, BudgetMeter —
+  per plan C2 and the stamp/gcell/age/meter recipes in
+  runs/fleetview-design/design/candidate-a/inbox.html and run-artifacts.html.
+  Specifics: KindChip becomes the square stamp family (routine gate = outlined
+  accent + wash; ESC/CAP/BAD = solid bad; PAUSE = solid warn; urgent stamps larger
+  and heavier — REC4: never hue alone). KindChip has no bounced input today (props
+  are frozen, C3) — the bounced-gate dashed/struck treatment belongs to the row/card
+  surfaces, not this file. GateCell: square, approved solid-ok border + check,
+  declined bad border + cross, pending dashed + gate number (keep existing glyph
+  logic and title text). AgeBadge stays a rounded-full pill (one of the two allowed;
+  urgent = solid bad + on-solid text). PhaseChip: square, mono, dot keeps its tone
+  mapping. BudgetMeter: square track, keep the unmetered/over logic and title.
+  ValidationBadge unchanged in behavior, mono glyph only. All component signatures,
+  glyphs, and title/aria text are frozen (C3); use only C1 tokens. No rounded-lg/md
+  remains in this file.
+
+file_contact_surface:
+  - frontend/packages/web/src/components/chips.tsx
+
+acceptance_tests:
+  - AC5.2
+  - "cd frontend && npm run typecheck && npm test pass"
+  - "exported signatures unchanged (git diff shows no prop/type changes)"
+  - "stamps/cells match candidate-a mockup recipes; only AgeBadge is rounded-full here"
+
+depends_on: [02-ledger-foundations]
+
+status: pending
+
+notes: |

@@ -1,0 +1,55 @@
+id: 01-g1-evidence-audit
+title: Mechanically audit the design-phase floors and record evidence for the G1 approver
+requirements: [R1, R2, R3, R4]
+
+scope: |
+  Gate-support task — run BEFORE G1 is decided; it changes no product files. Verify
+  the delivered research/design artifacts against the spec's mechanical floors and
+  append a pass/fail line per check (with the offending file/line for any failure)
+  to this file's notes. Checks:
+  - AC1.1: ux-research.md Scope names inbox, run detail, portfolio, metrics + shared
+    components.
+  - AC1.2/AC4.1: each of design/candidate-{a,b,c}/ has exactly the six R1 screen
+    .html files, each indexed in that candidate's Mockups section.
+  - AC2.1/AC3.1: every section required by contracts/ux-research.md and
+    contracts/design-candidate.md is present (bounce, don't grade, if missing).
+  - AC2.2: >=3 external products/categories cited by URL in ux-research.md.
+  - AC2.3: >=4 anti-patterns covering all four slop traits (intent-brief.md:10-12).
+  - AC2.4/AC2.5: no uncited P/A/REC entry; no REC naming a color/font/"look like X".
+  - AC4.1: grep each mockup .html (case-insensitive) for http://, https://,
+    <script src=, @import url( — zero hits (data: URLs are fine).
+  - AC4.3: grep each mockup .html (case-insensitive) for lorem, ipsum, foo, bar —
+    zero hits.
+  - AC4.4: grep each design-candidate.md for TBD, TODO, XXX — zero hits; confirm
+    type stack, both-theme color tokens, spacing rule, motion policy, shapes named.
+  - AC4.2/AC4.5/AC4.6: confirm required states, WCAG statement (or named gap), and
+    >=1 P + >=1 A/REC citation per candidate.
+  Report the checklist verbatim in notes so the G1 human can spot-check rather than
+  re-derive. Do not edit any artifact under runs/fleetview-design/ other than this
+  file's notes — findings route to the gate, not to silent fixes.
+
+file_contact_surface:
+  - runs/fleetview-design/tasks/01-g1-evidence-audit.yaml
+
+acceptance_tests:
+  - AC1.1
+  - AC1.2
+  - AC2.1
+  - AC2.2
+  - AC2.3
+  - AC2.4
+  - AC2.5
+  - AC3.1
+  - AC4.1
+  - AC4.2
+  - AC4.3
+  - AC4.4
+  - AC4.5
+  - AC4.6
+  - "notes contain one recorded pass/fail line per check above, each failure with file:line"
+
+depends_on: []
+
+status: pending
+
+notes: |

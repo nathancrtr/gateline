@@ -1,0 +1,35 @@
+id: 07-portfolio-screen
+title: Restyle the portfolio ledger table and add the zero-runs render branch
+requirements: [R1, R5, R6]
+
+scope: |
+  Restyle frontend/packages/web/src/pages/portfolio.tsx per
+  runs/fleetview-design/design/candidate-a/portfolio.html: section head with 2px
+  rule, the table unboxed (rule opens it, hairline row dividers, ground shows
+  through — the current rounded-lg/border/bg-surface wrapper goes away), scanning
+  rhythm (8-10px rows, 12.5px text), mono slugs/numerals with tabular-nums, the
+  needs count as a solid accent stamp, malformed-run line stays bad-toned.
+  The one behavioral addition of the whole run (spec R1, AC6.3, Assumption 4): when
+  runs.length === 0, render the zero-runs empty state exactly as sketched in the
+  mockup — a static conditional branch, no filtering/sorting/interaction, keeping
+  the <table> absent only in that branch. A <table> element must still render
+  whenever runs exist (smoke asserts getByRole('table') contains 'done-merged').
+  Everything else frozen (C3): columns, cell content, link targets, PageStatus
+  usage (do not edit inbox.tsx), chips imports as-is. Use only C1 tokens.
+
+file_contact_surface:
+  - frontend/packages/web/src/pages/portfolio.tsx
+
+acceptance_tests:
+  - AC5.1
+  - AC5.2
+  - AC6.3
+  - "cd frontend && npm run typecheck && npm test && npx playwright test pass"
+  - "zero-runs branch renders the mockup's empty state when the runs array is empty (verify against a bare fixture or by temporarily forcing the branch during dev — not in committed code)"
+  - "table matches candidate-a/portfolio.html: unboxed ledger, ink column heads, scanning density"
+
+depends_on: [02-ledger-foundations]
+
+status: pending
+
+notes: |

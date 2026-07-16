@@ -1,0 +1,31 @@
+id: 03-shell-masthead
+title: Convert the app shell from left rail to the Ledger masthead (app.tsx only)
+requirements: [R5]
+
+scope: |
+  Restyle App in frontend/packages/web/src/app.tsx per plan ADR-4 and the masthead
+  in runs/fleetview-design/design/candidate-a/inbox.html (any candidate-a mockup
+  shows it): wordmark ("Gate", font-display) with its small gloss, horizontal nav of
+  the same three NavLinks (uppercase tracked labels, 3px accent underline on the
+  active item via aria-current styling), the inbox count as a rounded-full accent
+  stamp (one of the two pills C2 allows), and the "repo is the database" motto in
+  italic font-display on the right; a 2px --color-rule closes the masthead. Converge
+  the current desktop rail + separate mobile top-nav into this one responsive
+  masthead (wrap/hide the motto on narrow viewports). Freeze contract C3 applies:
+  same routes, same NavLink targets/end props, same useQuery inbox badge logic,
+  <main> still renders <Outlet/>; main.tsx is untouched. Use only C1 tokens/utilities.
+
+file_contact_surface:
+  - frontend/packages/web/src/app.tsx
+
+acceptance_tests:
+  - AC5.2
+  - "cd frontend && npm run typecheck && npm test pass"
+  - "npx playwright test passes (no smoke assertion targets the shell, but navigation must still work)"
+  - "masthead matches candidate-a mockups: wordmark, 3 nav items with active underline, count pill, rule"
+
+depends_on: [02-ledger-foundations]
+
+status: pending
+
+notes: |

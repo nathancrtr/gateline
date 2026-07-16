@@ -1,0 +1,62 @@
+id: 11-integration-verification
+title: Full regression floor, cross-screen coherence pass, and AC6.1 fidelity evidence
+requirements: [R5, R6]
+
+scope: |
+  Runs after every other task merges. Three jobs:
+  1. Regression floor (AC5.1-AC5.4): from frontend/ on Node >= 24 — npm install,
+     npx playwright install chromium, then npm test, npm run typecheck, and
+     npx playwright test with smoke.spec.ts assertions unmodified. Verify by diff
+     review that only frontend/packages/web changed across the run (AC5.4), that
+     package.json still declares react ^19 / tailwindcss ^4 / vite ^7 (AC6.2), and
+     that no route/endpoint was added beyond the portfolio zero-runs branch (AC6.3).
+  2. Manual checks recorded in notes: the keyboard model end-to-end (j/k/enter on
+     inbox; a/x/1/2/3/esc and e on the run page — AC5.3), and the CAS-409 conflict
+     re-present (decide on a run whose branch moved underneath the open tab, e.g.
+     commit to the fixture run branch between opening the card and confirming —
+     AC6.4) against the fixture repo (`node fixtures/src/main.ts` / --demo).
+  3. Coherence + fidelity: compare each of the six R1 screens as built against
+     runs/fleetview-design/design/candidate-a/*.html and the Look-and-feel spec;
+     fix recipe drift between screens (plan Risk 2: paddings, kickers, rules,
+     stamp sizes) — this is the ONLY task allowed to touch any file under
+     frontend/packages/web/src/ for such fixes, still under freeze contract C3
+     (class strings only). Record a match-or-deviation line per screen in notes as
+     the Reviewer/Verifier's AC6.1 input. Fidelity comparison is made on one named
+     OS (plan ADR-2) — name it in notes.
+
+file_contact_surface:
+  - frontend/packages/web/src/styles.css
+  - frontend/packages/web/src/app.tsx
+  - frontend/packages/web/src/components/chips.tsx
+  - frontend/packages/web/src/components/decide.tsx
+  - frontend/packages/web/src/components/diff-view.tsx
+  - frontend/packages/web/src/pages/inbox.tsx
+  - frontend/packages/web/src/pages/portfolio.tsx
+  - frontend/packages/web/src/pages/metrics.tsx
+  - frontend/packages/web/src/pages/run.tsx
+
+acceptance_tests:
+  - AC5.1
+  - AC5.2
+  - AC5.3
+  - AC5.4
+  - AC6.1
+  - AC6.2
+  - AC6.3
+  - AC6.4
+  - "notes contain: command outputs summarized, the manual keyboard + 409 check results, and six per-screen match/deviation lines"
+
+depends_on:
+  - 02-ledger-foundations
+  - 03-shell-masthead
+  - 04-status-components
+  - 05-decide-panel
+  - 06-inbox-screen
+  - 07-portfolio-screen
+  - 08-metrics-screen
+  - 09-run-screen
+  - 10-diff-view
+
+status: pending
+
+notes: |

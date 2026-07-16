@@ -1,0 +1,35 @@
+id: 06-inbox-screen
+title: Restyle the inbox to the Ledger reading-list queue (inbox.tsx, incl. PageStatus)
+requirements: [R1, R5]
+
+scope: |
+  Restyle frontend/packages/web/src/pages/inbox.tsx per
+  runs/fleetview-design/design/candidate-a/inbox.html: page header as a Ledger
+  section head (font-display title, 2px rule, count + printed "j/k move - open"
+  key hint in mono), rows as ruled entries (hairline dividers, no boxed cards,
+  reading rhythm ~14px padding, 68ch detail cap, font-display item titles,
+  mono source/slug), selection as a left accent spine + wash (keep aria-current
+  and the focus-visible ring), bounced line stays bad-toned, inbox-zero as the
+  centered serif empty state opened by a rule (no dashed box). This task also owns
+  PageStatus (exported here, consumed by portfolio/metrics/run — signature frozen,
+  C3): restyle it as the static Ledger status line; loading remains static text
+  ("Reading repositories..." etc.), per the no-animation motion policy. Behavior
+  frozen (C3): itemHref, j/k/Enter cursor logic, data-inbox-row, row link targets,
+  all strings verbatim (smoke asserts the first row contains "escalated" and the
+  malformed-spec row contains "Bounced"). Use only C1 tokens.
+
+file_contact_surface:
+  - frontend/packages/web/src/pages/inbox.tsx
+
+acceptance_tests:
+  - AC5.1
+  - AC5.2
+  - AC5.3
+  - "cd frontend && npm run typecheck && npm test && npx playwright test pass"
+  - "inbox matches candidate-a/inbox.html: ruled rows, stamp column, selection spine, serif empty state"
+
+depends_on: [02-ledger-foundations]
+
+status: pending
+
+notes: |

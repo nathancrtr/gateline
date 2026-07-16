@@ -172,3 +172,85 @@ notes: |
   inline-vs-labeled citation style; AC4.3's incidental foo/bar substring hits
   in candidate-b's `railfoot`/`bbar` class names), per the audit's literal
   instructions.
+
+  Round 2 (review-02.md, verdict request-changes):
+  - F1 (blocking) — reclassifying AC4.3 as FAIL against the literal spec.
+    Re-ran `grep -inE 'lorem|ipsum|foo|bar'` (case-insensitive substring,
+    exactly as scope:21-22 specifies) against all 18 mockup .html files
+    myself: 18 hits, all in candidate-b, all at the file:lines already
+    recorded above (candidate-b/inbox.html:57,118;
+    candidate-b/run-artifacts.html:60,183; candidate-b/run-history.html:52,104;
+    candidate-b/run-diff.html:54,109; candidate-b/portfolio.html:56,135;
+    candidate-b/metrics.html:61,91,92,133,157,164,171,178) — the existing
+    file:line list and false-positive analysis (`.railfoot` contains "foo",
+    `.bbar` contains "bar"; neither is lorem-ipsum-style filler) stands and is
+    accurate, so it is kept as-is below. What changes is the verdict: as
+    literally specified, AC4.3 is **FAIL** (18 hits, not zero). The round-1
+    PASS rested on an unauthorized whole-word reinterpretation of the check —
+    that reinterpretation is a waiver call belonging to the G1 human, not this
+    audit. A PASS on AC4.3 would require the G1 human to explicitly waive the
+    literal substring check in favor of a whole-word reading (confirmed
+    separately: `grep -inE '\bfoo\b|\bbar\b'` against the same 18 files
+    returns zero hits, so the whole-word reading is available to the human as
+    an alternative basis if they choose to adopt it — but this audit does not
+    adopt it on their behalf). Recorded as FAIL, not PASS, above the summary
+    line is not itself edited (round-1 text is append-only per convention);
+    treat the AC4.3 entry above as superseded by this FAIL reclassification.
+  - F1 also requires updating the pass count: with AC4.3 reclassified FAIL,
+    the correct count is **13/14 acceptance tests pass, 1 fails (AC4.3)**,
+    not "all 14... pass" as the round-1 summary line states above.
+  - F2 (major) — corrected AC2.4's basis without changing the PASS verdict.
+    Re-checked ux-research.md:140-164 myself: REC1-REC6 each carry only a
+    `(from A_, P_)` or `(from P_, A_)` trace (e.g. REC1 "(from A1, A2)" at
+    line 140, REC6 "(from P2)" at line 161) — zero URLs, zero file:line
+    citations, among any of the six. The round-1 claim that "every P1-P5,
+    A1-A5, and REC1-REC6 entry carries a citation (URL and/or file:line)" is
+    false as to the RECs and should be read as corrected by this note. The
+    actual basis for AC2.4 PASS on the REC entries: contracts/ux-research.md's
+    own Recommendations section template (line 33: `- **REC1** (from P_, A_):
+    <constraint or caution>`) defines RECs as tracing to P/A finding numbers,
+    not as carrying independent citations of their own — the P/A entries they
+    trace to are themselves already cited (verified: all of P1-P5 and A1-A5
+    do carry a URL and/or file:line, per the round-1 note's own citations
+    above, which I re-spot-checked and found accurate). So AC2.4 PASSes on
+    the P1-P5/A1-A5 citations plus the contract-conformant REC trace pattern,
+    not on RECs independently carrying citations as round-1 claimed.
+  - F3 (minor) — fixed the recorded pattern typo. The whole-word check
+    actually run (and whose "zero whole-word hits" result is accurate, see F1
+    above) uses the pattern `\bfoo\b|\bbar\b`, not `\blfoo\b|\bbar\b` as
+    mistakenly recorded above (stray "l"). Treat the pattern cited in the
+    AC4.3 paragraph above as corrected to `\bfoo\b|\bbar\b`.
+  - F4 (minor) — fixed the AC2.2 count. Re-ran the URL citation count myself:
+    `grep -noE 'https?://[^ )]*' ux-research.md` finds 7 distinct URLs at
+    lines 27 (Honeycomb), 42 (dev.to tabular-nums), 49 (Datadog), 58 (Linear),
+    68 (GitHub Primer), 97 (freedesignmd.com), 111 (superdesign.dev) —
+    matching the 7 sources already listed in the round-1 note. The correct
+    count is **7 distinct sources**, not "6" as the round-1 note's lead-in
+    sentence states (the list following it was already correct at 7; only
+    the stated count was wrong). Still well over the floor of 3; PASS
+    unaffected.
+  - F5 (minor) — fixed the AC2.3 over-claim. Re-checked the full A1-A5
+    trait-tag list against intent-brief.md's four traits: "uniform treatment
+    of every surface" is tagged on A1 and A4 (2x); "default component
+    styling" is tagged on A2 and A5 (2x); "no spatial identity" is tagged on
+    A4 and A5 (2x); but "no typographic identity" is tagged only once, on A3
+    (ux-research.md:100) — there is no second tag anywhere in A1/A2/A4/A5.
+    The round-1 claim "every trait is covered at least twice" is false; the
+    accurate statement is that three of the four traits are covered twice and
+    one ("no typographic identity") is covered once. PASS is unaffected — the
+    spec (AC2.3) requires each of the four traits covered at least once, not
+    twice, and all four are covered at least once.
+  - All five findings addressed by correcting/superseding the specific
+    inaccurate claims in place via this appended note, per this run's
+    round-2 convention (round-1 text kept intact above, corrections appended
+    here) — no other artifact under runs/fleetview-design/ was touched, and
+    no product file was edited. Re-derived every number in this response from
+    the actual files (ux-research.md, contracts/ux-research.md, and the 18
+    mockup .html files) rather than trusting the round-1 note's arithmetic.
+  - Revised summary: **13 of 14** acceptance tests pass (AC1.1, AC1.2, AC2.1,
+    AC2.2, AC2.3, AC2.4, AC2.5, AC3.1, AC4.1, AC4.2, AC4.4, AC4.5, AC4.6);
+    **AC4.3 FAILs** as literally specified (18 case-insensitive substring
+    hits for foo/bar in candidate-b, all traced to the `.railfoot`/`.bbar`
+    class names, zero hits under a whole-word reading) — routed to the G1
+    human as a FAIL requiring an explicit waiver decision, not pre-waived by
+    this audit.

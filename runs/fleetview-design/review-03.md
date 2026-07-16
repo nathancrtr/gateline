@@ -33,3 +33,33 @@
 ## Boundary check
 
 Commit touches exactly one file: `frontend/packages/web/src/components/decide.tsx` — inside the declared `file_contact_surface`. No `styles.css`, spec, or e2e edits. Clean.
+
+---
+
+## Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** 3ce84bac00e1070e71affa846244156a043f7d15 against parent 72125ea on `run/fleetview-design`
+
+### Prior findings
+
+- **F1 (blocking) — resolved.** `decide.tsx:138-139`: `bg-inset` moved off the shared label base into the unselected branch; selected branch carries `bg-accent-soft` alone. The backgrounds are now mutually exclusive per state — the round-1 compiled-cascade argument cannot resurface because only one background utility is ever on the element, so the relative order of `.bg-accent-soft`/`.bg-inset` in the built stylesheet is irrelevant. Grep of the post-diff file confirms no other `bg-` utility on the label. Mirrors the pre-diff `bg-surface` pattern; the mutant (wash never renders) is dead.
+- **F2 (minor) — resolved.** `decide.tsx:213`: `font-semibold` now sits on the shared `<button>` base and was removed from the primary/danger tone strings (no duplication). Quiet capsules ("Cancel", "Decline…") render at 600 alongside primary/danger, matching mockup `.btn{font:600 13px}`.
+- **F3 (minor) — resolved.** `decide.tsx:206-213`: shared `border` (1px width) on the base plus per-tone color — `border-accent` (primary), `border-bad` (danger), `border-line` (quiet) — matching mockup `.btn{border:1px solid var(--line)}` with `.primary`/`.danger` border-color overrides. All three capsules in a `flex gap-2` row now carry the same 1px border; the 2px height mismatch is closed.
+
+### New findings
+
+None. Specifically checked for fix-induced regressions: quiet's old `border border-line` pair did not double up (`border` moved to the base, `border-line` stays in the tone branch — same computed result); primary/danger border color equals their fill (accent/bad) so no visible seam, per the mockup; the shared `border` width utility and per-tone `border-*` color utilities set different CSS properties, so no cascade-order hazard of the F1 kind exists in the new arrangement.
+
+### Coverage (round 2)
+
+- **Freeze re-check (C3):** the round-2 diff for `decide.tsx` is two hunks touching only `className` template strings; the `<button>` element gained multi-line formatting but no new props/handlers — `{...props}` spread, key handlers, `data-decide` hooks, and every user-visible string are byte-identical to 72125ea. Clean.
+- **Motion re-check:** grep of post-diff `decide.tsx` for `keyframes|animation|motion|pulse|skel` → zero hits. Clean.
+- **Token discipline of new classes:** `border-accent`, `border-bad`, `border-line`, `bg-inset`, `bg-accent-soft` — all C1 tokens, no ad-hoc values. Clean.
+- **Acceptance re-run in this workspace** (fresh `npm install`, `npm run build`, `npx playwright install chromium`): `npm run typecheck` ✓; `npm test` 127 passed/1 skipped ✓; `npx playwright test` 5/5 ✓. The implementer's verification claims in the task notes are confirmed independently, not taken on trust.
+- Round-1 mockup fidelity spot-check not repeated except the three areas this diff touches (burden-tile background, button weight, button border), per round-2 scope. Round-1 residual non-findings stand unchanged.
+
+### Boundary check (round 2)
+
+Commit 3ce84ba touches `frontend/packages/web/src/components/decide.tsx` (inside `file_contact_surface`) and `runs/fleetview-design/tasks/05-decide-panel.yaml` (the `notes:` field only — the implementer's round-response channel, standard run bookkeeping, not product-code contact). No other files. Clean.

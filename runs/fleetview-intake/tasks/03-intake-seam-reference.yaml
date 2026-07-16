@@ -96,3 +96,51 @@ depends_on: []
 status: pending
 
 notes: |
+  Round 2 (review-03-intake-seam-reference-r1.md, F1-F5) — all five findings
+  fixed in the document; none rebutted:
+
+  F1 (blocking, AC4.1 grep self-trips on §2's own proposal): fixed. Split
+  §10's AC4.1 into two checks: (1) the original grep, scoped to
+  contracts/state.yaml, contracts/intent-brief.md, and top-level
+  core/src/*.ts only — registry/task-sources.yaml removed from the grep
+  target since its permitted display values (`label: GitHub Issues`,
+  `ref_format: "owner/repo#N or issue URL"`) and the isolation-rule comment's
+  own prose legitimately contain the flagged words; (2) a new structural
+  check on registry/task-sources.yaml itself — confirm each entry uses only
+  the four generic schema keys (driver/label/ref_format/auth), which is what
+  the isolation rule actually constrains at the registry layer (tracker-noun
+  *keys*, not tracker-naming *prose values*). See seam-reference.md:882-909.
+
+  F2 (major, worked example 9a diverges from IC-4's literal skeleton with no
+  discrepancy note): fixed. Added a discrepancy note directly under 9a's
+  state.yaml (seam-reference.md:754-770) explaining the IC-4-verbatim vs
+  ADR-6 drafting-cost tension for a drafted import, contrasted with 9b (which
+  uses --no-draft and matches IC-4's literal zero exactly). Indexed the note
+  in the bottom discrepancy summary (:929-933 region, new §9a bullet).
+
+  F3 (minor, AC4.2 check assumes registry-only add-a-source, contradicting
+  §2's 3-step procedure): fixed. Rewrote §10's AC4.2 check to exercise all
+  three of §2's steps (driver module + registry entry + index.ts barrel
+  line), assert the driver actually resolves through /api/intake/item, and
+  clarify that spec AC4.2's "driver plus registry entry" is read inclusive
+  of the one-line mechanical barrel export, not as forbidding it — also
+  added a clarifying sentence reconciling that reading with §2:167-168's
+  "no core edit" framing (the barrel line touches a core file but adds no
+  new type/logic). See seam-reference.md:910-932.
+
+  F4 (minor, wrong local-source.ts line cited for commitTree call): fixed.
+  Re-verified against the current checkout — the plumbing-path commitTree
+  call is at local-source.ts:257 (`const commit = await
+  this.git.commitTree(tree, tip, message, this.options.identity)`); 246-256
+  is the worktree-path's `git push origin` block, as the review found.
+  Corrected §8's citation to cite :28 (the option) and :257 (its use)
+  separately, matching §3.2's existing correct citation. See
+  seam-reference.md:655-657.
+
+  F5 (minor, KindChip "undefined" claim): fixed. Re-verified against
+  chips.tsx: the label lookup at chips.tsx:34 does evaluate to `undefined`
+  for an unhandled InboxKind, but React renders an `undefined` JSX child as
+  nothing, so the badge renders empty, not the literal string "undefined".
+  Corrected §5 item 7's wording to describe the actual failure mode (empty
+  badge) while keeping the same remediation (add a `staged` case). See
+  seam-reference.md:488-497.

@@ -489,8 +489,13 @@ consumer that needs a follow-on touch:
    `PHASE_TONE` (`chips.tsx:5-14`) has no `staged` entry — falls back to
    `'text-muted'` (`chips.tsx:17`, harmless but undifferentiated) — and
    `KindChip`'s label/tone maps (`chips.tsx:34-40`) have no entry for the new
-   `'staged'` `InboxKind` from item 6 above (would render `undefined` as the
-   badge text without an added case). Both need one new row each. No other
+   `'staged'` `InboxKind` from item 6 above — the label lookup
+   (`chips.tsx:34`) would evaluate to `undefined` for an unhandled kind, and
+   React renders an `undefined` child as nothing, so (verified against
+   `chips.tsx:41-45`'s JSX) the badge would render **empty**, not the literal
+   text "undefined" — still a real defect (a blank badge reads as broken, not
+   as "staged"), just not the failure mode a naive reading of "renders
+   `undefined`" suggests. Both need one new row each. No other
    file needs a `'staged'` case merely to avoid crashing — `PhaseChip`
    renders any string — but both are needed for a staged run to read as
    distinct from "unknown"/malformed to an operator scanning the portfolio
@@ -653,7 +658,8 @@ runs" from "decisions") and exits 1 — **before** any git object is written
 git identity, never the bot identity.** This is not a new mechanism to
 build — it is the **absence** of one: `LocalGitSource`'s writes are authored
 under `this.options.identity` **only when that option is set**
-(`local-source.ts:28, 246-256`'s `commitTree(tree, parent, message, this.options.identity)`);
+(`local-source.ts:28`'s option and its plumbing-path use at `local-source.ts:257`,
+`commitTree(tree, tip, message, this.options.identity)`);
 its own doc comment is explicit about why (`local-source.ts:22-27`:
 "`options.identity` pins the author of every write from this source — the v1
 orchestrator's bot identity... Human surfaces omit it and write as `git
@@ -744,6 +750,24 @@ gates:
 tasks: []
 escalations: []
 ```
+
+**Discrepancy note:** `budget.cost_spent_usd: 0.02` and the non-empty
+`ledger` entry above deviate from plan IC-4's literal skeleton
+(`cost_spent_usd: 0, ledger: []`, `plan.md:174`), which the plan's Risks
+section binds both candidate task files to "verbatim" (AC5.2). The deviation
+is required by ADR-6 ("the draft's cost is carried into the staged run's
+opening ledger entry at staging," `plan.md:307`) precisely because this
+worked example's own premise is an imported item that *was* drafted through
+the LLM step (contrast worked example 9b below, staged with `--no-draft`,
+where IC-4's literal `cost_spent_usd: 0, ledger: []` applies exactly). IC-4's
+skeleton comment does not distinguish a drafted stage from a `--no-draft`
+one, so read at face value it and ADR-6 cannot both hold for this example;
+this document follows ADR-6 — leaving the drafting-cost requirement unmet
+would be the greater defect — rather than silently pick a side. Flagged here
+for the G1/G2 human: either accept this as the intended reading of IC-4
+(the skeleton is the shape, not a literal zero in every field), or amend
+IC-4's comment to say so explicitly so the follow-on Architect isn't left
+inferring it from two normative documents that appear to disagree.
 
 `runs/fix-login-redirect/intent-brief.md` (same commit):
 
@@ -855,21 +879,57 @@ Commit message: `state(tune-search-ranking): staged by Jordan Alvarez [client-ke
 
 One named, executable check per implementation-grade AC:
 
-- **AC4.1** — `grep -rniE "issue|label|assignee|milestone" contracts/state.yaml contracts/intent-brief.md registry/task-sources.yaml frontend/packages/core/src/*.ts`
-  (top-level `core/src/*.ts` only — **not** recursing into
-  `task-sources/`, which is the one permitted exception) must return zero
-  matches. **Known false-positive to exclude from the target**:
-  `contracts/docs-delta.md` already contains the word "issue" in its generic
-  sense (drift-evidence citation, e.g. `docs-delta.md:8, 18, 28` — "gh issue
-  close" as an *example* of evidence, unrelated to task-tracker nouns) — the
-  grep target above deliberately does not include `docs-delta.md` to avoid
-  that noise; if the follow-on widens the target to all of `contracts/`, it
-  must special-case that file rather than treat the hit as a violation.
-- **AC4.2** — Restart scenario: add a second entry to
-  `registry/task-sources.yaml` (any placeholder driver id) and confirm
-  `/api/intake/sources` lists it and the CLI's `--source` help text reflects
-  it, with **zero** other file touched in the same change (`git diff --stat`
-  shows only the registry file).
+- **AC4.1** — Two checks, not one, because `registry/task-sources.yaml`
+  itself legitimately names the tracker in its display strings (§2's
+  isolation rule constrains the registry's *schema keys* and everywhere
+  outside the registry+driver module, not the registry's own human-readable
+  values — a lexical grep of the registry file for these words is guaranteed
+  to hit its own permitted `label: GitHub Issues` / `ref_format: "owner/
+  repo#N or issue URL"` content and the isolation-rule comment's own prose,
+  even when §2 is implemented exactly as proposed):
+  1. `grep -rniE "issue|label|assignee|milestone" contracts/state.yaml contracts/intent-brief.md frontend/packages/core/src/*.ts`
+     (top-level `core/src/*.ts` only — **not** recursing into
+     `task-sources/`, which is the one permitted exception, and **not**
+     including `registry/task-sources.yaml`, checked separately below) must
+     return zero matches. **Known false-positive to exclude if the target is
+     ever widened**: `contracts/docs-delta.md` already contains the word
+     "issue" in its generic sense (drift-evidence citation, e.g.
+     `docs-delta.md:8, 18, 28` — "gh issue close" as an *example* of
+     evidence, unrelated to task-tracker nouns) — the target above
+     deliberately does not include `docs-delta.md`; if the follow-on widens
+     it to all of `contracts/`, it must special-case that file rather than
+     treat the hit as a violation.
+  2. `registry/task-sources.yaml` is checked structurally, not lexically:
+     confirm every entry under `sources:` uses only the four generic schema
+     keys this document defines (`driver`, `label`, `ref_format`, `auth`) —
+     any additional tracker-API-shaped key (e.g. `issue_number`,
+     `assignee_id`, `milestone_id`, `project_field`) is the actual violation
+     the isolation rule prohibits at the registry layer. A `label`/
+     `ref_format` *value* naming the tracker in prose (e.g. "GitHub Issues",
+     "issue URL") is expected and compliant, not a hit to fix.
+- **AC4.2** — Add-a-source scenario, matching §2's own three-step procedure
+  exactly — **not** a registry-entry-only check: a registry entry with no
+  driver module is not a smaller version of this test, it's a different,
+  broken configuration (§2's step 1/2 mismatch — a source `/api/intake/
+  sources` lists but whose driver can't resolve, hitting a `GET
+  /api/intake/item?source=<id>` case §6's status table doesn't define). Write
+  a minimal driver module implementing `TaskSourceDriver` at
+  `frontend/packages/core/src/task-sources/<placeholder>.ts`, add its
+  registry entry, and add the one `export * from './task-sources/
+  <placeholder>.ts'` line to `index.ts` (§2's steps 1-3). Confirm
+  `/api/intake/sources` lists it, `/api/intake/item?source=<placeholder>&ref=...`
+  resolves through the new driver, and the CLI's `--source` help text
+  reflects it — with **zero** other file touched (`git diff --stat` shows
+  only the new driver module, the registry entry, and the single `index.ts`
+  line — no `contracts/*` edit, no edit to any other `core/src/*.ts` file).
+  Spec AC4.2's "a driver plus a registry entry" should be read together with
+  this one-line, addition-only barrel export, not as excluding it: `index.ts`
+  is a mechanical re-export, not a new type, interface, or logic added to
+  core's surface, which is what §2:167-168's "no core edit… for step 1-3"
+  is actually claiming — it is a real touch to a file under
+  `frontend/packages/core/src/`, just not one that extends core's behavior or
+  vocabulary, and this document's phrasing should not be read as denying
+  that the barrel line is touched at all.
 - **AC5.1** — `grep -rn "commitTree\|hash-object\|write-tree\|updateRefCAS" frontend/packages/server/src frontend/packages/cli/src`
   → zero matches (§3.3).
 - **AC6.1** — Replay scenario: call `stageRun`/`agentic new`/`POST
@@ -922,4 +982,8 @@ One named, executable check per implementation-grade AC:
      `exists`, and the $EDITOR precedent's actual absence, both resolved
      here rather than left silent); §8 (host-wide abandoned-draft cost
      accounting has no existing mechanism to hook into outside the
-     orchestrator's own tick loop — flagged as unresolved, not decided). -->
+     orchestrator's own tick loop — flagged as unresolved, not decided); §9a
+     (a drafted import's `cost_spent_usd`/`ledger` deviate from IC-4's
+     literal zero-cost skeleton, as required by ADR-6 — the two plan clauses
+     disagree for this case and this document follows ADR-6, flagged for the
+     G1/G2 human rather than silently resolved). -->

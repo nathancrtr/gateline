@@ -50,10 +50,12 @@ function remoteWrite(bare: string, mutate: (state: string) => string): string {
   return git(clone, ['rev-parse', 'HEAD'])
 }
 
-/** Detach HEAD so run/toy is no longer checked out: a real orchestrator
- *  clone sits on main, and fetch refuses to move any checked-out branch. */
+/** Park the clone on main, exactly like a real orchestrator clone — which
+ *  also pins the regression this exercises: a checked-out branch in the
+ *  sync's fetch batch used to abort the whole batch with a fatal, so no run
+ *  branch ever fast-forwarded on a deployment with main checked out. */
 function parkOnDefault(dir: string): void {
-  git(dir, ['checkout', '-q', '--detach'])
+  git(dir, ['checkout', '-q', 'main'])
 }
 
 describe('engine.syncFromRemote (#104)', () => {

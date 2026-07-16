@@ -88,7 +88,15 @@ export class LocalGitSource implements RunSource {
     const remoteBranches = new Set(
       (await this.git.forEachRef(['refs/remotes/origin'])).map((r) => r.ref.replace('refs/remotes/origin/', '')),
     )
+    // Exclude branches checked out in any worktree: fetch refuses those with
+    // a FATAL that aborts the whole batch — unlike non-fast-forward, which is
+    // a per-ref refusal that leaves the other specs applied. With `main`
+    // checked out (every real deployment), one fatal spec would silently
+    // stop every run branch from fast-forwarding (#104). A checkout is
+    // reconciled by its own writer, never behind its back.
+    const checkedOut = new Set((await this.git.worktrees()).map((w) => w.branch))
     const specs = (await this.git.forEachRef(['refs/heads']))
+      .filter((l) => !checkedOut.has(l.ref))
       .map((l) => l.ref.replace('refs/heads/', ''))
       .filter((b) => remoteBranches.has(b))
       .map((b) => `refs/heads/${b}:refs/heads/${b}`)
@@ -96,8 +104,8 @@ export class LocalGitSource implements RunSource {
     try {
       await this.git.run(['fetch', 'origin', ...specs])
     } catch {
-      // Expected refusals: non-fast-forward (local unpushed work) and the
-      // checked-out branch. The remote-tracking refs above carry the news.
+      // Expected per-ref refusal: non-fast-forward (local unpushed work) —
+      // the other specs still apply and the remote-tracking refs carry the news.
     }
   }
 

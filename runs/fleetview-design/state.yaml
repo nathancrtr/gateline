@@ -5,7 +5,7 @@ paused_reason: escalation
 
 budget:
   cost_limit_usd: 200
-  cost_spent_usd: 65.21
+  cost_spent_usd: 65.79
   ledger:
     # v0 hand-appended; costs are the registry static estimates (harness
     # reports combined subagent tokens without an in/out split to price
@@ -306,9 +306,10 @@ budget:
       round: 1
       adapter: claude-code
       model: anthropic/claude-sonnet-5
-      tokens_in: null
-      tokens_out: null
-      cost_usd: null
+      tokens_in: 0
+      tokens_out: 0
+      cost_usd: 0.5735856000000001
+      failed: true
     - at: 2026-07-16T18:08:58.712Z
       role: implementer
       task: 04-status-components
@@ -619,4 +620,10 @@ escalations:
     reason: "implementer (09-run-screen) failed twice: Command failed: claude -p Use
       the implementer subagent. on task
       `runs/fleetview-design/tasks/09-run-screen.yaml`. When …"
+    resolved: false
+  - at: 2026-07-16T18:12:03.727Z
+    from_role: orchestrator
+    reason: "implementer (03-shell-masthead) failed twice: Command failed: claude -p
+      Use the implementer subagent. on task
+      `runs/fleetview-design/tasks/03-shell-masthead.yaml`. W…"
     resolved: false

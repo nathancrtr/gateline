@@ -90,9 +90,24 @@ export class Clock {
   }
 }
 
-export function makeToyRepo(opts: { budget?: number } = {}): { dir: string; clock: Clock } {
+export interface ToyRepoOpts {
+  budget?: number
+  /**
+   * `prefixed` mirrors `integrate.py init --layout prefixed` (#95): contracts
+   * and runs live under `prefix/` alongside a minimal framework-lock.json,
+   * so a source must probe rather than assume root layout.
+   */
+  layout?: 'root' | 'prefixed'
+  prefix?: string
+}
+
+export function makeToyRepo(opts: ToyRepoOpts = {}): { dir: string; clock: Clock } {
   const dir = mkdtempSync(join(tmpdir(), 'agentic-engine-'))
   const clock = new Clock()
+  const prefix = opts.prefix ?? '.agentic'
+  const prefixed = opts.layout === 'prefixed'
+  const contractsRoot = prefixed ? `${prefix}/contracts` : 'contracts'
+  const runsRoot = prefixed ? `${prefix}/runs` : 'runs'
   const git = (args: string[], date?: string) =>
     execFileSync('git', ['-C', dir, ...args], {
       encoding: 'utf8',
@@ -107,18 +122,42 @@ export function makeToyRepo(opts: { budget?: number } = {}): { dir: string; cloc
   git(['config', 'user.name', HUMAN.name])
   git(['config', 'user.email', HUMAN.email])
   for (const [name, content] of Object.entries(CONTRACTS)) {
-    const full = join(dir, 'contracts', name)
+    const full = join(dir, contractsRoot, name)
     mkdirSync(dirname(full), { recursive: true })
     writeFileSync(full, content)
+  }
+  if (prefixed) {
+    const lock = join(dir, prefix, 'framework-lock.json')
+    mkdirSync(dirname(lock), { recursive: true })
+    writeFileSync(
+      lock,
+      JSON.stringify(
+        {
+          source: { repo: null, ref: 'toy', version: 'unreleased' },
+          integrated_at: '2026-01-01',
+          method: 'toy',
+          adapters_rendered: [],
+          taken: [],
+          files: {},
+          forks: {},
+          instance_layer: [],
+          provenance_mode: 'private',
+          layout: 'prefixed',
+          prefix,
+        },
+        null,
+        2,
+      ),
+    )
   }
   git(['add', '-A'])
   git(['commit', '-q', '-m', 'Seed contracts'], clock.next())
 
   git(['checkout', '-q', '-b', 'run/toy'])
   const brief = '# Intent Brief: toy\n\n## Problem\nToy.\n\n## Motivation\nTest.\n\n## Constraints\nNone.\n\n## Out of scope\nAll.\n'
-  mkdirSync(join(dir, 'runs', 'toy'), { recursive: true })
-  writeFileSync(join(dir, 'runs', 'toy', 'intent-brief.md'), brief)
-  writeFileSync(join(dir, 'runs', 'toy', 'state.yaml'), STATE(opts.budget ?? 50))
+  mkdirSync(join(dir, runsRoot, 'toy'), { recursive: true })
+  writeFileSync(join(dir, runsRoot, 'toy', 'intent-brief.md'), brief)
+  writeFileSync(join(dir, runsRoot, 'toy', 'state.yaml'), STATE(opts.budget ?? 50))
   git(['add', '-A'])
   git(['commit', '-q', '-m', 'toy: intent brief'], clock.next())
   git(['checkout', '-q', 'main'])

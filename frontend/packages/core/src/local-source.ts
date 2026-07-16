@@ -5,7 +5,7 @@ import { constants } from 'node:fs'
 import { join } from 'node:path'
 import { parseDocument } from 'yaml'
 import { Git, type CommitInfo } from './git.ts'
-import { resolveFrameworkRoots, type FrameworkRoots } from './framework-roots.ts'
+import { memoizedFrameworkRoots, type FrameworkRoots } from './framework-roots.ts'
 import { parseRunState } from './schema.ts'
 import type { ContractTemplates } from './validate.ts'
 import type { Identity, RunRef, RunSource, StateCommit, StateDocMutation, WriteResult } from './source.ts'
@@ -19,7 +19,12 @@ export class LocalGitSource implements RunSource {
   readonly git: Git
   readonly templates: ContractTemplates
   private readonly options: { push?: boolean; identity?: Identity; fetchIntervalSeconds?: number; frameworkPrefix?: string }
-  private rootsPromise: Promise<FrameworkRoots> | null = null
+  /**
+   * Resolved core-layer roots, cached for the life of this source and
+   * shared with any other consumer resolving paths against this same repo
+   * (the orchestrator's Engine, #95) so the layout is probed once.
+   */
+  readonly frameworkRoots: () => Promise<FrameworkRoots>
 
   /**
    * `options.identity` pins the author of every write from this source —
@@ -40,7 +45,8 @@ export class LocalGitSource implements RunSource {
     this.options = options
     this.git = new Git(dir)
     const git = this.git
-    const roots = () => this.roots()
+    this.frameworkRoots = memoizedFrameworkRoots(git, options.frameworkPrefix)
+    const roots = this.frameworkRoots
     this.templates = {
       async read(name: string): Promise<string | null> {
         const defaultBranch = await git.defaultBranch()
@@ -50,21 +56,8 @@ export class LocalGitSource implements RunSource {
     }
   }
 
-  /**
-   * Resolved `runs`/`contracts` roots, cached for the life of this source —
-   * a host's integration layout doesn't change within a process's lifetime.
-   */
-  private roots(): Promise<FrameworkRoots> {
-    if (!this.rootsPromise) {
-      this.rootsPromise = this.git
-        .defaultBranch()
-        .then((rev) => resolveFrameworkRoots(this.git, rev, this.options.frameworkPrefix))
-    }
-    return this.rootsPromise
-  }
-
   private async runDir(slug: string): Promise<string> {
-    const { runs } = await this.roots()
+    const { runs } = await this.frameworkRoots()
     return `${runs}/${slug}`
   }
 
@@ -103,7 +96,7 @@ export class LocalGitSource implements RunSource {
 
   async listRuns(): Promise<RunRef[]> {
     const defaultBranch = await this.git.defaultBranch()
-    const { runs: runsRoot } = await this.roots()
+    const { runs: runsRoot } = await this.frameworkRoots()
     const bySlug = new Map<string, RunRef>()
 
     // Local run branches win; remote-only branches next.
@@ -179,7 +172,7 @@ export class LocalGitSource implements RunSource {
     const defaultBranch = await this.git.defaultBranch()
     if (ref.kind === 'default') return '' // merged: the run's diff is history now
     // The reviewable change is the code; run artifacts render separately.
-    const { runs: runsRoot } = await this.roots()
+    const { runs: runsRoot } = await this.frameworkRoots()
     return this.git.diff(defaultBranch, ref.ref, [`:(exclude)${runsRoot}`])
   }
 

@@ -19,6 +19,11 @@ export interface EngineConfig {
   identity: Identity
   dispatcher: Dispatcher
   registry: Registry | null
+  /**
+   * Override the `.agentic` default when this repo was integrated with a
+   * custom `integrate.py --prefix` (#95) — otherwise auto-detected.
+   */
+  frameworkPrefix?: string
   /** Dispatch wall clock per role before the job is killed (default 30 min). */
   roleTimeoutMs?: number
   /** Age at which an open ledger entry with no live job is declared lost (default 5 min). */
@@ -65,7 +70,11 @@ export class Engine {
 
   constructor(cfg: EngineConfig) {
     this.cfg = cfg
-    this.source = new LocalGitSource('orchestrator', cfg.repoDir, { identity: cfg.identity, push: cfg.push })
+    this.source = new LocalGitSource('orchestrator', cfg.repoDir, {
+      identity: cfg.identity,
+      push: cfg.push,
+      frameworkPrefix: cfg.frameworkPrefix,
+    })
   }
 
   private nowIso(): string {
@@ -285,10 +294,11 @@ export class Engine {
           ? await ensureTaskCheckout(this.cfg.repoDir, ref.branch, intent.task!)
           : { path: await ensureRunCheckout(this.cfg.repoDir, ref.branch), branch: ref.branch }
         const taskPath = intent.task ? (obs.taskFiles.get(intent.task)?.path ?? null) : null
+        const { runs: runsRoot } = await this.source.frameworkRoots()
         outcome = await this.cfg.dispatcher.dispatch({
           cwd: checkout.path,
           role: intent.role,
-          body: promptBody(ref.slug, intent, taskPath),
+          body: promptBody(ref.slug, intent, taskPath, runsRoot),
           timeoutMs: this.cfg.roleTimeoutMs ?? DEFAULT_ROLE_TIMEOUT_MS,
         })
         if (isolate) {

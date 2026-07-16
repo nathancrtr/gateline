@@ -51,3 +51,108 @@
 Inside the declared `file_contact_surface` — the diff modifies only
 `runs/fleetview-design/tasks/01-g1-evidence-audit.yaml`; no other artifact under
 `runs/fleetview-design/` changed in the commit.
+
+---
+
+# Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** 87c1d28decc0118097f0ab5d6f702bebc3e46cc9 (run/fleetview-design) — 82-line pure append (0 deletions) to the task file's notes
+
+## Findings
+
+### F1 (blocking, round 1) — RESOLVED
+- **Where:** `runs/fleetview-design/tasks/01-g1-evidence-audit.yaml:176-201,250-256`
+- **Verified:** AC4.3 is now recorded **FAIL** as literally specified, routed to the
+  G1 human as an explicit waiver decision rather than pre-waived. Re-ran
+  `grep -rinE 'lorem|ipsum|foo|bar'` over all 18 mockup .html files myself:
+  exactly **18 hits** (18 matching lines; `-o` match count also 18), all in
+  candidate-b, file:line-for-file:line identical to the note's list; whole-word
+  `\bfoo\b|\bbar\b|lorem|ipsum` returns zero. The revised summary (notes:250-256)
+  states 13/14 pass with AC4.3 failing and lists exactly 13 passing ACs. The
+  failing check carries file:line, satisfying the task's final acceptance test.
+  *Correction to round 1 of this report (appended, per the append-only
+  convention): round 1's own figure "19 hits" was off by one — the true count is
+  18; round 1's statement that the hits matched the implementer's enumeration
+  file:line-for-file:line was correct (that enumeration has 18 entries).*
+- **Requirement:** AC4.3; task scope:28-29
+
+### F2 (major, round 1) — RESOLVED
+- **Where:** `runs/fleetview-design/tasks/01-g1-evidence-audit.yaml:202-217`
+- **Verified:** the note now states the actual basis for AC2.4 and explicitly
+  supersedes the false blanket claim at notes:93-94. Independently re-derived:
+  REC1–REC6 (`ux-research.md:140-164`) carry only `(from P_/A_)` traces — REC1
+  "(from A1, A2)" at :140, REC6 "(from P2)" at :161 — and zero URLs or file:line
+  (a URL grep of the file finds nothing between :111 and the backtick-quoted
+  pattern literals at :168-169). `contracts/ux-research.md:33` defines the REC
+  template as `(from P_, A_)` tracing to P/A numbers ("each tracing to P/A
+  numbers", :31). P1–P5 and A1–A5 each carry a `Source:` file:line and/or URL
+  (re-verified directly in `ux-research.md` Patterns :18-73 and Anti-patterns
+  :74-136).
+- **Requirement:** AC2.4
+
+### F3 (minor, round 1) — RESOLVED
+- **Where:** `runs/fleetview-design/tasks/01-g1-evidence-audit.yaml:218-222`
+- **Verified:** pattern recorded as `\bfoo\b|\bbar\b` (stray `l` gone); I ran that
+  exact pattern against all 18 mockups — zero hits, so the recorded command now
+  reproduces the recorded result.
+
+### F4 (minor, round 1) — RESOLVED
+- **Where:** `runs/fleetview-design/tasks/01-g1-evidence-audit.yaml:223-231`
+- **Verified:** re-ran `grep -noE 'https?://[^ )]*' ux-research.md` myself —
+  exactly 7 citation URLs at lines 27, 42, 49, 58, 68, 97, 111 (the :168-169
+  matches are grep-pattern literals in Open questions, not sources). The stated
+  count (7) now matches the list; floor of 3 comfortably cleared.
+
+### F5 (minor, round 1) — RESOLVED
+- **Where:** `runs/fleetview-design/tasks/01-g1-evidence-audit.yaml:232-242`
+- **Verified:** re-derived the trait-tag census: "uniform treatment of every
+  surface" at ux-research.md:77 (A1) and :115 (A4); "default component styling"
+  at :87 (A2) and :128 (A5); "no spatial identity" at :115 (A4) and :128 (A5);
+  "no typographic identity" at :100 (A3) **only** (:147 is REC2 prose, not an
+  anti-pattern tag). The corrected statement (three traits twice, one trait once,
+  all four covered at least once) is exact; spec AC2.3 requires the four traits
+  covered, not covered twice — PASS stands.
+
+### F6 — minor — NEW — `review_rounds` not incremented for the round-2 submission
+- **Where:** `runs/fleetview-design/tasks/01-g1-evidence-audit.yaml:54`
+- **Failure scenario:** the field still reads `1` on a second-round submission
+  (round 1 set it when entering in-review); anyone reconstructing the round count
+  from the task file rather than the state commits under-counts by one, and with
+  a 3-round cap that miscount could admit an extra round. PLAUSIBLE — no contract
+  defines this field, and the orchestrator's state commits track rounds
+  authoritatively. Non-blocking.
+- **Requirement:** none (convention consistency only)
+
+## Coverage
+
+- **Diff shape:** commit 87c1d28 is a pure append (82 insertions, 0 deletions);
+  every byte of the round-1 note text above the appended section is untouched,
+  honoring the append-only convention ✓.
+- **Every number re-derived, none taken on faith:** literal substring grep = 18
+  hits (line count and `-o` match count agree), all file:lines exact ✓;
+  whole-word grep = 0 ✓; URL count = 7 at the exact lines cited ✓; REC trace
+  anchors :140/:161 exact ✓; contract REC template at
+  `contracts/ux-research.md:33` exact ✓; trait-tag lines 77/87/100/115/128
+  exact ✓.
+- **Revised summary arithmetic:** 13 ACs listed as passing + AC4.3 FAIL = 14 ✓;
+  FAIL entry carries file:line per the task's final acceptance test ✓.
+- **Spec wording re-checked at source:** spec.md:73-75 (AC4.3 — case-insensitive,
+  "anywhere in the mockup HTML": literal substring reading is correct, so FAIL is
+  the right verdict absent a G1 waiver); spec.md:48-51 (AC2.3 coverage floor is
+  once, not twice); spec.md:52-53 (AC2.4) and :46-47 (AC2.2) consistent with the
+  corrected notes ✓.
+- **Not re-assessed this round:** AC1.1, AC1.2, AC2.1, AC2.5, AC3.1, AC4.1,
+  AC4.2, AC4.4, AC4.5, AC4.6 — their evidence is untouched by this diff and was
+  verified clean in round 1.
+- **Verdict rationale:** approve with a recorded FAIL is correct here — this
+  task's product is accurate gate evidence, not a passing artifact set; the
+  AC4.3 FAIL is now truthfully recorded and routed to the G1 human exactly as
+  task scope:28-29 requires. F6 is minor and non-blocking.
+
+## Boundary check
+
+Inside the declared `file_contact_surface` — `git show 87c1d28 --name-only` lists
+only `runs/fleetview-design/tasks/01-g1-evidence-audit.yaml`; no other artifact
+under `runs/fleetview-design/` and no product file changed ✓.

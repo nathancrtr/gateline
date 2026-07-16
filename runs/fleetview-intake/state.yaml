@@ -339,6 +339,9 @@ escalations:
         from_role: orchestrator,
         reason: projected host spend $106.54 across active runs exceeds
           --spend-limit-usd $100 — pausing rather than degrading,
-        resolved: false
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-16T05:30:57.813Z,
+        resolution: budget increased
       }
   ]

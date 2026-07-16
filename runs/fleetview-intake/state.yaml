@@ -1,7 +1,7 @@
 run: fleetview-intake
 branch: run/fleetview-intake
-phase: paused
-paused_reason: escalation
+phase: implement
+paused_reason: null
 
 budget:
   cost_limit_usd: 200
@@ -263,10 +263,19 @@ gates:
   G3: { approved: false, by: null, at: null, notes: null }
 
 tasks:
+  # 2026-07-16 partial selection (the design-selection decision, recorded ahead
+  # of G2 by Nathan Carter): the seam + CLI subset is selected — the R4–R11
+  # core, `agentic new` / `agentic arm`, and the GitHub trigger path, all
+  # carried by task 03. The web-desk portion is held rather than the candidate
+  # wholesale: candidate tasks 01 (import-desk) and 02 (single-thread) are
+  # withdrawn from the active set and can be revived if the value curve bends
+  # (shared gate duty, operators who don't live in terminals). Task 01's lost
+  # round-1 mockups (never folded; stranded on the since-destroyed hosted
+  # machine) were discarded with the hold. 03 returns to in-review: its round-2
+  # verdict was request-changes and the round-3 implementer response never
+  # landed, so the reconciler re-derives that dispatch.
   [
-    { id: 01-candidate-import-desk, status: dispatched, review_rounds: 1 },
-    { id: 02-candidate-single-thread, status: dispatched, review_rounds: 0 },
-    { id: 03-intake-seam-reference, status: dispatched, review_rounds: 2 }
+    { id: 03-intake-seam-reference, status: in-review, review_rounds: 2 }
   ]
 
 escalations:
@@ -360,6 +369,14 @@ escalations:
         reason: "implementer (03-intake-seam-reference) failed twice: rebase of
           run/fleetview-intake--task/03-intake-seam-reference onto
           run/fleetview-intake conflicted — overlapping file-c…",
-        resolved: false
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-16T17:43:06.000Z,
+        resolution: "not a plan defect: the hosted machine's /data/repo working
+          tree was frozen pre-#113, so dispatches still launched background
+          subagents whose work never landed; the dirty task worktree made the
+          fold's rebase refuse (misclassified per #114). Hosted instance torn
+          down; resuming on the local orchestrator, whose manifest carries the
+          #113 fix"
       }
   ]

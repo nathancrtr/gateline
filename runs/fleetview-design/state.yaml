@@ -322,7 +322,10 @@ escalations:
     reason: "implementer (09-run-screen) failed twice: rebase of
       run/fleetview-design--task/09-run-screen onto run/fleetview-design
       conflicted — overlapping file-contact surf…"
-    resolved: false
+    resolved: true
+    resolved_by: Nathan Carter
+    resolved_at: 2026-07-16T06:15:38.093Z
+    resolution: "background-subagent CLI regression, see PR #113"
   - at: 2026-07-16T05:43:17.867Z
     from_role: orchestrator
     reason: "implementer (07-portfolio-screen) failed twice: rebase of

@@ -152,7 +152,7 @@ additions specific to a machine writer:
 - **Distinct identity.** Orchestrator commits are authored by a dedicated bot
   identity — one per orchestrator install, not per repo (resolved question 4) —
   never a person's `git config`. Gate entries are written only by named
-  humans (CLAUDE.md convention); provenance must make machine bookkeeping and human
+  humans (AGENTS.md convention); provenance must make machine bookkeeping and human
   decisions distinguishable at a glance.
 - **Reserved grammar.** Commit messages follow the frontend's structured form —
   `state(<slug>): <verb> …` — with the orchestrator using its own verbs

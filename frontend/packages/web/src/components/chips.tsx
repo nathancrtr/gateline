@@ -16,36 +16,30 @@ const PHASE_TONE: Record<string, string> = {
 export function PhaseChip({ phase, pausedReason }: { phase: string; pausedReason?: string | null }) {
   const tone = PHASE_TONE[phase] ?? 'text-muted'
   return (
-    <span className="inline-flex items-center gap-[7px] whitespace-nowrap text-xs">
-      <span className={`${tone} inline-block h-[7px] w-[7px] rounded-full bg-current shadow-[0_0_6px_currentColor]`} />
-      <span className="text-ink">{phase}</span>
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-2.5 py-0.5 text-xs font-medium">
+      <span className={`${tone} text-[9px] leading-none`}>●</span>
+      <span>{phase}</span>
       {pausedReason ? <span className="text-muted">· {pausedReason}</span> : null}
     </span>
   )
 }
 
 export function KindChip({ item }: { item: InboxItem }) {
-  if (item.kind === 'gate') {
-    const bounced = !item.reviewable
-    const tone = bounced
-      ? 'border border-dashed border-bad bg-bad-soft text-bad line-through'
-      : 'border border-accent bg-accent-soft text-accent'
+  if (item.kind === 'gate')
     return (
-      <span
-        className={`inline-flex min-w-9 items-center justify-center gap-1.5 rounded-full px-[9px] py-[3px] font-mono text-[11px] font-semibold tracking-[0.04em] ${tone}`}
-      >
-        <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-current shadow-[0_0_6px_currentColor]" />
+      <span className="inline-flex min-w-9 items-center justify-center rounded-md bg-accent-soft px-2 py-0.5 font-mono text-xs font-semibold text-accent">
         {item.gate}
       </span>
     )
-  }
   const label = { escalation: 'ESC', 'round-cap': 'CAP', paused: 'PAUSE', malformed: 'BAD' }[item.kind]
-  const tone = item.kind === 'paused' ? 'bg-warn text-on-solid' : 'bg-bad text-on-solid'
+  const tone =
+    item.kind === 'malformed'
+      ? 'bg-bad-soft text-bad'
+      : item.kind === 'paused'
+        ? 'bg-warn-soft text-warn'
+        : 'bg-bad-soft text-bad'
   return (
-    <span
-      className={`inline-flex min-w-9 items-center justify-center gap-1.5 rounded-full px-[11px] py-1 font-mono text-[11px] font-bold tracking-[0.04em] ${tone}`}
-    >
-      <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
+    <span className={`inline-flex min-w-9 items-center justify-center rounded-md px-2 py-0.5 font-mono text-xs font-semibold ${tone}`}>
       {label}
     </span>
   )
@@ -54,8 +48,8 @@ export function KindChip({ item }: { item: InboxItem }) {
 export function AgeBadge({ label, urgent }: { label: string; urgent: boolean }) {
   return (
     <span
-      className={`shrink-0 rounded-[4px] border bg-inset px-2 py-1 font-mono text-[11px] tabular-nums ${
-        urgent ? 'border-bad font-bold text-bad' : 'border-line text-muted'
+      className={`shrink-0 rounded-full px-2 py-0.5 font-mono text-xs tabular-nums ${
+        urgent ? 'bg-bad-soft font-semibold text-bad' : 'bg-raised text-muted'
       }`}
       title="waiting since"
     >
@@ -67,18 +61,14 @@ export function AgeBadge({ label, urgent }: { label: string; urgent: boolean }) 
 /** One gate cell of the G0–G3 ledger strip. */
 export function GateCell({ id, cell }: { id: GateId; cell: RunSummary['gates'][GateId] }) {
   const glyph = cell.approved ? '✓' : cell.decided ? '✕' : '·'
-  const tone = cell.approved
-    ? 'text-ok border-ok bg-ok-soft'
-    : cell.decided
-      ? 'text-bad border-bad bg-bad-soft'
-      : 'text-faint border-line border-dashed bg-inset'
+  const tone = cell.approved ? 'text-ok border-ok/30' : cell.decided ? 'text-bad border-bad/30' : 'text-faint border-line'
   const title = cell.decided ? `${id} ${cell.approved ? 'approved' : 'declined'} by ${cell.by}${cell.at ? ` · ${cell.at}` : ''}` : `${id} pending`
   return (
     <span
-      className={`inline-flex h-[22px] w-[30px] items-center justify-center gap-0.5 rounded-[3px] border font-mono text-[11px] ${tone}`}
+      className={`inline-flex h-6 w-9 items-center justify-center gap-0.5 rounded border bg-surface font-mono text-[11px] ${tone}`}
       title={title}
     >
-      <span className="text-[8px] text-faint">{id.slice(1)}</span>
+      <span className="text-[9px] text-faint">{id.slice(1)}</span>
       {glyph}
     </span>
   )
@@ -86,7 +76,7 @@ export function GateCell({ id, cell }: { id: GateId; cell: RunSummary['gates'][G
 
 export function GateLedger({ gates }: { gates: RunSummary['gates'] }) {
   return (
-    <span className="inline-flex gap-[3px]">
+    <span className="inline-flex gap-1">
       {(['G0', 'G1', 'G2', 'G3'] as const).map((g) => (
         <GateCell key={g} id={g} cell={gates[g]} />
       ))}
@@ -110,13 +100,10 @@ export function BudgetMeter({ limit, spent }: { limit: number | null; spent: num
   const pct = Math.min(100, (used / limit) * 100)
   return (
     <span className="inline-flex items-center gap-2" title={`$${used.toFixed(2)} of $${limit.toFixed(2)}`}>
-      <span className="h-[5px] w-16 overflow-hidden rounded-[3px] border border-line bg-inset">
-        <span
-          className={`block h-full ${over ? 'bg-bad' : used === 0 ? 'bg-faint' : 'bg-accent shadow-[0_0_6px_var(--glow)]'}`}
-          style={{ width: `${used === 0 ? 4 : pct}%` }}
-        />
+      <span className="h-1.5 w-16 overflow-hidden rounded-full bg-raised">
+        <span className={`block h-full rounded-full ${over ? 'bg-bad' : used === 0 ? 'bg-faint' : 'bg-accent'}`} style={{ width: `${used === 0 ? 4 : pct}%` }} />
       </span>
-      <span className={`font-mono text-xs tabular-nums ${over ? 'font-bold text-bad' : 'text-muted'}`}>
+      <span className={`font-mono text-xs tabular-nums ${over ? 'font-semibold text-bad' : 'text-muted'}`}>
         {used === 0 ? 'unmetered' : `$${used.toFixed(0)}/${limit.toFixed(0)}`}
       </span>
     </span>

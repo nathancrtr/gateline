@@ -398,6 +398,15 @@ budget:
       tokens_in: 4
       tokens_out: 377
       cost_usd: 0.86645985
+    - at: 2026-07-16T18:35:26.053Z
+      role: reviewer
+      task: 05-decide-panel
+      round: 2
+      adapter: claude-code
+      model: anthropic/claude-fable-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
 
 gates:
   G0:

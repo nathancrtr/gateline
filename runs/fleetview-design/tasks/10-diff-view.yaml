@@ -32,3 +32,18 @@ depends_on: [02-ledger-foundations]
 status: pending
 
 notes: |
+  implementer r1: restyled diff-view.tsx per candidate-b/run-diff.html — file
+  header bg-raised -> bg-inset with 13px/9px padding (was 12px/8px); outer panel
+  rounded-lg -> rounded-[6px]; hunk header py-1 -> py-[3px] (11px/12px per spec);
+  gutters w-10 (40px) -> w-[44px] per spec, added explicit py-0 to gutter and code
+  cells (zero vertical padding, was relying on default td padding); table
+  font-mono text-xs leading-5 already matched the 12px/20px evidence-density spec
+  so left untouched. DiffView/FileHeader signatures, all line/sign/number logic,
+  and every string (including the "No diff" empty state) left verbatim — pure
+  restyle, C3 respected. Only C1 tokens used; no new token needed, no escalation.
+  Verification: npm run typecheck passed; npm test — 126/128 passed, 1 pre-existing
+  unrelated failure (packages/orchestrator/test/engine.test.ts "honors a mid-run
+  human pause" — 30s timeout in the orchestrator package, outside this task's file
+  contact surface and outside frontend/packages/web entirely; reproduced in
+  isolation, not caused by this change). grep for @keyframes/animation-/motion|
+  pulse/rounded-lg in diff-view.tsx: all empty (pass).

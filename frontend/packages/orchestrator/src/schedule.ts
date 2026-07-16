@@ -20,7 +20,7 @@
 // purpose — the gate engine and frontend recognize runs by state.yaml, so
 // sweeps stay out of the derivation table entirely. The human surface is the
 // branch itself: review the docs-delta and doc edits, merge to approve (P4).
-import { Git, type Identity } from '@agentic/core'
+import { Git, memoizedFrameworkRoots, type FrameworkRoots, type Identity } from '@agentic/core'
 import { parse as parseYaml } from 'yaml'
 import { DEFAULT_ESTIMATE_USD } from './derive.ts'
 import { resolveModel, type Registry } from './registry.ts'
@@ -138,14 +138,14 @@ export function sweepSlug(role: string, now: Date): string {
 }
 
 /** The run-specific dispatch prompt (§5.4: a template, not a composition). */
-export function sweepPromptBody(slug: string, coveringSince: string | null): string {
+export function sweepPromptBody(slug: string, coveringSince: string | null, runsRoot = 'runs', contractsRoot = 'contracts'): string {
   const interval = coveringSince
     ? `the interval since ${coveringSince} (the previous sweep's cutoff)`
     : 'the full history of the repository (this is the first sweep)'
   return [
-    `for sweep \`runs/${slug}\`, covering ${interval}.`,
+    `for sweep \`${runsRoot}/${slug}\`, covering ${interval}.`,
     `Reconcile documentation and tracker surfaces with the run artifacts and merges landed on the default branch in that interval.`,
-    `Produce \`runs/${slug}/docs-delta.md\` per \`contracts/docs-delta.md\` and apply the documentation fixes it records on the current branch.`,
+    `Produce \`${runsRoot}/${slug}/docs-delta.md\` per \`${contractsRoot}/docs-delta.md\` and apply the documentation fixes it records on the current branch.`,
     `No authenticated tracker CLI is assumed: leave tracker mutations as proposed actions in the delta unless one is available in your tools.`,
     `When your work is complete, commit it on the current branch (git add the files you produced or changed) with a message starting "${slug}: docs delta".`,
   ].join(' ')
@@ -164,6 +164,11 @@ export interface SchedulerConfig {
   identity: Identity
   dispatcher: Dispatcher
   registry: Registry | null
+  /**
+   * Override the `.agentic` default when this repo was integrated with a
+   * custom `integrate.py --prefix` (#95) — otherwise auto-detected.
+   */
+  frameworkPrefix?: string
   /** Dispatch wall clock before the sweep job is killed (default 30 min). */
   sweepTimeoutMs?: number
   /** Push every sweep commit to origin (hosted mode). */
@@ -182,6 +187,7 @@ export interface SchedulerConfig {
 export class Scheduler {
   private readonly cfg: SchedulerConfig
   private readonly git: Git
+  private readonly frameworkRoots: () => Promise<FrameworkRoots>
   /** In-flight sweep jobs by slug — host ephemera; a crash costs a stale open branch a human prunes. */
   private readonly jobs = new Map<string, Promise<void>>()
   /** Fired each time a sweep job settles. */
@@ -190,6 +196,7 @@ export class Scheduler {
   constructor(cfg: SchedulerConfig) {
     this.cfg = cfg
     this.git = new Git(cfg.repoDir)
+    this.frameworkRoots = memoizedFrameworkRoots(this.git, cfg.frameworkPrefix)
   }
 
   private now(): Date {
@@ -242,10 +249,11 @@ export class Scheduler {
     }
 
     // Last merged sweep: the newest marker under runs/<role>-*/ at the default tip.
+    const { runs: runsRoot } = await this.frameworkRoots()
     let lastSweptAt: string | null = null
-    for (const dir of await this.git.lsTreeDirs(defaultBranch, 'runs')) {
+    for (const dir of await this.git.lsTreeDirs(defaultBranch, runsRoot)) {
       if (!dir.startsWith(`${entry.role}-`)) continue
-      const marker = await this.git.show(defaultBranch, `runs/${dir}/sweep.yaml`)
+      const marker = await this.git.show(defaultBranch, `${runsRoot}/${dir}/sweep.yaml`)
       const at = marker ? markerAt(marker) : null
       const candidate = at ?? isoFromSlugDate(dir.slice(entry.role.length + 1))
       if (candidate && (!lastSweptAt || candidate > lastSweptAt)) lastSweptAt = candidate
@@ -279,6 +287,7 @@ export class Scheduler {
   ): Promise<SweepOutcome> {
     const tip = await this.git.revParse(defaultBranch)
     if (!tip) return { role: entry.role, slug, kind: 'error', rule: 'S4', detail: `${defaultBranch} has no tip` }
+    const { runs: runsRoot, contracts: contractsRoot } = await this.frameworkRoots()
 
     const branch = `run/${slug}`
     const model = this.cfg.registry ? resolveModel(this.cfg.registry, entry.role) : null
@@ -301,7 +310,7 @@ export class Scheduler {
     ].join('\n')
 
     const blob = await this.git.hashObject(marker)
-    const tree = await this.git.writeTreeWithBlob(tip, `runs/${slug}/sweep.yaml`, blob)
+    const tree = await this.git.writeTreeWithBlob(tip, `${runsRoot}/${slug}/sweep.yaml`, blob)
     const commit = await this.git.commitTree(
       tree,
       tip,
@@ -319,7 +328,7 @@ export class Scheduler {
         outcome = await this.cfg.dispatcher.dispatch({
           cwd,
           role: entry.role,
-          body: sweepPromptBody(slug, coveringSince),
+          body: sweepPromptBody(slug, coveringSince, runsRoot, contractsRoot),
           timeoutMs: this.cfg.sweepTimeoutMs ?? DEFAULT_SWEEP_TIMEOUT_MS,
         })
       } catch (e) {
@@ -358,10 +367,11 @@ export class Scheduler {
   ): Promise<void> {
     const estimate = this.cfg.registry?.estimates[entry.role] ?? DEFAULT_ESTIMATE_USD
     const cost = outcome.costUsd ?? estimate
+    const { runs: runsRoot } = await this.frameworkRoots()
     for (let attempt = 0; attempt < 5; attempt++) {
       const tip = await this.git.revParse(`refs/heads/${branch}`)
       if (!tip) return // branch deleted under us — a human pruned it; nothing to record
-      const current = await this.git.show(tip, `runs/${slug}/sweep.yaml`)
+      const current = await this.git.show(tip, `${runsRoot}/${slug}/sweep.yaml`)
       if (current === null) return
       const closed = current
         .replace(/^tokens_in: .*$/m, `tokens_in: ${outcome.tokensIn ?? 'null'}`)
@@ -369,7 +379,7 @@ export class Scheduler {
         .replace(/^cost_usd: .*$/m, `cost_usd: ${cost}`)
         .concat(outcome.ok ? '' : `failed: ${JSON.stringify(truncate(outcome.error ?? 'unknown error', 200))}\n`)
       const blob = await this.git.hashObject(closed)
-      const tree = await this.git.writeTreeWithBlob(tip, `runs/${slug}/sweep.yaml`, blob)
+      const tree = await this.git.writeTreeWithBlob(tip, `${runsRoot}/${slug}/sweep.yaml`, blob)
       const commit = await this.git.commitTree(
         tree,
         tip,

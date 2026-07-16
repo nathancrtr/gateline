@@ -31,6 +31,10 @@ program
   .version('0.1.0')
   .option('--repo <path>', 'repository to operate on (default: cwd)', process.cwd())
   .option(
+    '--agentic-prefix <prefix>',
+    'metadata prefix of an integrate.py --layout prefixed host, when not the .agentic default',
+  )
+  .option(
     '--adapter <name>',
     'headless adapter(s), repeatable; the first is the default runner, later ones satisfy avoid_vendor_of pins',
     (value: string, acc: string[]) => [...acc, value],
@@ -46,12 +50,18 @@ interface Opened {
   dir: string
   source: LocalGitSource
   registry: Registry | null
+  frameworkPrefix?: string
 }
 
 async function open(): Promise<Opened> {
-  const dir = program.opts<{ repo: string }>().repo
+  const { repo: dir, agenticPrefix } = program.opts<{ repo: string; agenticPrefix?: string }>()
   const git = new Git(dir)
-  return { dir, source: new LocalGitSource('local', dir), registry: await loadRegistry(git, await git.defaultBranch()) }
+  return {
+    dir,
+    source: new LocalGitSource('local', dir, { frameworkPrefix: agenticPrefix }),
+    registry: await loadRegistry(git, await git.defaultBranch(), agenticPrefix),
+    frameworkPrefix: agenticPrefix,
+  }
 }
 
 /** Engine and scheduler share one dispatcher, so sweeps meter through the same seam (§6). */
@@ -60,7 +70,7 @@ async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler:
   const log = (line: string) => console.log(line)
   const adapters = await Promise.all(
     (names.length ? names : ['claude-code']).map(async (name) => {
-      const manifest = await loadHeadlessManifest(opened.dir, name)
+      const manifest = await loadHeadlessManifest(opened.dir, name, opened.frameworkPrefix)
       return { manifest, dispatcher: new HeadlessDispatcher(manifest) }
     }),
   )
@@ -74,6 +84,7 @@ async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler:
     identity: BOT_IDENTITY,
     dispatcher,
     registry: opened.registry,
+    frameworkPrefix: opened.frameworkPrefix,
     push: hosted.push,
     spendLimitUsd: hosted.spendLimitUsd ?? null,
     requireBudget: hosted.requireBudget,
@@ -84,6 +95,7 @@ async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler:
     identity: BOT_IDENTITY,
     dispatcher,
     registry: opened.registry,
+    frameworkPrefix: opened.frameworkPrefix,
     push: hosted.push,
     log,
   })

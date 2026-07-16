@@ -340,7 +340,10 @@ escalations:
     reason: "implementer (03-shell-masthead) failed twice: rebase of
       run/fleetview-design--task/03-shell-masthead onto run/fleetview-design
       conflicted — overlapping file-contact …"
-    resolved: false
+    resolved: true
+    resolved_by: Nathan Carter
+    resolved_at: 2026-07-16T06:15:47.060Z
+    resolution: "background-subagent CLI regression, see PR #113"
   - at: 2026-07-16T05:43:20.813Z
     from_role: orchestrator
     reason: "implementer (08-metrics-screen) failed twice: rebase of

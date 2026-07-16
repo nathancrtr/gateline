@@ -57,7 +57,7 @@
       "--permission-mode",
       "bypassPermissions"
     ],
-    "dispatch_prompt": "Use the {role} subagent. {body}",
+    "dispatch_prompt": "Use the {role} subagent, running it in the foreground \u2014 wait for it to complete; never launch it as a background agent (a background subagent outlives this print-mode session and its work is lost uncommitted). {body}",
     "usage_report": {
       "format": "json-stdout",
       "fields": {

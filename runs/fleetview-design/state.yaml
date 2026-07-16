@@ -295,7 +295,10 @@ escalations:
     reason: "implementer (05-decide-panel) failed twice: rebase of
       run/fleetview-design--task/05-decide-panel onto run/fleetview-design
       conflicted — overlapping file-contact su…"
-    resolved: false
+    resolved: true
+    resolved_by: Nathan Carter
+    resolved_at: 2026-07-16T06:15:22.332Z
+    resolution: "background-subagent CLI regression, see PR #113"
   - at: 2026-07-16T05:43:10.394Z
     from_role: orchestrator
     reason: "implementer (06-inbox-screen) failed twice: rebase of

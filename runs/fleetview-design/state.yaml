@@ -1,7 +1,7 @@
 run: fleetview-design
 branch: run/fleetview-design
-phase: plan
-paused_reason: null
+phase: paused
+paused_reason: gate-declined
 
 budget:
   cost_limit_usd: 75
@@ -86,7 +86,15 @@ gates:
       notes: null,
       burden: confirmation
     }
-  G1: { approved: false, by: null, at: null, notes: null }
+  G1:
+    {
+      approved: false,
+      by: Nathan Carter,
+      at: 2026-07-16T00:18:05.033Z,
+      notes: "Your overall task division is OK, but I do not want candidate A. I
+        select candidate B. Make any adjustments to the plan implied by the
+        differing factors of the designs."
+    }
   G2: { approved: false, by: null, at: null, notes: null }
   G3: { approved: false, by: null, at: null, notes: null }
 

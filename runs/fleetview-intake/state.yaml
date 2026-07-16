@@ -256,7 +256,7 @@ tasks:
   [
     { id: 01-candidate-import-desk, status: dispatched, review_rounds: 1 },
     { id: 02-candidate-single-thread, status: dispatched, review_rounds: 0 },
-    { id: 03-intake-seam-reference, status: in-review, review_rounds: 1 }
+    { id: 03-intake-seam-reference, status: in-review, review_rounds: 2 }
   ]
 
 escalations:

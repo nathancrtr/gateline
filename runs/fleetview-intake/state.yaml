@@ -1,7 +1,7 @@
 run: fleetview-intake
 branch: run/fleetview-intake
-phase: implement
-paused_reason: null
+phase: paused
+paused_reason: budget-exhausted
 
 budget:
   cost_limit_usd: 40
@@ -323,5 +323,12 @@ escalations:
         resolved_by: Nathan Carter,
         resolved_at: 2026-07-15T23:42:41.170Z,
         resolution: blah blah usage
+      },
+    {
+        at: 2026-07-16T02:42:50.970Z,
+        from_role: orchestrator,
+        reason: projected spend $44.09 (ledger $36.09 + estimates) exceeds
+          cost_limit_usd $40 — pausing rather than degrading,
+        resolved: false
       }
   ]

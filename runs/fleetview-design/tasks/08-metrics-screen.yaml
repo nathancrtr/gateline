@@ -47,3 +47,50 @@ depends_on: [02-ledger-foundations]
 status: pending
 
 notes: |
+  Implementer (round 1): restyled metrics.tsx per candidate-b/metrics.html —
+  mono uppercase h2s (DOM text unchanged, uppercase via Tailwind `uppercase`
+  utility only), page head restyled to match `.head`/`.head h1` (mono 20px
+  uppercase tracked, meta right-aligned max-w-340px), captions capped
+  max-w-[74ch]. Gate/budget tables now sit in bordered panels
+  (border-line/rounded-[5px]) with `bg-inset` theads, mono uppercase tracked
+  column heads, mono 12px tabular right-aligned numerals, gate ids
+  font-semibold mono. ApprovalMeter: 140x8 track on bg-inset with
+  border-line/rounded-[4px], accent fill with static
+  shadow-[0_0_6px_var(--glow)], warn fill drops the glow, 90% tick widened to
+  2px (w-0.5) — tick title/positioning logic unchanged. Over-triggering flag
+  is now a fully-round warn capsule (border-warn + bg-warn-soft), glyph+text
+  kept. Deleted the local BURDEN_RAMP/UNRECORDED light-dark() constants
+  entirely; burden ramp and legend swatches now read var(--ramp-1..3) /
+  var(--unrecorded) directly via inline style (C1 tokens from
+  02-ledger-foundations, already in styles.css). Burden bar is 16px tall
+  (h-4), 2px gaps, rounded-[4px]; legend swatches 11px at rounded-[3px], and
+  the legend now lives inside the same bordered panel as its table (matches
+  B's `.panel > table + .blegend`). Rounds distribution: mono tabular
+  labels/counts, inset tracks with border-line, accent fill with the same
+  glow shadow, 3+ cap bucket uses bg-bad without glow. No-decisions empty
+  state replaced the dashed box with the centered mockup treatment (mono
+  accent "0 / 0" glyph at text-lg tracked, sans font-semibold lede, muted
+  sub) — no border. Loading state now renders three `.skel` blocks (via the
+  existing global `.skel` utility class) above an unmodified `<PageStatus
+  text="Computing metrics from state history…" />` call — PageStatus's
+  component/signature untouched; error path unchanged. All data
+  logic/bucketing math/every user-facing string left byte-identical (only
+  className/markup/inline-style changed) — diffed against the pre-edit file
+  to confirm.
+
+  Verification: `npm run typecheck` clean. `npm test` — first full run under
+  this box's very high concurrent load (many sibling implementer tasks
+  running in parallel; load avg observed 150-300+) hit 7 timeouts, all in
+  packages/orchestrator/*.test.ts (nothing under packages/web, nothing I
+  touched); re-ran packages/orchestrator/test/router.test.ts alone (17s, well
+  under its 60s timeout) and then the full `npm test` again once load
+  dropped — 17 files / 127 tests passed, 1 skipped, 0 failures. `npx
+  playwright test` initially failed 4/5 (plus the metrics-specific assertion)
+  with the portfolio page returning a literal "404 Not Found" body — this
+  environment's packages/server serves the SPA from packages/web/dist, which
+  didn't exist until `npm run build -w @agentic/web` was run (no prior build
+  step, unrelated to this task's edit); after building, `npx playwright test`
+  is 5/5 green, including `portfolio and metrics render` (asserts
+  `getByText('Gate decisions')`/`getByText('Budget honesty')` still visible
+  verbatim). grep confirms no `light-dark(` literal and no `@keyframes`/
+  `animation-` remain in metrics.tsx.

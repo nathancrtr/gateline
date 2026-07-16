@@ -103,6 +103,24 @@ budget:
       tokens_in: 30
       tokens_out: 3641
       cost_usd: 1.0226510000000002
+    - at: 2026-07-16T03:00:24.521Z
+      role: reviewer
+      task: 01-g1-evidence-audit
+      round: 1
+      adapter: claude-code
+      model: anthropic/claude-fable-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
+    - at: 2026-07-16T03:00:24.521Z
+      role: reviewer
+      task: 02-ledger-foundations
+      round: 1
+      adapter: claude-code
+      model: anthropic/claude-fable-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
 
 gates:
   G0:

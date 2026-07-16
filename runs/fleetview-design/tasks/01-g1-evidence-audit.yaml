@@ -50,6 +50,125 @@ acceptance_tests:
 
 depends_on: []
 
-status: pending
+status: in-review
+review_rounds: 1
 
 notes: |
+  G1 evidence audit — mechanical checklist run against the delivered artifacts.
+  No file under runs/fleetview-design/ other than this task file was edited;
+  every finding below routes to the G1 human, not to a fix by this task.
+
+  AC1.1 — PASS. ux-research.md Scope (lines 3-17) names all five surveyed
+  surfaces: inbox (`pages/inbox.tsx`), "run detail" (literal phrase at line 6;
+  `pages/run.tsx`, `components/decide.tsx`, `components/diff-view.tsx`),
+  portfolio (`pages/portfolio.tsx`), metrics (`pages/metrics.tsx`), and shared
+  components (`components/chips.tsx`, `src/styles.css`).
+
+  AC1.2 — PASS. `find runs/fleetview-design/design -name '*.html' | wc -l` = 18
+  (3 candidates x 6). Each of design/candidate-{a,b,c}/ has exactly the six R1
+  screen files (inbox, portfolio, metrics, run-artifacts, run-diff,
+  run-history.html — no extras, no omissions). Each candidate's Mockups section
+  indexes all six by filename: candidate-a/design-candidate.md:14-31,
+  candidate-b/design-candidate.md:14-37, candidate-c/design-candidate.md:12-38.
+
+  AC2.1 — PASS. ux-research.md has all 5 contract-required sections (Scope,
+  Patterns, Anti-patterns, Recommendations, Open questions): lines 3, 18, 74,
+  138, 166 respectively.
+
+  AC2.2 — PASS. >=3 external products/categories cited by URL, found 6 distinct
+  sources: Honeycomb (ux-research.md:27), a dev.to tabular-nums article (l.42),
+  Datadog (l.49), Linear (l.58), GitHub Primer (l.68), freedesignmd.com's
+  shadcn-generic teardown (l.97), superdesign.dev's AI-slop teardown (l.111) —
+  well over the floor of 3.
+
+  AC2.3 — PASS. 5 anti-patterns present (A1-A5, ux-research.md:76-136), >=4
+  required. All four brief slop traits (intent-brief.md:10-12: default
+  component styling / uniform treatment of every surface / no typographic
+  identity / no spatial identity) are each explicitly trait-tagged in the text:
+  A1 "(uniform treatment of every surface)" l.77; A2 "(default component
+  styling)" l.87; A3 "(no typographic identity)" l.100; A4 "(uniform treatment
+  of every surface, no spatial identity)" l.115; A5 "(default component
+  styling, no spatial identity)" l.128. Every trait is covered at least twice.
+
+  AC2.4 — PASS. Every P1-P5, A1-A5, and REC1-REC6 entry carries a citation (URL
+  and/or file:line) — no uncited entry found. Minor format note, not a
+  failure: P4 (ux-research.md:54-63) embeds its citation URL inline in prose
+  rather than under an explicit "Source:" label like every other entry;
+  flagging ux-research.md:58 for the G1 human's own spot-check, the citation
+  itself (the Linear URL) is present.
+
+  AC2.5 — PASS. Scanned all six RECs (ux-research.md:140-164) for a named
+  color value, font-family name, or "should look like X" language — none
+  found. REC5 (l.157) names the existing "8px radius, 1px neutral border" app
+  recipe as a floor to move away from (a caution about what to avoid, not a
+  color/font prescribed to a candidate), which is in scope for a
+  constraint/caution per the contract.
+
+  AC3.1 — PASS. Exactly 3 candidate-*/design-candidate.md files exist
+  (candidate-a, candidate-b, candidate-c). Each has all 6 contract-required
+  sections (Thesis, Mockups, Look-and-feel spec, Research traceability,
+  Ergonomics notes, Implementation notes), confirmed present at:
+  candidate-a/design-candidate.md:3,12,33,83,104,126;
+  candidate-b/design-candidate.md:3,14,39,98,129,156;
+  candidate-c/design-candidate.md:3,12,40,94,119,149.
+
+  AC4.1 — PASS. `grep -inE 'http://|https://|<script src=|@import url\('` run
+  against all 18 mockup .html files across candidate-{a,b,c} returns zero
+  hits. (No data: URLs were flagged, as instructed.)
+
+  AC4.2 — PASS. Each candidate's Ergonomics-notes States summary
+  (candidate-a/design-candidate.md:121-124, candidate-b:150-154,
+  candidate-c:142-147) covers every "required states beyond generic
+  empty/loading/error" cell from spec.md's R1 table for all six screens:
+  inbox full kind vocabulary + inbox-zero; portfolio malformed row +
+  zero-runs; metrics no-decisions; run-artifacts malformed banner + open
+  decide/burden picker + bounced no-approval + task board; run-diff no-diff +
+  merged; run-history phase-transition marker + no-history — plus generic
+  empty/loading/error, itemized per screen in each candidate's Mockups section.
+
+  AC4.3 — PASS (see note). `grep -inE 'lorem|ipsum|\blfoo\b|\bbar\b'`-style
+  whole-word check finds zero hits across all 18 mockups. A literal
+  non-word-bounded substring grep for `foo`/`bar` does surface incidental
+  matches, all in candidate-b, all false positives from unrelated identifiers
+  (not placeholder text): candidate-b/inbox.html:57,118 and
+  candidate-b/run-artifacts.html:60,183 and
+  candidate-b/run-history.html:52,104 and candidate-b/run-diff.html:54,109 and
+  candidate-b/portfolio.html:56,135 (the `.railfoot` class name contains
+  "foo"); candidate-b/metrics.html:61,91,92,133,157,164,171,178 (the `.bbar`
+  budget-bar class/element name contains "bar"). None of these are
+  lorem-ipsum-style filler content — flagging file:line so the G1 human can
+  confirm this reading rather than take it on faith.
+
+  AC4.4 — PASS. `grep -inE 'TBD|TODO|XXX'` against all three
+  design-candidate.md files returns zero hits. Each candidate names: a type
+  stack (candidate-a/design-candidate.md:35-41, candidate-b:41-50,
+  candidate-c:42-48); both-theme color tokens via `light-dark()` light/dark
+  pairs (candidate-a:49-58, candidate-b:58-67, candidate-c:56-67); a
+  spacing/density rule (candidate-a:60-65, candidate-b:69-73, candidate-c:69-73);
+  a motion policy (candidate-a:78-81, candidate-b:75-83, candidate-c:88-92);
+  and component shapes (candidate-a:67-76, candidate-b:85-96, candidate-c:75-86).
+
+  AC4.5 — PASS. Each candidate's Ergonomics notes state WCAG 2.1 AA contrast
+  ratios in both themes and name an explicit deferred gap rather than staying
+  silent: candidate-a/design-candidate.md:113-119 (`--faint` ~3.4:1, named and
+  argued), candidate-b:139-148 (`--faint` ~3.2-3.4:1, named and argued),
+  candidate-c:130-140 (`--faint` ~3.3:1, named and argued). Focus order is
+  also stated in all three: candidate-a:106-109, candidate-b:131-135,
+  candidate-c:121-128.
+
+  AC4.6 — PASS. Each candidate's Research traceability section cites >=1 P and
+  >=1 A/REC number (all three cite P1/REC4, P2/REC6, P3/REC3, P4/REC2, P5,
+  REC1, and REC5) and states deviations in one line rather than by omission:
+  candidate-a/design-candidate.md:99-102 ("none of REC1-REC6 is deviated
+  from..."); candidate-b:118-127 (explicit "none... deviated from" plus one
+  named judgment call on how REC2 is satisfied); candidate-c:112-117
+  (explicit "none... deviated from" plus a named Linux type-fallback
+  tradeoff).
+
+  Summary: all 14 acceptance tests (AC1.1-AC4.6) pass on this mechanical
+  audit — no missing sections, no uncited findings, no network refs or
+  placeholder text in any mockup, no TBD/TODO/XXX in any candidate doc. Two
+  items are flagged above as spot-check pointers rather than failures (P4's
+  inline-vs-labeled citation style; AC4.3's incidental foo/bar substring hits
+  in candidate-b's `railfoot`/`bbar` class names), per the audit's literal
+  instructions.

@@ -204,6 +204,15 @@ budget:
       tokens_in: null
       tokens_out: null
       cost_usd: null
+    - at: 2026-07-16T05:37:24.748Z
+      role: reviewer
+      task: 01-g1-evidence-audit
+      round: 2
+      adapter: claude-code
+      model: anthropic/claude-fable-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
 
 gates:
   G0:

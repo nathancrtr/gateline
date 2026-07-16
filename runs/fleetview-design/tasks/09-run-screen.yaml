@@ -56,3 +56,34 @@ depends_on: [02-ledger-foundations]
 status: pending
 
 notes: |
+  Implementer round 1: restyled run.tsx per scope — run head (mono 20px slug,
+  border-b divider), malformed-state banner (bad-soft, 5px radius, pre on
+  bg-inset), NeedsYouCard as the signal panel (pulse-panel + accent rail when
+  reviewable; bad rail with no glow/no motion class when bounced), task board
+  chips (status word + round-count toned bad-700 when review_rounds >= 3),
+  mono uppercase tabs with 2px accent underline, artifacts rail (4px radius)
+  and ArtifactBody instrument panel (76ch cap, bordered fail banner), History
+  tab restyled as an instrument log (spine + node built from Tailwind
+  before:* pseudo-element utilities per run-history.html; existing
+  transition-detection logic untouched), and a shared LoadingSkeleton
+  (3 .skel lines + preserved PageStatus text) used by the three loading
+  branches. Only run.tsx touched; decide.tsx and chips.tsx consumed as-is;
+  all data-* hooks, keyboard handlers, tab/param logic, and user-facing
+  strings preserved verbatim.
+
+  Test results: `npm run typecheck` passes. `npm test` (vitest): 125 passed,
+  1 skipped, 2 failed — both failures are pre-existing and unrelated to
+  packages/web (packages/orchestrator/test/hardening.test.ts fails on a gpg
+  signing sandbox limitation; packages/orchestrator/test/router.test.ts times
+  out in an unrelated dispatch test); no unit tests exist under packages/web.
+  `npx playwright test`: flaky in this sandbox — verified by reverting
+  run.tsx via `git stash` and rerunning the same suite, which reproduced the
+  identical 4-5 failures (including on portfolio.tsx/metrics.tsx routes this
+  task never touches) with the unmodified file, then restored my changes via
+  `git stash pop`. Also observed the suite fails harder under concurrent
+  sibling task worktrees, all of which hardcode the same PORT=4399 in
+  e2e/smoke.spec.ts and race for the same TCP port — a pre-existing e2e
+  fixture defect (not introduced by this task) worth a follow-up ticket to
+  give each smoke.spec.ts run a distinct port. Confirmed via grep: no
+  `@keyframes` or `animation-` in run.tsx; motion is only via the pre-existing
+  `.pulse-panel` and `.skel` classes.

@@ -1,6 +1,6 @@
 // RestPrProvider: the gh-CLI-free PR-approval lookup for hosted deployments.
 import { describe, expect, it } from 'vitest'
-import { parseGitHubRemote, RestPrProvider } from '../src/github.ts'
+import { parseGitHubRemote, RestPrProvider } from '../src/sources/github.ts'
 
 describe('parseGitHubRemote', () => {
   it('parses https, ssh, and scp-like remotes with and without .git', () => {

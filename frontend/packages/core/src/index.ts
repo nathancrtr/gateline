@@ -1,15 +1,7 @@
-export * from './schema.ts'
-export * from './git.ts'
-export * from './framework-roots.ts'
-export * from './validate.ts'
-export * from './unidiff.ts'
-export * from './source.ts'
-export * from './local-source.ts'
-export * from './readiness.ts'
-export * from './actions.ts'
-export * from './portfolio.ts'
-export * from './metrics.ts'
-export * from './config.ts'
-export * from './time.ts'
-export * from './sync.ts'
-export * from './github.ts'
+// Layered on purpose: record (the evidence kernel) ← sources (where records
+// live) ← view-model (what the frontend renders). Import a single layer via
+// the package subpaths (@agentic/core/record, /sources, /view-model); this
+// root export remains the whole package.
+export * from './record/index.ts'
+export * from './sources/index.ts'
+export * from './view-model/index.ts'

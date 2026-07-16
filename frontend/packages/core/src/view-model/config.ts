@@ -4,8 +4,8 @@ import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { z } from 'zod'
-import { LocalGitSource, readFileIfExists, repoToplevel } from './local-source.ts'
-import type { RunSource } from './source.ts'
+import { LocalGitSource, readFileIfExists, repoToplevel } from '../sources/local-source.ts'
+import type { RunSource } from '../sources/source.ts'
 
 const sourceEntrySchema = z.object({
   name: z.string().optional(),

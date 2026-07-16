@@ -2,8 +2,16 @@
 // unknown keys (contracts evolve) but strict about the shape the frontend
 // depends on: a state file that fails here surfaces as a malformed run —
 // visible, never guessed around (the contracts' bounce rule applied to us).
-import { parse as parseYaml } from 'yaml'
+import { parse as parseYaml, type Document } from 'yaml'
 import { z } from 'zod'
+
+export type StateDocMutation = (doc: Document) => void
+
+/** Who a state.yaml write is committed as — the named human or the bot. */
+export interface Identity {
+  name: string
+  email: string
+}
 
 export const PHASES = ['spec', 'plan', 'implement', 'integrate', 'release', 'done', 'paused'] as const
 export type Phase = (typeof PHASES)[number]

@@ -13,8 +13,9 @@ import {
   type GateId,
   type Phase,
   type RunState,
+  type Identity,
+  type StateDocMutation,
 } from './schema.ts'
-import type { Identity, StateDocMutation } from './source.ts'
 
 export type DecisionAction = 'approve' | 'decline' | 'resolve-escalation' | 'pause' | 'resume'
 

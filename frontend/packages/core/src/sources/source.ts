@@ -1,10 +1,9 @@
 // The RunSource driver seam (plan §2.2): everything above this interface is
 // indifferent to whether runs come from a local clone or (later) the GitHub
 // API. Nothing above it may know which driver it is talking to.
-import type { Document } from 'yaml'
 import type { CommitInfo } from './git.ts'
-import type { RunState, StateParseResult } from './schema.ts'
-import type { ContractTemplates } from './validate.ts'
+import type { Identity, RunState, StateDocMutation, StateParseResult } from '../record/schema.ts'
+import type { ContractTemplates } from '../record/validate.ts'
 
 export interface RunRef {
   /** Source id this run belongs to. */
@@ -21,7 +20,7 @@ export interface StateCommit extends CommitInfo {
   state: RunState | null
 }
 
-export type StateDocMutation = (doc: Document) => void
+export type { Identity, StateDocMutation }
 
 export type WriteFailure = 'ref-moved' | 'dirty-worktree' | 'no-branch' | 'no-identity' | 'error'
 
@@ -38,11 +37,6 @@ export interface WriteResult {
    * would act on state another writer already changed.
    */
   pushFailed?: string
-}
-
-export interface Identity {
-  name: string
-  email: string
 }
 
 export interface RunSource {

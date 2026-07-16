@@ -304,7 +304,10 @@ escalations:
     reason: "implementer (06-inbox-screen) failed twice: rebase of
       run/fleetview-design--task/06-inbox-screen onto run/fleetview-design
       conflicted — overlapping file-contact su…"
-    resolved: false
+    resolved: true
+    resolved_by: Nathan Carter
+    resolved_at: 2026-07-16T06:15:28.262Z
+    resolution: "background-subagent CLI regression, see PR #113"
   - at: 2026-07-16T05:43:14.230Z
     from_role: orchestrator
     reason: "implementer (10-diff-view) failed twice: rebase of

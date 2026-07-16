@@ -5,7 +5,7 @@ paused_reason: escalation
 
 budget:
   cost_limit_usd: 200
-  cost_spent_usd: 67.54
+  cost_spent_usd: 68.01
   ledger:
     # v0 hand-appended; costs are the registry static estimates (harness
     # reports combined subagent tokens without an in/out split to price
@@ -375,9 +375,10 @@ budget:
       round: 1
       adapter: claude-code
       model: anthropic/claude-sonnet-5
-      tokens_in: null
-      tokens_out: null
-      cost_usd: null
+      tokens_in: 0
+      tokens_out: 0
+      cost_usd: 0.46865619999999997
+      failed: true
 
 gates:
   G0:
@@ -634,4 +635,10 @@ escalations:
     reason: "implementer (07-portfolio-screen) failed twice: Command failed: claude
       -p Use the implementer subagent. on task
       `runs/fleetview-design/tasks/07-portfolio-screen.yaml`.…"
+    resolved: false
+  - at: 2026-07-16T18:12:46.926Z
+    from_role: orchestrator
+    reason: "implementer (10-diff-view) failed twice: Command failed: claude -p Use
+      the implementer subagent. on task
+      `runs/fleetview-design/tasks/10-diff-view.yaml`. When y…"
     resolved: false

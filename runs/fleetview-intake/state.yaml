@@ -196,6 +196,15 @@ budget:
       tokens_in: 52
       tokens_out: 5310
       cost_usd: 2.1655205
+    - at: 2026-07-16T21:45:48.762Z
+      role: reviewer
+      task: 03-intake-seam-reference
+      round: 3
+      adapter: claude-code
+      model: anthropic/claude-fable-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
 
 gates:
   G0:

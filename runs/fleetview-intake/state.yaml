@@ -5,7 +5,7 @@ paused_reason: null
 
 budget:
   cost_limit_usd: 40
-  cost_spent_usd: 26.82
+  cost_spent_usd: 31.68
   ledger:
     # analyst: total tokens only (50855), split unavailable, cost estimated at registry rates
     - {
@@ -156,9 +156,9 @@ budget:
       round: 1
       adapter: claude-code
       model: anthropic/claude-fable-5
-      tokens_in: null
-      tokens_out: null
-      cost_usd: null
+      tokens_in: 22
+      tokens_out: 3627
+      cost_usd: 4.865722000000001
 
 gates:
   G0:

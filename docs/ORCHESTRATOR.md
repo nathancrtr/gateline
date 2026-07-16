@@ -113,7 +113,17 @@ The derivation rules are the dual of the frontend's readiness table
 (FRONTEND-PLAN.md §2.3): that table derives *needs a human* from files; this one
 derives *needs a dispatch*. A run deriving as neither is at rest — gate waits,
 unresolved escalations, and pauses are all rest states, which is why a stateless
-orchestrator can hold them indefinitely for free. The full table is authored at
+orchestrator can hold them indefinitely for free.
+
+Approving a gate arms the next phase's dispatch on the very next tick, so when a
+human decision still stands between a gate and the next producer (e.g. selecting
+one of several design candidates before the Architect plans against it), the
+approval must not advance the phase — and merely skipping the advance is not
+enough, because the convergence rule sees the signed gate and advances anyway.
+The decision vocabulary therefore includes **approve-and-hold**: sign the gate and
+set `phase: paused` with a `paused_reason` naming the awaited decision, in the
+same commit. The held run is an ordinary rest state; resume releases it into the
+phase the gate ledger implies. The full table is authored at
 implementation time (one test per row, like the frontend's); its shape:
 
 | State observed | Action |

@@ -82,6 +82,8 @@ export interface DecisionRequest {
   escalationIndex?: number
   pauseReason?: string
   resumePhase?: Phase
+  hold?: boolean
+  holdReason?: string
 }
 
 export class ApiError extends Error {

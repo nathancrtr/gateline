@@ -5,7 +5,7 @@ paused_reason: escalation
 
 budget:
   cost_limit_usd: 200
-  cost_spent_usd: 68.01
+  cost_spent_usd: 68.72
   ledger:
     # v0 hand-appended; costs are the registry static estimates (harness
     # reports combined subagent tokens without an in/out split to price
@@ -356,9 +356,10 @@ budget:
       round: 1
       adapter: claude-code
       model: anthropic/claude-sonnet-5
-      tokens_in: null
-      tokens_out: null
-      cost_usd: null
+      tokens_in: 0
+      tokens_out: 0
+      cost_usd: 0.70698945
+      failed: true
     - at: 2026-07-16T18:08:58.712Z
       role: implementer
       task: 09-run-screen
@@ -641,4 +642,10 @@ escalations:
     reason: "implementer (10-diff-view) failed twice: Command failed: claude -p Use
       the implementer subagent. on task
       `runs/fleetview-design/tasks/10-diff-view.yaml`. When y…"
+    resolved: false
+  - at: 2026-07-16T18:13:21.075Z
+    from_role: orchestrator
+    reason: "implementer (08-metrics-screen) failed twice: Command failed: claude -p
+      Use the implementer subagent. on task
+      `runs/fleetview-design/tasks/08-metrics-screen.yaml`. W…"
     resolved: false

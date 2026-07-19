@@ -42,8 +42,8 @@ criterion.
 
 ## Invariants — check before editing
 
-* **`.claude/agents/` and `.github/agents/` are rendered files; never hand-edit
-  them.** Edit the source role spec (`roles/<role>.md`) or the adapter's
+* **`.claude/agents/`, `.github/agents/`, and `.opencode/agents/` are rendered
+  files; never hand-edit them.** Edit the source role spec (`roles/<role>.md`) or the adapter's
   `manifest.json`, then run `python3 scripts/render-agents.py`. CI
   (`.github/workflows/render-check.yml`) fails any PR with stale renders.
 * **No vendor or model name may appear in `roles/` or `contracts/`** (principle P2).

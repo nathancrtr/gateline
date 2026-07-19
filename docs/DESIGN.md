@@ -198,6 +198,7 @@ maps them onto a specific harness:
 |---------|--------|--------------|
 | [`adapters/claude-code/`](../adapters/claude-code/) | **Built (the skeleton)** | role specs → `.claude/agents/*.md` subagents; runnable today by every operator |
 | [`adapters/copilot-cli/`](../adapters/copilot-cli/) | **Built** | role specs → `.github/agents/*.agent.md` custom agents; also the adapter that fully honors P5 — Copilot CLI hosts Anthropic/OpenAI/Google models natively, so Reviewer/Verifier bind to a genuinely different vendor than Implementer |
+| [`adapters/opencode/`](../adapters/opencode/) | **Built** | role specs → `.opencode/agents/*.md` agents, scoped by deny-by-default permission maps; the any-provider adapter — opencode spells models as `provider/model-id` across its full provider catalog (including local models), so any registry binding or P5 pin is expressible per role |
 | *(orchestrated dispatch)* | **Resolved — no separate adapter tree** | v1's orchestrator is a framework component that consumes the adapters above through a `headless` section in each manifest (invocation template + usage-report parsing spec); a new runner still costs one manifest. See [ORCHESTRATOR.md](ORCHESTRATOR.md) §5 |
 
 Adapter rule: an adapter may *narrow* a role (fewer tools, tighter permissions) but

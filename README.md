@@ -13,6 +13,7 @@ pair-programming to multi-agent development.
 | Path | What it is | Portable? |
 |------|-----------|-----------|
 | [`docs/DESIGN.md`](docs/DESIGN.md) | The architecture: principles, roles, gates, failure modes | — |
+| [`docs/TOPOLOGY.md`](docs/TOPOLOGY.md) | Control-plane topology: one authority per deployment, origin as linearization point | — |
 | [`docs/FRONTEND.md`](docs/FRONTEND.md) | Design for the gate frontend — the human interfaces to the pipeline (plan: [FRONTEND-PLAN.md](docs/FRONTEND-PLAN.md)) | — |
 | [`docs/INTEGRATION.md`](docs/INTEGRATION.md) | Design (draft) for the workflow that imports the framework into a host repo | — |
 | [`docs/ORCHESTRATOR.md`](docs/ORCHESTRATOR.md) | Design for the v1 agent-orchestrated operating mode (implemented in `frontend/packages/orchestrator`) | — |
@@ -38,13 +39,7 @@ customizability" are both satisfied by the same mechanism.
 
 ## Status
 
-v0.2 — design exercised end-to-end by the wordfreq run (`runs/wordfreq/`, G0→G3 with
-two adversarial-review cycles and independent verification); retro findings folded
-back into roles, contracts, and both adapters. The gate frontend (web, CLI, server)
-and the v1 orchestrator are implemented in `frontend/`; autonomy stays gated on the
-DESIGN.md §7 promotion criterion. Next: finish the v1 trust ladder's exit evidence
-(shadow-agreement runs, live cross-vendor dispatch), then the integration workflow
-(docs/INTEGRATION.md) and a first tagged release.
+v0.2 — design exercised end-to-end by three full G0→G3 runs (`runs/wordfreq/`, `runs/mdtoc/`, `runs/dupefind/` — the shadow-agreement evidence for the v1 trust ladder); retro findings folded back into roles, contracts, and both adapters. The gate frontend (web, CLI, server) and the v1 orchestrator are implemented in `frontend/`; autonomy stays gated on the DESIGN.md §7 promotion criterion. Control-plane topology (one authority per deployment, origin as linearization point) is designed and in progress. Next: live cross-vendor dispatch verification, the integration workflow (docs/INTEGRATION.md), and a first tagged release.
 
 ## License
 

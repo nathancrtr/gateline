@@ -1,6 +1,6 @@
 # Agentic Development System — Design
 
-**Status:** v0.2 — exercised end-to-end by the wordfreq run (`runs/wordfreq/`); the
+**Status:** v0.2 — exercised end-to-end by three full G0→G3 runs (`runs/wordfreq/`, `runs/mdtoc/`, `runs/dupefind/`); the
 gate frontend and the v1 orchestrator it describes in §7 are implemented (`frontend/`)
 **Audience:** senior engineers moving from single-stream AI pair-programming to multi-agent, semi-autonomous development
 

@@ -92,10 +92,18 @@ Interactive dispatch mirrors the Claude Code walkthrough
 copilot --agent analyst --prompt "run runs/wordfreq"
 copilot --agent architect --prompt "run runs/wordfreq"
 copilot --agent implementer --prompt "task runs/wordfreq/tasks/01-<name>.yaml"
-copilot --agent reviewer --prompt "task runs/wordfreq/tasks/01-<name>.yaml, diff run/wordfreq"
+copilot --agent reviewer --prompt "task runs/wordfreq/tasks/01-<name>.yaml, diff <base>..HEAD (this task's commits only)"
 copilot --agent verifier --prompt "run runs/wordfreq, verify current branch"
 copilot --agent ops --prompt "run runs/wordfreq"
 ```
+
+The reviewer's diff ref must cover **only the task under review**. Diffing the whole
+run branch against its base works only while the branch holds a single task; once
+earlier tasks' commits are on the branch, pass this task's own commit range
+(find the boundary with `git log --oneline`, then `<sha-before-task>..HEAD`) —
+otherwise every completed task's work reads as an out-of-scope edit. Commit each
+task's changes before dispatching its review, so the range is well-defined and no
+stray uncommitted work leaks into the diff.
 
 Gate approvals, round-cap tracking, and `state.yaml` bookkeeping are still the human
 Orchestrator's job, same as v0 under Claude Code.

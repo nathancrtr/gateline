@@ -24,6 +24,20 @@ export interface EngineHealth {
   inFlight: number
   /** Branch → consecutive rejected pushes (Engine.pushHealth, #103). */
   pushRejections: Record<string, number>
+  /**
+   * Self-supersede (#141): the code tree's oid at process start, the same
+   * tree's on-disk HEAD as of the last boundary check, and the drift state
+   * between them. All three are optional so old heartbeat files (written
+   * before #141) still parse — a viewer reading a stale file from an
+   * unupgraded engine just sees no drift signal, not a parse failure.
+   * `codeState` only ever carries these three values: a monitor's internal
+   * `supersede-confirmed` maps to `superseded-pending` here, since by the
+   * time a confirmed heartbeat is written the process is already draining
+   * to exit — there is no steady state to report beyond "pending restart".
+   */
+  commit?: string
+  codeHead?: string
+  codeState?: 'fresh' | 'superseded-pending' | 'paused'
 }
 
 /** Grace beyond the expected cadence before a heartbeat reads as stale. */

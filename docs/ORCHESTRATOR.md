@@ -136,11 +136,22 @@ implementation time (one test per row, like the frontend's); its shape:
 | Task diff ready, `review_rounds` < 3 | Dispatch Reviewer (P5-constrained, §5.3) |
 | Review requests changes, rounds < 3 | Dispatch Implementer, round n+1 |
 | Round cap hit, or two bounces of the same artifact | Escalate; pause the run |
+| Review verdict `escalate` | Escalate; pause. Resolving the escalation *after* the verdict landed dispatches a re-review round — the fresh verdict supersedes the standing `escalate` |
 | Budget pre-flight fails (§6) | Pause `budget-exhausted`; escalate |
 
 Two invariants govern every row: each action is derivable from committed files
 alone, and each action is **idempotent to re-derive** — a tick interrupted anywhere
 converges on re-run.
+
+A consequence of statelessness worth naming: an escalation is a *pointer to a
+condition* in the committed files, and marking it resolved is an acknowledgment,
+not a change. When the condition is one a human can edit away (raise
+`cost_limit_usd`, repair the branch), the engine re-derives quiet on the next tick
+only once that edit lands — a resolution alone re-escalates, which is the engine
+nagging, not a bug. The `escalate` verdict is the exception: it stands in an
+append-only review report no one may amend, so there the resolution itself is the
+input — the engine reads its timestamp and answers with a re-review round rather
+than a repeat escalation (issue #142).
 
 ### 4.3 Writes: the same discipline as the frontend
 

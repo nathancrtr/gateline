@@ -288,6 +288,61 @@ describe('the derivation table, one rule per row', () => {
     expect(a).toMatchObject({ kind: 'escalate', rule: 'D17', pause: 'escalation' })
   })
 
+  it('D17 — a resolution older than the escalate verdict still escalates (the verdict is the newer fact)', () => {
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:05:00.000Z', // epoch 300 < lastTouched 500
+          resolution: 'stale resolution from an earlier round',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'escalate', rule: 'D17', pause: 'escalation' })
+  })
+
+  it('D17 — a resolution newer than the escalate verdict dispatches the re-review round instead of re-escalating', () => {
+    // The fleetview-design regression: resolve+resume re-escalated identically
+    // every tick because the escalate verdict stands in an append-only artifact.
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600 > lastTouched 500
+          resolution: 'condition repaired on the branch',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'dispatch', rule: 'D13' })
+    expect(a.kind === 'dispatch' && a.dispatches[0]).toMatchObject({ role: 'reviewer', task: '01-a', round: 2 })
+  })
+
   it('D19 — implement phase with empty state.tasks seeds it from the task files', () => {
     const s = state({ phase: 'implement', tasks: [] })
     const a = deriveAction(

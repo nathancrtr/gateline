@@ -74,6 +74,12 @@ its review so the range is well-defined.
   only home) and re-dispatch the implementer **with the review report path in the
   prompt**. Cap: 3 rounds, then it's yours.
 - Verdict `approve` → mark the task `in-review → verified`-eligible and move on.
+- Verdict `escalate` → the reviewer found something no implementer round can fix
+  (branch damage, a plan defect, cross-task fallout). Fix the named condition in
+  the repo yourself, then dispatch the reviewer for a **fresh round** — the review
+  report is append-only, so the standing `escalate` is superseded only by a newer
+  verdict, never edited away. (In v1 the orchestrator does this for you: resolving
+  the escalation after the verdict landed dispatches the re-review round.)
 
 ### Recovering when a task's contact surface was too narrow
 

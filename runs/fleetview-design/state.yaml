@@ -839,4 +839,7 @@ escalations:
   - at: 2026-07-16T22:01:42.295Z
     from_role: orchestrator
     reason: reviewer escalated task 07-portfolio-screen — see review-07.md
-    resolved: false
+    resolved: true
+    resolved_by: Nathan Carter
+    resolved_at: 2026-07-21T14:07:52.092Z
+    resolution: git state contaminated -- resolved and resuming

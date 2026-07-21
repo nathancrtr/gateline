@@ -10,7 +10,8 @@
 //   D1  phase done                                   → rest
 //   D2  phase paused                                 → rest (resume is a human decision)
 //   D3  unresolved escalation                        → rest (a human owns the run)
-//   D4  task rounds ≥ cap, task not complete         → escalate + pause round-cap
+//   D4  task rounds ≥ cap, task not complete,
+//       latest verdict not approve                   → escalate + pause round-cap
 //   D5  gate approved but phase not advanced         → record phase advance
 //   D6  producer artifact absent                     → dispatch the producing role
 //   D7  producer artifact malformed, bounces < 2     → bounce (re-dispatch naming missing sections)
@@ -106,8 +107,16 @@ export function deriveAction(obs: RunObservation): DerivedAction {
   if (state.escalations.some((e) => !e.resolved)) return rest('D3', 'unresolved escalation — the run has a human’s attention')
 
   for (const t of state.tasks) {
-    if (t.review_rounds >= ROUND_CAP && !G2_COMPLETE_STATUSES.has(t.status))
+    if (t.review_rounds >= ROUND_CAP && !G2_COMPLETE_STATUSES.has(t.status)) {
+      // An approve on the cap round IS convergence: the D16 rounds bookkeeping
+      // lands one tick before the status transition, so a task can sit at
+      // rounds == cap, still in-review, with an approve verdict already
+      // delivered. Let implementPhase record the approval instead of
+      // escalating out of that window.
+      const verdicts = obs.reviews.find((r) => r.task === t.id)?.verdicts ?? []
+      if (verdicts[verdicts.length - 1] === 'approve') continue
       return escalate('D4', `task ${t.id}: ${t.review_rounds} review rounds without convergence — usually a spec ambiguity`, 'round-cap')
+    }
   }
 
   // D5 — a gate decided approve while the phase still lists it (the frontend

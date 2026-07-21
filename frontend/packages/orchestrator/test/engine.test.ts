@@ -16,6 +16,7 @@ import {
   agentCommit,
   appendToFile,
   FakeDispatcher,
+  HUMAN,
   humanDecide,
   log,
   makeToyRepo,
@@ -293,9 +294,79 @@ describe('the autonomous loop, one vendor (M2)', () => {
       expect(state!.phase).toBe('paused')
       expect(state!.paused_reason).toBe('escalation')
       expect(state!.escalations.some((e) => e.reason.includes('failed twice'))).toBe(true)
-      // On escalation the status freezes for the human; the resolution
-      // decides whether the task goes back to pending.
-      expect(state!.tasks.every((t) => t.status === 'dispatched')).toBe(true)
+      // On escalation the task is marked failed — a status nothing reads as
+      // in-flight (#147); D20 returns it to pending once a human resolves
+      // the naming escalation.
+      expect(state!.tasks.every((t) => t.status === 'failed')).toBe(true)
+    } finally {
+      await removeRunCheckout(dir, 'run/toy')
+    }
+  })
+
+  it('D20 recovery: resolving the failed-twice escalation returns the task to pending, no hand edit needed', { timeout: 60_000 }, async () => {
+    const { dir, clock } = makeToyRepo()
+    let implementerCalls = 0
+    const dispatcher = new FakeDispatcher((req) => {
+      switch (req.role) {
+        case 'analyst':
+          agentCommit(req.cwd, clock, { 'runs/toy/spec.md': SPEC }, 'toy: spec')
+          return {}
+        case 'architect':
+          agentCommit(
+            req.cwd,
+            clock,
+            { 'runs/toy/plan.md': PLAN, 'runs/toy/tasks/01-core.yaml': taskYaml('01-core', 'src/core.py') },
+            'toy: plan and task breakdown',
+          )
+          return {}
+        case 'implementer':
+          implementerCalls++
+          if (implementerCalls <= 2) return { ok: false, costUsd: null, tokensIn: null, tokensOut: null, error: 'model outage' }
+          agentCommit(req.cwd, clock, { 'src/core.py': 'print("core")\n' }, 'toy: 01-core')
+          return {}
+        default:
+          throw new Error(`unscripted role ${req.role}`)
+      }
+    })
+    const engine = makeEngine(dir, dispatcher)
+    const source = new LocalGitSource('check', dir)
+    try {
+      await reconcile(engine)
+      await humanDecide(dir, { action: 'approve', gate: 'G0', burden: 'confirmation' })
+      await reconcile(engine)
+      await humanDecide(dir, { action: 'approve', gate: 'G1', burden: 'confirmation' })
+      await reconcile(engine) // two failures → task failed, run paused on the escalation
+      let { state } = await source.readState(toyRef(dir))
+      expect(state!.tasks[0]!.status).toBe('failed')
+      expect(state!.phase).toBe('paused')
+
+      // The human resolves the escalation and resumes — the task status is
+      // untouched: D20 owns the recovery.
+      const human = new LocalGitSource('human', dir, { identity: HUMAN })
+      const idx = state!.escalations.findIndex((e) => !e.resolved)
+      const write = await human.writeState(
+        toyRef(dir),
+        (doc) => {
+          doc.setIn(['escalations', idx, 'resolved'], true)
+          doc.setIn(['escalations', idx, 'resolved_by'], HUMAN.name)
+          doc.setIn(['escalations', idx, 'resolved_at'], new Date().toISOString())
+          doc.setIn(['phase'], 'implement')
+          doc.setIn(['paused_reason'], null)
+        },
+        'state(toy): resolved the implementer failure and resumed',
+      )
+      expect(write.ok).toBe(true)
+
+      await engine.tick()
+      await engine.drain() // D20 — record failed → pending
+      ;({ state } = await source.readState(toyRef(dir)))
+      expect(state!.tasks[0]!.status).toBe('pending')
+
+      await engine.tick()
+      await engine.drain() // D11 — fresh dispatch; this attempt lands
+      ;({ state } = await source.readState(toyRef(dir)))
+      expect(implementerCalls).toBe(3)
+      expect(state!.tasks[0]!.status).toBe('in-review')
     } finally {
       await removeRunCheckout(dir, 'run/toy')
     }

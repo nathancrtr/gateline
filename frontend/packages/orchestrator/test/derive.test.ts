@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GateEntry, RunState, Validation } from '@agentic/core'
 import { deriveAction, DEFAULT_ESTIMATE_USD } from '../src/derive.ts'
-import type { RunObservation, TaskFileInfo } from '../src/observe.ts'
+import type { LedgerEntry, RunObservation, TaskFileInfo } from '../src/observe.ts'
 
 const gate = (over: Partial<GateEntry> = {}): GateEntry => ({ approved: false, by: null, at: null, notes: null, burden: null, ...over })
 
@@ -47,6 +47,20 @@ const taskFile = (id: string, over: Partial<TaskFileInfo> = {}): [string, TaskFi
   id,
   { path: `tasks/${id}.yaml`, surface: [`src/${id}.py`], dependsOn: [], ...over },
 ]
+
+/** A closed-failed implementer ledger entry — the D20 timestamp anchor. */
+const failedAttempt = (task: string, at: string): LedgerEntry => ({
+  at,
+  role: 'implementer',
+  task,
+  round: 1,
+  adapter: 'claude-code',
+  model: null,
+  tokens_in: null,
+  tokens_out: null,
+  cost_usd: 8,
+  failed: true,
+})
 
 describe('the derivation table, one rule per row', () => {
   it('D0 — malformed state rests; a human owns it', () => {
@@ -341,6 +355,108 @@ describe('the derivation table, one rule per row', () => {
     )
     expect(a).toMatchObject({ kind: 'dispatch', rule: 'D13' })
     expect(a.kind === 'dispatch' && a.dispatches[0]).toMatchObject({ role: 'reviewer', task: '01-a', round: 2 })
+  })
+
+  it('D20 — a failed task whose naming escalation resolved after the last failure returns to pending', () => {
+    // The #147 recovery: the engine froze the task at `failed` when its
+    // implementer failed twice; the resolution is the unblocking input.
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'failed', review_rounds: 0 }],
+      escalations: [
+        {
+          at: '1970-01-01T00:06:00.000Z',
+          from_role: 'orchestrator',
+          reason: 'implementer (01-a) failed twice: model outage',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z', // after the 00:05 failure below
+          resolution: 'outage over — retry',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        ledger: [failedAttempt('01-a', '1970-01-01T00:03:00.000Z'), failedAttempt('01-a', '1970-01-01T00:05:00.000Z')],
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'record', rule: 'D20', updates: [{ field: 'task-status', task: '01-a', to: 'pending' }] })
+  })
+
+  it('D20 — a resolution older than the last failure rests frozen (it acknowledged an earlier escalation)', () => {
+    // The re-fire guard: after a D20 recovery the old resolution stays in
+    // state; a fresh pair of failures must not be unblocked by it.
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'failed', review_rounds: 0 }],
+      escalations: [
+        {
+          at: '1970-01-01T00:02:00.000Z',
+          from_role: 'orchestrator',
+          reason: 'implementer (01-a) failed twice: model outage',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:04:00.000Z', // before the 00:05 failure below
+          resolution: 'unblocked',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        ledger: [failedAttempt('01-a', '1970-01-01T00:05:00.000Z')],
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'rest', rule: 'D20' })
+  })
+
+  it('D20 — a resolution naming a different task rests frozen', () => {
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'failed', review_rounds: 0 }],
+      escalations: [
+        {
+          at: '1970-01-01T00:06:00.000Z',
+          from_role: 'orchestrator',
+          reason: 'implementer (02-b) failed twice: model outage',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z',
+          resolution: 'unblocked',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        ledger: [failedAttempt('01-a', '1970-01-01T00:05:00.000Z')],
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'rest', rule: 'D20' })
+  })
+
+  it('D20 — a frozen task does not block other tasks from dispatching', () => {
+    const s = state({
+      phase: 'implement',
+      tasks: [
+        { id: '01-a', status: 'failed', review_rounds: 0 },
+        { id: '02-b', status: 'pending', review_rounds: 0 },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a'), taskFile('02-b')]),
+        ledger: [failedAttempt('01-a', '1970-01-01T00:05:00.000Z')],
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'dispatch', rule: 'D11' })
+    expect(a.kind === 'dispatch' && a.dispatches).toHaveLength(1)
+    expect(a.kind === 'dispatch' && a.dispatches[0]).toMatchObject({ role: 'implementer', task: '02-b' })
   })
 
   it('D19 — implement phase with empty state.tasks seeds it from the task files', () => {

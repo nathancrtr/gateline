@@ -137,6 +137,7 @@ implementation time (one test per row, like the frontend's); its shape:
 | Review requests changes, rounds < 3 | Dispatch Implementer, round n+1 |
 | Round cap hit, or two bounces of the same artifact | Escalate; pause the run |
 | Review verdict `escalate` | Escalate; pause. Resolving the escalation *after* the verdict landed dispatches a re-review round — the fresh verdict supersedes the standing `escalate` |
+| Implementer dispatch fails | Return the task to `pending` for its one retry; a second failure marks the task `failed` (nothing reads it as in-flight), escalates, and pauses. Resolving the escalation *after* the last failed attempt returns the task to `pending` — a fresh round supersedes the failure (issue #147) |
 | Budget pre-flight fails (§6) | Pause `budget-exhausted`; escalate |
 
 Two invariants govern every row: each action is derivable from committed files
@@ -151,7 +152,10 @@ only once that edit lands — a resolution alone re-escalates, which is the engi
 nagging, not a bug. The `escalate` verdict is the exception: it stands in an
 append-only review report no one may amend, so there the resolution itself is the
 input — the engine reads its timestamp and answers with a re-review round rather
-than a repeat escalation (issue #142).
+than a repeat escalation (issue #142). A twice-failed implementer task is the
+same shape: the failed ledger entries are append-only facts, so the resolution's
+timestamp is the input — resolved after the last failure, the task returns to
+`pending` for a fresh round (issue #147).
 
 ### 4.3 Writes: the same discipline as the frontend
 

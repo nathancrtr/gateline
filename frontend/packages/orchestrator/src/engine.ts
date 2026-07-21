@@ -506,11 +506,13 @@ export class Engine {
           // which D12 reads as in-flight forever — no retry, and the
           // second-failure escalation below becomes unreachable. Hand the
           // task back to derivation for the one retry §11 promises. On
-          // escalation the status stays frozen: resuming is a human
-          // decision, and the resolution says what happens to the task.
-          if (!outcome.ok && !escalateNow && intent.role === 'implementer' && intent.task) {
+          // escalation mark it `failed` — a status nothing reads as
+          // in-flight (#147); D20 returns it to pending once a human
+          // resolves the escalation, so a fresh round supersedes the
+          // failure without a hand edit.
+          if (!outcome.ok && intent.role === 'implementer' && intent.task) {
             if (getTaskFieldByDoc(doc, intent.task, 'status') === 'dispatched') {
-              setTaskFieldByDoc(doc, intent.task, 'status', 'pending')
+              setTaskFieldByDoc(doc, intent.task, 'status', escalateNow ? 'failed' : 'pending')
             }
           }
           if (escalateNow) {

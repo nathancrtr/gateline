@@ -1,11 +1,11 @@
 run: fleetview-design
 branch: run/fleetview-design
-phase: implement
-paused_reason: null
+phase: paused
+paused_reason: escalation
 
 budget:
   cost_limit_usd: 200
-  cost_spent_usd: 125.08
+  cost_spent_usd: 133.08
   ledger:
     # v0 hand-appended; costs are the registry static estimates (harness
     # reports combined subagent tokens without an in/out split to price
@@ -596,7 +596,8 @@ budget:
       model: anthropic/claude-sonnet-5
       tokens_in: null
       tokens_out: null
-      cost_usd: null
+      cost_usd: 8
+      failed: true
 
 gates:
   G0:
@@ -915,3 +916,9 @@ escalations:
     resolved_by: Nathan Carter
     resolved_at: 2026-07-21T15:02:36.341Z
     resolution: unblocked
+  - at: 2026-07-21T17:05:26.262Z
+    from_role: orchestrator
+    reason: "implementer (11-integration-verification) failed twice: Command failed:
+      claude -p Use the implementer subagent, running it in the foreground —
+      wait for it to complete; never l…"
+    resolved: false

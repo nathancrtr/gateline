@@ -607,6 +607,15 @@ budget:
       tokens_in: 10
       tokens_out: 3011
       cost_usd: 6.3648926999999995
+    - at: 2026-07-21T22:51:12.138Z
+      role: reviewer
+      task: 11-integration-verification
+      round: 1
+      adapter: claude-code
+      model: anthropic/claude-fable-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
 
 gates:
   G0:

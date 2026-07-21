@@ -6,7 +6,7 @@
 //   shadow <slug>    replay a run's history, derived vs actual (M1)
 //   sweep <role>     force a scheduled sweep now (ignores dueness, not the guards)
 import { Command } from 'commander'
-import { Git, LocalGitSource } from '@agentic/core'
+import { CodeTreeMonitor, Git, LocalGitSource, resolveCodeRepo, SUPERSEDE_EXIT_CODE } from '@agentic/core'
 import { loadRegistry, type Registry } from './registry.ts'
 import { deriveAll } from './tick.ts'
 import { formatAction } from './derive.ts'
@@ -113,19 +113,33 @@ program
   .action(async (opts: { heartbeat: string }) => {
     const opened = await open()
     const { engine, scheduler } = await buildEngine(opened)
-    const loop = await runLoop(engine, opened.dir, {
+    // Self-supersede (#141): the code tree is this binary's own checkout —
+    // resolved from our own import.meta.url — independent of the run source
+    // at opened.dir.
+    const codeRepo = resolveCodeRepo(import.meta.url)
+    const codeMonitor = codeRepo ? await CodeTreeMonitor.create(codeRepo) : undefined
+    // `stop` is referenced by the supersede callback passed into runLoop
+    // below, before `loop` itself exists — set once runLoop resolves, and
+    // the callback (which only fires later, on a heartbeat) reads it then.
+    let loop: Awaited<ReturnType<typeof runLoop>> | null = null
+    const stop = async (exitCode: number) => {
+      console.log('draining in-flight dispatches…')
+      await loop?.stop()
+      process.exit(exitCode)
+    }
+    loop = await runLoop(engine, opened.dir, {
       heartbeatMs: Number(opts.heartbeat) * 1000,
       scheduler,
       log: (line) => console.log(line),
+      codeMonitor,
+      onSupersede: (status) => {
+        console.log(`code tree moved ${status.startHead}..${status.codeHead}, superseding — draining and exiting ${SUPERSEDE_EXIT_CODE}`)
+        void stop(SUPERSEDE_EXIT_CODE)
+      },
     })
     console.log(`watching ${opened.dir} (heartbeat ${opts.heartbeat}s; bot identity ${BOT_IDENTITY.name}) — ^C to stop`)
-    const stop = async () => {
-      console.log('draining in-flight dispatches…')
-      await loop.stop()
-      process.exit(0)
-    }
-    process.on('SIGINT', () => void stop())
-    process.on('SIGTERM', () => void stop())
+    process.on('SIGINT', () => void stop(0))
+    process.on('SIGTERM', () => void stop(0))
   })
 
 program

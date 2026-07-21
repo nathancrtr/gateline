@@ -400,6 +400,9 @@ escalations:
         from_role: orchestrator,
         reason: "task 03-intake-seam-reference: 3 review rounds without convergence —
           usually a spec ambiguity",
-        resolved: false
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-21T01:05:56.116Z,
+        resolution: I don't think this is real - keep an eye on this
       }
   ]

@@ -83,6 +83,33 @@ describe('the derivation table, one rule per row', () => {
     expect(deriveAction(obs({ state: s }))).toMatchObject({ kind: 'escalate', rule: 'D4', pause: 'round-cap' })
   })
 
+  it('D4 — an approve on the cap round is convergence, not a round-cap failure; D16 records it', () => {
+    // The fleetview-intake regression: rounds bookkeeping lands one tick before
+    // the status transition, so the task sits at rounds == cap, in-review, with
+    // the approve verdict already delivered.
+    const s = state({ phase: 'implement', tasks: [{ id: '01-x', status: 'in-review', review_rounds: 3 }] })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-x')]),
+        reviews: [{ path: 'review-01.md', task: '01-x', verdicts: ['request-changes', 'request-changes', 'approve'], lastTouched: 500 }],
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'record', rule: 'D16', updates: [{ field: 'task-status', task: '01-x', to: 'review-approved' }] })
+  })
+
+  it('D4 — the approve exemption is narrow: a request-changes at the cap still escalates', () => {
+    const s = state({ phase: 'implement', tasks: [{ id: '01-x', status: 'in-review', review_rounds: 3 }] })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-x')]),
+        reviews: [{ path: 'review-01.md', task: '01-x', verdicts: ['request-changes', 'request-changes', 'request-changes'], lastTouched: 500 }],
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'escalate', rule: 'D4', pause: 'round-cap' })
+  })
+
   it('D5 — gate approved but phase not advanced converges via bookkeeping', () => {
     const s = state({ phase: 'spec', gates: { G0: gate({ approved: true, by: 'op' }), G1: gate(), G2: gate(), G3: gate() } })
     const a = deriveAction(obs({ state: s }))

@@ -3,9 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Schema, discovery, readiness, validation, write path, and metrics for the gate frontend. Runs from TypeScript source (Node >=24 type stripping); no build step.",
+  "description": "Layered core: record (state.yaml schema, validation, decision actions), sources (git, RunSource drivers, GitHub sync), view-model (readiness, portfolio, metrics for the gate frontend). Runs from TypeScript source (Node >=24 type stripping); no build step.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./record": "./src/record/index.ts",
+    "./sources": "./src/sources/index.ts",
+    "./view-model": "./src/view-model/index.ts"
   },
   "dependencies": {
     "yaml": "^2.8.0",

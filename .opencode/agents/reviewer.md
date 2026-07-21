@@ -1,13 +1,20 @@
 ---
-role: reviewer
-dispatch: Adversarial review of one task's diff against spec and plan. Dispatch with the task file path and the diff ref. Produces runs/<slug>/review-NN.md per contracts/review-report.md.
-capability_profile: frontier-reasoning
-capabilities: [read, search, write-artifacts, shell]
-vendor_pin: decorrelate-from-implementer
-inputs: [diff, spec.md, plan.md, tasks/NN-slug.yaml, repo (read-only)]
-outputs: [review-report.md]
-writes_code: false
+name: reviewer
+description: Adversarial review of one task's diff against spec and plan. Dispatch with the task file path and the diff ref. Produces runs/<slug>/review-NN.md per contracts/review-report.md.
+permission:
+  "*": deny
+  read: allow
+  grep: allow
+  glob: allow
+  list: allow
+  edit: allow
+  bash: allow
+model: openai/gpt-5.4
+mode: "all"
 ---
+
+<!-- RENDERED from roles/reviewer.md by scripts/render-agents.py - DO NOT EDIT.
+     Edit the role spec, then run: python3 scripts/render-agents.py -->
 
 # Reviewer
 

@@ -6,7 +6,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { engineHealthStale, readEngineHealth, writeEngineHealth, type EngineHealth } from '../src/engine-health.ts'
+import { engineHealthStale, readEngineHealth, writeEngineHealth, type EngineHealth } from '../src/sources/engine-health.ts'
 
 const cleanups: string[] = []
 afterEach(() => {

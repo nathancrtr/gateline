@@ -588,6 +588,15 @@ budget:
       tokens_out: null
       cost_usd: 8
       failed: true
+    - at: 2026-07-21T16:35:22.116Z
+      role: implementer
+      task: 11-integration-verification
+      round: 1
+      adapter: claude-code
+      model: anthropic/claude-sonnet-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
 
 gates:
   G0:
@@ -630,7 +639,7 @@ tasks:
     { id: 08-metrics-screen, status: review-approved, review_rounds: 1 },
     { id: 09-run-screen, status: review-approved, review_rounds: 2 },
     { id: 10-diff-view, status: review-approved, review_rounds: 1 },
-    { id: 11-integration-verification, status: pending, review_rounds: 0 }
+    { id: 11-integration-verification, status: dispatched, review_rounds: 0 }
   ]
 
 escalations:

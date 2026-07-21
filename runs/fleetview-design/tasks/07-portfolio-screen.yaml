@@ -83,3 +83,52 @@ notes: |
   workers some smoke tests timed out from the same sandbox contention, but a
   serial rerun (`--workers=1 --retries=1`) passed all 5/5, including "portfolio
   and metrics render" asserting the table contains 'done-merged'.
+
+  implementer (round 2): superseding the escalate verdict per orchestrator
+  instructions — commit 9a69fde had reverted portfolio.tsx (repo damage, review-07
+  F1), the orchestrator restored it in b447874, and this round verifies that
+  restoration is complete and correct rather than re-implementing from scratch.
+  `git diff 107c0f8 HEAD -- frontend/packages/web/src/pages/portfolio.tsx` is
+  empty — the file at HEAD is byte-identical to the round-1 commit, so no repair
+  was needed on the file itself; only the round-1 notes block was still present
+  and is kept above, unedited, per the append-only rule.
+  Re-verified against candidate-b/portfolio.html and the task scope line by line:
+  header (mono uppercase tracked h1, border-b line, right-aligned muted meta),
+  instrument panel (border-line, rounded-[5px], bg-surface, overflow-x-auto),
+  thead on bg-inset with mono 600 10px uppercase tracked-0.12em muted cells,
+  ~8-12px cell padding, border-line row dividers, hover:bg-raised, accent-600
+  run-name links with hover:underline and mono faint source, mono tabular-nums
+  right-aligned numeric columns, malformed-run bad-toned explanation line, chips
+  (PhaseChip/GateLedger/BudgetMeter) consumed unchanged, fully-round solid-accent
+  mono needs pill with static shadow-[0_0_8px_var(--glow)] (no pulse), "N esc"/
+  "BAD" mono bad, zero-runs empty-state branch (centered, aria-hidden "[ ]"
+  glyph, "No runs found." lede, muted mono runs/<slug> sub, no <table> in that
+  branch), and the 3-row .skel loading skeleton above PageStatus — all present
+  and unchanged from round 1. Confirmed no <table> renders in the zero-runs
+  branch and a <table> still renders whenever runs exist.
+  Addressed review-07 F2 (loading PageStatus placement, minor/PLAUSIBLE): the
+  mockup's "states" showcase section nests skel-rows and `<p class="status">`
+  inside a shared `.demo` box, but that box is a side-by-side documentation
+  wrapper for the states gallery (adds a padding+label the real page never
+  uses), not a literal spec for the panel boundary. The task's own scope text
+  reads "3 skeleton rows ... above the preserved PageStatus text" — siblings in
+  sequence, which is what round 1 built. More decisively, inbox.tsx (frozen,
+  C3, not touched by this task) already establishes this exact pattern for its
+  own isLoading branch: a bordered `<ul>` skeleton panel followed by a sibling
+  `<PageStatus>` below/outside it, both children of the same wrapper div. Moving
+  PageStatus inside the portfolio panel would fix a minor mockup-fidelity gap at
+  the cost of making the two loading states in this app inconsistent with each
+  other for no behavioral gain. Kept the current placement; no code change.
+  Test results (round 2, clean sandbox with node_modules reinstalled since round
+  1's checkout didn't have them): `npm run typecheck` clean (both tsconfigs).
+  `npm test` (vitest): 17 passed / 1 skipped, 0 failed (127 tests passed, 1
+  skipped live-smoke) — no timeouts this run, confirming round 1's failures were
+  transient sandbox contention as noted, not a defect. `npm run build -w
+  @agentic/web` succeeded (dist/ produced). `npx playwright test` (5/5 passed on
+  the first run, 1 worker, no retries needed): inbox ranking, bounce view,
+  pointer approve loop, keyboard approve loop, and "portfolio and metrics
+  render" (table contains 'done-merged'). `grep -n '@keyframes\|animation-'
+  frontend/packages/web/src/pages/portfolio.tsx` → no matches (exit 1).
+  Files touched this round: none in frontend/ (verification-only round); this
+  notes block appended to
+  runs/fleetview-design/tasks/07-portfolio-screen.yaml only.

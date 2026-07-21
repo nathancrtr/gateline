@@ -2,6 +2,7 @@
 // and written — git plumbing, the RunSource driver seam, the local-clone
 // driver, and GitHub PR-approval sync. May import record/, never view-model/.
 export * from './git.ts'
+export * from './engine-health.ts'
 export * from './framework-roots.ts'
 export * from './source.ts'
 export * from './local-source.ts'

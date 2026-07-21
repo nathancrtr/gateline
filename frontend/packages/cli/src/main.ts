@@ -273,6 +273,69 @@ program
 // --- ui ----------------------------------------------------------------------
 
 program
+  .command('up')
+  .description('FleetView + the v1 orchestrator over one clone — the single-authority deployment (docs/TOPOLOGY.md §3.1)')
+  .option('--port <n>', 'port', '4310')
+  .option('--host <h>', 'bind address', '127.0.0.1')
+  .option('--no-open', 'do not open the browser')
+  .option(
+    '--adapter <name>',
+    'headless adapter(s), repeatable; the first is the default runner',
+    (value: string, acc: string[]) => [...acc, value],
+    [] as string[],
+  )
+  .option('--spend-limit-usd <usd>', 'refuse new dispatches when projected spend across all active runs exceeds this', parseFloat)
+  .option('--no-push', 'keep orchestrator commits local (default pushes: origin is the record)')
+  .option('--heartbeat <seconds>', 'engine heartbeat interval', '180')
+  .action(
+    async (flags: {
+      port: string
+      host: string
+      open?: boolean
+      adapter: string[]
+      spendLimitUsd?: number
+      push?: boolean
+      heartbeat: string
+    }) => {
+      const opts = program.opts<{ repo: string[] }>()
+      // One engine per `up`: dispatching needs exactly one writable clone.
+      // The server may aggregate several sources; the engine takes the one
+      // repo named (or the cwd) — a second engine belongs to a second `up`.
+      if (opts.repo.length > 1) {
+        console.error('`up` runs one engine over one clone — pass a single --repo (the server may still aggregate more via config)')
+        process.exit(1)
+      }
+      const repoDir = opts.repo[0] ?? process.cwd()
+      const { startServer } = await import('@agentic/server/main')
+      const { startOrchestrator } = await import('@agentic/orchestrator')
+      const server = await startServer({
+        port: Number(flags.port),
+        host: flags.host,
+        open: flags.open !== false,
+        repoOverrides: [repoDir],
+      })
+      const orchestrator = await startOrchestrator({
+        repoDir,
+        adapters: flags.adapter,
+        push: flags.push !== false,
+        requireBudget: true,
+        spendLimitUsd: flags.spendLimitUsd ?? null,
+        heartbeatSeconds: Number(flags.heartbeat),
+        log: (line) => console.log(line),
+      })
+      console.log(`engine watching ${repoDir} (heartbeat ${flags.heartbeat}s${flags.push !== false ? ', pushing to origin' : ', local-only'}) — ^C to stop`)
+      const stop = async () => {
+        console.log('draining in-flight dispatches…')
+        await orchestrator.stop()
+        server.close()
+        process.exit(0)
+      }
+      process.on('SIGINT', () => void stop())
+      process.on('SIGTERM', () => void stop())
+    },
+  )
+
+program
   .command('ui')
   .description('serve the web app on localhost')
   .option('--port <n>', 'port', '4310')

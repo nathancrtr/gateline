@@ -7,8 +7,10 @@ import {
   computeMetrics,
   deriveReadiness,
   DecisionError,
+  engineHealthStale,
   parseUnifiedDiff,
   planDecision,
+  readEngineHealth,
   summarizeRun,
   validateArtifact,
   type Burden,
@@ -70,6 +72,21 @@ export function createApp(deps: AppDeps): Hono {
   }
 
   app.get('/api/health', (c) => c.json({ ok: true, sources: deps.sources.map((s) => s.id) }))
+
+  // Engine liveness per source (#100): null = no co-located engine has ever
+  // reported on this deployment (a viewer-only install — not an outage);
+  // stale = one was configured here and has gone silent, which the UI
+  // renders as an outage banner instead of "waiting on gate".
+  app.get('/api/engine-health', async (c) => {
+    const out: Record<string, { at: string; inFlight: number; pushRejections: Record<string, number>; stale: boolean } | null> = {}
+    for (const s of deps.sources) {
+      const dir = (s as { dir?: string }).dir
+      if (!dir) continue
+      const health = await readEngineHealth(dir)
+      out[s.id] = health ? { at: health.at, inFlight: health.inFlight, pushRejections: health.pushRejections ?? {}, stale: engineHealthStale(health) } : null
+    }
+    return c.json({ engines: out, now: Math.floor(Date.now() / 1000) })
+  })
 
   app.get('/api/inbox', async (c) => {
     const { inbox } = await cache.get('portfolio', () => buildPortfolio(deps.sources))

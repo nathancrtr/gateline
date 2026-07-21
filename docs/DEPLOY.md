@@ -82,7 +82,7 @@ re-presents rather than corrupting state.
 | `DATA_DIR` | no | `/data` | Volume mount point holding the clone. |
 | `GITHUB_WEBHOOK_SECRET` | no | — | Arms `POST /api/webhooks/github`; unset → the route does not exist. |
 | `GITHUB_TOKEN` | no | — | Enables PR-approval sync on review webhooks (token needs Pull requests: Read). |
-| `ORCH_ENABLED` | no | `0` | `1` runs the v1 orchestrator against the same clone. Read the orchestrator section first. |
+| `ORCH_ENABLED` | no | `0` | `1` runs the v1 orchestrator against the same clone — the blessed topology, and the example config's default. Read the orchestrator section first. |
 | `ANTHROPIC_API_KEY` | with `ORCH_ENABLED=1` | — | Model auth for the claude-code dispatch harness. |
 | `ORCH_SPEND_LIMIT_USD` | recommended | — | Host-wide ceiling: refuse dispatch when projected spend across all active runs exceeds it. |
 | `ORCH_HEARTBEAT_SECONDS` | no | `180` | Orchestrator heartbeat (stale-dispatch aging, missed-event sweep). |
@@ -149,6 +149,15 @@ In the Cloudflare dashboard (Zero Trust), with a domain on your account:
 Order matters: create the Access application **before** you share or use the
 hostname — the tunnel is reachable the moment it connects.
 
+**Verify exactly one connector on the tunnel** (Networks → Tunnels → your
+tunnel → Connectors) once the machine is up — and again after any workstation
+testing. A leftover `cloudflared service install` on a laptop registers a
+second connector for the same token, and Cloudflare will route a share of
+requests to it; if nothing listens on that machine's port, those requests die
+as intermittent 502s that look like a dead deployment while the real machine
+reports perfectly healthy. (`sudo cloudflared service uninstall` removes a
+stray one.)
+
 ## GitHub webhooks: push-driven freshness + PR-approval sync
 
 Without webhooks the instance polls origin every `FETCH_INTERVAL` seconds.
@@ -175,8 +184,29 @@ run's G2 is recorded into `state.yaml` minutes-to-seconds after it happens.
 ## Enable the orchestrator (hosted dispatch)
 
 `ORCH_ENABLED=1` runs the v1 orchestrator (`agentic-orchestrator watch`) as a
-second process against the same clone. Read this section — and
-[ORCHESTRATOR.md](ORCHESTRATOR.md) §10's autonomy gate — before flipping it.
+second process against the same clone. **Co-located is the blessed topology**
+(one machine, one clone, one authority — [TOPOLOGY.md](TOPOLOGY.md) §3.1), and
+the example config ships with it on. Hosted dispatch bills by API key
+(`ANTHROPIC_API_KEY`); an operator who wants subscription-billed dispatch runs
+the same co-located pair on their own machine with `agentic up` (below)
+instead of splitting the orchestrator off — an orchestrator over a second
+writable clone is the topology that produced #103/#104. Read this section —
+and [ORCHESTRATOR.md](ORCHESTRATOR.md) §10's autonomy gate — before first
+enabling it.
+
+**Liveness.** The engine writes a machine-local heartbeat after every
+reconcile pass; FleetView renders a banner when a heartbeat exists and goes
+stale, so decisions landing with no engine consuming them read as an outage,
+never as "waiting on gate". A viewer-only deployment (`ORCH_ENABLED=0`, no
+engine ever run here) has no heartbeat file and gets no banner.
+
+**Run it locally in one command.** `agentic up [--repo <path>]` serves
+FleetView and runs the engine over the same clone — the local twin of this
+hosted deployment, with the same hard lines (`--push` by default,
+`--require-budget` always; add `--spend-limit-usd`). Dispatch bills through
+whatever the local harness CLI is logged in as. If you previously ran an
+ad-hoc orchestrator runner script with its own clone and fetch loop, retire
+it in favor of `up`.
 
 **What it does and does not do.** The orchestrator dispatches agents *within*
 phases, meters their cost into each run's ledger, and escalates when things

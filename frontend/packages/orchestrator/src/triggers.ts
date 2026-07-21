@@ -5,7 +5,7 @@
 // The ref-watch mirrors the frontend server's freshness watcher.
 import { watch, type FSWatcher } from 'node:fs'
 import { join } from 'node:path'
-import { Git } from '@agentic/core'
+import { Git, writeEngineHealth } from '@agentic/core'
 import type { Engine } from './engine.ts'
 import type { Scheduler } from './schedule.ts'
 
@@ -59,6 +59,20 @@ export async function runLoop(engine: Engine, repoDir: string, cfg: RunLoopConfi
       cfg.log?.(`tick failed: ${(e as Error).message}`)
     } finally {
       ticking = false
+    }
+    // Liveness heartbeat (#100): written after every pass, read by the
+    // co-located frontend. Under the git common dir — machine-local, never
+    // committed; its presence marks "an engine runs on this deployment".
+    try {
+      await writeEngineHealth(repoDir, {
+        at: new Date().toISOString(),
+        pid: process.pid,
+        heartbeatMs: cfg.heartbeatMs ?? DEFAULT_HEARTBEAT_MS,
+        inFlight: engine.inFlight(),
+        pushRejections: Object.fromEntries(engine.pushHealth()),
+      })
+    } catch (e) {
+      cfg.log?.(`engine-health write failed: ${(e as Error).message}`)
     }
   }
 

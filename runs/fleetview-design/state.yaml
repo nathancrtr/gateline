@@ -658,7 +658,7 @@ tasks:
     { id: 08-metrics-screen, status: review-approved, review_rounds: 1 },
     { id: 09-run-screen, status: review-approved, review_rounds: 2 },
     { id: 10-diff-view, status: review-approved, review_rounds: 1 },
-    { id: 11-integration-verification, status: in-review, review_rounds: 0 }
+    { id: 11-integration-verification, status: in-review, review_rounds: 1 }
   ]
 
 escalations:

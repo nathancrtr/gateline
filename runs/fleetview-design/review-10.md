@@ -44,3 +44,32 @@ Checked clean at `8ad4253`, class-by-class against `design/candidate-b/run-artif
 ## Boundary check
 
 Code changes confined to `frontend/packages/web/src/pages/run.tsx` — exactly the declared `file_contact_surface`. `decide.tsx` and `chips.tsx` untouched by `8ad4253` (commit stat lists only `run.tsx` + the task yaml). The commit also appends a round-1 implementer-notes block to `runs/fleetview-design/tasks/09-run-screen.yaml` — the sanctioned report-back channel consistent with prior tasks; not a boundary violation. (That notes block is among the deletions currently staged — F1's damage.) In bounds.
+
+---
+
+# Review Report: 09-run-screen — Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** commit `8ad4253` on `run/fleetview-design` at HEAD `1e242b9` — no code delta since round 1; this round verifies the round-1 findings' resolution and branch state
+
+## Findings resolution
+
+### F1 (blocking, repo integrity) — RESOLVED
+- `git status --porcelain` at `1e242b9`: empty — index and worktree clean; the staged revert is gone.
+- Blob-exact verification, all six paths F1 named: `run.tsx` HEAD = worktree = `4c796ea` (the `8ad4253` post-restyle blob, not pre-restyle `8911ef4`); `inbox.tsx` HEAD = worktree = `4268acd` (= `7733198`, not `b796654`); `metrics.tsx` HEAD = worktree = `e66b69c` (= `658061d`, not `c64f418`); task yamls 09/06/08 at HEAD = `e7d34a9`/`bc381f1`/`2f972ab`, matching their post-restyle commits — implementer-notes audit trail intact.
+- No intervening commit altered the reviewed work: `git log -- run.tsx` shows only `8ad4253` since baseline `3ab199a`; `git diff 8ad4253 HEAD -- run.tsx` is empty. The remediation commit `b447874` touched only `app.tsx`, `portfolio.tsx`, and task yamls 03/07 (review-07 F1's surface) — not this task's files.
+- Escalation resolved by Nathan Carter 2026-07-21T15:02:36Z, resolution `unblocked` (state.yaml escalations).
+
+### F2 (minor, PLAUSIBLE) — STANDS, deferred as dispositioned
+- `run.tsx:190,194` at HEAD unchanged (file byte-identical to round 1): `capped` tone still overrides the `done` status word. Standing disposition holds — task-11 coherence pass or G2 adjudicates the scope-vs-mockup ambiguity; cosmetic, not an implementer bounce, not blocking.
+
+## Coverage
+
+- `run.tsx` at HEAD is blob-identical to what round 1 reviewed (`4c796ea`); the round-1 Coverage section's class-by-class fidelity pass (R6, banner, signal panel, sole-live-object, task board, tabs, artifacts rail, history, loading, token/motion grep, C3 freeze) therefore applies verbatim and was not redone.
+- Branch delta since round 1 inspected: `b447874` + state-only commits (`47ed6a2`…`1e242b9`); none touches task 09's contact surface or the reviewed file. No new findings.
+- Carry-forward for G2 unchanged from round 1: AC5.1/AC5.2 not independently executed (reviewer is git-only); implementer evidence was assessed credible-on-trust, and the tree is now clean, so a G2/verifier re-run now exercises the correct code.
+
+## Boundary check
+
+No new code commits to check this round; `8ad4253` remains confined to `frontend/packages/web/src/pages/run.tsx` + the task-09 yaml notes block as established in round 1. In bounds.

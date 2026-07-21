@@ -24,7 +24,8 @@
 //   D14 request-changes, implementer not responded   → dispatch implementer, round n+1, with the report
 //   D15 request-changes, implementer responded       → dispatch reviewer (verify round)
 //   D16 latest verdict approve                       → record task status review-approved
-//   D17 reviewer verdict escalate                    → escalate + pause
+//   D17 reviewer verdict escalate                    → escalate + pause; a resolution newer
+//       than the verdict → dispatch re-review round (the fresh verdict supersedes)
 //   D18 all tasks review-approved+, no verification  → dispatch verifier
 //   D19 phase implement, state lists no tasks        → record: seed tasks[] from tasks/*.yaml (the v0 human's mirror step)
 //   DB  any dispatch would exceed the budget cap     → escalate + pause budget-exhausted
@@ -262,8 +263,30 @@ function implementPhase(obs: RunObservation): DerivedAction {
         updates.push({ field: 'task-status', task: task.id, to: 'review-approved' })
         continue
       }
-      if (verdict === 'escalate')
-        return escalate('D17', `reviewer escalated task ${task.id} — see ${review!.path}`, 'escalation')
+      if (verdict === 'escalate') {
+        // An escalate verdict is a standing fact in an append-only artifact —
+        // no later state edit can amend it, so the escalation entry's
+        // resolution is the unblocking input. A resolution newer than the
+        // verdict means a human addressed the named condition in the repo;
+        // verify that by re-review instead of re-escalating every tick.
+        const acknowledged = state.escalations.some(
+          (e) =>
+            e.resolved &&
+            e.resolved_at !== null &&
+            e.reason.includes(`task ${task.id}`) &&
+            review!.lastTouched !== null &&
+            Date.parse(e.resolved_at) / 1000 > review!.lastTouched,
+        )
+        if (!acknowledged) return escalate('D17', `reviewer escalated task ${task.id} — see ${review!.path}`, 'escalation')
+        dispatches.push({
+          role: 'reviewer',
+          task: task.id,
+          round: task.review_rounds + 1,
+          bounce: null,
+          reason: `task ${task.id}: escalation resolved after the escalate verdict — dispatch re-review round`,
+        })
+        continue
+      }
       // request-changes: whose turn? The task file's notes record the
       // implementer's response; newer than the review means responded.
       const taskPath = obs.taskFiles.get(task.id)?.path

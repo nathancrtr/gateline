@@ -2,7 +2,7 @@
 // knows which harness ran — the seam is to runtimes what the registry is to
 // models. Every model invocation in v1 flows through dispatch(), which is
 // what makes the seam the single metering point (§6).
-import { execFile } from 'node:child_process'
+import { spawn } from 'node:child_process'
 import { dig, type HeadlessManifest } from './manifest.ts'
 
 export interface DispatchRequest {
@@ -51,19 +51,20 @@ export class HeadlessDispatcher implements Dispatcher {
     const argv = this.manifest.command.map((a) => a.replaceAll('{prompt}', prompt).replaceAll('{role}', req.role))
     const [cmd, ...args] = argv
 
-    const { stdout, error } = await new Promise<{ stdout: string; error: Error | null }>((resolve) => {
-      execFile(
-        cmd!,
-        args,
-        { cwd: req.cwd, timeout: req.timeoutMs, maxBuffer: 64 * 1024 * 1024, killSignal: 'SIGKILL' },
-        (err, out) => resolve({ stdout: out ?? '', error: err }),
-      )
-    })
+    const { stdout, error, timedOut } = await runHarness(cmd!, args, req.cwd, req.timeoutMs)
+    // execFile's generic "Command failed: <argv>" hides what actually
+    // happened; a timeout is the one failure the seam itself caused, so
+    // name it — the ledger and the escalation both carry this string.
+    const failure = timedOut
+      ? `harness timed out after ${Math.round(req.timeoutMs / 60000)}min wall clock — process group killed (SIGKILL)`
+      : error
+        ? error.message
+        : null
 
     if (this.manifest.usage.format === 'static-estimate') {
       // No per-invocation usage from this harness (yet): the engine meters
       // this dispatch at the registry's static estimate, tokens null.
-      return { ok: !error, costUsd: null, tokensIn: null, tokensOut: null, error: error ? error.message : null }
+      return { ok: !error && !timedOut, costUsd: null, tokensIn: null, tokensOut: null, error: failure }
     }
 
     const parsed = parseJsonOutput(stdout)
@@ -73,7 +74,7 @@ export class HeadlessDispatcher implements Dispatcher {
         costUsd: null,
         tokensIn: null,
         tokensOut: null,
-        error: error ? error.message : 'harness produced no parseable JSON output',
+        error: failure ?? 'harness produced no parseable JSON output',
       }
     }
     const fields = this.manifest.usage.fields ?? {}
@@ -85,13 +86,66 @@ export class HeadlessDispatcher implements Dispatcher {
     const harnessError = this.manifest.usage.errorField ? dig(parsed, this.manifest.usage.errorField) === true : false
     const resultText = this.manifest.usage.resultField ? dig(parsed, this.manifest.usage.resultField) : null
     return {
-      ok: !error && !harnessError,
+      ok: !error && !timedOut && !harnessError,
       costUsd: num(fields.cost_usd),
       tokensIn: num(fields.tokens_in),
       tokensOut: num(fields.tokens_out),
-      error: error ? error.message : harnessError ? String(resultText ?? 'harness reported an error') : null,
+      error: failure ?? (harnessError ? String(resultText ?? 'harness reported an error') : null),
     }
   }
+}
+
+/**
+ * Run the harness under a wall-clock ceiling, killing its whole process
+ * group on timeout. execFile's built-in timeout signals only the direct
+ * child: a harness's own children (tool shells, MCP servers) survive the
+ * kill, keep spending, and hold the stdio pipes open — the callback (and so
+ * the closing commit) then waits on them, minutes after the kill.
+ */
+const MAX_CAPTURE = 64 * 1024 * 1024
+
+function runHarness(
+  cmd: string,
+  args: string[],
+  cwd: string,
+  timeoutMs: number,
+): Promise<{ stdout: string; error: Error | null; timedOut: boolean }> {
+  return new Promise((resolve) => {
+    let timedOut = false
+    let stdout = ''
+    let stderr = ''
+    const child = spawn(cmd, args, { cwd, detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
+    child.stdout.setEncoding('utf8')
+    child.stdout.on('data', (chunk: string) => {
+      if (stdout.length < MAX_CAPTURE) stdout += chunk
+    })
+    child.stderr.setEncoding('utf8')
+    child.stderr.on('data', (chunk: string) => {
+      if (stderr.length < MAX_CAPTURE) stderr += chunk
+    })
+    const timer = setTimeout(() => {
+      timedOut = true
+      try {
+        process.kill(-child.pid!, 'SIGKILL') // negative pid = the group (POSIX)
+      } catch {
+        child.kill('SIGKILL') // no group to kill (already gone, or not POSIX)
+      }
+    }, timeoutMs)
+    child.on('error', (err) => {
+      clearTimeout(timer)
+      resolve({ stdout, error: err, timedOut })
+    })
+    child.on('close', (code, signal) => {
+      clearTimeout(timer)
+      const error =
+        code === 0
+          ? null
+          : new Error(
+              `Command failed${signal ? ` (${signal})` : code !== null ? ` (exit ${code})` : ''}: ${cmd} ${args.join(' ')}${stderr.trim() ? `\n${stderr.trim()}` : ''}`,
+            )
+      resolve({ stdout, error, timedOut })
+    })
+  })
 }
 
 /** The whole stdout is one JSON document in print mode; tolerate stray lines. */

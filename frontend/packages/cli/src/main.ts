@@ -287,6 +287,7 @@ program
   .option('--spend-limit-usd <usd>', 'refuse new dispatches when projected spend across all active runs exceeds this', parseFloat)
   .option('--no-push', 'keep orchestrator commits local (default pushes: origin is the record)')
   .option('--heartbeat <seconds>', 'engine heartbeat interval', '180')
+  .option('--role-timeout <seconds>', 'wall clock per dispatched role before its process group is killed (default 1800)', parseFloat)
   .action(
     async (flags: {
       port: string
@@ -296,6 +297,7 @@ program
       spendLimitUsd?: number
       push?: boolean
       heartbeat: string
+      roleTimeout?: number
     }) => {
       const opts = program.opts<{ repo: string[] }>()
       // One engine per `up`: dispatching needs exactly one writable clone.
@@ -320,6 +322,7 @@ program
         push: flags.push !== false,
         requireBudget: true,
         spendLimitUsd: flags.spendLimitUsd ?? null,
+        roleTimeoutSeconds: flags.roleTimeout,
         heartbeatSeconds: Number(flags.heartbeat),
         log: (line) => console.log(line),
       })

@@ -248,6 +248,59 @@ describe('the autonomous loop, one vendor (M2)', () => {
     }
   })
 
+  it('a failed implementer frees its task for the one retry instead of stranding it at dispatched', { timeout: 60_000 }, async () => {
+    // The fleetview-design task-11 stall: a failed close left the task at
+    // `dispatched`, which D12 reads as in-flight forever — no retry, and the
+    // second-failure escalation unreachable.
+    const { dir, clock } = makeToyRepo()
+    const dispatcher = new FakeDispatcher((req) => {
+      switch (req.role) {
+        case 'analyst':
+          agentCommit(req.cwd, clock, { 'runs/toy/spec.md': SPEC }, 'toy: spec')
+          return {}
+        case 'architect':
+          agentCommit(
+            req.cwd,
+            clock,
+            {
+              'runs/toy/plan.md': PLAN,
+              'runs/toy/tasks/01-core.yaml': taskYaml('01-core', 'src/core.py'),
+              'runs/toy/tasks/02-cli.yaml': taskYaml('02-cli', 'src/cli.py'),
+            },
+            'toy: plan and task breakdown',
+          )
+          return {}
+        case 'implementer':
+          return { ok: false, costUsd: null, tokensIn: null, tokensOut: null, error: 'harness timed out after 30min wall clock — process group killed (SIGKILL)' }
+        default:
+          throw new Error(`unscripted role ${req.role}`)
+      }
+    })
+    const engine = makeEngine(dir, dispatcher)
+    const source = new LocalGitSource('check', dir)
+    try {
+      await reconcile(engine)
+      await humanDecide(dir, { action: 'approve', gate: 'G0', burden: 'confirmation' })
+      await reconcile(engine)
+      await humanDecide(dir, { action: 'approve', gate: 'G1', burden: 'confirmation' })
+      await reconcile(engine)
+      const { state } = await source.readState(toyRef(dir))
+      // Each task got its original dispatch and exactly one retry — the
+      // failed close handed the task back to derivation as `pending`.
+      const failures = parseLedger(state).filter((e) => e.role === 'implementer' && e.failed)
+      expect(failures.filter((e) => e.task === '01-core')).toHaveLength(2)
+      expect(failures.filter((e) => e.task === '02-cli')).toHaveLength(2)
+      expect(state!.phase).toBe('paused')
+      expect(state!.paused_reason).toBe('escalation')
+      expect(state!.escalations.some((e) => e.reason.includes('failed twice'))).toBe(true)
+      // On escalation the status freezes for the human; the resolution
+      // decides whether the task goes back to pending.
+      expect(state!.tasks.every((t) => t.status === 'dispatched')).toBe(true)
+    } finally {
+      await removeRunCheckout(dir, 'run/toy')
+    }
+  })
+
   it('decline recovery: resume re-opens the gate and re-dispatches with the decline notes', { timeout: 60_000 }, async () => {
     const { dir, clock } = makeToyRepo()
     const dispatcher = new FakeDispatcher(pipelineScript(dir, clock))

@@ -37,3 +37,31 @@ Checked clean at `107c0f8`, class-by-class against `design/candidate-b/portfolio
 ## Boundary check
 
 Code changes confined to `frontend/packages/web/src/pages/portfolio.tsx` — exactly the declared `file_contact_surface`. The commit also appends a round-1 implementer-notes block to `runs/fleetview-design/tasks/07-portfolio-screen.yaml`, the sanctioned report-back channel consistent with prior tasks in this run — not a boundary violation. Those notes were subsequently deleted by `9a69fde` (part of F1's damage to the audit trail). In bounds.
+
+---
+
+## Round 2 — 2026-07-21
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** commit `56e2483` (round-2 delta: task-yaml notes only, no code); resolution verified at branch HEAD `a4a6f36`
+
+### Prior-finding resolution
+
+- **F1 (blocking) — RESOLVED.** Repair commit `b447874` reverse-applied `9a69fde`'s damage: `git diff 107c0f8 HEAD -- frontend/packages/web/src/pages/portfolio.tsx` is empty (byte-identical to the reviewed round-1 diff), `app.tsx` likewise; `chips.tsx` differs from `107c0f8` only by task 04's own round-2 fixes (`leading-none`, `border-transparent` — task 04's contact surface, restored via `e13b5f0` per the repair commit's rationale, not residual damage). Both stripped notes blocks (tasks 03 and 07) restored. Review-04's re-examination is underway (`8ae8e7f`, review 04 round 2) — outside this task. The round-1 caveat that R5 evidence was taken on trust is now discharged: this reviewer independently ran the suites on the restored, integrated tree (see Coverage).
+- **F2 (minor, PLAUSIBLE) — CLOSED, decline accepted.** Implementer declined with rationale in the round-2 notes; verified accurate against the artifacts: the mockup's `.status`-inside-`.demo` nesting sits in the `.states` showcase gallery (`portfolio.html:220-237` — `.demo` is a labeled documentation box, `portfolio.html:113-114`, not the page's panel; the zero-runs demo is wrapped the same way and nobody reads that wrapper as page chrome), the task scope's own wording ("3 skeleton rows … above the preserved PageStatus text") specifies siblings, and frozen `inbox.tsx:79-80` (C3 — not touchable by this task) already renders `PageStatus` as a sibling below its skeleton panel, so moving it would make the app's two loading states inconsistent. No spec/plan clause is violated; remains available to the task-11 coherence pass if G2 disagrees.
+
+### New findings
+
+None. The round-2 delta is a 49-line append-only notes block in `runs/fleetview-design/tasks/07-portfolio-screen.yaml`; no code changed (`56e2483` stat confirms). Round-1 coverage of the implementation itself stands unchanged since the file is blob-identical.
+
+### Coverage (round 2)
+
+- **Restoration integrity:** `portfolio.tsx` and `app.tsx` at HEAD byte-identical to `107c0f8`; task-yaml notes for tasks 03/07 present at HEAD ✓. (Process note, already remediated upstream of this review: `8ae8e7f` transiently clobbered the round-2 notes — same stale-worktree failure mode as `9a69fde` — and `0bd790d` restored them; notes verified present at `a4a6f36`, worktree clean.)
+- **AC5.1/AC5.2 executed by this reviewer on the integrated tree** (not taken from implementer notes): `npm run typecheck` clean; `npm test` (vitest) 127 passed / 1 skipped, 0 failed — confirming round 1's orchestrator-package timeouts were transient contention; `npm run build -w @agentic/web` then `npx playwright test --workers=1` 5/5 passed, including "portfolio and metrics render" (table contains 'done-merged'). All match the implementer's round-2 claims.
+- **Grep AC:** `grep -n '@keyframes\|animation-' portfolio.tsx` → no matches (exit 1) ✓.
+- Not re-assessed: rendered visual output in a browser; light-theme glow contrast (task 11).
+
+### Boundary check (round 2)
+
+Round-2 commit `56e2483` touches only `runs/fleetview-design/tasks/07-portfolio-screen.yaml` (append-only notes — the sanctioned report-back channel). No code files touched. In bounds.

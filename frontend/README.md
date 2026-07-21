@@ -69,6 +69,10 @@ agentic ui [--demo] [--port N]          serve the web app
 
 Global: `--repo <path>` (repeatable) overrides source discovery.
 
+Common terminal workflows and pitfalls — deciding gates, approve-and-hold,
+PR-review sync, headless engine operation:
+[packages/cli/README.md](packages/cli/README.md).
+
 ## Multi-repo configuration
 
 `~/.config/agentic/config.yaml`:

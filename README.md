@@ -106,6 +106,13 @@ them local), and gates remain named-human decisions in the UI or via
 `agentic approve`. To look before anything dispatches:
 `agentic status --repo ~/repos/my-app` renders the same state read-only.
 
+The browser is optional. The whole gate workflow is terminal-native —
+`agentic inbox`, `approve`, `decline`, `resolve-escalation` — and the engine
+runs headless without FleetView: `agentic-orchestrator watch` (resident) or
+`tick` (one reconcile pass, with `--dry-run` to derive and print next actions
+while writing and dispatching nothing). Common terminal workflows and their
+pitfalls: [`frontend/packages/cli/README.md`](frontend/packages/cli/README.md).
+
 Before the first real dispatch, read [ORCHESTRATOR.md §10](docs/ORCHESTRATOR.md)
 (the autonomy ladder — first live work is a toy run with humans at every gate).
 To drive the pipeline by hand instead — no Node, no orchestrator, just the

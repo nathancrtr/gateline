@@ -449,6 +449,105 @@ sections above. Recorded here so the reasoning survives:
    (§4.2); re-open-and-wait was rejected as an idle state a human must remember
    to unstick.
 
+## 13. Merge-update lifecycle (self-supersede)
+
+An orchestrator process loads its own code once, at start, from the checkout
+it runs in. A `git pull` that lands after that — a human merging a framework
+fix under a running engine — does nothing on its own; the running process
+keeps executing the code it already has in memory. This section is the
+mechanism (#141) that turns that staleness into a bounded, self-detected
+process replacement instead of a silent drift nobody notices.
+
+**Deployment model.** The blessed topology (#100/#112, [TOPOLOGY.md](TOPOLOGY.md)
+§3.1) is one checkout, co-located: the server, the engine, and the CLI are one
+process (`agentic up`) reading and writing one clone, with the globally
+installed `agentic` binary `npm link`ed to that checkout's
+`frontend/packages/cli`. There is exactly one blessed tree per deployment, so
+"update the code" reduces to "advance that one checkout" — no fleet of
+processes to reconcile against each other.
+
+**What is monitored.** Not a configured run source — the *code tree*, the git
+checkout that owns the running module's own source, resolved from
+`import.meta.url` (`resolveCodeRepo` in `@agentic/core`). Under the co-located
+default this is the same clone the engine reconciles runs against; under a
+host-repo setup (INTEGRATION.md) it need not be, and it is the code tree's
+staleness that matters here. When the running module isn't inside a git
+checkout at all — installed from a published package, or (as on the hosted
+Fly recipe, DEPLOY.md) baked into a container image with no `.git` above it
+— `resolveCodeRepo` returns null, no monitor is constructed, and this whole
+section is inert: there is nothing to watch.
+
+**Operator flow.** `git pull` in the checkout — by hand, or via `agentic
+upgrade` (below) — is the only input; the engine never pulls on its own.
+`CodeTreeMonitor` notices at the next tick boundary (heartbeat or startup,
+the same gating `syncFromRemote` uses, §4.2), and once a clean fast-forward is
+confirmed the loop drains in-flight work and exits `75`. Under a supervisor
+that exit is restarted immediately onto the fresh code, with no manual step.
+Without one — a bare local `agentic up` — the process just stops; the
+operator restarts it by hand, at their convenience, since the code is already
+pulled and nothing is lost by waiting.
+
+**States.** `CodeTreeMonitor.check()` recomputes state from the working tree
+at every boundary check; the debounce (below) is the only state carried
+between calls:
+
+| State | Meaning | Loop behavior |
+|---|---|---|
+| `fresh` | On-disk `HEAD` equals the commit the process started on | Ticks normally |
+| `superseded-pending` | Clean fast-forward of the default branch, observed for the first time | Tick bodies idle; heartbeat keeps writing |
+| `supersede-confirmed` | The same fast-forward observed on a second consecutive boundary check (the debounce) | `onSupersede` fires once, after the confirming heartbeat write; the process drains and exits `75` |
+| `paused` | Dirty tree, a rebase/merge in progress, non-fast-forward movement, or the checkout switched off the default branch (including detached HEAD) | Tick bodies idle; recovers to `fresh`/`superseded-pending` once the tree returns clean |
+
+A heartbeat never reports `supersede-confirmed` itself — by the time a
+confirmed check is written the process is already draining toward exit, so
+the written `codeState` collapses it into `superseded-pending` ("pending
+restart" is the only steady state left to describe).
+
+**Guardrails.**
+- Only a clean fast-forward of the default branch counts as an update.
+  Anything else — dirty tree, in-progress rebase/merge, branch switch,
+  detached HEAD, or history that isn't a fast-forward of the commit the
+  process started on — is `paused`, not superseded, and the engine never
+  dispatches on mixed code.
+- **Debounce.** A fast-forward must be observed on two consecutive boundary
+  checks before it is confirmed, so a heartbeat racing a `git pull` still in
+  progress reads `superseded-pending` once rather than firing early on a
+  half-updated tree.
+- **`paused` is deliberate idling, not a silent hang.** The heartbeat keeps
+  writing while paused (`codeState: 'paused'`), and FleetView's drift chip
+  renders it as a distinct, stronger-tone pill beside the engine outage
+  banner — a paused engine reads differently from a dead one.
+
+**What stays human-owned.** The engine never calls `git pull`; the update
+input is always an operator action (a manual pull, or `agentic upgrade`).
+Resolving a paused code tree — finishing the rebase, cleaning the working
+tree, switching back to the default branch — and restarting afterward are
+both human acts. None of this touches the gate grammar in §4.3 or §7: gate
+entries are still written only by named humans, and the orchestrator's own
+commit verbs are unaffected. Self-supersede lives entirely in process
+lifecycle, never in `state.yaml`.
+
+**Exit code.** `SUPERSEDE_EXIT_CODE = 75` — `EX_TEMPFAIL` from
+`<sysexits.h>`, "temporary failure, please retry." It is a deliberately
+ordinary code, chosen for supervisor compatibility: launchd's `KeepAlive`
+restarts on a nonzero exit by default, and systemd's
+`RestartForceExitStatus=75` makes a unit restart on this specific code the
+same way it would on a crash. `agentic-orchestrator watch` and `agentic up`
+both wire this exit in; a `tick`-driven deployment (§4.1, trigger 4) doesn't
+need it — a one-shot tick already exits after a single pass regardless. A
+launchd example plist for this deployment is deliberately deferred (tracked
+on #141); `frontend/packages/orchestrator/README.md`'s trigger-packaging
+section carries one for `tick`, which doesn't need updating for this.
+
+**`agentic upgrade`.** Convenience over the same mechanism, not a second one:
+refuses on a dirty tree, `git pull --ff-only`, then `npm install` in the
+workspace (`frontend/` under the resolved code repo, falling back to the
+repo root, or skipped if neither carries a `package.json`) when `HEAD`
+moved, printing `upgraded <old7>..<new7>` (or `already up to date at
+<head7>`). It does not itself restart a running engine — the monitor's own
+tick-boundary check is what notices the moved `HEAD` and drives the exit, on
+whatever cadence the heartbeat runs.
+
 ---
 
 *Companion documents: [DESIGN.md](DESIGN.md) (architecture and operating modes),

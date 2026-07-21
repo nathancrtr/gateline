@@ -208,6 +208,25 @@ whatever the local harness CLI is logged in as. If you previously ran an
 ad-hoc orchestrator runner script with its own clone and fetch loop, retire
 it in favor of `up`.
 
+**Merge-updates (self-supersede, [ORCHESTRATOR.md](ORCHESTRATOR.md) §13).**
+The engine notices a `git pull` in the checkout it runs from at its next
+tick boundary and exits (`75`) rather than silently keep serving stale code.
+That mechanism does not reach the hosted process on *this* recipe: the image
+bakes `frontend/` in at build time with no `.git` above it (the Dockerfile
+copies only `frontend/` and `deploy/`, and `.dockerignore` excludes `.git`),
+so `resolveCodeRepo` finds nothing to watch and the code-tree monitor is
+never constructed inside the container. A hosted update is still `fly
+deploy` from a newer checkout (Operational notes, below), which replaces the
+whole machine and needs no `git pull` inside it — the entrypoint's
+while-loop restarts the orchestrator on any crash today, and would equally
+absorb a self-supersede exit if this process ever ran from a live git
+checkout. Where the mechanism is live end to end is the bare local twin:
+`agentic up`, run directly from the blessed git checkout, notices a pull (by
+hand, or `agentic upgrade`) and — having no supervisor of its own — exits
+`75` and waits for the operator to restart it by hand. FleetView's drift
+chip renders the engine's loaded commit against the checkout's on-disk
+`HEAD` from the heartbeat either way, whenever one is present.
+
 **What it does and does not do.** The orchestrator dispatches agents *within*
 phases, meters their cost into each run's ledger, and escalates when things
 go wrong. It structurally cannot write `gates.*` — every gate remains a named
@@ -257,7 +276,9 @@ in git, restart converges, kills are safe.
 ## Operational notes
 
 * **Upgrades:** `fly deploy` from a newer checkout. The volume (clone) is
-  untouched; the entrypoint re-runs idempotently.
+  untouched; the entrypoint re-runs idempotently. This is the only update
+  path for the hosted process — see "Merge-updates" above for why
+  self-supersede doesn't apply here.
 * **Recovery:** if the clone is ever wrecked, destroy and recreate the
   volume — the next boot re-clones. Nothing on the machine is canonical.
 * **Rotation:** `GIT_TOKEN` and `TUNNEL_TOKEN` rotate via `fly secrets set`;

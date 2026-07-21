@@ -640,7 +640,7 @@ tasks:
     { id: 08-metrics-screen, status: review-approved, review_rounds: 1 },
     { id: 09-run-screen, status: review-approved, review_rounds: 2 },
     { id: 10-diff-view, status: review-approved, review_rounds: 1 },
-    { id: 11-integration-verification, status: dispatched, review_rounds: 0 }
+    { id: 11-integration-verification, status: pending, review_rounds: 0 }
   ]
 
 escalations:
@@ -924,4 +924,9 @@ escalations:
     resolved: true
     resolved_by: Nathan Carter
     resolved_at: 2026-07-21T17:23:30.865Z
-    resolution: retry
+    resolution: "retry — both attempts SIGKILLed by the 30-min default role
+      timeout; the orchestrator now runs with --role-timeout 5400. The 17:23Z
+      resolve-and-resume left task 11 at `dispatched`, which D12 read as
+      in-flight — the run rested wedged until a 22:16Z origin-side resolution
+      reset the task to pending (the #147 freeze, fixed forward in #148; this
+      entry is the two lineages merged)"

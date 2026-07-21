@@ -856,4 +856,7 @@ escalations:
   - at: 2026-07-21T14:46:05.953Z
     from_role: orchestrator
     reason: reviewer escalated task 09-run-screen — see review-10.md
-    resolved: false
+    resolved: true
+    resolved_by: Nathan Carter
+    resolved_at: 2026-07-21T15:02:36.341Z
+    resolution: unblocked

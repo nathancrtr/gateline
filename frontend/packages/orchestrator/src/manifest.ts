@@ -34,9 +34,13 @@ export interface HeadlessManifest {
  * integrated with a custom `integrate.py --prefix` (#95); auto-detected from
  * the checkout's own framework-lock.json otherwise.
  */
-export async function loadHeadlessManifest(repoDir: string, adapter: string, prefixHint?: string): Promise<HeadlessManifest> {
+export async function headlessManifestPath(repoDir: string, adapter: string, prefixHint?: string): Promise<string> {
   const { adapters: adaptersRoot } = await resolveFrameworkRootsFromDisk(repoDir, prefixHint)
-  const path = join(repoDir, adaptersRoot, adapter, 'manifest.json')
+  return join(repoDir, adaptersRoot, adapter, 'manifest.json')
+}
+
+export async function loadHeadlessManifest(repoDir: string, adapter: string, prefixHint?: string): Promise<HeadlessManifest> {
+  const path = await headlessManifestPath(repoDir, adapter, prefixHint)
   const raw = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
   const headless = raw.headless as Record<string, unknown> | undefined
   if (!headless) throw new Error(`adapter "${adapter}" has no headless section in ${path} — it cannot be dispatched`)

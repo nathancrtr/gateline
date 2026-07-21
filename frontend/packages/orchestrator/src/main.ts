@@ -14,6 +14,7 @@ import { formatShadowStep, shadowReplay } from './shadow.ts'
 import type { Engine } from './engine.ts'
 import type { Scheduler, SweepOutcome } from './schedule.ts'
 import { runLoop } from './triggers.ts'
+import { stagedShutdown } from './shutdown.ts'
 import { assembleOrchestrator, BOT_IDENTITY } from './start.ts'
 
 export { BOT_IDENTITY }
@@ -60,7 +61,7 @@ async function open(): Promise<Opened> {
 }
 
 /** CLI flags → the shared assembly (start.ts): one construction path for the binary and `agentic up`. */
-async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler: Scheduler }> {
+async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler: Scheduler; manifestStaleProbe: () => Promise<string[]> }> {
   const names = program.opts<{ adapter: string[] }>().adapter
   const hosted = program.opts<{ push?: boolean; spendLimitUsd?: number; requireBudget?: boolean; roleTimeout?: number }>()
   return assembleOrchestrator({
@@ -112,20 +113,23 @@ program
   .option('--heartbeat <seconds>', 'heartbeat interval', '180')
   .action(async (opts: { heartbeat: string }) => {
     const opened = await open()
-    const { engine, scheduler } = await buildEngine(opened)
+    const { engine, scheduler, manifestStaleProbe } = await buildEngine(opened)
     const loop = await runLoop(engine, opened.dir, {
       heartbeatMs: Number(opts.heartbeat) * 1000,
       scheduler,
       log: (line) => console.log(line),
+      staleProbe: manifestStaleProbe,
     })
     console.log(`watching ${opened.dir} (heartbeat ${opts.heartbeat}s; bot identity ${BOT_IDENTITY.name}) — ^C to stop`)
-    const stop = async () => {
-      console.log('draining in-flight dispatches…')
-      await loop.stop()
-      process.exit(0)
-    }
-    process.on('SIGINT', () => void stop())
-    process.on('SIGTERM', () => void stop())
+    const onSignal = stagedShutdown({
+      inFlight: () => engine.inFlightDetail(),
+      drain: () => loop.stop(),
+      abort: () => engine.abortInFlight(),
+      log: (line) => console.log(line),
+      exit: (code) => process.exit(code),
+    })
+    process.on('SIGINT', onSignal)
+    process.on('SIGTERM', onSignal)
   })
 
 program

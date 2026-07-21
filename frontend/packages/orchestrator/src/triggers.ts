@@ -15,6 +15,8 @@ export interface RunLoopConfig {
   /** When present, every tick also reconciles orchestrator.yaml's schedules (§4.6). */
   scheduler?: Scheduler
   log?: (line: string) => void
+  /** Advisory staleness check run on heartbeat ticks; returned lines are logged (#150). */
+  staleProbe?: () => Promise<string[]>
 }
 
 export interface RunLoop {
@@ -42,7 +44,16 @@ export async function runLoop(engine: Engine, repoDir: string, cfg: RunLoopConfi
       // Never on refs/completion ticks — our own fetch writes FETCH_HEAD
       // under the watched .git dir, so syncing there would re-trigger the
       // watcher forever; the heartbeat bounds staleness instead.
-      if (why === 'heartbeat' || why === 'startup') await engine.syncFromRemote()
+      if (why === 'heartbeat' || why === 'startup') {
+        await engine.syncFromRemote()
+        if (cfg.staleProbe) {
+          try {
+            for (const line of await cfg.staleProbe()) cfg.log?.(line)
+          } catch {
+            /* advisory only — a probe failure never blocks the tick */
+          }
+        }
+      }
       do {
         queued = false
         const outcomes = await engine.tick()

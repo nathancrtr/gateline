@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { z } from 'zod'
+import { Git } from '../sources/git.ts'
 import { LocalGitSource, readFileIfExists, repoToplevel } from '../sources/local-source.ts'
 import type { RunSource } from '../sources/source.ts'
 
@@ -41,6 +42,19 @@ function slugForPath(p: string): string {
 }
 
 /**
+ * Zero-config sources (--repo, cwd) push human writes when the repo has an
+ * origin (#149): a decision that only lands locally waits on the engine's
+ * next commit to reach origin, and an engine at rest never commits — the
+ * viewer and origin then show different runs with no signal. Push failures
+ * stay tolerated (`ok: true, pushFailed`), so a flaky or absent network
+ * degrades to the old behavior, visibly. Config-file sources keep their
+ * explicit `push` setting.
+ */
+async function pushWhenOriginExists(top: string): Promise<boolean> {
+  return (await new Git(top).configGet('remote.origin.url')) !== null
+}
+
+/**
  * Resolve sources in precedence order: explicit --repo paths, then the config
  * file, then the cwd's repository.
  */
@@ -48,9 +62,16 @@ export async function loadSources(opts: {
   repoOverrides?: string[]
   configPath?: string
   cwd?: string
+  /**
+   * Overrides the origin-exists push auto-detection for zero-config sources
+   * — `false` honors an operator's explicit no-push ceiling (`agentic up
+   * --no-push`). Config-file sources always keep their own `push` entry.
+   */
+  push?: boolean
 }): Promise<LoadedConfig> {
   const warnings: string[] = []
   const cwd = opts.cwd ?? process.cwd()
+  const pushFor = async (top: string) => opts.push ?? (await pushWhenOriginExists(top))
 
   if (opts.repoOverrides?.length) {
     const sources: RunSource[] = []
@@ -61,7 +82,7 @@ export async function loadSources(opts: {
         warnings.push(`--repo ${raw}: not a git repository, skipped`)
         continue
       }
-      sources.push(new LocalGitSource(slugForPath(top), top))
+      sources.push(new LocalGitSource(slugForPath(top), top, { push: await pushFor(top) }))
     }
     return { sources, configPath: null, warnings }
   }
@@ -74,7 +95,7 @@ export async function loadSources(opts: {
       parsed = configSchema.parse(parseYaml(text))
     } catch (e) {
       warnings.push(`config at ${configPath} is invalid (${(e as Error).message}); falling back to current repo`)
-      return fallbackToCwd(cwd, warnings)
+      return fallbackToCwd(cwd, warnings, opts.push)
     }
     const sources: RunSource[] = []
     const seen = new Set<string>()
@@ -98,18 +119,22 @@ export async function loadSources(opts: {
     }
     if (sources.length === 0) {
       warnings.push(`config at ${configPath} yielded no usable sources; falling back to current repo`)
-      return fallbackToCwd(cwd, warnings)
+      return fallbackToCwd(cwd, warnings, opts.push)
     }
     return { sources, configPath, warnings }
   }
 
-  return fallbackToCwd(cwd, warnings)
+  return fallbackToCwd(cwd, warnings, opts.push)
 }
 
-async function fallbackToCwd(cwd: string, warnings: string[]): Promise<LoadedConfig> {
+async function fallbackToCwd(cwd: string, warnings: string[], push?: boolean): Promise<LoadedConfig> {
   const top = await repoToplevel(cwd)
   if (top !== null) {
-    return { sources: [new LocalGitSource(slugForPath(top), top)], configPath: null, warnings }
+    return {
+      sources: [new LocalGitSource(slugForPath(top), top, { push: push ?? (await pushWhenOriginExists(top)) })],
+      configPath: null,
+      warnings,
+    }
   }
   warnings.push(`${cwd} is not a git repository and no config exists at ${defaultConfigPath()}`)
   return { sources: [], configPath: null, warnings }

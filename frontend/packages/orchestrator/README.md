@@ -72,6 +72,21 @@ Driving a live toy run end-to-end (the M2 exit criterion):
 4. Watch `git log run/<slug>` — every dispatch, bounce, and metering commit is
    there, authored by the bot; every decision is yours, authored by you.
 
+Stopping a resident orchestrator (`watch`, `agentic up`) is a drain ladder (#150),
+so picking up a merged fix never has to cost in-flight metered work:
+
+1. First `^C` **drains**: nothing new dispatches; in-flight work runs to its
+   normal close (ledger entries land). Each in-flight dispatch is named, with
+   progress lines while you wait.
+2. Second `^C` **aborts**: the harness process groups are SIGKILLed, but each
+   dispatch still resolves through the ordinary failure path — closing commits
+   land and the tasks are freed for retry. Killed work, closed books.
+3. Third `^C` exits immediately; open ledger entries are aged out by the next
+   orchestrator's heartbeat (§4.4 crash recovery).
+
+The heartbeat also warns when an adapter manifest changes on disk after load —
+manifests are read once at startup, so an on-disk fix needs a restart to apply.
+
 ## Trigger packaging
 
 `watch` is the resident form. For a machine that should reconcile without a

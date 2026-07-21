@@ -309,12 +309,15 @@ program
       }
       const repoDir = opts.repo[0] ?? process.cwd()
       const { startServer } = await import('@agentic/server/main')
-      const { startOrchestrator } = await import('@agentic/orchestrator')
+      const { stagedShutdown, startOrchestrator } = await import('@agentic/orchestrator')
       const server = await startServer({
         port: Number(flags.port),
         host: flags.host,
         open: flags.open !== false,
         repoOverrides: [repoDir],
+        // --no-push is a hard ceiling: it silences the frontend's human-write
+        // pushes too, not just the engine's (#149).
+        push: flags.push !== false ? undefined : false,
       })
       const orchestrator = await startOrchestrator({
         repoDir,
@@ -327,14 +330,18 @@ program
         log: (line) => console.log(line),
       })
       console.log(`engine watching ${repoDir} (heartbeat ${flags.heartbeat}s${flags.push !== false ? ', pushing to origin' : ', local-only'}) — ^C to stop`)
-      const stop = async () => {
-        console.log('draining in-flight dispatches…')
-        await orchestrator.stop()
-        server.close()
-        process.exit(0)
-      }
-      process.on('SIGINT', () => void stop())
-      process.on('SIGTERM', () => void stop())
+      const onSignal = stagedShutdown({
+        inFlight: () => orchestrator.inFlightDetail(),
+        drain: async () => {
+          await orchestrator.stop()
+          server.close()
+        },
+        abort: () => orchestrator.abortInFlight(),
+        log: (line) => console.log(line),
+        exit: (code) => process.exit(code),
+      })
+      process.on('SIGINT', onSignal)
+      process.on('SIGTERM', onSignal)
     },
   )
 

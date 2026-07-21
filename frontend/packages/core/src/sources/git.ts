@@ -174,6 +174,16 @@ export class Git {
     }
   }
 
+  /** `git rev-list --count <range>`, or null when a ref in the range is unknown. */
+  async revListCount(range: string): Promise<number | null> {
+    try {
+      const n = Number((await this.run(['rev-list', '--count', range])).trim())
+      return Number.isFinite(n) ? n : null
+    } catch {
+      return null
+    }
+  }
+
   /**
    * The repo's default branch: origin/HEAD when set, else main/master (local,
    * then remote-tracking — CI checkouts detach HEAD with no local branches),

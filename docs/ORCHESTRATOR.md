@@ -175,6 +175,15 @@ additions specific to a machine writer:
   the human decision grammar (`G2 approved by <name> …`), which the metrics reader
   treats as authoritative for decisions.
 
+Both writers carry their commits to origin themselves. The engine pushes with each
+bookkeeping commit (`--push`, #103), and zero-config frontend sources push human
+decisions in the same write whenever the repo has an origin (#149) — a decision
+that only landed locally would otherwise wait on the engine's next commit to reach
+origin, and an engine at rest never commits, so the viewer and origin consumers
+would silently see different runs. Any residual divergence is surfaced, not
+hidden: run summaries carry an ahead-of-origin commit count, shown as an
+"unpushed" badge in FleetView.
+
 ### 4.4 Dispatch protocol: commit-then-launch
 
 1. Derive a dispatch → **commit the intent first** (task/phase status →

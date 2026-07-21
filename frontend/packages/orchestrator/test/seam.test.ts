@@ -58,3 +58,23 @@ describe('the dispatch seam timeout', () => {
     expect(outcome.error).toContain('Command failed')
   })
 })
+
+describe('operator force-drain (#150)', () => {
+  it('abortAll kills the live group and the outcome names the operator abort, not a generic failure', async () => {
+    const dispatcher = new HeadlessDispatcher(shManifest('sleep 30'))
+    const pending = dispatcher.dispatch({ ...req, timeoutMs: 30_000 })
+    await new Promise((r) => setTimeout(r, 200)) // let the child spawn
+    expect(dispatcher.abortAll()).toBe(1)
+    const outcome = await pending
+    expect(outcome.ok).toBe(false)
+    expect(outcome.error).toMatch(/aborted by the operator during drain/)
+    expect(outcome.error).not.toMatch(/timed out/)
+  })
+
+  it('abortAll with nothing live signals nothing', async () => {
+    const dispatcher = new HeadlessDispatcher(shManifest("echo '{\"cost\":1,\"in\":1,\"out\":1}'"))
+    const outcome = await dispatcher.dispatch({ ...req, timeoutMs: 30_000 })
+    expect(outcome.ok).toBe(true)
+    expect(dispatcher.abortAll()).toBe(0)
+  })
+})

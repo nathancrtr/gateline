@@ -68,6 +68,14 @@ export function RunPage() {
         <PhaseChip phase={summary.phase} pausedReason={summary.pausedReason} />
         <GateLedger gates={summary.gates} />
         <span className="ml-auto flex items-center gap-4">
+          {summary.aheadOfOrigin != null && summary.aheadOfOrigin > 0 && (
+            <span
+              className="rounded-full bg-warn-soft px-2 py-0.5 font-mono text-[11px] font-semibold tabular-nums text-warn"
+              title={`${summary.aheadOfOrigin} commit(s) on ${summary.ref} not yet pushed — origin consumers see an older run`}
+            >
+              ↑{summary.aheadOfOrigin} unpushed
+            </span>
+          )}
           <BudgetMeter limit={summary.budget.limit} spent={summary.budget.spent} />
           <span className="font-mono text-xs text-faint" title={`read at ${summary.ref}`}>
             {summary.source} · {summary.ref}

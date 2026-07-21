@@ -211,6 +211,14 @@ export class LocalGitSource implements RunSource {
     return { name, email }
   }
 
+  async aheadOfOrigin(ref: RunRef): Promise<number | null> {
+    if (ref.kind !== 'branch') return null
+    // No remote-tracking ref → the branch was never pushed (or there is no
+    // origin): divergence is not knowable, which is not the same as zero.
+    if (!(await this.git.revParse(`refs/remotes/origin/${ref.branch}`))) return null
+    return this.git.revListCount(`refs/remotes/origin/${ref.branch}..refs/heads/${ref.branch}`)
+  }
+
   async writeState(ref: RunRef, mutate: StateDocMutation, message: string, options: { expectedTip?: string } = {}): Promise<WriteResult> {
     if (!(await this.identity()))
       return { ok: false, reason: 'no-identity', message: 'git user.name/user.email are unset — decisions must be attributable to a named human' }

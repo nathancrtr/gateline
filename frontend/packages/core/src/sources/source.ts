@@ -55,6 +55,14 @@ export interface RunSource {
   lastTouched(ref: RunRef, paths: string[]): Promise<CommitInfo | null>
   identity(): Promise<Identity | null>
   /**
+   * Commits on the run branch that origin does not yet have — unpushed
+   * writes (#149): the lineage FleetView renders and the lineage origin
+   * consumers see have silently diverged. Absent method or null result
+   * means "not knowable" (no origin tracking, remote-kind run) — display
+   * nothing, never zero.
+   */
+  aheadOfOrigin?(ref: RunRef): Promise<number | null>
+  /**
    * The single write path (rule R2): apply a mutation to state.yaml and commit
    * it to the run branch, compare-and-swap semantics. `expectedTip` extends
    * the CAS window back to the caller's read: when given and the branch no

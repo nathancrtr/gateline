@@ -29,6 +29,8 @@ export interface OrchestratorOptions {
   requireBudget?: boolean
   /** Host-wide spend ceiling across active runs. */
   spendLimitUsd?: number | null
+  /** Wall clock per dispatched role before its process group is killed (default 30 min). */
+  roleTimeoutSeconds?: number
   heartbeatSeconds?: number
   log?: (line: string) => void
 }
@@ -57,7 +59,12 @@ export async function assembleOrchestrator(opts: OrchestratorOptions): Promise<{
     push: opts.push,
     log,
   }
-  const engine = new Engine({ ...common, spendLimitUsd: opts.spendLimitUsd ?? null, requireBudget: opts.requireBudget })
+  const engine = new Engine({
+    ...common,
+    spendLimitUsd: opts.spendLimitUsd ?? null,
+    requireBudget: opts.requireBudget,
+    roleTimeoutMs: opts.roleTimeoutSeconds !== undefined ? opts.roleTimeoutSeconds * 1000 : undefined,
+  })
   const scheduler = new Scheduler(common)
   return { engine, scheduler }
 }

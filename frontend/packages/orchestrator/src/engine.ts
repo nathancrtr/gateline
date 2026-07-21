@@ -502,6 +502,17 @@ export class Engine {
           if (outcome.ok && intent.role === 'implementer' && intent.task) {
             setTaskFieldByDoc(doc, intent.task, 'status', 'in-review')
           }
+          // A failed implementer left its task stranded at `dispatched`,
+          // which D12 reads as in-flight forever — no retry, and the
+          // second-failure escalation below becomes unreachable. Hand the
+          // task back to derivation for the one retry §11 promises. On
+          // escalation the status stays frozen: resuming is a human
+          // decision, and the resolution says what happens to the task.
+          if (!outcome.ok && !escalateNow && intent.role === 'implementer' && intent.task) {
+            if (getTaskFieldByDoc(doc, intent.task, 'status') === 'dispatched') {
+              setTaskFieldByDoc(doc, intent.task, 'status', 'pending')
+            }
+          }
           if (escalateNow) {
             const count = countSeq(doc, ['escalations'])
             doc.setIn(['escalations', count], {
@@ -590,11 +601,22 @@ function setTaskField(doc: Document, obs: RunObservation, taskId: string, field:
 }
 
 /** Task index resolved against the doc itself (for closing commits, which re-read). */
-function setTaskFieldByDoc(doc: Document, taskId: string, field: string, value: unknown): void {
+function taskIndexByDoc(doc: Document, taskId: string): number {
   const tasks = doc.getIn(['tasks'])
   const js = tasks && typeof (tasks as { toJSON?: unknown }).toJSON === 'function' ? (tasks as { toJSON(): unknown[] }).toJSON() : []
-  const index = Array.isArray(js) ? js.findIndex((t) => t && typeof t === 'object' && (t as { id?: string }).id === taskId) : -1
+  return Array.isArray(js) ? js.findIndex((t) => t && typeof t === 'object' && (t as { id?: string }).id === taskId) : -1
+}
+
+function setTaskFieldByDoc(doc: Document, taskId: string, field: string, value: unknown): void {
+  const index = taskIndexByDoc(doc, taskId)
   if (index >= 0) doc.setIn(['tasks', index, field], value)
+}
+
+function getTaskFieldByDoc(doc: Document, taskId: string, field: string): unknown {
+  const index = taskIndexByDoc(doc, taskId)
+  if (index < 0) return undefined
+  const value = doc.getIn(['tasks', index, field])
+  return value && typeof (value as { toJSON?: unknown }).toJSON === 'function' ? (value as { toJSON(): unknown }).toJSON() : value
 }
 
 function applyBookkeeping(doc: Document, updates: Bookkeeping[]): void {

@@ -39,6 +39,7 @@ program
   .option('--push', 'push every orchestrator commit to origin (hosted mode)')
   .option('--spend-limit-usd <usd>', 'refuse new dispatches when projected spend across all active runs exceeds this', parseFloat)
   .option('--require-budget', 'refuse dispatch on any run missing budget.cost_limit_usd')
+  .option('--role-timeout <seconds>', 'wall clock per dispatched role before its process group is killed (default 1800)', parseFloat)
 
 interface Opened {
   dir: string
@@ -61,7 +62,7 @@ async function open(): Promise<Opened> {
 /** CLI flags → the shared assembly (start.ts): one construction path for the binary and `agentic up`. */
 async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler: Scheduler }> {
   const names = program.opts<{ adapter: string[] }>().adapter
-  const hosted = program.opts<{ push?: boolean; spendLimitUsd?: number; requireBudget?: boolean }>()
+  const hosted = program.opts<{ push?: boolean; spendLimitUsd?: number; requireBudget?: boolean; roleTimeout?: number }>()
   return assembleOrchestrator({
     repoDir: opened.dir,
     adapters: names,
@@ -69,6 +70,7 @@ async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler:
     push: hosted.push,
     spendLimitUsd: hosted.spendLimitUsd ?? null,
     requireBudget: hosted.requireBudget,
+    roleTimeoutSeconds: hosted.roleTimeout,
     log: (line: string) => console.log(line),
   })
 }

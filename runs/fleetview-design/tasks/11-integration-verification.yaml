@@ -69,6 +69,261 @@ depends_on:
   - 09-run-screen
   - 10-diff-view
 
-status: pending
+status: in-review
 
 notes: |
+  Verification-only round: no fix was needed under the coherence pass (job 4),
+  so no file in file_contact_surface was edited — `git diff --stat main...HEAD`
+  is unchanged by this task (confirmed at the end of this note). Environment:
+  Node v26.3.0, npm 11.16.0, macOS (Darwin 25.5.0) — this is also the AC6.1
+  fidelity-comparison OS (plan ADR-2/Risk 7).
+
+  === Job 1 — regression floor (AC5.1-AC5.4) ===
+
+  `npm install` (from frontend/): succeeded, 235 packages added, 0 errors
+  (only an unrelated `npm audit` moderate-severity advisory and an
+  allow-scripts notice for esbuild/fsevents postinstall scripts — pre-existing
+  workspace hygiene, out of this task's scope).
+
+  `npx playwright install chromium`: chromium-1223/1228 already cached under
+  `~/Library/Caches/ms-playwright`; install was a no-op success.
+
+  `npm run build` (prerequisite discovered this round: `packages/server`
+  serves the SPA from `packages/web/dist` — `npx playwright test` 404s on
+  every route without it; the plan's C4/ADR-notes don't call this out
+  explicitly as a step, but `smoke.spec.ts` spawns the same server binary
+  the built app runs behind, so a build is load-bearing for AC5.1, not
+  optional): `tsc -p tsconfig.json && vite build` — succeeded, 351 modules,
+  dist/index.html + one CSS bundle (28.93kB) + one JS bundle (519.87kB,
+  above Vite's 500kB chunk-size advisory — pre-existing, not a task-11
+  regression, not in file_contact_surface to address).
+
+  `npm test` (vitest run, from frontend/): PASS — 17 files / 127 tests passed,
+  1 test file skipped (live-smoke, intentionally gated), 0 failures. ~76s.
+
+  `npm run typecheck` (`tsc -p tsconfig.json && tsc -p packages/web/tsconfig.json`):
+  PASS — zero errors, zero output.
+
+  `npx playwright test` (frontend/e2e/smoke.spec.ts, assertions unmodified —
+  confirmed by `git diff main...HEAD -- frontend/e2e/smoke.spec.ts` = empty):
+  PASS — 5/5 tests green (inbox ranks oldest-first + flags bounced; bounce
+  view offers no approval R3; pointer approve loop → correct commit; keyboard
+  loop a→1→approve; portfolio+metrics render). AC5.1, AC5.3 (automated half)
+  hold.
+
+  AC5.4 (diff scope): `git diff --stat main...HEAD -- frontend/` touches
+  exactly the 9 files in file_contact_surface (app.tsx, chips.tsx,
+  decide.tsx, diff-view.tsx, inbox.tsx, metrics.tsx, portfolio.tsx, run.tsx,
+  styles.css) — 465 insertions / 266 deletions, no other file under
+  frontend/. Explicitly re-checked and empty-diffed: packages/core,
+  packages/server, packages/cli, packages/orchestrator, frontend/e2e,
+  frontend/package.json, packages/web/package.json, index.html,
+  tsconfig.json, vite.config.ts, api.ts, main.tsx, use-keys.ts, use-live.ts,
+  components/markdown.tsx. No new shared token module was added (matches
+  plan ADR-3's rejection of one — web is the only consumer). PASS.
+
+  AC6.2: `frontend/packages/web/package.json` still declares
+  `"react": "^19.1.0"`, `"tailwindcss": "^4.1.0"`, `"vite": "^7.0.0"` —
+  unchanged, no stack-change ADR was needed. PASS.
+
+  AC6.3: `git diff main...HEAD -- frontend/packages/web/src/app.tsx` shows
+  only NavItem/NavLink className changes — no new `<Route>`, no router
+  change. `api.ts` has zero diff (frozen, unedited) — no new endpoint calls.
+  The one behavioral addition is portfolio.tsx's `runs.length === 0` render
+  branch (verified in the diff and live — see job 4 below). PASS.
+
+  === Job 2a — manual keyboard check (AC5.3) ===
+
+  Driven with Playwright (chromium, scripted — no human hands-on-keyboard
+  session is possible in this sandbox; every claim below is from an actual
+  browser session against `node packages/server/src/main.ts --demo`, not
+  inferred from source reading) against a fresh --demo fixture.
+
+  Inbox (j/k/↵): PASS on every check — `j` selects the first row
+  (aria-current appears), a second `j` moves selection to the next row, `k`
+  moves it back to the previous row, and `↵` navigates from `/` to the
+  selected item's `/runs/<src>/<slug>?decide=<gate>` detail route.
+
+  Run page (a/x/1/2/3/esc, e): `e` cycles the `?artifact=` query param
+  through the run's artifact list (verified null → `intent-brief.md`). `a`
+  opens the approve burden picker on the primary needs-card. `1` selects
+  "Confirmation" and enables the `approve-confirm` button. `x` (on a fresh
+  card) opens decline mode and shows the `decline-confirm` button. Page-level
+  `esc` with no decision open navigates back to `/`. All PASS, matching
+  `frontend/README.md`'s table — the keyboard model is unchanged (confirmed
+  by an empty diff on `use-keys.ts`, which is outside file_contact_surface
+  and was never touched by any of the nine restyle tasks).
+
+  One PRE-EXISTING interaction quirk found and confirmed NOT introduced by
+  this run (`git diff main...HEAD` on decide.tsx/run.tsx/use-keys.ts touches
+  no key-handler logic, only class strings — use-keys.ts has zero diff):
+  pressing `esc` while a decision panel is open (e.g. mode=approve) does not
+  reliably return to the idle button state — it instead falls through to the
+  run page's own `esc` handler (`document.body.dataset.deciding` is only
+  synchronized via an effect that runs one tick after the state update, so
+  both window `keydown` listeners fire against the stale `dataset.deciding`
+  value on the same keypress) and navigates back to `/`. Reproduced twice,
+  deterministically, with a fresh page each time. This is out of task 11's
+  scope to fix — `use-keys.ts` is not in file_contact_surface and the freeze
+  contract (C3) restricts this task to class-string edits only; fixing it
+  would mean editing hook/handler logic in a frozen file. Recorded here for
+  the Reviewer/G2 human as a pre-existing defect, not a task-11 regression:
+  AC5.3 asks only that the keyboard model be *unchanged*, which it is.
+
+  === Job 2b — manual CAS-409 check (AC6.4) ===
+
+  First attempted the plan's literal suggested repro ("commit to the fixture
+  run branch between opening the card and confirming"): opened the decide
+  flow, ran `git commit --allow-empty` on the run's branch via a worktree,
+  then confirmed the approval. Result: no conflict — the approval committed
+  cleanly on top of the external commit. Traced this to the implementation
+  (`packages/server/src/app.ts` `/api/decisions` handler, `packages/core/src
+  /local-source.ts` `writeState`): the server does `readState` fresh at POST
+  time (not from any state captured at the earlier GET) and its CAS window
+  is only `revParse(tip) → updateRefCAS(tip, newCommit)` inside that single
+  request — so a commit that lands *before* the POST arrives is simply read
+  as the new base and built on top of correctly; it never trips the CAS.
+  This matches `write-path.test.ts`'s own "refuses when the branch moved
+  since read" test, which simulates the race by monkey-patching `revParse`
+  to move the ref *between* the write's own read and its own write, not by
+  moving it before the request starts. The plan's example wording describes
+  the human-facing scenario more loosely than the code's actual CAS window;
+  recording this precisely so a future reader doesn't mistake "commit before
+  clicking confirm" for a working repro of 409.
+
+  Correct repro (genuine concurrency, same run/gate, two tabs): opened the
+  same `g3-pending` G3 decide flow in two browser contexts, filled both to
+  "confirm", then fired both `[data-decide="approve-confirm"]` clicks
+  concurrently. Captured the raw `POST /api/decisions` responses directly
+  (not just the rendered UI) via `page.waitForResponse`: tab A → 409
+  `{"error":"run/g3-pending moved while deciding — re-read and re-present"}`;
+  tab B → 200 `{"ok":true,"commit":"d2998312..."}`. The UI in tab A rendered
+  `role="status"` text "The run moved while you were deciding — re-read and
+  decide again. (run/g3-pending moved while deciding — re-read and
+  re-present)" — the designed re-present copy, not a silent failure or a
+  generic error. `git log --oneline -3 run/g3-pending` afterward shows a
+  single clean commit on top of the pre-race tip — the losing write left no
+  trace, no corrupted ref, no double-commit. AC6.4 (one CAS write path with
+  409 re-present; repo stays the single source of truth) holds under a real
+  race. Also reconfirmed the R3 backstop (malformed packet never renders as
+  reviewable, no approval offered) via the AC5.1 suite (smoke.spec.ts test 2,
+  passing) — unchanged by this run.
+
+  === Job 3 — motion / reduced-motion floor (plan ADR-6, Risk 4) ===
+
+  Grep floor: `grep -rn '@keyframes' frontend/packages/web/src` → 3 hits, all
+  in styles.css (pulse, pulsepanel, sweep) plus one comment line. `grep -rn
+  'animation' frontend/packages/web/src` → all hits in styles.css (the three
+  `animation:` declarations, one comment, and the reduced-motion
+  `animation: none !important`). Zero hits in any .tsx file. PASS — matches
+  C1/C2's "exactly three motion classes, one file" contract; consumers
+  (app.tsx `.pulse-glow`, run.tsx `.pulse-panel`, inbox/portfolio/metrics/
+  run.tsx `.skel`) apply class names only.
+
+  Default mode (Playwright, no media emulation, against a fresh --demo
+  fixture): `.pulse-glow` (inbox nav count pill) — `element.getAnimations()`
+  reports one running animation, `animationName: "pulse"`. `.pulse-panel`
+  (pending-decision signal panel, on a reviewable G3 needs-card) — one
+  running animation, `animationName: "pulsepanel"`. `.skel` — computed
+  `animation-name` resolves to `"sweep"`. A bounced (non-reviewable) card
+  correctly carries no `.pulse-panel` class at all (bad border, no glow, no
+  motion class — matches C2's "Bounced/not-reviewable: ... no glow, no
+  pulse"). All PASS.
+
+  Reduced-motion mode (`page.emulateMedia({ reducedMotion: 'reduce' })`):
+  `.pulse-glow` — `getAnimations()` returns an empty array (nothing running),
+  and the pill still renders as a solid accent-filled capsule (computed
+  `background-color: rgb(11, 111, 137)`, `border-radius` ~999px) — the
+  non-motion carrier survives. `.skel` — computed `animation-name: "none"`,
+  the gradient background is still present as a static block. `.pulse-panel`
+  — zero running animations, and `getComputedStyle(el).boxShadow` still
+  returns the static glow-ring value (`... 0 0 0 1px rgba(11,111,137,.12),
+  0 0 18px rgba(11,111,137,.3)`) — the "static glow ring" fallback from the
+  reduced-motion contract is real, not just documented. The needs-card also
+  keeps its accent border color under reduced motion (non-glow carrier: rail
+  + border + gate chip, per C1/plan ADR-6). All PASS in both modes; the
+  reduced-motion media block's `animation: none !important` wins over the
+  base `.pulse-panel`/`.pulse-glow`/`.skel` class declarations as designed.
+
+  === Job 4 — coherence + fidelity pass (AC6.1) ===
+
+  Comparison OS: macOS (Darwin 25.5.0), Chromium via Playwright 1.61.1.
+  Screens compared dark-first (candidate B's native theme) then light, by
+  rendering both `runs/fleetview-design/design/candidate-b/*.html` (via
+  `file://`) and the live app (`--demo` fixture and a couple of specific
+  fixture runs chosen for state coverage) side by side with
+  `page.emulateMedia({ colorScheme })`, plus reading the class-recipe source
+  for every shared component (chips.tsx, decide.tsx, diff-view.tsx) against
+  the design-candidate.md Look-and-feel spec's Component-shapes section.
+
+  No recipe drift was found that needed a fix — grep confirms zero
+  `rounded-lg`/`rounded-xl`/`rounded-2xl` anywhere in src (REC5 holds); gate
+  cells are exactly the ~30×22px 3px-radius segmented strip with the tiny
+  faint gate numeral; the signal panel is `rounded-md` (6px) with a uniform
+  1px accent border plus a 3px accent left rail (`border border-l-[3px]
+  border-accent`) exactly per C2; KindChip suppresses the LED glow on solid
+  (urgent) fills and keeps it on outlined (routine) chips, matching "LED
+  glow suppressed on solid fills." Consequently file_contact_surface was
+  left untouched this round — there was no class-string fix to make.
+
+  Per-screen match/deviation (dark theme primary, light theme checked for
+  contrast + glow visibility per plan Risk 5):
+
+  1. inbox — MATCH. Rail spine, LED nav dots, pulsing accent count pill,
+     kind-chip vocabulary (G1/ESC/CAP/G2-bounced-dashed/PAUSE/BAD/G0),
+     bordered single-panel row list, "waiting since" age chips, selected-row
+     accent rail + wash all present in both themes. One minor content (not
+     recipe) deviation: the rail tagline reads "pipeline decisions" (one
+     line) in the built app vs. the mockup's two-line "fleet console ·
+     pipeline decisions" — a copy difference from an earlier restyle task
+     (app.tsx, task 03), not a class-recipe issue, and outside this task's
+     "class strings only" mandate to alter further; noted, not fixed.
+
+  2. portfolio — MATCH. Instrument-grid table (tight cells, mono uppercase
+     inset heads), gate-cell ledger, phase LED + label, budget meter track
+     with glow fill, needs pill / "N esc" text, malformed-row red inline
+     detail. The new zero-runs branch (AC6.3) was exercised live against a
+     bare git repo with no runs/ directories at all: renders the mockup's
+     "[ ]" accent glyph + bold "No runs found." lede + muted sub-copy about
+     `runs/<slug>` directories almost verbatim. No deviation.
+
+  3. metrics — MATCH. Gate-decisions table with approval-rate track,
+     "over-triggering?" warn chip at ≥90%, burden-mix ramp bars + legend
+     (confirmation/light/heavy/unrecorded), review-rounds-per-task bar chart
+     with the red 3+-cap bar, budget-honesty table with ✓/⚠ metering
+     indicators. No deviation.
+
+  4. run-artifacts — MATCH. Pulsing signal panel (accent rail + border +
+     glow) around the primary needs-card, gate chip, burden picker with the
+     selected option's ring highlighted, notes textarea, task-board pills
+     with round-count glyphs, ARTIFACTS/DIFF/HISTORY tabs with the 2px
+     accent underline on the active tab, artifact rail with per-file
+     checkmarks, rendered markdown body capped at measure. No deviation.
+
+  5. run-diff — MATCH. Per-file panel with mono filename + `+N −N` stat
+     line, teal-washed hunk header, add/del row backgrounds, dual line-number
+     gutters, dense evidence spacing (12px/20px mono, no vertical cell
+     padding). No deviation.
+
+  6. run-history — MATCH. Signal-spine dots (open ring for a plain commit,
+     filled accent dot + connecting spine line + mono "→ <phase>" stamp for
+     a phase-transition commit), newest-first ordering, author + short-oid
+     trailer. Verified specifically against a run with a real phase
+     transition (G2 approval moving implement → release) to see the filled
+     marker + arrow render, not just the single-commit case. No deviation.
+
+  Light theme (Risk 5 check): re-rendered inbox and the run-artifacts signal
+  panel with `colorScheme: 'light'`. Contrast reads clean across body/muted/
+  accent text against ground/surface. The pending-panel glow is visibly
+  present but genuinely subtle in light, exactly as design-candidate.md's
+  own Risks section concedes ("the bloom is subtle... the accent rail + chip
+  carry the signal") — the mockup's own light-theme render (compared side by
+  side) shows the same order of subtlety, so this isn't a built-vs-mockup
+  deviation, and the panel still separates at a glance via its accent
+  border + rail + gate chip (non-glow carriers), so no `--glow` token
+  retune was needed.
+
+  git diff --stat main...HEAD -- frontend/ after this task's work: unchanged
+  from before this task started (465 insertions / 266 deletions across the
+  same 9 files) — confirming no edits were made under file_contact_surface
+  this round, consistent with the coherence pass finding no drift to fix.

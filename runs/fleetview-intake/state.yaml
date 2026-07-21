@@ -1,7 +1,7 @@
 run: fleetview-intake
 branch: run/fleetview-intake
-phase: implement
-paused_reason: null
+phase: paused
+paused_reason: round-cap
 
 budget:
   cost_limit_usd: 200
@@ -404,5 +404,12 @@ escalations:
         resolved_by: Nathan Carter,
         resolved_at: 2026-07-21T01:05:56.116Z,
         resolution: I don't think this is real - keep an eye on this
+      },
+    {
+        at: 2026-07-21T01:06:12.169Z,
+        from_role: orchestrator,
+        reason: "task 03-intake-seam-reference: 3 review rounds without convergence —
+          usually a spec ambiguity",
+        resolved: false
       }
   ]

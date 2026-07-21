@@ -109,6 +109,10 @@ export interface EngineHealthEntry {
   inFlight: number
   pushRejections: Record<string, number>
   stale: boolean
+  /** Self-supersede (#141) drift fields — absent on pre-#141 engines. */
+  commit?: string
+  codeHead?: string
+  codeState?: 'fresh' | 'superseded-pending' | 'paused'
 }
 
 export interface EngineHealthResponse {

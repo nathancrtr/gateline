@@ -74,7 +74,9 @@ fi
 
 # The v1 orchestrator (opt-in): resident watch mode against the same clone.
 # Hosted hard lines: --push (origin is the record), --require-budget (no
-# ceiling, no dispatch), and an optional host-wide --spend-limit-usd. Humans
+# ceiling, no dispatch), and an optional host-wide --spend-limit-usd.
+# ORCH_NO_BUDGET_ENFORCEMENT=1 opts out of all three cap pauses for
+# flat-rate-billed harnesses (#109) — metering continues either way. Humans
 # decide gates in the frontend; the loop below restarts on any nonzero exit
 # after 10s (state is in git, restart converges) — ordinary crashes today.
 # It would equally absorb a deliberate self-supersede exit (75, #141, see
@@ -84,12 +86,14 @@ fi
 # update is still `fly deploy` from a newer checkout (docs/DEPLOY.md).
 if [ "${ORCH_ENABLED:-0}" = "1" ]; then
   : "${ANTHROPIC_API_KEY:?ORCH_ENABLED=1 requires ANTHROPIC_API_KEY for the claude-code adapter}"
+  ORCH_BUDGET_FLAG="--require-budget"
+  [ "${ORCH_NO_BUDGET_ENFORCEMENT:-0}" = "1" ] && ORCH_BUDGET_FLAG="--no-budget-enforcement"
   (
     while :; do
       node /app/frontend/packages/orchestrator/src/main.ts \
         --repo "$REPO_DIR" \
         --adapter "${ORCH_ADAPTER:-claude-code}" \
-        --push --require-budget \
+        --push "$ORCH_BUDGET_FLAG" \
         ${ORCH_SPEND_LIMIT_USD:+--spend-limit-usd "$ORCH_SPEND_LIMIT_USD"} \
         watch --heartbeat "${ORCH_HEARTBEAT_SECONDS:-180}" || true
       echo "orchestrator exited; restarting in 10s" >&2

@@ -144,6 +144,54 @@ describe('--require-budget: no ceiling, no dispatch (RB)', () => {
   })
 })
 
+describe('--no-budget-enforcement: meter always, pause never (#109)', () => {
+  it('dispatches past the per-run and host caps, and the ledger still meters', async () => {
+    // A $1 per-run cap and a $1 host cap both sit under the analyst's $2
+    // estimate — with enforcement on this is a DB/HB pause; off, it dispatches.
+    const { dir, clock } = toyRepo({ budget: 1 })
+    const dispatcher = new FakeDispatcher((req) => {
+      agentCommit(req.cwd, clock as Clock, { 'runs/toy/spec.md': SPEC }, 'toy: spec')
+      return {}
+    })
+    const engine = makeEngine(dir, dispatcher, { budgetEnforcement: false, spendLimitUsd: 1 })
+
+    const outcomes = await engine.tick()
+    await engine.drain()
+
+    expect(outcomes.find((o) => o.slug === 'toy')?.launched).toBe(1)
+    expect(dispatcher.calls.length).toBe(1)
+
+    // Metering is unconditional: the closing commit still records real cost.
+    const source = new LocalGitSource('t', dir)
+    const ref = (await source.listRuns()).find((r) => r.slug === 'toy')!
+    const { state } = await source.readState(ref)
+    expect(state?.phase).not.toBe('paused')
+    const ledger = parseLedger(state!)
+    expect(ledger.length).toBe(1)
+    expect(ledger[0]?.cost_usd).toBe(1.25)
+  })
+
+  it('overrides --require-budget: a run with no cap at all still dispatches', async () => {
+    const { dir, clock } = toyRepo()
+    const human = new LocalGitSource('t', dir)
+    const ref = (await human.listRuns()).find((r) => r.slug === 'toy')!
+    const dropped = await human.writeState(ref, (doc) => doc.setIn(['budget', 'cost_limit_usd'], null), 'state(toy): drop budget cap')
+    expect(dropped.ok).toBe(true)
+
+    const dispatcher = new FakeDispatcher((req) => {
+      agentCommit(req.cwd, clock as Clock, { 'runs/toy/spec.md': SPEC }, 'toy: spec')
+      return {}
+    })
+    const engine = makeEngine(dir, dispatcher, { requireBudget: true, budgetEnforcement: false })
+
+    const outcomes = await engine.tick()
+    await engine.drain()
+
+    expect(outcomes.find((o) => o.slug === 'toy')?.launched).toBe(1)
+    expect(dispatcher.calls.length).toBe(1)
+  })
+})
+
 describe('hosted clone: a run that exists only as a remote-tracking ref', () => {
   // The M2 csvpeek wedge: a hosted machine clones from origin, so a newly
   // pushed run/<slug> branch exists only as refs/remotes/origin/run/<slug>

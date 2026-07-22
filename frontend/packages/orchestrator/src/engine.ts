@@ -38,6 +38,13 @@ export interface EngineConfig {
   spendLimitUsd?: number | null
   /** Refuse dispatch on a run missing budget.cost_limit_usd (hosted mode): unattended dispatch needs a ceiling. */
   requireBudget?: boolean
+  /**
+   * Master switch for budget *enforcement* (#109): false disables the DB, RB,
+   * and HB pauses (spendLimitUsd/requireBudget become no-ops) for operators
+   * whose harness bills flat-rate. Metering — the ledger, cost_spent_usd,
+   * token counts — is unconditional and unaffected. Default true.
+   */
+  budgetEnforcement?: boolean
   now?: () => Date
   log?: (line: string) => void
 }
@@ -99,6 +106,10 @@ export class Engine {
 
   private estimates(): Record<string, number> {
     return this.cfg.registry?.estimates ?? {}
+  }
+
+  private enforcing(): boolean {
+    return this.cfg.budgetEnforcement !== false
   }
 
   private withLock<T>(slug: string, fn: () => Promise<T>): Promise<T> {
@@ -232,7 +243,7 @@ export class Engine {
     const refs = (await this.source.listRuns()).filter((r) => r.kind !== 'default') // merged runs are historical records
     // The host ceiling is measured once per tick across every active run's
     // ledger; dispatches granted within the tick add their estimates.
-    const host = this.cfg.spendLimitUsd != null ? { projected: await this.hostProjectedUsd(refs) } : null
+    const host = this.enforcing() && this.cfg.spendLimitUsd != null ? { projected: await this.hostProjectedUsd(refs) } : null
     for (const ref of refs) {
       await this.sweepStale(ref)
       // Pin the tip: observe at this exact commit and CAS every write against
@@ -250,6 +261,7 @@ export class Engine {
       const pinned = { ...ref, ref: tip }
       const obs = await observeRun(this.source, pinned, {
         estimates: this.estimates(),
+        enforceBudget: this.enforcing(),
         isAncestor: (a, b) => this.source.git.isAncestor(a, b),
       })
       const action = deriveAction(obs)
@@ -266,6 +278,7 @@ export class Engine {
    */
   private hostGuards(obs: RunObservation, action: DerivedAction, host: { projected: number } | null): DerivedAction {
     if (action.kind !== 'dispatch') return action
+    if (!this.enforcing()) return action // #109: enforcement off — meter, never pause
     if (this.cfg.requireBudget && (obs.state?.budget?.cost_limit_usd ?? null) === null) {
       const reason = 'no cost_limit_usd set — this orchestrator requires a per-run budget cap before dispatch (--require-budget)'
       return { kind: 'escalate', rule: 'RB', reason, pause: 'budget-exhausted', why: reason }

@@ -61,10 +61,18 @@ export interface RunObservation {
   inFlightSurfaces: string[][]
   /** Static per-role estimates from the registry (resolved question 2). */
   estimates: Record<string, number>
+  /**
+   * Whether budget caps pause dispatch (#109). Orchestrator config injected
+   * like `estimates`, defaulting on; when off, DB never fires — metering
+   * (ledger, ledgerSpentUsd) is unconditional either way.
+   */
+  enforceBudget: boolean
 }
 
 export interface ObserveConfig {
   estimates?: Record<string, number>
+  /** Budget caps pause dispatch (default true); metering happens regardless (#109). */
+  enforceBudget?: boolean
   /** git merge-base --is-ancestor, for decline-vs-artifact ordering (D9). */
   isAncestor?: (maybeAncestor: string, of: string) => Promise<boolean>
 }
@@ -172,6 +180,7 @@ export async function observeRun(source: RunSource, ref: RunRef, cfg: ObserveCon
     taskFiles,
     inFlightSurfaces,
     estimates: cfg.estimates ?? {},
+    enforceBudget: cfg.enforceBudget ?? true,
   }
 }
 

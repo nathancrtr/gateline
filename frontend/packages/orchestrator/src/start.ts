@@ -30,6 +30,12 @@ export interface OrchestratorOptions {
   requireBudget?: boolean
   /** Host-wide spend ceiling across active runs. */
   spendLimitUsd?: number | null
+  /**
+   * Budget *enforcement* switch (#109), default on: false disables the
+   * DB/RB/HB pauses — for operators billed flat-rate, where dollar caps do
+   * not map to marginal cost. Metering stays unconditional.
+   */
+  budgetEnforcement?: boolean
   /** Wall clock per dispatched role before its process group is killed (default 30 min). */
   roleTimeoutSeconds?: number
   heartbeatSeconds?: number
@@ -88,10 +94,22 @@ export async function assembleOrchestrator(
     push: opts.push,
     log,
   }
+  // An uncapped host must be visible, not quiet (#109): say so at every
+  // startup, and name any ceiling flags the opt-out overrides.
+  if (opts.budgetEnforcement === false) {
+    const overridden = [opts.requireBudget ? '--require-budget' : null, opts.spendLimitUsd != null ? '--spend-limit-usd' : null]
+      .filter((f) => f !== null)
+      .join(', ')
+    log(
+      `budget enforcement OFF — runs meter (ledger, cost_spent_usd) but caps never pause dispatch` +
+        (overridden ? `; ignoring ${overridden}` : ''),
+    )
+  }
   const engine = new Engine({
     ...common,
     spendLimitUsd: opts.spendLimitUsd ?? null,
     requireBudget: opts.requireBudget,
+    budgetEnforcement: opts.budgetEnforcement,
     roleTimeoutMs: opts.roleTimeoutSeconds !== undefined ? opts.roleTimeoutSeconds * 1000 : undefined,
   })
   const scheduler = new Scheduler(common)

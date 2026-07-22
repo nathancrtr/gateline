@@ -40,6 +40,7 @@ const obs = (over: Partial<RunObservation> = {}): RunObservation => ({
   taskFiles: new Map(),
   inFlightSurfaces: [],
   estimates: { orchestrator: 0.5, analyst: 2, architect: 5, implementer: 8, reviewer: 4, verifier: 6, ops: 2 },
+  enforceBudget: true,
   ...over,
 })
 
@@ -533,6 +534,12 @@ describe('the derivation table, one rule per row', () => {
       }),
     ) // open 8 + new 8 = 16 > 10
     expect(a).toMatchObject({ kind: 'escalate', rule: 'DB', pause: 'budget-exhausted' })
+  })
+
+  it('DB is skipped when enforcement is off (#109) — the same over-cap projection dispatches', () => {
+    const s = state({ budget: { cost_limit_usd: 10, cost_spent_usd: 0 } })
+    const a = deriveAction(obs({ state: s, ledgerSpentUsd: 9, enforceBudget: false })) // same numbers as the DB pause above
+    expect(a).toMatchObject({ kind: 'dispatch' })
   })
 
   it('a role with no registry estimate is costed at the conservative default', () => {

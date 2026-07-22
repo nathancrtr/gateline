@@ -292,6 +292,10 @@ program
     [] as string[],
   )
   .option('--spend-limit-usd <usd>', 'refuse new dispatches when projected spend across all active runs exceeds this', parseFloat)
+  .option(
+    '--no-budget-enforcement',
+    'meter spend but never pause on it: no per-run cap requirement, no cap pauses (for flat-rate-billed harnesses, #109)',
+  )
   .option('--no-push', 'keep orchestrator commits local (default pushes: origin is the record)')
   .option('--heartbeat <seconds>', 'engine heartbeat interval', '180')
   .option('--role-timeout <seconds>', 'wall clock per dispatched role before its process group is killed (default 1800)', parseFloat)
@@ -302,6 +306,7 @@ program
       open?: boolean
       adapter: string[]
       spendLimitUsd?: number
+      budgetEnforcement?: boolean
       push?: boolean
       heartbeat: string
       roleTimeout?: number
@@ -350,7 +355,11 @@ program
         repoDir,
         adapters: flags.adapter,
         push: flags.push !== false,
-        requireBudget: true,
+        // Hosted hard line unless the operator opts out (#109): with
+        // enforcement off, requiring a per-run cap would be requiring a
+        // number nothing reads.
+        requireBudget: flags.budgetEnforcement !== false,
+        budgetEnforcement: flags.budgetEnforcement,
         spendLimitUsd: flags.spendLimitUsd ?? null,
         roleTimeoutSeconds: flags.roleTimeout,
         heartbeatSeconds: Number(flags.heartbeat),

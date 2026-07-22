@@ -85,6 +85,7 @@ re-presents rather than corrupting state.
 | `ORCH_ENABLED` | no | `0` | `1` runs the v1 orchestrator against the same clone — the blessed topology, and the example config's default. Read the orchestrator section first. |
 | `ANTHROPIC_API_KEY` | with `ORCH_ENABLED=1` | — | Model auth for the claude-code dispatch harness. |
 | `ORCH_SPEND_LIMIT_USD` | recommended | — | Host-wide ceiling: refuse dispatch when projected spend across all active runs exceeds it. |
+| `ORCH_NO_BUDGET_ENFORCEMENT` | no | `0` | `1` replaces `--require-budget` with `--no-budget-enforcement`: meter spend but never pause on caps (flat-rate-billed harnesses, #109). |
 | `ORCH_HEARTBEAT_SECONDS` | no | `180` | Orchestrator heartbeat (stale-dispatch aging, missed-event sweep). |
 | `ORCH_ADAPTER` | no | `claude-code` | Headless adapter name (`adapters/<name>/manifest.json` in your repo). |
 
@@ -241,6 +242,13 @@ the orchestrator's watcher picks the change up within seconds.
   pauses instead of dispatching. No ceiling, no dispatch.
 * `--spend-limit-usd $ORCH_SPEND_LIMIT_USD` — a host-wide cap across all
   active runs, on top of the per-run caps. Set it.
+
+If your harness bills through a flat subscription rather than per-token,
+`ORCH_NO_BUDGET_ENFORCEMENT=1` swaps `--require-budget` for
+`--no-budget-enforcement`: metering (the ledger, `cost_spent_usd`) continues
+unconditionally, but no cap ever pauses dispatch (#109). The orchestrator
+logs the opted-out state at every startup — an uncapped host should be
+visible, not quiet.
 
 **Prerequisites, in order:**
 

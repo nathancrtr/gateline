@@ -17,6 +17,13 @@
 run: example-slug
 branch: run/example-slug
 phase: spec               # spec | plan | implement | integrate | release | done | paused
+                          # (reduced profiles skip phases: see `profile` below)
+profile: full             # patch | standard | full — which roles run and which
+                          # gates exist (DESIGN.md §4.1). Absent → full, so every
+                          # pre-profile run record keeps its meaning. Recorded at
+                          # init from the intent brief; upgrades mid-run are a
+                          # human edit to a heavier value only — the orchestrator
+                          # escalates on a downgrade rather than guessing.
 paused_reason: null       # set when phase=paused: budget-exhausted | round-cap | escalation | gate-declined
 
 budget:
@@ -33,7 +40,10 @@ budget:
                           # automatically. Facts, not a running total — totals are
                           # derived, so races and audits survive.
 
-gates:                    # a gate entry is written ONLY by the named human.
+gates:                    # carries exactly the profile's gates (patch: G1+G2;
+                          # standard: G0–G2; full: all four) — a gate outside
+                          # the profile is absent, never auto-approved.
+                          # A gate entry is written ONLY by the named human.
                           # `at` should be an ISO-8601 timestamp (a bare date
                           # parses, but decision-latency metrics degrade).
                           # A decided entry may carry `burden` — how much work

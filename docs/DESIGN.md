@@ -120,6 +120,61 @@ Rules that keep the loop safe:
 - **Gates are named humans, not "the team."** `state.yaml` records who approved what,
   when. This matters more as this generalizes up the org (Future Consideration #1).
 
+### 4.1 Run profiles — ceremony scaled to the change
+
+The pipeline above is one weight class: every run pays for a spec, a plan, an
+adversarial review cycle, independent verification, and a release plan. That was
+right for proving the design, but a two-line bug fix should not pay for it — and on
+a real repository most work items are small. A **run profile** declares, per run,
+which roles run and which gates exist. Three profiles, fixed sets, heaviest last:
+
+| Profile | Roles that run | Gates | Phase sequence |
+|---------|----------------|-------|----------------|
+| `patch` | Implementer, Reviewer | G1, G2 | `plan → implement → integrate → done` |
+| `standard` | Analyst, Architect, Implementer, Reviewer, Verifier | G0, G1, G2 | `spec → plan → implement → integrate → done` |
+| `full` | all eight | G0, G1, G2, G3 | `spec → plan → implement → integrate → release → done` |
+
+- **`patch`** — bug fixes and small bounded changes. The human authors the intent
+  brief *and* a single work item (`tasks/01-*.yaml`) at init: the analyst/architect
+  judgment being skipped is the human's to supply, not the engine's to improvise.
+  G1 approves brief + work item together (the G0/G1 questions collapse into one
+  "is this the change we want, scoped this way?"), then Implementer ⇄ Reviewer as
+  usual, and G2 merges. No Verifier: wanting independent verification is itself
+  evidence the change is `standard`-weight.
+- **`standard`** — the workhorse for feature-sized changes that ship by merging.
+  Everything up to and including G2; no Ops role and no G3, because for most repo
+  work the merge *is* the release. Reach for `full` when deployment is a distinct,
+  risky act needing a release and rollback plan.
+- **`full`** — the complete pipeline above. The default: a run whose `state.yaml`
+  carries no `profile:` field is a `full` run, so every existing run record and
+  fixture keeps its meaning unchanged.
+
+Mechanics and guardrails:
+
+- **Declaration.** The profile is chosen in the intent brief (optional `Profile`
+  line; absent → `full`) and recorded as `profile:` in `state.yaml` at run init —
+  from then on `state.yaml` is authoritative. `gates:` carries exactly the
+  profile's gates; a gate that doesn't exist for the profile is absent, never
+  auto-approved.
+- **Profiles are fixed sets, not knobs.** There is no per-run role toggle or
+  gate toggle (P6, and the charter's flexibility-over-customizability). If a
+  profile doesn't fit, pick the next heavier one.
+- **Reduced profiles change the review baseline explicitly.** In `patch` there is
+  no `spec.md`/`plan.md`; the intent brief and the work item are the standard the
+  Reviewer reviews against, and the dispatch names them as such. Contracts are
+  otherwise unchanged.
+- **Upgrades are one-way and human-decided.** Scope growth discovered mid-run —
+  an Implementer or Reviewer escalating "this exceeds the profile" (a plan-defect
+  escalation in the existing grammar), or the human deciding at a gate — is
+  resolved by the human editing `profile:` to a heavier value and resuming. The
+  stateless reconciler then derives the backfill for free: under the heavier
+  profile the missing artifacts (no `spec.md`, no G0 entry) make the run derive
+  as needing the Analyst, exactly as if the run had started there. The upgrade
+  edit adds the newly required gate entries (undecided); an absent entry parses
+  as undecided anyway, so forgetting one degrades gracefully. Downgrading
+  mid-run is forbidden — an engine that observes a profile lighter than the
+  gates already decided escalates rather than guessing.
+
 ## 5. Artifact contracts
 
 Every handoff artifact has a template in [`contracts/`](../contracts/). Templates are

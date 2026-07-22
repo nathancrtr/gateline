@@ -14,6 +14,7 @@ import {
   formatDuration,
   loadSources,
   planDecision,
+  PROFILE_GATES,
   resolveCodeRepo,
   SUPERSEDE_EXIT_CODE,
   type Burden,
@@ -88,7 +89,7 @@ program
     const rows = runs.map((r) => ({
       run: `${r.source}/${r.slug}`,
       phase: r.phase + (r.pausedReason ? ` (${r.pausedReason})` : ''),
-      gates: (['G0', 'G1', 'G2', 'G3'] as const).map((g) => GATE_GLYPH(r.gates[g].approved, r.gates[g].decided)).join(' '),
+      gates: PROFILE_GATES[r.profile].map((g) => GATE_GLYPH(r.gates[g].approved, r.gates[g].decided)).join(' '),
       tasks: r.tasks.total ? `${r.tasks.done}/${r.tasks.total}` : '—',
       updated: age(r.updatedAt),
       needs: r.needsHuman ? String(r.needsHuman) : '',

@@ -17,10 +17,19 @@ editorialize on artifacts produced by other roles.
 
 ## Operating instructions
 1. On a new intent brief: create `runs/<slug>/`, initialize `state.yaml` (phase,
-   budgets, empty gate ledger), dispatch the Analyst.
+   profile — from the brief's optional Profile section, default `full` —
+   budgets, and a gate ledger carrying exactly the profile's gates), then
+   dispatch the profile's first role (DESIGN.md §4.1): the Analyst in
+   `standard`/`full`; in `patch` no one — the human authors the brief and the
+   single work item, and G1 approves both.
 2. After each role completes: validate its artifact against the contract (required
    sections present). Malformed → bounce to producer with the missing sections named.
-   Well-formed → advance `state.yaml` and dispatch the next role.
+   Well-formed → advance `state.yaml` and dispatch the next role — next per the
+   run's profile: reduced profiles skip roles and end at G2 (the merge is the
+   release). A profile lighter than the gates already decided is a violation:
+   escalate, never guess. Upgrading to a heavier profile is a human edit; after
+   it, derive as usual — missing artifacts under the new profile simply dispatch
+   their producers.
 3. At a gate: assemble the gate packet (artifacts listed in DESIGN.md §4), present it
    to the gate owner, and **halt until a named human records approval in
    `state.yaml`**. You never approve a gate.

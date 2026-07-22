@@ -66,7 +66,7 @@ export function RunPage() {
       <header className="mb-5 flex flex-wrap items-center gap-x-3.5 gap-y-2 border-b border-line pb-4">
         <h1 className="font-mono text-xl font-semibold tracking-[0.06em]">{summary.slug}</h1>
         <PhaseChip phase={summary.phase} pausedReason={summary.pausedReason} />
-        <GateLedger gates={summary.gates} />
+        <GateLedger gates={summary.gates} profile={summary.profile} />
         <span className="ml-auto flex items-center gap-4">
           {summary.aheadOfOrigin != null && summary.aheadOfOrigin > 0 && (
             <span

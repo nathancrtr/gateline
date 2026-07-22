@@ -450,7 +450,7 @@ export class Engine {
         outcome = await this.cfg.dispatcher.dispatch({
           cwd: checkout.path,
           role: intent.role,
-          body: promptBody(ref.slug, intent, taskPath, runsRoot),
+          body: promptBody(ref.slug, intent, taskPath, runsRoot, obs.state?.profile ?? 'full'),
           timeoutMs: this.cfg.roleTimeoutMs ?? DEFAULT_ROLE_TIMEOUT_MS,
         })
         if (isolate) {

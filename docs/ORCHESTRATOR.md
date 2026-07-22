@@ -144,6 +144,17 @@ Two invariants govern every row: each action is derivable from committed files
 alone, and each action is **idempotent to re-derive** — a tick interrupted anywhere
 converges on re-run.
 
+The whole table is parameterized by the run's **profile** (DESIGN.md §4.1,
+issue #4): reduced profiles subset the gates, G2 advances to `done` rather than
+`release`, and in `patch` the plan phase has no producing role — the human
+authored the brief and work item, so there is no one to dispatch or bounce to,
+and the reviews alone are G2's packet. A profile invariant violation — a decided
+gate outside the profile (mid-run downgrade), a phase outside the profile's
+sequence, or a patch run with no work item — escalates (rule D21): honest
+failure, never a guess. Upgrading mid-run needs no special engine handling: the
+human edits `profile:` heavier and resumes, and the missing artifacts under the
+new profile derive as ordinary dispatches.
+
 A consequence of statelessness worth naming: an escalation is a *pointer to a
 condition* in the committed files, and marking it resolved is an acknowledgment,
 not a change. When the condition is one a human can edit away (raise

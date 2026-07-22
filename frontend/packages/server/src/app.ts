@@ -2,12 +2,14 @@
 // write path (rule R2 — POST /api/decisions is the only mutating route).
 import { Hono } from 'hono'
 import {
+  buildLexicon,
   buildPortfolio,
   collectRunDecisions,
   computeMetrics,
   deriveReadiness,
   DecisionError,
   engineHealthStale,
+  ID_PATTERN,
   parseUnifiedDiff,
   planDecision,
   readEngineHealth,
@@ -162,6 +164,20 @@ export function createApp(deps: AppDeps): Hono {
     if (content === null) return c.json({ error: `no artifact at ${path}` }, 404)
     const validation = await validateArtifact(path, content, source.templates)
     return c.json({ path, content, validation })
+  })
+
+  // The run lexicon (#163): verbatim R/AC/ADR definitions from this run's
+  // own spec.md + plan.md, plus the id grammar as a regex source — shipped
+  // as data because the browser must not bundle the core runtime.
+  app.get('/api/runs/:src/:slug/lexicon', async (c) => {
+    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+    if (!found) return c.json({ error: 'run not found' }, 404)
+    const { source, ref } = found
+    const lexicon = await cache.get(`lexicon:${ref.source}:${ref.slug}`, async () => {
+      const [spec, plan] = await Promise.all([source.readArtifact(ref, 'spec.md'), source.readArtifact(ref, 'plan.md')])
+      return buildLexicon({ spec, plan })
+    })
+    return c.json({ entries: lexicon.entries, pattern: ID_PATTERN })
   })
 
   app.get('/api/runs/:src/:slug/diff', async (c) => {

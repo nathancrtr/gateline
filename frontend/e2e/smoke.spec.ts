@@ -90,6 +90,21 @@ test('portfolio and metrics render', async ({ page }) => {
   await expect(page.getByText('Budget honesty')).toBeVisible()
 })
 
+test('run lexicon (#163): ids resolve to verbatim hover cards and jump to their definition', async ({ page }) => {
+  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=artifacts&artifact=verification-report.md')
+  await expect(page.locator('.lex-cited > summary')).toContainText('Cites AC1.1, AC2.1')
+  const ref = page.locator('.prose-artifact .lex-ref', { hasText: 'AC1.1' }).first()
+  await ref.hover()
+  const card = ref.locator('.lex-card')
+  await expect(card).toBeVisible()
+  await expect(card).toContainText('acceptance criterion')
+  // Verbatim from the fixture spec — the card quotes, never paraphrases.
+  await expect(card).toContainText('running the tool on sample input produces the documented output')
+  await card.locator('.lex-card-jump').click()
+  await expect(page).toHaveURL(/artifact=spec\.md/)
+  await expect(page.locator('#def-R1')).toContainText('Core behavior')
+})
+
 function sourceId(): string {
   return fixtureDir.replace(/\/+$/, '').split('/').pop()!
 }

@@ -61,6 +61,17 @@ describe('read routes', () => {
     expect(body.validation.missing).toContain('Requirements')
   })
 
+  it('GET lexicon returns verbatim definitions plus the id grammar as data', async () => {
+    const { status, body } = await get('/api/runs/fixture/g2-pending/lexicon')
+    expect(status).toBe(200)
+    const r1 = body.entries.find((e: { id: string }) => e.id === 'R1')
+    expect(r1).toMatchObject({ kind: 'requirement', shortName: 'Core behavior', artifact: 'spec.md' })
+    expect(r1.definition).toContain('### R1 — Core behavior')
+    expect(body.entries.find((e: { id: string }) => e.id === 'AC2.1')?.kind).toBe('criterion')
+    expect(body.entries.find((e: { id: string }) => e.id === 'ADR-1')).toMatchObject({ kind: 'decision', artifact: 'plan.md' })
+    expect('cites AC10.2 and ADR-3'.match(new RegExp(body.pattern, 'g'))).toEqual(['AC10.2', 'ADR-3'])
+  })
+
   it('GET diff returns parsed hunks for a branch run and merged flag for done', async () => {
     const branch = await get('/api/runs/fixture/g2-pending/diff')
     expect(branch.status).toBe(200)

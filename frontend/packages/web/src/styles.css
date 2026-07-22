@@ -151,3 +151,58 @@ body {
   accent-color: var(--color-accent);
   margin-right: 0.4rem;
 }
+.prose-artifact :is(h1, h2, h3, h4, h5, h6) {
+  scroll-margin-top: 12px;
+}
+
+/* Run-lexicon references (#163). A cited R/AC/ADR id resolves where it
+   stands: dotted accent underline; hover or keyboard focus opens a card
+   quoting the definition verbatim from the run's own spec/plan. Unresolved
+   ids take the warn voice — a dangling reference is reviewer signal. */
+.lex-ref {
+  @apply relative font-mono text-[0.94em] text-accent;
+  text-decoration: underline dotted;
+  text-underline-offset: 2px;
+  cursor: help;
+}
+.lex-ref-missing {
+  @apply text-warn;
+}
+.lex-card {
+  @apply invisible absolute left-0 top-full z-40 mt-1 flex w-[26rem] max-w-[80vw] flex-col gap-1.5 rounded-[5px] border border-line bg-surface px-3 py-2.5 text-left font-sans text-xs font-normal normal-case tracking-normal text-ink;
+  box-shadow: 0 6px 24px light-dark(rgba(16, 32, 42, 0.18), rgba(0, 0, 0, 0.5));
+  white-space: normal;
+}
+.lex-ref:hover > .lex-card,
+.lex-ref:focus-within > .lex-card,
+.lex-ref:focus > .lex-card {
+  visibility: visible;
+}
+.lex-card-head {
+  @apply flex flex-wrap items-baseline gap-x-2 gap-y-0.5;
+}
+.lex-card-qualifier {
+  @apply font-mono text-[11px] text-warn;
+}
+.lex-card-def {
+  @apply block max-h-48 overflow-y-auto rounded-[4px] bg-inset p-2 font-mono text-[11.5px] leading-[1.55];
+  white-space: pre-wrap;
+}
+.lex-card-jump {
+  @apply font-mono text-[11px] text-accent underline underline-offset-2;
+}
+
+/* Cited-objects strip: the artifact's reference surface, compressed to one
+   line until the reviewer opens it. */
+.lex-cited {
+  @apply mb-4 rounded-[5px] border border-line bg-inset px-3 py-2 text-xs;
+}
+.lex-cited > summary {
+  @apply cursor-pointer select-none font-mono text-[11.5px] text-muted;
+}
+.lex-cited > summary:hover {
+  @apply text-ink;
+}
+.lex-cited ul {
+  @apply mt-2 flex flex-col gap-1;
+}

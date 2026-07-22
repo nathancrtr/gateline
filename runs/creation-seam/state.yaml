@@ -4,11 +4,11 @@
 
 run: creation-seam
 branch: run/creation-seam
-phase: paused
+phase: implement
   # staged by hand ahead of the seam this run builds;
   # resume (= arm) derives spec from the gate ledger
 profile: standard # patch | standard | full (DESIGN.md §4.1)
-paused_reason: escalation
+paused_reason: null
 
 budget:
   cost_limit_usd: 60 # exhaustion pauses the run; it never silently degrades

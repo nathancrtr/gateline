@@ -203,7 +203,7 @@ tasks:
     { id: 01-merge-main, status: review-approved, review_rounds: 1 },
     { id: 02-record-scaffold-and-arm, status: in-review, review_rounds: 0 },
     { id: 03-stage-run-source, status: pending, review_rounds: 0 },
-    { id: 04-pr-ensure, status: in-review, review_rounds: 0 },
+    { id: 04-pr-ensure, status: in-review, review_rounds: 1 },
     { id: 05-cli-new-arm, status: pending, review_rounds: 0 },
     { id: 06-derive-tests-engine-ensure, status: pending, review_rounds: 0 },
     {

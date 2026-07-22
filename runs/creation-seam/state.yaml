@@ -12,7 +12,7 @@ paused_reason: null
 
 budget:
   cost_limit_usd: 60 # exhaustion pauses the run; it never silently degrades
-  cost_spent_usd: 36.02 # derived: the sum of ledger[].cost_usd
+  cost_spent_usd: 44.02 # derived: the sum of ledger[].cost_usd
   ledger:
     [
       {
@@ -79,7 +79,8 @@ budget:
           model: anthropic/claude-sonnet-5,
           tokens_in: null,
           tokens_out: null,
-          cost_usd: null
+          cost_usd: 8,
+          failed: true
         },
       {
           at: 2026-07-22T06:06:07.720Z,
@@ -134,7 +135,7 @@ gates:
 tasks:
   [
     { id: 01-merge-main, status: review-approved, review_rounds: 1 },
-    { id: 02-record-scaffold-and-arm, status: dispatched, review_rounds: 0 },
+    { id: 02-record-scaffold-and-arm, status: pending, review_rounds: 0 },
     { id: 03-stage-run-source, status: pending, review_rounds: 0 },
     { id: 04-pr-ensure, status: pending, review_rounds: 0 },
     { id: 05-cli-new-arm, status: pending, review_rounds: 0 },

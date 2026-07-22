@@ -58,6 +58,10 @@ export class RoutingDispatcher implements Dispatcher {
     return this.adapters[0]!.manifest.adapter
   }
 
+  abortAll(): number {
+    return this.adapters.reduce((n, a) => n + (a.dispatcher.abortAll?.() ?? 0), 0)
+  }
+
   route(role: string): RouteDecision {
     const dflt = this.adapters[0]!
     const pin = this.registry.bindings[role]?.avoid_vendor_of

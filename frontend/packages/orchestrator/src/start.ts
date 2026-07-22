@@ -2,9 +2,10 @@
 // run loop the `agentic-orchestrator` binary drives, callable in-process so
 // a frontend can co-locate the engine over its own clone (`agentic up`) —
 // one deployment, one clone, one authority (docs/TOPOLOGY.md §3.1).
+import { stat } from 'node:fs/promises'
 import { CodeTreeMonitor, Git, LocalGitSource, resolveCodeRepo, type CodeTreeStatus, type Identity } from '@agentic/core'
-import { Engine } from './engine.ts'
-import { loadHeadlessManifest } from './manifest.ts'
+import { Engine, type InFlightJob } from './engine.ts'
+import { headlessManifestPath, loadHeadlessManifest } from './manifest.ts'
 import { loadRegistry } from './registry.ts'
 import { RoutingDispatcher } from './router.ts'
 import { Scheduler } from './schedule.ts'
@@ -44,16 +45,35 @@ export interface OrchestratorOptions {
   onSupersede?: (status: CodeTreeStatus) => void
 }
 
-export async function assembleOrchestrator(opts: OrchestratorOptions): Promise<{ engine: Engine; scheduler: Scheduler }> {
+export async function assembleOrchestrator(
+  opts: OrchestratorOptions,
+): Promise<{ engine: Engine; scheduler: Scheduler; manifestStaleProbe: () => Promise<string[]> }> {
   const log = opts.log ?? (() => {})
   const git = new Git(opts.repoDir)
   const registry = await loadRegistry(git, await git.defaultBranch(), opts.frameworkPrefix)
+  const watched: { adapter: string; path: string; loadedMtimeMs: number }[] = []
   const adapters = await Promise.all(
     (opts.adapters?.length ? opts.adapters : ['claude-code']).map(async (name) => {
       const manifest = await loadHeadlessManifest(opts.repoDir, name, opts.frameworkPrefix)
+      const path = await headlessManifestPath(opts.repoDir, name, opts.frameworkPrefix)
+      watched.push({ adapter: name, path, loadedMtimeMs: (await stat(path).catch(() => null))?.mtimeMs ?? 0 })
       return { manifest, dispatcher: new HeadlessDispatcher(manifest) }
     }),
   )
+  // Manifests are read once, at process start (the 2026-07-16 trap: an
+  // on-disk fix silently never applied). The probe reports a manifest whose
+  // file changed after load, once per change — the heartbeat surfaces it.
+  const manifestStaleProbe = async (): Promise<string[]> => {
+    const messages: string[] = []
+    for (const w of watched) {
+      const mtimeMs = (await stat(w.path).catch(() => null))?.mtimeMs ?? 0
+      if (mtimeMs > w.loadedMtimeMs) {
+        w.loadedMtimeMs = mtimeMs
+        messages.push(`adapter manifest "${w.adapter}" changed on disk after load — manifests are read once at startup; restart to apply (${w.path})`)
+      }
+    }
+    return messages
+  }
   // Engine and scheduler share one dispatcher, so sweeps meter through the same seam (§6).
   const dispatcher =
     adapters.length === 1 && !registry
@@ -75,18 +95,22 @@ export async function assembleOrchestrator(opts: OrchestratorOptions): Promise<{
     roleTimeoutMs: opts.roleTimeoutSeconds !== undefined ? opts.roleTimeoutSeconds * 1000 : undefined,
   })
   const scheduler = new Scheduler(common)
-  return { engine, scheduler }
+  return { engine, scheduler, manifestStaleProbe }
 }
 
 export interface OrchestratorHandle {
   engine: Engine
   /** Drain in-flight dispatches and stop watching. */
   stop(): Promise<void>
+  /** What is currently dispatched, for drain reporting (#150). */
+  inFlightDetail(): InFlightJob[]
+  /** SIGKILL live harness groups; closing commits still land (#150). */
+  abortInFlight(): number
 }
 
 /** Resident orchestrator over an existing clone, in-process. */
 export async function startOrchestrator(opts: OrchestratorOptions): Promise<OrchestratorHandle> {
-  const { engine, scheduler } = await assembleOrchestrator(opts)
+  const { engine, scheduler, manifestStaleProbe } = await assembleOrchestrator(opts)
   // Self-supersede (#141): the code tree is *this module's own* checkout —
   // resolved from our own import.meta.url, not from opts.repoDir (the run
   // source, which may live in a different checkout under a host-repo setup).
@@ -96,8 +120,14 @@ export async function startOrchestrator(opts: OrchestratorOptions): Promise<Orch
     heartbeatMs: (opts.heartbeatSeconds ?? 180) * 1000,
     scheduler,
     log: opts.log,
+    staleProbe: manifestStaleProbe,
     codeMonitor,
     onSupersede: opts.onSupersede,
   })
-  return { engine, stop: () => loop.stop() }
+  return {
+    engine,
+    stop: () => loop.stop(),
+    inFlightDetail: () => engine.inFlightDetail(),
+    abortInFlight: () => engine.abortInFlight(),
+  }
 }

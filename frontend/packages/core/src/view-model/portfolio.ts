@@ -26,6 +26,12 @@ export interface RunSummary {
   /** Epoch seconds of the last commit touching the run directory. */
   updatedAt: number | null
   needsHuman: number
+  /**
+   * Commits on the run branch origin lacks (#149) — unpushed writes the
+   * viewer sees but origin consumers do not. Null when not knowable (no
+   * origin tracking, remote-kind run).
+   */
+  aheadOfOrigin: number | null
 }
 
 const cell = (g: GateEntry): GateLedgerCell => ({
@@ -42,6 +48,7 @@ export async function summarizeRun(
   const { state, error } = await source.readState(ref)
   const { items } = await deriveReadiness(source, ref)
   const touched = await source.lastTouched(ref, [''])
+  const aheadOfOrigin = (await source.aheadOfOrigin?.(ref)) ?? null
 
   if (!state) {
     return {
@@ -59,6 +66,7 @@ export async function summarizeRun(
         budget: { limit: null, spent: null },
         updatedAt: touched?.time ?? null,
         needsHuman: items.length,
+        aheadOfOrigin,
       },
       items,
     }
@@ -88,6 +96,7 @@ export async function summarizeRun(
       budget: { limit: state.budget?.cost_limit_usd ?? null, spent: state.budget?.cost_spent_usd ?? null },
       updatedAt: touched?.time ?? null,
       needsHuman: items.length,
+      aheadOfOrigin,
     },
     items,
   }

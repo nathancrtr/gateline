@@ -30,6 +30,13 @@ export interface Dispatcher {
   /** The adapter that would run this role (routing dispatchers differ per role). */
   adapterFor?(role: string): string
   dispatch(req: DispatchRequest): Promise<DispatchOutcome>
+  /**
+   * Operator force-drain (#150): SIGKILL every live harness process group.
+   * Each aborted dispatch resolves through the normal failure path, so its
+   * closing commit lands and the task is freed for a retry — killed work,
+   * closed books. Returns how many groups were signalled.
+   */
+  abortAll?(): number
 }
 
 /**
@@ -40,10 +47,32 @@ export interface Dispatcher {
 export class HeadlessDispatcher implements Dispatcher {
   readonly adapter: string
   private readonly manifest: HeadlessManifest
+  /** Live harness process-group leader pids, for operator force-drain (#150). */
+  private readonly live = new Set<number>()
+  private readonly abortedPids = new Set<number>()
 
   constructor(manifest: HeadlessManifest) {
     this.adapter = manifest.adapter
     this.manifest = manifest
+  }
+
+  abortAll(): number {
+    let signalled = 0
+    for (const pid of this.live) {
+      this.abortedPids.add(pid)
+      try {
+        process.kill(-pid, 'SIGKILL') // negative pid = the group (POSIX)
+        signalled++
+      } catch {
+        try {
+          process.kill(pid, 'SIGKILL')
+          signalled++
+        } catch {
+          /* already gone */
+        }
+      }
+    }
+    return signalled
   }
 
   async dispatch(req: DispatchRequest): Promise<DispatchOutcome> {
@@ -51,20 +80,23 @@ export class HeadlessDispatcher implements Dispatcher {
     const argv = this.manifest.command.map((a) => a.replaceAll('{prompt}', prompt).replaceAll('{role}', req.role))
     const [cmd, ...args] = argv
 
-    const { stdout, error, timedOut } = await runHarness(cmd!, args, req.cwd, req.timeoutMs)
+    const { stdout, error, timedOut, aborted } = await runHarness(cmd!, args, req.cwd, req.timeoutMs, this.live, this.abortedPids)
     // execFile's generic "Command failed: <argv>" hides what actually
-    // happened; a timeout is the one failure the seam itself caused, so
-    // name it — the ledger and the escalation both carry this string.
-    const failure = timedOut
-      ? `harness timed out after ${Math.round(req.timeoutMs / 60000)}min wall clock — process group killed (SIGKILL)`
-      : error
-        ? error.message
-        : null
+    // happened; a timeout or an operator abort is a failure the seam itself
+    // caused, so name it — the ledger and the escalation both carry this
+    // string.
+    const failure = aborted
+      ? 'dispatch aborted by the operator during drain — process group killed (SIGKILL); the task is freed for a retry'
+      : timedOut
+        ? `harness timed out after ${Math.round(req.timeoutMs / 60000)}min wall clock — process group killed (SIGKILL)`
+        : error
+          ? error.message
+          : null
 
     if (this.manifest.usage.format === 'static-estimate') {
       // No per-invocation usage from this harness (yet): the engine meters
       // this dispatch at the registry's static estimate, tokens null.
-      return { ok: !error && !timedOut, costUsd: null, tokensIn: null, tokensOut: null, error: failure }
+      return { ok: !error && !timedOut && !aborted, costUsd: null, tokensIn: null, tokensOut: null, error: failure }
     }
 
     const parsed = parseJsonOutput(stdout)
@@ -86,7 +118,7 @@ export class HeadlessDispatcher implements Dispatcher {
     const harnessError = this.manifest.usage.errorField ? dig(parsed, this.manifest.usage.errorField) === true : false
     const resultText = this.manifest.usage.resultField ? dig(parsed, this.manifest.usage.resultField) : null
     return {
-      ok: !error && !timedOut && !harnessError,
+      ok: !error && !timedOut && !aborted && !harnessError,
       costUsd: num(fields.cost_usd),
       tokensIn: num(fields.tokens_in),
       tokensOut: num(fields.tokens_out),
@@ -109,12 +141,20 @@ function runHarness(
   args: string[],
   cwd: string,
   timeoutMs: number,
-): Promise<{ stdout: string; error: Error | null; timedOut: boolean }> {
+  live?: Set<number>,
+  abortedPids?: Set<number>,
+): Promise<{ stdout: string; error: Error | null; timedOut: boolean; aborted: boolean }> {
   return new Promise((resolve) => {
     let timedOut = false
     let stdout = ''
     let stderr = ''
     const child = spawn(cmd, args, { cwd, detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
+    if (child.pid !== undefined) live?.add(child.pid)
+    const settle = (error: Error | null) => {
+      const aborted = child.pid !== undefined && (abortedPids?.delete(child.pid) ?? false)
+      if (child.pid !== undefined) live?.delete(child.pid)
+      resolve({ stdout, error, timedOut, aborted })
+    }
     child.stdout.setEncoding('utf8')
     child.stdout.on('data', (chunk: string) => {
       if (stdout.length < MAX_CAPTURE) stdout += chunk
@@ -133,7 +173,7 @@ function runHarness(
     }, timeoutMs)
     child.on('error', (err) => {
       clearTimeout(timer)
-      resolve({ stdout, error: err, timedOut })
+      settle(err)
     })
     child.on('close', (code, signal) => {
       clearTimeout(timer)
@@ -143,7 +183,7 @@ function runHarness(
           : new Error(
               `Command failed${signal ? ` (${signal})` : code !== null ? ` (exit ${code})` : ''}: ${cmd} ${args.join(' ')}${stderr.trim() ? `\n${stderr.trim()}` : ''}`,
             )
-      resolve({ stdout, error, timedOut })
+      settle(error)
     })
   })
 }

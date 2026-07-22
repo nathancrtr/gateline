@@ -41,6 +41,8 @@ export interface RunLoopConfig {
   /** Fired exactly once, after the heartbeat write, when the monitor confirms a clean fast-forward past startHead. */
   onSupersede?: (status: CodeTreeStatus) => void
   log?: (line: string) => void
+  /** Advisory staleness check run on heartbeat ticks; returned lines are logged (#150). */
+  staleProbe?: () => Promise<string[]>
 }
 
 /** The same trigger classes ORCHESTRATOR.md §4.1 describes — named so tests can fire one deterministically instead of racing real timers/watchers. */
@@ -109,7 +111,16 @@ export async function runLoop(engine: EngineLike, repoDir: string, cfg: RunLoopC
         // Never on refs/completion ticks — our own fetch writes FETCH_HEAD
         // under the watched .git dir, so syncing there would re-trigger the
         // watcher forever; the heartbeat bounds staleness instead.
-        if (why === 'heartbeat' || why === 'startup') await engine.syncFromRemote()
+        if (why === 'heartbeat' || why === 'startup') {
+          await engine.syncFromRemote()
+          if (cfg.staleProbe) {
+            try {
+              for (const line of await cfg.staleProbe()) cfg.log?.(line)
+            } catch {
+              /* advisory only — a probe failure never blocks the tick */
+            }
+          }
+        }
         do {
           queued = false
           const outcomes = await engine.tick()

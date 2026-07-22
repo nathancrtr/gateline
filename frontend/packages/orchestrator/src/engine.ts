@@ -53,11 +53,23 @@ export interface TickOutcome {
 const DEFAULT_ROLE_TIMEOUT_MS = 30 * 60 * 1000
 const DEFAULT_STALE_MS = 5 * 60 * 1000
 
+/** One in-flight dispatch, as reported to the operator during drain (#150). */
+export interface InFlightJob {
+  slug: string
+  role: string
+  task: string | null
+  round: number | null
+  /** Epoch ms the dispatch launched. */
+  startedAt: number
+}
+
 export class Engine {
   readonly source: LocalGitSource
   private readonly cfg: EngineConfig
   /** In-flight jobs, keyed slug|role|task|round — host ephemera, never committed (§4.4). */
   private readonly jobs = new Map<string, Promise<void>>()
+  /** Same keys as `jobs`: what each in-flight dispatch is, for drain reporting (#150). */
+  private readonly jobMeta = new Map<string, InFlightJob>()
   /**
    * Per-run write serialization. CAS protects against *other* writers; this
    * protects the engine against itself — concurrent closing commits (two
@@ -101,6 +113,21 @@ export class Engine {
 
   inFlight(): number {
     return this.jobs.size
+  }
+
+  /** What is currently dispatched, for drain reporting (#150). */
+  inFlightDetail(): InFlightJob[] {
+    return [...this.jobMeta.values()]
+  }
+
+  /**
+   * Operator force-drain (#150): SIGKILL every live harness process group.
+   * Aborted dispatches resolve through the normal failure path — closing
+   * commits land and tasks are freed for retry — so `drain()` completes
+   * shortly after. Returns how many groups were signalled.
+   */
+  abortInFlight(): number {
+    return this.cfg.dispatcher.abortAll?.() ?? 0
   }
 
   /**
@@ -407,6 +434,7 @@ export class Engine {
 
   private launch(ref: RunRef, obs: RunObservation, intent: DispatchIntent, openedAt: string): void {
     const key = jobKey(ref.slug, intent.role, intent.task, intent.round)
+    this.jobMeta.set(key, { slug: ref.slug, role: intent.role, task: intent.task, round: intent.round, startedAt: Date.now() })
     // Implementers get per-task isolation (§5.3): a private branch and
     // worktree off the run tip, folded back serially on success — parallel
     // implementers never observe each other's mid-flight state.
@@ -443,6 +471,7 @@ export class Engine {
       key,
       job.finally(async () => {
         this.jobs.delete(key)
+        this.jobMeta.delete(key)
         // Last job out releases the run's checkout, so subsequent state
         // writes go through plumbing + CAS instead of the worktree fallback.
         if (![...this.jobs.keys()].some((k) => k.startsWith(`${ref.slug}|`))) {

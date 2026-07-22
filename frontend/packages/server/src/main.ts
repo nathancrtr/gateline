@@ -18,6 +18,11 @@ export interface ServeOptions {
   repoOverrides?: string[]
   demo?: boolean
   open?: boolean
+  /**
+   * Zero-config sources push human writes when the repo has an origin
+   * (#149); `false` honors an operator's explicit no-push ceiling.
+   */
+  push?: boolean
 }
 
 const MIME: Record<string, string> = {
@@ -40,7 +45,7 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
     repoOverrides = [fixture.dir]
   }
 
-  const { sources, configPath, warnings } = await loadSources({ repoOverrides })
+  const { sources, configPath, warnings } = await loadSources({ repoOverrides, push: opts.push })
   for (const w of warnings) console.warn(`warning: ${w}`)
   if (sources.length === 0) {
     throw new Error('no run sources — run inside a repository, pass --repo <path>, or create ~/.config/agentic/config.yaml')

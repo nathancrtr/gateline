@@ -74,6 +74,14 @@ export function PortfolioPage() {
                       {run.slug}
                     </Link>
                     <span className="ml-2 font-mono text-[11px] text-faint">{run.source}</span>
+                    {run.aheadOfOrigin != null && run.aheadOfOrigin > 0 && (
+                      <span
+                        className="ml-2 rounded-full bg-warn-soft px-1.5 py-[3px] font-mono text-[11px] font-semibold tabular-nums text-warn"
+                        title={`${run.aheadOfOrigin} commit(s) on ${run.ref} not yet pushed — origin consumers see an older run`}
+                      >
+                        ↑{run.aheadOfOrigin}
+                      </span>
+                    )}
                     {run.malformed && <p className="mt-[3px] text-[11.5px] text-bad">{run.malformed}</p>}
                   </td>
                   <td className={TD}>

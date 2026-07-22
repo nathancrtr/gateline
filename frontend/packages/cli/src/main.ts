@@ -315,12 +315,15 @@ program
       }
       const repoDir = opts.repo[0] ?? process.cwd()
       const { startServer } = await import('@agentic/server/main')
-      const { startOrchestrator } = await import('@agentic/orchestrator')
+      const { stagedShutdown, startOrchestrator } = await import('@agentic/orchestrator')
       const server = await startServer({
         port: Number(flags.port),
         host: flags.host,
         open: flags.open !== false,
         repoOverrides: [repoDir],
+        // --no-push is a hard ceiling: it silences the frontend's human-write
+        // pushes too, not just the engine's (#149).
+        push: flags.push !== false ? undefined : false,
       })
       // `orchestrator` and the supersede callback below both close over
       // `stop`, but `stop` needs `orchestrator` to drain it — same
@@ -328,16 +331,18 @@ program
       // variable nullable until startOrchestrator returns; the callback only
       // fires later, on a heartbeat, by which point it's set.
       let orchestrator: Awaited<ReturnType<typeof startOrchestrator>> | null = null
-      // A supersede can race a SIGINT/SIGTERM (both trigger the same drain
-      // path); guard so the second caller is a no-op instead of double
-      // draining or double process.exit.
-      let stopping = false
+      // A supersede can race the operator's ^C ladder (both end in the same
+      // drain); share one idempotent drain so the second caller awaits the
+      // first's work instead of double-draining or double process.exit.
+      let drained: Promise<void> | null = null
+      const drain = () =>
+        (drained ??= (async () => {
+          await orchestrator?.stop()
+          server.close()
+        })())
       const stop = async (exitCode: number) => {
-        if (stopping) return
-        stopping = true
         console.log('draining in-flight dispatches…')
-        await orchestrator?.stop()
-        server.close()
+        await drain()
         process.exit(exitCode)
       }
       orchestrator = await startOrchestrator({
@@ -357,8 +362,15 @@ program
         },
       })
       console.log(`engine watching ${repoDir} (heartbeat ${flags.heartbeat}s${flags.push !== false ? ', pushing to origin' : ', local-only'}) — ^C to stop`)
-      process.on('SIGINT', () => void stop(0))
-      process.on('SIGTERM', () => void stop(0))
+      const onSignal = stagedShutdown({
+        inFlight: () => orchestrator?.inFlightDetail() ?? [],
+        drain,
+        abort: () => orchestrator?.abortInFlight() ?? 0,
+        log: (line) => console.log(line),
+        exit: (code) => process.exit(code),
+      })
+      process.on('SIGINT', onSignal)
+      process.on('SIGTERM', onSignal)
     },
   )
 

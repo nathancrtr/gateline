@@ -112,3 +112,100 @@ describe('zero-config sources push human writes when an origin exists (#149)', (
     expect(result.pushFailed).toBeUndefined()
   })
 })
+
+// --- #99: a local branch pinned behind origin must not freeze observation ---
+
+import { readFileSync, writeFileSync } from 'node:fs'
+
+/** Advance origin's copy of the branch: flip G0 approved in a throwaway clone and push. */
+function advanceOrigin(bare: string, branch: string, slug: string): string {
+  const clone = `${bare}-clone-${Math.random().toString(36).slice(2, 8)}`
+  cleanups.push(clone)
+  execFileSync('git', ['clone', '--quiet', '--branch', branch, bare, clone])
+  execFileSync('git', ['-C', clone, 'config', 'user.name', 'Origin Op'])
+  execFileSync('git', ['-C', clone, 'config', 'user.email', 'oo@example.test'])
+  const p = `${clone}/runs/${slug}/state.yaml`
+  writeFileSync(p, readFileSync(p, 'utf8').replace('G0: {approved: false, by: null', 'G0: {approved: true, by: Origin Op'), 'utf8')
+  execFileSync('git', ['-C', clone, 'commit', '-aqm', `state(${slug}): G0 approved by Origin Op [burden: confirmation]`])
+  execFileSync('git', ['-C', clone, 'push', '--quiet', 'origin', branch])
+  return execFileSync('git', ['-C', clone, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+}
+
+describe('stale local branch (#99)', () => {
+  it('behind + checked out in a worktree: observation serves the remote tip, not the pinned local', async () => {
+    const bare = addOrigin(ctx.repo.dir)
+    const wt = `${ctx.repo.dir}-wt`
+    cleanups.push(wt)
+    execFileSync('git', ['-C', ctx.repo.dir, 'worktree', 'add', '--quiet', wt, 'run/g0-pending'])
+    advanceOrigin(bare, 'run/g0-pending', 'g0-pending')
+    await ctx.source.syncFromRemote() // fetches; deliberately cannot move the checked-out branch
+
+    const ref = await refFor(ctx.source, 'g0-pending')
+    expect(ref.kind).toBe('remote')
+    expect(ref.ref).toBe('origin/run/g0-pending')
+    const { state } = await ctx.source.readState(ref)
+    expect(state!.gates.G0.approved).toBe(true) // origin's world, not the worktree-pinned one
+  })
+
+  it('ahead (unpushed decision): local still wins, as today', async () => {
+    addOrigin(ctx.repo.dir)
+    await localOnlyDecision(ctx.repo.dir, 'g0-pending')
+    const ref = await refFor(ctx.source, 'g0-pending')
+    expect(ref.kind).toBe('branch')
+    expect(await ctx.source.behindOrigin(ref)).toBe(0)
+  })
+
+  it('diverged: local wins deterministically, and the summary carries both counts', async () => {
+    const bare = addOrigin(ctx.repo.dir)
+    await localOnlyDecision(ctx.repo.dir, 'g0-pending')
+    advanceOrigin(bare, 'run/g0-pending', 'g0-pending')
+    execFileSync('git', ['-C', ctx.repo.dir, 'fetch', '--quiet', 'origin'])
+
+    const ref = await refFor(ctx.source, 'g0-pending')
+    expect(ref.kind).toBe('branch')
+    const { summary } = await summarizeRun(ctx.source, ref)
+    expect(summary.aheadOfOrigin).toBe(1)
+    expect(summary.behindOrigin).toBe(1)
+  })
+
+  it('writeState on a behind local (not checked out) fast-forwards first — never builds on a stale base', async () => {
+    const bare = addOrigin(ctx.repo.dir)
+    const newTip = advanceOrigin(bare, 'run/g0-pending', 'g0-pending')
+    execFileSync('git', ['-C', ctx.repo.dir, 'fetch', '--quiet', 'origin']) // remote-tracking only
+
+    const source = new LocalGitSource('local-only', ctx.repo.dir)
+    const ref = await refFor(source, 'g0-pending')
+    const { state } = await source.readState(ref)
+    expect(state!.gates.G0.approved).toBe(true) // observed at origin's tip
+    const planned = planDecision(state!, { action: 'approve', gate: 'G1', burden: 'confirmation' }, { name: 'Op', email: 'op@example.test' })
+    const result = await source.writeState(ref, planned.mutate, planned.message)
+    expect(result.ok).toBe(true)
+
+    const parent = execFileSync('git', ['-C', ctx.repo.dir, 'rev-parse', 'run/g0-pending^'], { encoding: 'utf8' }).trim()
+    expect(parent).toBe(newTip) // the decision sits on origin's tip, not the stale local one
+    const after = await source.readState(await refFor(source, 'g0-pending'))
+    expect(after.state!.gates.G0.approved).toBe(true)
+    expect(after.state!.gates.G1.approved).toBe(true)
+  })
+
+  it('writeState through a clean but behind checkout fast-forwards the worktree, then commits', async () => {
+    const bare = addOrigin(ctx.repo.dir)
+    const wt = `${ctx.repo.dir}-wt2`
+    cleanups.push(wt)
+    execFileSync('git', ['-C', ctx.repo.dir, 'worktree', 'add', '--quiet', wt, 'run/g0-pending'])
+    const newTip = advanceOrigin(bare, 'run/g0-pending', 'g0-pending')
+    execFileSync('git', ['-C', ctx.repo.dir, 'fetch', '--quiet', 'origin'])
+
+    const source = new LocalGitSource('local-only', ctx.repo.dir)
+    const ref = await refFor(source, 'g0-pending')
+    const { state } = await source.readState(ref)
+    const planned = planDecision(state!, { action: 'approve', gate: 'G1', burden: 'confirmation' }, { name: 'Op', email: 'op@example.test' })
+    const result = await source.writeState(ref, planned.mutate, planned.message)
+    expect(result.ok).toBe(true)
+
+    const parent = execFileSync('git', ['-C', ctx.repo.dir, 'rev-parse', 'run/g0-pending^'], { encoding: 'utf8' }).trim()
+    expect(parent).toBe(newTip)
+    const wtHead = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+    expect(wtHead).toBe(result.commit) // the checkout advanced with the write — no silent desync
+  })
+})

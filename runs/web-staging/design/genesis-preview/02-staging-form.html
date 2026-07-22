@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>genesis-preview · 02 staging form</title>
+<style>
+/* ============ Signal Deck tokens — verbatim from styles.css ============ */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  color-scheme:light dark;
+  --ground:light-dark(#eef2f5,#0a0e11);
+  --surface:light-dark(#ffffff,#111820);
+  --inset:light-dark(#f3f6f8,#0d141a);
+  --raised:light-dark(#e4ebef,#18222b);
+  --ink:light-dark(#10202a,#dbe7ec);
+  --muted:light-dark(#4c5d67,#8ba1ac);
+  --faint:light-dark(#8598a2,#566771);
+  --line:light-dark(#d3dde3,#223039);
+  --accent:light-dark(#0b6f89,#45c8ec);
+  --ok:light-dark(#157a4a,#4ec98d);
+  --warn:light-dark(#8a6410,#e0b24e);
+  --bad:light-dark(#b23b28,#ff7f63);
+  --on-solid:light-dark(#ffffff,#06121a);
+  --accent-soft:light-dark(rgba(11,111,137,.12),rgba(69,200,236,.14));
+  --ok-soft:light-dark(rgba(21,122,74,.13),rgba(78,201,141,.15));
+  --warn-soft:light-dark(rgba(138,100,16,.13),rgba(224,178,78,.15));
+  --bad-soft:light-dark(rgba(178,59,40,.12),rgba(255,127,99,.16));
+  --glow:light-dark(rgba(11,111,137,.30),rgba(69,200,236,.40));
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+}
+body{background:var(--ground);color:var(--ink);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+a{color:var(--accent)}
+.mono{font-family:var(--mono)}
+
+/* mockup chrome */
+.mock-bar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);background:var(--surface);padding:8px 14px}
+.mock-bar .tag{font:700 10px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--warn);border:1px dashed var(--warn);border-radius:4px;padding:3px 7px}
+.mock-bar .name{font:600 12px var(--mono);color:var(--muted)}
+.tabs{display:flex;gap:6px;margin-left:auto}
+.tabs button{border:1px solid var(--line);background:var(--inset);color:var(--muted);border-radius:999px;padding:4px 12px;font:600 11.5px var(--sans);cursor:pointer}
+.tabs button.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.state{display:none}.state.on{display:block}
+.callout{margin:18px 0 0;border-left:2px solid var(--warn);background:var(--warn-soft);border-radius:0 5px 5px 0;padding:8px 12px;font-size:12px;color:var(--muted)}
+.callout b{color:var(--warn)}
+
+/* app shell */
+.shell{display:flex;max-width:1280px;margin:0 auto;min-height:calc(100vh - 41px)}
+.side{width:192px;flex-shrink:0;display:flex;flex-direction:column;gap:22px;border-right:1px solid var(--line);background:var(--surface);padding:16px 12px}
+.brand{padding:6px 8px}
+.brand .t{font:600 15px var(--mono);letter-spacing:.16em;text-transform:uppercase}
+.brand .s{margin-top:6px;font-size:10.5px;line-height:1.35;color:var(--faint)}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav a{display:flex;align-items:center;gap:9px;border-radius:4px;padding:7px 9px;font-size:12px;color:var(--muted);text-decoration:none}
+.nav a.on{background:var(--accent-soft);color:var(--accent)}
+.nav a .d{width:6px;height:6px;border-radius:50%;background:var(--faint)}
+.nav a.on .d{background:var(--accent);box-shadow:0 0 8px var(--glow)}
+.motto{margin-top:auto;padding:8px;font:10px/1.6 var(--mono);color:var(--faint)}
+.main{flex:1;min-width:0;padding:24px}
+
+/* page header (sub-route of Portfolio) */
+.pghead{display:flex;align-items:flex-end;gap:14px;border-bottom:1px solid var(--line);margin-bottom:22px;padding-bottom:14px}
+.pghead .crumb{font:600 20px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.pghead .crumb a{color:var(--faint);text-decoration:none}
+.pghead .crumb a:hover{color:var(--accent)}
+.pghead h1{font:600 20px var(--mono);letter-spacing:.14em;text-transform:uppercase}
+.pghead .hint{margin-left:auto;font-size:12px;color:var(--muted)}
+
+/* two-pane layout: authoring left, the record right */
+.panes{display:flex;gap:22px;align-items:flex-start}
+.form-pane{flex:1;min-width:0;max-width:560px}
+.rec-pane{width:400px;flex-shrink:0;position:sticky;top:56px}
+@media (max-width:980px){.panes{flex-direction:column}.rec-pane{width:100%;position:static}}
+
+/* form voice */
+.zone{margin-bottom:26px}
+.zone-h{font:600 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:14px}
+.field{margin-bottom:14px}
+.lbl{display:block;font:600 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.lbl .req{color:var(--faint);font-weight:400;text-transform:none;letter-spacing:0}
+input[type=text],input[type=number],textarea,select{width:100%;border:1px solid var(--line);background:var(--inset);color:var(--ink);border-radius:5px;padding:9px 11px;font:14px var(--sans)}
+textarea{resize:vertical;min-height:62px;line-height:1.5}
+::placeholder{color:var(--faint)}
+.hint{font-size:11.5px;color:var(--faint);margin-top:5px;line-height:1.5}
+.hint code{font:11px var(--mono);background:var(--raised);border-radius:3px;padding:1px 4px}
+.row2{display:flex;gap:12px}.row2>*{flex:1}
+
+/* slug — the permanent name gets the mono record voice beside it */
+.slugline{display:flex;align-items:center;gap:10px}
+.slugline input{flex:1}
+.slugline .ref{white-space:nowrap;font:600 12.5px var(--mono);color:var(--accent)}
+
+/* brief sections: heading is fixed chrome (from the contract template), words are the human's */
+.sect{border:1px solid var(--line);border-radius:5px;background:var(--surface);margin-bottom:10px;overflow:hidden}
+.sect-head{display:flex;align-items:baseline;gap:8px;background:var(--inset);border-bottom:1px solid var(--line);padding:7px 11px}
+.sect-head .h{font:600 12.5px var(--mono);color:var(--ink)}
+.sect-head .fixed{font:10px var(--mono);color:var(--faint);letter-spacing:.06em;text-transform:uppercase}
+.sect-head .presence{margin-left:auto;font:600 11px var(--mono)}
+.p-ok{color:var(--ok)}.p-empty{color:var(--faint)}
+.sect textarea{border:none;border-radius:0;background:transparent;padding:10px 11px}
+.sect textarea:focus-visible{outline-offset:-2px}
+
+/* profile cards with mini gate ledgers */
+.profiles{display:flex;gap:10px}
+.pcard{flex:1;cursor:pointer;border:1px solid var(--line);border-radius:5px;background:var(--inset);padding:10px 12px;transition:border-color .14s}
+.pcard:hover{border-color:var(--accent)}
+.pcard.on{border-color:var(--accent);background:var(--accent-soft)}
+.pcard .pn{font:600 13px var(--sans)}
+.pcard.on .pn{color:var(--accent)}
+.pcard .gates{display:inline-flex;gap:3px;margin-top:7px}
+.gc{display:inline-flex;height:18px;width:26px;align-items:center;justify-content:center;gap:2px;border-radius:3px;border:1px dashed var(--line);background:var(--surface);font:10px var(--mono);color:var(--faint)}
+.gc .id{font-size:7px}
+
+/* identity + submit strip */
+.identity{display:flex;align-items:baseline;gap:9px;border:1px solid var(--line);border-radius:5px;background:var(--surface);padding:10px 12px;margin-bottom:14px}
+.identity .k{font:600 10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.identity .v{font:600 12.5px var(--mono);color:var(--ink)}
+.identity .note{margin-left:auto;font-size:11px;color:var(--faint);text-align:right}
+.btn{border-radius:999px;border:1px solid var(--line);background:var(--inset);color:var(--muted);padding:7px 16px;font:600 14px var(--sans);cursor:pointer;transition:all .14s}
+.btn:hover{color:var(--ink);border-color:var(--accent)}
+.btn-primary{border-color:var(--accent);background:var(--accent);color:var(--on-solid);box-shadow:0 0 12px var(--glow)}
+.btn-primary:hover{opacity:.9}
+.btn[disabled]{opacity:.4;cursor:not-allowed;box-shadow:none}
+.submitrow{display:flex;align-items:center;gap:12px}
+.submitrow .why{font-size:11.5px;color:var(--faint);line-height:1.5}
+
+/* ================= THE RECORD — genesis commit preview ================= */
+.record{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:6px;background:var(--surface);padding:16px 18px;box-shadow:0 0 0 1px var(--accent-soft)}
+.rec-h{display:flex;align-items:baseline;gap:8px;font:600 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.rec-h .live{margin-left:auto;font-size:9.5px;color:var(--accent)}
+.rec-sub{font-size:11.5px;color:var(--faint);margin-bottom:14px;line-height:1.5}
+.rec-branch{display:flex;align-items:baseline;gap:8px;margin-bottom:12px}
+.rec-branch .ref{font:600 13.5px var(--mono);color:var(--accent)}
+.rec-branch .tag{font:10px var(--mono);color:var(--faint);letter-spacing:.06em;text-transform:uppercase}
+/* commit node — the HistoryTab spine idiom: accent node = a transition being minted */
+.rec-node{position:relative;padding-left:22px;margin-bottom:12px}
+.rec-node::before{content:'';position:absolute;left:2px;top:5px;width:10px;height:10px;border-radius:50%;border:2px solid var(--accent);background:var(--accent);box-shadow:0 0 10px var(--glow)}
+.rec-node.pending::before{background:var(--inset);border-color:var(--faint);box-shadow:none}
+.rec-msg{font:600 12px var(--mono);line-height:1.5;overflow-wrap:anywhere}
+.rec-author{margin-top:3px;font:11.5px var(--mono);color:var(--muted)}
+.rec-author .who{color:var(--ink);font-weight:600}
+.rec-author .from{color:var(--faint)}
+.rec-files{border-top:1px solid var(--line);margin-top:4px;padding-top:10px}
+.rec-file{display:flex;align-items:baseline;gap:8px;padding:3px 0;font:12px var(--mono)}
+.rec-file .new{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ok);border:1px solid var(--ok);border-radius:3px;padding:1px 4px}
+.rec-file .chk{margin-left:auto;font-size:11px}
+.rec-secs{margin:2px 0 4px 14px;display:flex;flex-direction:column;gap:1px}
+.rec-sec{display:flex;gap:7px;font:11px var(--mono);color:var(--muted)}
+.rec-sec .g{width:12px;text-align:center}
+details.rec-yaml{margin-top:10px}
+details.rec-yaml summary{cursor:pointer;font:600 10.5px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+details.rec-yaml summary:hover{color:var(--ink)}
+.yaml{margin-top:8px;border-radius:4px;background:var(--inset);padding:10px 12px;font:11px/1.6 var(--mono);overflow-x:auto;white-space:pre;color:var(--muted)}
+.yaml .k{color:var(--ink)}
+.yaml .hl{color:var(--accent);font-weight:600}
+.rec-foot{border-top:1px solid var(--line);margin-top:12px;padding-top:10px;font-size:11.5px;line-height:1.55;color:var(--muted)}
+.rec-foot b{color:var(--ink)}
+details.key{margin-top:8px}
+details.key summary{cursor:pointer;font:10.5px var(--mono);color:var(--faint)}
+details.key .kv{margin-top:4px;font:11px var(--mono);color:var(--muted)}
+</style>
+</head>
+<body>
+
+<div class="mock-bar">
+  <span class="tag">Mockup</span>
+  <span class="name">genesis-preview · 02 — the form is a preview of the genesis commit (AC1.2/AC1.3, AC2.1, AC3.1, AC4.2)</span>
+  <div class="tabs">
+    <button class="on" onclick="show('st-authoring',this)">Authoring · sections incomplete</button>
+    <button onclick="show('st-ready',this)">Ready to stage</button>
+  </div>
+</div>
+
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><span class="t">Gate</span><p class="s">pipeline decisions</p></div>
+    <nav class="nav">
+      <a href="#"><span class="d"></span>Inbox</a>
+      <a href="#" class="on"><span class="d"></span>Portfolio</a>
+      <a href="#"><span class="d"></span>Metrics</a>
+    </nav>
+    <div class="motto">The repo is the database.<br>Every view renders git.</div>
+  </aside>
+
+  <main class="main">
+    <header class="pghead">
+      <span class="crumb"><a href="#">Portfolio</a>&nbsp;/&nbsp;</span><h1>New run</h1>
+      <span class="hint">You author the words. Gate shows you the record they become.</span>
+    </header>
+
+    <!-- ============ STATE 1: authoring, two sections still empty ============ -->
+    <section id="st-authoring" class="state on">
+      <div class="panes">
+        <div class="form-pane">
+
+          <div class="zone">
+            <div class="zone-h">Run</div>
+            <div class="field">
+              <label class="lbl" for="repo1">Repository</label>
+              <select id="repo1">
+                <option selected>sandbox — ~/repos/agentic-sandbox</option>
+                <option>host-app — ~/repos/host-app</option>
+              </select>
+              <p class="hint">Two sources are configured, so Gate asks which repo carries the record. With exactly one, this field does not appear. It selects among Gate's own repositories — never an external system.</p>
+            </div>
+            <div class="field">
+              <label class="lbl" for="title1">Title</label>
+              <input type="text" id="title1" value="Budget threshold alerts on the portfolio surface">
+            </div>
+            <div class="field">
+              <label class="lbl" for="slug1">Slug <span class="req">— permanent after staging</span></label>
+              <div class="slugline">
+                <input type="text" id="slug1" value="budget-alerts" class="mono" style="font-family:var(--mono);font-size:13px">
+                <span class="ref">→ run/budget-alerts</span>
+              </div>
+              <p class="hint">Suggested from the title; edit it until you stage. It names the branch and the run directory forever.</p>
+            </div>
+            <div class="field">
+              <label class="lbl">Profile <span class="req">— sets which gates the record carries</span></label>
+              <div class="profiles">
+                <div class="pcard"><span class="pn">patch</span><span class="gates"><span class="gc"><span class="id">1</span>·</span><span class="gc"><span class="id">2</span>·</span></span></div>
+                <div class="pcard on"><span class="pn">standard</span><span class="gates"><span class="gc"><span class="id">0</span>·</span><span class="gc"><span class="id">1</span>·</span><span class="gc"><span class="id">2</span>·</span></span></div>
+                <div class="pcard"><span class="pn">full</span><span class="gates"><span class="gc"><span class="id">0</span>·</span><span class="gc"><span class="id">1</span>·</span><span class="gc"><span class="id">2</span>·</span><span class="gc"><span class="id">3</span>·</span></span></div>
+              </div>
+              <p class="hint">Choosing <b>patch</b> also scaffolds a placeholder task stub (<code>tasks/01-&lt;slug&gt;.yaml</code>) you complete before arming — it appears in the record preview.</p>
+            </div>
+            <div class="field" style="max-width:220px">
+              <label class="lbl" for="budget1">Budget ceiling (USD)</label>
+              <input type="number" id="budget1" value="150">
+              <p class="hint">Blank = no ceiling; the run reads as unmetered.</p>
+            </div>
+          </div>
+
+          <div class="zone">
+            <div class="zone-h">Intent brief — structure from the contract, words from you</div>
+            <div class="sect">
+              <div class="sect-head"><span class="h">## Problem</span><span class="fixed">required section</span><span class="presence p-ok">✓</span></div>
+              <textarea rows="3">Budget overruns surface only after the fact: the portfolio meter turns red once spent exceeds the ceiling, but nothing warns an operator that a run is trending toward its limit mid-flight.</textarea>
+            </div>
+            <div class="sect">
+              <div class="sect-head"><span class="h">## Motivation</span><span class="fixed">required section</span><span class="presence p-empty">·</span></div>
+              <textarea rows="3" placeholder="Why now — what changes if this lands, in your words. Placeholders are never submitted."></textarea>
+            </div>
+            <div class="sect">
+              <div class="sect-head"><span class="h">## Constraints</span><span class="fixed">required section</span><span class="presence p-empty">·</span></div>
+              <textarea rows="3" placeholder="Boundaries the work must respect — surfaces, budgets, invariants."></textarea>
+            </div>
+            <div class="sect">
+              <div class="sect-head"><span class="h">## Out of scope</span><span class="fixed">required section</span><span class="presence p-ok">✓</span></div>
+              <textarea rows="2">Notification delivery channels (email, chat). Changing budget semantics or the ledger format.</textarea>
+            </div>
+            <p class="hint">Section headings come from the repo's <code>contracts/intent-brief.md</code> template — they are chrome, not content. Gate never writes a sentence of the brief.</p>
+          </div>
+
+          <div class="zone">
+            <div class="zone-h">Provenance — optional, your own pointer text</div>
+            <div class="row2">
+              <div class="field"><label class="lbl" for="psrc1">Source</label><input type="text" id="psrc1" value="retro-notes"></div>
+              <div class="field"><label class="lbl" for="pref1">Ref</label><input type="text" id="pref1" value="2026-07 retro §3"></div>
+            </div>
+            <div class="field"><label class="lbl" for="purl1">URL</label><input type="text" id="purl1" placeholder="https:// — recorded as text you vouch for"></div>
+            <p class="hint">Recorded verbatim into the genesis commit's <code>intake:</code> block. Nothing here is fetched, previewed, or verified — a URL is a string the human vouches for, not an object the system retrieves.</p>
+          </div>
+
+          <div class="identity">
+            <span class="k">Recorded as</span>
+            <span class="v">staged by Nathan Carter <span class="from">&lt;nathan@carter.dev&gt;</span></span>
+            <span class="note">the server's git identity —<br>displayed, never asked</span>
+          </div>
+
+          <div class="submitrow">
+            <button class="btn btn-primary" disabled>Stage run</button>
+            <p class="why">2 required sections are still empty — <b>Motivation, Constraints</b>. The server re-checks on submit; its wording is what you would see.</p>
+          </div>
+
+        </div>
+
+        <!-- THE RECORD (incomplete) -->
+        <aside class="rec-pane">
+          <div class="record">
+            <div class="rec-h">The record this stages <span class="live">· live preview</span></div>
+            <p class="rec-sub">Rendered by the same planner the server commits with — what you see is byte-for-byte what lands in git.</p>
+            <div class="rec-branch"><span class="tag">new branch</span><span class="ref">run/budget-alerts</span></div>
+            <div class="rec-node pending">
+              <p class="rec-msg">state(budget-alerts): staged by Nathan Carter [client-key: 3f9c-a1d2]</p>
+              <p class="rec-author"><span class="who">Nathan Carter</span> <span class="from">&lt;nathan@carter.dev&gt;</span> — author &amp; committer</p>
+            </div>
+            <div class="rec-files">
+              <div class="rec-file"><span>runs/budget-alerts/state.yaml</span><span class="new">new</span><span class="chk p-ok">✓</span></div>
+              <div class="rec-file"><span>runs/budget-alerts/intent-brief.md</span><span class="new">new</span><span class="chk p-empty">2 of 4</span></div>
+              <div class="rec-secs">
+                <span class="rec-sec"><span class="g p-ok">✓</span>Problem</span>
+                <span class="rec-sec"><span class="g p-empty">·</span>Motivation — empty</span>
+                <span class="rec-sec"><span class="g p-empty">·</span>Constraints — empty</span>
+                <span class="rec-sec"><span class="g p-ok">✓</span>Out of scope</span>
+              </div>
+            </div>
+            <details class="rec-yaml">
+              <summary>state.yaml — 24 lines</summary>
+              <div class="yaml"><span class="k">run:</span> budget-alerts
+<span class="k">branch:</span> run/budget-alerts
+<span class="k">phase:</span> <span class="hl">paused</span>   <span># staged — not yet armed</span>
+<span class="k">paused_reason:</span> <span class="hl">staged</span>
+<span class="k">profile:</span> standard
+<span class="k">intake:</span>
+  <span class="k">source:</span> "retro-notes"
+  <span class="k">ref:</span> "2026-07 retro §3"
+  <span class="k">url:</span> null
+  <span class="k">client_key:</span> "3f9c-a1d2"
+  <span class="k">staged_by:</span> "Nathan Carter"
+<span class="k">budget:</span>
+  <span class="k">cost_limit_usd:</span> 150
+  <span class="k">cost_spent_usd:</span> 0
+<span class="k">gates:</span>
+  <span class="k">G0:</span> { approved: false, … }
+  <span class="k">G1:</span> { approved: false, … }
+  <span class="k">G2:</span> { approved: false, … }
+<span class="k">tasks:</span> []</div>
+            </details>
+            <details class="key">
+              <summary>replay key · 3f9c-a1d2</summary>
+              <p class="kv">Generated for this form session. If your submit is cut off and you retry, the server recognizes the same request and reports "already staged" instead of failing or double-committing. It is written into the record above — the preview does not hide what the commit will say.</p>
+            </details>
+            <div class="rec-foot"><b>Staging commits this record. Nothing else happens.</b> No agent dispatches, no budget meters — the run rests at <span class="mono">staged</span> until you arm it, and arming is its own decision on the run's page.</div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="callout"><b>Annotation.</b> The hollow commit node and the "2 of 4" file check show the record refusing to finish forming: the disabled submit is explained by the same panel that will celebrate the commit. Client-side incompleteness only ever disables (P5) — the wording of a real refusal always comes from the server (mockup 03).</div>
+    </section>
+
+    <!-- ============ STATE 2: ready to stage ============ -->
+    <section id="st-ready" class="state">
+      <div class="panes">
+        <div class="form-pane">
+
+          <div class="zone">
+            <div class="zone-h">Run</div>
+            <div class="field">
+              <label class="lbl" for="title2">Title</label>
+              <input type="text" id="title2" value="Budget threshold alerts on the portfolio surface">
+            </div>
+            <div class="field">
+              <label class="lbl" for="slug2">Slug <span class="req">— permanent after staging</span></label>
+              <div class="slugline">
+                <input type="text" id="slug2" value="budget-alerts" style="font-family:var(--mono);font-size:13px">
+                <span class="ref">→ run/budget-alerts</span>
+              </div>
+            </div>
+            <div class="field">
+              <label class="lbl">Profile</label>
+              <div class="profiles">
+                <div class="pcard"><span class="pn">patch</span><span class="gates"><span class="gc"><span class="id">1</span>·</span><span class="gc"><span class="id">2</span>·</span></span></div>
+                <div class="pcard on"><span class="pn">standard</span><span class="gates"><span class="gc"><span class="id">0</span>·</span><span class="gc"><span class="id">1</span>·</span><span class="gc"><span class="id">2</span>·</span></span></div>
+                <div class="pcard"><span class="pn">full</span><span class="gates"><span class="gc"><span class="id">0</span>·</span><span class="gc"><span class="id">1</span>·</span><span class="gc"><span class="id">2</span>·</span><span class="gc"><span class="id">3</span>·</span></span></div>
+              </div>
+            </div>
+            <div class="field" style="max-width:220px">
+              <label class="lbl" for="budget2">Budget ceiling (USD)</label>
+              <input type="number" id="budget2" value="150">
+            </div>
+          </div>
+
+          <div class="zone">
+            <div class="zone-h">Intent brief</div>
+            <div class="sect">
+              <div class="sect-head"><span class="h">## Problem</span><span class="fixed">required section</span><span class="presence p-ok">✓</span></div>
+              <textarea rows="3">Budget overruns surface only after the fact: the portfolio meter turns red once spent exceeds the ceiling, but nothing warns an operator that a run is trending toward its limit mid-flight.</textarea>
+            </div>
+            <div class="sect">
+              <div class="sect-head"><span class="h">## Motivation</span><span class="fixed">required section</span><span class="presence p-ok">✓</span></div>
+              <textarea rows="3">Operators watch the portfolio, not the ledger. A threshold signal at 80% turns a post-mortem number into a mid-flight decision point.</textarea>
+            </div>
+            <div class="sect">
+              <div class="sect-head"><span class="h">## Constraints</span><span class="fixed">required section</span><span class="presence p-ok">✓</span></div>
+              <textarea rows="3">Portfolio and run-detail surfaces only; reuse BudgetMeter and the existing token set. No new color vocabulary, no notification side-channel.</textarea>
+            </div>
+            <div class="sect">
+              <div class="sect-head"><span class="h">## Out of scope</span><span class="fixed">required section</span><span class="presence p-ok">✓</span></div>
+              <textarea rows="2">Notification delivery channels (email, chat). Changing budget semantics or the ledger format.</textarea>
+            </div>
+          </div>
+
+          <div class="zone">
+            <div class="zone-h">Provenance — optional, your own pointer text</div>
+            <div class="row2">
+              <div class="field"><label class="lbl">Source</label><input type="text" value="retro-notes"></div>
+              <div class="field"><label class="lbl">Ref</label><input type="text" value="2026-07 retro §3"></div>
+            </div>
+            <div class="field"><label class="lbl">URL</label><input type="text" placeholder="https:// — recorded as text you vouch for"></div>
+          </div>
+
+          <div class="identity">
+            <span class="k">Recorded as</span>
+            <span class="v">staged by Nathan Carter <span class="from">&lt;nathan@carter.dev&gt;</span></span>
+            <span class="note">the server's git identity —<br>displayed, never asked</span>
+          </div>
+
+          <div class="submitrow">
+            <button class="btn btn-primary">Stage run</button>
+            <p class="why">Creates <span class="mono">run/budget-alerts</span> and commits the record shown. Nothing dispatches, nothing is spent — <b>Arm</b> is a separate decision on the staged run.</p>
+          </div>
+
+        </div>
+
+        <!-- THE RECORD (complete) -->
+        <aside class="rec-pane">
+          <div class="record">
+            <div class="rec-h">The record this stages <span class="live">· live preview</span></div>
+            <p class="rec-sub">Rendered by the same planner the server commits with — what you see is byte-for-byte what lands in git.</p>
+            <div class="rec-branch"><span class="tag">new branch</span><span class="ref">run/budget-alerts</span></div>
+            <div class="rec-node">
+              <p class="rec-msg">state(budget-alerts): staged by Nathan Carter [client-key: 3f9c-a1d2]</p>
+              <p class="rec-author"><span class="who">Nathan Carter</span> <span class="from">&lt;nathan@carter.dev&gt;</span> — author &amp; committer</p>
+            </div>
+            <div class="rec-files">
+              <div class="rec-file"><span>runs/budget-alerts/state.yaml</span><span class="new">new</span><span class="chk p-ok">✓</span></div>
+              <div class="rec-file"><span>runs/budget-alerts/intent-brief.md</span><span class="new">new</span><span class="chk p-ok">✓ 4 of 4</span></div>
+            </div>
+            <details class="rec-yaml" open>
+              <summary>state.yaml — 24 lines</summary>
+              <div class="yaml"><span class="k">run:</span> budget-alerts
+<span class="k">branch:</span> run/budget-alerts
+<span class="k">phase:</span> <span class="hl">paused</span>   <span># staged — not yet armed</span>
+<span class="k">paused_reason:</span> <span class="hl">staged</span>
+<span class="k">profile:</span> standard
+<span class="k">intake:</span>
+  <span class="k">source:</span> "retro-notes"
+  <span class="k">ref:</span> "2026-07 retro §3"
+  <span class="k">url:</span> null
+  <span class="k">client_key:</span> "3f9c-a1d2"
+  <span class="k">staged_by:</span> "Nathan Carter"
+<span class="k">budget:</span>
+  <span class="k">cost_limit_usd:</span> 150
+  <span class="k">cost_spent_usd:</span> 0
+<span class="k">gates:</span>
+  <span class="k">G0:</span> { approved: false, … }
+  <span class="k">G1:</span> { approved: false, … }
+  <span class="k">G2:</span> { approved: false, … }
+<span class="k">tasks:</span> []</div>
+            </details>
+            <div class="rec-foot"><b>Staging commits this record. Nothing else happens.</b> No agent dispatches, no budget meters — the run rests at <span class="mono">staged</span> until you arm it, and arming is its own decision on the run's page.</div>
+          </div>
+        </aside>
+      </div>
+
+      <div class="callout"><b>Annotation.</b> When the record completes, its commit node fills and glows — the HistoryTab phase-transition idiom, borrowed for a transition about to exist. The submit button's caption and the panel footer say the same thing in the same voice: what git object is created, as whom, and that nothing dispatches. Switching profile to <b>patch</b> would swap the gates block to G1/G2 and add a third file row, <span class="mono">tasks/01-budget-alerts.yaml</span>, tagged "placeholder stub — completed before arming."</div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+function show(id,btn){
+  document.querySelectorAll('.state').forEach(s=>s.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+}
+</script>
+</body>
+</html>

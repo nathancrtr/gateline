@@ -7,6 +7,7 @@ import type {
   GateId,
   GateMetrics,
   InboxItem,
+  LexiconEntry,
   Phase,
   Profile,
   RunMetricsSummary,
@@ -15,7 +16,7 @@ import type {
   Validation,
 } from '@agentic/core'
 
-export type { Burden, DiffFile, GateId, InboxItem, Profile, RunState, RunSummary, Validation }
+export type { Burden, DiffFile, GateId, InboxItem, LexiconEntry, Profile, RunState, RunSummary, Validation }
 
 /** Mirror of core's PROFILE_GATES (DESIGN.md §4.1) — a value import from core would pull the node runtime into the browser bundle. */
 export const PROFILE_GATES: Record<Profile, GateId[]> = {
@@ -58,6 +59,13 @@ export interface ArtifactResponse {
   path: string
   content: string
   validation: Validation
+}
+
+export interface LexiconResponse {
+  /** Definitions in document order; duplicate ids (amended ADRs) all present. */
+  entries: LexiconEntry[]
+  /** The id-reference grammar as a regex source (core's ID_PATTERN, arriving as data). */
+  pattern: string
 }
 
 export interface DiffResponse {
@@ -136,6 +144,7 @@ export const api = {
   run: (src: string, slug: string) => getJson<RunDetailResponse>(`/api/runs/${src}/${slug}`),
   artifact: (src: string, slug: string, path: string) =>
     getJson<ArtifactResponse>(`/api/runs/${src}/${slug}/artifact?path=${encodeURIComponent(path)}`),
+  lexicon: (src: string, slug: string) => getJson<LexiconResponse>(`/api/runs/${src}/${slug}/lexicon`),
   diff: (src: string, slug: string) => getJson<DiffResponse>(`/api/runs/${src}/${slug}/diff`),
   metrics: () => getJson<MetricsResponse>('/api/metrics'),
   decide: async (req: DecisionRequest): Promise<{ ok: boolean; commit?: string; summary?: string; note?: string | null }> => {

@@ -1,7 +1,7 @@
 // One run's story: header + gate ledger, the "needs you" panel, and tabs for
 // artifacts, diff, and state history. Decision affordances live in the cards
 // (M2 wires them to POST /api/decisions).
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useKeys } from '../use-keys.ts'
@@ -9,6 +9,7 @@ import { api, formatAge, formatWhen, type InboxItem, type RunDetailResponse } fr
 import { AgeBadge, BudgetMeter, GateLedger, KindChip, PhaseChip, ValidationBadge } from '../components/chips.tsx'
 import { DecidePanel } from '../components/decide.tsx'
 import { DiffView } from '../components/diff-view.tsx'
+import { CitedObjects, LexiconProvider, useRunLexicon } from '../components/lexicon.tsx'
 import { Markdown } from '../components/markdown.tsx'
 import { PageStatus } from './inbox.tsx'
 
@@ -26,6 +27,7 @@ export function RunPage() {
     queryFn: () => api.run(src!, slug!),
     enabled: Boolean(src && slug),
   })
+  const lexicon = useRunLexicon(src, slug)
 
   // e cycles artifacts; esc returns to the inbox unless a decision is open.
   const keyHandlers = useMemo(
@@ -131,16 +133,19 @@ export function RunPage() {
       </nav>
 
       {tab === 'artifacts' && (
-        <ArtifactsTab
-          detail={detail}
-          selected={artifact}
-          onSelect={(p) => {
-            const next = new URLSearchParams(params)
-            next.set('tab', 'artifacts')
-            next.set('artifact', p)
-            setParams(next, { replace: true })
-          }}
-        />
+        <LexiconProvider value={lexicon}>
+          <ArtifactsTab
+            detail={detail}
+            selected={artifact}
+            onSelect={(p) => {
+              const next = new URLSearchParams(params)
+              next.set('tab', 'artifacts')
+              next.set('artifact', p)
+              next.delete('anchor')
+              setParams(next, { replace: true })
+            }}
+          />
+        </LexiconProvider>
       )}
       {tab === 'diff' && <DiffTab src={summary.source} slug={summary.slug} />}
       {tab === 'history' && <HistoryTab history={detail.history} />}
@@ -262,6 +267,13 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
     queryKey: ['artifact', src, slug, path],
     queryFn: () => api.artifact(src, slug, path),
   })
+  // Jump-to-definition (#163): the anchor param lands on the def-<id> heading
+  // ids the lexicon rehype stage stamps onto R/ADR definition headings.
+  const [params] = useSearchParams()
+  const anchor = params.get('anchor')
+  useEffect(() => {
+    if (anchor && data) document.getElementById(anchor)?.scrollIntoView({ block: 'start' })
+  }, [anchor, data])
   if (isLoading) return <LoadingSkeleton text="Reading artifact…" />
   if (error) return <PageStatus text={(error as Error).message} bad />
   const { content, validation } = data!
@@ -272,7 +284,12 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
           Fails its {validation.contract} contract — missing: {validation.missing.join(', ')}
         </p>
       )}
-      {path.endsWith('.md') ? <Markdown>{content}</Markdown> : <pre className="overflow-x-auto font-mono text-xs leading-5">{content}</pre>}
+      <CitedObjects content={content} path={path} />
+      {path.endsWith('.md') ? (
+        <Markdown sourcePath={path}>{content}</Markdown>
+      ) : (
+        <pre className="overflow-x-auto font-mono text-xs leading-5">{content}</pre>
+      )}
     </article>
   )
 }

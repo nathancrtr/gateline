@@ -92,6 +92,10 @@ criterion.
 * Run the frontend/orchestrator tests: `npm test` in `frontend/` (typecheck:
   `npm run typecheck`; e2e: `npm run build && npx playwright test`; needs
   `npm install` once, Node ≥ 24)
+* Try unmerged frontend changes: from that branch's worktree, `npm run build`
+  then `node packages/cli/src/main.ts ui --demo` (or `--repo <path>`) on a side
+  port — never check the branch out in the blessed main checkout, and never
+  `up` from a trial tree (TOPOLOGY.md §3.5)
 * Run the tests for pipeline-run output: `pytest apps/<app>` — one app per
   invocation (`wordfreq`, `mdtoc`, `dupefind`); the apps' identically named test
   modules collide when pytest collects `apps/` in one pass

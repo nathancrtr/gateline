@@ -28,9 +28,11 @@ import {
   type Burden,
   type DecisionInput,
   type GateId,
+  type Identity,
   type InboxItem,
   type Phase,
   type Profile,
+  type RunRef,
   type RunSource,
 } from '@agentic/core'
 
@@ -136,6 +138,41 @@ interface DecideFlags {
   push?: boolean
 }
 
+/**
+ * The shared plan → write → exit-code core of the decision flow
+ * (`planDecision`/`writeState`'s CAS path — AC6.1), factored out of `decide()`
+ * so `armRun` can reuse the exact same refusal strings and exit-code mapping
+ * instead of hand-duplicating them (F5: duplication was a drift risk between
+ * `arm` and the `decide()`-backed commands). Returns `null` on success (after
+ * printing the summary), or the exit code the caller should use on failure —
+ * never calls `process.exit` itself, so `armRun` can chain `ensureDraftPr`
+ * after a successful write.
+ */
+async function planAndWrite(source: RunSource, ref: RunRef, who: Identity, input: DecisionInput): Promise<number | null> {
+  const { state, error } = await source.readState(ref)
+  if (!state) {
+    console.error(`run state is malformed: ${error}`)
+    return 1
+  }
+  try {
+    const planned = planDecision(state, input, who)
+    const result = await source.writeState(ref, planned.mutate, planned.message)
+    if (!result.ok) {
+      console.error(`refused (${result.reason}): ${result.message}`)
+      return result.reason === 'ref-moved' ? 2 : 1
+    }
+    console.log(`${planned.summary}\n→ ${result.commit!.slice(0, 10)} ${planned.message}`)
+    if (result.message) console.warn(result.message)
+    return null
+  } catch (e) {
+    if (e instanceof DecisionError) {
+      console.error(e.message)
+      return 1
+    }
+    throw e
+  }
+}
+
 async function decide(slug: string, flags: DecideFlags, input: Omit<DecisionInput, 'notes' | 'burden'> & { notes?: string; burden?: Burden }) {
   const { sources } = await resolveSources()
   const { source, ref } = await findRun(sources, slug, flags.source)
@@ -144,27 +181,8 @@ async function decide(slug: string, flags: DecideFlags, input: Omit<DecisionInpu
     console.error('git user.name/user.email are unset — decisions must be attributable to a named human')
     process.exit(1)
   }
-  const { state, error } = await source.readState(ref)
-  if (!state) {
-    console.error(`run state is malformed: ${error}`)
-    process.exit(1)
-  }
-  try {
-    const planned = planDecision(state, input, who)
-    const result = await source.writeState(ref, planned.mutate, planned.message)
-    if (!result.ok) {
-      console.error(`refused (${result.reason}): ${result.message}`)
-      process.exit(result.reason === 'ref-moved' ? 2 : 1)
-    }
-    console.log(`${planned.summary}\n→ ${result.commit!.slice(0, 10)} ${planned.message}`)
-    if (result.message) console.warn(result.message)
-  } catch (e) {
-    if (e instanceof DecisionError) {
-      console.error(e.message)
-      process.exit(1)
-    }
-    throw e
-  }
+  const code = await planAndWrite(source, ref, who, input as DecisionInput)
+  if (code !== null) process.exit(code)
 }
 
 async function promptBurden(given?: string): Promise<Burden> {
@@ -284,10 +302,22 @@ export function draftBriefMarkdown(template: string | null, title: string): stri
   return `# Intent Brief: ${title}\n\n${sections.map((s) => `## ${s}\n`).join('\n')}`
 }
 
+// Mirrors core validate.ts's private `normalize` exactly (lowercase, collapse
+// runs of non-alphanumerics to a single space, trim) so the CLI's refusal
+// never disagrees with what `validateArtifact` would accept later (F6): a
+// stricter/looser normalization here would either refuse a brief core
+// accepts, or stage one core would bounce.
+const normalizeSection = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+
 function missingBriefSections(content: string, required: string[]): string[] {
-  const have = new Set(extractSections(content).map((s) => s.toLowerCase().trim()))
-  return required.filter((s) => !have.has(s.toLowerCase().trim()))
+  const have = new Set(extractSections(content).map(normalizeSection))
+  return required.filter((s) => !have.has(normalizeSection(s)))
 }
+
+/** Branch- and path-safe slug grammar — mirrors core scaffold.ts's `SLUG_RE`
+ * (not exported, so duplicated here rather than widening this task's file
+ * surface into core; the `--slug` flag help below names the same pattern). */
+const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/
 
 export interface InteractiveNewIO {
   prompt(question: string): Promise<string>
@@ -323,7 +353,13 @@ export async function runInteractiveNew(
 ): Promise<InteractiveNewResult | null> {
   const log = io.log ?? (() => {})
   let slug = current.slug?.trim() || ''
-  while (!slug) slug = (await io.prompt('slug: ')).trim()
+  // Validate here (F4), not just later via ScaffoldError: rejecting an
+  // invalid slug after the full edit/confirm session discards the human's
+  // authored brief with only the printed preview surviving scrollback.
+  while (!slug || !SLUG_RE.test(slug)) {
+    if (slug) log(`slug "${slug}" must match ${SLUG_RE} (branch- and path-safe)`)
+    slug = (await io.prompt('slug: ')).trim()
+  }
   let title = current.title?.trim() || ''
   while (!title) title = (await io.prompt('title: ')).trim()
 
@@ -396,6 +432,18 @@ export async function stageNewRun(flags: NewFlags): Promise<number> {
   }
   const source = candidates[0]!
 
+  // Identity check before staging (AC7.1's CLI half) — decide()'s own
+  // refusal shape, adapted for staging, and hoisted above the interactive
+  // prompt/edit/confirm session (F3): checking only after that session ends
+  // would let an operator in a no-identity repo complete a full editor round
+  // trip and answer `stage? y` only to be refused with the temp file already
+  // deleted — the authored prose surviving only in printed scrollback.
+  const who = await source.identity()
+  if (!who) {
+    console.error('git user.name/user.email are unset — staged runs must be attributable to a named human')
+    return 1
+  }
+
   const templateContent = await source.templates.read('intent-brief.md')
   const requiredSections = templateContent ? extractSections(templateContent) : (BUILTIN_SECTIONS['intent-brief.md'] ?? [])
 
@@ -452,14 +500,6 @@ export async function stageNewRun(flags: NewFlags): Promise<number> {
       return 1
     }
     ;({ slug, title, briefMarkdown } = result)
-  }
-
-  // Identity check before staging (AC7.1's CLI half) — decide()'s own
-  // refusal shape, adapted for staging.
-  const who = await source.identity()
-  if (!who) {
-    console.error('git user.name/user.email are unset — staged runs must be attributable to a named human')
-    return 1
   }
 
   let scaffold
@@ -525,27 +565,8 @@ export async function armRun(slug: string, flags: { source?: string }): Promise<
     console.error('git user.name/user.email are unset — decisions must be attributable to a named human')
     return 1
   }
-  const { state, error } = await source.readState(ref)
-  if (!state) {
-    console.error(`run state is malformed: ${error}`)
-    return 1
-  }
-  try {
-    const planned = planDecision(state, { action: 'arm' }, who)
-    const result = await source.writeState(ref, planned.mutate, planned.message)
-    if (!result.ok) {
-      console.error(`refused (${result.reason}): ${result.message}`)
-      return result.reason === 'ref-moved' ? 2 : 1
-    }
-    console.log(`${planned.summary}\n→ ${result.commit!.slice(0, 10)} ${planned.message}`)
-    if (result.message) console.warn(result.message)
-  } catch (e) {
-    if (e instanceof DecisionError) {
-      console.error(e.message)
-      return 1
-    }
-    throw e
-  }
+  const code = await planAndWrite(source, ref, who, { action: 'arm' })
+  if (code !== null) return code
   const dir = (source as { dir?: string }).dir
   if (dir) {
     const note = await ensureDraftPr(dir, ref.branch, slug)

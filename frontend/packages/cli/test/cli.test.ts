@@ -151,6 +151,9 @@ describe('agentic CLI', () => {
     expect(code).toBe(1)
     expect(stderr).toContain('--title')
     expect(stderr).toContain('--brief-file')
+    // Names only what is genuinely missing, not every flag (F2): --slug WAS
+    // given above, so a mutant that unconditionally names all three must fail.
+    expect(stderr).not.toContain('--slug')
 
     const source = new LocalGitSource('fixture', fixture.dir)
     const ref = (await source.listRuns()).find((r) => r.slug === 'incomplete-cli')
@@ -168,12 +171,37 @@ describe('agentic CLI', () => {
     const { code, stdout } = await run(['arm', 'arm-standard'])
     expect(code).toBe(0)
     expect(stdout).toMatch(/armed/)
+    // The ensureDraftPr call site (F1): the fixture repo has no origin, so
+    // this exact skip note is the observable proof the call happened at all —
+    // a mutant that drops the `console.log(note.note)` print leaves this
+    // text out of stdout.
+    expect(stdout).toContain('no remote.origin.url configured — nothing to open a PR against')
 
     const source = new LocalGitSource('fixture', fixture.dir)
     const ref = (await source.listRuns()).find((r) => r.slug === 'arm-standard')!
     const { state } = await source.readState(ref)
     expect(state!.phase).toBe('spec')
     expect(state!.paused_reason).toBeNull()
+  })
+
+  it("arm passes the run's own branch (not slug or another field) to ensureDraftPr (F1)", async () => {
+    const scratch = makeScratchRepo()
+    try {
+      execFileSync('git', ['-C', scratch, 'config', 'user.name', 'Scratch Operator'])
+      execFileSync('git', ['-C', scratch, 'config', 'user.email', 'scratch@example.test'])
+      // A configured-but-unfetched origin moves ensureDraftPr past the
+      // "no remote" skip and into the "branch not pushed" skip, whose note
+      // literally names `refs/remotes/origin/<branch>` — the one string a
+      // mis-wired branch argument (e.g. passing the slug, or swapping
+      // `dir`/`branch`) cannot reproduce.
+      execFileSync('git', ['-C', scratch, 'remote', 'add', 'origin', 'https://example.invalid/scratch.git'])
+      await runIn(scratch, ['new', '--slug', 'arm-note', '--title', 'Arm Note', '--brief-file', briefPath])
+      const { code, stdout } = await runIn(scratch, ['arm', 'arm-note'])
+      expect(code).toBe(0)
+      expect(stdout).toContain('branch not pushed: refs/remotes/origin/run/arm-note does not exist yet')
+    } finally {
+      await rm(scratch, { recursive: true, force: true })
+    }
   })
 
   it('arm moves a staged patch run to phase plan (AC6.1)', async () => {
@@ -218,6 +246,37 @@ describe('agentic CLI', () => {
       await rm(scratch, { recursive: true, force: true })
     }
   })
+
+  it('new accepts a brief whose H2 differs from the template only in punctuation/whitespace, matching core validate.ts\'s normalize (F6)', async () => {
+    const scratch = mkdtempSync(join(tmpdir(), 'agentic-cli-f6-'))
+    const briefDir = await mkdtemp(join(tmpdir(), 'agentic-brief-f6-'))
+    try {
+      const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' }
+      const git = (args: string[]) => execFileSync('git', ['-C', scratch, ...args], { env, encoding: 'utf8' })
+      git(['init', '-q', '-b', 'main'])
+      git(['config', 'user.name', 'F6 Operator'])
+      git(['config', 'user.email', 'f6@example.test'])
+      mkdirSync(join(scratch, 'contracts'), { recursive: true })
+      // The template's H2 carries punctuation (&); the brief below repeats it
+      // with different internal spacing — core's `normalize` (strip
+      // punctuation, collapse whitespace runs) treats them as the same
+      // section; a stricter lowercase+trim comparison would not.
+      writeFileSync(join(scratch, 'contracts', 'intent-brief.md'), '# Intent Brief: <title>\n\n## Problem\n\n## Constraints & risks\n')
+      writeFileSync(join(scratch, 'README.md'), '# scratch\n')
+      git(['add', '-A'])
+      git(['commit', '-q', '-m', 'seed'])
+
+      const punctBrief = join(briefDir, 'intent-brief.md')
+      await writeFile(punctBrief, '# Intent Brief: F6 Case\n\n## Problem\ntext\n\n## Constraints  &  risks\ntext\n')
+
+      const { code, stderr } = await runIn(scratch, ['new', '--slug', 'f6-case', '--title', 'F6 Case', '--brief-file', punctBrief])
+      expect(stderr).toBe('')
+      expect(code).toBe(0)
+    } finally {
+      await rm(scratch, { recursive: true, force: true })
+      await rm(briefDir, { recursive: true, force: true })
+    }
+  })
 })
 
 describe('agentic new — interactive helpers (unit, no TTY)', () => {
@@ -254,6 +313,24 @@ describe('agentic new — interactive helpers (unit, no TTY)', () => {
       briefMarkdown: expect.stringContaining('# Intent Brief: Prompted Title'),
     })
     expect(prompts).toEqual(['slug: ', 'title: ', 'stage? [y/N] '])
+  })
+
+  it('runInteractiveNew re-prompts on an invalid slug instead of accepting it for the editor session (F4)', async () => {
+    const answers = ['My New Thing', 'valid-slug', 'Prompted Title', 'y']
+    const prompts: string[] = []
+    const logs: string[] = []
+    const io: InteractiveNewIO = {
+      prompt: async (q) => {
+        prompts.push(q)
+        return answers.shift()!
+      },
+      log: (line) => logs.push(line),
+      editFile: async (initial) => `${initial}\n## Problem\np\n\n## Motivation\nm\n\n## Constraints\nc\n\n## Out of scope\no\n`,
+    }
+    const result = await runInteractiveNew({ slug: null, title: null, initialBrief: null }, null, ['Problem', 'Motivation', 'Constraints', 'Out of scope'], io)
+    expect(result?.slug).toBe('valid-slug')
+    expect(prompts).toEqual(['slug: ', 'slug: ', 'title: ', 'stage? [y/N] '])
+    expect(logs.some((l) => l.includes('must match'))).toBe(true)
   })
 
   it('runInteractiveNew offers a re-edit when required sections are missing, never padding them', async () => {

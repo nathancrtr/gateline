@@ -115,3 +115,84 @@ notes: |
   1 pre-existing skip: live-smoke.test.ts) — full workspace suite green.
   `cd frontend && npm run typecheck` clean (tsc -p tsconfig.json && tsc -p
   packages/web/tsconfig.json, no errors).
+
+  Round 2 (implementer): responds to review-07.md's findings — all six fixed,
+  none rebutted.
+
+  F1 (major, fixed): the arm→ensureDraftPr call site is now observed two
+  ways. The existing arm-standard test (main.ts arm command) now asserts the
+  exact skip note text (`no remote.origin.url configured — nothing to open a
+  PR against`) that the fixture repo's no-origin case prints, catching a
+  dropped `console.log(note.note)`. A new dedicated test stages+arms a run
+  in a scratch repo carrying a configured-but-never-fetched `origin` remote,
+  which routes ensureDraftPr past the no-origin skip into the
+  branch-not-pushed skip — whose note literally embeds the branch string
+  (`branch not pushed: refs/remotes/origin/run/arm-note does not exist
+  yet`), directly killing a mis-wired-branch-argument mutant (e.g. passing
+  slug instead of branch, which would print `.../arm-note` without the
+  `run/` prefix). Verified live by hand-applying both mutants (dropped
+  print; branch→slug) against main.ts and confirming each fails exactly the
+  new test that targets it, then reverting.
+
+  F2 (minor, fixed): added `expect(stderr).not.toContain('--slug')` to the
+  AC2.3 missing-flags test (which supplies `--slug` but omits `--title`/
+  `--brief-file`), so a mutant that unconditionally names all three flags
+  now fails.
+
+  F3 (minor, fixed): hoisted the identity check in `stageNewRun` from just
+  before `planRunScaffold` to immediately after resolving `source` — before
+  the flags-complete/non-TTY/interactive branch is even chosen — matching
+  `decide()`'s resolve→identity ordering and removing the later duplicate
+  check. A no-identity repo now refuses before any prompt, editor session,
+  or `--brief-file` read, eliminating the session-loss UX the finding
+  described.
+
+  F4 (minor, fixed): `runInteractiveNew`'s slug prompt loop now validates
+  against `SLUG_RE` (`/^[a-z0-9][a-z0-9-]*$/`, duplicated from core
+  scaffold.ts's private, non-exported `SLUG_RE` — kept inside this task's
+  file surface rather than widening it into core), re-prompting with a
+  logged reason instead of accepting an invalid slug into the edit session.
+  Applies whether the slug came from a bad `--slug` flag or a bad prompt
+  answer. Added a unit test (`runInteractiveNew re-prompts on an invalid
+  slug...`) exercising the re-prompt; verified live that reverting the loop
+  to unconditional acceptance fails it.
+
+  F5 (minor, fixed): extracted the shared plan→write→exit-code core (the
+  `planDecision`/`writeState` CAS path, refusal strings, and exit-code
+  mapping) out of `decide()` into a new `planAndWrite(source, ref, who,
+  input)` helper returning `number | null`; both `decide()` (process.exits
+  on non-null) and `armRun` (returns/chains `ensureDraftPr` on null) now
+  call it, so a future change to a refusal string or the ref-moved→2 mapping
+  can no longer land in one and not the other. This also corrects the round-1
+  rationale the reviewer flagged as partly inaccurate — `decide()`'s
+  post-refactor body confirms `armRun` can indeed await a shared call and
+  branch on its return value, as the reviewer noted was viable; the
+  returned-exit-code shape is kept for the reason already given (uniform
+  `process.exit(await armRun(...))` at the command-action call site,
+  runUpgrade-precedent).
+
+  F6 (minor, fixed): `missingBriefSections`'s section-name normalization
+  (`normalizeSection`) now mirrors core validate.ts's private `normalize`
+  exactly — lowercase, collapse runs of non-alphanumerics (including
+  internal whitespace and punctuation) to a single space, trim — instead of
+  a bare lowercase+trim. Added a CLI test staging a run whose brief repeats
+  a punctuated template H2 (`Constraints & risks`) with different internal
+  spacing (`Constraints  &  risks`); verified live that this fails
+  (`--brief-file is missing required section(s): Constraints & risks`)
+  under the old normalization and passes under the fix.
+
+  Tests: extended frontend/packages/cli/test/cli.test.ts with 4 new/updated
+  cases — the arm-standard note assertion + a dedicated
+  ensureDraftPr-branch-argument test (F1), the missing-flags exclusion
+  assertion (F2), a slug re-prompt unit test (F4), and a punctuation/
+  whitespace H2-normalization CLI test (F6). F3 and F5 are exercised by the
+  existing AC7.1/AC6.1/AC6.2 tests, which continued to pass through the
+  refactor (no new assertions needed — the identity-refusal and
+  arm-exit-code tests already cover the reordered/shared code paths;
+  confirmed via typecheck + the full run below that nothing regressed).
+
+  Results: `cd frontend && npx vitest run packages/cli/test/cli.test.ts`
+  23/23 passed. `cd frontend && npm test` 308 passed | 1 skipped (38 files,
+  same 1 pre-existing skip: live-smoke.test.ts) — full workspace suite
+  green. `cd frontend && npm run typecheck` clean (tsc -p tsconfig.json &&
+  tsc -p packages/web/tsconfig.json, no errors).

@@ -1,7 +1,7 @@
 run: fleetview-intake
 branch: run/fleetview-intake
-phase: paused
-paused_reason: design run closes at G2 — no release phase; see retro.md
+phase: done
+paused_reason: null
 
 budget:
   cost_limit_usd: 200

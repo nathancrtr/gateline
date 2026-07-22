@@ -300,7 +300,7 @@ tasks:
   # machine) were discarded with the hold. 03 returns to in-review: its round-2
   # verdict was request-changes and the round-3 implementer response never
   # landed, so the reconciler re-derives that dispatch.
-  [ { id: 03-intake-seam-reference, status: in-review, review_rounds: 3 } ]
+  [ { id: 03-intake-seam-reference, status: review-approved, review_rounds: 3 } ]
 
 escalations:
   [

@@ -43,4 +43,66 @@ depends_on: [02-record-scaffold-and-arm, 04-pr-ensure]
 
 status: pending
 
-notes: ""
+notes: |
+  Round 1 (implementer): built all three deliverables inside the declared
+  file_contact_surface only.
+
+  derive.test.ts: added a D2 staged-rest case looping PROFILES (patch,
+  standard, full) — phase paused/paused_reason STAGED_REASON, default
+  all-undecided gates, tasks: [] — asserting kind !== 'dispatch', kind !==
+  'escalate', and rule === 'D2' (AC5.3). Added a post-arm patch case (phase
+  plan, profile patch, artifacts ['intent-brief.md','tasks/01-toy.yaml'])
+  asserting rest/D10, proving the AC4.2 work-item stub is load-bearing
+  against the real D21 no-work-item escalation. Both import PROFILES and
+  STAGED_REASON as values from @agentic/core (already exported by task 02).
+
+  engine.ts: added `ensureDraftPr` to the @agentic/core import; added a
+  module-level `const ensuredDraftPrs = new Set<string>()` (literally
+  "per-process", per ADR-5/plan wording, not an instance field, so it
+  survives across Engine instances in one process); in the 'dispatch' case,
+  after the push-rejection recovery and notePushAccepted/Failure calls and
+  before the `for (const intent of action.dispatches) this.launch(...)`
+  loop, added: if the slug isn't in the memo, add it, await
+  ensureDraftPr(this.cfg.repoDir, ref.branch, ref.slug), and this.log(...)
+  its status/note. ensureDraftPr itself never throws (task 04's contract)
+  and its result is never inspected beyond logging, so a skipped/failed
+  ensure cannot change `wrote`/`launched`/`detail` on TickOutcome (AC8.1
+  engine half, AC8.2). Confirmed `grep -rn stageRun
+  frontend/packages/orchestrator/src` stays empty (plan's ADR-5 invariant).
+
+  engine.test.ts: added one case exercising both halves. Deviation from a
+  literal reading of "one case": because `ensuredDraftPrs` is a
+  module-level Set, and every other test in this same file already
+  dispatches for slug `toy` against the same statically-imported Engine
+  module, a naive same-module test would find `toy` already memoized by an
+  earlier test and never observe a genuine first attempt (order-dependent
+  and fragile either way). Used `vi.resetModules()` + a dynamic `await
+  import('../src/engine.ts')` (same technique already used for
+  seam.ts/manifest.ts imports later in this file, and for a fresh
+  Engine/LocalGitSource in router.test.ts) to get an Engine class backed by
+  a fresh, unpolluted memo Set, independent of test order or count. Verified
+  this doesn't affect other tests: statically-imported bindings at the top
+  of the file resolved before any test ran and are unaffected by a later
+  resetModules call from within one test body. The case: (1) reconcile() to
+  the first dispatching tick (analyst, D6) against a makeToyRepo() scratch
+  repo (no remote configured by that helper) — asserts exactly one "draft PR
+  ensure" log line containing "skipped", and that phase/gates progressed
+  normally (unaffected); (2) approve G0, reconcile() again to a second
+  dispatching tick (architect) — asserts the ensure log count is still
+  exactly 1 (memoized) and the run still converged normally to phase
+  'plan'. Covers "attempts exactly once across two ticks" and "a
+  failing/skipping ensure leaves the tick outcome unchanged" in one case,
+  per the task's own wording that either the injectable exec or a
+  no-remote scratch repo satisfies the skipped path — used the latter since
+  ensureDraftPr isn't threaded through EngineConfig as an injectable (task
+  04/05's ensureDraftPr signature takes no dispatcher-level seam; the
+  engine call site invokes it directly, matching the plan's citation
+  `ensureDraftPr(this.cfg.repoDir, ref.branch, ref.slug)` with no exec
+  override parameter).
+
+  Verification: `npx vitest run packages/orchestrator/test/derive.test.ts`
+  (49 passed), `npx vitest run packages/orchestrator/test/engine.test.ts`
+  (11 passed, ~136s — pre-existing suite is this slow already), `npm test`
+  (282 passed, 1 skipped pre-existing live-smoke), `npm run typecheck`
+  (clean, both tsconfigs). No findings deferred; no file outside the
+  contact surface touched.

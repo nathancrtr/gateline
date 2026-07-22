@@ -6,7 +6,7 @@
 //   shadow <slug>    replay a run's history, derived vs actual (M1)
 //   sweep <role>     force a scheduled sweep now (ignores dueness, not the guards)
 import { Command } from 'commander'
-import { Git, LocalGitSource } from '@agentic/core'
+import { CodeTreeMonitor, Git, LocalGitSource, resolveCodeRepo, SUPERSEDE_EXIT_CODE } from '@agentic/core'
 import { loadRegistry, type Registry } from './registry.ts'
 import { deriveAll } from './tick.ts'
 import { formatAction } from './derive.ts'
@@ -114,16 +114,38 @@ program
   .action(async (opts: { heartbeat: string }) => {
     const opened = await open()
     const { engine, scheduler, manifestStaleProbe } = await buildEngine(opened)
-    const loop = await runLoop(engine, opened.dir, {
+    // Self-supersede (#141): the code tree is this binary's own checkout —
+    // resolved from our own import.meta.url — independent of the run source
+    // at opened.dir.
+    const codeRepo = resolveCodeRepo(import.meta.url)
+    const codeMonitor = codeRepo ? await CodeTreeMonitor.create(codeRepo) : undefined
+    // The supersede callback passed into runLoop below closes over `loop`
+    // before it exists — set once runLoop resolves; the callback only fires
+    // later, on a heartbeat. A supersede and the operator's ^C ladder end in
+    // the same drain: share one idempotent promise so neither double-drains.
+    let loop: Awaited<ReturnType<typeof runLoop>> | null = null
+    let drained: Promise<void> | null = null
+    const drain = () => (drained ??= Promise.resolve().then(() => loop?.stop()))
+    const stop = async (exitCode: number) => {
+      console.log('draining in-flight dispatches…')
+      await drain()
+      process.exit(exitCode)
+    }
+    loop = await runLoop(engine, opened.dir, {
       heartbeatMs: Number(opts.heartbeat) * 1000,
       scheduler,
       log: (line) => console.log(line),
       staleProbe: manifestStaleProbe,
+      codeMonitor,
+      onSupersede: (status) => {
+        console.log(`code tree moved ${status.startHead}..${status.codeHead}, superseding — draining and exiting ${SUPERSEDE_EXIT_CODE}`)
+        void stop(SUPERSEDE_EXIT_CODE)
+      },
     })
     console.log(`watching ${opened.dir} (heartbeat ${opts.heartbeat}s; bot identity ${BOT_IDENTITY.name}) — ^C to stop`)
     const onSignal = stagedShutdown({
       inFlight: () => engine.inFlightDetail(),
-      drain: () => loop.stop(),
+      drain,
       abort: () => engine.abortInFlight(),
       log: (line) => console.log(line),
       exit: (code) => process.exit(code),

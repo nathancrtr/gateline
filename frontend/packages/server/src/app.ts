@@ -78,12 +78,33 @@ export function createApp(deps: AppDeps): Hono {
   // stale = one was configured here and has gone silent, which the UI
   // renders as an outage banner instead of "waiting on gate".
   app.get('/api/engine-health', async (c) => {
-    const out: Record<string, { at: string; inFlight: number; pushRejections: Record<string, number>; stale: boolean } | null> = {}
+    const out: Record<
+      string,
+      {
+        at: string
+        inFlight: number
+        pushRejections: Record<string, number>
+        stale: boolean
+        commit?: string
+        codeHead?: string
+        codeState?: 'fresh' | 'superseded-pending' | 'paused'
+      } | null
+    > = {}
     for (const s of deps.sources) {
       const dir = (s as { dir?: string }).dir
       if (!dir) continue
       const health = await readEngineHealth(dir)
-      out[s.id] = health ? { at: health.at, inFlight: health.inFlight, pushRejections: health.pushRejections ?? {}, stale: engineHealthStale(health) } : null
+      out[s.id] = health
+        ? {
+            at: health.at,
+            inFlight: health.inFlight,
+            pushRejections: health.pushRejections ?? {},
+            stale: engineHealthStale(health),
+            commit: health.commit,
+            codeHead: health.codeHead,
+            codeState: health.codeState,
+          }
+        : null
     }
     return c.json({ engines: out, now: Math.floor(Date.now() / 1000) })
   })

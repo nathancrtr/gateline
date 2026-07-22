@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>candidate-a · run-diff — The Ledger</title>
+<!-- Candidate A "The Ledger" — screen: run-diff (run detail, diff tab).
+     Self-contained: no scripts, no external assets, no network requests.
+     States shown: populated (two files, add/del hunks, gutters), no-diff
+     empty, run-is-merged empty, loading, error. -->
+<style>
+:root { color-scheme: light dark; }
+:root {
+  --ground: light-dark(#f6f3ea, #16140f);
+  --surface: light-dark(#fdfbf4, #1d1a14);
+  --raised: light-dark(#ece7d8, #262218);
+  --ink: light-dark(#211e16, #eae4d4);
+  --muted: light-dark(#575145, #a89f8a);
+  --faint: light-dark(#837c6a, #746c5a);
+  --line: light-dark(#ded7c4, #38321f);
+  --rule: light-dark(#211e16, #eae4d4);
+  --accent: light-dark(#1e4f8f, #92b4e3);
+  --ok: light-dark(#2f6b40, #86c28f);
+  --warn: light-dark(#8a5d0f, #d3a94e);
+  --bad: light-dark(#a03123, #e2836a);
+  --on-solid: light-dark(#fdfbf4, #16140f);
+  --wash-accent: light-dark(rgba(30,79,143,.07), rgba(146,180,227,.10));
+  --wash-ok: light-dark(rgba(47,107,64,.11), rgba(134,194,143,.13));
+  --wash-bad: light-dark(rgba(160,49,35,.09), rgba(226,131,106,.12));
+  --serif: 'Iowan Old Style','Palatino Linotype',Palatino,Georgia,'Times New Roman',serif;
+  --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --mono: ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+}
+* { box-sizing: border-box; margin: 0; }
+body { background: var(--ground); color: var(--ink); font: 14px/1.55 var(--sans); -webkit-font-smoothing: antialiased; padding: 0 32px 80px; }
+.sheet { max-width: 1080px; margin: 0 auto; }
+a { color: inherit; text-decoration: none; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+.proof { font: 10px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); padding: 10px 0 0; }
+.masthead { display: flex; align-items: baseline; gap: 26px; padding: 18px 0 10px; }
+.wordmark { font: 600 20px/1 var(--serif); }
+.wordmark small { display: block; font: 400 11px/1.5 var(--sans); color: var(--faint); }
+.mastnav { display: flex; gap: 22px; margin-left: 18px; }
+.mastnav a { font: 600 11px/1 var(--sans); letter-spacing: .13em; text-transform: uppercase; color: var(--muted); padding: 8px 2px 10px; border-bottom: 3px solid transparent; transition: color .12s ease-out, border-color .12s ease-out; }
+.mastnav a:hover { color: var(--ink); }
+.stamp-count { display: inline-block; min-width: 18px; text-align: center; background: var(--accent); color: var(--on-solid); border-radius: 999px; font: 700 10.5px/1 var(--mono); padding: 3px 6px; margin-left: 6px; vertical-align: 1px; }
+.motto { margin-left: auto; font: italic 12px/1.45 var(--serif); color: var(--faint); text-align: right; }
+.rule-tt { border-top: 2.5px solid var(--rule); }
+.rule-tt::after { content: ''; display: block; border-top: 1px solid var(--rule); margin-top: 2px; }
+.runhead { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin: 28px 0 22px; }
+.runhead h1 { font: 600 24px/1.1 var(--mono); letter-spacing: -.02em; }
+.runhead .right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+.ref { font: 11px var(--mono); color: var(--faint); }
+.phase { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); padding: 3px 8px; font: 600 11px/1 var(--mono); }
+.phase .dot { font-size: 8px; color: var(--warn); }
+.gates { display: inline-flex; gap: 4px; }
+.gcell { display: inline-flex; align-items: center; justify-content: center; gap: 3px; width: 36px; height: 22px; font: 11px var(--mono); background: var(--surface); border: 1px solid var(--line); }
+.gcell .gid { font-size: 9px; color: var(--faint); }
+.gcell.approved { border-color: var(--ok); color: var(--ok); }
+.gcell.pending { border-style: dashed; color: var(--faint); }
+.tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--rule); margin: 10px 0 22px; }
+.tabs a { font: 600 11px/1 var(--sans); letter-spacing: .13em; text-transform: uppercase; color: var(--muted); padding: 8px 2px 10px; border-bottom: 3px solid transparent; margin-bottom: -1px; transition: color .12s ease-out; }
+.tabs a:hover { color: var(--ink); }
+.tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+
+/* Evidence surface: the densest rhythm in the app. Mono 12px/20px, zero
+   vertical padding on lines. Each file is a flat plate — 1px border, no
+   shadow, square corners; the file head is a ledger head, not a card head. */
+.filediff { background: var(--surface); border: 1px solid var(--line); margin-bottom: 22px; }
+.filehead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 8px 12px; border-bottom: 2px solid var(--rule); }
+.filehead .path { font: 700 12px var(--mono); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.filehead .stat { font: 11px var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stat .plus { color: var(--ok); } .stat .minus { color: var(--bad); } .stat .kind { color: var(--muted); margin-left: 8px; }
+.scroller { overflow-x: auto; }
+table.diff { border-collapse: collapse; font: 12px/1.7 var(--mono); width: 100%; }
+.diff td { padding: 0 10px; white-space: pre; }
+.diff td.no { width: 38px; text-align: right; color: var(--faint); border-right: 1px solid var(--line); user-select: none; font-variant-numeric: tabular-nums; padding: 0 8px; }
+.diff tr.hunk td { background: var(--wash-accent); color: var(--accent); font-size: 11px; padding: 3px 10px; }
+.diff tr.add td.code { background: var(--wash-ok); }
+.diff tr.del td.code { background: var(--wash-bad); }
+.diff .sign { user-select: none; color: var(--faint); }
+
+.sketches { margin-top: 64px; }
+.sect-head { border-top: 2px solid var(--rule); padding-top: 8px; display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+.kicker { font: 600 10.5px/1 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.sect-head .note { font: italic 12.5px var(--serif); color: var(--muted); }
+.sketchgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+.sketch { border: 1px dashed var(--line); padding: 14px; }
+.sketch .kicker { display: block; margin-bottom: 12px; color: var(--faint); }
+.status { text-align: center; padding: 34px 18px; font-size: 13px; color: var(--muted); }
+.status.bad { color: var(--bad); }
+.centered { text-align: center; padding: 34px 18px; }
+.centered .lede { font: 600 16px/1.3 var(--serif); }
+.centered .sub { margin-top: 5px; font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <p class="proof">candidate-a · the ledger · screen: run-diff · states: populated / no-diff / merged / loading / error</p>
+
+  <div class="masthead">
+    <div class="wordmark">Gate<small>pipeline decisions</small></div>
+    <nav class="mastnav">
+      <a href="#inbox">Inbox<span class="stamp-count">7</span></a>
+      <a href="#portfolio">Portfolio</a>
+      <a href="#metrics">Metrics</a>
+    </nav>
+    <p class="motto">The repo is the database.<br>Every view renders git.</p>
+  </div>
+  <div class="rule-tt"></div>
+
+  <div class="runhead">
+    <h1>dupefind</h1>
+    <span class="phase"><span class="dot">●</span>integrate</span>
+    <span class="gates">
+      <span class="gcell approved"><span class="gid">0</span>✓</span>
+      <span class="gcell approved"><span class="gid">1</span>✓</span>
+      <span class="gcell pending"><span class="gid">2</span>·</span>
+      <span class="gcell pending"><span class="gid">3</span>·</span>
+    </span>
+    <span class="right"><span class="ref">agentic-sandbox · run/dupefind @ c7a4f81</span></span>
+  </div>
+
+  <nav class="tabs">
+    <a href="#artifacts">Artifacts</a>
+    <a href="#diff" aria-current="page">Diff</a>
+    <a href="#history">History</a>
+  </nav>
+
+  <section class="filediff">
+    <div class="filehead">
+      <span class="path">apps/dupefind/dupefind.py</span>
+      <span class="stat"><span class="plus">+9</span> <span class="minus">−2</span></span>
+    </div>
+    <div class="scroller">
+      <table class="diff">
+        <tr class="hunk"><td colspan="3">@@ -45,8 +45,15 @@ def scan_files(root: str) -&gt; list[tuple[str, int]]:</td></tr>
+        <tr><td class="no">45</td><td class="no">45</td><td class="code"><span class="sign">  </span></td></tr>
+        <tr><td class="no">46</td><td class="no">46</td><td class="code"><span class="sign">  </span>def hash_file(path: str) -&gt; str:</td></tr>
+        <tr><td class="no">47</td><td class="no">47</td><td class="code"><span class="sign">  </span>    """Hex SHA-256 digest of the file's contents, read in binary</td></tr>
+        <tr class="del"><td class="no">48</td><td class="no"></td><td class="code"><span class="sign">− </span>    chunks (R3)."""</td></tr>
+        <tr class="del"><td class="no">49</td><td class="no"></td><td class="code"><span class="sign">− </span>    return hashlib.sha256(open(path, "rb").read()).hexdigest()</td></tr>
+        <tr class="add"><td class="no"></td><td class="no">48</td><td class="code"><span class="sign">+ </span>    CHUNK_SIZE chunks (R3, ADR-3). Raises OSError on unreadable</td></tr>
+        <tr class="add"><td class="no"></td><td class="no">49</td><td class="code"><span class="sign">+ </span>    paths; caller policy in ADR-6."""</td></tr>
+        <tr class="add"><td class="no"></td><td class="no">50</td><td class="code"><span class="sign">+ </span>    digest = hashlib.sha256()</td></tr>
+        <tr class="add"><td class="no"></td><td class="no">51</td><td class="code"><span class="sign">+ </span>    with open(path, "rb") as f:</td></tr>
+        <tr class="add"><td class="no"></td><td class="no">52</td><td class="code"><span class="sign">+ </span>        while True:</td></tr>
+        <tr class="add"><td class="no"></td><td class="no">53</td><td class="code"><span class="sign">+ </span>            chunk = f.read(CHUNK_SIZE)</td></tr>
+        <tr class="add"><td class="no"></td><td class="no">54</td><td class="code"><span class="sign">+ </span>            if not chunk:</td></tr>
+        <tr class="add"><td class="no"></td><td class="no">55</td><td class="code"><span class="sign">+ </span>                break</td></tr>
+        <tr class="add"><td class="no"></td><td class="no">56</td><td class="code"><span class="sign">+ </span>            digest.update(chunk)</td></tr>
+        <tr class="add"><td class="no"></td><td class="no">57</td><td class="code"><span class="sign">+ </span>    return digest.hexdigest()</td></tr>
+        <tr><td class="no">50</td><td class="no">58</td><td class="code"><span class="sign">  </span></td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section class="filediff">
+    <div class="filehead">
+      <span class="path">apps/dupefind/test_core.py</span>
+      <span class="stat"><span class="plus">+11</span> <span class="minus">−0</span><span class="kind">added</span></span>
+    </div>
+    <div class="scroller">
+      <table class="diff">
+        <tr class="hunk"><td colspan="3">@@ -0,0 +1,11 @@</td></tr>
+        <tr class="add"><td class="no"></td><td class="no">1</td><td class="code"><span class="sign">+ </span>"""Unit tests for dupefind core (task 02-unit-tests, review round 2)."""</td></tr>
+        <tr class="add"><td class="no"></td><td class="no">2</td><td class="code"><span class="sign">+ </span>import os</td></tr>
+        <tr class="add"><td class="no"></td><td class="no">3</td><td class="code"><span class="sign">+ </span></td></tr>
+        <tr class="add"><td class="no"></td><td class="no">4</td><td class="code"><span class="sign">+ </span>from dupefind import find_duplicate_groups, hash_file, scan_files</td></tr>
+        <tr class="add"><td class="no"></td><td class="no">5</td><td class="code"><span class="sign">+ </span></td></tr>
+        <tr class="add"><td class="no"></td><td class="no">6</td><td class="code"><span class="sign">+ </span></td></tr>
+        <tr class="add"><td class="no"></td><td class="no">7</td><td class="code"><span class="sign">+ </span>def test_size_zero_files_never_hashed(tmp_path):</td></tr>
+        <tr class="add"><td class="no"></td><td class="no">8</td><td class="code"><span class="sign">+ </span>    (tmp_path / "empty-a.txt").write_bytes(b"")</td></tr>
+        <tr class="add"><td class="no"></td><td class="no">9</td><td class="code"><span class="sign">+ </span>    (tmp_path / "empty-b.txt").write_bytes(b"")</td></tr>
+        <tr class="add"><td class="no"></td><td class="no">10</td><td class="code"><span class="sign">+ </span>    groups = find_duplicate_groups(scan_files(str(tmp_path)))</td></tr>
+        <tr class="add"><td class="no"></td><td class="no">11</td><td class="code"><span class="sign">+ </span>    assert groups == []</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <section class="sketches">
+    <div class="sect-head"><span class="kicker">State sketches</span><span class="note">evidence keeps the full mono font-swap; gutters and stats use tabular figures</span></div>
+    <div class="sketchgrid">
+      <div class="sketch">
+        <span class="kicker">Empty — no diff</span>
+        <p class="status">No diff — the run branch matches the default branch.</p>
+      </div>
+      <div class="sketch">
+        <span class="kicker">Empty — run is merged</span>
+        <div class="centered">
+          <p class="lede">Run is merged.</p>
+          <p class="sub">Its change lives in the default branch history now.</p>
+        </div>
+      </div>
+      <div class="sketch">
+        <span class="kicker">Loading</span>
+        <p class="status">Computing diff…</p>
+      </div>
+      <div class="sketch">
+        <span class="kicker">Error</span>
+        <p class="status bad">Could not compute diff: unknown revision run/dupefind</p>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

@@ -1,0 +1,89 @@
+id: 09-run-screen
+title: Restyle the run page (head, signal panel, task board, tabs, artifacts, history)
+requirements: [R1, R5, R6]
+
+scope: |
+  Restyle frontend/packages/web/src/pages/run.tsx per
+  runs/fleetview-design/design/candidate-b/run-artifacts.html and run-history.html:
+  run head under a 1px line bottom border — mono 600 20px slug (+0.06em tracking,
+  no uppercase), phase LED, gate readout strip, budget meter (all consumed from
+  chips.tsx as-is), mono faint source · ref on the right. Malformed run-state
+  banner: bad-soft panel with 1px bad border, 5px radius, raw yaml pre on bg-inset —
+  still never reviewable.
+  NeedsYouCard becomes THE signal panel — the page's only live object: bg-surface,
+  1px accent border + 3px accent left rail, 6px radius, carrying the .pulse-panel
+  class from C1 (static glow ring + 2.8s pulse — this is the sanctioned panel
+  pulse). When the item is not reviewable (bounced): bad border + bad left rail,
+  NO glow, NO pulse — omit the motion class entirely. Panel title sans 600 ~15px,
+  detail muted capped 76ch, "waiting" age chip; packet links as mono 11px tags on
+  bg-inset (1px line border, 4px radius, hover accent text/border). The inner
+  decide flow is task 05's surface (decide.tsx) — consume DecidePanel unmodified.
+  Task board: 5px-radius chips on bg-surface with 1px line borders — mono task id,
+  status word toned (done = ok, in-progress/review = muted, capped = bad 700),
+  mono faint round-count. Tabs: mono 600 12px uppercase +0.06em tracked buttons,
+  2px accent bottom border on the active tab (same onClick logic).
+  ArtifactsTab rail: 4px-radius mono 12px buttons, hover raised, selected
+  accent-soft + accent 600; validation marks consumed as-is. ArtifactBody on an
+  instrument panel (1px line border, 6px radius, 76ch cap; failing-contract banner
+  stays bad-washed with 1px bad border, 5px radius).
+  HistoryTab as the instrument log per run-history.html: a 2px line spine down the
+  left (::before or a border), each event a hairline-divided row with a 10px round
+  node (bg-inset + 2px faint border); phase transitions light the node accent with
+  a static 0 0 10px var(--glow) shadow and print the mono accent "→ phase" stamp
+  (keep the existing transition-detection logic); when/oid mono faint, actor muted.
+  Loading branches ("Reading run…", "Reading artifact…", "Computing diff…"): 2-3
+  .skel lines per the mockups above the preserved PageStatus text. Behavior frozen
+  (C3): tab/param handling, e/Escape key handlers, data-needs-card, DecidePanel and
+  chips consumed as-is (do not edit their files), all strings verbatim. Diff tab
+  content is task 10's surface — only the surrounding tab chrome is yours. Use only
+  C1 tokens and the .pulse-panel/.skel classes; no keyframes or animation
+  properties defined here.
+
+file_contact_surface:
+  - frontend/packages/web/src/pages/run.tsx
+
+acceptance_tests:
+  - AC5.1
+  - AC5.2
+  - AC5.3
+  - AC6.4
+  - "cd frontend && npm run typecheck && npm test && npx playwright test pass"
+  - "run page matches candidate-b/run-artifacts.html and run-history.html: the signal panel is the sole glowing/pulsing element; bounced panel shows bad rail with no glow and no pulse; spine nodes mark phase transitions"
+  - "grep of run.tsx: no @keyframes, no animation- property; motion enters only via .pulse-panel and .skel"
+
+depends_on: [02-ledger-foundations]
+
+status: pending
+
+notes: |
+  Implementer round 1: restyled run.tsx per scope — run head (mono 20px slug,
+  border-b divider), malformed-state banner (bad-soft, 5px radius, pre on
+  bg-inset), NeedsYouCard as the signal panel (pulse-panel + accent rail when
+  reviewable; bad rail with no glow/no motion class when bounced), task board
+  chips (status word + round-count toned bad-700 when review_rounds >= 3),
+  mono uppercase tabs with 2px accent underline, artifacts rail (4px radius)
+  and ArtifactBody instrument panel (76ch cap, bordered fail banner), History
+  tab restyled as an instrument log (spine + node built from Tailwind
+  before:* pseudo-element utilities per run-history.html; existing
+  transition-detection logic untouched), and a shared LoadingSkeleton
+  (3 .skel lines + preserved PageStatus text) used by the three loading
+  branches. Only run.tsx touched; decide.tsx and chips.tsx consumed as-is;
+  all data-* hooks, keyboard handlers, tab/param logic, and user-facing
+  strings preserved verbatim.
+
+  Test results: `npm run typecheck` passes. `npm test` (vitest): 125 passed,
+  1 skipped, 2 failed — both failures are pre-existing and unrelated to
+  packages/web (packages/orchestrator/test/hardening.test.ts fails on a gpg
+  signing sandbox limitation; packages/orchestrator/test/router.test.ts times
+  out in an unrelated dispatch test); no unit tests exist under packages/web.
+  `npx playwright test`: flaky in this sandbox — verified by reverting
+  run.tsx via `git stash` and rerunning the same suite, which reproduced the
+  identical 4-5 failures (including on portfolio.tsx/metrics.tsx routes this
+  task never touches) with the unmodified file, then restored my changes via
+  `git stash pop`. Also observed the suite fails harder under concurrent
+  sibling task worktrees, all of which hardcode the same PORT=4399 in
+  e2e/smoke.spec.ts and race for the same TCP port — a pre-existing e2e
+  fixture defect (not introduced by this task) worth a follow-up ticket to
+  give each smoke.spec.ts run a distinct port. Confirmed via grep: no
+  `@keyframes` or `animation-` in run.tsx; motion is only via the pre-existing
+  `.pulse-panel` and `.skel` classes.

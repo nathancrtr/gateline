@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>candidate-b · run-diff — Signal Deck</title>
+<!-- Candidate B "Signal Deck" — screen: run-diff (run detail, diff tab).
+     Self-contained: no scripts, no external assets, no network requests.
+     States shown: populated diff with add/del hunks + per-file stats, "no diff"
+     empty, "run is merged" empty, loading, error. -->
+<style>
+:root { color-scheme: light dark; }
+:root{
+  --ground: light-dark(#eef2f5,#0a0e11);
+  --surface: light-dark(#ffffff,#111820);
+  --inset: light-dark(#f3f6f8,#0d141a);
+  --raised: light-dark(#e4ebef,#18222b);
+  --ink: light-dark(#10202a,#dbe7ec);
+  --muted: light-dark(#4c5d67,#8ba1ac);
+  --faint: light-dark(#8598a2,#566771);
+  --line: light-dark(#d3dde3,#223039);
+  --accent: light-dark(#0b6f89,#45c8ec);
+  --accent-soft: light-dark(rgba(11,111,137,.12),rgba(69,200,236,.14));
+  --ok: light-dark(#157a4a,#4ec98d);
+  --ok-soft: light-dark(rgba(21,122,74,.13),rgba(78,201,141,.14));
+  --bad: light-dark(#b23b28,#ff7f63);
+  --bad-soft: light-dark(rgba(178,59,40,.10),rgba(255,127,99,.13));
+  --warn: light-dark(#8a6410,#e0b24e);
+  --on-solid: light-dark(#ffffff,#06121a);
+  --glow: light-dark(rgba(11,111,137,.30),rgba(69,200,236,.40));
+  --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --mono: ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--ground);color:var(--ink);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+@keyframes pulse{0%,100%{box-shadow:0 0 6px var(--glow)}50%{box-shadow:0 0 15px var(--glow),0 0 4px var(--glow)}}
+@keyframes sweep{0%{background-position:180% 0}100%{background-position:-80% 0}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-duration:.01ms!important}}
+
+.deck{display:grid;grid-template-columns:200px 1fr;min-height:100vh;max-width:1280px;margin:0 auto}
+.rail{position:sticky;top:0;height:100vh;border-right:1px solid var(--line);background:var(--surface);padding:16px 12px;display:flex;flex-direction:column;gap:22px}
+.brand{padding:6px 8px}
+.brand b{font:600 15px/1 var(--mono);letter-spacing:.16em}
+.brand small{display:block;margin-top:6px;font:400 10.5px/1.35 var(--sans);color:var(--faint)}
+.navsec{display:flex;flex-direction:column;gap:2px}
+.nav{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:4px;font:12px/1 var(--sans);color:var(--muted);transition:background .14s,color .14s}
+.nav .dot{width:6px;height:6px;border-radius:50%;background:var(--faint)}
+.nav:hover{background:var(--raised);color:var(--ink)}
+.nav[aria-current="page"]{background:var(--accent-soft);color:var(--accent)}
+.nav[aria-current="page"] .dot{background:var(--accent);box-shadow:0 0 8px var(--glow)}
+.nav .count{margin-left:auto;font:600 11px/1 var(--mono);font-variant-numeric:tabular-nums;padding:2px 7px;border-radius:999px;background:var(--accent);color:var(--on-solid);animation:pulse 2.4s ease-in-out infinite}
+.railfoot{margin-top:auto;padding:8px;font:10px/1.6 var(--mono);color:var(--faint)}
+
+.readout{min-width:0;padding:22px 30px 90px;max-width:1040px}
+.proof{font:10px/1.4 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:18px}
+
+.runhead{display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding-bottom:16px;margin-bottom:14px;border-bottom:1px solid var(--line)}
+.runhead h1{font:600 20px/1 var(--mono);letter-spacing:.06em}
+.runhead .ref{margin-left:auto;font:11px var(--mono);color:var(--faint)}
+.phase{display:inline-flex;align-items:center;gap:7px;font:12px/1 var(--sans);color:var(--warn)}
+.phase .led{width:7px;height:7px;border-radius:50%;box-shadow:0 0 6px currentColor}
+.phase .txt{color:var(--ink)}
+
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px}
+.tab{padding:9px 16px;font:600 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;background:none;cursor:pointer}
+.tab.on{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* Evidence surface (REC1: distinct from decision + display). Dense mono grid,
+   no glow, 20px line height, zero vertical padding — a readout, not a card. */
+.file{border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--surface);margin-bottom:16px}
+.filehead{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding:9px 13px;border-bottom:1px solid var(--line);background:var(--inset)}
+.filehead .path{font:600 12px var(--mono);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.filehead .stat{font:11px var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.filehead .add{color:var(--ok)}
+.filehead .del{color:var(--bad)}
+.filehead .kind{color:var(--muted);margin-left:8px}
+.difftable{width:100%;border-collapse:collapse;font:12px/20px var(--mono)}
+.difftable td{padding:0}
+.gutter{width:44px;text-align:right;padding:0 8px;color:var(--faint);border-right:1px solid var(--line);user-select:none;font-variant-numeric:tabular-nums}
+.code{white-space:pre;padding:0 12px}
+.code .sign{color:var(--faint);user-select:none}
+tr.add{background:var(--ok-soft)}
+tr.del{background:var(--bad-soft)}
+tr.hunk td{background:var(--accent-soft);color:var(--accent);padding:3px 12px;font-size:11px}
+
+.states{margin-top:44px}
+.sect{border-top:1px solid var(--line);padding-top:14px;margin-bottom:16px;display:flex;align-items:baseline;gap:12px}
+.kick{font:600 10.5px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.sect .note{font:12px var(--sans);color:var(--faint)}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.demo{border:1px solid var(--line);border-radius:5px;background:var(--surface);padding:14px;min-width:0}
+.demo .lab{display:block;font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:12px}
+.status{text-align:center;padding:26px 16px;font:13px var(--sans);color:var(--muted)}
+.status.bad{color:var(--bad)}
+.skel{border-radius:4px;background:linear-gradient(100deg,var(--inset) 30%,var(--raised) 50%,var(--inset) 70%);background-size:220% 100%;animation:sweep 1.5s linear infinite}
+</style>
+</head>
+<body>
+<div class="deck">
+  <aside class="rail">
+    <div class="brand"><b>GATE</b><small>fleet console · pipeline decisions</small></div>
+    <nav class="navsec">
+      <a class="nav" href="#"><span class="dot"></span>Inbox<span class="count">7</span></a>
+      <a class="nav" href="#"><span class="dot"></span>Portfolio</a>
+      <a class="nav" href="#"><span class="dot"></span>Metrics</a>
+    </nav>
+    <div class="railfoot">the repo is the<br>database — every<br>view renders git</div>
+  </aside>
+
+  <main class="readout">
+    <p class="proof">candidate-b · signal deck · screen: run-diff · states: populated (add/del hunks) / no-diff / merged / loading / error</p>
+
+    <div class="runhead">
+      <h1>dupefind</h1>
+      <span class="phase"><span class="led"></span><span class="txt">implement</span></span>
+      <span class="ref" title="read at 9a75877">agentic-sandbox · 9a75877</span>
+    </div>
+
+    <div class="tabs">
+      <button class="tab">Artifacts</button>
+      <button class="tab on">Diff</button>
+      <button class="tab">History</button>
+    </div>
+
+    <div class="file">
+      <div class="filehead">
+        <span class="path">apps/dupefind/src/dedup.py</span>
+        <span class="stat"><span class="add">+18</span> <span class="del">−4</span></span>
+      </div>
+      <table class="difftable">
+        <tbody>
+          <tr class="hunk"><td colspan="3">@@ -12,7 +12,9 @@ def normalize_key(path: str) -&gt; str:</td></tr>
+          <tr><td class="gutter">12</td><td class="gutter">12</td><td class="code"><span class="sign"> </span>    stem = path.lower().strip()</td></tr>
+          <tr class="del"><td class="gutter">13</td><td class="gutter"></td><td class="code"><span class="sign">−</span>    return stem</td></tr>
+          <tr class="add"><td class="gutter"></td><td class="gutter">13</td><td class="code"><span class="sign">+</span>    # dedup key is the content oid, not the path (escalation esc-0)</td></tr>
+          <tr class="add"><td class="gutter"></td><td class="gutter">14</td><td class="code"><span class="sign">+</span>    return blake2b(stem.encode()).hexdigest()[:16]</td></tr>
+          <tr><td class="gutter">14</td><td class="gutter">15</td><td class="code"><span class="sign"> </span></td></tr>
+          <tr class="hunk"><td colspan="3">@@ -28,3 +30,6 @@ class DedupIndex:</td></tr>
+          <tr><td class="gutter">28</td><td class="gutter">30</td><td class="code"><span class="sign"> </span>    def add(self, entry):</td></tr>
+          <tr class="add"><td class="gutter"></td><td class="gutter">31</td><td class="code"><span class="sign">+</span>        if entry.key in self._seen:</td></tr>
+          <tr class="add"><td class="gutter"></td><td class="gutter">32</td><td class="code"><span class="sign">+</span>            self._collisions += 1</td></tr>
+          <tr><td class="gutter">29</td><td class="gutter">33</td><td class="code"><span class="sign"> </span>        self._seen.add(entry.key)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="file">
+      <div class="filehead">
+        <span class="path">apps/dupefind/tests/test_dedup.py</span>
+        <span class="stat"><span class="add">+22</span> <span class="del">−0</span><span class="kind">added</span></span>
+      </div>
+      <table class="difftable">
+        <tbody>
+          <tr class="hunk"><td colspan="3">@@ -0,0 +1,22 @@</td></tr>
+          <tr class="add"><td class="gutter"></td><td class="gutter">1</td><td class="code"><span class="sign">+</span>from dupefind.dedup import normalize_key, DedupIndex</td></tr>
+          <tr class="add"><td class="gutter"></td><td class="gutter">2</td><td class="code"><span class="sign">+</span></td></tr>
+          <tr class="add"><td class="gutter"></td><td class="gutter">3</td><td class="code"><span class="sign">+</span>def test_key_is_content_stable():</td></tr>
+          <tr class="add"><td class="gutter"></td><td class="gutter">4</td><td class="code"><span class="sign">+</span>    assert normalize_key("A/b.txt") == normalize_key("a/B.txt")</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="states">
+      <div class="sect"><span class="kick">Required states</span><span class="note">no-diff · run-is-merged · loading · error</span></div>
+      <div class="sgrid">
+        <div class="demo">
+          <span class="lab">No diff</span>
+          <p class="status">No diff — the run branch matches the default branch.</p>
+        </div>
+        <div class="demo">
+          <span class="lab">Run is merged</span>
+          <p class="status">Run is merged — its change lives in the default branch history now.</p>
+        </div>
+        <div class="demo">
+          <span class="lab">Loading · signal sweep</span>
+          <span class="skel" style="display:block;height:14px;width:90%;margin-bottom:8px"></span>
+          <span class="skel" style="display:block;height:14px;width:70%;margin-bottom:8px"></span>
+          <span class="skel" style="display:block;height:14px;width:80%"></span>
+          <p class="status">Computing diff…</p>
+        </div>
+        <div class="demo">
+          <span class="lab">Error</span>
+          <p class="status bad">Could not diff: merge base not found for run/dupefind against main</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

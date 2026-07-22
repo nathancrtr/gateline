@@ -3,7 +3,7 @@
 // a frontend can co-locate the engine over its own clone (`agentic up`) —
 // one deployment, one clone, one authority (docs/TOPOLOGY.md §3.1).
 import { stat } from 'node:fs/promises'
-import { Git, LocalGitSource, type Identity } from '@agentic/core'
+import { CodeTreeMonitor, Git, LocalGitSource, resolveCodeRepo, type CodeTreeStatus, type Identity } from '@agentic/core'
 import { Engine, type InFlightJob } from './engine.ts'
 import { headlessManifestPath, loadHeadlessManifest } from './manifest.ts'
 import { loadRegistry } from './registry.ts'
@@ -34,6 +34,15 @@ export interface OrchestratorOptions {
   roleTimeoutSeconds?: number
   heartbeatSeconds?: number
   log?: (line: string) => void
+  /**
+   * Self-supersede (#141): fired exactly once, after the confirming
+   * heartbeat write, when the code tree this process's own module lives in
+   * fast-forwards past the commit it started on. Only wired when the
+   * running module resolves to a git checkout (`resolveCodeRepo`) — an
+   * npm-installed/viewer-only process has nothing to watch and `startOrchestrator`
+   * behaves exactly as it did before #141.
+   */
+  onSupersede?: (status: CodeTreeStatus) => void
 }
 
 export async function assembleOrchestrator(
@@ -102,11 +111,18 @@ export interface OrchestratorHandle {
 /** Resident orchestrator over an existing clone, in-process. */
 export async function startOrchestrator(opts: OrchestratorOptions): Promise<OrchestratorHandle> {
   const { engine, scheduler, manifestStaleProbe } = await assembleOrchestrator(opts)
+  // Self-supersede (#141): the code tree is *this module's own* checkout —
+  // resolved from our own import.meta.url, not from opts.repoDir (the run
+  // source, which may live in a different checkout under a host-repo setup).
+  const codeRepo = resolveCodeRepo(import.meta.url)
+  const codeMonitor = codeRepo ? await CodeTreeMonitor.create(codeRepo) : undefined
   const loop: RunLoop = await runLoop(engine, opts.repoDir, {
     heartbeatMs: (opts.heartbeatSeconds ?? 180) * 1000,
     scheduler,
     log: opts.log,
     staleProbe: manifestStaleProbe,
+    codeMonitor,
+    onSupersede: opts.onSupersede,
   })
   return {
     engine,

@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>candidate-c · run-history — Wayfinder</title>
+<!-- Candidate C "Wayfinder" — screen: run-history (run detail, history tab).
+     Self-contained: no scripts, no external assets, no network requests.
+     States shown: populated route-line timeline of state.yaml commits, newest
+     first, with phase-transition interchange markers (square stop + solid
+     "→ phase" tag); annexes: no state history, loading, error. -->
+<style>
+:root{color-scheme:light dark}
+:root{
+  --ground:light-dark(#f1f1f3,#161619);
+  --surface:light-dark(#ffffff,#1e1e22);
+  --raised:light-dark(#e6e6ea,#2a2a31);
+  --ink:light-dark(#1b1b20,#ebebee);
+  --muted:light-dark(#565660,#a3a3ad);
+  --faint:light-dark(#8f8f99,#6d6d77);
+  --line:light-dark(#d7d7dc,#34343b);
+  --band:light-dark(#1b1b20,#0f0f12);
+  --band-ink:#f2f2f4;
+  --band-muted:#9a9aa4;
+  --strip:#6d63e8;
+  --accent:light-dark(#4f46c8,#a7a1f2);
+  --accent-soft:light-dark(rgba(79,70,200,.10),rgba(167,161,242,.14));
+  --ok:light-dark(#1e7a46,#5fc98c);
+  --ok-soft:light-dark(rgba(30,122,70,.12),rgba(95,201,140,.15));
+  --warn:light-dark(#8a6206,#d8ab4b);
+  --warn-soft:light-dark(rgba(138,98,6,.13),rgba(216,171,75,.15));
+  --bad:light-dark(#b23227,#f2836f);
+  --bad-soft:light-dark(rgba(178,50,39,.11),rgba(242,131,111,.15));
+  --on-solid:light-dark(#ffffff,#111114);
+  --display:'Avenir Next','Avenir',Futura,'Century Gothic','Segoe UI',system-ui,sans-serif;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--ground);color:var(--ink);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@keyframes crawl{to{background-position:-28px 0}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-duration:.01ms!important}}
+
+.band{background:var(--band);color:var(--band-ink)}
+.band-in{max-width:1160px;margin:0 auto;display:flex;align-items:stretch;gap:28px;padding:0 28px;height:54px}
+.brand{display:flex;flex-direction:column;justify-content:center}
+.brand b{font:800 17px/1 var(--display);letter-spacing:.06em}
+.brand small{font:10px/1.3 var(--sans);color:var(--band-muted)}
+.tabs{display:flex}
+.tab{position:relative;display:flex;align-items:center;gap:9px;padding:0 16px;font:700 11.5px/1 var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--band-muted);transition:color .1s linear}
+.tab:hover{color:var(--band-ink)}
+.tab[aria-current="page"]{color:var(--band-ink)}
+.tab[aria-current="page"]::after{content:"";position:absolute;left:12px;right:12px;bottom:0;height:4px;background:var(--strip)}
+.tab .count{padding:3px 8px;border-radius:2px;background:var(--strip);color:#fff;font:700 11px/1 var(--mono);font-variant-numeric:tabular-nums}
+.band-note{margin-left:auto;align-self:center;font:10px/1.5 var(--mono);color:var(--band-muted);text-align:right}
+.keyline{height:3px;background:var(--strip)}
+
+.wrap{max-width:1160px;margin:0 auto;padding:26px 28px 90px}
+.runhead{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-bottom:20px}
+.runhead h1{font:700 21px/1 var(--mono);letter-spacing:-.01em}
+.runhead .right{margin-left:auto;display:flex;align-items:center;gap:16px}
+.ref{font:11px var(--mono);color:var(--faint)}
+.phase{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:2px;border:1px solid var(--line);background:var(--surface);font:600 11.5px/1.4 var(--sans)}
+.phase i{font-style:normal;font-size:9px;line-height:1;color:var(--ok)}
+.gates{display:inline-flex;border:1px solid var(--line);border-radius:2px;overflow:hidden}
+.gc{display:inline-flex;align-items:center;justify-content:center;gap:3px;width:36px;height:22px;font:700 11px var(--mono);border-left:1px solid var(--line);background:var(--surface);color:var(--faint)}
+.gc:first-child{border-left:0}
+.gc small{font-size:9px;font-weight:400;opacity:.75}
+.gc.ok{background:var(--ok);color:var(--on-solid)}
+.meter{display:inline-flex;align-items:center;gap:8px}
+.meter .track{width:64px;height:8px;border-radius:2px;background:var(--raised);overflow:hidden}
+.meter .fill{display:block;height:100%;background:var(--accent)}
+.meter em{font:600 11px var(--mono);font-style:normal;font-variant-numeric:tabular-nums;color:var(--muted)}
+
+.sectabs{display:flex;gap:2px;border-bottom:2px solid var(--ink);margin-bottom:20px}
+.sectab{position:relative;padding:9px 16px;font:700 11.5px/1 var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);background:none;border:0;cursor:pointer}
+.sectab:hover{color:var(--ink)}
+.sectab.on{color:var(--ink)}
+.sectab.on::after{content:"";position:absolute;left:0;right:0;bottom:-2px;height:4px;background:var(--strip)}
+
+/* ——— route-line timeline: stops on an accent line; interchanges are square ——— */
+.route{list-style:none;padding:0;max-width:880px}
+.stop{position:relative;display:flex;align-items:baseline;gap:14px;padding:9px 0 9px 34px}
+.stop::before{content:"";position:absolute;left:11px;top:0;bottom:0;width:2px;background:var(--line)}
+.stop:first-child::before{top:14px}
+.stop:last-child::before{bottom:auto;height:14px}
+.stop::after{content:"";position:absolute;left:7px;top:13px;width:10px;height:10px;border-radius:50%;background:var(--surface);border:2px solid var(--faint)}
+.stop.xfer::after{border-radius:2px;width:12px;height:12px;left:6px;background:var(--strip);border-color:var(--strip)}
+.stop .when{width:96px;flex-shrink:0;font:11.5px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint)}
+.stop .what{min-width:0;flex:1;font:13.5px/1.45 var(--sans)}
+.stop .what .sub{display:block;font:12px var(--sans);color:var(--muted)}
+.xtag{display:inline-flex;align-items:center;margin-left:10px;padding:3px 8px;border-radius:2px;background:var(--strip);color:#fff;font:700 10.5px/1 var(--display);letter-spacing:.1em;text-transform:uppercase;white-space:nowrap;vertical-align:2px}
+.stop .who{width:96px;flex-shrink:0;text-align:right;font:12px var(--sans);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stop .oid{width:66px;flex-shrink:0;text-align:right;font:11px var(--mono);color:var(--faint)}
+
+.annex{margin-top:48px}
+.rule{border-top:2px solid var(--ink);padding-top:12px;margin-bottom:14px;display:flex;align-items:baseline;gap:12px}
+.kick{font:700 10.5px/1 var(--display);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.rule .note{font:12px var(--sans);color:var(--faint)}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.demo{border:1px solid var(--line);border-radius:2px;background:var(--surface);padding:16px;min-width:0}
+.demo .lab{display:block;font:700 10px/1 var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:12px}
+.empty{text-align:center;padding:30px 18px}
+.empty .glyph{display:block;font:800 22px/1 var(--display);color:var(--accent);margin-bottom:10px}
+.empty .big{font:700 15px/1.3 var(--display)}
+.empty .sub{margin-top:6px;font:12px/1.55 var(--sans);color:var(--muted);max-width:44ch;margin-left:auto;margin-right:auto}
+.status{text-align:center;padding:26px 16px;font:13px var(--sans);color:var(--muted)}
+.status.bad{color:var(--bad);font-weight:600}
+.stripe{height:6px;border-radius:2px;background:repeating-linear-gradient(45deg,var(--accent-soft) 0 10px,var(--raised) 10px 20px);animation:crawl 1s linear infinite;margin-bottom:14px}
+.skb{background:var(--raised);border-radius:2px;display:block;margin-top:10px}
+</style>
+</head>
+<body>
+<header class="band">
+  <div class="band-in">
+    <div class="brand"><b>GATE</b><small>pipeline decisions</small></div>
+    <nav class="tabs" aria-label="Sections">
+      <a class="tab" href="#">Inbox <span class="count">7</span></a>
+      <a class="tab" href="#" aria-current="page">Portfolio</a>
+      <a class="tab" href="#">Metrics</a>
+    </nav>
+    <div class="band-note">the repo is the database<br>every view renders git</div>
+  </div>
+</header>
+<div class="keyline"></div>
+
+<main class="wrap">
+  <div class="runhead">
+    <h1>dupefind</h1>
+    <span class="phase"><i>●</i>done</span>
+    <span class="gates"><span class="gc ok"><small>0</small>✓</span><span class="gc ok"><small>1</small>✓</span><span class="gc ok"><small>2</small>✓</span><span class="gc ok"><small>3</small>✓</span></span>
+    <span class="right">
+      <span class="meter" title="$12.15 of $50.00"><span class="track"><span class="fill" style="width:24%"></span></span><em>$12/50</em></span>
+      <span class="ref" title="read at run/dupefind">agentic-sandbox · run/dupefind</span>
+    </span>
+  </div>
+
+  <nav class="sectabs" aria-label="Run views">
+    <button class="sectab">Artifacts</button>
+    <button class="sectab">Diff</button>
+    <button class="sectab on">History</button>
+    <span style="margin-left:auto;align-self:center;font:11px var(--mono);color:var(--faint)">every commit that touched state.yaml, newest first</span>
+  </nav>
+
+  <ol class="route">
+    <li class="stop xfer">
+      <span class="when">Jul 13 04:24</span>
+      <span class="what">G2 + G3 approved — merge and proceed<span class="xtag">→ done</span>
+        <span class="sub">full packet accepted; TOCTOU minors verifier-reproduced as accepted races</span></span>
+      <span class="who">nthncrtr</span><span class="oid">a41c9e2</span>
+    </li>
+    <li class="stop xfer">
+      <span class="when">Jul 13 04:21</span>
+      <span class="what">verification-report.md committed — all ACs hold with pasted evidence<span class="xtag">→ integrate</span></span>
+      <span class="who">orchestrator</span><span class="oid">8d02f71</span>
+    </li>
+    <li class="stop">
+      <span class="when">Jul 13 04:09</span>
+      <span class="what">task 03-cli-tests verified — review round 2 clean</span>
+      <span class="who">orchestrator</span><span class="oid">5f3e0c9</span>
+    </li>
+    <li class="stop">
+      <span class="when">Jul 13 04:08</span>
+      <span class="what">task 02-unit-tests verified — review-02 F1–F5 resolved</span>
+      <span class="who">orchestrator</span><span class="oid">2c91b44</span>
+    </li>
+    <li class="stop">
+      <span class="when">Jul 13 03:52</span>
+      <span class="what">task 01-dupefind-cli verified — review-01 F1 resolved on round 2</span>
+      <span class="who">orchestrator</span><span class="oid">9e7ad12</span>
+    </li>
+    <li class="stop xfer">
+      <span class="when">Jul 13 03:43</span>
+      <span class="what">ledger: implementer dispatched on 01-dupefind-cli<span class="xtag">→ implement</span></span>
+      <span class="who">orchestrator</span><span class="oid">6b28f5d</span>
+    </li>
+    <li class="stop">
+      <span class="when">Jul 13 03:36</span>
+      <span class="what">G1 approved — all 8 ADRs accepted incl. ADR-6 LBYL departure</span>
+      <span class="who">nthncrtr</span><span class="oid">4d1c8ae</span>
+    </li>
+    <li class="stop xfer">
+      <span class="when">Jul 13 03:13</span>
+      <span class="what">plan.md and tasks/ committed by the architect<span class="xtag">→ plan</span></span>
+      <span class="who">orchestrator</span><span class="oid">e5a92c7</span>
+    </li>
+    <li class="stop">
+      <span class="when">Jul 13 03:03</span>
+      <span class="what">G0 approved — 6 assumptions accepted; assumption 2 vetoed (no override flag)
+        <span class="sub">approval recorded against the amended spec · burden: confirmation</span></span>
+      <span class="who">nthncrtr</span><span class="oid">1f64d2b</span>
+    </li>
+    <li class="stop xfer">
+      <span class="when">Jul 13 02:54</span>
+      <span class="what">run opened — state.yaml committed at spec phase<span class="xtag">→ spec</span></span>
+      <span class="who">orchestrator</span><span class="oid">7a30c15</span>
+    </li>
+  </ol>
+
+  <section class="annex">
+    <div class="rule"><span class="kick">State annexes — history</span><span class="note">no state history · loading · error</span></div>
+    <div class="sgrid">
+      <div class="demo"><span class="lab">No state history</span>
+        <div class="empty">
+          <span class="glyph">·</span>
+          <p class="big">No state history at this ref.</p>
+          <p class="sub">state.yaml has no commits on run/dupefind yet — the route fills in as the orchestrator and gate humans commit.</p>
+        </div>
+      </div>
+      <div class="demo"><span class="lab">Loading</span>
+        <div class="stripe" title="reading"></div>
+        <span class="skb" style="width:88%;height:10px"></span>
+        <span class="skb" style="width:72%;height:10px"></span>
+        <span class="skb" style="width:80%;height:10px"></span>
+        <p class="status">Reading run…</p>
+      </div>
+      <div class="demo"><span class="lab">Error</span>
+        <p class="status bad">Could not load run: GET /api/runs/agentic-sandbox/dupefind → 500 git log -- runs/dupefind/state.yaml failed</p>
+      </div>
+    </div>
+  </section>
+</main>
+</body>
+</html>

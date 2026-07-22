@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>candidate-a · inbox — The Ledger</title>
+<!-- Candidate A "The Ledger" — screen: inbox.
+     Self-contained: no scripts, no external assets, no network requests.
+     States shown: populated (full kind vocabulary: gate, bounced gate,
+     escalation, round-cap, paused, malformed), inbox zero, loading, error. -->
+<style>
+:root { color-scheme: light dark; }
+:root {
+  --ground: light-dark(#f6f3ea, #16140f);
+  --surface: light-dark(#fdfbf4, #1d1a14);
+  --raised: light-dark(#ece7d8, #262218);
+  --ink: light-dark(#211e16, #eae4d4);
+  --muted: light-dark(#575145, #a89f8a);
+  --faint: light-dark(#837c6a, #746c5a);
+  --line: light-dark(#ded7c4, #38321f);
+  --rule: light-dark(#211e16, #eae4d4);
+  --accent: light-dark(#1e4f8f, #92b4e3);
+  --accent-deep: light-dark(#153a6b, #6f97c9);
+  --ok: light-dark(#2f6b40, #86c28f);
+  --warn: light-dark(#8a5d0f, #d3a94e);
+  --bad: light-dark(#a03123, #e2836a);
+  --on-solid: light-dark(#fdfbf4, #16140f);
+  --wash-accent: light-dark(rgba(30,79,143,.07), rgba(146,180,227,.10));
+  --wash-warn: light-dark(rgba(138,93,15,.09), rgba(211,169,78,.12));
+  --wash-bad: light-dark(rgba(160,49,35,.07), rgba(226,131,106,.11));
+  --shadow: light-dark(rgba(33,30,22,.16), rgba(0,0,0,.55));
+  --serif: 'Iowan Old Style','Palatino Linotype',Palatino,Georgia,'Times New Roman',serif;
+  --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --mono: ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+}
+* { box-sizing: border-box; margin: 0; }
+body { background: var(--ground); color: var(--ink); font: 14px/1.55 var(--sans); -webkit-font-smoothing: antialiased; padding: 0 32px 80px; }
+.sheet { max-width: 980px; margin: 0 auto; }
+a { color: inherit; text-decoration: none; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+
+/* Proof mark — mockup identification only, not part of the product UI */
+.proof { font: 10px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); padding: 10px 0 0; }
+
+/* Masthead: thick-thin double rule below, like a ledger head */
+.masthead { display: flex; align-items: baseline; gap: 26px; padding: 18px 0 10px; }
+.wordmark { font: 600 20px/1 var(--serif); }
+.wordmark small { display: block; font: 400 11px/1.5 var(--sans); color: var(--faint); }
+.mastnav { display: flex; gap: 22px; margin-left: 18px; }
+.mastnav a { font: 600 11px/1 var(--sans); letter-spacing: .13em; text-transform: uppercase; color: var(--muted); padding: 8px 2px 10px; border-bottom: 3px solid transparent; transition: color .12s ease-out, border-color .12s ease-out; }
+.mastnav a:hover { color: var(--ink); }
+.mastnav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+.stamp-count { display: inline-block; min-width: 18px; text-align: center; background: var(--accent); color: var(--on-solid); border-radius: 999px; font: 700 10.5px/1 var(--mono); padding: 3px 6px; margin-left: 6px; vertical-align: 1px; }
+.motto { margin-left: auto; font: italic 12px/1.45 var(--serif); color: var(--faint); text-align: right; }
+.rule-tt { border-top: 2.5px solid var(--rule); }
+.rule-tt::after { content: ''; display: block; border-top: 1px solid var(--rule); margin-top: 2px; }
+
+/* Page head */
+.pagehead { display: flex; align-items: flex-end; gap: 16px; margin: 30px 0 8px; }
+.pagehead h1 { font: 600 30px/1.1 var(--serif); letter-spacing: -.005em; }
+.pagehead .aside { margin-left: auto; text-align: right; font-size: 12px; color: var(--muted); }
+.keys { font: 11px var(--mono); color: var(--faint); margin-left: 12px; }
+
+/* Inbox list: a reading surface. No boxes — hairline rules between rows,
+   generous rhythm (14px row padding), measure-capped detail text. */
+.queue { list-style: none; padding: 0; border-top: 2px solid var(--rule); }
+.row { display: flex; align-items: baseline; gap: 14px; padding: 14px 10px 14px 12px; border-bottom: 1px solid var(--line); border-left: 3px solid transparent; transition: background .12s ease-out; }
+.row:hover { background: var(--wash-accent); }
+.row.selected { background: var(--wash-accent); border-left-color: var(--accent); }
+.row .main { min-width: 0; flex: 1; }
+.row .titleline { display: flex; align-items: baseline; gap: 10px; }
+.row .title { font: 600 15px/1.35 var(--serif); }
+.row.selected .title, .row:hover .title { color: var(--accent); }
+.row .loc { font: 11px var(--mono); color: var(--faint); white-space: nowrap; }
+.row .detail { margin-top: 2px; font-size: 12.5px; color: var(--muted); max-width: 68ch; }
+.row .bounce { margin-top: 4px; font-size: 12px; font-weight: 600; color: var(--bad); }
+
+/* Kind stamps: square, mono, printed. Routine gates are outlined tint;
+   urgent kinds are SOLID fill + heavier weight — shape and weight carry
+   urgency, never hue alone. */
+.stamp { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; padding: 4px 7px; font: 700 10.5px/1 var(--mono); letter-spacing: .06em; }
+.stamp-gate { border: 1px solid var(--accent); color: var(--accent); background: var(--wash-accent); }
+.stamp-gate-bounced { border: 1px dashed var(--bad); color: var(--bad); background: var(--wash-bad); text-decoration: line-through; }
+.stamp-esc, .stamp-cap, .stamp-bad { background: var(--bad); color: var(--on-solid); padding: 5px 8px; }
+.stamp-pause { background: var(--warn); color: var(--on-solid); padding: 5px 8px; }
+
+/* Age: a small inked pill (the one rounded thing — a stamp, not a card) */
+.age { flex-shrink: 0; border-radius: 999px; padding: 3px 9px; font: 11px/1 var(--mono); font-variant-numeric: tabular-nums; background: var(--raised); color: var(--muted); }
+.age.urgent { background: var(--bad); color: var(--on-solid); font-weight: 700; }
+
+/* Focus demo: the ring every interactive element gets from :focus-visible */
+.kbd-focus { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* State sketches */
+.sketches { margin-top: 64px; }
+.sect-head { border-top: 2px solid var(--rule); padding-top: 8px; display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+.kicker { font: 600 10.5px/1 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.sect-head .note { font: italic 12.5px var(--serif); color: var(--muted); }
+.sketchgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+.sketch { border: 1px dashed var(--line); padding: 14px; }
+.sketch .kicker { display: block; margin-bottom: 12px; color: var(--faint); }
+.centered { text-align: center; padding: 40px 18px; }
+.centered .lede { font: 600 17px/1.3 var(--serif); }
+.centered .sub { margin-top: 5px; font-size: 12px; color: var(--muted); }
+.centered .orn { display: block; font: 18px var(--serif); color: var(--faint); margin-bottom: 10px; }
+.status { text-align: center; padding: 40px 18px; font-size: 13px; color: var(--muted); }
+.status.bad { color: var(--bad); }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <p class="proof">candidate-a · the ledger · screen: inbox · states: populated / zero / loading / error</p>
+
+  <div class="masthead">
+    <div class="wordmark">Gate<small>pipeline decisions</small></div>
+    <nav class="mastnav">
+      <a href="#inbox" aria-current="page">Inbox<span class="stamp-count">7</span></a>
+      <a href="#portfolio">Portfolio</a>
+      <a href="#metrics">Metrics</a>
+    </nav>
+    <p class="motto">The repo is the database.<br>Every view renders git.</p>
+  </div>
+  <div class="rule-tt"></div>
+
+  <div class="pagehead">
+    <h1>Inbox</h1>
+    <p class="aside">7 waiting · oldest first<span class="keys">j/k move · ↵ open</span></p>
+  </div>
+
+  <ul class="queue">
+    <li class="row">
+      <span class="stamp stamp-esc">ESC</span>
+      <span class="main">
+        <span class="titleline"><span class="title">Architect blocked: adapter worktree lifecycle is ambiguous</span><span class="loc">agentic-sandbox/integration-hardening</span></span>
+        <p class="detail">escalation #0 — whether the adapter or the orchestrator owns worktree cleanup is undecidable from the plan; run is paused until a disposition is recorded</p>
+      </span>
+      <span class="age urgent">5d</span>
+    </li>
+    <li class="row">
+      <span class="stamp stamp-gate-bounced">G0</span>
+      <span class="main">
+        <span class="titleline"><span class="title">G0 · spec ready for review</span><span class="loc">agentic-sandbox/agents-md-adapter</span></span>
+        <p class="detail">spec.md committed from intent-brief.md — 5 assumptions to confirm or veto</p>
+        <p class="bounce">Bounced — packet fails its contract; no approval offered. spec.md missing required section: Out of scope</p>
+      </span>
+      <span class="age urgent">4d</span>
+    </li>
+    <li class="row">
+      <span class="stamp stamp-cap">CAP</span>
+      <span class="main">
+        <span class="titleline"><span class="title">Task 02-unit-tests hit the review round cap</span><span class="loc">agentic-sandbox/mdtoc</span></span>
+        <p class="detail">3 rounds without convergence — read review-02.md and the diff, then unblock: decline the pending gate with direction, or amend the spec and let the loop retry</p>
+      </span>
+      <span class="age">2d</span>
+    </li>
+    <li class="row">
+      <span class="stamp stamp-pause">PAUSE</span>
+      <span class="main">
+        <span class="titleline"><span class="title">Run paused: budget-exhausted</span><span class="loc">agentic-sandbox/dupefind</span></span>
+        <p class="detail">$50.00 limit reached at $50.12 recorded spend — resuming moves the run back to implement with the ledger intact</p>
+      </span>
+      <span class="age">26h</span>
+    </li>
+    <li class="row">
+      <span class="stamp stamp-bad">BAD</span>
+      <span class="main">
+        <span class="titleline"><span class="title">state.yaml does not parse</span><span class="loc">agentic-sandbox/historian-2026-07-12</span></span>
+        <p class="detail">mapping values are not allowed here at line 12, column 18 — fix the file on run/historian-2026-07-12; nothing renders as reviewable until it parses</p>
+      </span>
+      <span class="age">9h</span>
+    </li>
+    <li class="row selected kbd-focus" aria-current="true">
+      <span class="stamp stamp-gate">G1</span>
+      <span class="main">
+        <span class="titleline"><span class="title">G1 · design candidates ready</span><span class="loc">agentic-sandbox/fleetview-design</span></span>
+        <p class="detail">three candidates committed under runs/fleetview-design/design/ — judge thesis distinctness, pick a direction or decline with notes</p>
+      </span>
+      <span class="age">3h</span>
+    </li>
+    <li class="row">
+      <span class="stamp stamp-gate">G2</span>
+      <span class="main">
+        <span class="titleline"><span class="title">G2 · integration packet ready</span><span class="loc">agentic-sandbox/wordfreq</span></span>
+        <p class="detail">4 tasks verified — verification-report.md, review-04.md, and the full diff are in the packet</p>
+      </span>
+      <span class="age">1h</span>
+    </li>
+  </ul>
+
+  <section class="sketches">
+    <div class="sect-head"><span class="kicker">State sketches</span><span class="note">selected row above carries the 2px accent focus ring every focusable element gets</span></div>
+    <div class="sketchgrid">
+      <div class="sketch">
+        <span class="kicker">Empty — inbox zero</span>
+        <div class="centered">
+          <span class="orn">❧</span>
+          <p class="lede">Inbox zero.</p>
+          <p class="sub">No gates ready, no escalations, no paused runs.<br>The pipeline is either working or done.</p>
+        </div>
+      </div>
+      <div class="sketch">
+        <span class="kicker">Loading</span>
+        <p class="status">Reading repositories…</p>
+      </div>
+      <div class="sketch">
+        <span class="kicker">Error</span>
+        <p class="status bad">Could not load the inbox: fetch failed — is the gate server running?</p>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

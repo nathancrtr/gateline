@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>candidate-b · run-artifacts — Signal Deck</title>
+<!-- Candidate B "Signal Deck" — screen: run-artifacts (run detail, artifacts tab).
+     Self-contained: no scripts, no external assets, no network requests.
+     States shown: run head + gate readout, "needs you" SIGNAL panel with an OPEN
+     approve flow (burden picker, option focused, notes), packet links, task board,
+     artifact rail with validation marks, rendered artifact body; malformed
+     run-state banner, bounced no-approval message, committed / CAS-409 / error
+     flashes, empty, loading, error. -->
+<style>
+:root { color-scheme: light dark; }
+:root{
+  --ground: light-dark(#eef2f5,#0a0e11);
+  --surface: light-dark(#ffffff,#111820);
+  --inset: light-dark(#f3f6f8,#0d141a);
+  --raised: light-dark(#e4ebef,#18222b);
+  --ink: light-dark(#10202a,#dbe7ec);
+  --muted: light-dark(#4c5d67,#8ba1ac);
+  --faint: light-dark(#8598a2,#566771);
+  --line: light-dark(#d3dde3,#223039);
+  --accent: light-dark(#0b6f89,#45c8ec);
+  --accent-deep: light-dark(#075365,#8adcf5);
+  --accent-soft: light-dark(rgba(11,111,137,.12),rgba(69,200,236,.14));
+  --ok: light-dark(#157a4a,#4ec98d);
+  --ok-soft: light-dark(rgba(21,122,74,.13),rgba(78,201,141,.15));
+  --warn: light-dark(#8a6410,#e0b24e);
+  --warn-soft: light-dark(rgba(138,100,16,.13),rgba(224,178,78,.15));
+  --bad: light-dark(#b23b28,#ff7f63);
+  --bad-soft: light-dark(rgba(178,59,40,.12),rgba(255,127,99,.16));
+  --on-solid: light-dark(#ffffff,#06121a);
+  --glow: light-dark(rgba(11,111,137,.30),rgba(69,200,236,.44));
+  --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --mono: ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--ground);color:var(--ink);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+@keyframes pulse{0%,100%{box-shadow:0 0 6px var(--glow)}50%{box-shadow:0 0 15px var(--glow),0 0 4px var(--glow)}}
+@keyframes pulsepanel{0%,100%{box-shadow:0 0 0 1px var(--accent-soft),0 0 14px var(--glow)}50%{box-shadow:0 0 0 1px var(--accent-soft),0 0 28px var(--glow)}}
+@keyframes sweep{0%{background-position:180% 0}100%{background-position:-80% 0}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-duration:.01ms!important}}
+
+.deck{display:grid;grid-template-columns:200px 1fr;min-height:100vh;max-width:1280px;margin:0 auto}
+.rail{position:sticky;top:0;height:100vh;border-right:1px solid var(--line);background:var(--surface);padding:16px 12px;display:flex;flex-direction:column;gap:22px}
+.brand{padding:6px 8px}
+.brand b{font:600 15px/1 var(--mono);letter-spacing:.16em}
+.brand small{display:block;margin-top:6px;font:400 10.5px/1.35 var(--sans);color:var(--faint)}
+.navsec{display:flex;flex-direction:column;gap:2px}
+.nav{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:4px;font:12px/1 var(--sans);color:var(--muted);transition:background .14s,color .14s}
+.nav .dot{width:6px;height:6px;border-radius:50%;background:var(--faint)}
+.nav:hover{background:var(--raised);color:var(--ink)}
+.nav[aria-current="page"]{background:var(--accent-soft);color:var(--accent)}
+.nav[aria-current="page"] .dot{background:var(--accent);box-shadow:0 0 8px var(--glow)}
+.nav .count{margin-left:auto;font:600 11px/1 var(--mono);font-variant-numeric:tabular-nums;padding:2px 7px;border-radius:999px;background:var(--accent);color:var(--on-solid);animation:pulse 2.4s ease-in-out infinite}
+.railfoot{margin-top:auto;padding:8px;font:10px/1.6 var(--mono);color:var(--faint)}
+
+.readout{min-width:0;padding:22px 30px 90px;max-width:1040px}
+.proof{font:10px/1.4 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:18px}
+
+.runhead{display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding-bottom:16px;margin-bottom:20px;border-bottom:1px solid var(--line)}
+.runhead h1{font:600 20px/1 var(--mono);letter-spacing:.06em}
+.runhead .right{margin-left:auto;display:flex;align-items:center;gap:16px}
+.runhead .ref{font:11px var(--mono);color:var(--faint)}
+
+.phase{display:inline-flex;align-items:center;gap:7px;font:12px/1 var(--sans)}
+.phase .led{width:7px;height:7px;border-radius:50%;box-shadow:0 0 6px currentColor}
+.p-plan{color:var(--accent)}
+.phase .txt{color:var(--ink)}
+
+.gates{display:inline-flex;gap:3px}
+.cell{width:30px;height:22px;display:inline-flex;align-items:center;justify-content:center;gap:2px;border-radius:3px;font:11px/1 var(--mono);border:1px solid var(--line);background:var(--inset)}
+.cell .n{font-size:8px;color:var(--faint)}
+.cell.ok{color:var(--ok);border-color:var(--ok);background:var(--ok-soft)}
+.cell.no{color:var(--bad);border-color:var(--bad);background:var(--bad-soft)}
+.cell.pend{color:var(--faint);border-style:dashed}
+
+.meter{display:inline-flex;align-items:center;gap:8px}
+.meter .track{width:64px;height:5px;border-radius:3px;background:var(--inset);overflow:hidden;border:1px solid var(--line)}
+.meter .fill{height:100%;background:var(--faint)}
+.meter .val{font:11px var(--mono);font-variant-numeric:tabular-nums;color:var(--muted)}
+
+.sig{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font:600 11px/1 var(--mono);letter-spacing:.04em;border:1px solid transparent}
+.sig .led{width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 6px currentColor}
+.sig-gate{color:var(--accent);border-color:var(--accent);background:var(--accent-soft)}
+.sig-gate-bounced{color:var(--bad);border:1px dashed var(--bad);background:var(--bad-soft);text-decoration:line-through}
+.age{font:11px/1 var(--mono);font-variant-numeric:tabular-nums;color:var(--muted);padding:4px 8px;border-radius:4px;background:var(--inset);border:1px solid var(--line)}
+
+/* THE SIGNAL PANEL: the one live, glowing object — a decision that needs a human.
+   Stakes-varied wrapper (REC1): passive surfaces are flat; this one pulses. */
+.signalpanel{position:relative;border:1px solid var(--accent);border-left:3px solid var(--accent);border-radius:6px;background:var(--surface);padding:16px 18px;margin-bottom:22px;box-shadow:0 0 0 1px var(--accent-soft),0 0 18px var(--glow);animation:pulsepanel 2.8s ease-in-out infinite}
+.signalpanel.bounced{border-color:var(--bad);border-left-color:var(--bad);box-shadow:0 0 0 1px var(--bad-soft);animation:none}
+.span-head{display:flex;align-items:center;gap:12px}
+.span-head .t{font:600 15px/1.3 var(--sans)}
+.span-head .age{margin-left:auto}
+.span-detail{margin-top:8px;font:13px/1.5 var(--sans);color:var(--muted);max-width:76ch}
+.packet{margin-top:12px;display:flex;flex-wrap:wrap;gap:7px}
+.packet a{font:11px var(--mono);color:var(--muted);padding:3px 8px;border-radius:4px;border:1px solid var(--line);background:var(--inset)}
+.packet a:hover{color:var(--accent);border-color:var(--accent)}
+
+.decide{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+fieldset{border:0;padding:0}
+legend{font:600 10.5px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:9px}
+.burden{display:flex;flex-wrap:wrap;gap:8px}
+.opt{display:flex;align-items:baseline;gap:8px;padding:8px 12px;border:1px solid var(--line);border-radius:5px;background:var(--inset);font:13px var(--sans);cursor:pointer;transition:border-color .14s,background .14s}
+.opt:hover{border-color:var(--accent)}
+.opt.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600;outline:2px solid var(--accent);outline-offset:2px}
+.opt .k{font:11px var(--mono);color:var(--faint)}
+.opt.on .k{color:var(--accent)}
+.opt .hint{font:12px var(--sans);color:var(--muted);font-weight:400}
+textarea{width:100%;margin-top:12px;resize:vertical;border:1px solid var(--line);border-radius:5px;background:var(--inset);color:var(--ink);padding:9px 11px;font:13px var(--sans);min-height:52px}
+textarea::placeholder{color:var(--faint)}
+.acts{margin-top:12px;display:flex;gap:8px}
+.btn{border:1px solid var(--line);background:var(--inset);color:var(--muted);border-radius:999px;padding:7px 16px;font:600 13px var(--sans);cursor:pointer;transition:border-color .14s,color .14s}
+.btn:hover{color:var(--ink);border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--on-solid);border-color:var(--accent);box-shadow:0 0 12px var(--glow)}
+.btn.danger{background:var(--bad);color:var(--on-solid);border-color:var(--bad);box-shadow:none}
+.bouncemsg{font:600 12.5px/1.5 var(--sans);color:var(--bad)}
+
+.board{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:26px}
+.task{display:inline-flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:5px;background:var(--surface);padding:6px 11px;font:12px var(--sans)}
+.task .id{font:12px var(--mono)}
+.task .st.done{color:var(--ok)}
+.task .st.wip{color:var(--muted)}
+.task .rounds{font:11px var(--mono);font-variant-numeric:tabular-nums;color:var(--faint)}
+.task .rounds.cap{color:var(--bad);font-weight:700}
+
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:18px}
+.tab{padding:9px 16px;font:600 12px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px;background:none;cursor:pointer}
+.tab.on{color:var(--accent);border-bottom-color:var(--accent)}
+
+.arts{display:grid;grid-template-columns:220px 1fr;gap:22px}
+.artnav{list-style:none;display:flex;flex-direction:column;gap:2px}
+.artnav button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:8px;padding:7px 10px;border:0;border-radius:4px;background:none;font:12px var(--mono);color:var(--muted);text-align:left;cursor:pointer;transition:background .14s,color .14s}
+.artnav button:hover{background:var(--raised);color:var(--ink)}
+.artnav button.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.vbadge{font:11px var(--mono)}
+.vbadge.ok{color:var(--ok)}
+.vbadge.no{color:var(--bad);font-weight:700}
+
+.artbody{border:1px solid var(--line);border-radius:6px;background:var(--surface);padding:22px 26px;min-width:0;max-width:76ch}
+.artbody h1.doc{font:600 18px/1.3 var(--sans);margin-bottom:14px}
+.artbody h2.doc{font:600 14px/1.3 var(--sans);margin:20px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--line)}
+.artbody p.doc{font:14px/1.6 var(--sans);color:var(--ink);margin:9px 0}
+.artbody ul.doc{margin:9px 0 9px 20px}
+.artbody li.doc{font:14px/1.55 var(--sans);margin:5px 0}
+.artbody code{font:12.5px var(--mono);background:var(--raised);padding:1px 5px;border-radius:3px}
+.artbody .fail{margin-bottom:16px;padding:9px 12px;border-radius:5px;background:var(--bad-soft);border:1px solid var(--bad);font:600 12px var(--sans);color:var(--bad)}
+
+.states{margin-top:44px}
+.sect{border-top:1px solid var(--line);padding-top:14px;margin-bottom:16px;display:flex;align-items:baseline;gap:12px}
+.kick{font:600 10.5px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.sect .note{font:12px var(--sans);color:var(--faint)}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+.demo{border:1px solid var(--line);border-radius:5px;background:var(--surface);padding:14px;min-width:0}
+.demo .lab{display:block;font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:12px}
+.banner{padding:12px 14px;border-radius:5px;background:var(--bad-soft);border:1px solid var(--bad)}
+.banner .bt{font:600 13px var(--sans);color:var(--bad)}
+.banner .bd{margin-top:5px;font:12px/1.5 var(--sans);color:var(--muted)}
+.banner pre{margin-top:9px;padding:9px 11px;border-radius:4px;background:var(--inset);font:11.5px/1.5 var(--mono);color:var(--ink);overflow-x:auto}
+.flash{padding:8px 12px;border-radius:5px;font:600 12px var(--sans);margin-bottom:8px}
+.flash.ok{background:var(--ok-soft);color:var(--ok)}
+.flash.conflict{background:var(--warn-soft);color:var(--warn)}
+.flash.err{background:var(--bad-soft);color:var(--bad)}
+.status{text-align:center;padding:26px 16px;font:13px var(--sans);color:var(--muted)}
+.status.bad{color:var(--bad)}
+.skel{border-radius:4px;background:linear-gradient(100deg,var(--inset) 30%,var(--raised) 50%,var(--inset) 70%);background-size:220% 100%;animation:sweep 1.5s linear infinite}
+</style>
+</head>
+<body>
+<div class="deck">
+  <aside class="rail">
+    <div class="brand"><b>GATE</b><small>fleet console · pipeline decisions</small></div>
+    <nav class="navsec">
+      <a class="nav" href="#"><span class="dot"></span>Inbox<span class="count">7</span></a>
+      <a class="nav" href="#"><span class="dot"></span>Portfolio</a>
+      <a class="nav" href="#"><span class="dot"></span>Metrics</a>
+    </nav>
+    <div class="railfoot">the repo is the<br>database — every<br>view renders git</div>
+  </aside>
+
+  <main class="readout">
+    <p class="proof">candidate-b · signal deck · screen: run-artifacts · states: needs-you (open approve) / task board / malformed banner / bounced / flashes / empty / loading / error</p>
+
+    <div class="runhead">
+      <h1>fleetview-design</h1>
+      <span class="phase p-plan"><span class="led"></span><span class="txt">plan</span></span>
+      <span class="gates"><span class="cell ok"><span class="n">0</span>✓</span><span class="cell pend"><span class="n">1</span>·</span><span class="cell pend"><span class="n">2</span>·</span><span class="cell pend"><span class="n">3</span>·</span></span>
+      <span class="right">
+        <span class="meter"><span class="track"><span class="fill" style="width:4%"></span></span><span class="val">unmetered</span></span>
+        <span class="ref" title="read at 32c940b">agentic-sandbox · 32c940b</span>
+      </span>
+    </div>
+
+    <!-- Needs-you SIGNAL panel, open in approve mode with the burden picker -->
+    <section class="signalpanel" aria-label="pending decision" data-needs-card>
+      <div class="span-head">
+        <span class="sig sig-gate"><span class="led"></span>G1</span>
+        <span class="t">G1: three design candidates ready to judge</span>
+        <span class="age">waiting 2d</span>
+      </div>
+      <p class="span-detail">candidate-a, candidate-b, candidate-c each ship six self-contained mockups and a design-candidate.md. Pick a direction, or decline to bounce the set back to the designers with correction notes.</p>
+      <div class="packet">
+        <a href="#">design/candidate-a/design-candidate.md</a>
+        <a href="#">design/candidate-b/design-candidate.md</a>
+        <a href="#">design/candidate-c/design-candidate.md</a>
+        <a href="#">spec.md</a>
+        <a href="#">state.yaml</a>
+      </div>
+
+      <div class="decide" data-decide-panel>
+        <fieldset>
+          <legend>How much work was this review? (recorded with the approval)</legend>
+          <div class="burden">
+            <label class="opt"><span class="k">1</span><span>Confirmation <span class="hint">looked right as delivered</span></span></label>
+            <label class="opt on" tabindex="0"><span class="k">2</span><span>Light correction <span class="hint">approved, notes attached</span></span></label>
+            <label class="opt"><span class="k">3</span><span>Heavy correction <span class="hint">took real work to accept</span></span></label>
+          </div>
+        </fieldset>
+        <textarea placeholder="Notes (optional) — recorded in the gate entry">candidate-b's motion policy is the strongest differentiator; asked designers to hold the reduced-motion fallback as a hard requirement.</textarea>
+        <div class="acts">
+          <button class="btn primary" data-decide="approve-confirm">Approve G1</button>
+          <button class="btn" data-decide="decline">Decline…</button>
+          <button class="btn">Cancel</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Task board -->
+    <div class="board">
+      <span class="task"><span class="id">01-ux-research</span><span class="st done">done</span></span>
+      <span class="task"><span class="id">02-candidate-a</span><span class="st done">done</span></span>
+      <span class="task"><span class="id">03-candidate-b</span><span class="st wip">in-review</span><span class="rounds" title="review rounds">⟲2</span></span>
+      <span class="task"><span class="id">04-candidate-c</span><span class="st wip">in-review</span></span>
+      <span class="task"><span class="id">05-implement-winner</span><span class="st wip">blocked</span></span>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab on">Artifacts</button>
+      <button class="tab">Diff</button>
+      <button class="tab">History</button>
+    </div>
+
+    <div class="arts">
+      <ul class="artnav">
+        <li><button class="on">spec.md <span class="vbadge ok" title="contract sections present">✓</span></button></li>
+        <li><button>ux-research.md <span class="vbadge ok">✓</span></button></li>
+        <li><button>plan.md <span class="vbadge ok">✓</span></button></li>
+        <li><button>design/candidate-a/design-candidate.md <span class="vbadge ok">✓</span></button></li>
+        <li><button>design/candidate-b/design-candidate.md <span class="vbadge ok">✓</span></button></li>
+        <li><button>state.yaml <span class="vbadge ok">✓</span></button></li>
+      </ul>
+      <article class="artbody">
+        <h1 class="doc">Specification: FleetView gate-frontend look-and-feel redesign</h1>
+        <h2 class="doc">Context</h2>
+        <p class="doc"><code>frontend/packages/web</code> (React 19 / Tailwind 4 / Vite) already defines a token system — <code>--color-*</code> custom properties via <code>light-dark()</code> — but every surface repeats the same <code>rounded-lg border border-line bg-surface</code> card with no per-page variation.</p>
+        <h2 class="doc">R1 — Screen and state inventory</h2>
+        <p class="doc">The surface in scope is fixed to six screens so no producer drifts wider or narrower:</p>
+        <ul class="doc">
+          <li class="doc"><code>inbox</code> — full kind vocabulary + inbox zero</li>
+          <li class="doc"><code>portfolio</code> — malformed row + zero-runs</li>
+          <li class="doc"><code>metrics</code> — gate table + burden mix + budget honesty</li>
+          <li class="doc"><code>run-artifacts</code> — malformed banner, open decide flow, task board</li>
+        </ul>
+      </article>
+    </div>
+
+    <div class="states">
+      <div class="sect"><span class="kick">Required states</span><span class="note">malformed banner · bounced no-approval · decide flashes · empty · loading · error</span></div>
+      <div class="sgrid">
+        <div class="demo">
+          <span class="lab">Malformed run-state banner</span>
+          <div class="banner">
+            <p class="bt">Malformed run state</p>
+            <p class="bd">state.yaml: mapping value not allowed here (line 12) — the run cannot render as reviewable.</p>
+            <pre>gates:
+  G0: {approved: true, by: nathan
+  G1: pending</pre>
+          </div>
+        </div>
+        <div class="demo">
+          <span class="lab">Bounced — no approval offered</span>
+          <div class="signalpanel bounced" style="animation:none;box-shadow:0 0 0 1px var(--bad-soft)">
+            <div class="span-head">
+              <span class="sig sig-gate-bounced"><span class="led"></span>G2</span>
+              <span class="t">G2 packet fails its contract</span>
+            </div>
+            <p class="span-detail">verification-report.md is missing its Evidence section.</p>
+            <div class="decide"><p class="bouncemsg">Bounced — fix the artifacts (or the contract) and the card returns; no approval is offered for a malformed packet.</p></div>
+          </div>
+        </div>
+        <div class="demo">
+          <span class="lab">Decide flashes</span>
+          <div class="flash ok">Approved G1 — committed 32c940b1a2 (light-correction)</div>
+          <div class="flash conflict">The run moved while you were deciding — re-read and decide again. (409: state.yaml oid changed)</div>
+          <div class="flash err">Could not commit: write refused — worktree branch run/fleetview-design is behind origin</div>
+        </div>
+        <div class="demo">
+          <span class="lab">Empty · no artifacts</span>
+          <p class="status">No artifacts yet.</p>
+        </div>
+        <div class="demo">
+          <span class="lab">Loading · signal sweep</span>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <span class="skel" style="height:14px;width:70%"></span>
+            <span class="skel" style="height:14px;width:90%"></span>
+            <span class="skel" style="height:14px;width:60%"></span>
+          </div>
+          <p class="status">Reading run…</p>
+        </div>
+        <div class="demo">
+          <span class="lab">Error · plus a failing-contract artifact banner</span>
+          <p class="status bad">Could not load run: no such run agentic-sandbox/fleetview-desgin</p>
+          <div class="artbody" style="margin-top:8px;padding:14px"><p class="fail">Fails its verification-report contract — missing: Evidence, Reproduction</p><p class="doc" style="color:var(--muted)">Raw body still renders below so the human can see what arrived.</p></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

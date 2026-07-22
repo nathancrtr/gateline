@@ -635,6 +635,15 @@ budget:
       tokens_out: null
       cost_usd: 2
       failed: true
+    - at: 2026-07-22T01:38:07.986Z
+      role: ops
+      task: null
+      round: null
+      adapter: claude-code
+      model: anthropic/claude-sonnet-5
+      tokens_in: null
+      tokens_out: null
+      cost_usd: null
 
 gates:
   G0:

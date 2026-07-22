@@ -114,7 +114,15 @@ gates:
       burden: confirmation
     }
   G2: { approved: false, by: null, at: null, notes: null }
-tasks: []
+tasks:
+  [
+    { id: 01-core-shared-checks, status: pending, review_rounds: 0 },
+    { id: 02-core-staged-readiness, status: pending, review_rounds: 0 },
+    { id: 03-server-staging-routes, status: pending, review_rounds: 0 },
+    { id: 04-web-staging-form, status: pending, review_rounds: 0 },
+    { id: 05-web-staged-state-arm, status: pending, review_rounds: 0 },
+    { id: 06-e2e-staging-arm, status: pending, review_rounds: 0 }
+  ]
 escalations:
   [
     {

@@ -193,6 +193,28 @@ budget:
           tokens_in: 10,
           tokens_out: 2216,
           cost_usd: 2.4623515
+        },
+      {
+          at: 2026-07-22T18:01:19.926Z,
+          role: implementer,
+          task: 03-stage-run-source,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
+        },
+      {
+          at: 2026-07-22T18:01:19.926Z,
+          role: implementer,
+          task: 06-derive-tests-engine-ensure,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 
@@ -224,10 +246,10 @@ tasks:
   [
     { id: 01-merge-main, status: review-approved, review_rounds: 1 },
     { id: 02-record-scaffold-and-arm, status: review-approved, review_rounds: 2 },
-    { id: 03-stage-run-source, status: pending, review_rounds: 0 },
+    { id: 03-stage-run-source, status: dispatched, review_rounds: 0 },
     { id: 04-pr-ensure, status: review-approved, review_rounds: 1 },
     { id: 05-cli-new-arm, status: pending, review_rounds: 0 },
-    { id: 06-derive-tests-engine-ensure, status: pending, review_rounds: 0 },
+    { id: 06-derive-tests-engine-ensure, status: dispatched, review_rounds: 0 },
     {
         id: 07-contract-and-release-notes,
         status: review-approved,

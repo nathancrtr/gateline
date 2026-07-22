@@ -105,6 +105,39 @@ budget:
           tokens_out: null,
           cost_usd: 8,
           failed: true
+        },
+      {
+          at: 2026-07-22T14:53:23.372Z,
+          role: implementer,
+          task: 02-record-scaffold-and-arm,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
+        },
+      {
+          at: 2026-07-22T14:53:23.372Z,
+          role: implementer,
+          task: 04-pr-ensure,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
+        },
+      {
+          at: 2026-07-22T14:53:23.372Z,
+          role: implementer,
+          task: 07-contract-and-release-notes,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 
@@ -135,12 +168,12 @@ gates:
 tasks:
   [
     { id: 01-merge-main, status: review-approved, review_rounds: 1 },
-    { id: 02-record-scaffold-and-arm, status: pending, review_rounds: 0 },
+    { id: 02-record-scaffold-and-arm, status: dispatched, review_rounds: 0 },
     { id: 03-stage-run-source, status: pending, review_rounds: 0 },
-    { id: 04-pr-ensure, status: pending, review_rounds: 0 },
+    { id: 04-pr-ensure, status: dispatched, review_rounds: 0 },
     { id: 05-cli-new-arm, status: pending, review_rounds: 0 },
     { id: 06-derive-tests-engine-ensure, status: pending, review_rounds: 0 },
-    { id: 07-contract-and-release-notes, status: pending, review_rounds: 0 }
+    { id: 07-contract-and-release-notes, status: dispatched, review_rounds: 0 }
   ]
 
 escalations:

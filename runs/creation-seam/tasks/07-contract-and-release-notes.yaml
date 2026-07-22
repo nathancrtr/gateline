@@ -1,0 +1,40 @@
+id: 07-contract-and-release-notes
+title: "contracts/state.yaml grammar/vocabulary comments + release note closing #118"
+requirements: [R5, R6, R8]
+
+scope: |
+  1. contracts/state.yaml (comment-only deltas — no structural change to the
+     illustrative document): extend the paused_reason comment's vocabulary
+     with `staged` (a staged-but-unarmed run; `agentic arm` starts it); add
+     the two new human-decision grammar lines to the header's grammar block:
+       state(<slug>): staged by <name> [client-key: <key>]
+       state(<slug>): armed by <name>
+     (the client-key suffix present only when a key was supplied); and
+     document the optional `intake:` block (source, ref, url, client_key,
+     staged_by — source-agnostic staging provenance, written once at staging,
+     never edited after) as a commented example near paused_reason. Keep
+     tracker vocabulary out: no issue/label/assignee/milestone words
+     (AC9.1) — describe fields generically ("upstream item reference").
+     NOTE: if task 01's merge brought a `profile:` line or other #156 changes
+     into this file, extend the merged version — do not revert anything.
+  2. New runs/creation-seam/release-notes.md: a short PR-description block
+     for the human merging this run, stating what shipped (agentic new/arm,
+     stageRun seam, staged rest state, draft-PR ensure) and containing the
+     literal line `Closes #118` (AC8.3).
+
+file_contact_surface:
+  - contracts/state.yaml
+  - runs/creation-seam/release-notes.md
+
+acceptance_tests:
+  - AC8.3
+  - "grep -c 'staged by' contracts/state.yaml >= 1 and grep -c 'armed by' contracts/state.yaml >= 1"
+  - "grep -niE 'issue|label|assignee|milestone' contracts/state.yaml returns nothing"
+  - "grep -c 'Closes #118' runs/creation-seam/release-notes.md == 1"
+  - "cd frontend && npm test passes (validate.ts template-driven checks still green)"
+
+depends_on: [01-merge-main]
+
+status: pending
+
+notes: ""

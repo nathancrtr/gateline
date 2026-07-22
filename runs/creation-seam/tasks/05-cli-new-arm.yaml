@@ -1,0 +1,65 @@
+id: 05-cli-new-arm
+title: "CLI: `agentic new` (flags-first, TTY fallback, $EDITOR brief confirm) and `agentic arm`"
+requirements: [R2, R3, R4, R6, R7, R8]
+
+scope: |
+  In frontend/packages/cli/src/main.ts, following the existing command idioms
+  (resolveSources/findRun, decide()'s exit codes, promptBurden's TTY gate):
+
+  1. `agentic new` with flags --slug, --title, --profile (default standard),
+     --brief-file, --budget (default 50), --key, --source — behavior exactly
+     per plan.md "Interface contracts" §CLI: flags-complete -> no prompts,
+     stage via source.identity() + planRunScaffold + source.stageRun, exit 0
+     (AC2.1). Missing required content (slug, title, or brief) with stdin a
+     TTY -> readline/promises prompts for slug/title; brief drafted from
+     source.templates.read('intent-brief.md') with the title substituted into
+     the H1 (structure only — the command must never invent
+     Problem/Motivation/Constraints prose, R3), written to a temp file,
+     opened in $EDITOR/$VISUAL (fallback vi), re-read, preview printed, then
+     an explicit `stage? [y/N]` confirm before any commit (AC3.1). Missing
+     content with stdin non-TTY -> exit 1 naming each missing flag, no commit
+     — promptBurden's refusal shape (AC2.3, AC3.2). Validate the brief's
+     required H2s via extractSections against the repo template (fallback
+     BUILTIN_SECTIONS); refuse (or re-edit interactively) on missing
+     sections, never pad. Identity check before staging with the exact
+     refusal decide() uses, adapted to staging (AC7.1's CLI half). Outcome
+     mapping: created -> 0; exists -> 0 printing
+     `already staged: <slug> (<branch>)`; refused -> 1; conflict -> 2.
+  2. `agentic arm <slug> [--source]` — decide()-style flow passing
+     { action: 'arm' } through planDecision/writeState (DecisionError -> exit
+     1 with the message: covers already-armed, nonexistent-run comes from
+     findRun's existing refusal — AC6.1/AC6.2), then call ensureDraftPr with
+     the source's dir (the sync command's `(source as {dir?}).dir` pattern),
+     printing its note (AC8.1's arm call site; a skipped note is success).
+  3. Factor the interactive prompt/edit/confirm flow into exported helpers
+     (the runUpgrade precedent) so it is unit-testable without a TTY.
+
+  Tests in frontend/packages/cli/test/cli.test.ts (extend): spawned-process
+  cases against a scratch repo — flags-complete stage exits 0 and creates the
+  branch; non-TTY with missing flags exits 1 naming them and creates nothing;
+  repeat invocation prints the `already staged:` line and exits 0; arm moves
+  a staged standard run to phase spec and a staged patch run to plan (read
+  state.yaml back); arm on a non-staged run exits 1 with a named error;
+  no-identity repo exits 1. Unit-test the exported helpers for the
+  interactive branch (editor spawn stubbed).
+
+file_contact_surface:
+  - frontend/packages/cli/src/main.ts
+  - frontend/packages/cli/test/cli.test.ts
+
+acceptance_tests:
+  - AC2.1
+  - AC2.2
+  - AC2.3
+  - AC3.1
+  - AC3.2
+  - AC6.1
+  - AC6.2
+  - "cd frontend && npx vitest run packages/cli/test/cli.test.ts passes"
+  - "cd frontend && npm test && npm run typecheck pass"
+
+depends_on: [02-record-scaffold-and-arm, 03-stage-run-source, 04-pr-ensure]
+
+status: pending
+
+notes: ""

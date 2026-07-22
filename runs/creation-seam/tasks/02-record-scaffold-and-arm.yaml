@@ -1,0 +1,71 @@
+id: 02-record-scaffold-and-arm
+title: "Record layer: planRunScaffold, staged paused-reason, arm DecisionAction"
+requirements: [R1, R4, R5, R6, R9]
+
+scope: |
+  In frontend/packages/core/src/record/ (pure record layer — must not import
+  sources/ or view-model/; layering.test.ts enforces this):
+
+  1. schema.ts — add 'staged' to PAUSED_REASONS and export
+     `STAGED_REASON = 'staged'` (plan ADR-1). No other schema change: the
+     scaffolded state parses under the existing runStateSchema.
+  2. New scaffold.ts — implement planRunScaffold / RunScaffoldInput /
+     RunScaffold / ScaffoldError / readIntake exactly per plan.md "Interface
+     contracts" (§record/scaffold.ts): pure, no I/O. Emit state.yaml per the
+     plan's YAML template — gates contain exactly PROFILE_GATES[profile],
+     phase 'paused', paused_reason 'staged', profile recorded, intake block
+     with nulls + clientKey + stagedBy, budget from costLimitUsd (default
+     handled by callers; here null means omit cost_limit_usd's value as
+     null). Emit intent-brief.md verbatim from briefMarkdown. For
+     profile 'patch', also emit tasks/01-<slug>.yaml carrying every top-level
+     key of contracts/work-item.yaml (id, title, requirements, scope,
+     file_contact_surface, acceptance_tests, depends_on, status: pending,
+     notes) with placeholder values per the plan. Commit message grammar:
+     `state(<slug>): staged by <name>` plus ` [client-key: <key>]` when a key
+     is present. Validate slug (/^[a-z0-9][a-z0-9-]*$/), non-empty title and
+     brief; throw ScaffoldError otherwise. Do not use the words
+     issue/label/assignee/milestone anywhere in this file, comments included
+     (R9 grep target).
+  3. actions.ts — add 'arm' to DecisionAction and a `case 'arm':` in
+     planDecision: legal only when phase==='paused' && paused_reason===
+     STAGED_REASON (DecisionError otherwise, naming the actual state —
+     AC6.2); target phase = deriveResumePhase(state); mutation sets phase to
+     target and paused_reason to null; message `state(<slug>): armed by
+     <name>`. Add to `resume`: refuse when paused_reason===STAGED_REASON
+     (point at `agentic arm`). Add to `pause`: refuse pauseReason===
+     STAGED_REASON.
+  4. record/index.ts (if needed): scaffold.ts exports flow through the
+     existing `export * from './schema|validate|actions'` pattern — add
+     `export * from './scaffold.ts'`.
+
+  Tests in frontend/packages/core/test/scaffold.test.ts (new): per-profile
+  fixture tests (patch, standard, full) asserting the emitted state.yaml
+  round-trips through parseRunState with zero errors (AC4.4, AC5.2), gates
+  contain exactly PROFILE_GATES[profile] keys in the raw YAML (AC4.1–4.3),
+  patch emits the work-item stub with all contract keys (AC4.2), arm's
+  planDecision produces spec/spec/plan targets for full/standard/patch and
+  refuses non-staged states, resume/pause refusals, ScaffoldError cases, and
+  readIntake round-trip.
+
+file_contact_surface:
+  - frontend/packages/core/src/record/schema.ts
+  - frontend/packages/core/src/record/actions.ts
+  - frontend/packages/core/src/record/scaffold.ts
+  - frontend/packages/core/src/record/index.ts
+  - frontend/packages/core/test/scaffold.test.ts
+
+acceptance_tests:
+  - AC4.1
+  - AC4.2
+  - AC4.3
+  - AC4.4
+  - AC5.2
+  - AC6.2 (planDecision-level refusal)
+  - "cd frontend && npx vitest run packages/core/test/scaffold.test.ts passes"
+  - "cd frontend && npm test && npm run typecheck pass (layering test still green)"
+
+depends_on: [01-merge-main]
+
+status: pending
+
+notes: ""

@@ -1,0 +1,43 @@
+id: 04-pr-ensure
+title: "sources/pr-ensure.ts: idempotent, never-fatal draft-PR ensure over the gh CLI"
+requirements: [R8]
+
+scope: |
+  New frontend/packages/core/src/sources/pr-ensure.ts implementing
+  `ensureDraftPr(dir, branch, slug, opts?)` per plan.md "Interface contracts":
+  returns { status: 'created' | 'exists' | 'skipped'; note } and NEVER throws.
+  Sequence: no remote.origin.url (Git.configGet) -> skipped; no
+  refs/remotes/origin/<branch> (Git.revParse) -> skipped ("branch not
+  pushed"); `gh pr list --head <branch> --state all --limit 1 --json number`
+  -> any PR -> exists; else `gh pr create --draft --head <branch> --base
+  <defaultBranch> --title "run/<slug>" --body` (one line pointing at
+  runs/<slug>/) -> created. Follow GhCliProvider's execFile invocation shape
+  (sources/sync.ts) but accept an injectable exec function in opts so tests
+  never shell out to real gh; any gh error (missing binary, unauthed,
+  network) -> skipped with the reason in note (AC8.2). Add
+  `export * from './pr-ensure.ts'` to sources/index.ts. Keep GitHub-Issues
+  vocabulary out entirely — PRs are fine (existing sync.ts precedent), Issues
+  identifiers are not (AC9.1).
+
+  Tests in frontend/packages/core/test/pr-ensure.test.ts (new), all through
+  the injected exec: creates when list returns empty; exists (and does NOT
+  call create) when a PR is listed — the AC8.1 idempotency half at unit
+  level; skipped on no-remote, unpushed branch, and a rejecting exec, each
+  completing without throwing and with a descriptive note (AC8.2).
+
+file_contact_surface:
+  - frontend/packages/core/src/sources/pr-ensure.ts
+  - frontend/packages/core/src/sources/index.ts
+  - frontend/packages/core/test/pr-ensure.test.ts
+
+acceptance_tests:
+  - AC8.1 (unit half: repeated ensure never creates a second PR)
+  - AC8.2
+  - "cd frontend && npx vitest run packages/core/test/pr-ensure.test.ts passes"
+  - "cd frontend && npm test && npm run typecheck pass"
+
+depends_on: [01-merge-main]
+
+status: pending
+
+notes: ""

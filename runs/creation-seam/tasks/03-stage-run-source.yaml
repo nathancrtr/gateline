@@ -1,0 +1,67 @@
+id: 03-stage-run-source
+title: "Sources layer: stageRun on RunSource/LocalGitSource (create-only CAS genesis commit)"
+requirements: [R1, R7, R9, R10]
+
+scope: |
+  In frontend/packages/core/src/sources/:
+
+  1. source.ts — add StageRefusal, StageOutcome, and the required
+     `stageRun(scaffold: RunScaffold, who: Identity): Promise<StageOutcome>`
+     member to RunSource, exactly per plan.md "Interface contracts". Confirm
+     LocalGitSource is the only `implements RunSource` in the workspace
+     (grep); if another implementer exists, see plan Risks before proceeding.
+  2. local-source.ts — implement stageRun per the plan's 5-step sequence:
+     identity refusal first (message: "git user.name/user.email are unset —
+     staged runs must be attributable to a named human", AC7.1) before any
+     git object is written; existence scan implementing plan ADR-4's decision
+     table (client-key replay across all runs, then slug: staged-rest +
+     matching/null key -> exists, otherwise refused slug-taken naming the
+     existing run; use readIntake + phase/paused_reason to detect staged
+     rest); genesis commit against the default branch tip by composing
+     writeTreeWithBlob once per scaffold file (previous tree OID as next base
+     — read-tree accepts a tree-ish; comment this), file paths prefixed
+     `<runsRoot>/<slug>/` via frameworkRoots(); commitTree(tree, tip,
+     scaffold.message, who) — pass `who`, NEVER this.options.identity;
+     updateRefCAS(refs/heads/run/<slug>, commit, ZERO_OID); on CAS false,
+     re-scan and re-derive exists vs refused conflict; push when options.push
+     with pushFailed reporting like writeState. Do not use the words
+     issue/label/assignee/milestone anywhere, comments included (R9).
+
+  Tests in frontend/packages/core/test/stage-run.test.ts (new), using
+  fixture.helper's scratch-repo pattern (see existing write-path.test.ts):
+  - created: branch exists, `git show run/<slug>:runs/<slug>/state.yaml` and
+    intent-brief.md readable in a fresh Git instance with no server (AC10.1),
+    state parses via parseRunState.
+  - refuses when run/<slug> already exists as a non-staged run — no write,
+    branch tip unchanged (AC1.2).
+  - replay: same scaffold twice -> second returns exists, exactly one branch,
+    outcome distinguishable from created (AC1.3); same client_key under a
+    different slug also returns exists.
+  - conflict: pre-create the ref between scan and CAS (or race two calls) ->
+    refused conflict, no second branch.
+  - no-identity: unset user.name/user.email in the scratch repo -> refused
+    no-identity, zero new refs (AC7.1).
+  - authorship: construct LocalGitSource with options.identity set to a bot
+    identity, call stageRun with a human `who` -> commit author equals the
+    human, never the bot.
+  - patch profile: genesis commit carries tasks/01-<slug>.yaml.
+
+file_contact_surface:
+  - frontend/packages/core/src/sources/source.ts
+  - frontend/packages/core/src/sources/local-source.ts
+  - frontend/packages/core/test/stage-run.test.ts
+
+acceptance_tests:
+  - AC1.1
+  - AC1.2
+  - AC1.3
+  - AC7.1
+  - AC10.1
+  - "cd frontend && npx vitest run packages/core/test/stage-run.test.ts passes"
+  - "cd frontend && npm test && npm run typecheck pass"
+
+depends_on: [01-merge-main, 02-record-scaffold-and-arm]
+
+status: pending
+
+notes: ""

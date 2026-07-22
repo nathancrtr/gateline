@@ -1,0 +1,46 @@
+id: 06-derive-tests-engine-ensure
+title: "Orchestrator: staged-rest derivation tests and the engine's draft-PR ensure call"
+requirements: [R5, R8]
+
+scope: |
+  1. frontend/packages/orchestrator/test/derive.test.ts — add cases (using
+     the file's existing observation-builder idiom) showing deriveAction on a
+     freshly staged run — state.yaml exactly as plan.md's scaffold template:
+     phase paused, paused_reason staged, all profile gates undecided, tasks
+     [] — derives a rest action (rule D2) for EACH profile (patch, standard,
+     full), and specifically neither dispatch nor escalate (AC5.3). Add one
+     post-arm patch case: phase plan, profile patch, artifacts include
+     tasks/01-<slug>.yaml -> rest D10 (never the D21 no-work-item
+     escalation), proving AC4.2's stub is load-bearing.
+  2. frontend/packages/orchestrator/src/engine.ts — in execute()'s
+     'dispatch' case, after the intent commit is accepted (past the
+     push-rejection recovery, alongside the launch loop), call
+     ensureDraftPr(this.cfg.repoDir, ref.branch, ref.slug) memoized in a new
+     per-process Set<string> keyed by slug; log the note via this.log; never
+     let a skipped/failed ensure affect the tick outcome (AC8.1 engine half,
+     AC8.2). Import from @agentic/core. The engine must NOT call stageRun
+     anywhere (plan ADR-5's grep invariant).
+  3. frontend/packages/orchestrator/test/engine.test.ts — one case via the
+     engine helper: a dispatching tick attempts the ensure exactly once
+     across two ticks (memoized), and a failing/skipping ensure leaves the
+     tick outcome unchanged. Stub ensureDraftPr through its injectable exec
+     or by pointing the scratch repo at no remote (skipped path).
+
+file_contact_surface:
+  - frontend/packages/orchestrator/src/engine.ts
+  - frontend/packages/orchestrator/test/derive.test.ts
+  - frontend/packages/orchestrator/test/engine.test.ts
+
+acceptance_tests:
+  - AC5.3
+  - AC8.1 (engine half)
+  - AC8.2
+  - "cd frontend && npx vitest run packages/orchestrator/test/derive.test.ts passes"
+  - "cd frontend && npx vitest run packages/orchestrator/test/engine.test.ts passes"
+  - "cd frontend && npm test && npm run typecheck pass"
+
+depends_on: [02-record-scaffold-and-arm, 04-pr-ensure]
+
+status: pending
+
+notes: ""

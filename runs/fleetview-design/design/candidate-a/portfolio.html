@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>candidate-a · portfolio — The Ledger</title>
+<!-- Candidate A "The Ledger" — screen: portfolio.
+     Self-contained: no scripts, no external assets, no network requests.
+     States shown: populated (incl. malformed-run row, needs/escalation
+     stamps, paused run), zero-runs empty, loading, error. -->
+<style>
+:root { color-scheme: light dark; }
+:root {
+  --ground: light-dark(#f6f3ea, #16140f);
+  --surface: light-dark(#fdfbf4, #1d1a14);
+  --raised: light-dark(#ece7d8, #262218);
+  --ink: light-dark(#211e16, #eae4d4);
+  --muted: light-dark(#575145, #a89f8a);
+  --faint: light-dark(#837c6a, #746c5a);
+  --line: light-dark(#ded7c4, #38321f);
+  --rule: light-dark(#211e16, #eae4d4);
+  --accent: light-dark(#1e4f8f, #92b4e3);
+  --accent-deep: light-dark(#153a6b, #6f97c9);
+  --ok: light-dark(#2f6b40, #86c28f);
+  --warn: light-dark(#8a5d0f, #d3a94e);
+  --bad: light-dark(#a03123, #e2836a);
+  --on-solid: light-dark(#fdfbf4, #16140f);
+  --wash-accent: light-dark(rgba(30,79,143,.07), rgba(146,180,227,.10));
+  --wash-bad: light-dark(rgba(160,49,35,.07), rgba(226,131,106,.11));
+  --shadow: light-dark(rgba(33,30,22,.16), rgba(0,0,0,.55));
+  --serif: 'Iowan Old Style','Palatino Linotype',Palatino,Georgia,'Times New Roman',serif;
+  --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --mono: ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+}
+* { box-sizing: border-box; margin: 0; }
+body { background: var(--ground); color: var(--ink); font: 14px/1.55 var(--sans); -webkit-font-smoothing: antialiased; padding: 0 32px 80px; }
+.sheet { max-width: 1080px; margin: 0 auto; }
+a { color: inherit; text-decoration: none; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; } }
+.proof { font: 10px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--faint); padding: 10px 0 0; }
+.masthead { display: flex; align-items: baseline; gap: 26px; padding: 18px 0 10px; }
+.wordmark { font: 600 20px/1 var(--serif); }
+.wordmark small { display: block; font: 400 11px/1.5 var(--sans); color: var(--faint); }
+.mastnav { display: flex; gap: 22px; margin-left: 18px; }
+.mastnav a { font: 600 11px/1 var(--sans); letter-spacing: .13em; text-transform: uppercase; color: var(--muted); padding: 8px 2px 10px; border-bottom: 3px solid transparent; transition: color .12s ease-out, border-color .12s ease-out; }
+.mastnav a:hover { color: var(--ink); }
+.mastnav a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+.stamp-count { display: inline-block; min-width: 18px; text-align: center; background: var(--accent); color: var(--on-solid); border-radius: 999px; font: 700 10.5px/1 var(--mono); padding: 3px 6px; margin-left: 6px; vertical-align: 1px; }
+.motto { margin-left: auto; font: italic 12px/1.45 var(--serif); color: var(--faint); text-align: right; }
+.rule-tt { border-top: 2.5px solid var(--rule); }
+.rule-tt::after { content: ''; display: block; border-top: 1px solid var(--rule); margin-top: 2px; }
+.pagehead { display: flex; align-items: flex-end; gap: 16px; margin: 30px 0 14px; }
+.pagehead h1 { font: 600 30px/1.1 var(--serif); letter-spacing: -.005em; }
+.pagehead .aside { margin-left: auto; text-align: right; font-size: 12px; color: var(--muted); }
+
+/* Scanning ledger: denser rhythm than the inbox (8px row padding, 12.5px
+   text). No box around the table — a 2px ink rule opens it, hairlines
+   divide it. The page may scroll horizontally on narrow screens; the
+   table itself never reflows its columns. */
+.scroller { overflow-x: auto; }
+table.ledger { width: 100%; min-width: 860px; border-collapse: collapse; font-size: 12.5px; border-top: 2px solid var(--rule); }
+.ledger thead th { font: 600 10.5px/1.2 var(--sans); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); text-align: left; padding: 8px 10px 6px; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+.ledger thead th.num, .ledger td.num { text-align: right; }
+.ledger td { padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; white-space: nowrap; }
+.ledger tbody tr { transition: background .12s ease-out; }
+.ledger tbody tr:hover { background: var(--wash-accent); }
+.runlink { font: 600 13.5px/1.3 var(--serif); color: var(--accent); }
+.runlink:hover { text-decoration: underline; text-underline-offset: 2px; }
+.src { font: 11px var(--mono); color: var(--faint); margin-left: 8px; }
+.malformed-note { font-size: 11.5px; font-weight: 600; color: var(--bad); white-space: normal; max-width: 34ch; margin-top: 2px; }
+.num { font: 11.5px var(--mono); font-variant-numeric: tabular-nums; }
+.num.hot { font-weight: 700; color: var(--bad); }
+.dim { color: var(--faint); }
+
+/* Phase: square outlined chip, glyph + word (form, not color alone).
+   Paused is the exception — solid warn fill, the only filled phase. */
+.phase { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); padding: 3px 8px; font: 600 11px/1 var(--mono); }
+.phase .dot { font-size: 8px; line-height: 1; }
+.phase .dot.accent { color: var(--accent); } .phase .dot.warn { color: var(--warn); } .phase .dot.ok { color: var(--ok); }
+.phase-paused { display: inline-flex; align-items: center; gap: 6px; background: var(--warn); color: var(--on-solid); padding: 4px 8px; font: 700 11px/1 var(--mono); }
+.phase-unknown { display: inline-flex; align-items: center; gap: 6px; background: var(--bad); color: var(--on-solid); padding: 4px 8px; font: 700 11px/1 var(--mono); }
+
+/* Gate ledger cells: approved solid-ok rule + check, declined bad + cross,
+   pending a dashed empty box — three shapes, not three hues. */
+.gates { display: inline-flex; gap: 4px; }
+.gcell { display: inline-flex; align-items: center; justify-content: center; gap: 3px; width: 36px; height: 22px; font: 11px var(--mono); background: var(--surface); border: 1px solid var(--line); }
+.gcell .gid { font-size: 9px; color: var(--faint); }
+.gcell.approved { border-color: var(--ok); color: var(--ok); }
+.gcell.declined { border-color: var(--bad); color: var(--bad); font-weight: 700; }
+.gcell.pending { border-style: dashed; color: var(--faint); }
+
+/* Budget meter: thin track + mono figure; over-limit turns solid bad + label */
+.meter { display: inline-flex; align-items: center; gap: 8px; }
+.track { position: relative; width: 64px; height: 5px; background: var(--raised); overflow: hidden; }
+.fill { position: absolute; inset: 0 auto 0 0; background: var(--accent); }
+.fill.over { background: var(--bad); }
+
+/* Needs: an inked stamp when a human is needed; escalations print in bad */
+.needstamp { display: inline-block; min-width: 20px; text-align: center; background: var(--accent); color: var(--on-solid); border-radius: 999px; font: 700 11px/1 var(--mono); padding: 3px 7px; }
+.escnote { font: 700 11px var(--mono); color: var(--bad); }
+
+.sketches { margin-top: 64px; }
+.sect-head { border-top: 2px solid var(--rule); padding-top: 8px; display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+.kicker { font: 600 10.5px/1 var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.sect-head .note { font: italic 12.5px var(--serif); color: var(--muted); }
+.sketchgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px; }
+.sketch { border: 1px dashed var(--line); padding: 14px; }
+.sketch .kicker { display: block; margin-bottom: 12px; color: var(--faint); }
+.centered { text-align: center; padding: 40px 18px; }
+.centered .lede { font: 600 17px/1.3 var(--serif); }
+.centered .sub { margin-top: 5px; font-size: 12px; color: var(--muted); max-width: 44ch; margin-left: auto; margin-right: auto; }
+.centered .orn { display: block; font: 18px var(--serif); color: var(--faint); margin-bottom: 10px; }
+.status { text-align: center; padding: 40px 18px; font-size: 13px; color: var(--muted); }
+.status.bad { color: var(--bad); }
+code { font: 11.5px var(--mono); background: var(--raised); padding: 1px 4px; }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <p class="proof">candidate-a · the ledger · screen: portfolio · states: populated / zero-runs / loading / error</p>
+
+  <div class="masthead">
+    <div class="wordmark">Gate<small>pipeline decisions</small></div>
+    <nav class="mastnav">
+      <a href="#inbox">Inbox<span class="stamp-count">7</span></a>
+      <a href="#portfolio" aria-current="page">Portfolio</a>
+      <a href="#metrics">Metrics</a>
+    </nav>
+    <p class="motto">The repo is the database.<br>Every view renders git.</p>
+  </div>
+  <div class="rule-tt"></div>
+
+  <div class="pagehead">
+    <h1>Portfolio</h1>
+    <p class="aside">7 runs · 2 need you</p>
+  </div>
+
+  <div class="scroller">
+    <table class="ledger">
+      <thead>
+        <tr>
+          <th>Run</th><th>Phase</th><th>Gates</th>
+          <th class="num">Tasks</th><th class="num">Rounds</th>
+          <th>Budget</th><th class="num">Updated</th><th class="num">Needs</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><a class="runlink" href="#run">fleetview-design</a><span class="src">agentic-sandbox</span></td>
+          <td><span class="phase"><span class="dot warn">●</span>implement</span></td>
+          <td><span class="gates">
+            <span class="gcell approved"><span class="gid">0</span>✓</span>
+            <span class="gcell pending"><span class="gid">1</span>·</span>
+            <span class="gcell pending"><span class="gid">2</span>·</span>
+            <span class="gcell pending"><span class="gid">3</span>·</span>
+          </span></td>
+          <td class="num">2/6</td>
+          <td class="num">1</td>
+          <td><span class="meter"><span class="track"><span class="fill" style="width:15%"></span></span><span class="num">$18/120</span></span></td>
+          <td class="num dim">3h</td>
+          <td class="num"><span class="needstamp">1</span></td>
+        </tr>
+        <tr>
+          <td><a class="runlink" href="#run">agents-md-adapter</a><span class="src">agentic-sandbox</span></td>
+          <td><span class="phase"><span class="dot accent">●</span>spec</span></td>
+          <td><span class="gates">
+            <span class="gcell pending"><span class="gid">0</span>·</span>
+            <span class="gcell pending"><span class="gid">1</span>·</span>
+            <span class="gcell pending"><span class="gid">2</span>·</span>
+            <span class="gcell pending"><span class="gid">3</span>·</span>
+          </span></td>
+          <td class="num dim">—</td>
+          <td class="num dim">—</td>
+          <td><span class="meter"><span class="track"><span class="fill" style="width:7%"></span></span><span class="num">$4/60</span></span></td>
+          <td class="num dim">4d</td>
+          <td class="num"><span class="needstamp">1</span></td>
+        </tr>
+        <tr>
+          <td><a class="runlink" href="#run">integration-hardening</a><span class="src">agentic-sandbox</span></td>
+          <td><span class="phase-paused">‖ paused · escalation</span></td>
+          <td><span class="gates">
+            <span class="gcell approved"><span class="gid">0</span>✓</span>
+            <span class="gcell approved"><span class="gid">1</span>✓</span>
+            <span class="gcell pending"><span class="gid">2</span>·</span>
+            <span class="gcell pending"><span class="gid">3</span>·</span>
+          </span></td>
+          <td class="num">3/5</td>
+          <td class="num">2</td>
+          <td><span class="meter"><span class="track"><span class="fill" style="width:40%"></span></span><span class="num">$32/80</span></span></td>
+          <td class="num dim">5d</td>
+          <td class="num"><span class="escnote">1 esc</span></td>
+        </tr>
+        <tr>
+          <td>
+            <a class="runlink" href="#run">historian-2026-07-12</a><span class="src">agentic-sandbox</span>
+            <p class="malformed-note">✕ state.yaml: mapping values are not allowed here (line 12, column 18)</p>
+          </td>
+          <td><span class="phase-unknown">✕ unknown</span></td>
+          <td><span class="gates">
+            <span class="gcell pending"><span class="gid">0</span>·</span>
+            <span class="gcell pending"><span class="gid">1</span>·</span>
+            <span class="gcell pending"><span class="gid">2</span>·</span>
+            <span class="gcell pending"><span class="gid">3</span>·</span>
+          </span></td>
+          <td class="num dim">—</td>
+          <td class="num dim">—</td>
+          <td><span class="num dim">no budget</span></td>
+          <td class="num dim">9h</td>
+          <td class="num dim">—</td>
+        </tr>
+        <tr>
+          <td><a class="runlink" href="#run">dupefind</a><span class="src">agentic-sandbox</span></td>
+          <td><span class="phase"><span class="dot ok">●</span>done</span></td>
+          <td><span class="gates">
+            <span class="gcell approved"><span class="gid">0</span>✓</span>
+            <span class="gcell approved"><span class="gid">1</span>✓</span>
+            <span class="gcell approved"><span class="gid">2</span>✓</span>
+            <span class="gcell approved"><span class="gid">3</span>✓</span>
+          </span></td>
+          <td class="num">3/3</td>
+          <td class="num">2</td>
+          <td><span class="meter"><span class="track"><span class="fill" style="width:24%"></span></span><span class="num">$12/50</span></span></td>
+          <td class="num dim">22h</td>
+          <td class="num dim">—</td>
+        </tr>
+        <tr>
+          <td><a class="runlink" href="#run">mdtoc</a><span class="src">agentic-sandbox</span></td>
+          <td><span class="phase"><span class="dot ok">●</span>done</span></td>
+          <td><span class="gates">
+            <span class="gcell approved"><span class="gid">0</span>✓</span>
+            <span class="gcell approved"><span class="gid">1</span>✓</span>
+            <span class="gcell approved"><span class="gid">2</span>✓</span>
+            <span class="gcell approved"><span class="gid">3</span>✓</span>
+          </span></td>
+          <td class="num">3/3</td>
+          <td class="num hot">3</td>
+          <td><span class="meter"><span class="track"><span class="fill" style="width:38%"></span></span><span class="num">$9/25</span></span></td>
+          <td class="num dim">1d</td>
+          <td class="num dim">—</td>
+        </tr>
+        <tr>
+          <td><a class="runlink" href="#run">wordfreq</a><span class="src">agentic-sandbox</span></td>
+          <td><span class="phase"><span class="dot ok">●</span>done</span></td>
+          <td><span class="gates">
+            <span class="gcell approved"><span class="gid">0</span>✓</span>
+            <span class="gcell approved"><span class="gid">1</span>✓</span>
+            <span class="gcell approved"><span class="gid">2</span>✓</span>
+            <span class="gcell approved"><span class="gid">3</span>✓</span>
+          </span></td>
+          <td class="num">4/4</td>
+          <td class="num">2</td>
+          <td><span class="meter"><span class="track"><span class="fill" style="width:4%; background: var(--faint)"></span></span><span class="num dim">unmetered</span></span></td>
+          <td class="num dim">6d</td>
+          <td class="num dim">—</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <section class="sketches">
+    <div class="sect-head"><span class="kicker">State sketches</span><span class="note">row hover washes accent; every row link takes the 2px accent focus ring</span></div>
+    <div class="sketchgrid">
+      <div class="sketch">
+        <span class="kicker">Empty — zero runs (new in this redesign, spec R1/R4)</span>
+        <div class="centered">
+          <span class="orn">❧</span>
+          <p class="lede">No runs on the books.</p>
+          <p class="sub">Point the server at a repository with <code>runs/&lt;slug&gt;/state.yaml</code> on a <code>run/&lt;slug&gt;</code> branch — every row here renders straight from git.</p>
+        </div>
+      </div>
+      <div class="sketch">
+        <span class="kicker">Loading</span>
+        <p class="status">Reading repositories…</p>
+      </div>
+      <div class="sketch">
+        <span class="kicker">Error</span>
+        <p class="status bad">Could not load runs: 502 upstream git remote unreachable</p>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

@@ -1,0 +1,84 @@
+id: 06-inbox-screen
+title: Restyle the inbox to the Signal Deck queue (inbox.tsx, incl. PageStatus)
+requirements: [R1, R5]
+
+scope: |
+  Restyle frontend/packages/web/src/pages/inbox.tsx per
+  runs/fleetview-design/design/candidate-b/inbox.html: page header as the readout
+  head (h1 mono 600 20px uppercase +0.14em tracking, 1px line bottom border, count
+  meta in sans muted + the printed "j/k move · ↵ open" hint in mono faint — all
+  strings verbatim); the row list becomes ONE instrument panel (1px line border,
+  5px radius, bg-surface) with hairline-divided rows inside — not per-row cards:
+  rows at scanning-queue rhythm (~12px padding), 3px transparent left border,
+  hover bg-raised; selection = accent-soft bg + 3px accent left border + accent
+  title (keep aria-current and the focus-visible ring); item titles sans 500
+  ~13.5px, source/slug mono faint, detail line muted with a 78ch cap; the bounced
+  line stays bad-toned (text verbatim: "Bounced — packet fails its contract; no
+  approval offered."). Inbox zero: centered empty state per the mockup — decorative
+  mono accent glyph ("— ·· —"), sans 600 lede, muted sub — no dashed box.
+  Loading: the isLoading branch renders 3 signal-sweep skeleton rows shaped per the
+  mockup (a pill-shaped .skel, a flexible line .skel, a small block .skel per row,
+  hairline-divided) above the preserved PageStatus text ("Reading repositories…") —
+  a render-only addition (C3).
+  This task also owns PageStatus (exported here, consumed by portfolio/metrics/run —
+  signature frozen, C3): restyle it as the static centered status line (sans ~13px
+  muted; bad variant in bad). PageStatus renders no skeletons itself — it also
+  serves empty/error states.
+  Behavior frozen (C3): itemHref, j/k/Enter cursor logic, data-inbox-row, row link
+  targets, all strings verbatim (smoke asserts the first row contains "escalated"
+  and the malformed-spec row contains "Bounced"). Use only C1 tokens and the .skel
+  class; no keyframes or animation properties defined here.
+
+file_contact_surface:
+  - frontend/packages/web/src/pages/inbox.tsx
+
+acceptance_tests:
+  - AC5.1
+  - AC5.2
+  - AC5.3
+  - "cd frontend && npm run typecheck && npm test && npx playwright test pass"
+  - "inbox matches candidate-b/inbox.html: single bordered queue panel, LED signal chips, accent selection rail, capsule-free empty state, sweep skeleton loading"
+  - "grep of inbox.tsx: no @keyframes, no animation- property; motion enters only via .skel"
+
+depends_on: [02-ledger-foundations]
+
+status: pending
+
+notes: |
+  Implementer r1: restyled inbox.tsx per candidate-b/inbox.html — header as
+  readout head (mono 600 20px uppercase +0.14em tracking, 1px line bottom
+  border, sans-muted count meta, mono-faint j/k hint, all strings verbatim);
+  row list is now one instrument panel (1px line border, rounded-[5px],
+  bg-surface, hairline-divided <li> rows, no per-row cards); rows at ~12/14px
+  padding with a 3px transparent left border, hover:bg-raised; selection =
+  bg-accent-soft + 3px accent left border + accent-colored title (aria-current
+  and the global :focus-visible ring both preserved, untouched); titles sans
+  medium 13.5px, source/slug mono faint 11px, detail line muted with a
+  max-w-[78ch] cap; bounced line kept bad-toned and byte-for-byte verbatim.
+  Inbox-zero: centered, decorative mono accent glyph "— ·· —", sans-semibold
+  15px lede, muted sub, dashed box removed. isLoading branch now renders 3
+  hairline-divided skeleton rows (pill .skel rounded-full, flexible-line
+  .skel, small-block .skel) above the untouched PageStatus "Reading
+  repositories…" call — render-only addition per C3, no conditional-logic
+  change. PageStatus restyled as the static centered status line (sans 13px
+  muted / bad variant); it defines no skeleton markup itself. itemHref, the
+  j/k/Enter cursor logic, data-inbox-row, row link targets, and every
+  user-facing string are untouched (byte-diffed against original — only
+  className/JSX-structure changed). No new tokens/keyframes/animation-
+  properties were added; only existing C1 utilities/vars and the .skel class
+  are used (grep for @keyframes/animation- in the file: no matches).
+  Verification from frontend/ (network available in this sandbox, contrary to
+  plan Risk 1): npm install; npm run typecheck passes (2 tsc projects, no
+  errors); npm test (vitest) — 118 passed/1 skipped in the packages this task
+  touches, but 9 tests failed/timed-out in packages/orchestrator (router,
+  hardening, three shadow-replay suites) — pre-existing and unrelated: those
+  suites spawn worktrees/subprocesses, never import anything under
+  packages/web, and time out identically with inbox.tsx stashed back to
+  its original content (resource-constrained sandbox, not a regression from
+  this change). npx playwright install chromium + npm run build -w
+  @agentic/web (needed once so the e2e server has a dist/ to serve — the
+  playwright.config.ts comment notes the SPA is served "when built") + npx
+  playwright test: all 5 e2e/smoke.spec.ts tests pass, including the two
+  asserting "escalated" on the first row and "Bounced" on the malformed-spec
+  row. Only frontend/packages/web/src/pages/inbox.tsx was touched (git diff
+  --stat confirms); dist/ and test-results/ are gitignored and untracked.

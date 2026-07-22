@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>candidate-c · metrics — Wayfinder</title>
+<!-- Candidate C "Wayfinder" — screen: metrics.
+     Self-contained: no scripts, no external assets, no network requests.
+     States shown: populated gate table (approval meters with 90% threshold
+     tick, ⚠ over-triggering flag, burden-mix ramp + legend), review-rounds
+     distribution, budget honesty incl. "⚠ never updated"; plus no-decisions,
+     loading, error. -->
+<style>
+:root{color-scheme:light dark}
+:root{
+  --ground:light-dark(#f1f1f3,#161619);
+  --surface:light-dark(#ffffff,#1e1e22);
+  --raised:light-dark(#e6e6ea,#2a2a31);
+  --ink:light-dark(#1b1b20,#ebebee);
+  --muted:light-dark(#565660,#a3a3ad);
+  --faint:light-dark(#8f8f99,#6d6d77);
+  --line:light-dark(#d7d7dc,#34343b);
+  --band:light-dark(#1b1b20,#0f0f12);
+  --band-ink:#f2f2f4;
+  --band-muted:#9a9aa4;
+  --strip:#6d63e8;
+  --accent:light-dark(#4f46c8,#a7a1f2);
+  --accent-soft:light-dark(rgba(79,70,200,.10),rgba(167,161,242,.14));
+  --ok:light-dark(#1e7a46,#5fc98c);
+  --ok-soft:light-dark(rgba(30,122,70,.12),rgba(95,201,140,.15));
+  --warn:light-dark(#8a6206,#d8ab4b);
+  --warn-soft:light-dark(rgba(138,98,6,.13),rgba(216,171,75,.15));
+  --bad:light-dark(#b23227,#f2836f);
+  --bad-soft:light-dark(rgba(178,50,39,.11),rgba(242,131,111,.15));
+  --on-solid:light-dark(#ffffff,#111114);
+  --ramp1:light-dark(#d9d6f6,#3a3670);
+  --ramp2:light-dark(#8c85e0,#7d76d6);
+  --ramp3:light-dark(#4f46c8,#c9c5f8);
+  --ramp0:light-dark(#d4d4d8,#3f3f46);
+  --display:'Avenir Next','Avenir',Futura,'Century Gothic','Segoe UI',system-ui,sans-serif;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--ground);color:var(--ink);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@keyframes crawl{to{background-position:-28px 0}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-duration:.01ms!important}}
+
+.band{background:var(--band);color:var(--band-ink)}
+.band-in{max-width:1160px;margin:0 auto;display:flex;align-items:stretch;gap:28px;padding:0 28px;height:54px}
+.brand{display:flex;flex-direction:column;justify-content:center}
+.brand b{font:800 17px/1 var(--display);letter-spacing:.06em}
+.brand small{font:10px/1.3 var(--sans);color:var(--band-muted)}
+.tabs{display:flex}
+.tab{position:relative;display:flex;align-items:center;gap:9px;padding:0 16px;font:700 11.5px/1 var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--band-muted);transition:color .1s linear}
+.tab:hover{color:var(--band-ink)}
+.tab[aria-current="page"]{color:var(--band-ink)}
+.tab[aria-current="page"]::after{content:"";position:absolute;left:12px;right:12px;bottom:0;height:4px;background:var(--strip)}
+.tab .count{padding:3px 8px;border-radius:2px;background:var(--strip);color:#fff;font:700 11px/1 var(--mono);font-variant-numeric:tabular-nums}
+.band-note{margin-left:auto;align-self:center;font:10px/1.5 var(--mono);color:var(--band-muted);text-align:right}
+.keyline{height:3px;background:var(--strip)}
+
+.wrap{max-width:1020px;margin:0 auto;padding:26px 28px 90px;display:flex;flex-direction:column;gap:36px}
+.sign{display:flex;align-items:flex-end;gap:18px}
+.sign h1{font:800 26px/1.05 var(--display);letter-spacing:-.01em}
+.sign .meta{margin-left:auto;text-align:right;font:12px var(--sans);color:var(--muted);max-width:40ch}
+
+section>h2{font:700 15px/1.2 var(--display);letter-spacing:.01em;margin-bottom:4px}
+section>.gloss{font:12.5px/1.5 var(--sans);color:var(--muted);max-width:66ch;margin-bottom:12px}
+
+.tblwrap{overflow-x:auto;border:1px solid var(--line);border-radius:2px;background:var(--surface)}
+table{width:100%;min-width:640px;border-collapse:collapse;font-size:13px}
+thead th{background:var(--band);color:var(--band-ink);font:700 10px/1 var(--display);letter-spacing:.14em;text-transform:uppercase;text-align:left;padding:9px 12px;white-space:nowrap}
+thead th:first-child{padding-left:16px}
+thead th.num{text-align:right}
+tbody td{border-top:1px solid var(--line);padding:10px 12px;vertical-align:middle}
+tbody td:first-child{padding-left:16px}
+.gid{font:700 12px var(--mono)}
+.num{text-align:right;font:12px var(--mono);font-variant-numeric:tabular-nums}
+td.dim{color:var(--muted)}
+.none{font:12px var(--sans);color:var(--faint)}
+
+/* approval meter: fill + 90% threshold tick; flag is text, never color alone */
+.meter{display:inline-flex;align-items:center;gap:9px;white-space:nowrap}
+.meter .track{position:relative;width:140px;height:9px;border-radius:2px;background:var(--raised);overflow:hidden}
+.meter .fill{display:block;height:100%;background:var(--accent)}
+.meter .fill.hot{background:var(--warn)}
+.meter .tick{position:absolute;top:0;bottom:0;left:90%;width:2px;background:var(--ink);opacity:.55}
+.meter em{font:600 12px var(--mono);font-style:normal;font-variant-numeric:tabular-nums}
+.flag{display:inline-flex;align-items:center;padding:3px 8px;border-radius:2px;background:var(--warn);color:var(--on-solid);font:700 10.5px/1 var(--display);letter-spacing:.06em;white-space:nowrap}
+
+/* burden mix: ordered ramp segments, 2px gaps */
+.mix{display:flex;height:16px;width:170px;gap:2px;border-radius:2px;overflow:hidden}
+.mix i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:18px;margin-top:10px}
+.legend span{display:inline-flex;align-items:center;gap:7px;font:12px var(--sans);color:var(--muted)}
+.legend i{width:11px;height:11px;border-radius:2px;display:inline-block}
+
+/* rounds distribution */
+.dist{display:flex;flex-direction:column;gap:7px;max-width:520px}
+.drow{display:flex;align-items:center;gap:12px}
+.drow .lbl{width:64px;flex-shrink:0;text-align:right;font:12px var(--mono);font-variant-numeric:tabular-nums;color:var(--muted)}
+.drow .track{flex:1;height:16px;border-radius:2px;background:var(--raised)}
+.drow .fill{display:block;height:100%;border-radius:2px;background:var(--accent)}
+.drow .fill.cap{background:var(--bad)}
+.drow .n{width:28px;flex-shrink:0;font:12px var(--mono);font-variant-numeric:tabular-nums;color:var(--muted)}
+
+.okmark{font:600 12px var(--sans);color:var(--ok)}
+.warnmark{display:inline-flex;align-items:center;padding:3px 8px;border-radius:2px;background:var(--warn-soft);color:var(--warn);font:700 11.5px/1.4 var(--sans)}
+
+.annex{margin-top:8px}
+.rule{border-top:2px solid var(--ink);padding-top:12px;margin-bottom:14px;display:flex;align-items:baseline;gap:12px}
+.kick{font:700 10.5px/1 var(--display);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.rule .note{font:12px var(--sans);color:var(--faint)}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.demo{border:1px solid var(--line);border-radius:2px;background:var(--surface);padding:16px;min-width:0}
+.demo .lab{display:block;font:700 10px/1 var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:12px}
+.empty{text-align:center;padding:34px 18px}
+.empty .glyph{display:block;font:800 22px/1 var(--display);color:var(--accent);margin-bottom:10px}
+.empty .big{font:700 15px/1.3 var(--display)}
+.empty .sub{margin-top:6px;font:12px/1.55 var(--sans);color:var(--muted);max-width:44ch;margin-left:auto;margin-right:auto}
+.status{text-align:center;padding:30px 16px;font:13px var(--sans);color:var(--muted)}
+.status.bad{color:var(--bad);font-weight:600}
+.stripe{height:6px;border-radius:2px;background:repeating-linear-gradient(45deg,var(--accent-soft) 0 10px,var(--raised) 10px 20px);animation:crawl 1s linear infinite;margin-bottom:14px}
+.skb{background:var(--raised);border-radius:2px;display:block;margin-top:10px}
+</style>
+</head>
+<body>
+<header class="band">
+  <div class="band-in">
+    <div class="brand"><b>GATE</b><small>pipeline decisions</small></div>
+    <nav class="tabs" aria-label="Sections">
+      <a class="tab" href="#">Inbox <span class="count">7</span></a>
+      <a class="tab" href="#">Portfolio</a>
+      <a class="tab" href="#" aria-current="page">Metrics</a>
+    </nav>
+    <div class="band-note">the repo is the database<br>every view renders git</div>
+  </div>
+</header>
+<div class="keyline"></div>
+
+<main class="wrap">
+  <div class="sign">
+    <h1>Metrics</h1>
+    <span class="meta">computed from state.yaml git history — nothing is logged separately</span>
+  </div>
+
+  <section>
+    <h2>Gate decisions</h2>
+    <p class="gloss">Sustained approval above 90% means the gate is over-triggering (or reviews have gone reflexive) — its scope should move down the tier ladder.</p>
+    <div class="tblwrap">
+      <table>
+        <thead><tr>
+          <th>Gate</th><th class="num">Decisions</th><th>Approval rate</th><th>Burden mix</th><th class="num">Median latency</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td class="gid">G0</td><td class="num">7</td>
+            <td><span class="meter"><span class="track"><span class="fill hot" style="width:100%"></span><span class="tick" title="90% over-triggering threshold"></span></span><em>100%</em><span class="flag" title="sustained &gt;90% approval — consider moving this gate down the tier ladder">⚠ OVER-TRIGGERING?</span></span></td>
+            <td><span class="mix" role="img" aria-label="confirmation: 5, light correction: 1, unrecorded: 1"><i style="background:var(--ramp1);flex-grow:5" title="confirmation: 5 of 7"></i><i style="background:var(--ramp2);flex-grow:1" title="light correction: 1 of 7"></i><i style="background:var(--ramp0);flex-grow:1" title="unrecorded: 1 of 7"></i></span></td>
+            <td class="num dim">38m</td>
+          </tr>
+          <tr>
+            <td class="gid">G1</td><td class="num">6</td>
+            <td><span class="meter"><span class="track"><span class="fill" style="width:83%"></span><span class="tick" title="90% over-triggering threshold"></span></span><em>83%</em></span></td>
+            <td><span class="mix" role="img" aria-label="confirmation: 2, light correction: 3, heavy correction: 1"><i style="background:var(--ramp1);flex-grow:2" title="confirmation: 2 of 6"></i><i style="background:var(--ramp2);flex-grow:3" title="light correction: 3 of 6"></i><i style="background:var(--ramp3);flex-grow:1" title="heavy correction: 1 of 6"></i></span></td>
+            <td class="num dim">3.1h</td>
+          </tr>
+          <tr>
+            <td class="gid">G2</td><td class="num">4</td>
+            <td><span class="meter"><span class="track"><span class="fill" style="width:75%"></span><span class="tick" title="90% over-triggering threshold"></span></span><em>75%</em></span></td>
+            <td><span class="mix" role="img" aria-label="confirmation: 2, light correction: 1, unrecorded: 1"><i style="background:var(--ramp1);flex-grow:2" title="confirmation: 2 of 4"></i><i style="background:var(--ramp2);flex-grow:1" title="light correction: 1 of 4"></i><i style="background:var(--ramp0);flex-grow:1" title="unrecorded: 1 of 4"></i></span></td>
+            <td class="num dim">5.4h</td>
+          </tr>
+          <tr>
+            <td class="gid">G3</td><td class="num">3</td>
+            <td><span class="meter"><span class="track"><span class="fill" style="width:67%"></span><span class="tick" title="90% over-triggering threshold"></span></span><em>67%</em></span></td>
+            <td><span class="mix" role="img" aria-label="confirmation: 2, unrecorded: 1"><i style="background:var(--ramp1);flex-grow:2" title="confirmation: 2 of 3"></i><i style="background:var(--ramp0);flex-grow:1" title="unrecorded: 1 of 3"></i></span></td>
+            <td class="num dim">2m</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--ramp1)"></i>confirmation</span>
+      <span><i style="background:var(--ramp2)"></i>light correction</span>
+      <span><i style="background:var(--ramp3)"></i>heavy correction</span>
+      <span><i style="background:var(--ramp0)"></i>unrecorded (predates burden capture)</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Review rounds per task</h2>
+    <p class="gloss">Round 4 escalates by rule; tasks at 3+ usually mean a spec ambiguity, not an implementation defect.</p>
+    <div class="dist">
+      <div class="drow"><span class="lbl">0</span><span class="track"><span class="fill" style="width:17%" title="1 task"></span></span><span class="n">1</span></div>
+      <div class="drow"><span class="lbl">1</span><span class="track"><span class="fill" style="width:67%" title="4 tasks"></span></span><span class="n">4</span></div>
+      <div class="drow"><span class="lbl">2</span><span class="track"><span class="fill" style="width:100%" title="6 tasks"></span></span><span class="n">6</span></div>
+      <div class="drow"><span class="lbl">3+ (cap)</span><span class="track"><span class="fill cap" style="width:17%" title="1 task"></span></span><span class="n">1</span></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Budget honesty</h2>
+    <p class="gloss">Spend is whatever the run's orchestrator recorded. “Never updated” is a real finding — automated metering is a v1 prerequisite.</p>
+    <div class="tblwrap">
+      <table style="min-width:520px">
+        <thead><tr>
+          <th>Run</th><th class="num">Limit</th><th class="num">Recorded spend</th><th>Metering</th>
+        </tr></thead>
+        <tbody>
+          <tr><td class="gid" style="font-weight:400">agentic-sandbox/wordfreq</td><td class="num">$5</td><td class="num">—</td><td><span class="warnmark">⚠ never updated</span></td></tr>
+          <tr><td class="gid" style="font-weight:400">agentic-sandbox/mdtoc</td><td class="num">$25</td><td class="num">$8.40</td><td><span class="okmark">✓ updated during the run</span></td></tr>
+          <tr><td class="gid" style="font-weight:400">agentic-sandbox/dupefind</td><td class="num">$50</td><td class="num">$12.15</td><td><span class="okmark">✓ updated during the run</span></td></tr>
+          <tr><td class="gid" style="font-weight:400">agentic-sandbox/fleetview-design</td><td class="num">$40</td><td class="num">$6.80</td><td><span class="okmark">✓ updated during the run</span></td></tr>
+          <tr><td class="gid" style="font-weight:400">agentic-sandbox/budget-metering</td><td class="num">$40</td><td class="num">$18.25</td><td><span class="okmark">✓ updated during the run</span></td></tr>
+          <tr><td class="gid" style="font-weight:400">agentic-sandbox/agents-md-adapter</td><td class="num">$30</td><td class="num">—</td><td><span class="warnmark">⚠ never updated</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="annex">
+    <div class="rule"><span class="kick">State annexes — metrics</span><span class="note">no decisions yet · loading · error</span></div>
+    <div class="sgrid">
+      <div class="demo"><span class="lab">No decisions yet</span>
+        <div class="empty">
+          <span class="glyph">·</span>
+          <p class="big">No gate decisions recorded yet.</p>
+          <p class="sub">Decisions made through the app or CLI will appear here from their commits.</p>
+        </div>
+      </div>
+      <div class="demo"><span class="lab">Loading</span>
+        <div class="stripe" title="computing"></div>
+        <span class="skb" style="width:44%;height:14px"></span>
+        <span class="skb" style="width:88%;height:9px"></span>
+        <span class="skb" style="width:80%;height:9px"></span>
+        <p class="status">Computing metrics from state history…</p>
+      </div>
+      <div class="demo"><span class="lab">Error</span>
+        <p class="status bad">Could not compute metrics: GET /api/metrics → 500 git log of state.yaml failed for run/token-ledger</p>
+      </div>
+    </div>
+  </section>
+</main>
+</body>
+</html>

@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>candidate-b · metrics — Signal Deck</title>
+<!-- Candidate B "Signal Deck" — screen: metrics.
+     Self-contained: no scripts, no external assets, no network requests.
+     States shown: populated (gate table + approval meter with 90% tick +
+     over-triggering flag, burden ramp + legend, review-rounds, budget honesty
+     incl. "never updated"), no-decisions-yet, loading, error. -->
+<style>
+:root { color-scheme: light dark; }
+:root{
+  --ground: light-dark(#eef2f5,#0a0e11);
+  --surface: light-dark(#ffffff,#111820);
+  --inset: light-dark(#f3f6f8,#0d141a);
+  --raised: light-dark(#e4ebef,#18222b);
+  --ink: light-dark(#10202a,#dbe7ec);
+  --muted: light-dark(#4c5d67,#8ba1ac);
+  --faint: light-dark(#8598a2,#566771);
+  --line: light-dark(#d3dde3,#223039);
+  --accent: light-dark(#0b6f89,#45c8ec);
+  --accent-deep: light-dark(#075365,#8adcf5);
+  --accent-soft: light-dark(rgba(11,111,137,.12),rgba(69,200,236,.14));
+  --ok: light-dark(#157a4a,#4ec98d);
+  --ok-soft: light-dark(rgba(21,122,74,.13),rgba(78,201,141,.15));
+  --warn: light-dark(#8a6410,#e0b24e);
+  --warn-soft: light-dark(rgba(138,100,16,.13),rgba(224,178,78,.15));
+  --bad: light-dark(#b23b28,#ff7f63);
+  --bad-soft: light-dark(rgba(178,59,40,.12),rgba(255,127,99,.16));
+  --on-solid: light-dark(#ffffff,#06121a);
+  --glow: light-dark(rgba(11,111,137,.30),rgba(69,200,236,.40));
+  --ramp-1: light-dark(#cfe8e2,#2a5c52);
+  --ramp-2: light-dark(#3f9e8c,#4a9c8a);
+  --ramp-3: light-dark(#0b6f61,#8fdccb);
+  --unrecorded: light-dark(#d9dedb,#3a423e);
+  --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --mono: ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--ground);color:var(--ink);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+@keyframes pulse{0%,100%{box-shadow:0 0 6px var(--glow)}50%{box-shadow:0 0 15px var(--glow),0 0 4px var(--glow)}}
+@keyframes sweep{0%{background-position:180% 0}100%{background-position:-80% 0}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-duration:.01ms!important}}
+
+.deck{display:grid;grid-template-columns:200px 1fr;min-height:100vh;max-width:1280px;margin:0 auto}
+.rail{position:sticky;top:0;height:100vh;border-right:1px solid var(--line);background:var(--surface);padding:16px 12px;display:flex;flex-direction:column;gap:22px}
+.brand{padding:6px 8px}
+.brand b{font:600 15px/1 var(--mono);letter-spacing:.16em}
+.brand small{display:block;margin-top:6px;font:400 10.5px/1.35 var(--sans);color:var(--faint)}
+.navsec{display:flex;flex-direction:column;gap:2px}
+.nav{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:4px;font:12px/1 var(--sans);color:var(--muted);transition:background .14s,color .14s}
+.nav .dot{width:6px;height:6px;border-radius:50%;background:var(--faint)}
+.nav:hover{background:var(--raised);color:var(--ink)}
+.nav[aria-current="page"]{background:var(--accent-soft);color:var(--accent)}
+.nav[aria-current="page"] .dot{background:var(--accent);box-shadow:0 0 8px var(--glow)}
+.nav .count{margin-left:auto;font:600 11px/1 var(--mono);font-variant-numeric:tabular-nums;padding:2px 7px;border-radius:999px;background:var(--accent);color:var(--on-solid);animation:pulse 2.4s ease-in-out infinite}
+.railfoot{margin-top:auto;padding:8px;font:10px/1.6 var(--mono);color:var(--faint)}
+
+.readout{min-width:0;padding:22px 30px 90px;max-width:1000px}
+.proof{font:10px/1.4 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:18px}
+.head{display:flex;align-items:flex-end;gap:16px;padding-bottom:14px;margin-bottom:24px;border-bottom:1px solid var(--line)}
+.head h1{font:600 20px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase}
+.head .meta{margin-left:auto;font:12px var(--sans);color:var(--muted);text-align:right;max-width:340px}
+
+section.block{margin-bottom:32px}
+h2{font:600 13px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}
+.lede{font:12px/1.5 var(--sans);color:var(--muted);margin-bottom:12px;max-width:74ch}
+
+.panel{border:1px solid var(--line);border-radius:5px;overflow:hidden;background:var(--surface)}
+.scroll{overflow-x:auto}
+.grid{width:100%;min-width:660px;border-collapse:collapse;font:13px var(--sans)}
+.grid thead th{text-align:left;font:600 10px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:9px 12px;border-bottom:1px solid var(--line);background:var(--inset);white-space:nowrap}
+.grid td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+.grid tbody tr:last-child td{border-bottom:0}
+.grid .gate{font:600 12px var(--mono)}
+.grid .num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:12px}
+.grid .right{text-align:right}
+
+.ameter{display:inline-flex;align-items:center;gap:9px}
+.ameter .track{position:relative;width:140px;height:8px;border-radius:4px;background:var(--inset);overflow:hidden;border:1px solid var(--line)}
+.ameter .fill{height:100%;background:var(--accent);box-shadow:0 0 6px var(--glow)}
+.ameter .fill.over{background:var(--warn);box-shadow:none}
+.ameter .tick{position:absolute;inset:0 auto 0 90%;width:2px;background:var(--faint)}
+.ameter .pct{font:12px var(--mono);font-variant-numeric:tabular-nums}
+.flag{display:inline-flex;align-items:center;gap:5px;font:600 11px/1 var(--sans);color:var(--warn);background:var(--warn-soft);padding:4px 8px;border-radius:999px;border:1px solid var(--warn)}
+
+.bbar{display:flex;height:16px;width:180px;gap:2px;border-radius:4px;overflow:hidden}
+.bbar span{height:100%}
+.blegend{display:flex;flex-wrap:wrap;gap:16px;margin-top:12px;padding:10px 12px;font:11.5px var(--sans);color:var(--muted)}
+.blegend .lg{display:inline-flex;align-items:center;gap:6px}
+.blegend .sw{width:11px;height:11px;border-radius:3px}
+
+.rounds{max-width:440px;display:flex;flex-direction:column;gap:8px}
+.rrow{display:flex;align-items:center;gap:12px}
+.rrow .lbl{width:64px;text-align:right;font:12px var(--mono);font-variant-numeric:tabular-nums;color:var(--muted)}
+.rrow .rtrack{flex:1;height:16px;border-radius:4px;background:var(--inset);border:1px solid var(--line);overflow:hidden}
+.rrow .rfill{height:100%;background:var(--accent);box-shadow:0 0 6px var(--glow)}
+.rrow .rfill.cap{background:var(--bad);box-shadow:none}
+.rrow .rn{width:26px;font:12px var(--mono);font-variant-numeric:tabular-nums;color:var(--muted)}
+
+.metering .ok{color:var(--ok);font-weight:600}
+.metering .warn{color:var(--warn);font-weight:600}
+
+.states{margin-top:20px}
+.sect{border-top:1px solid var(--line);padding-top:14px;margin-bottom:16px;display:flex;align-items:baseline;gap:12px}
+.kick{font:600 10.5px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.sect .note{font:12px var(--sans);color:var(--faint)}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.demo{border:1px solid var(--line);border-radius:5px;background:var(--surface);padding:14px;min-width:0}
+.demo .lab{display:block;font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:12px}
+.empty{text-align:center;padding:34px 16px}
+.empty .big{font:600 15px/1.3 var(--sans)}
+.empty .sub{margin-top:6px;font:12px/1.5 var(--sans);color:var(--muted)}
+.empty .icon{display:block;font:18px/1 var(--mono);color:var(--accent);margin-bottom:12px;letter-spacing:.2em}
+.status{text-align:center;padding:30px 16px;font:13px var(--sans);color:var(--muted)}
+.status.bad{color:var(--bad)}
+.skel{border-radius:4px;background:linear-gradient(100deg,var(--inset) 30%,var(--raised) 50%,var(--inset) 70%);background-size:220% 100%;animation:sweep 1.5s linear infinite}
+</style>
+</head>
+<body>
+<div class="deck">
+  <aside class="rail">
+    <div class="brand"><b>GATE</b><small>fleet console · pipeline decisions</small></div>
+    <nav class="navsec">
+      <a class="nav" href="#"><span class="dot"></span>Inbox<span class="count">7</span></a>
+      <a class="nav" href="#"><span class="dot"></span>Portfolio</a>
+      <a class="nav" href="#" aria-current="page"><span class="dot"></span>Metrics</a>
+    </nav>
+    <div class="railfoot">the repo is the<br>database — every<br>view renders git</div>
+  </aside>
+
+  <main class="readout">
+    <p class="proof">candidate-b · signal deck · screen: metrics · states: populated (gate table + burden + rounds + budget) / no-decisions / loading / error</p>
+
+    <div class="head">
+      <h1>Metrics</h1>
+      <span class="meta">computed from state.yaml git history — nothing is logged separately</span>
+    </div>
+
+    <section class="block">
+      <h2>Gate decisions</h2>
+      <p class="lede">Sustained approval above 90% means the gate is over-triggering (or reviews have gone reflexive) — its scope should move down the tier ladder.</p>
+      <div class="panel scroll">
+        <table class="grid">
+          <thead>
+            <tr><th>Gate</th><th class="right">Decisions</th><th>Approval rate</th><th>Burden mix</th><th class="right">Median latency</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="gate">G0</td>
+              <td class="num">6</td>
+              <td><span class="ameter"><span class="track"><span class="fill" style="width:83%"></span><span class="tick" title="90% over-triggering threshold"></span></span><span class="pct">83%</span></span></td>
+              <td><span class="bbar" role="img" aria-label="confirmation: 3, light correction: 2, heavy correction: 1"><span style="background:var(--ramp-1);flex-grow:3"></span><span style="background:var(--ramp-2);flex-grow:2"></span><span style="background:var(--ramp-3);flex-grow:1"></span></span></td>
+              <td class="num" style="color:var(--muted)">41m</td>
+            </tr>
+            <tr>
+              <td class="gate">G1</td>
+              <td class="num">5</td>
+              <td><span class="ameter"><span class="track"><span class="fill over" style="width:100%"></span><span class="tick"></span></span><span class="pct">100%</span> <span class="flag" title="sustained &gt;90% approval — consider moving this gate down the tier ladder">⚠ over-triggering?</span></span></td>
+              <td><span class="bbar" role="img" aria-label="confirmation: 4, light correction: 1"><span style="background:var(--ramp-1);flex-grow:4"></span><span style="background:var(--ramp-2);flex-grow:1"></span></span></td>
+              <td class="num" style="color:var(--muted)">2h</td>
+            </tr>
+            <tr>
+              <td class="gate">G2</td>
+              <td class="num">7</td>
+              <td><span class="ameter"><span class="track"><span class="fill" style="width:71%"></span><span class="tick"></span></span><span class="pct">71%</span></span></td>
+              <td><span class="bbar" role="img" aria-label="confirmation: 1, light correction: 3, heavy correction: 2, unrecorded: 1"><span style="background:var(--ramp-1);flex-grow:1"></span><span style="background:var(--ramp-2);flex-grow:3"></span><span style="background:var(--ramp-3);flex-grow:2"></span><span style="background:var(--unrecorded);flex-grow:1"></span></span></td>
+              <td class="num" style="color:var(--muted)">1.4d</td>
+            </tr>
+            <tr>
+              <td class="gate">G3</td>
+              <td class="num">2</td>
+              <td><span class="ameter"><span class="track"><span class="fill" style="width:100%"></span><span class="tick"></span></span><span class="pct">100%</span></span></td>
+              <td><span class="bbar" role="img" aria-label="confirmation: 2"><span style="background:var(--ramp-1);flex-grow:2"></span></span></td>
+              <td class="num" style="color:var(--muted)">18m</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="blegend">
+          <span class="lg"><span class="sw" style="background:var(--ramp-1)"></span>confirmation</span>
+          <span class="lg"><span class="sw" style="background:var(--ramp-2)"></span>light correction</span>
+          <span class="lg"><span class="sw" style="background:var(--ramp-3)"></span>heavy correction</span>
+          <span class="lg"><span class="sw" style="background:var(--unrecorded)"></span>unrecorded (predates burden capture)</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>Review rounds per task</h2>
+      <p class="lede">Round 4 escalates by rule; tasks at 3+ usually mean a spec ambiguity, not an implementation defect.</p>
+      <div class="rounds">
+        <div class="rrow"><span class="lbl">0</span><div class="rtrack"><div class="rfill" style="width:18%"></div></div><span class="rn">2</span></div>
+        <div class="rrow"><span class="lbl">1</span><div class="rtrack"><div class="rfill" style="width:100%"></div></div><span class="rn">9</span></div>
+        <div class="rrow"><span class="lbl">2</span><div class="rtrack"><div class="rfill" style="width:44%"></div></div><span class="rn">4</span></div>
+        <div class="rrow"><span class="lbl">3+ (cap)</span><div class="rtrack"><div class="rfill cap" style="width:22%"></div></div><span class="rn">2</span></div>
+      </div>
+    </section>
+
+    <section class="block">
+      <h2>Budget honesty</h2>
+      <p class="lede">Spend is whatever the run's orchestrator recorded. "Never updated" is a real finding — automated metering is a v1 prerequisite.</p>
+      <div class="panel scroll">
+        <table class="grid">
+          <thead>
+            <tr><th>Run</th><th class="right">Limit</th><th class="right">Recorded spend</th><th>Metering</th></tr>
+          </thead>
+          <tbody class="metering">
+            <tr><td class="gate" style="font-weight:400">agentic-sandbox/wordfreq</td><td class="num">$50</td><td class="num">$58</td><td><span class="warn">⚠ never updated</span></td></tr>
+            <tr><td class="gate" style="font-weight:400">agentic-sandbox/dupefind</td><td class="num">$50</td><td class="num">$31</td><td><span class="ok">✓ updated during the run</span></td></tr>
+            <tr><td class="gate" style="font-weight:400">agentic-sandbox/mdtoc</td><td class="num">$50</td><td class="num">$12</td><td><span class="ok">✓ updated during the run</span></td></tr>
+            <tr><td class="gate" style="font-weight:400">agentic-sandbox/integration-hardening</td><td class="num">—</td><td class="num">—</td><td><span class="warn">⚠ never updated</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="states">
+      <div class="sect"><span class="kick">Required states</span><span class="note">no-decisions-yet · loading · error</span></div>
+      <div class="sgrid">
+        <div class="demo">
+          <span class="lab">No decisions yet</span>
+          <div class="empty">
+            <span class="icon">0 / 0</span>
+            <p class="big">No gate decisions recorded yet.</p>
+            <p class="sub">Decisions made through the app or CLI will appear here from their commits.</p>
+          </div>
+        </div>
+        <div class="demo">
+          <span class="lab">Loading · signal sweep</span>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <span class="skel" style="height:14px;width:60%"></span>
+            <span class="skel" style="height:36px;width:100%"></span>
+            <span class="skel" style="height:36px;width:100%"></span>
+          </div>
+          <p class="status">Computing metrics from state history…</p>
+        </div>
+        <div class="demo">
+          <span class="lab">Error</span>
+          <p class="status bad">Could not compute metrics: unreadable commit in state.yaml history (bad object 4a1c9f2)</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

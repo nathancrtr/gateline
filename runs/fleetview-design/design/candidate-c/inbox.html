@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>candidate-c · inbox — Wayfinder</title>
+<!-- Candidate C "Wayfinder" — screen: inbox.
+     Self-contained: no scripts, no external assets, no network requests.
+     States shown: populated (full kind vocabulary: gate, bounced gate,
+     escalation ESC, round-cap CAP, paused PAUSE, malformed BAD), inbox zero,
+     loading (static skeleton + striped progress strip), error. -->
+<style>
+:root{color-scheme:light dark}
+:root{
+  --ground:light-dark(#f1f1f3,#161619);
+  --surface:light-dark(#ffffff,#1e1e22);
+  --raised:light-dark(#e6e6ea,#2a2a31);
+  --ink:light-dark(#1b1b20,#ebebee);
+  --muted:light-dark(#565660,#a3a3ad);
+  --faint:light-dark(#8f8f99,#6d6d77);
+  --line:light-dark(#d7d7dc,#34343b);
+  --band:light-dark(#1b1b20,#0f0f12);
+  --band-ink:#f2f2f4;
+  --band-muted:#9a9aa4;
+  --strip:#6d63e8;
+  --accent:light-dark(#4f46c8,#a7a1f2);
+  --accent-soft:light-dark(rgba(79,70,200,.10),rgba(167,161,242,.14));
+  --ok:light-dark(#1e7a46,#5fc98c);
+  --ok-soft:light-dark(rgba(30,122,70,.12),rgba(95,201,140,.15));
+  --warn:light-dark(#8a6206,#d8ab4b);
+  --warn-soft:light-dark(rgba(138,98,6,.13),rgba(216,171,75,.15));
+  --bad:light-dark(#b23227,#f2836f);
+  --bad-soft:light-dark(rgba(178,50,39,.11),rgba(242,131,111,.15));
+  --on-solid:light-dark(#ffffff,#111114);
+  --display:'Avenir Next','Avenir',Futura,'Century Gothic','Segoe UI',system-ui,sans-serif;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--ground);color:var(--ink);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@keyframes crawl{to{background-position:-28px 0}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-duration:.01ms!important}}
+
+/* ——— signage band (the shell) ——— */
+.band{background:var(--band);color:var(--band-ink)}
+.band-in{max-width:1160px;margin:0 auto;display:flex;align-items:stretch;gap:28px;padding:0 28px;height:54px}
+.brand{display:flex;flex-direction:column;justify-content:center}
+.brand b{font:800 17px/1 var(--display);letter-spacing:.06em}
+.brand small{font:10px/1.3 var(--sans);color:var(--band-muted)}
+.tabs{display:flex}
+.tab{position:relative;display:flex;align-items:center;gap:9px;padding:0 16px;font:700 11.5px/1 var(--display);letter-spacing:.12em;text-transform:uppercase;color:var(--band-muted);transition:color .1s linear}
+.tab:hover{color:var(--band-ink)}
+.tab[aria-current="page"]{color:var(--band-ink)}
+.tab[aria-current="page"]::after{content:"";position:absolute;left:12px;right:12px;bottom:0;height:4px;background:var(--strip)}
+.tab .count{padding:3px 8px;border-radius:2px;background:var(--strip);color:#fff;font:700 11px/1 var(--mono);font-variant-numeric:tabular-nums}
+.band-note{margin-left:auto;align-self:center;font:10px/1.5 var(--mono);color:var(--band-muted);text-align:right}
+.keyline{height:3px;background:var(--strip)}
+
+.wrap{max-width:1160px;margin:0 auto;padding:26px 28px 90px}
+.sign{display:flex;align-items:flex-end;gap:18px;margin-bottom:20px}
+.sign h1{font:800 26px/1.05 var(--display);letter-spacing:-.01em}
+.sign .meta{margin-left:auto;text-align:right;font:12px var(--sans);color:var(--muted)}
+.keys{font:11px var(--mono);color:var(--faint);margin-left:12px}
+
+/* ——— queue: surface blocks with a colored edge-band per kind ——— */
+.queue{list-style:none;padding:0;display:flex;flex-direction:column;gap:8px}
+.item{display:flex;align-items:center;gap:14px;padding:13px 16px;background:var(--surface);border:1px solid var(--line);border-left:6px solid var(--faint);border-radius:2px;transition:background .1s linear}
+.item:hover{background:var(--raised)}
+.item.k-gate{border-left-color:var(--accent)}
+.item.k-urgent{border-left-color:var(--bad)}
+.item.k-pause{border-left-color:var(--warn)}
+.item.k-void{border-left-color:var(--bad);border-left-style:double}
+.item.sel{background:var(--accent-soft);outline:2px solid var(--accent);outline-offset:2px}
+.item .body{min-width:0;flex:1}
+.item .tline{display:flex;align-items:baseline;gap:8px}
+.item .t{font:600 14.5px/1.3 var(--display)}
+.item.sel .t{color:var(--accent)}
+.item .loc{font:11px var(--mono);color:var(--faint);white-space:nowrap}
+.item .d{margin-top:2px;font:12.5px/1.45 var(--sans);color:var(--muted);max-width:74ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .bounce{margin-top:4px;font:600 12px var(--sans);color:var(--bad)}
+
+/* tags: solid signage blocks; urgency = fill + size, never hue alone */
+.tag{display:inline-flex;align-items:center;justify-content:center;min-width:42px;padding:4px 9px;border-radius:2px;font:700 11px/1 var(--display);letter-spacing:.08em;white-space:nowrap}
+.tag-gate{background:var(--accent-soft);color:var(--accent);box-shadow:inset 3px 0 0 var(--accent)}
+.tag-urgent{background:var(--bad);color:var(--on-solid);padding:6px 11px;font-size:11.5px}
+.tag-pause{background:var(--warn);color:var(--on-solid);padding:6px 11px;font-size:11.5px}
+.tag-void{color:var(--bad);box-shadow:inset 0 0 0 1px var(--bad);background:repeating-linear-gradient(45deg,var(--bad-soft) 0 5px,transparent 5px 10px);text-decoration:line-through}
+.age{flex-shrink:0;font:600 11px/1 var(--mono);font-variant-numeric:tabular-nums;padding:5px 8px;border-radius:2px;background:var(--raised);color:var(--muted)}
+.age.urgent{background:var(--bad);color:var(--on-solid)}
+
+/* ——— state annexes ——— */
+.annex{margin-top:48px}
+.rule{border-top:2px solid var(--ink);padding-top:12px;margin-bottom:14px;display:flex;align-items:baseline;gap:12px}
+.kick{font:700 10.5px/1 var(--display);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.rule .note{font:12px var(--sans);color:var(--faint)}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
+.demo{border:1px solid var(--line);border-radius:2px;background:var(--surface);padding:16px;min-width:0}
+.demo .lab{display:block;font:700 10px/1 var(--display);letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:12px}
+.empty{text-align:center;padding:34px 18px}
+.empty .glyph{display:block;font:800 22px/1 var(--display);color:var(--accent);margin-bottom:10px}
+.empty .big{font:700 15px/1.3 var(--display)}
+.empty .sub{margin-top:6px;font:12px/1.55 var(--sans);color:var(--muted);max-width:44ch;margin-left:auto;margin-right:auto}
+.status{text-align:center;padding:30px 16px;font:13px var(--sans);color:var(--muted)}
+.status.bad{color:var(--bad);font-weight:600}
+.stripe{height:6px;border-radius:2px;background:repeating-linear-gradient(45deg,var(--accent-soft) 0 10px,var(--raised) 10px 20px);animation:crawl 1s linear infinite;margin-bottom:14px}
+.skrow{display:flex;align-items:center;gap:12px;padding:12px 4px;border-top:1px solid var(--line)}
+.skb{background:var(--raised);border-radius:2px}
+</style>
+</head>
+<body>
+<header class="band">
+  <div class="band-in">
+    <div class="brand"><b>GATE</b><small>pipeline decisions</small></div>
+    <nav class="tabs" aria-label="Sections">
+      <a class="tab" href="#" aria-current="page">Inbox <span class="count">7</span></a>
+      <a class="tab" href="#">Portfolio</a>
+      <a class="tab" href="#">Metrics</a>
+    </nav>
+    <div class="band-note">the repo is the database<br>every view renders git</div>
+  </div>
+</header>
+<div class="keyline"></div>
+
+<main class="wrap">
+  <div class="sign">
+    <h1>Inbox</h1>
+    <span class="meta">7 waiting · oldest first<span class="keys">j/k move · ↵ open</span></span>
+  </div>
+
+  <ul class="queue">
+    <!-- selected row: j/k cursor here; ring is the live focus indicator -->
+    <li><a class="item k-gate sel" href="#" aria-current="true">
+      <span class="tag tag-gate">G0</span>
+      <span class="body">
+        <span class="tline"><span class="t">Spec ready for G0 — 5 assumptions to accept</span><span class="loc">agentic-sandbox/agents-md-adapter</span></span>
+        <span class="d">spec.md resolves the adapter surface to AGENTS.md emit-only; assumption 3 narrows tool ceilings to the role spec.</span>
+      </span>
+      <span class="age urgent">4d</span>
+    </a></li>
+
+    <li><a class="item k-gate" href="#">
+      <span class="tag tag-gate">G1</span>
+      <span class="body">
+        <span class="tline"><span class="t">Three design candidates ready for G1</span><span class="loc">agentic-sandbox/fleetview-design</span></span>
+        <span class="d">ux-research.md + design/candidate-a, candidate-b, candidate-c — pick a direction or decline with notes.</span>
+      </span>
+      <span class="age">2d</span>
+    </a></li>
+
+    <li><a class="item k-void" href="#">
+      <span class="tag tag-void">G2</span>
+      <span class="body">
+        <span class="tline"><span class="t">Integration packet ready for G2</span><span class="loc">agentic-sandbox/budget-metering</span></span>
+        <span class="d">verification-report.md + review-03.md + diff at run/budget-metering.</span>
+        <span class="bounce">Bounced — packet fails its contract; no approval offered.</span>
+      </span>
+      <span class="age">31h</span>
+    </a></li>
+
+    <li><a class="item k-urgent" href="#">
+      <span class="tag tag-urgent">ESC</span>
+      <span class="body">
+        <span class="tline"><span class="t">Architect escalation: ledger schema needs a human call</span><span class="loc">agentic-sandbox/budget-metering</span></span>
+        <span class="d">ADR-4 has two live options (per-invocation rows vs per-task rollup); both hold the spec — disposition required.</span>
+      </span>
+      <span class="age">26h</span>
+    </a></li>
+
+    <li><a class="item k-urgent" href="#">
+      <span class="tag tag-urgent">CAP</span>
+      <span class="body">
+        <span class="tline"><span class="t">Task 03-rollup-cli hit the round cap (3)</span><span class="loc">agentic-sandbox/token-ledger</span></span>
+        <span class="d">review-03 and the response disagree on rounding at the cost boundary — read both sides, then unblock.</span>
+      </span>
+      <span class="age">9h</span>
+    </a></li>
+
+    <li><a class="item k-pause" href="#">
+      <span class="tag tag-pause">PAUSE</span>
+      <span class="body">
+        <span class="tline"><span class="t">Run paused: budget-exhausted</span><span class="loc">agentic-sandbox/dupefind-portable</span></span>
+        <span class="d">$30.00 of $30.00 recorded in the ledger — raise the limit and resume, or close the run.</span>
+      </span>
+      <span class="age">5h</span>
+    </a></li>
+
+    <li><a class="item k-urgent" href="#">
+      <span class="tag tag-urgent">BAD</span>
+      <span class="body">
+        <span class="tline"><span class="t">Run state does not parse</span><span class="loc">agentic-sandbox/spec-kit-watch</span></span>
+        <span class="d">state.yaml: phase "revew" is not one of spec | plan | implement | integrate | release | done | paused.</span>
+      </span>
+      <span class="age">1h</span>
+    </a></li>
+  </ul>
+
+  <!-- ——— sketched states ——— -->
+  <section class="annex">
+    <div class="rule"><span class="kick">State annexes — inbox</span><span class="note">empty · loading · error, as built</span></div>
+    <div class="sgrid">
+      <div class="demo"><span class="lab">Inbox zero</span>
+        <div class="empty">
+          <span class="glyph">✓</span>
+          <p class="big">Inbox zero.</p>
+          <p class="sub">No gates ready, no escalations, no paused runs. The pipeline is either working or done.</p>
+        </div>
+      </div>
+      <div class="demo"><span class="lab">Loading</span>
+        <div class="stripe" title="reading repositories"></div>
+        <div class="skrow"><span class="skb" style="width:42px;height:20px"></span><span class="skb" style="width:58%;height:12px"></span><span class="skb" style="width:34px;height:16px;margin-left:auto"></span></div>
+        <div class="skrow"><span class="skb" style="width:42px;height:20px"></span><span class="skb" style="width:46%;height:12px"></span><span class="skb" style="width:34px;height:16px;margin-left:auto"></span></div>
+        <div class="skrow"><span class="skb" style="width:42px;height:20px"></span><span class="skb" style="width:52%;height:12px"></span><span class="skb" style="width:34px;height:16px;margin-left:auto"></span></div>
+        <p class="status">Reading repositories…</p>
+      </div>
+      <div class="demo"><span class="lab">Error</span>
+        <p class="status bad">Could not load the inbox: GET /api/inbox → 502 upstream unavailable</p>
+        <p class="status" style="padding-top:0">The gate server is not reachable. Check that it is running and pointed at a repo root.</p>
+      </div>
+    </div>
+  </section>
+</main>
+</body>
+</html>

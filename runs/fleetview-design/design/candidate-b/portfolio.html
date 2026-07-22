@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>candidate-b · portfolio — Signal Deck</title>
+<!-- Candidate B "Signal Deck" — screen: portfolio.
+     Self-contained: no scripts, no external assets, no network requests.
+     States shown: populated (malformed-run row, paused run, needs/escalation
+     badges, gate readouts, budget meters), zero-runs (new state), loading, error. -->
+<style>
+:root { color-scheme: light dark; }
+:root{
+  --ground: light-dark(#eef2f5,#0a0e11);
+  --surface: light-dark(#ffffff,#111820);
+  --inset: light-dark(#f3f6f8,#0d141a);
+  --raised: light-dark(#e4ebef,#18222b);
+  --ink: light-dark(#10202a,#dbe7ec);
+  --muted: light-dark(#4c5d67,#8ba1ac);
+  --faint: light-dark(#8598a2,#566771);
+  --line: light-dark(#d3dde3,#223039);
+  --accent: light-dark(#0b6f89,#45c8ec);
+  --accent-deep: light-dark(#075365,#8adcf5);
+  --accent-soft: light-dark(rgba(11,111,137,.12),rgba(69,200,236,.14));
+  --ok: light-dark(#157a4a,#4ec98d);
+  --ok-soft: light-dark(rgba(21,122,74,.13),rgba(78,201,141,.15));
+  --warn: light-dark(#8a6410,#e0b24e);
+  --warn-soft: light-dark(rgba(138,100,16,.13),rgba(224,178,78,.15));
+  --bad: light-dark(#b23b28,#ff7f63);
+  --bad-soft: light-dark(rgba(178,59,40,.12),rgba(255,127,99,.16));
+  --on-solid: light-dark(#ffffff,#06121a);
+  --glow: light-dark(rgba(11,111,137,.30),rgba(69,200,236,.40));
+  --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --mono: ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--ground);color:var(--ink);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:inherit;text-decoration:none}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+@keyframes pulse{0%,100%{box-shadow:0 0 6px var(--glow)}50%{box-shadow:0 0 15px var(--glow),0 0 4px var(--glow)}}
+@keyframes sweep{0%{background-position:180% 0}100%{background-position:-80% 0}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition-duration:.01ms!important}}
+
+.deck{display:grid;grid-template-columns:200px 1fr;min-height:100vh;max-width:1280px;margin:0 auto}
+.rail{position:sticky;top:0;height:100vh;border-right:1px solid var(--line);background:var(--surface);padding:16px 12px;display:flex;flex-direction:column;gap:22px}
+.brand{padding:6px 8px}
+.brand b{font:600 15px/1 var(--mono);letter-spacing:.16em}
+.brand small{display:block;margin-top:6px;font:400 10.5px/1.35 var(--sans);color:var(--faint)}
+.navsec{display:flex;flex-direction:column;gap:2px}
+.nav{display:flex;align-items:center;gap:9px;padding:7px 9px;border-radius:4px;font:12px/1 var(--sans);color:var(--muted);transition:background .14s,color .14s}
+.nav .dot{width:6px;height:6px;border-radius:50%;background:var(--faint)}
+.nav:hover{background:var(--raised);color:var(--ink)}
+.nav[aria-current="page"]{background:var(--accent-soft);color:var(--accent)}
+.nav[aria-current="page"] .dot{background:var(--accent);box-shadow:0 0 8px var(--glow)}
+.nav .count{margin-left:auto;font:600 11px/1 var(--mono);font-variant-numeric:tabular-nums;padding:2px 7px;border-radius:999px;background:var(--accent);color:var(--on-solid);animation:pulse 2.4s ease-in-out infinite}
+.railfoot{margin-top:auto;padding:8px;font:10px/1.6 var(--mono);color:var(--faint)}
+
+.readout{min-width:0;padding:22px 30px 90px}
+.proof{font:10px/1.4 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:18px}
+.head{display:flex;align-items:flex-end;gap:16px;padding-bottom:14px;margin-bottom:22px;border-bottom:1px solid var(--line)}
+.head h1{font:600 20px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase}
+.head .meta{margin-left:auto;font:12px var(--sans);color:var(--muted);text-align:right}
+
+.panel{border:1px solid var(--line);border-radius:5px;overflow:hidden;background:var(--surface)}
+.scroll{overflow-x:auto}
+.grid{width:100%;min-width:820px;border-collapse:collapse;font:13px var(--sans)}
+.grid thead th{text-align:left;font:600 10px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:9px 12px;border-bottom:1px solid var(--line);background:var(--inset);white-space:nowrap}
+.grid td{padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+.grid tbody tr:last-child td{border-bottom:0}
+.grid tbody tr:hover{background:var(--raised)}
+.grid .num{text-align:right;font-variant-numeric:tabular-nums;font-family:var(--mono);font-size:12px}
+.grid .right{text-align:right}
+.runname a{font-weight:600;color:var(--accent)}
+.runname a:hover{text-decoration:underline}
+.runname .src{margin-left:8px;font:11px var(--mono);color:var(--faint)}
+.malf{margin-top:3px;font:11.5px var(--sans);color:var(--bad)}
+.warncell{color:var(--bad);font-weight:600}
+
+.phase{display:inline-flex;align-items:center;gap:7px;font:12px/1 var(--sans);white-space:nowrap}
+.phase .led{width:7px;height:7px;border-radius:50%;box-shadow:0 0 6px currentColor}
+.p-spec,.p-plan,.p-release{color:var(--accent)}
+.p-implement,.p-integrate{color:var(--warn)}
+.p-done{color:var(--ok)}
+.p-paused,.p-unknown{color:var(--bad)}
+.phase .txt{color:var(--ink)}
+.phase .rsn{color:var(--muted)}
+
+.gates{display:inline-flex;gap:3px}
+.cell{width:30px;height:22px;display:inline-flex;align-items:center;justify-content:center;gap:2px;border-radius:3px;font:11px/1 var(--mono);border:1px solid var(--line);background:var(--inset)}
+.cell .n{font-size:8px;color:var(--faint)}
+.cell.ok{color:var(--ok);border-color:var(--ok);background:var(--ok-soft)}
+.cell.no{color:var(--bad);border-color:var(--bad);background:var(--bad-soft)}
+.cell.pend{color:var(--faint);border-style:dashed}
+
+.meter{display:inline-flex;align-items:center;gap:8px}
+.meter .track{width:64px;height:5px;border-radius:3px;background:var(--inset);overflow:hidden;border:1px solid var(--line)}
+.meter .fill{height:100%;background:var(--accent);box-shadow:0 0 6px var(--glow)}
+.meter .fill.over{background:var(--bad);box-shadow:none}
+.meter .fill.zero{background:var(--faint);box-shadow:none}
+.meter .val{font:11px var(--mono);font-variant-numeric:tabular-nums;color:var(--muted)}
+.meter .val.over{color:var(--bad);font-weight:700}
+.nobudget{font:11px var(--sans);color:var(--faint)}
+
+.needs{display:inline-flex;min-width:22px;justify-content:center;font:700 11px/1 var(--mono);font-variant-numeric:tabular-nums;padding:3px 8px;border-radius:999px;background:var(--accent);color:var(--on-solid);box-shadow:0 0 8px var(--glow)}
+.esc{font:11px var(--mono);color:var(--bad);font-weight:600}
+.dash{color:var(--faint)}
+
+.states{margin-top:44px}
+.sect{border-top:1px solid var(--line);padding-top:14px;margin-bottom:16px;display:flex;align-items:baseline;gap:12px}
+.kick{font:600 10.5px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--muted)}
+.sect .note{font:12px var(--sans);color:var(--faint)}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.demo{border:1px solid var(--line);border-radius:5px;background:var(--surface);padding:14px;min-width:0}
+.demo .lab{display:block;font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin-bottom:12px}
+.empty{text-align:center;padding:34px 16px}
+.empty .big{font:600 15px/1.3 var(--sans)}
+.empty .sub{margin-top:6px;font:12px/1.5 var(--sans);color:var(--muted)}
+.empty .icon{display:block;font:18px/1 var(--mono);color:var(--accent);margin-bottom:12px;letter-spacing:.2em}
+.status{text-align:center;padding:30px 16px;font:13px var(--sans);color:var(--muted)}
+.status.bad{color:var(--bad)}
+.skel-row{display:flex;align-items:center;gap:16px;padding:10px 0;border-bottom:1px solid var(--line)}
+.skel-row:last-child{border-bottom:0}
+.skel{border-radius:4px;background:linear-gradient(100deg,var(--inset) 30%,var(--raised) 50%,var(--inset) 70%);background-size:220% 100%;animation:sweep 1.5s linear infinite}
+</style>
+</head>
+<body>
+<div class="deck">
+  <aside class="rail">
+    <div class="brand"><b>GATE</b><small>fleet console · pipeline decisions</small></div>
+    <nav class="navsec">
+      <a class="nav" href="#"><span class="dot"></span>Inbox<span class="count">7</span></a>
+      <a class="nav" href="#" aria-current="page"><span class="dot"></span>Portfolio</a>
+      <a class="nav" href="#"><span class="dot"></span>Metrics</a>
+    </nav>
+    <div class="railfoot">the repo is the<br>database — every<br>view renders git</div>
+  </aside>
+
+  <main class="readout">
+    <p class="proof">candidate-b · signal deck · screen: portfolio · states: populated (malformed + paused + needs) / zero-runs / loading / error</p>
+
+    <div class="head">
+      <h1>Portfolio</h1>
+      <span class="meta">6 runs · every run × source</span>
+    </div>
+
+    <div class="panel scroll">
+      <table class="grid">
+        <thead>
+          <tr>
+            <th>Run</th><th>Phase</th><th>Gates</th><th class="right">Tasks</th><th class="right">Rounds</th><th>Budget</th><th class="right">Updated</th><th class="right">Needs</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="runname"><a href="#">fleetview-design</a><span class="src">agentic-sandbox</span></td>
+            <td><span class="phase p-plan"><span class="led"></span><span class="txt">plan</span></span></td>
+            <td><span class="gates"><span class="cell ok"><span class="n">0</span>✓</span><span class="cell pend"><span class="n">1</span>·</span><span class="cell pend"><span class="n">2</span>·</span><span class="cell pend"><span class="n">3</span>·</span></span></td>
+            <td class="num">—</td>
+            <td class="num">—</td>
+            <td><span class="nobudget">no budget</span></td>
+            <td class="num" style="color:var(--muted)">2d</td>
+            <td class="right"><span class="needs">1</span></td>
+          </tr>
+          <tr>
+            <td class="runname"><a href="#">dupefind</a><span class="src">agentic-sandbox</span></td>
+            <td><span class="phase p-implement"><span class="led"></span><span class="txt">implement</span></span></td>
+            <td><span class="gates"><span class="cell ok"><span class="n">0</span>✓</span><span class="cell ok"><span class="n">1</span>✓</span><span class="cell pend"><span class="n">2</span>·</span><span class="cell pend"><span class="n">3</span>·</span></span></td>
+            <td class="num">2/4</td>
+            <td class="num warncell">4</td>
+            <td><span class="meter"><span class="track"><span class="fill" style="width:62%"></span></span><span class="val">$31/50</span></span></td>
+            <td class="num" style="color:var(--muted)">5d</td>
+            <td class="right"><span class="esc">1 esc</span></td>
+          </tr>
+          <tr>
+            <td class="runname"><a href="#">mdtoc</a><span class="src">agentic-sandbox</span></td>
+            <td><span class="phase p-implement"><span class="led"></span><span class="txt">implement</span></span></td>
+            <td><span class="gates"><span class="cell ok"><span class="n">0</span>✓</span><span class="cell ok"><span class="n">1</span>✓</span><span class="cell pend"><span class="n">2</span>·</span><span class="cell pend"><span class="n">3</span>·</span></span></td>
+            <td class="num">3/3</td>
+            <td class="num warncell">3</td>
+            <td><span class="meter"><span class="track"><span class="fill" style="width:24%"></span></span><span class="val">$12/50</span></span></td>
+            <td class="num" style="color:var(--muted)">4d</td>
+            <td class="right"><span class="needs">1</span></td>
+          </tr>
+          <tr>
+            <td class="runname"><a href="#">integration-hardening</a><span class="src">agentic-sandbox</span></td>
+            <td><span class="phase p-integrate"><span class="led"></span><span class="txt">integrate</span></span></td>
+            <td><span class="gates"><span class="cell ok"><span class="n">0</span>✓</span><span class="cell ok"><span class="n">1</span>✓</span><span class="cell pend"><span class="n">2</span>·</span><span class="cell pend"><span class="n">3</span>·</span></span></td>
+            <td class="num">5/5</td>
+            <td class="num">2</td>
+            <td><span class="meter"><span class="track"><span class="fill zero" style="width:4%"></span></span><span class="val">unmetered</span></span></td>
+            <td class="num" style="color:var(--muted)">1d</td>
+            <td class="right"><span class="needs">1</span></td>
+          </tr>
+          <tr>
+            <td class="runname"><a href="#">wordfreq</a><span class="src">agentic-sandbox</span></td>
+            <td><span class="phase p-paused"><span class="led"></span><span class="txt">paused</span> <span class="rsn">· G2 declined</span></span></td>
+            <td><span class="gates"><span class="cell ok"><span class="n">0</span>✓</span><span class="cell ok"><span class="n">1</span>✓</span><span class="cell no"><span class="n">2</span>✕</span><span class="cell pend"><span class="n">3</span>·</span></span></td>
+            <td class="num">3/4</td>
+            <td class="num">2</td>
+            <td><span class="meter"><span class="track"><span class="fill over" style="width:100%"></span></span><span class="val over">$58/50</span></span></td>
+            <td class="num" style="color:var(--muted)">6h</td>
+            <td class="right"><span class="needs">1</span></td>
+          </tr>
+          <tr>
+            <td class="runname"><a href="#">historian-2026-07-12</a><span class="src">agentic-sandbox</span>
+              <p class="malf">state.yaml malformed — mapping value not allowed here (line 12)</p>
+            </td>
+            <td><span class="phase p-unknown"><span class="led"></span><span class="txt">unknown</span></span></td>
+            <td><span class="gates"><span class="cell pend"><span class="n">0</span>·</span><span class="cell pend"><span class="n">1</span>·</span><span class="cell pend"><span class="n">2</span>·</span><span class="cell pend"><span class="n">3</span>·</span></span></td>
+            <td class="num dash">—</td>
+            <td class="num dash">—</td>
+            <td><span class="nobudget">—</span></td>
+            <td class="num" style="color:var(--muted)">3h</td>
+            <td class="right"><span class="esc">BAD</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="states">
+      <div class="sect"><span class="kick">Required states</span><span class="note">empty · loading · error, plus the new zero-runs render branch (spec R1)</span></div>
+      <div class="sgrid">
+        <div class="demo">
+          <span class="lab">Zero runs · new state</span>
+          <div class="empty">
+            <span class="icon">[ ]</span>
+            <p class="big">No runs found.</p>
+            <p class="sub">No <code style="font-family:var(--mono)">runs/&lt;slug&gt;</code> directories on any tracked source yet. Start one with the orchestrator, or point Gate at a repo that has runs.</p>
+          </div>
+        </div>
+        <div class="demo">
+          <span class="lab">Loading · signal sweep</span>
+          <div class="skel-row"><span class="skel" style="width:130px;height:14px"></span><span class="skel" style="width:60px;height:14px"></span><span class="skel" style="width:120px;height:22px"></span><span class="skel" style="flex:1;height:14px"></span></div>
+          <div class="skel-row"><span class="skel" style="width:110px;height:14px"></span><span class="skel" style="width:60px;height:14px"></span><span class="skel" style="width:120px;height:22px"></span><span class="skel" style="flex:1;height:14px"></span></div>
+          <div class="skel-row"><span class="skel" style="width:150px;height:14px"></span><span class="skel" style="width:60px;height:14px"></span><span class="skel" style="width:120px;height:22px"></span><span class="skel" style="flex:1;height:14px"></span></div>
+          <p class="status">Reading repositories…</p>
+        </div>
+        <div class="demo">
+          <span class="lab">Error</span>
+          <p class="status bad">Could not load runs: worktree for agentic-sandbox is locked by another process</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</body>
+</html>

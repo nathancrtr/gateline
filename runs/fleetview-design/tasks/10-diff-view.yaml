@@ -1,0 +1,49 @@
+id: 10-diff-view
+title: Restyle the diff view to the Signal Deck evidence readout (diff-view.tsx)
+requirements: [R1, R5]
+
+scope: |
+  Restyle frontend/packages/web/src/components/diff-view.tsx per
+  runs/fleetview-design/design/candidate-b/run-diff.html: each file on an evidence
+  panel — 1px line border on bg-surface, 6px radius, overflow hidden, no glow (the
+  diff is a readout, not a signal); file header as an inset strip (bg-inset, 1px
+  line bottom border) with mono 600 12px path and mono tabular +/− stats (ok/bad
+  tones kept, "added"/kind note muted); hunk header rows accent-soft washed with
+  accent mono ~11px text; add/del rows keep their ok-soft/bad-soft washes; gutters
+  ~44px right-aligned faint tabular-nums with a 1px line right border, select-none
+  kept; code cells evidence-density mono 12px/20px with zero vertical padding.
+  The "No diff" empty line keeps the static centered status treatment (string
+  verbatim: "No diff — the run branch matches the default branch."). Behavior and
+  signatures frozen (C3): DiffView/FileHeader props, line/sign/number logic, all
+  strings verbatim. Use only C1 tokens; no rounded-lg remains; no keyframes,
+  animation properties, or motion classes in this file.
+
+file_contact_surface:
+  - frontend/packages/web/src/components/diff-view.tsx
+
+acceptance_tests:
+  - AC5.2
+  - "cd frontend && npm run typecheck && npm test pass"
+  - "diff matches candidate-b/run-diff.html: bordered evidence panel, inset file header, accent hunk strips, add/del washes, faint bordered gutters"
+  - "grep of diff-view.tsx: no @keyframes, no animation- property, no motion class"
+
+depends_on: [02-ledger-foundations]
+
+status: pending
+
+notes: |
+  implementer r1: restyled diff-view.tsx per candidate-b/run-diff.html — file
+  header bg-raised -> bg-inset with 13px/9px padding (was 12px/8px); outer panel
+  rounded-lg -> rounded-[6px]; hunk header py-1 -> py-[3px] (11px/12px per spec);
+  gutters w-10 (40px) -> w-[44px] per spec, added explicit py-0 to gutter and code
+  cells (zero vertical padding, was relying on default td padding); table
+  font-mono text-xs leading-5 already matched the 12px/20px evidence-density spec
+  so left untouched. DiffView/FileHeader signatures, all line/sign/number logic,
+  and every string (including the "No diff" empty state) left verbatim — pure
+  restyle, C3 respected. Only C1 tokens used; no new token needed, no escalation.
+  Verification: npm run typecheck passed; npm test — 126/128 passed, 1 pre-existing
+  unrelated failure (packages/orchestrator/test/engine.test.ts "honors a mid-run
+  human pause" — 30s timeout in the orchestrator package, outside this task's file
+  contact surface and outside frontend/packages/web entirely; reproduced in
+  isolation, not caused by this change). grep for @keyframes/animation-/motion|
+  pulse/rounded-lg in diff-view.tsx: all empty (pass).

@@ -1,0 +1,82 @@
+id: 04-status-components
+title: Restyle the shared status vocabulary in chips.tsx to Signal Deck chips/cells/meters
+requirements: [R5]
+
+scope: |
+  Restyle every export of frontend/packages/web/src/components/chips.tsx in place —
+  PhaseChip, KindChip, AgeBadge, GateCell, GateLedger, ValidationBadge, BudgetMeter —
+  per plan C2 and the sig/cell/age/phase/meter recipes in
+  runs/fleetview-design/design/candidate-b/inbox.html, portfolio.html, and
+  run-artifacts.html. Specifics:
+  KindChip becomes the signal-chip family: fully-round capsule, mono 600 ~11px,
+  leading 6px LED dot (currentColor bg + static 0 0 6px currentColor glow) plus the
+  existing label text; routine gate = accent outline + accent-soft wash; ESC/CAP/BAD
+  = solid bad + text-on-solid; PAUSE = solid warn + text-on-solid; urgent solid
+  chips heavier (700) and larger padding with the LED glow suppressed (REC4: never
+  hue alone). Bounced gate = dashed bad border + bad-soft + line-through — derive it
+  from item.kind === 'gate' && !item.reviewable (KindChip already receives the whole
+  InboxItem; no signature change).
+  GateCell: segmented readout cell — ~30x22, 3px radius, mono 11px on inset with a
+  1px line border, keeping the existing glyph/title logic: approved = ok text/border
+  on ok-soft + check, declined = bad + cross, pending = dashed border, faint, middot.
+  GateLedger: the strip with 3px gaps.
+  AgeBadge: inset chip (NOT a pill) — mono tabular 11px on bg-inset, 1px line
+  border, 4px radius; urgent = bad text/border + font-bold. Keep the title.
+  PhaseChip: borderless LED readout — drop the pill border/background; 7px LED dot
+  colored by the existing PHASE_TONE mapping with a static currentColor glow, phase
+  text in ink, pausedReason muted.
+  BudgetMeter: 3px-radius track on bg-inset with 1px line border; fill accent with a
+  static 0 0 6px var(--glow) shadow; over = bad fill, zero = faint fill, both
+  without glow; keep the unmetered/over logic and title. ValidationBadge unchanged
+  in behavior, mono glyph only.
+  All component signatures, glyphs, and title/aria text are frozen (C3); use only C1
+  tokens; static glow shadows are allowed, but define no keyframes or animation
+  properties in this file. No rounded-lg/md remains.
+
+file_contact_surface:
+  - frontend/packages/web/src/components/chips.tsx
+
+acceptance_tests:
+  - AC5.2
+  - "cd frontend && npm run typecheck && npm test pass"
+  - "exported signatures unchanged (git diff shows no prop/type changes)"
+  - "chips/cells/meters match candidate-b mockup recipes: LED-dot capsules, dashed struck bounced gate chip, segmented gate strip, inset age chip"
+  - "grep of chips.tsx: no @keyframes, no animation- property"
+
+depends_on: [02-ledger-foundations]
+
+status: pending
+
+notes: |
+  Round 2 (addressing review-06.md against 9725456):
+  Note on branch state: HEAD's chips.tsx had reverted to the pre-round-1 blob
+  (confirmed via `git show HEAD:...chips.tsx`) — an unrelated commit
+  (9a69fde, "review task 10-diff-view round 1") on this branch's history
+  clobbered chips.tsx along with app.tsx/portfolio.tsx as rebase debris, per
+  state.yaml's recorded rebase-conflict escalations for this run. Round 2
+  therefore restores the round-1 content from commit 972545603c (the version
+  review-06.md actually reviewed) as the base, then applies the two fixes
+  below on top — `git diff 972545603c -- chips.tsx` shows only the F1/F2
+  changes, nothing else moved.
+  F1 (major, fixed): added `leading-none` to PhaseChip's outer span, both
+  KindChip branches' capsule span (gate and solid-urgent), and AgeBadge's
+  span. Confirmed against inbox.html:80 `.sig{font:600 11px/1...}` and :88
+  `.age{font:11px/1...}` — both pin line-height:1, which Tailwind's
+  `text-[11px]`/`text-xs` utilities do not supply on their own (font-size
+  only), so chip height no longer depends on ambient line-height in
+  inbox.tsx/run.tsx. GateCell was left alone per review-06's own
+  non-finding (fixed h-[22px] + items-center already makes its line-height
+  irrelevant), and ValidationBadge/BudgetMeter were out of scope for F1 (the
+  finding named only KindChip/AgeBadge/PhaseChip).
+  F2 (minor, fixed): added `border border-transparent` to KindChip's solid
+  urgent branch (ESC/CAP/BAD/PAUSE). Confirmed against inbox.html:80 `.sig`
+  base rule keeps `border:1px solid transparent` on every variant including
+  the solid ones at :84-85 (only background/color/padding/font-weight are
+  overridden, border is never unset) — so the urgent capsule's box is
+  1px-per-side bigger than the routine gate chip via border alone, on top of
+  the existing 2px/1px padding delta, preserving the mockup's "urgent =
+  larger" size cue without touching hue.
+  Verified: `cd frontend && npm run typecheck && npm test` — typecheck clean,
+  127 passed / 1 skipped. `grep -n '@keyframes\|animation-'` and `grep -n
+  'rounded-lg\|rounded-md'` against chips.tsx both zero hits. No signature
+  changes (diff against 9725456 is className-only, three lines touched).

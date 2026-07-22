@@ -1,0 +1,75 @@
+id: 03-shell-masthead
+# id keeps its v1 slug so depends_on references stay stable across the G1 redo;
+# candidate B keeps the left rail (plan ADR-4) — there is no masthead. This task
+# restyles the existing rail into the console spine.
+title: Restyle the app shell's left rail into the console spine (app.tsx only)
+requirements: [R5]
+
+scope: |
+  Restyle App and NavItem in frontend/packages/web/src/app.tsx per plan ADR-4 and
+  the rail in runs/fleetview-design/design/candidate-b/inbox.html (any candidate-b
+  mockup shows it). The rail structure stays: sticky desktop rail + mobile top bar,
+  same NavLink targets/end props, same useQuery inbox badge logic, <main> still
+  renders <Outlet/>; main.tsx untouched. Restyle: rail on bg-surface with a 1px
+  line right border; brand as the mono 600 uppercase-tracked wordmark (+0.16em; DOM
+  text "Gate" stays — uppercase via CSS) with its faint tagline; each nav row gets a
+  6px round LED dot span (faint by default; active row: accent-soft bg, accent
+  text, accent dot with a static 0 0 8px var(--glow) shadow), 4px radius rows,
+  140ms color/background transitions; the inbox count becomes the fully-round
+  solid-accent mono tabular pill in text-on-solid carrying the .pulse-glow class
+  from C1 — this is one of the two sanctioned pulses, and the only animation in
+  this file; the rail-foot motto restyles to mono ~10px faint (text verbatim).
+  Apply the same recipes to the mobile top bar. Use only C1 tokens/utilities and
+  the .pulse-glow class — define no keyframes or animation properties here.
+
+file_contact_surface:
+  - frontend/packages/web/src/app.tsx
+
+acceptance_tests:
+  - AC5.2
+  - "cd frontend && npm run typecheck && npm test pass"
+  - "npx playwright test passes (no smoke assertion targets the shell, but navigation must still work)"
+  - "rail matches candidate-b mockups: mono tracked wordmark, LED nav dots, glowing active dot, pulsing count pill, mono faint motto"
+  - "grep of app.tsx: no @keyframes, no animation- property; motion enters only via the .pulse-glow class"
+
+depends_on: [02-ledger-foundations]
+
+status: pending
+
+notes: |
+  Implementer (round 1): restyled app.tsx per ADR-4/C1/C2, consuming styles.css
+  read-only (untouched). NavItem now renders via NavLink render-props for both
+  className and children: row is bg-accent-soft/text-accent when active vs
+  text-muted/hover:bg-raised/hover:text-ink otherwise, rounded-[4px],
+  px-[9px] py-[7px], gap-[9px], duration-[140ms] transition-colors (140ms
+  color/background per spec). Each row gets a 6px (h-1.5 w-1.5) rounded-full LED
+  dot: bg-faint by default, bg-accent + shadow-[0_0_8px_var(--glow)] (static,
+  precedent in decide.tsx) when active — no inline style, no animation. Badge
+  pill: rounded-full bg-accent text-on-solid font-mono text-[11px] font-semibold
+  tabular-nums, carrying .pulse-glow (the sanctioned nav-count pulse). Brand
+  wordmark: font-mono font-semibold uppercase tracking-[0.16em] text-[15px] —
+  DOM text "Gate" unchanged, uppercase applied via CSS only. Desktop aside: added
+  bg-surface, border-r border-line (already present), gap-[22px]/py-4 to match
+  mockup's .rail rhythm; tagline restyled to sans 10.5px/1.35 faint; rail-foot
+  motto restyled to font-mono text-[10px] leading-[1.6] text-faint, p-2, text
+  kept verbatim. Mobile top bar: same brand wordmark treatment applied to its
+  span; NavItem/badge styling shared automatically via the same component: its
+  own container (bg-ground/90 backdrop-blur, border-b) left untouched per the
+  task's explicit "same brand wordmark treatment, same NavItem row styling, same
+  badge pill" recipe list (outer bar chrome wasn't named). NavLink to/end props,
+  useQuery-based `needs` badge logic, router, and main.tsx are all unchanged.
+
+  Verification: `cd frontend && npm run typecheck` passes (2 project refs, no
+  errors). `npm test` (vitest across all packages): 117 passed / 10 failed / 1
+  skipped — all 10 failures are in packages/orchestrator/test/* (hardening,
+  router, schedule, shadow-*) with "Test timed out" errors; nothing under
+  packages/web is exercised by this suite (no packages/web/test dir exists) and
+  app.tsx isn't imported by orchestrator code, so these are environment/sandbox
+  timeout flakes, not caused by this change. `npx playwright test`: 5 failing
+  (inbox/bounce/decide-loop/keyboard-loop/portfolio+metrics specs) — confirmed
+  pre-existing by `git stash`-ing this diff and re-running: identical 5 failures
+  on the unmodified baseline (those specs depend on tasks 06/07/08/09's screens,
+  which haven't landed on this branch yet per the dispatch's parallel-task
+  layout). `grep -n '@keyframes\|animation-' app.tsx` → no matches (exit 1).
+  Also grepped for stray `rounded-lg`/non-C1 classes: none introduced; only
+  rounded-[4px]/rounded-full (both in the C2 shape grammar) are used.

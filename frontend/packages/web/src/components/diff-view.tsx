@@ -3,9 +3,9 @@ import type { DiffFile } from '../api.ts'
 function FileHeader({ file }: { file: DiffFile }) {
   const label = file.status === 'renamed' ? `${file.oldPath} → ${file.newPath}` : file.newPath || file.oldPath
   return (
-    <div className="flex items-baseline justify-between gap-3 border-b border-line bg-raised px-3 py-2">
+    <div className="flex items-baseline justify-between gap-3 border-b border-line bg-inset px-[13px] py-[9px]">
       <span className="min-w-0 truncate font-mono text-xs font-semibold">{label}</span>
-      <span className="shrink-0 font-mono text-[11px] tabular-nums">
+      <span className="shrink-0 whitespace-nowrap font-mono text-[11px] tabular-nums">
         {file.status === 'binary' ? (
           <span className="text-muted">binary</span>
         ) : (
@@ -24,7 +24,7 @@ export function DiffView({ files }: { files: DiffFile[] }) {
   return (
     <div className="flex flex-col gap-4">
       {files.map((file) => (
-        <section key={`${file.oldPath}→${file.newPath}`} className="overflow-hidden rounded-lg border border-line bg-surface">
+        <section key={`${file.oldPath}→${file.newPath}`} className="overflow-hidden rounded-[6px] border border-line bg-surface">
           <FileHeader file={file} />
           <div className="overflow-x-auto">
             <table className="w-full border-collapse font-mono text-xs leading-5">
@@ -45,7 +45,7 @@ function HunkRows({ header, lines }: { header: string; lines: DiffFile['hunks'][
   return (
     <>
       <tr>
-        <td colSpan={3} className="bg-accent-soft px-3 py-1 text-[11px] text-accent">
+        <td colSpan={3} className="bg-accent-soft px-3 py-[3px] text-[11px] text-accent">
           {header}
         </td>
       </tr>
@@ -54,9 +54,9 @@ function HunkRows({ header, lines }: { header: string; lines: DiffFile['hunks'][
         const sign = line.kind === 'add' ? '+' : line.kind === 'del' ? '−' : ' '
         return (
           <tr key={i} className={bg}>
-            <td className="w-10 select-none border-r border-line px-2 text-right tabular-nums text-faint">{line.oldNo ?? ''}</td>
-            <td className="w-10 select-none border-r border-line px-2 text-right tabular-nums text-faint">{line.newNo ?? ''}</td>
-            <td className="whitespace-pre px-3">
+            <td className="w-[44px] select-none border-r border-line px-2 py-0 text-right tabular-nums text-faint">{line.oldNo ?? ''}</td>
+            <td className="w-[44px] select-none border-r border-line px-2 py-0 text-right tabular-nums text-faint">{line.newNo ?? ''}</td>
+            <td className="whitespace-pre px-3 py-0">
               <span className="select-none text-faint">{sign} </span>
               {line.text}
             </td>

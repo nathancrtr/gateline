@@ -270,6 +270,17 @@ budget:
           tokens_in: 12,
           tokens_out: 3144,
           cost_usd: 2.053456
+        },
+      {
+          at: 2026-07-22T19:17:46.063Z,
+          role: implementer,
+          task: 05-cli-new-arm,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 
@@ -303,7 +314,7 @@ tasks:
     { id: 02-record-scaffold-and-arm, status: review-approved, review_rounds: 2 },
     { id: 03-stage-run-source, status: review-approved, review_rounds: 2 },
     { id: 04-pr-ensure, status: review-approved, review_rounds: 1 },
-    { id: 05-cli-new-arm, status: pending, review_rounds: 0 },
+    { id: 05-cli-new-arm, status: dispatched, review_rounds: 0 },
     {
         id: 06-derive-tests-engine-ensure,
         status: review-approved,

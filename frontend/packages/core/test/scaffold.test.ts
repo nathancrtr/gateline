@@ -1,7 +1,7 @@
 // The pure half of the run-creation seam (record/scaffold.ts): planRunScaffold
 // emits state.yaml/intent-brief.md (+ a patch task stub) with no I/O, and the
 // staged rest state (ADR-1) rides the existing paused/arm decision path.
-import { parse as parseYaml } from 'yaml'
+import { parse as parseYaml, parseDocument } from 'yaml'
 import { describe, expect, it } from 'vitest'
 import {
   BUILTIN_WORK_ITEM_KEYS,
@@ -61,6 +61,15 @@ describe('planRunScaffold — per-profile fixtures', () => {
     expect(parsed.status).toBe('pending')
   })
 
+  it('patch stub survives a colon- or comment-marker-bearing title (YAML-quoted, not interpolated raw)', () => {
+    for (const title of ['Fix: the parser bug', '#123 needs attention', '[bracketed] title', '- dash-led title', '& anchor-looking title']) {
+      const scaffold = planRunScaffold(baseInput('patch', { title }))
+      const stub = scaffold.files['tasks/01-toy-run.yaml']!
+      const parsed = parseYaml(stub) as Record<string, unknown>
+      expect(parsed.title).toBe(title)
+    }
+  })
+
   it('standard and full do not emit a task stub', () => {
     expect(planRunScaffold(baseInput('standard')).files['tasks/01-toy-run.yaml']).toBeUndefined()
     expect(planRunScaffold(baseInput('full')).files['tasks/01-toy-run.yaml']).toBeUndefined()
@@ -91,6 +100,22 @@ describe('planRunScaffold — per-profile fixtures', () => {
     expect(error).toBeNull()
     expect(state!.budget!.cost_limit_usd).toBeNull()
   })
+
+  it('a stagedBy name with a colon (`user.name` echo) still parses and round-trips', () => {
+    const scaffold = planRunScaffold(baseInput('full', { stagedBy: 'Eve\nphase: done' }))
+    const { state, error } = parseRunState(scaffold.files['state.yaml']!)
+    expect(error).toBeNull()
+    expect(state!.phase).toBe('paused') // the injected "phase: done" line must not land as a real key
+    expect(readIntake(state!)!.staged_by).toBe('Eve\nphase: done')
+  })
+
+  it('an intake.ref beginning with `#` round-trips instead of truncating into a YAML comment', () => {
+    const scaffold = planRunScaffold(baseInput('full', { intake: { source: null, ref: '#123', url: null, clientKey: null } }))
+    const { state, error } = parseRunState(scaffold.files['state.yaml']!)
+    expect(error).toBeNull()
+    expect(readIntake(state!)!.ref).toBe('#123')
+  })
+
 })
 
 describe('planRunScaffold — ScaffoldError cases', () => {
@@ -101,6 +126,11 @@ describe('planRunScaffold — ScaffoldError cases', () => {
 
   it('rejects an empty title', () => {
     expect(() => planRunScaffold(baseInput('full', { title: '   ' }))).toThrow(ScaffoldError)
+  })
+
+  it('rejects a non-finite costLimitUsd rather than emitting an unparseable NaN scalar', () => {
+    expect(() => planRunScaffold(baseInput('full', { costLimitUsd: NaN }))).toThrow(ScaffoldError)
+    expect(() => planRunScaffold(baseInput('full', { costLimitUsd: Infinity }))).toThrow(ScaffoldError)
   })
 
   it('rejects an empty brief', () => {
@@ -146,6 +176,11 @@ describe('arm: planDecision from the staged rest state', () => {
     const scaffold = planRunScaffold(baseInput(profile))
     return parseRunState(scaffold.files['state.yaml']!).state!
   }
+  // Same shape as scaffold.files['state.yaml'] for the given profile, but as
+  // the yaml Document that PlannedDecision.mutate actually operates on — lets
+  // these tests apply the mutation for real, the way sources/local-source.ts's
+  // writeState does, and catch a no-op or wrong-target mutate.
+  const stagedDoc = (profile: Profile) => parseDocument(planRunScaffold(baseInput(profile)).files['state.yaml']!)
 
   it('full/standard target spec; patch targets plan (deriveResumePhase over an all-undecided ledger)', () => {
     expect(planDecision(stagedState('full'), { action: 'arm' }, who).summary).toContain('phase "spec"')
@@ -153,9 +188,19 @@ describe('arm: planDecision from the staged rest state', () => {
     expect(planDecision(stagedState('patch'), { action: 'arm' }, who).summary).toContain('phase "plan"')
   })
 
-  it('the planned mutation clears paused_reason and sets phase to the derived target', () => {
-    const decision = planDecision(stagedState('patch'), { action: 'arm' }, who)
+  it.each([
+    ['full', 'spec'],
+    ['standard', 'spec'],
+    ['patch', 'plan'],
+  ] as const)('applying the %s arm mutation actually sets phase to %s and clears paused_reason', (profile, target) => {
+    const doc = stagedDoc(profile)
+    const decision = planDecision(stagedState(profile), { action: 'arm' }, who)
     expect(decision.message).toBe('state(toy-run): armed by Operator')
+    decision.mutate(doc)
+    const { state, error } = parseRunState(doc.toString())
+    expect(error).toBeNull()
+    expect(state!.phase).toBe(target)
+    expect(state!.paused_reason).toBeNull()
   })
 
   it('refuses to arm a run already armed (phase no longer paused)', () => {
@@ -189,5 +234,10 @@ describe('resume/pause refusals around the staged rest state', () => {
     const state = { ...stagedState('full'), phase: 'implement' as const, paused_reason: null }
     expect(() => planDecision(state, { action: 'pause', pauseReason: STAGED_REASON }, who)).toThrow(DecisionError)
     expect(() => planDecision(state, { action: 'pause', pauseReason: STAGED_REASON }, who)).toThrow(/birth state/)
+  })
+
+  it('pause refuses a `staged` pauseReason padded with whitespace — the check compares the trimmed reason', () => {
+    const state = { ...stagedState('full'), phase: 'implement' as const, paused_reason: null }
+    expect(() => planDecision(state, { action: 'pause', pauseReason: ' staged ' }, who)).toThrow(/birth state/)
   })
 })

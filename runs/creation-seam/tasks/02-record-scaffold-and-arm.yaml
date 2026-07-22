@@ -132,3 +132,50 @@ notes: |
     schema.ts untouched by this diff (confirmed via `git diff -U0 ... | grep -niE
     "issue|label|assignee|milestone"` — zero matches in the actual diff hunks); scaffold.ts
     and scaffold.test.ts have zero matches.
+
+  Round 2 — response to review-04.md findings (all fixed, none rebutted):
+  - F1 (blocking, patch task-stub title unescaped): fixed. Added a `yamlString` helper
+    (JSON.stringify — a safe, dependency-free YAML double-quoted scalar quoter, since JSON's
+    escaping is a subset of YAML's) and applied it to the stub's `title:` line. Added a test
+    with colon/`#`/`[`/`- `/`&`-led titles asserting the stub still parses and round-trips the
+    exact title.
+  - F2 (major, stagedBy/intake.* unescaped — corruption/injection and silent `#`-nulling):
+    fixed. `yamlScalar` (nullable intake fields) now routes non-null values through
+    `yamlString`; `staged_by` is now quoted the same way. Added tests: a `stagedBy` containing
+    an embedded `\nphase: done` line no longer injects a key (state still parses with
+    `phase: paused` and the literal string round-trips via `readIntake`), and an `intake.ref`
+    of `'#123'` round-trips instead of truncating into a YAML comment.
+  - F3 (major, arm's mutation never applied in any test): fixed. Replaced the mutation test
+    with an `it.each` over full/standard/patch that builds a `parseDocument` of the actual
+    scaffolded state.yaml (the same `Document` shape `sources/local-source.ts`'s `writeState`
+    mutates), calls `decision.mutate(doc)` for real, re-parses via `parseRunState`, and asserts
+    the resulting `phase`/`paused_reason` — a mutant `mutate` (wrong target, or a no-op) now
+    fails this test.
+  - F4 (minor, pause's staged-reason check compared pre-trim): fixed. Reordered actions.ts so
+    the check compares the already-trimmed `reason` local (`reason === STAGED_REASON`) instead
+    of the raw `input.pauseReason`. Added a test: `pauseReason: ' staged '` (padded) is now
+    refused with the same "birth state" message.
+  - F5 (minor/PLAUSIBLE, non-finite costLimitUsd emits `NaN`): fixed. `planRunScaffold` now
+    throws `ScaffoldError` when `costLimitUsd` is neither `null` nor `Number.isFinite`. Added a
+    test for `NaN` and `Infinity`.
+  - F6 (minor, notes claimed the plan template's `# default 50...` comment was "retained
+    verbatim" when it is not emitted): fixed by correction here rather than by editing the
+    append-only round-1 notes above — that claim was inaccurate. The emitted `cost_limit_usd`
+    line has never carried that comment (verified again in the current `scaffold.ts`); the
+    comment is descriptive, not semantic, and applying the default itself is out of this
+    task's scope (task 05, the CLI), so nothing in the emitted YAML shape changes. Correcting
+    the record: the round-1 "Deviations" paragraph's "retained verbatim" phrase should be read
+    as describing the *shape* of the budget block (present, parses, `null` when omitted), not
+    a literal comment string that was in fact never written.
+
+  Verification (round 2):
+  - `cd frontend && npx vitest run packages/core/test/scaffold.test.ts` — 30/30 pass (7 new
+    tests: colon/comment-marker title escaping, stagedBy injection, intake.ref `#`-leading
+    round-trip, non-finite costLimitUsd rejection, per-profile arm-mutation application,
+    padded `' staged '` pause refusal).
+  - `cd frontend && npm run typecheck` — clean.
+  - `cd frontend && npx vitest run packages/core --pool=forks --poolOptions.forks.maxForks=2`
+    — 130/130 pass (includes the pre-existing `decision legality (planDecision)` suite,
+    unaffected by the F4 reordering).
+  - `cd frontend && npm test` (full workspace suite) — 279 passed, 1 skipped, 0 failed; no
+    timeouts this round (ran without a concurrent dispatch on the host, unlike round 1).

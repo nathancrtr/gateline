@@ -37,7 +37,15 @@ export class ScaffoldError extends Error {
 
 const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/
 
-const yamlScalar = (v: string | null): string => (v === null ? 'null' : v)
+/** YAML double-quoted scalar for any free-form string — titles, names, and
+ * intake fields all come from humans or upstream systems and may contain
+ * colons, `#`, leading `[`/`-`/`*`/`&`, or newlines, any of which corrupts an
+ * unquoted YAML scalar (or, for `#`, silently truncates it into a comment).
+ * JSON's escaping is a subset of YAML double-quoted escaping, so
+ * JSON.stringify is a safe, dependency-free quoter. */
+const yamlString = (v: string): string => JSON.stringify(v)
+
+const yamlScalar = (v: string | null): string => (v === null ? 'null' : yamlString(v))
 
 /** Pure planner: slug/title/profile/brief/intake fields -> branch/tree/message. */
 export function planRunScaffold(input: RunScaffoldInput): RunScaffold {
@@ -45,6 +53,8 @@ export function planRunScaffold(input: RunScaffoldInput): RunScaffold {
   const title = input.title.trim()
   if (!title) throw new ScaffoldError('title must not be empty')
   if (!input.briefMarkdown.trim()) throw new ScaffoldError('brief content must not be empty')
+  if (input.costLimitUsd !== null && !Number.isFinite(input.costLimitUsd))
+    throw new ScaffoldError(`costLimitUsd must be a finite number or null (got ${input.costLimitUsd})`)
 
   const branch = `run/${input.slug}`
   const gatesBlock = PROFILE_GATES[input.profile]
@@ -62,7 +72,7 @@ intake:                   # source-agnostic staging provenance; free-form path: 
   ref: ${yamlScalar(input.intake.ref)}
   url: ${yamlScalar(input.intake.url)}
   client_key: ${yamlScalar(input.intake.clientKey)}
-  staged_by: ${input.stagedBy}
+  staged_by: ${yamlString(input.stagedBy)}
 budget:
   cost_limit_usd: ${costLimitScalar}
   cost_spent_usd: 0
@@ -80,7 +90,7 @@ escalations: []
 
   if (input.profile === 'patch') {
     files[`tasks/01-${input.slug}.yaml`] = `id: 01-${input.slug}
-title: ${title}
+title: ${yamlString(title)}
 requirements: []
 
 scope: |

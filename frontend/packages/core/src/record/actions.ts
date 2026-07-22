@@ -146,8 +146,8 @@ export function planDecision(state: RunState, input: DecisionInput, who: Identit
     case 'pause': {
       if (state.phase === 'paused') throw new DecisionError('run is already paused')
       if (state.phase === 'done') throw new DecisionError('run is done; nothing to pause')
-      if (input.pauseReason === STAGED_REASON) throw new DecisionError('staging is a birth state, not a pause reason')
       const reason = input.pauseReason?.trim() || 'escalation'
+      if (reason === STAGED_REASON) throw new DecisionError('staging is a birth state, not a pause reason')
       return {
         mutate: (doc: Document) => {
           doc.setIn(['phase'], 'paused')

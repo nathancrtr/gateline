@@ -56,3 +56,39 @@
 ## Boundary check
 
 Diff touches exactly `frontend/packages/cli/src/main.ts`, `frontend/packages/cli/test/cli.test.ts` (the declared file_contact_surface), plus `runs/creation-seam/tasks/05-cli-new-arm.yaml` notes — the implementer's own report channel, in-process, not a violation. No core, server, or orchestrator files touched; no new server route (AC1.4 unaffected) ✓.
+
+---
+
+# Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** 9716546 (run/creation-seam)
+
+## Prior-finding disposition
+
+- **F1 (major) — resolved.** Two-pronged: the arm-standard test now asserts the exact no-origin skip note (`cli.test.ts:178`), and a new dedicated test (`cli.test.ts:187-205`) stages+arms in a scratch repo with a configured-but-unfetched origin, forcing the branch-not-pushed note that literally embeds `refs/remotes/origin/run/arm-note`. Mutants re-applied by me: (a) dropped `console.log(note.note)` → arm-standard test fails; (b) `ensureDraftPr(dir, slug, slug)` → branch-argument test fails; real code passes 23/23. Hermetic: `example.invalid` is RFC 6761 guaranteed-NXDOMAIN, `ensureDraftPr` reaches the skip via local `revParse` only (pr-ensure.ts:48-49), and the tolerated push failure (local-source.ts:395-401) is by-design behavior.
+- **F2 (minor) — resolved.** `cli.test.ts:156` asserts `--slug` absent from stderr. Mutant (unconditional three-flag message) re-applied → test fails.
+- **F3 (minor) — resolved.** Identity check hoisted to immediately after source resolution (`main.ts:441-445`), before template read, missing-flag computation, and the interactive branch; later duplicate removed. AC7.1 test still passes; ordering now matches decide()'s resolve→identity. (Side effect, accepted: a no-identity repo with missing flags non-TTY now gets the identity refusal instead of the missing-flags list — same exit 1, and exactly the ordering F3 asked for.)
+- **F4 (minor) — resolved.** Prompt loop validates against `SLUG_RE` with a logged reason (`main.ts:359-362`); the duplicated regex is byte-identical to core scaffold.ts:38 and stays inside the task's file surface. Unit test `cli.test.ts:318-334` asserts the double `slug:` prompt and the `must match` log. Mutant (revert to `while (!slug)`) re-applied → test fails.
+- **F5 (minor) — resolved.** `planAndWrite` (`main.ts:151-174`) is the single copy of the readState→planDecision→writeState→exit-code core; `decide()` (main.ts:184-185) and `armRun` (main.ts:568-569) both call it. Body verified semantically identical to the round-1 duplicates (same refusal strings, ref-moved→2, DecisionError→1, success summary + warn). Exercised by the existing decision-loop and arm tests, all green.
+- **F6 (minor) — resolved.** `normalizeSection` (`main.ts:310`) is byte-identical to core validate.ts:30's `normalize`. New CLI test (`cli.test.ts:250-279`) stages a brief whose punctuated H2 differs only in internal whitespace. Mutant (revert to lowercase+trim) re-applied → test fails.
+
+All five re-applied mutants were reverted; working tree clean after review.
+
+## Findings
+
+None. No regressions or new defects found in the round-2 delta.
+
+## Coverage
+
+- **Round-2 delta reviewed in full** (`git show 9716546`): main.ts refactor (planAndWrite extraction, identity hoist, slug-loop validation, normalization fix) and 4 new/updated tests. No behavior outside the six findings was changed; `stageNewRun`'s flags-complete path, outcome/exit mapping, and `armRun`'s ensureDraftPr chaining are unchanged from the round-1-reviewed code.
+- **Mutation testing:** 5 mutants hand-applied (dropped note print; branch→slug arg; unconditional missing-flags list; unvalidated prompt slug; lowercase+trim normalization) — each killed by exactly the test targeting it; real code passes.
+- **Acceptance commands re-run by me:** `npx vitest run packages/cli/test/cli.test.ts` → 23/23 passed; `npm test` → 308 passed | 1 skipped (38 files, same pre-existing live-smoke skip); `npm run typecheck` → clean (both tsconfig projects).
+- **Round-1 coverage stands:** AC2.1-2.3, AC3.1-3.2, AC6.1/6.2, AC7.1's CLI half, R3 structure-only drafting — re-verified green through the refactor; the round-1 deviation ruling (armRun in place of literal decide() reuse satisfies AC6.1) is strengthened by F5's fix, since the CAS core is now literally shared.
+- Residual nit, not a finding: the arm-standard F1 assertion depends on the shared fixture repo having no origin; if `generateFixtureRepo` ever grows one, that exact-string assert breaks loudly (the dedicated branch-argument test is fixture-independent).
+- Not assessed (unchanged from round 1): real `$EDITOR` spawn (`realInteractiveIO`, per the plan's accepted risk); concurrent-stage CAS races (core-owned, task 03).
+
+## Boundary check
+
+Round-2 diff touches exactly `frontend/packages/cli/src/main.ts`, `frontend/packages/cli/test/cli.test.ts` (the declared file_contact_surface), plus `runs/creation-seam/tasks/05-cli-new-arm.yaml` notes — the implementer's report channel, in-process. No core, server, or orchestrator files ✓.

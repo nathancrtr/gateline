@@ -187,9 +187,11 @@ body {
 /* The card body renders the definition's own markdown (verbatim source,
    deterministic rendering — same standing as the artifact view itself).
    Inherits .prose-artifact's code/list voices; margins tightened to card
-   scale (these rules are later in the file, so they win the tie). */
+   scale (these rules are later in the file, so they win the tie).
+   Long bodies clamp at six lines with an ellipsis — an honest, visible cut.
+   No scrolling inside an ephemeral card; the jump link below is the "more". */
 .lex-card-def {
-  @apply block max-h-48 overflow-y-auto rounded-[4px] bg-inset px-2.5 py-1.5 text-[12px] leading-[1.55];
+  @apply line-clamp-6 rounded-[4px] bg-inset px-2.5 py-1.5 text-[12px] leading-[1.55];
 }
 .lex-card-def p {
   @apply my-1;

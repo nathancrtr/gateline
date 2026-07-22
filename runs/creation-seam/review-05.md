@@ -44,3 +44,32 @@ Checked and found clean (all verified against the diff and by running the comman
 ## Boundary check
 
 Diff touches exactly the declared surface — `source.ts`, `local-source.ts`, `test/stage-run.test.ts` — plus the task file's own `notes:` field (the implementer's report channel, standard in this run). No boundary violations.
+
+---
+
+# Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** commit 1e20083 (delta on 02edade, branch run/creation-seam)
+
+## Prior-finding dispositions
+
+- **F1 (blocking)** — **resolved.** New test `stage-run.test.ts:113-129` stages a null-key scaffold twice; null `clientKey` skips scan rule 1 entirely (local-source.ts:323), so only rule 2's positive branch can produce `exists`. Mutant re-verified by me: hardcoding `isStagedRest = false` (local-source.ts:338) fails exactly this test (`'refused'` at line 124), 9/10 otherwise pass; real code 10/10. The same mutation kills a hardcoded-`false` `keyMatches` by the identical path.
+- **F2 (minor)** — **resolved.** New test `stage-run.test.ts:157-192` monkeypatches `updateRefCAS` so a genuine identical rival genesis lands before the outer call's CAS reports loss, forcing the rescan path. Mutant re-verified by me: neutering the `rescanned?.outcome === 'exists'` return (local-source.ts:391) fails exactly this test (`'refused'` at line 187); real code 10/10. Fixture isolation holds — `beforeEach` mints a fresh repo/source per test, so the patched Git instance cannot leak.
+- **F3 (minor, PLAUSIBLE)** — **resolved-by-disposition (rebuttal accepted).** My round-1 condition ("no change required unless round 2 touches the file anyway") was not triggered — 1e20083 touches only the test file. Substantively the rebuttal is correct: plan.md:138's `StageRefusal` union is closed over `no-identity | slug-taken | conflict`, none of which fits an empty default branch; a new variant is a plan-level interface change (source.ts union, task 05 exit-code mapping), not something this task may originate. The message text names the real cause. Noted for the plan owner as a candidate future variant; not a defect in this diff.
+
+## Findings
+
+None. The round-2 delta introduces no new production code; both new tests assert on outcomes plus ref-count invariants (exactly one branch), and the F2 test restores nothing it doesn't need to (fixture-scoped patch).
+
+## Coverage
+
+- **Delta scope** — read the full 1e20083 diff: two tests appended to existing describe blocks, no edits to round-1 tests, no production changes (`local-source.ts`/`source.ts` byte-identical to 02edade, confirmed via `git show 1e20083 --stat`).
+- **Mutation verification** — both described mutants applied by me to local-source.ts, run, and reverted; working tree confirmed clean after (`git status`).
+- **Acceptance commands (run by me, this checkout):** `npx vitest run packages/core/test/stage-run.test.ts` → 10/10 pass; `npm test` → 292 passed, 1 skipped (round-1 count plus the two new tests); `npm run typecheck` → clean.
+- Round-1 coverage findings (interface contract, 5-step sequence, authorship, ADR-4 rule 1, path prefixing, push parity, R9 hygiene) unchanged by this delta — not re-litigated.
+
+## Boundary check
+
+1e20083 touches `frontend/packages/core/test/stage-run.test.ts` (in surface) and the task file's own `notes:` field (implementer report channel, standard in this run). No boundary violations.

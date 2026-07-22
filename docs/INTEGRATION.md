@@ -6,8 +6,11 @@ integration — a non-SDLC, single-operator ops host (its integration retro is
 maintained outside this repository; framework-general findings are tracked as
 issues here) — and two framework components that postdate the draft shipped:
 the gate frontend ([FRONTEND.md](FRONTEND.md), `frontend/`) and the v1
-orchestrator ([ORCHESTRATOR.md](ORCHESTRATOR.md)). The tooling (`integrate.py`,
-renderer overlays, the tagged release) remains unbuilt; §11 tracks it, and
+orchestrator ([ORCHESTRATOR.md](ORCHESTRATOR.md)). A v0 of the tooling now
+ships: `integrate.py init|validate|fork`, the copy manifest, the normative lock
+schema, and renderer overlay splicing (`scripts/`, tested by
+`scripts/test_integrate.py`); the tagged release, instance-vocabulary
+validation (open question 6), and `upgrade` remain open — §11 tracks them, and
 [INTEGRATION-PLAN.md](INTEGRATION-PLAN.md) sequences the build. A round-1
 adversarial review of this revision is applied
 (`runs/integration-hardening/review-01.md`).
@@ -208,8 +211,10 @@ core versus instance.
 splice boundaries), and resolves paths relative to its own location so the same
 script runs vendored. Policy text lives only in overlays; manifests stay pure
 mapping (tool aliases, model spellings, frontmatter shape) — this makes the Phase 0
-layering mistake structurally impossible rather than remembered. This remains
-unbuilt (tracked: renderer overlay support + path-relativity).
+layering mistake structurally impossible rather than remembered. Overlay
+splicing and path-relativity are now built into `render-agents.py` (a
+comment-only stub splices nothing, so a repo with no overlays renders
+byte-identical); instance-vocabulary validation remains open (question 6).
 
 **Vocabulary is part of the layering, and today nothing validates it.**
 Integration #2 added a capability (`web`) to its manifest's `tool_map` and

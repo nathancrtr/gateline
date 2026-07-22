@@ -155,6 +155,59 @@ describe('decision legality (planDecision)', () => {
     })
   })
 
+  it('approve with hold signs the gate and pauses the run in the same commit', async () => {
+    const ref = await refFor('g0-pending')
+    const { state } = await ctx.source.readState(ref)
+    const planned = planDecision(
+      state!,
+      { action: 'approve', gate: 'G0', burden: 'confirmation', hold: true, holdReason: 'awaiting design-candidate selection' },
+      who,
+    )
+    const result = await ctx.source.writeState(ref, planned.mutate, planned.message)
+    expect(result.ok).toBe(true)
+
+    const after = await ctx.source.readState(ref)
+    expect(after.state!.gates.G0).toMatchObject({ approved: true, by: 'Fixture Operator', burden: 'confirmation' })
+    expect(after.state!.phase).toBe('paused')
+    expect(after.state!.paused_reason).toBe('awaiting design-candidate selection')
+
+    const [head] = await ctx.source.git.log(ref.ref, [], { maxCount: 1 })
+    expect(head!.subject).toBe(
+      'state(g0-pending): G0 approved by Fixture Operator [burden: confirmation] and held (awaiting design-candidate selection)',
+    )
+  })
+
+  it('resume after a hold advances past the signed gate without re-opening it', async () => {
+    const ref = await refFor('g0-pending')
+    const { state } = await ctx.source.readState(ref)
+    const held = planDecision(state!, { action: 'approve', gate: 'G0', burden: 'confirmation', hold: true, holdReason: 'selection pending' }, who)
+    await ctx.source.writeState(ref, held.mutate, held.message)
+
+    const mid = await ctx.source.readState(ref)
+    const resumed = planDecision(mid.state!, { action: 'resume' }, who)
+    expect(resumed.summary).toContain('"plan"') // G0 signed → the hold releases into plan
+    await ctx.source.writeState(ref, resumed.mutate, resumed.message)
+
+    const after = await ctx.source.readState(ref)
+    expect(after.state!.phase).toBe('plan')
+    expect(after.state!.paused_reason).toBeNull()
+    expect(after.state!.gates.G0.approved).toBe(true) // a hold is not a decline; nothing re-opens
+  })
+
+  it('hold without a reason is rejected — the reason is what the inbox shows', async () => {
+    const ref = await refFor('g0-pending')
+    const { state } = await ctx.source.readState(ref)
+    expect(() => planDecision(state!, { action: 'approve', gate: 'G0', burden: 'confirmation', hold: true }, who)).toThrow(/reason/)
+  })
+
+  it('hold combined with advancePhase:false is rejected as ambiguous', async () => {
+    const ref = await refFor('g0-pending')
+    const { state } = await ctx.source.readState(ref)
+    expect(() =>
+      planDecision(state!, { action: 'approve', gate: 'G0', burden: 'confirmation', hold: true, holdReason: 'x', advancePhase: false }, who),
+    ).toThrow(/hold already implies/)
+  })
+
   it('resume derives the correct phase from the gate ledger', async () => {
     const ref = await refFor('paused-budget')
     const { state } = await ctx.source.readState(ref)

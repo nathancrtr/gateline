@@ -19,10 +19,25 @@ export interface EngineConfig {
   identity: Identity
   dispatcher: Dispatcher
   registry: Registry | null
+  /**
+   * Override the `.agentic` default when this repo was integrated with a
+   * custom `integrate.py --prefix` (#95) — otherwise auto-detected.
+   */
+  frameworkPrefix?: string
   /** Dispatch wall clock per role before the job is killed (default 30 min). */
   roleTimeoutMs?: number
   /** Age at which an open ledger entry with no live job is declared lost (default 5 min). */
   staleMs?: number
+  /** Push every orchestrator commit to origin (hosted mode): the machine is disposable, origin is not. */
+  push?: boolean
+  /**
+   * Host-wide ceiling (hosted mode): refuse new dispatches when projected
+   * spend across every active run exceeds this, escalating like DB does.
+   * Per-run cost_limit_usd still applies; this bounds their sum.
+   */
+  spendLimitUsd?: number | null
+  /** Refuse dispatch on a run missing budget.cost_limit_usd (hosted mode): unattended dispatch needs a ceiling. */
+  requireBudget?: boolean
   now?: () => Date
   log?: (line: string) => void
 }
@@ -55,7 +70,11 @@ export class Engine {
 
   constructor(cfg: EngineConfig) {
     this.cfg = cfg
-    this.source = new LocalGitSource('orchestrator', cfg.repoDir, { identity: cfg.identity })
+    this.source = new LocalGitSource('orchestrator', cfg.repoDir, {
+      identity: cfg.identity,
+      push: cfg.push,
+      frameworkPrefix: cfg.frameworkPrefix,
+    })
   }
 
   private nowIso(): string {
@@ -84,6 +103,97 @@ export class Engine {
     return this.jobs.size
   }
 
+  /**
+   * Fast-forward local run branches from origin before deriving (#104). A
+   * standalone orchestrator has no co-located server fetch loop to lean on,
+   * and an engine reading a materialized local branch never sees remote
+   * decisions otherwise — it re-derives yesterday's state forever. ff-only
+   * and idempotent (LocalGitSource.syncFromRemote): a diverged branch is
+   * refused and left for a human, never resolved silently. Failure is
+   * tolerated — a clone with no origin is a legal dev/test topology.
+   *
+   * Callers choose when: the run loop syncs on heartbeat/startup ticks only,
+   * because our own fetch touches FETCH_HEAD under the watched .git dir and
+   * a sync inside every refs-triggered tick would re-trigger itself.
+   */
+  async syncFromRemote(): Promise<void> {
+    try {
+      await this.source.syncFromRemote()
+    } catch (e) {
+      this.log(`sync from origin failed: ${(e as Error).message}`)
+    }
+  }
+
+  /** Consecutive rejected pushes per branch — cleared by any accepted write.
+   *  Read by callers (and eventually the frontend, #100) as push health. */
+  private readonly pushRejections = new Map<string, number>()
+
+  pushHealth(): ReadonlyMap<string, number> {
+    return this.pushRejections
+  }
+
+  /**
+   * Push-then-launch's recovery half (#103): origin rejecting our push means
+   * another writer moved the branch past the tip this commit was derived
+   * from — origin is the linearization point, and this commit lost its CAS
+   * there. The commit is the engine's own bookkeeping, not yet acted on
+   * (CAS guarantees it is the local tip), so drop it, sync, and let the
+   * next derivation start from origin's truth.
+   *
+   * When a run checkout holds the branch (jobs in flight), the ref cannot be
+   * moved behind the worktree's back — the commit stays local and unpushed;
+   * the open ledger entry it carries is self-healing via stale-aging, and a
+   * later accepted push carries or supersedes it. Returns true when the
+   * commit was dropped.
+   */
+  private async recoverRejectedPush(ref: RunRef, commit: string | undefined, why: string): Promise<boolean> {
+    const n = (this.pushRejections.get(ref.branch) ?? 0) + 1
+    this.pushRejections.set(ref.branch, n)
+    const prefix = `${ref.slug}: push rejected (${n}× consecutive) — ${truncate(why, 100)}`
+    let dropped = false
+    if (commit) {
+      const branchRef = `refs/heads/${ref.branch}`
+      const held = (await this.source.git.worktrees()).some((w) => w.branch === branchRef)
+      const parent = held ? null : await this.source.git.revParse(`${commit}^`)
+      if (parent) dropped = await this.source.git.updateRefCAS(branchRef, parent, commit)
+      this.log(
+        dropped
+          ? `${prefix}; dropped the stale commit and syncing from origin`
+          : `${prefix}; commit stays local (${held ? 'branch held by a checkout' : 'ref moved'}) — stale-aging self-heals`,
+      )
+    } else {
+      this.log(prefix)
+    }
+    await this.syncFromRemote()
+    if (n >= 2)
+      this.log(
+        `${ref.slug}: ${n} consecutive rejected pushes — another writer is actively holding origin; a human should look (see #103)`,
+      )
+    return dropped
+  }
+
+  private notePushAccepted(branch: string): void {
+    this.pushRejections.delete(branch)
+  }
+
+  /**
+   * Rejection classes (#103): non-fast-forward means origin moved past the
+   * observed tip — the derivation behind the commit is stale and must not be
+   * acted on. Anything else (unreachable remote, auth) leaves this clone
+   * merely *ahead* of origin: keep the commit, warn, count it against push
+   * health, and let a later accepted push carry it — dropping bookkeeping
+   * over a network blip would lose real usage data.
+   */
+  private stalePush(msg: string): boolean {
+    return /non-fast-forward|fetch first/i.test(msg)
+  }
+
+  private notePushFailure(ref: RunRef, why: string): void {
+    const n = (this.pushRejections.get(ref.branch) ?? 0) + 1
+    this.pushRejections.set(ref.branch, n)
+    this.log(`${ref.slug}: push failed (${n}× consecutive) — ${truncate(why, 100)} — commits stay local until the next accepted push`)
+  }
+
   /** Await every in-flight job (their closing commits included). */
   async drain(): Promise<void> {
     while (this.jobs.size > 0) await Promise.allSettled([...this.jobs.values()])
@@ -92,13 +202,23 @@ export class Engine {
   /** One reconcile pass over every active run. Idempotent to re-run. */
   async tick(): Promise<TickOutcome[]> {
     const outcomes: TickOutcome[] = []
-    for (const ref of await this.source.listRuns()) {
-      if (ref.kind === 'default') continue // merged runs are historical records
+    const refs = (await this.source.listRuns()).filter((r) => r.kind !== 'default') // merged runs are historical records
+    // The host ceiling is measured once per tick across every active run's
+    // ledger; dispatches granted within the tick add their estimates.
+    const host = this.cfg.spendLimitUsd != null ? { projected: await this.hostProjectedUsd(refs) } : null
+    for (const ref of refs) {
       await this.sweepStale(ref)
       // Pin the tip: observe at this exact commit and CAS every write against
       // it, so nothing decided from a stale read can land (§4.4's guard,
-      // stretched over the whole derive-then-write span).
-      const tip = await this.source.git.revParse(`refs/heads/${ref.branch}`)
+      // stretched over the whole derive-then-write span). A hosted clone sees
+      // a new run only as a remote-tracking ref until the first write
+      // materializes the local branch (LocalGitSource.syncFromRemote), so
+      // resolve the tip where listRuns actually found the run — pinning only
+      // refs/heads would silently skip every not-yet-written remote run.
+      const tip =
+        ref.kind === 'remote'
+          ? await this.source.git.revParse(ref.ref)
+          : await this.source.git.revParse(`refs/heads/${ref.branch}`)
       if (!tip) continue
       const pinned = { ...ref, ref: tip }
       const obs = await observeRun(this.source, pinned, {
@@ -106,9 +226,45 @@ export class Engine {
         isAncestor: (a, b) => this.source.git.isAncestor(a, b),
       })
       const action = deriveAction(obs)
-      outcomes.push(await this.execute(ref, tip, obs, action))
+      outcomes.push(await this.execute(ref, tip, obs, this.hostGuards(obs, action, host)))
     }
     return outcomes
+  }
+
+  /**
+   * Hosted-mode guards wrapping the per-run derivation (§6's DB, lifted to
+   * the host): a dispatch is downgraded to an escalation when the run has no
+   * budget ceiling (RB) or the host-wide projection would exceed the global
+   * cap (HB). Pause rather than degrade, same as DB.
+   */
+  private hostGuards(obs: RunObservation, action: DerivedAction, host: { projected: number } | null): DerivedAction {
+    if (action.kind !== 'dispatch') return action
+    if (this.cfg.requireBudget && (obs.state?.budget?.cost_limit_usd ?? null) === null) {
+      const reason = 'no cost_limit_usd set — this orchestrator requires a per-run budget cap before dispatch (--require-budget)'
+      return { kind: 'escalate', rule: 'RB', reason, pause: 'budget-exhausted', why: reason }
+    }
+    if (host && this.cfg.spendLimitUsd != null) {
+      const add = action.dispatches.reduce((sum, d) => sum + (this.estimates()[d.role] ?? DEFAULT_ESTIMATE_USD), 0)
+      if (host.projected + add > this.cfg.spendLimitUsd) {
+        const reason = `projected host spend $${(host.projected + add).toFixed(2)} across active runs exceeds --spend-limit-usd $${this.cfg.spendLimitUsd} — pausing rather than degrading`
+        return { kind: 'escalate', rule: 'HB', reason, pause: 'budget-exhausted', why: reason }
+      }
+      host.projected += add
+    }
+    return action
+  }
+
+  /** Spend committed or in flight across the given runs: closed ledger costs plus estimates for open entries. */
+  private async hostProjectedUsd(refs: RunRef[]): Promise<number> {
+    let total = 0
+    for (const ref of refs) {
+      const { state } = await this.source.readState(ref)
+      if (!state) continue
+      for (const entry of parseLedger(state)) {
+        total += entry.cost_usd ?? (entry.failed ? 0 : (this.estimates()[entry.role] ?? DEFAULT_ESTIMATE_USD))
+      }
+    }
+    return total
   }
 
   /**
@@ -156,6 +312,13 @@ export class Engine {
             cas,
           ),
         )
+        if (result.ok && result.pushFailed) {
+          if (this.stalePush(result.pushFailed)) {
+            const dropped = await this.recoverRejectedPush(ref, result.commit, result.pushFailed)
+            return { ...base, wrote: !dropped, detail: 'push rejected — origin moved; synced, re-derive next tick' }
+          }
+          this.notePushFailure(ref, result.pushFailed)
+        } else if (result.ok) this.notePushAccepted(ref.branch)
         return { ...base, wrote: result.ok, detail: writeDetail(result, action.why) }
       }
 
@@ -176,6 +339,13 @@ export class Engine {
             cas,
           ),
         )
+        if (result.ok && result.pushFailed) {
+          if (this.stalePush(result.pushFailed)) {
+            const dropped = await this.recoverRejectedPush(ref, result.commit, result.pushFailed)
+            return { ...base, wrote: !dropped, detail: 'push rejected — origin moved; synced, re-derive next tick' }
+          }
+          this.notePushFailure(ref, result.pushFailed)
+        } else if (result.ok) this.notePushAccepted(ref.branch)
         return { ...base, wrote: result.ok, detail: writeDetail(result, action.reason) }
       }
 
@@ -209,6 +379,25 @@ export class Engine {
           ),
         )
         if (!result.ok) return { ...base, detail: writeDetail(result, 'intent commit lost CAS — re-derive next tick') }
+        // Push-then-launch (#103): origin accepting the intent commit is what
+        // arms the dispatch. A rejected push means another writer moved the
+        // branch past the tip this derivation observed — launching now would
+        // act on state that is already history. Drop the stale intent (or
+        // leave it to stale-aging when a checkout holds the branch), sync,
+        // and re-derive from origin's truth next tick.
+        if (result.pushFailed && this.stalePush(result.pushFailed)) {
+          const dropped = await this.recoverRejectedPush(ref, result.commit, result.pushFailed)
+          return {
+            ...base,
+            wrote: !dropped,
+            detail: `intent push rejected — origin moved past the observed tip; ${dropped ? 'intent dropped' : 'intent kept local (stale-aging closes it)'}, nothing launched`,
+          }
+        }
+        // An unreachable origin doesn't invalidate the derivation — this
+        // clone is merely ahead. Launch (the pre-#103 posture), and let a
+        // later accepted push carry the intent commit.
+        if (result.pushFailed) this.notePushFailure(ref, result.pushFailed)
+        else this.notePushAccepted(ref.branch)
 
         for (const intent of action.dispatches) this.launch(ref, obs, intent, at)
         return { ...base, wrote: true, launched: action.dispatches.length }
@@ -229,10 +418,11 @@ export class Engine {
           ? await ensureTaskCheckout(this.cfg.repoDir, ref.branch, intent.task!)
           : { path: await ensureRunCheckout(this.cfg.repoDir, ref.branch), branch: ref.branch }
         const taskPath = intent.task ? (obs.taskFiles.get(intent.task)?.path ?? null) : null
+        const { runs: runsRoot } = await this.source.frameworkRoots()
         outcome = await this.cfg.dispatcher.dispatch({
           cwd: checkout.path,
           role: intent.role,
-          body: promptBody(ref.slug, intent, taskPath),
+          body: promptBody(ref.slug, intent, taskPath, runsRoot),
           timeoutMs: this.cfg.roleTimeoutMs ?? DEFAULT_ROLE_TIMEOUT_MS,
         })
         if (isolate) {
@@ -240,6 +430,9 @@ export class Engine {
           if (outcome.ok && !fold.ok) {
             outcome = { ok: false, costUsd: outcome.costUsd, tokensIn: outcome.tokensIn, tokensOut: outcome.tokensOut, error: fold.message, fatal: fold.conflict }
           }
+          // The fold moves the run ref outside writeState; push it explicitly
+          // so agent work reaches origin even if the closing commit fails.
+          if (fold.ok) await this.pushBranch(ref.branch)
         }
       } catch (e) {
         outcome = { ok: false, costUsd: null, tokensIn: null, tokensOut: null, error: (e as Error).message }
@@ -309,6 +502,19 @@ export class Engine {
           if (outcome.ok && intent.role === 'implementer' && intent.task) {
             setTaskFieldByDoc(doc, intent.task, 'status', 'in-review')
           }
+          // A failed implementer left its task stranded at `dispatched`,
+          // which D12 reads as in-flight forever — no retry, and the
+          // second-failure escalation below becomes unreachable. Hand the
+          // task back to derivation for the one retry §11 promises. On
+          // escalation mark it `failed` — a status nothing reads as
+          // in-flight (#147); D20 returns it to pending once a human
+          // resolves the escalation, so a fresh round supersedes the
+          // failure without a hand edit.
+          if (!outcome.ok && intent.role === 'implementer' && intent.task) {
+            if (getTaskFieldByDoc(doc, intent.task, 'status') === 'dispatched') {
+              setTaskFieldByDoc(doc, intent.task, 'status', escalateNow ? 'failed' : 'pending')
+            }
+          }
           if (escalateNow) {
             const count = countSeq(doc, ['escalations'])
             doc.setIn(['escalations', count], {
@@ -323,7 +529,18 @@ export class Engine {
         },
         `state(${ref.slug}): metered ${intent.role}${intent.task ? `(${intent.task}${intent.round ? ` r${intent.round}` : ''})` : ''} $${cost.toFixed(2)}${outcome.ok ? '' : ` — failed: ${truncate(outcome.error ?? 'unknown', 60)}`}`,
       )
+      if (result.ok && result.pushFailed && this.stalePush(result.pushFailed)) {
+        // #103: the closing commit carries real usage — never discard it
+        // outright. Dropped (plumbing path): re-read the synced state and
+        // re-close on origin's tip. Kept (a checkout holds the branch):
+        // it stays local and a later accepted push carries it — retrying
+        // here would only stack more diverged commits.
+        const dropped = await this.recoverRejectedPush(ref, result.commit, result.pushFailed)
+        return dropped ? 'retry' : 'done'
+      }
       if (result.ok) {
+        if (result.pushFailed) this.notePushFailure(ref, result.pushFailed)
+        else this.notePushAccepted(ref.branch)
         this.log(`${ref.slug}: metered ${intent.role} $${cost.toFixed(2)} ${outcome.ok ? 'ok' : `FAILED (${outcome.error})`}`)
         return 'done'
       }
@@ -338,6 +555,22 @@ export class Engine {
       if ((await this.withLock(ref.slug, attemptOnce)) === 'done') return
     }
     this.log(`${ref.slug}: closing commit lost CAS 5×; the heartbeat will age the open entry`)
+  }
+
+  /**
+   * Push of agent work after a fold: these are real commits that can never
+   * be dropped, so a rejection here only counts against push health (#103)
+   * and warns — a later accepted push of the branch carries them.
+   */
+  private async pushBranch(branch: string): Promise<void> {
+    if (!this.cfg.push) return
+    try {
+      await this.source.git.run(['push', 'origin', `${branch}:${branch}`])
+      this.notePushAccepted(branch)
+    } catch (e) {
+      this.pushRejections.set(branch, (this.pushRejections.get(branch) ?? 0) + 1)
+      this.log(`push of ${branch} failed: ${(e as Error).message} — commits stay local until the next push`)
+    }
   }
 
   private computeCost(role: string, outcome: DispatchOutcome): number | null {
@@ -370,11 +603,22 @@ function setTaskField(doc: Document, obs: RunObservation, taskId: string, field:
 }
 
 /** Task index resolved against the doc itself (for closing commits, which re-read). */
-function setTaskFieldByDoc(doc: Document, taskId: string, field: string, value: unknown): void {
+function taskIndexByDoc(doc: Document, taskId: string): number {
   const tasks = doc.getIn(['tasks'])
   const js = tasks && typeof (tasks as { toJSON?: unknown }).toJSON === 'function' ? (tasks as { toJSON(): unknown[] }).toJSON() : []
-  const index = Array.isArray(js) ? js.findIndex((t) => t && typeof t === 'object' && (t as { id?: string }).id === taskId) : -1
+  return Array.isArray(js) ? js.findIndex((t) => t && typeof t === 'object' && (t as { id?: string }).id === taskId) : -1
+}
+
+function setTaskFieldByDoc(doc: Document, taskId: string, field: string, value: unknown): void {
+  const index = taskIndexByDoc(doc, taskId)
   if (index >= 0) doc.setIn(['tasks', index, field], value)
+}
+
+function getTaskFieldByDoc(doc: Document, taskId: string, field: string): unknown {
+  const index = taskIndexByDoc(doc, taskId)
+  if (index < 0) return undefined
+  const value = doc.getIn(['tasks', index, field])
+  return value && typeof (value as { toJSON?: unknown }).toJSON === 'function' ? (value as { toJSON(): unknown }).toJSON() : value
 }
 
 function applyBookkeeping(doc: Document, updates: Bookkeeping[]): void {

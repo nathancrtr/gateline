@@ -82,6 +82,8 @@ export interface DecisionRequest {
   escalationIndex?: number
   pauseReason?: string
   resumePhase?: Phase
+  hold?: boolean
+  holdReason?: string
 }
 
 export class ApiError extends Error {
@@ -102,8 +104,26 @@ async function getJson<T>(path: string): Promise<T> {
   return res.json() as Promise<T>
 }
 
+export interface EngineHealthEntry {
+  at: string
+  inFlight: number
+  pushRejections: Record<string, number>
+  stale: boolean
+  /** Self-supersede (#141) drift fields — absent on pre-#141 engines. */
+  commit?: string
+  codeHead?: string
+  codeState?: 'fresh' | 'superseded-pending' | 'paused'
+}
+
+export interface EngineHealthResponse {
+  /** Per source id; null = no co-located engine has ever reported here (viewer-only install, not an outage). */
+  engines: Record<string, EngineHealthEntry | null>
+  now: number
+}
+
 export const api = {
   inbox: () => getJson<InboxResponse>('/api/inbox'),
+  engineHealth: () => getJson<EngineHealthResponse>('/api/engine-health'),
   runs: () => getJson<RunsResponse>('/api/runs'),
   run: (src: string, slug: string) => getJson<RunDetailResponse>(`/api/runs/${src}/${slug}`),
   artifact: (src: string, slug: string, path: string) =>

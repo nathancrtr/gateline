@@ -1,6 +1,10 @@
 #!/usr/bin/env node
 // agentic — decisions stay possible when no browser is. Same core, same
 // single write path (R2), terminal rendering.
+import { execFileSync, spawn } from 'node:child_process'
+import { existsSync, realpathSync } from 'node:fs'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline/promises'
 import { Command } from 'commander'
 import {
@@ -10,6 +14,8 @@ import {
   formatDuration,
   loadSources,
   planDecision,
+  resolveCodeRepo,
+  SUPERSEDE_EXIT_CODE,
   type Burden,
   type DecisionInput,
   type GateId,
@@ -182,9 +188,18 @@ program
   .option('--burden <category>', BURDENS.join(' | '))
   .option('--notes <text>', 'approval notes')
   .option('--no-advance', 'record the approval without moving the phase')
-  .action(async (slug: string, gate: string, flags: DecideFlags & { advance?: boolean }) => {
+  .option('--hold <reason>', 'approve but pause the run in the same commit — the dispatch-safe way to wait on a human decision before the next phase runs')
+  .action(async (slug: string, gate: string, flags: DecideFlags & { advance?: boolean; hold?: string }) => {
     const burden = await promptBurden(flags.burden)
-    await decide(slug, flags, { action: 'approve', gate: gate.toUpperCase() as GateId, burden, notes: flags.notes, advancePhase: flags.advance })
+    await decide(slug, flags, {
+      action: 'approve',
+      gate: gate.toUpperCase() as GateId,
+      burden,
+      notes: flags.notes,
+      advancePhase: flags.advance,
+      hold: flags.hold !== undefined || undefined,
+      holdReason: flags.hold,
+    })
   })
 
 program
@@ -264,6 +279,157 @@ program
 // --- ui ----------------------------------------------------------------------
 
 program
+  .command('up')
+  .description('FleetView + the v1 orchestrator over one clone — the single-authority deployment (docs/TOPOLOGY.md §3.1)')
+  .option('--port <n>', 'port', '4310')
+  .option('--host <h>', 'bind address', '127.0.0.1')
+  .option('--no-open', 'do not open the browser')
+  .option(
+    '--adapter <name>',
+    'headless adapter(s), repeatable; the first is the default runner',
+    (value: string, acc: string[]) => [...acc, value],
+    [] as string[],
+  )
+  .option('--spend-limit-usd <usd>', 'refuse new dispatches when projected spend across all active runs exceeds this', parseFloat)
+  .option('--no-push', 'keep orchestrator commits local (default pushes: origin is the record)')
+  .option('--heartbeat <seconds>', 'engine heartbeat interval', '180')
+  .option('--role-timeout <seconds>', 'wall clock per dispatched role before its process group is killed (default 1800)', parseFloat)
+  .action(
+    async (flags: {
+      port: string
+      host: string
+      open?: boolean
+      adapter: string[]
+      spendLimitUsd?: number
+      push?: boolean
+      heartbeat: string
+      roleTimeout?: number
+    }) => {
+      const opts = program.opts<{ repo: string[] }>()
+      // One engine per `up`: dispatching needs exactly one writable clone.
+      // The server may aggregate several sources; the engine takes the one
+      // repo named (or the cwd) — a second engine belongs to a second `up`.
+      if (opts.repo.length > 1) {
+        console.error('`up` runs one engine over one clone — pass a single --repo (the server may still aggregate more via config)')
+        process.exit(1)
+      }
+      const repoDir = opts.repo[0] ?? process.cwd()
+      const { startServer } = await import('@agentic/server/main')
+      const { startOrchestrator } = await import('@agentic/orchestrator')
+      const server = await startServer({
+        port: Number(flags.port),
+        host: flags.host,
+        open: flags.open !== false,
+        repoOverrides: [repoDir],
+      })
+      // `orchestrator` and the supersede callback below both close over
+      // `stop`, but `stop` needs `orchestrator` to drain it — same
+      // forward-reference the `watch` command resolves by leaving the
+      // variable nullable until startOrchestrator returns; the callback only
+      // fires later, on a heartbeat, by which point it's set.
+      let orchestrator: Awaited<ReturnType<typeof startOrchestrator>> | null = null
+      // A supersede can race a SIGINT/SIGTERM (both trigger the same drain
+      // path); guard so the second caller is a no-op instead of double
+      // draining or double process.exit.
+      let stopping = false
+      const stop = async (exitCode: number) => {
+        if (stopping) return
+        stopping = true
+        console.log('draining in-flight dispatches…')
+        await orchestrator?.stop()
+        server.close()
+        process.exit(exitCode)
+      }
+      orchestrator = await startOrchestrator({
+        repoDir,
+        adapters: flags.adapter,
+        push: flags.push !== false,
+        requireBudget: true,
+        spendLimitUsd: flags.spendLimitUsd ?? null,
+        roleTimeoutSeconds: flags.roleTimeout,
+        heartbeatSeconds: Number(flags.heartbeat),
+        log: (line) => console.log(line),
+        onSupersede: (status) => {
+          console.log(
+            `code tree moved ${status.startHead.slice(0, 10)}..${status.codeHead.slice(0, 10)} — superseding, restart to load fresh code`,
+          )
+          void stop(SUPERSEDE_EXIT_CODE)
+        },
+      })
+      console.log(`engine watching ${repoDir} (heartbeat ${flags.heartbeat}s${flags.push !== false ? ', pushing to origin' : ', local-only'}) — ^C to stop`)
+      process.on('SIGINT', () => void stop(0))
+      process.on('SIGTERM', () => void stop(0))
+    },
+  )
+
+// --- upgrade -------------------------------------------------------------------
+
+/**
+ * `agentic upgrade`'s body, factored out of the command action so it can be
+ * driven directly against an arbitrary repo dir (tests, manual transcripts)
+ * without going through `resolveCodeRepo(import.meta.url)` — which always
+ * resolves to the checkout this module itself lives in.
+ *
+ * Returns the process exit code the caller should use; never calls
+ * `process.exit` itself.
+ */
+export async function runUpgrade(repoDir: string, log: (line: string) => void = (line) => console.log(line)): Promise<number> {
+  const dirty = execFileSync('git', ['-C', repoDir, 'status', '--porcelain'], { encoding: 'utf8' })
+  if (dirty.trim()) {
+    console.error(`agentic upgrade: ${repoDir} has uncommitted changes — commit or stash them before upgrading`)
+    return 1
+  }
+
+  const before = execFileSync('git', ['-C', repoDir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+  const pullCode = await streamCommand('git', ['-C', repoDir, 'pull', '--ff-only'], repoDir)
+  if (pullCode !== 0) return pullCode
+  const after = execFileSync('git', ['-C', repoDir, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
+
+  if (before === after) {
+    log(`already up to date at ${after.slice(0, 7)}`)
+    return 0
+  }
+
+  const frontendPkg = join(repoDir, 'frontend', 'package.json')
+  const rootPkg = join(repoDir, 'package.json')
+  const workspaceDir = existsSync(frontendPkg) ? join(repoDir, 'frontend') : existsSync(rootPkg) ? repoDir : null
+  if (workspaceDir) {
+    const npmCode = await streamCommand('npm', ['install'], workspaceDir)
+    if (npmCode !== 0) {
+      console.error(`agentic upgrade: npm install failed in ${workspaceDir} (exit ${npmCode})`)
+      return npmCode
+    }
+  } else {
+    log('no package.json found under the repo — skipping npm install')
+  }
+
+  log(`upgraded ${before.slice(0, 7)}..${after.slice(0, 7)}`)
+  log(`a running engine will notice at its next tick boundary and exit (${SUPERSEDE_EXIT_CODE}) for its supervisor to restart`)
+  return 0
+}
+
+/** Run a command with stdio inherited (streamed to this process's own streams); resolves to its exit code. */
+function streamCommand(cmd: string, args: string[], cwd: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { cwd, stdio: 'inherit' })
+    child.on('error', reject)
+    child.on('exit', (code) => resolve(code ?? 1))
+  })
+}
+
+program
+  .command('upgrade')
+  .description('git pull --ff-only the code checkout this CLI/engine runs from, then npm install if it moved (docs/ORCHESTRATOR.md merge-update lifecycle)')
+  .action(async () => {
+    const repoDir = resolveCodeRepo(import.meta.url)
+    if (!repoDir) {
+      console.error('agentic upgrade: this install is not a git checkout — nothing to `git pull` (e.g. installed from a published package)')
+      process.exit(1)
+    }
+    process.exit(await runUpgrade(repoDir))
+  })
+
+program
   .command('ui')
   .description('serve the web app on localhost')
   .option('--port <n>', 'port', '4310')
@@ -290,7 +456,25 @@ function table(rows: Record<string, string>[], cols: string[]): void {
   for (const r of rows) console.log(cols.map((c, i) => (r[c] ?? '').padEnd(widths[i]!)).join('  '))
 }
 
-program.parseAsync().catch((e: Error) => {
-  console.error(e.message)
-  process.exit(1)
-})
+// Only parse argv when this module is the process entrypoint (the bin
+// shebang, or `node .../main.ts ...` as cli.test.ts spawns it) — not when
+// something imports it as a library, e.g. to drive `runUpgrade` directly
+// against a scratch repo without going through argv/resolveCodeRepo at all.
+// Compare realpaths, not strings: the global `agentic` bin is an npm-link
+// symlink chain to this file, and Node's ESM loader realpaths the entry
+// module while argv[1] keeps the symlink path.
+function isProcessEntrypoint(): boolean {
+  const argv1 = process.argv[1]
+  if (!argv1) return false
+  try {
+    return fileURLToPath(import.meta.url) === realpathSync(argv1)
+  } catch {
+    return false
+  }
+}
+if (isProcessEntrypoint()) {
+  program.parseAsync().catch((e: Error) => {
+    console.error(e.message)
+    process.exit(1)
+  })
+}

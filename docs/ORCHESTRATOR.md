@@ -45,7 +45,7 @@ noted where the choice was genuinely contested.
 | Execution model | **Stateless reconciler.** The orchestrator wakes on triggers, reads `state.yaml` at the run branch tip, derives the next action from files alone, executes it, commits, and exits. No conversation state survives between wakes — the purest expression of P1, and a gate wait costs nothing (it is simply "no action derivable"). Rejected: a long-running harness session (accrues exactly the conversation state P1 exists to eliminate; undefined crash recovery; a session burning while humans deliberate at a gate). |
 | Dispatch | **Adapter-shaped seam; one implementation first.** A runtime-neutral dispatch interface, implemented for the claude-code adapter first with copilot-cli as a fast-follow milestone — P5 decorrelation is designed in from day one and delivered incrementally. Rejected: single-harness-forever (bakes the P5 gap into the first autonomous mode) and cross-vendor-before-anything-works (delays the first trust-building loop). |
 | Metering | **Designed here, enforced by the orchestrator.** Automated budget metering is DESIGN.md §4's stated v1 prerequisite, and the enforcement hook — who checks the cap and flips `phase: paused` — is naturally the process that performs every dispatch. Folding it in (§6) keeps the meter and its enforcer from drifting apart. |
-| First deployment | **Local, this repo.** v1 runs on an operator's machine against this repository (the same local-first posture the frontend took), earning trust on toy runs before any host-repo or CI deployment. Host-repo delivery is designed-for-but-later (§10). |
+| First deployment | **Single-user, this repo — the operator's laptop or their hosted cockpit machine.** v1 runs against this repository on a machine the operator owns: locally, or as a second process on the hosted single-user instance that serves FleetView ([DEPLOY.md](DEPLOY.md)), with gates decided in the hosted frontend. Humans remain at every gate either way — hosting changes where the process sleeps, not who decides. *Amended 2026-07-14 from "Local, this repo" so the M2 toy run proves the shape a production user actually runs; hosted mode adds hard ceilings (`--push`, `--require-budget`, `--spend-limit-usd`).* Host-repo delivery (repositories the operator does not own the machine for) is designed-for-but-later (§10). |
 
 ## 3. The judgment/mechanics split
 
@@ -113,7 +113,17 @@ The derivation rules are the dual of the frontend's readiness table
 (FRONTEND-PLAN.md §2.3): that table derives *needs a human* from files; this one
 derives *needs a dispatch*. A run deriving as neither is at rest — gate waits,
 unresolved escalations, and pauses are all rest states, which is why a stateless
-orchestrator can hold them indefinitely for free. The full table is authored at
+orchestrator can hold them indefinitely for free.
+
+Approving a gate arms the next phase's dispatch on the very next tick, so when a
+human decision still stands between a gate and the next producer (e.g. selecting
+one of several design candidates before the Architect plans against it), the
+approval must not advance the phase — and merely skipping the advance is not
+enough, because the convergence rule sees the signed gate and advances anyway.
+The decision vocabulary therefore includes **approve-and-hold**: sign the gate and
+set `phase: paused` with a `paused_reason` naming the awaited decision, in the
+same commit. The held run is an ordinary rest state; resume releases it into the
+phase the gate ledger implies. The full table is authored at
 implementation time (one test per row, like the frontend's); its shape:
 
 | State observed | Action |
@@ -126,11 +136,26 @@ implementation time (one test per row, like the frontend's); its shape:
 | Task diff ready, `review_rounds` < 3 | Dispatch Reviewer (P5-constrained, §5.3) |
 | Review requests changes, rounds < 3 | Dispatch Implementer, round n+1 |
 | Round cap hit, or two bounces of the same artifact | Escalate; pause the run |
+| Review verdict `escalate` | Escalate; pause. Resolving the escalation *after* the verdict landed dispatches a re-review round — the fresh verdict supersedes the standing `escalate` |
+| Implementer dispatch fails | Return the task to `pending` for its one retry; a second failure marks the task `failed` (nothing reads it as in-flight), escalates, and pauses. Resolving the escalation *after* the last failed attempt returns the task to `pending` — a fresh round supersedes the failure (issue #147) |
 | Budget pre-flight fails (§6) | Pause `budget-exhausted`; escalate |
 
 Two invariants govern every row: each action is derivable from committed files
 alone, and each action is **idempotent to re-derive** — a tick interrupted anywhere
 converges on re-run.
+
+A consequence of statelessness worth naming: an escalation is a *pointer to a
+condition* in the committed files, and marking it resolved is an acknowledgment,
+not a change. When the condition is one a human can edit away (raise
+`cost_limit_usd`, repair the branch), the engine re-derives quiet on the next tick
+only once that edit lands — a resolution alone re-escalates, which is the engine
+nagging, not a bug. The `escalate` verdict is the exception: it stands in an
+append-only review report no one may amend, so there the resolution itself is the
+input — the engine reads its timestamp and answers with a re-review round rather
+than a repeat escalation (issue #142). A twice-failed implementer task is the
+same shape: the failed ledger entries are append-only facts, so the resolution's
+timestamp is the input — resolved after the last failure, the task returns to
+`pending` for a fresh round (issue #147).
 
 ### 4.3 Writes: the same discipline as the frontend
 
@@ -142,7 +167,7 @@ additions specific to a machine writer:
 - **Distinct identity.** Orchestrator commits are authored by a dedicated bot
   identity — one per orchestrator install, not per repo (resolved question 4) —
   never a person's `git config`. Gate entries are written only by named
-  humans (CLAUDE.md convention); provenance must make machine bookkeeping and human
+  humans (AGENTS.md convention); provenance must make machine bookkeeping and human
   decisions distinguishable at a glance.
 - **Reserved grammar.** Commit messages follow the frontend's structured form —
   `state(<slug>): <verb> …` — with the orchestrator using its own verbs
@@ -403,7 +428,7 @@ Extends DESIGN.md §9 for the autonomous mode:
 | Duplicate dispatch (two instances, crash-restart, racing ticks) | Commit-then-launch: intent is a CAS commit; heartbeat probes liveness before re-dispatching |
 | Orchestrator races a human decision | CAS refusal → re-tick; both writers already treat refusal as the designed outcome |
 | Runaway spend | Every model invocation flows through the metered seam; pre-flight cap; pause-don't-degrade |
-| Hung or stuck dispatch job | Per-role wall-clock timeout on the heartbeat → kill, re-dispatch once, then escalate |
+| Hung or stuck dispatch job | Per-role wall-clock timeout (default 30 min; `--role-timeout`) → kill the harness's whole process group, re-dispatch once, then escalate. The group kill matters: a surviving child would keep spending and hold the stdio pipes open, delaying the closing commit |
 | Engine rules drift from frontend readiness rules | One library (`@agentic/core`) hosts both derivations; the readiness table remains the shared spec with one test per row |
 | Machine writes masquerade as human decisions | Distinct bot author identity; reserved decision grammar; no code path writes `gates.*` |
 | Vendor or model outage mid-run | Dispatch failure → one retry → escalate and pause. Falling back to a registry alternate is a human decision — a silent model swap would invalidate the P5 reasoning recorded for the run |
@@ -427,6 +452,105 @@ sections above. Recorded here so the reasoning survives:
    re-dispatches the producing role with the decline notes as bounce input
    (§4.2); re-open-and-wait was rejected as an idle state a human must remember
    to unstick.
+
+## 13. Merge-update lifecycle (self-supersede)
+
+An orchestrator process loads its own code once, at start, from the checkout
+it runs in. A `git pull` that lands after that — a human merging a framework
+fix under a running engine — does nothing on its own; the running process
+keeps executing the code it already has in memory. This section is the
+mechanism (#141) that turns that staleness into a bounded, self-detected
+process replacement instead of a silent drift nobody notices.
+
+**Deployment model.** The blessed topology (#100/#112, [TOPOLOGY.md](TOPOLOGY.md)
+§3.1) is one checkout, co-located: the server, the engine, and the CLI are one
+process (`agentic up`) reading and writing one clone, with the globally
+installed `agentic` binary `npm link`ed to that checkout's
+`frontend/packages/cli`. There is exactly one blessed tree per deployment, so
+"update the code" reduces to "advance that one checkout" — no fleet of
+processes to reconcile against each other.
+
+**What is monitored.** Not a configured run source — the *code tree*, the git
+checkout that owns the running module's own source, resolved from
+`import.meta.url` (`resolveCodeRepo` in `@agentic/core`). Under the co-located
+default this is the same clone the engine reconciles runs against; under a
+host-repo setup (INTEGRATION.md) it need not be, and it is the code tree's
+staleness that matters here. When the running module isn't inside a git
+checkout at all — installed from a published package, or (as on the hosted
+Fly recipe, DEPLOY.md) baked into a container image with no `.git` above it
+— `resolveCodeRepo` returns null, no monitor is constructed, and this whole
+section is inert: there is nothing to watch.
+
+**Operator flow.** `git pull` in the checkout — by hand, or via `agentic
+upgrade` (below) — is the only input; the engine never pulls on its own.
+`CodeTreeMonitor` notices at the next tick boundary (heartbeat or startup,
+the same gating `syncFromRemote` uses, §4.2), and once a clean fast-forward is
+confirmed the loop drains in-flight work and exits `75`. Under a supervisor
+that exit is restarted immediately onto the fresh code, with no manual step.
+Without one — a bare local `agentic up` — the process just stops; the
+operator restarts it by hand, at their convenience, since the code is already
+pulled and nothing is lost by waiting.
+
+**States.** `CodeTreeMonitor.check()` recomputes state from the working tree
+at every boundary check; the debounce (below) is the only state carried
+between calls:
+
+| State | Meaning | Loop behavior |
+|---|---|---|
+| `fresh` | On-disk `HEAD` equals the commit the process started on | Ticks normally |
+| `superseded-pending` | Clean fast-forward of the default branch, observed for the first time | Tick bodies idle; heartbeat keeps writing |
+| `supersede-confirmed` | The same fast-forward observed on a second consecutive boundary check (the debounce) | `onSupersede` fires once, after the confirming heartbeat write; the process drains and exits `75` |
+| `paused` | Dirty tree, a rebase/merge in progress, non-fast-forward movement, or the checkout switched off the default branch (including detached HEAD) | Tick bodies idle; recovers to `fresh`/`superseded-pending` once the tree returns clean |
+
+A heartbeat never reports `supersede-confirmed` itself — by the time a
+confirmed check is written the process is already draining toward exit, so
+the written `codeState` collapses it into `superseded-pending` ("pending
+restart" is the only steady state left to describe).
+
+**Guardrails.**
+- Only a clean fast-forward of the default branch counts as an update.
+  Anything else — dirty tree, in-progress rebase/merge, branch switch,
+  detached HEAD, or history that isn't a fast-forward of the commit the
+  process started on — is `paused`, not superseded, and the engine never
+  dispatches on mixed code.
+- **Debounce.** A fast-forward must be observed on two consecutive boundary
+  checks before it is confirmed, so a heartbeat racing a `git pull` still in
+  progress reads `superseded-pending` once rather than firing early on a
+  half-updated tree.
+- **`paused` is deliberate idling, not a silent hang.** The heartbeat keeps
+  writing while paused (`codeState: 'paused'`), and FleetView's drift chip
+  renders it as a distinct, stronger-tone pill beside the engine outage
+  banner — a paused engine reads differently from a dead one.
+
+**What stays human-owned.** The engine never calls `git pull`; the update
+input is always an operator action (a manual pull, or `agentic upgrade`).
+Resolving a paused code tree — finishing the rebase, cleaning the working
+tree, switching back to the default branch — and restarting afterward are
+both human acts. None of this touches the gate grammar in §4.3 or §7: gate
+entries are still written only by named humans, and the orchestrator's own
+commit verbs are unaffected. Self-supersede lives entirely in process
+lifecycle, never in `state.yaml`.
+
+**Exit code.** `SUPERSEDE_EXIT_CODE = 75` — `EX_TEMPFAIL` from
+`<sysexits.h>`, "temporary failure, please retry." It is a deliberately
+ordinary code, chosen for supervisor compatibility: launchd's `KeepAlive`
+restarts on a nonzero exit by default, and systemd's
+`RestartForceExitStatus=75` makes a unit restart on this specific code the
+same way it would on a crash. `agentic-orchestrator watch` and `agentic up`
+both wire this exit in; a `tick`-driven deployment (§4.1, trigger 4) doesn't
+need it — a one-shot tick already exits after a single pass regardless. A
+launchd example plist for this deployment is deliberately deferred (tracked
+on #141); `frontend/packages/orchestrator/README.md`'s trigger-packaging
+section carries one for `tick`, which doesn't need updating for this.
+
+**`agentic upgrade`.** Convenience over the same mechanism, not a second one:
+refuses on a dirty tree, `git pull --ff-only`, then `npm install` in the
+workspace (`frontend/` under the resolved code repo, falling back to the
+repo root, or skipped if neither carries a `package.json`) when `HEAD`
+moved, printing `upgraded <old7>..<new7>` (or `already up to date at
+<head7>`). It does not itself restart a running engine — the monitor's own
+tick-boundary check is what notices the moved `HEAD` and drives the exit, on
+whatever cadence the heartbeat runs.
 
 ---
 

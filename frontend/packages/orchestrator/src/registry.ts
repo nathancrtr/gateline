@@ -4,7 +4,7 @@
 // enforce at dispatch time, and the pricing/estimate maps that drive metering
 // and the pre-flight budget check.
 import { parse as parseYaml } from 'yaml'
-import type { Git } from '@agentic/core'
+import { resolveFrameworkRoots, type Git } from '@agentic/core'
 
 export interface RegistryProfile {
   default: string
@@ -77,9 +77,14 @@ export function parseRegistry(text: string): Registry {
   return { profiles, bindings, pricing, estimates }
 }
 
-/** Registry at a rev (default branch normally) — null when the repo has none. */
-export async function loadRegistry(git: Git, rev: string): Promise<Registry | null> {
-  const text = await git.show(rev, 'registry/models.yaml')
+/**
+ * Registry at a rev (default branch normally) — null when the repo has none.
+ * `prefixHint` overrides the default `.agentic` probe location for a host
+ * integrated with a custom `integrate.py --prefix` (#95).
+ */
+export async function loadRegistry(git: Git, rev: string, prefixHint?: string): Promise<Registry | null> {
+  const { registry: registryRoot } = await resolveFrameworkRoots(git, rev, prefixHint)
+  const text = await git.show(rev, `${registryRoot}/models.yaml`)
   if (text === null) return null
   try {
     return parseRegistry(text)

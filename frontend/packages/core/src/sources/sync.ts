@@ -5,7 +5,7 @@
 // unrecorded — the sync can't know how hard the review was. Phase is not
 // advanced: recording a fact is not orchestrating.
 import { execFile } from 'node:child_process'
-import { gateUndecided } from './schema.ts'
+import { gateUndecided } from '../record/schema.ts'
 import type { RunRef, RunSource, WriteResult } from './source.ts'
 
 export interface PrApproval {

@@ -10,6 +10,7 @@ import { loadSources } from '@agentic/core'
 import { createApp } from './app.ts'
 import { GenerationCache } from './cache.ts'
 import { watchRepoRefs } from './watch.ts'
+import { buildWebhook } from './webhook.ts'
 
 export interface ServeOptions {
   port?: number
@@ -62,6 +63,40 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
     )
   }
 
+  // Periodic remote sync: a source configured with fetch_interval polls its
+  // origin so runs pushed elsewhere show up here; each fetch moves refs, and
+  // the ref watcher above turns that into an SSE change signal.
+  const syncTimers: NodeJS.Timeout[] = []
+  for (const source of sources) {
+    const s = source as { id: string; fetchIntervalSeconds?: number; syncFromRemote?: () => Promise<void> }
+    if (!s.fetchIntervalSeconds || !s.syncFromRemote) continue
+    let inFlight = false
+    const sync = async () => {
+      if (inFlight) return
+      inFlight = true
+      try {
+        await s.syncFromRemote!()
+      } catch (e) {
+        console.warn(`warning: sync of ${s.id} failed: ${(e as Error).message}`)
+      } finally {
+        inFlight = false
+      }
+    }
+    void sync()
+    syncTimers.push(setInterval(sync, s.fetchIntervalSeconds * 1000))
+    console.log(`syncing ${s.id} from origin every ${s.fetchIntervalSeconds}s`)
+  }
+
+  // Webhook intake (hosted mode): GITHUB_WEBHOOK_SECRET arms the route;
+  // GITHUB_TOKEN additionally enables PR-approval sync on review events.
+  const webhook = buildWebhook({
+    sources,
+    secret: process.env.GITHUB_WEBHOOK_SECRET,
+    githubToken: process.env.GITHUB_TOKEN,
+    log: (line) => console.log(line),
+  })
+  if (webhook) console.log('github webhook armed at /api/webhooks/github')
+
   const app = createApp({
     sources,
     cache,
@@ -69,6 +104,7 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
       clients.add(send)
       return () => clients.delete(send)
     },
+    webhook,
   })
 
   // Static SPA (when built). In dev, Vite serves the UI and proxies /api here.
@@ -99,6 +135,7 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
   return {
     url,
     close: () => {
+      for (const t of syncTimers) clearInterval(t)
       for (const u of unwatchers) u()
       server.close()
     },

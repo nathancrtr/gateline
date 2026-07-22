@@ -64,10 +64,44 @@ Then:
 > Use the **reviewer** subagent on task `runs/wordfreq/tasks/01-<name>.yaml`,
 > reviewing the diff of the last commit(s) for that task.
 
+The diff you name must bound **that task's changes only**. On a branch already
+carrying earlier tasks' commits, give the reviewer the task's own commit range
+(`<sha-before-task>..HEAD`), never the whole branch against its base — the whole
+branch reads as one giant boundary violation. Commit each task before dispatching
+its review so the range is well-defined.
+
 - Verdict `request-changes` → bump the task's `review_rounds` in `state.yaml` (its
   only home) and re-dispatch the implementer **with the review report path in the
   prompt**. Cap: 3 rounds, then it's yours.
 - Verdict `approve` → mark the task `in-review → verified`-eligible and move on.
+- Verdict `escalate` → the reviewer found something no implementer round can fix
+  (branch damage, a plan defect, cross-task fallout). Fix the named condition in
+  the repo yourself, then dispatch the reviewer for a **fresh round** — the review
+  report is append-only, so the standing `escalate` is superseded only by a newer
+  verdict, never edited away. (In v1 the orchestrator does this for you: resolving
+  the escalation after the verdict landed dispatches the re-review round.)
+
+### Recovering when a task's contact surface was too narrow
+
+Sometimes the implementer needed a file the task never declared — the code is
+right, the boundary was wrong. The reviewer flags it (correctly) under Boundaries.
+The defect lives in the **plan layer**, so the fix belongs there, not in the review
+artifacts:
+
+1. **Widen the task.** Add the file(s) to `file_contact_surface` in
+   `runs/<slug>/tasks/NN-<name>.yaml`. You approved the plan at G1, so widening it
+   is your call — but first check the widened surface against every other task's
+   surface; if it now overlaps a parallel task, serialize them.
+2. **Log it.** Append one line to the task's `notes:` saying what was added and
+   why. `notes:` is append-only; it is what the next review round reads.
+3. **Leave `review-NN.md` alone.** Review reports are append-only history, and
+   deleting a finding changes nothing anyway: every round re-derives the boundary
+   check from the task file and the diff, not from the previous report.
+4. **Reset via the round machinery**, exactly as for any `request-changes`: bump
+   `review_rounds` in `state.yaml`, re-dispatch the implementer with the review
+   report path (with the surface widened and the code already correct, its job is
+   the rebuttal note in `notes:`), then re-dispatch the reviewer — round 2 verifies
+   the finding against the amended task file and appends its section to the report.
 
 ## 4. Verify (Verifier)
 

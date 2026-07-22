@@ -2,8 +2,16 @@
 // unknown keys (contracts evolve) but strict about the shape the frontend
 // depends on: a state file that fails here surfaces as a malformed run —
 // visible, never guessed around (the contracts' bounce rule applied to us).
-import { parse as parseYaml } from 'yaml'
+import { parse as parseYaml, type Document } from 'yaml'
 import { z } from 'zod'
+
+export type StateDocMutation = (doc: Document) => void
+
+/** Who a state.yaml write is committed as — the named human or the bot. */
+export interface Identity {
+  name: string
+  email: string
+}
 
 export const PHASES = ['spec', 'plan', 'implement', 'integrate', 'release', 'done', 'paused'] as const
 export type Phase = (typeof PHASES)[number]
@@ -21,8 +29,11 @@ export type Burden = (typeof BURDENS)[number]
 // once review has approved it — verification presence is checked separately
 // via verification-report.md, so review-approved and later all count.
 // `dispatched` is the v1 orchestrator's commit-then-launch bookkeeping state:
-// a producer was launched but has not yet committed its artifact.
-export const TASK_STATUSES = ['pending', 'dispatched', 'in-progress', 'in-review', 'review-approved', 'verified', 'done'] as const
+// a producer was launched but has not yet committed its artifact. `failed`
+// is the engine's frozen state after an implementer failed twice and the
+// run escalated; the orchestrator returns it to pending once the naming
+// escalation is resolved (derivation rule D20).
+export const TASK_STATUSES = ['pending', 'dispatched', 'failed', 'in-progress', 'in-review', 'review-approved', 'verified', 'done'] as const
 export const G2_COMPLETE_STATUSES = new Set(['review-approved', 'verified', 'done'])
 
 /** The `yaml` core schema parses unquoted dates as strings; normalize anything else. */

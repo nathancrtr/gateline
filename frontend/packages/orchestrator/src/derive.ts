@@ -10,7 +10,8 @@
 //   D1  phase done                                   → rest
 //   D2  phase paused                                 → rest (resume is a human decision)
 //   D3  unresolved escalation                        → rest (a human owns the run)
-//   D4  task rounds ≥ cap, task not complete         → escalate + pause round-cap
+//   D4  task rounds ≥ cap, task not complete,
+//       latest verdict not approve                   → escalate + pause round-cap
 //   D5  gate approved but phase not advanced         → record phase advance
 //   D6  producer artifact absent                     → dispatch the producing role
 //   D7  producer artifact malformed, bounces < 2     → bounce (re-dispatch naming missing sections)
@@ -23,9 +24,13 @@
 //   D14 request-changes, implementer not responded   → dispatch implementer, round n+1, with the report
 //   D15 request-changes, implementer responded       → dispatch reviewer (verify round)
 //   D16 latest verdict approve                       → record task status review-approved
-//   D17 reviewer verdict escalate                    → escalate + pause
+//   D17 reviewer verdict escalate                    → escalate + pause; a resolution newer
+//       than the verdict → dispatch re-review round (the fresh verdict supersedes)
 //   D18 all tasks review-approved+, no verification  → dispatch verifier
 //   D19 phase implement, state lists no tasks        → record: seed tasks[] from tasks/*.yaml (the v0 human's mirror step)
+//   D20 task failed (implementer failed twice); the naming escalation resolved
+//       after the last failure → record status pending (a fresh round
+//       supersedes); unresolved or stale → rest naming the frozen task
 //   DB  any dispatch would exceed the budget cap     → escalate + pause budget-exhausted
 //
 // Two invariants govern every row (§4.2): each action is derivable from
@@ -106,8 +111,16 @@ export function deriveAction(obs: RunObservation): DerivedAction {
   if (state.escalations.some((e) => !e.resolved)) return rest('D3', 'unresolved escalation — the run has a human’s attention')
 
   for (const t of state.tasks) {
-    if (t.review_rounds >= ROUND_CAP && !G2_COMPLETE_STATUSES.has(t.status))
+    if (t.review_rounds >= ROUND_CAP && !G2_COMPLETE_STATUSES.has(t.status)) {
+      // An approve on the cap round IS convergence: the D16 rounds bookkeeping
+      // lands one tick before the status transition, so a task can sit at
+      // rounds == cap, still in-review, with an approve verdict already
+      // delivered. Let implementPhase record the approval instead of
+      // escalating out of that window.
+      const verdicts = obs.reviews.find((r) => r.task === t.id)?.verdicts ?? []
+      if (verdicts[verdicts.length - 1] === 'approve') continue
       return escalate('D4', `task ${t.id}: ${t.review_rounds} review rounds without convergence — usually a spec ambiguity`, 'round-cap')
+    }
   }
 
   // D5 — a gate decided approve while the phase still lists it (the frontend
@@ -195,12 +208,45 @@ function implementPhase(obs: RunObservation): DerivedAction {
   const updates: Bookkeeping[] = []
   const dispatches: DispatchIntent[] = []
   const launchingSurfaces: string[][] = []
+  const frozen: string[] = []
 
   for (const task of state.tasks) {
     if (G2_COMPLETE_STATUSES.has(task.status)) continue
 
     const open = obs.openDispatches.find((d) => d.task === task.id)
     if (open || task.status === 'dispatched' || task.status === 'in-progress') continue // D12: in flight
+
+    if (task.status === 'failed') {
+      // D20 — the engine froze the task when its implementer failed twice
+      // and the run escalated (#147). Mirror D17: the escalation entry's
+      // resolution is the unblocking input. A resolution newer than the
+      // last failed attempt means a human addressed the named condition —
+      // return the task to pending so a fresh round supersedes the
+      // failure. Until then the task rests with the human. The engine's
+      // escalation reason always carries `(task-id)`, which is what the
+      // match keys on (D17's reviewer reasons use `task <id>`, so the two
+      // rules never claim each other's escalations).
+      const lastFailure = Math.max(
+        ...obs.ledger
+          .filter((e) => e.failed && e.role === 'implementer' && e.task === task.id && e.at !== null)
+          .map((e) => Date.parse(e.at!)),
+      )
+      const acknowledged = state.escalations.some(
+        (e) =>
+          e.resolved &&
+          e.resolved_at !== null &&
+          e.reason.includes(`(${task.id})`) &&
+          (!Number.isFinite(lastFailure) || Date.parse(e.resolved_at) > lastFailure),
+      )
+      if (acknowledged)
+        return record(
+          'D20',
+          [{ field: 'task-status', task: task.id, to: 'pending' }],
+          `task ${task.id}: escalation resolved after the failure — return to pending for a fresh round`,
+        )
+      frozen.push(task.id)
+      continue
+    }
 
     if (task.status === 'pending') {
       const file = obs.taskFiles.get(task.id)
@@ -253,8 +299,30 @@ function implementPhase(obs: RunObservation): DerivedAction {
         updates.push({ field: 'task-status', task: task.id, to: 'review-approved' })
         continue
       }
-      if (verdict === 'escalate')
-        return escalate('D17', `reviewer escalated task ${task.id} — see ${review!.path}`, 'escalation')
+      if (verdict === 'escalate') {
+        // An escalate verdict is a standing fact in an append-only artifact —
+        // no later state edit can amend it, so the escalation entry's
+        // resolution is the unblocking input. A resolution newer than the
+        // verdict means a human addressed the named condition in the repo;
+        // verify that by re-review instead of re-escalating every tick.
+        const acknowledged = state.escalations.some(
+          (e) =>
+            e.resolved &&
+            e.resolved_at !== null &&
+            e.reason.includes(`task ${task.id}`) &&
+            review!.lastTouched !== null &&
+            Date.parse(e.resolved_at) / 1000 > review!.lastTouched,
+        )
+        if (!acknowledged) return escalate('D17', `reviewer escalated task ${task.id} — see ${review!.path}`, 'escalation')
+        dispatches.push({
+          role: 'reviewer',
+          task: task.id,
+          round: task.review_rounds + 1,
+          bounce: null,
+          reason: `task ${task.id}: escalation resolved after the escalate verdict — dispatch re-review round`,
+        })
+        continue
+      }
       // request-changes: whose turn? The task file's notes record the
       // implementer's response; newer than the review means responded.
       const taskPath = obs.taskFiles.get(task.id)?.path
@@ -288,6 +356,9 @@ function implementPhase(obs: RunObservation): DerivedAction {
   // Bookkeeping converges state before anything new launches (one transition per tick).
   if (updates.length > 0) return record('D16', updates, 'review verdicts landed — record the bookkeeping')
   if (dispatches.length > 0) return gatedDispatch(obs, dispatches, dispatches.every((d) => d.role === 'reviewer') ? 'D13' : 'D11')
+
+  if (frozen.length > 0)
+    return rest('D20', `task(s) ${frozen.join(', ')} failed and frozen — awaiting the naming escalation's resolution`)
 
   const allComplete = state.tasks.every((t) => G2_COMPLETE_STATUSES.has(t.status))
   if (!allComplete) return rest('D12', 'tasks in flight — nothing derivable until an artifact lands')

@@ -4,14 +4,20 @@ import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import { parse as parseYaml } from 'yaml'
 import { z } from 'zod'
-import { isGitRepo, LocalGitSource, readFileIfExists } from './local-source.ts'
-import type { RunSource } from './source.ts'
+import { LocalGitSource, readFileIfExists, repoToplevel } from '../sources/local-source.ts'
+import type { RunSource } from '../sources/source.ts'
 
 const sourceEntrySchema = z.object({
   name: z.string().optional(),
   path: z.string(),
   push: z.boolean().optional().default(false),
-  fetch_interval: z.number().optional(),
+  /** Seconds between `git fetch`es of origin; unset = never poll. */
+  fetch_interval: z.number().positive().optional(),
+  /**
+   * Override the `.agentic` default when this source was integrated with a
+   * custom `integrate.py --prefix` (#94) — otherwise auto-detected.
+   */
+  agentic_prefix: z.string().optional(),
 })
 
 const configSchema = z.object({
@@ -50,11 +56,12 @@ export async function loadSources(opts: {
     const sources: RunSource[] = []
     for (const raw of opts.repoOverrides) {
       const path = isAbsolute(raw) ? raw : resolve(cwd, raw)
-      if (!(await isGitRepo(path))) {
+      const top = await repoToplevel(path)
+      if (top === null) {
         warnings.push(`--repo ${raw}: not a git repository, skipped`)
         continue
       }
-      sources.push(new LocalGitSource(slugForPath(path), path))
+      sources.push(new LocalGitSource(slugForPath(top), top))
     }
     return { sources, configPath: null, warnings }
   }
@@ -73,14 +80,21 @@ export async function loadSources(opts: {
     const seen = new Set<string>()
     for (const entry of parsed.sources) {
       const path = entry.path.startsWith('~') ? join(homedir(), entry.path.slice(1)) : resolve(entry.path)
-      if (!(await isGitRepo(path))) {
+      const top = await repoToplevel(path)
+      if (top === null) {
         warnings.push(`source ${entry.name ?? entry.path}: ${path} is not a git repository, skipped`)
         continue
       }
-      let id = entry.name ?? slugForPath(path)
+      let id = entry.name ?? slugForPath(top)
       while (seen.has(id)) id = `${id}-2`
       seen.add(id)
-      sources.push(new LocalGitSource(id, path, { push: entry.push }))
+      sources.push(
+        new LocalGitSource(id, path, {
+          push: entry.push,
+          fetchIntervalSeconds: entry.fetch_interval,
+          frameworkPrefix: entry.agentic_prefix,
+        }),
+      )
     }
     if (sources.length === 0) {
       warnings.push(`config at ${configPath} yielded no usable sources; falling back to current repo`)
@@ -93,8 +107,9 @@ export async function loadSources(opts: {
 }
 
 async function fallbackToCwd(cwd: string, warnings: string[]): Promise<LoadedConfig> {
-  if (await isGitRepo(cwd)) {
-    return { sources: [new LocalGitSource(slugForPath(cwd), cwd)], configPath: null, warnings }
+  const top = await repoToplevel(cwd)
+  if (top !== null) {
+    return { sources: [new LocalGitSource(slugForPath(top), top)], configPath: null, warnings }
   }
   warnings.push(`${cwd} is not a git repository and no config exists at ${defaultConfigPath()}`)
   return { sources: [], configPath: null, warnings }

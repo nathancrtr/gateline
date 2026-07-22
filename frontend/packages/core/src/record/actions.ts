@@ -13,8 +13,9 @@ import {
   type GateId,
   type Phase,
   type RunState,
+  type Identity,
+  type StateDocMutation,
 } from './schema.ts'
-import type { Identity, StateDocMutation } from './source.ts'
 
 export type DecisionAction = 'approve' | 'decline' | 'resolve-escalation' | 'pause' | 'resume'
 
@@ -28,6 +29,16 @@ export interface DecisionInput {
   escalationIndex?: number
   /** approve: also move phase forward (the v0 human is the orchestrator). Default true. */
   advancePhase?: boolean
+  /**
+   * approve: sign the gate but pause the run in the same commit, instead of
+   * advancing. This is the dispatch-safe way to approve when a human decision
+   * still stands between this gate and the next phase's producer: a bare
+   * `advancePhase: false` leaves the approved gate visible to the engine,
+   * whose convergence rule advances the phase and dispatches anyway.
+   */
+  hold?: boolean
+  /** hold: what the run is waiting on; recorded in paused_reason. Required with hold. */
+  holdReason?: string
   /** pause: reason recorded in paused_reason. */
   pauseReason?: string
   /** resume: target phase; derived from the gate ledger when omitted. */
@@ -62,7 +73,13 @@ export function planDecision(state: RunState, input: DecisionInput, who: Identit
         )
       if (!input.burden || !BURDENS.includes(input.burden))
         throw new DecisionError(`approve requires a burden category (${BURDENS.join(' | ')}) — it is the pilot's headline metric`)
-      const advance = input.advancePhase !== false
+      const hold = input.hold === true
+      const holdReason = input.holdReason?.trim()
+      if (hold && !holdReason)
+        throw new DecisionError('hold requires a reason — it names the decision the run is waiting on, and the inbox shows it')
+      if (hold && input.advancePhase === false)
+        throw new DecisionError('hold already implies not advancing — omit advancePhase')
+      const advance = !hold && input.advancePhase !== false
       const nextPhase = PHASE_AFTER_GATE[gate]
       const at = nowIso()
       return {
@@ -75,10 +92,13 @@ export function planDecision(state: RunState, input: DecisionInput, who: Identit
           if (advance) {
             doc.setIn(['phase'], nextPhase)
             doc.setIn(['paused_reason'], null)
+          } else if (hold) {
+            doc.setIn(['phase'], 'paused')
+            doc.setIn(['paused_reason'], holdReason)
           }
         },
-        message: `state(${slug}): ${gate} approved by ${who.name} [burden: ${input.burden}]`,
-        summary: `Approve ${gate}${advance ? ` and move ${slug} to phase "${nextPhase}"` : ''}`,
+        message: `state(${slug}): ${gate} approved by ${who.name} [burden: ${input.burden}]${hold ? ` and held (${holdReason})` : ''}`,
+        summary: `Approve ${gate}${advance ? ` and move ${slug} to phase "${nextPhase}"` : ''}${hold ? ` and hold ${slug} paused (${holdReason})` : ''}`,
       }
     }
     case 'decline': {

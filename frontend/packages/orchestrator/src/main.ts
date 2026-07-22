@@ -6,23 +6,17 @@
 //   shadow <slug>    replay a run's history, derived vs actual (M1)
 //   sweep <role>     force a scheduled sweep now (ignores dueness, not the guards)
 import { Command } from 'commander'
-import { Git, LocalGitSource, type Identity } from '@agentic/core'
+import { CodeTreeMonitor, Git, LocalGitSource, resolveCodeRepo, SUPERSEDE_EXIT_CODE } from '@agentic/core'
 import { loadRegistry, type Registry } from './registry.ts'
 import { deriveAll } from './tick.ts'
 import { formatAction } from './derive.ts'
 import { formatShadowStep, shadowReplay } from './shadow.ts'
-import { Engine } from './engine.ts'
-import { HeadlessDispatcher } from './seam.ts'
-import { loadHeadlessManifest } from './manifest.ts'
-import { RoutingDispatcher } from './router.ts'
-import { Scheduler, type SweepOutcome } from './schedule.ts'
+import type { Engine } from './engine.ts'
+import type { Scheduler, SweepOutcome } from './schedule.ts'
 import { runLoop } from './triggers.ts'
+import { assembleOrchestrator, BOT_IDENTITY } from './start.ts'
 
-/** One identity per orchestrator install (resolved question 4). */
-export const BOT_IDENTITY: Identity = {
-  name: 'agentic-orchestrator',
-  email: 'orchestrator@agentic.invalid',
-}
+export { BOT_IDENTITY }
 
 const program = new Command()
 program
@@ -31,53 +25,54 @@ program
   .version('0.1.0')
   .option('--repo <path>', 'repository to operate on (default: cwd)', process.cwd())
   .option(
+    '--agentic-prefix <prefix>',
+    'metadata prefix of an integrate.py --layout prefixed host, when not the .agentic default',
+  )
+  .option(
     '--adapter <name>',
     'headless adapter(s), repeatable; the first is the default runner, later ones satisfy avoid_vendor_of pins',
     (value: string, acc: string[]) => [...acc, value],
     [] as string[],
   )
+  // Hosted mode (ORCHESTRATOR.md §2 first deployment): the machine is
+  // disposable, origin is the record; unattended dispatch needs hard ceilings.
+  .option('--push', 'push every orchestrator commit to origin (hosted mode)')
+  .option('--spend-limit-usd <usd>', 'refuse new dispatches when projected spend across all active runs exceeds this', parseFloat)
+  .option('--require-budget', 'refuse dispatch on any run missing budget.cost_limit_usd')
+  .option('--role-timeout <seconds>', 'wall clock per dispatched role before its process group is killed (default 1800)', parseFloat)
 
 interface Opened {
   dir: string
   source: LocalGitSource
   registry: Registry | null
+  frameworkPrefix?: string
 }
 
 async function open(): Promise<Opened> {
-  const dir = program.opts<{ repo: string }>().repo
+  const { repo: dir, agenticPrefix } = program.opts<{ repo: string; agenticPrefix?: string }>()
   const git = new Git(dir)
-  return { dir, source: new LocalGitSource('local', dir), registry: await loadRegistry(git, await git.defaultBranch()) }
+  return {
+    dir,
+    source: new LocalGitSource('local', dir, { frameworkPrefix: agenticPrefix }),
+    registry: await loadRegistry(git, await git.defaultBranch(), agenticPrefix),
+    frameworkPrefix: agenticPrefix,
+  }
 }
 
-/** Engine and scheduler share one dispatcher, so sweeps meter through the same seam (§6). */
+/** CLI flags → the shared assembly (start.ts): one construction path for the binary and `agentic up`. */
 async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler: Scheduler }> {
   const names = program.opts<{ adapter: string[] }>().adapter
-  const log = (line: string) => console.log(line)
-  const adapters = await Promise.all(
-    (names.length ? names : ['claude-code']).map(async (name) => {
-      const manifest = await loadHeadlessManifest(opened.dir, name)
-      return { manifest, dispatcher: new HeadlessDispatcher(manifest) }
-    }),
-  )
-  const dispatcher =
-    adapters.length === 1 && !opened.registry
-      ? adapters[0]!.dispatcher
-      : new RoutingDispatcher(adapters, opened.registry ?? { profiles: {}, bindings: {}, pricing: {}, estimates: {} }, log)
-  const engine = new Engine({
+  const hosted = program.opts<{ push?: boolean; spendLimitUsd?: number; requireBudget?: boolean; roleTimeout?: number }>()
+  return assembleOrchestrator({
     repoDir: opened.dir,
-    identity: BOT_IDENTITY,
-    dispatcher,
-    registry: opened.registry,
-    log,
+    adapters: names,
+    frameworkPrefix: opened.frameworkPrefix,
+    push: hosted.push,
+    spendLimitUsd: hosted.spendLimitUsd ?? null,
+    requireBudget: hosted.requireBudget,
+    roleTimeoutSeconds: hosted.roleTimeout,
+    log: (line: string) => console.log(line),
   })
-  const scheduler = new Scheduler({
-    repoDir: opened.dir,
-    identity: BOT_IDENTITY,
-    dispatcher,
-    registry: opened.registry,
-    log,
-  })
-  return { engine, scheduler }
 }
 
 const printSweep = (s: SweepOutcome) =>
@@ -100,6 +95,10 @@ program
       return
     }
     const { engine, scheduler } = await buildEngine(opened)
+    // A live one-shot tick owns its own freshness (#104); --dry-run stays
+    // read-only end to end — it derives from whatever the clone has and
+    // moves no refs, not even fast-forwards.
+    await engine.syncFromRemote()
     const outcomes = await engine.tick()
     for (const o of outcomes) console.log(`${o.slug}: ${o.action.kind} [${o.action.rule}]${o.launched ? ` launched ${o.launched}` : ''} — ${o.detail}`)
     for (const s of await scheduler.tick()) printSweep(s)
@@ -114,19 +113,33 @@ program
   .action(async (opts: { heartbeat: string }) => {
     const opened = await open()
     const { engine, scheduler } = await buildEngine(opened)
-    const loop = await runLoop(engine, opened.dir, {
+    // Self-supersede (#141): the code tree is this binary's own checkout —
+    // resolved from our own import.meta.url — independent of the run source
+    // at opened.dir.
+    const codeRepo = resolveCodeRepo(import.meta.url)
+    const codeMonitor = codeRepo ? await CodeTreeMonitor.create(codeRepo) : undefined
+    // `stop` is referenced by the supersede callback passed into runLoop
+    // below, before `loop` itself exists — set once runLoop resolves, and
+    // the callback (which only fires later, on a heartbeat) reads it then.
+    let loop: Awaited<ReturnType<typeof runLoop>> | null = null
+    const stop = async (exitCode: number) => {
+      console.log('draining in-flight dispatches…')
+      await loop?.stop()
+      process.exit(exitCode)
+    }
+    loop = await runLoop(engine, opened.dir, {
       heartbeatMs: Number(opts.heartbeat) * 1000,
       scheduler,
       log: (line) => console.log(line),
+      codeMonitor,
+      onSupersede: (status) => {
+        console.log(`code tree moved ${status.startHead}..${status.codeHead}, superseding — draining and exiting ${SUPERSEDE_EXIT_CODE}`)
+        void stop(SUPERSEDE_EXIT_CODE)
+      },
     })
     console.log(`watching ${opened.dir} (heartbeat ${opts.heartbeat}s; bot identity ${BOT_IDENTITY.name}) — ^C to stop`)
-    const stop = async () => {
-      console.log('draining in-flight dispatches…')
-      await loop.stop()
-      process.exit(0)
-    }
-    process.on('SIGINT', () => void stop())
-    process.on('SIGTERM', () => void stop())
+    process.on('SIGINT', () => void stop(0))
+    process.on('SIGTERM', () => void stop(0))
   })
 
 program

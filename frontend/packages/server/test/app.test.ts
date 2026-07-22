@@ -2,7 +2,7 @@
 import { rm } from 'node:fs/promises'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { generateFixtureRepo, type FixtureRepo } from '@agentic/fixtures'
-import { LocalGitSource } from '@agentic/core'
+import { LocalGitSource, writeEngineHealth } from '@agentic/core'
 import type { Hono } from 'hono'
 import { createApp } from '../src/app.ts'
 
@@ -133,5 +133,41 @@ describe('the write route (R2/R3)', () => {
     })
     expect(status).toBe(400)
     expect(body.error).toMatch(/already approved/)
+  })
+})
+
+describe('GET /api/engine-health (#141 drift passthrough)', () => {
+  it('passes commit/codeHead/codeState through undefined-safe (pre-#141 files have none)', async () => {
+    const before = await get('/api/engine-health')
+    expect(before.body.engines.fixture).toBeNull()
+
+    await writeEngineHealth(fixture.dir, {
+      at: new Date().toISOString(),
+      pid: process.pid,
+      heartbeatMs: 180_000,
+      inFlight: 0,
+      pushRejections: {},
+    })
+    const noDrift = await get('/api/engine-health')
+    expect(noDrift.body.engines.fixture.commit).toBeUndefined()
+    expect(noDrift.body.engines.fixture.codeHead).toBeUndefined()
+    expect(noDrift.body.engines.fixture.codeState).toBeUndefined()
+
+    await writeEngineHealth(fixture.dir, {
+      at: new Date().toISOString(),
+      pid: process.pid,
+      heartbeatMs: 180_000,
+      inFlight: 0,
+      pushRejections: {},
+      commit: 'a'.repeat(40),
+      codeHead: 'b'.repeat(40),
+      codeState: 'superseded-pending',
+    })
+    const drift = await get('/api/engine-health')
+    expect(drift.body.engines.fixture).toMatchObject({
+      commit: 'a'.repeat(40),
+      codeHead: 'b'.repeat(40),
+      codeState: 'superseded-pending',
+    })
   })
 })

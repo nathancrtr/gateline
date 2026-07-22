@@ -7,8 +7,10 @@ import {
   computeMetrics,
   deriveReadiness,
   DecisionError,
+  engineHealthStale,
   parseUnifiedDiff,
   planDecision,
+  readEngineHealth,
   summarizeRun,
   validateArtifact,
   type Burden,
@@ -19,17 +21,45 @@ import {
   type RunSource,
 } from '@agentic/core'
 import { GenerationCache } from './cache.ts'
+import { verifySignature, type WebhookConfig } from './webhook.ts'
 
 export interface AppDeps {
   sources: RunSource[]
   cache?: GenerationCache
   /** Called once per SSE client; returns an unsubscribe. */
   subscribe?: (send: (event: string) => void) => () => void
+  /** GitHub webhook intake; absent → the route does not exist. */
+  webhook?: WebhookConfig
 }
 
 export function createApp(deps: AppDeps): Hono {
   const cache = deps.cache ?? new GenerationCache()
   const app = new Hono()
+
+  // R2 note: the webhook is not a second write path — pushes trigger a fetch,
+  // and review events record a human's PR approval through writeState, the
+  // same single path decisions take. HMAC is the route's authentication.
+  if (deps.webhook) {
+    const webhook = deps.webhook
+    app.post('/api/webhooks/github', async (c) => {
+      const raw = await c.req.text()
+      if (!verifySignature(webhook.secret, raw, c.req.header('x-hub-signature-256'))) {
+        return c.json({ error: 'invalid signature' }, 401)
+      }
+      try {
+        JSON.parse(raw)
+      } catch {
+        return c.json({ error: 'body is not JSON' }, 400)
+      }
+      const event = c.req.header('x-github-event') ?? ''
+      try {
+        const detail = await webhook.onEvent(event, JSON.parse(raw))
+        return c.json({ ok: true, detail })
+      } catch (e) {
+        return c.json({ error: (e as Error).message }, 500)
+      }
+    })
+  }
 
   const sourceById = (id: string) => deps.sources.find((s) => s.id === id)
 
@@ -42,6 +72,42 @@ export function createApp(deps: AppDeps): Hono {
   }
 
   app.get('/api/health', (c) => c.json({ ok: true, sources: deps.sources.map((s) => s.id) }))
+
+  // Engine liveness per source (#100): null = no co-located engine has ever
+  // reported on this deployment (a viewer-only install — not an outage);
+  // stale = one was configured here and has gone silent, which the UI
+  // renders as an outage banner instead of "waiting on gate".
+  app.get('/api/engine-health', async (c) => {
+    const out: Record<
+      string,
+      {
+        at: string
+        inFlight: number
+        pushRejections: Record<string, number>
+        stale: boolean
+        commit?: string
+        codeHead?: string
+        codeState?: 'fresh' | 'superseded-pending' | 'paused'
+      } | null
+    > = {}
+    for (const s of deps.sources) {
+      const dir = (s as { dir?: string }).dir
+      if (!dir) continue
+      const health = await readEngineHealth(dir)
+      out[s.id] = health
+        ? {
+            at: health.at,
+            inFlight: health.inFlight,
+            pushRejections: health.pushRejections ?? {},
+            stale: engineHealthStale(health),
+            commit: health.commit,
+            codeHead: health.codeHead,
+            codeState: health.codeState,
+          }
+        : null
+    }
+    return c.json({ engines: out, now: Math.floor(Date.now() / 1000) })
+  })
 
   app.get('/api/inbox', async (c) => {
     const { inbox } = await cache.get('portfolio', () => buildPortfolio(deps.sources))
@@ -124,6 +190,8 @@ export function createApp(deps: AppDeps): Hono {
       escalationIndex?: number
       pauseReason?: string
       resumePhase?: Phase
+      hold?: boolean
+      holdReason?: string
     }
     try {
       body = await c.req.json()

@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GateEntry, RunState, Validation } from '@agentic/core'
 import { deriveAction, DEFAULT_ESTIMATE_USD } from '../src/derive.ts'
-import type { RunObservation, TaskFileInfo } from '../src/observe.ts'
+import type { LedgerEntry, RunObservation, TaskFileInfo } from '../src/observe.ts'
 
 const gate = (over: Partial<GateEntry> = {}): GateEntry => ({ approved: false, by: null, at: null, notes: null, burden: null, ...over })
 
@@ -48,6 +48,20 @@ const taskFile = (id: string, over: Partial<TaskFileInfo> = {}): [string, TaskFi
   { path: `tasks/${id}.yaml`, surface: [`src/${id}.py`], dependsOn: [], ...over },
 ]
 
+/** A closed-failed implementer ledger entry — the D20 timestamp anchor. */
+const failedAttempt = (task: string, at: string): LedgerEntry => ({
+  at,
+  role: 'implementer',
+  task,
+  round: 1,
+  adapter: 'claude-code',
+  model: null,
+  tokens_in: null,
+  tokens_out: null,
+  cost_usd: 8,
+  failed: true,
+})
+
 describe('the derivation table, one rule per row', () => {
   it('D0 — malformed state rests; a human owns it', () => {
     const a = deriveAction(obs({ state: null, stateError: 'not yaml' }))
@@ -63,6 +77,16 @@ describe('the derivation table, one rule per row', () => {
     expect(a).toMatchObject({ kind: 'rest', rule: 'D2' })
   })
 
+  it('D2 — an approve-and-hold rests even though the signed gate would otherwise converge forward (D5) and dispatch (D6)', () => {
+    const s = state({
+      phase: 'paused',
+      paused_reason: 'awaiting design-candidate selection',
+      gates: { G0: gate({ approved: true, by: 'Operator', at: '2026-07-15T00:00:00Z' }), G1: gate(), G2: gate(), G3: gate() },
+    })
+    const a = deriveAction(obs({ state: s, artifacts: ['intent-brief.md', 'spec.md'] }))
+    expect(a).toMatchObject({ kind: 'rest', rule: 'D2' })
+  })
+
   it('D3 — unresolved escalation rests', () => {
     const s = state({ escalations: [{ at: null, from_role: 'verifier', reason: 'x', resolved: false, resolved_by: null, resolved_at: null, resolution: null }] })
     expect(deriveAction(obs({ state: s }))).toMatchObject({ kind: 'rest', rule: 'D3' })
@@ -71,6 +95,33 @@ describe('the derivation table, one rule per row', () => {
   it('D4 — round cap escalates and pauses', () => {
     const s = state({ phase: 'implement', tasks: [{ id: '01-x', status: 'in-review', review_rounds: 3 }] })
     expect(deriveAction(obs({ state: s }))).toMatchObject({ kind: 'escalate', rule: 'D4', pause: 'round-cap' })
+  })
+
+  it('D4 — an approve on the cap round is convergence, not a round-cap failure; D16 records it', () => {
+    // The fleetview-intake regression: rounds bookkeeping lands one tick before
+    // the status transition, so the task sits at rounds == cap, in-review, with
+    // the approve verdict already delivered.
+    const s = state({ phase: 'implement', tasks: [{ id: '01-x', status: 'in-review', review_rounds: 3 }] })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-x')]),
+        reviews: [{ path: 'review-01.md', task: '01-x', verdicts: ['request-changes', 'request-changes', 'approve'], lastTouched: 500 }],
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'record', rule: 'D16', updates: [{ field: 'task-status', task: '01-x', to: 'review-approved' }] })
+  })
+
+  it('D4 — the approve exemption is narrow: a request-changes at the cap still escalates', () => {
+    const s = state({ phase: 'implement', tasks: [{ id: '01-x', status: 'in-review', review_rounds: 3 }] })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-x')]),
+        reviews: [{ path: 'review-01.md', task: '01-x', verdicts: ['request-changes', 'request-changes', 'request-changes'], lastTouched: 500 }],
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'escalate', rule: 'D4', pause: 'round-cap' })
   })
 
   it('D5 — gate approved but phase not advanced converges via bookkeeping', () => {
@@ -249,6 +300,163 @@ describe('the derivation table, one rule per row', () => {
       }),
     )
     expect(a).toMatchObject({ kind: 'escalate', rule: 'D17', pause: 'escalation' })
+  })
+
+  it('D17 — a resolution older than the escalate verdict still escalates (the verdict is the newer fact)', () => {
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:05:00.000Z', // epoch 300 < lastTouched 500
+          resolution: 'stale resolution from an earlier round',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'escalate', rule: 'D17', pause: 'escalation' })
+  })
+
+  it('D17 — a resolution newer than the escalate verdict dispatches the re-review round instead of re-escalating', () => {
+    // The fleetview-design regression: resolve+resume re-escalated identically
+    // every tick because the escalate verdict stands in an append-only artifact.
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600 > lastTouched 500
+          resolution: 'condition repaired on the branch',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'dispatch', rule: 'D13' })
+    expect(a.kind === 'dispatch' && a.dispatches[0]).toMatchObject({ role: 'reviewer', task: '01-a', round: 2 })
+  })
+
+  it('D20 — a failed task whose naming escalation resolved after the last failure returns to pending', () => {
+    // The #147 recovery: the engine froze the task at `failed` when its
+    // implementer failed twice; the resolution is the unblocking input.
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'failed', review_rounds: 0 }],
+      escalations: [
+        {
+          at: '1970-01-01T00:06:00.000Z',
+          from_role: 'orchestrator',
+          reason: 'implementer (01-a) failed twice: model outage',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z', // after the 00:05 failure below
+          resolution: 'outage over — retry',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        ledger: [failedAttempt('01-a', '1970-01-01T00:03:00.000Z'), failedAttempt('01-a', '1970-01-01T00:05:00.000Z')],
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'record', rule: 'D20', updates: [{ field: 'task-status', task: '01-a', to: 'pending' }] })
+  })
+
+  it('D20 — a resolution older than the last failure rests frozen (it acknowledged an earlier escalation)', () => {
+    // The re-fire guard: after a D20 recovery the old resolution stays in
+    // state; a fresh pair of failures must not be unblocked by it.
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'failed', review_rounds: 0 }],
+      escalations: [
+        {
+          at: '1970-01-01T00:02:00.000Z',
+          from_role: 'orchestrator',
+          reason: 'implementer (01-a) failed twice: model outage',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:04:00.000Z', // before the 00:05 failure below
+          resolution: 'unblocked',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        ledger: [failedAttempt('01-a', '1970-01-01T00:05:00.000Z')],
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'rest', rule: 'D20' })
+  })
+
+  it('D20 — a resolution naming a different task rests frozen', () => {
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'failed', review_rounds: 0 }],
+      escalations: [
+        {
+          at: '1970-01-01T00:06:00.000Z',
+          from_role: 'orchestrator',
+          reason: 'implementer (02-b) failed twice: model outage',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z',
+          resolution: 'unblocked',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        ledger: [failedAttempt('01-a', '1970-01-01T00:05:00.000Z')],
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'rest', rule: 'D20' })
+  })
+
+  it('D20 — a frozen task does not block other tasks from dispatching', () => {
+    const s = state({
+      phase: 'implement',
+      tasks: [
+        { id: '01-a', status: 'failed', review_rounds: 0 },
+        { id: '02-b', status: 'pending', review_rounds: 0 },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a'), taskFile('02-b')]),
+        ledger: [failedAttempt('01-a', '1970-01-01T00:05:00.000Z')],
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'dispatch', rule: 'D11' })
+    expect(a.kind === 'dispatch' && a.dispatches).toHaveLength(1)
+    expect(a.kind === 'dispatch' && a.dispatches[0]).toMatchObject({ role: 'implementer', task: '02-b' })
   })
 
   it('D19 — implement phase with empty state.tasks seeds it from the task files', () => {

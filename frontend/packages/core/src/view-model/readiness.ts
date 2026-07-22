@@ -12,9 +12,9 @@
 //
 // A gate whose packet is present but malformed yields a NON-reviewable item —
 // the bounce view (rule R3) — never a reviewable card.
-import { G2_COMPLETE_STATUSES, gateUndecided, GATE_PHASES, type GateId, type RunState } from './schema.ts'
-import { validateArtifact, type Validation } from './validate.ts'
-import type { RunRef, RunSource } from './source.ts'
+import { G2_COMPLETE_STATUSES, gateUndecided, GATE_PHASES, type GateId, type RunState } from '../record/schema.ts'
+import { validateArtifact, type Validation } from '../record/validate.ts'
+import type { RunRef, RunSource } from '../sources/source.ts'
 
 export const GATE_QUESTIONS: Record<GateId, string> = {
   G0: 'Is this what we actually want built?',

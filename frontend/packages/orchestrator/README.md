@@ -52,6 +52,18 @@ node packages/orchestrator/src/main.ts --repo ~/repos/myproject \
 node packages/orchestrator/src/main.ts --repo ~/repos/myproject sweep historian
 ```
 
+**Merge-updates.** `watch` (and `agentic up`, its co-located twin) checks the
+code checkout it runs from at each heartbeat/startup tick boundary; once a
+`git pull` there fast-forwards past the commit the process started on, it
+drains in-flight dispatches and exits `75` (`SUPERSEDE_EXIT_CODE`,
+docs/ORCHESTRATOR.md §13 — self-supersede, #141) instead of continuing to
+reconcile on stale code. Pair `watch` with a supervisor (systemd
+`RestartForceExitStatus=75`, launchd `KeepAlive`, or the Fly recipe's own
+restart loop) for hands-off merge-updates; unsupervised, the process just
+stops and waits for a manual restart. `agentic upgrade` is the one-command
+update: refuses on a dirty tree, `git pull --ff-only`, then `npm install` if
+`HEAD` moved.
+
 Scheduled roles (design §4.6): when the target repo commits an
 `orchestrator.yaml` with a `schedules:` section, every tick also reconciles
 those schedules — a due Historian sweep is seeded as `runs/historian-<date>/`
@@ -132,5 +144,9 @@ anywhere; restart converges (`test/hardening.test.ts` drills exactly this).
 Running M2+ against real work is gated on the DESIGN.md §7 promotion criterion:
 sustained majority-`confirmation` burden across v0 gate decisions, and the
 shadow bar of **three** full v0 runs whose disagreements are all dispositioned
-(`shadow-wordfreq.md` is run 1 of 3). Until then, `tick --dry-run` and `shadow`
-are the sanctioned modes outside toy runs.
+— met 2026-07-13 (`shadow-wordfreq.md`, `shadow-mdtoc.md`, `shadow-dupefind.md`).
+M2 begins with a toy run in this repo, humans at every gate, on the operator's
+laptop or their hosted cockpit machine (docs/DEPLOY.md, `ORCH_ENABLED=1` —
+which wires in `--push`, `--require-budget`, and `--spend-limit-usd`). Until
+that toy run closes, `tick --dry-run` and `shadow` remain the sanctioned modes
+outside toy runs.

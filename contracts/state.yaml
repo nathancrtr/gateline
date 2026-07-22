@@ -47,13 +47,16 @@ gates:                    # a gate entry is written ONLY by the named human.
   G3: {approved: false, by: null, at: null, notes: null}
 
 tasks:                    # mirrors tasks/*.yaml status; the ONLY home of review_rounds
-                          # status: pending | dispatched | in-progress | in-review |
-                          #         review-approved | verified | done
+                          # status: pending | dispatched | failed | in-progress |
+                          #         in-review | review-approved | verified | done
                           # `dispatched`: a producer was launched but has not yet
                           # committed its artifact — the v1 commit-then-launch guard
-                          # (docs/ORCHESTRATOR.md §4.4). `review-approved`: review
-                          # passed, verification still pending (first improvised in
-                          # the wordfreq run, contractual since).
+                          # (docs/ORCHESTRATOR.md §4.4). `failed`: the implementer
+                          # failed twice and the run escalated; the orchestrator
+                          # returns the task to pending once the naming escalation
+                          # is resolved. `review-approved`: review passed,
+                          # verification still pending (first improvised in the
+                          # wordfreq run, contractual since).
   - {id: 01-example-slug, status: pending, review_rounds: 0}
 
 escalations: []           # append-only: {at, from_role, reason, resolved}

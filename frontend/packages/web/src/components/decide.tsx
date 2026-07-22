@@ -20,6 +20,8 @@ export function DecidePanel({ item, primary = false }: { item: InboxItem; primar
   const [mode, setMode] = useState<Mode>('idle')
   const [burden, setBurden] = useState<Burden | null>(null)
   const [notes, setNotes] = useState('')
+  const [hold, setHold] = useState(false)
+  const [holdReason, setHoldReason] = useState('')
   const [flash, setFlash] = useState<{ kind: 'ok' | 'conflict' | 'error'; text: string } | null>(null)
 
   // Keyboard loop for the page's primary card: a approve · x decline ·
@@ -59,6 +61,8 @@ export function DecidePanel({ item, primary = false }: { item: InboxItem; primar
       setMode('idle')
       setBurden(null)
       setNotes('')
+      setHold(false)
+      setHoldReason('')
       void queryClient.invalidateQueries()
     },
     onError: (e) => {
@@ -76,7 +80,16 @@ export function DecidePanel({ item, primary = false }: { item: InboxItem; primar
 
   const submitApprove = () => {
     if (!burden || !gate) return
-    mutation.mutate({ ...base, action: 'approve', gate, burden, notes: notes.trim() || undefined })
+    if (hold && !holdReason.trim()) return
+    mutation.mutate({
+      ...base,
+      action: 'approve',
+      gate,
+      burden,
+      notes: notes.trim() || undefined,
+      hold: hold || undefined,
+      holdReason: hold ? holdReason.trim() : undefined,
+    })
   }
   const submitDecline = () => {
     if (!gate || !notes.trim()) return
@@ -156,9 +169,24 @@ export function DecidePanel({ item, primary = false }: { item: InboxItem; primar
             </div>
           </fieldset>
           <NotesField value={notes} onChange={setNotes} placeholder="Notes (optional) — recorded in the gate entry" />
+          <label className="flex cursor-pointer items-baseline gap-2 text-sm text-muted">
+            <input type="checkbox" checked={hold} onChange={(e) => setHold(e.target.checked)} data-decide="hold" />
+            <span>
+              Approve and hold — sign the gate but pause the run in the same commit, so nothing dispatches until you resume.
+              <span className="ml-1 text-xs text-faint">Use when a decision of yours still stands between this gate and the next phase.</span>
+            </span>
+          </label>
+          {hold && (
+            <NotesField
+              value={holdReason}
+              onChange={setHoldReason}
+              autoFocus
+              placeholder="What is the run waiting on? Recorded as the pause reason — required."
+            />
+          )}
           <div className="flex gap-2">
-            <Button primary onClick={submitApprove} disabled={!burden || mutation.isPending} data-decide="approve-confirm">
-              {mutation.isPending ? 'Committing…' : `Approve ${gate}`}
+            <Button primary onClick={submitApprove} disabled={!burden || (hold && !holdReason.trim()) || mutation.isPending} data-decide="approve-confirm">
+              {mutation.isPending ? 'Committing…' : hold ? `Approve ${gate} and hold` : `Approve ${gate}`}
             </Button>
             <Button onClick={() => setMode('idle')}>Cancel</Button>
           </div>

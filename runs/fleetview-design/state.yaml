@@ -1,11 +1,11 @@
 run: fleetview-design
 branch: run/fleetview-design
-phase: release
-paused_reason: null
+phase: paused
+paused_reason: escalation
 
 budget:
   cost_limit_usd: 200
-  cost_spent_usd: 148.61
+  cost_spent_usd: 150.61
   ledger:
     # v0 hand-appended; costs are the registry static estimates (harness
     # reports combined subagent tokens without an in/out split to price
@@ -643,7 +643,8 @@ budget:
       model: anthropic/claude-sonnet-5
       tokens_in: null
       tokens_out: null
-      cost_usd: null
+      cost_usd: 2
+      failed: true
 
 gates:
   G0:
@@ -990,3 +991,8 @@ escalations:
       in-flight — the run rested wedged until a 22:16Z origin-side resolution
       reset the task to pending (the #147 freeze, fixed forward in #148; this
       entry is the two lineages merged)"
+  - at: 2026-07-22T01:38:09.782Z
+    from_role: orchestrator
+    reason: "ops failed twice: run branch run/fleetview-design is checked out at
+      /Users/nthncrtr/repos/agentic-sandbox/.claude/worktrees/design-dept-r…"
+    resolved: false

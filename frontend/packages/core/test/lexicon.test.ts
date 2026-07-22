@@ -49,6 +49,9 @@ Cites R1 and AC1.1.
 ### ADR-2: Original decision
 - **Choice:** superseded by nothing — this tests document order, not realism.
 
+### ADR-3: No Choice bullet
+Prose rationale only, outside the contract's bullet shape.
+
 ## Risks
 None.
 `
@@ -75,8 +78,6 @@ describe('buildLexicon', () => {
 
   it('extracts decisions, carrying the amendment qualifier', () => {
     expect(resolveId(lex, 'ADR-1')).toMatchObject({ kind: 'decision', shortName: 'Pure core, thin shell', artifact: 'plan.md' })
-    expect(resolveId(lex, 'ADR-1')!.body).toContain('**Choice:** keep logic pure.')
-    expect(resolveId(lex, 'ADR-1')!.body).not.toContain('ADR-1:')
     const amended = lex.entries.filter((e) => e.id === 'ADR-2')
     expect(amended).toHaveLength(2)
     expect(amended[0]!.qualifier).toBe('amendment, 2026-07-08')
@@ -84,6 +85,16 @@ describe('buildLexicon', () => {
 
   it('resolveId returns the last definition in document order', () => {
     expect(resolveId(lex, 'ADR-2')!.shortName).toBe('Original decision')
+  })
+
+  it("a decision's body is its Choice line; the argument stays behind the click-through", () => {
+    expect(resolveId(lex, 'ADR-1')!.body).toBe('keep logic pure.')
+    expect(resolveId(lex, 'ADR-1')!.body).not.toContain('Rejected')
+    expect(resolveId(lex, 'ADR-1')!.definition).toContain('**Rejected:**')
+  })
+
+  it('a decision without a Choice bullet falls back to its full body', () => {
+    expect(resolveId(lex, 'ADR-3')!.body).toBe("Prose rationale only, outside the contract's bullet shape.")
   })
 
   it('ignores definitions inside code fences', () => {
@@ -130,7 +141,10 @@ describe('real finished runs', () => {
     expect(r4.body).toMatch(/^Files of size 0 bytes/)
     expect(r4.definition).not.toContain('AC4.1')
     expect(resolveId(lex, 'AC5.1')?.kind).toBe('criterion')
-    expect(resolveId(lex, 'ADR-6')?.kind).toBe('decision')
+    const adr6 = resolveId(lex, 'ADR-6')!
+    expect(adr6.kind).toBe('decision')
+    expect(adr6.body.length).toBeGreaterThan(0)
+    expect(adr6.body).not.toContain('**Rejected:**')
   })
 
   it('amended ADRs carry their qualifiers (mdtoc in-place, wordfreq appended)', () => {

@@ -22,9 +22,12 @@ export interface LexiconEntry {
    * list — criteria are first-class entries of their own, and a card that
    * repeats them renders the same content twice. */
   definition: string
-  /** The definition minus its defining marker (heading line or `AC<n>.<m> — `
-   * prefix): what a human-facing card or footnote shows under a header that
-   * already names the id. Derived by elision only — never rewording. */
+  /** What a human-facing card or footnote shows under a header that already
+   * names the id: the definition minus its defining marker — and for
+   * decisions, just the `**Choice:**` line (the decision in force; the
+   * Rejected/Consequences argument stays behind the click-through). Falls
+   * back to the full block body when no Choice bullet exists. Derived by
+   * elision only — never rewording. */
   body: string
   /** Run-relative path of the defining artifact ('spec.md' | 'plan.md'). */
   artifact: string
@@ -49,6 +52,7 @@ const R_HEADING = /^#{1,6}\s*R(\d+)\s+—\s+(.+?)\s*$/
 const ADR_HEADING = /^#{1,6}\s*ADR-(\d+)(?:\s*\(([^)]+)\))?:\s*(.+?)\s*$/
 const AC_ITEM = /^\s*[-*]\s*(?:\[[ xX]\]\s*)?(AC\d+\.\d+)\s+—\s*(.*)$/
 const AC_LABEL = /^\s*\*\*Acceptance criteria:?\*\*/i
+const CHOICE_ITEM = /^\s*[-*]\s*\*\*Choice:?\*\*\s*(.*)$/i
 const LIST_ITEM = /^\s*[-*]\s/
 const FENCE = /^\s*(```|~~~)/
 
@@ -157,12 +161,25 @@ export function buildLexicon(input: { spec?: string | null; plan?: string | null
       const adr = ADR_HEADING.exec(line.text)
       if (adr) {
         const definition = blockFrom(lines, i)
+        // A decision's card body is its Choice line; the argument lives at
+        // the definition. Fall back to the full body when the block does not
+        // follow the contract's Choice/Rejected/Consequences shape.
+        let body = bodyOf(definition)
+        const end = i + definition.split('\n').length
+        for (let j = i + 1; j < end; j++) {
+          const c = CHOICE_ITEM.exec(lines[j]!.text)
+          if (c && !lines[j]!.inFence) {
+            const item = itemFrom(lines, j)
+            body = [c[1]!, ...item.split('\n').slice(1).map((l) => l.trim())].join(' ').trim()
+            break
+          }
+        }
         entries.push({
           id: `ADR-${adr[1]}`,
           kind: 'decision',
           shortName: adr[3]!,
           definition,
-          body: bodyOf(definition),
+          body,
           artifact: 'plan.md',
           line: line.n,
           ...(adr[2] ? { qualifier: adr[2] } : {}),

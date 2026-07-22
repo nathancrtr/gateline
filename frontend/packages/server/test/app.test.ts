@@ -73,6 +73,19 @@ describe('read routes', () => {
     expect('cites AC10.2 and ADR-3'.match(new RegExp(body.pattern, 'g'))).toEqual(['AC10.2', 'ADR-3'])
   })
 
+  it('GET evidence returns presence per criterion with verbatim report quotes', async () => {
+    const { status, body } = await get('/api/runs/fixture/g2-pending/evidence')
+    expect(status).toBe(200)
+    expect(body.hasVerification).toBe(true)
+    const ac11 = body.criteria.find((c: { id: string }) => c.id === 'AC1.1')
+    expect(ac11.evidence[0]).toMatchObject({ artifact: 'verification-report.md', label: 'E1' })
+    expect(ac11.result).toEqual({ verdict: 'verified', evidence: 'see E1' })
+    const ac22 = body.criteria.find((c: { id: string }) => c.id === 'AC2.2')
+    expect(ac22.evidence).toEqual([])
+    expect(ac22.result).toBeNull()
+    expect(ac22.gap).toContain('no oversized sample')
+  })
+
   it('GET diff returns parsed hunks for a branch run and merged flag for done', async () => {
     const branch = await get('/api/runs/fixture/g2-pending/diff')
     expect(branch.status).toBe(200)

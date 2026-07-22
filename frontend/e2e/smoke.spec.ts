@@ -110,6 +110,18 @@ test('run lexicon (#163): ids resolve to verbatim hover cards and jump to their 
   await expect(page.locator('.prose-artifact li .lex-ref', { hasText: 'AC1.1' })).toHaveCount(0)
 })
 
+test('evidence rollup (#165): uncited criteria are the headline; anchors jump to the evidence block', async ({ page }) => {
+  await page.goto('/runs/' + sourceId() + '/g2-pending')
+  const rollup = page.locator('[data-evidence-rollup]').first()
+  await expect(rollup).toContainText('No verification evidence cites:')
+  await expect(rollup).toContainText('AC2.2')
+  await expect(rollup).toContainText('report states')
+  // No computed judgment anywhere — the only verdict text is the report's own words.
+  await rollup.getByRole('link', { name: 'E1', exact: true }).click()
+  await expect(page).toHaveURL(/artifact=verification-report\.md/)
+  await expect(page.locator('#def-E1')).toBeVisible()
+})
+
 function sourceId(): string {
   return fixtureDir.replace(/\/+$/, '').split('/').pop()!
 }

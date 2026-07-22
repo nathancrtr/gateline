@@ -108,7 +108,7 @@ interface WalkOpts {
 function walk(node: HNode, opts: WalkOpts, skip?: SkipOnce): void {
   if (node.type === 'element' && SKIP.has(node.tagName ?? '')) return
   if (node.type === 'element' && /^h[1-6]$/.test(node.tagName ?? '')) {
-    const m = /^\s*(R\d+|ADR-\d+)\b/.exec(textOf(node))
+    const m = /^\s*(R\d+|ADR-\d+|E\d+)\b/.exec(textOf(node))
     if (m) {
       ;(node.properties ??= {}).id = `def-${m[1]}`
       if (opts.definesHeadings) skip = { id: m[1]!, used: false }

@@ -2,6 +2,7 @@
 // write path (rule R2 — POST /api/decisions is the only mutating route).
 import { Hono } from 'hono'
 import {
+  buildEvidenceRollup,
   buildLexicon,
   buildPortfolio,
   collectRunDecisions,
@@ -178,6 +179,29 @@ export function createApp(deps: AppDeps): Hono {
       return buildLexicon({ spec, plan })
     })
     return c.json({ entries: lexicon.entries, pattern: ID_PATTERN })
+  })
+
+  // Evidence-presence rollup (#165): which criteria the verification record
+  // cites, computed from the artifacts. Presence, never verdicts — verdict
+  // text in the payload is a verbatim quote from the report.
+  app.get('/api/runs/:src/:slug/evidence', async (c) => {
+    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+    if (!found) return c.json({ error: 'run not found' }, 404)
+    const { source, ref } = found
+    const rollup = await cache.get(`evidence:${ref.source}:${ref.slug}`, async () => {
+      const [spec, verification, artifacts] = await Promise.all([
+        source.readArtifact(ref, 'spec.md'),
+        source.readArtifact(ref, 'verification-report.md'),
+        source.listArtifacts(ref),
+      ])
+      const reviews = await Promise.all(
+        artifacts
+          .filter((p) => /^review-\d+.*\.md$/.test(p))
+          .map(async (p) => ({ path: p, content: (await source.readArtifact(ref, p)) ?? '' })),
+      )
+      return buildEvidenceRollup({ lexicon: buildLexicon({ spec }), verification, reviews })
+    })
+    return c.json(rollup)
   })
 
   app.get('/api/runs/:src/:slug/diff', async (c) => {

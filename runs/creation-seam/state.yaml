@@ -4,7 +4,7 @@
 
 run: creation-seam
 branch: run/creation-seam
-phase: implement
+phase: done
   # staged by hand ahead of the seam this run builds;
   # resume (= arm) derives spec from the gate ledger
 profile: standard # patch | standard | full (DESIGN.md §4.1)
@@ -349,7 +349,14 @@ gates:
       notes: null,
       burden: confirmation
     }
-  G2: { approved: false, by: null, at: null, notes: null }
+  G2:
+    {
+      approved: true,
+      by: Nathan Carter,
+      at: 2026-07-22T21:29:00.738Z,
+      notes: null,
+      burden: confirmation
+    }
   G3: { approved: false, by: null, at: null, notes: null }
 
 tasks:

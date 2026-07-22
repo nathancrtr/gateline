@@ -5,8 +5,8 @@
      BUDGET: one line + failure scenario per finding — no narrative. Reference
      the spec and diff (requirement numbers, file:line); never re-quote them. -->
 
-**Verdict:** escalate
-**Round:** 1 of 3
+**Verdict:** approve (round 2; round 1 verdict: escalate — preserved below)
+**Round:** 2 of 3
 **Diff reviewed:** commit 343f06c (branch run/creation-seam)
 
 ## Findings
@@ -34,3 +34,30 @@
 ## Boundary check
 
 Clean. Commit 343f06c touches exactly the three declared surface files (`src/engine.ts`, `test/derive.test.ts`, `test/engine.test.ts`) plus the task YAML's own `notes:` update (expected orchestration bookkeeping). F1's *effect* lands in `push.test.ts`/`hosted.test.ts` at runtime, but the diff does not modify them.
+
+---
+
+## Round 2
+
+**Verdict:** approve
+**Diff reviewed:** commit 343f06c — verified no later commit touches the task's `file_contact_surface` (`git log 343f06c..HEAD -- src/engine.ts test/derive.test.ts test/engine.test.ts` is empty; working tree clean).
+
+### Prior-finding resolution
+
+- **F1 — resolved-by-disposition (code unchanged; residual risk tracked).** Re-inspected: `engine.ts:445` still calls `ensureDraftPr(this.cfg.repoDir, ref.branch, ref.slug)` directly; `EngineConfig` (`engine.ts:17`) has no ensure/exec member; `ensureDraftPr` (`frontend/packages/core/src/sources/pr-ensure.ts:35`) still exposes its exec seam only at its own signature; no commit since 343f06c touches `plan.md`, `runs/creation-seam/tasks/` (still exactly seven task files — no amended surface yet), `pr-ensure.ts`, `push.test.ts`, or `hosted.test.ts`. The escalation this finding raised was resolved by the run owner (`state.yaml` escalations[1], Nathan Carter, 2026-07-22T18:53Z): the proposed remedy — "thread an ensure/exec seam through EngineConfig and amend a task surface to stub it in the remote-configured tests" — was accepted and routed to an architect-level plan/task amendment. That is exactly what round 1's escalation asked for: the defect is a plan-level gap, unfixable inside task 06's declared surface, and ownership has now transferred to the forthcoming amendment. Task 06's own diff was verified clean in round 1; request-changes would demand out-of-surface work from this implementer, and re-escalating a resolved escalation would loop. **Residual risk, explicitly tracked for G2:** until the amended task lands, `push.test.ts`/`hosted.test.ts` invoke whatever real `gh` is in PATH — re-demonstrated this round with the shim probe (two `gh-invoked: pr list --head run/toy --state all --limit 1 --json number` lines, one per file; suites still pass only because failure degrades to `skipped`). G2 should not treat the plan's hermeticity mitigation as satisfied until the seam amendment is implemented and reviewed.
+- **F2 — unresolved, still minor, non-gating.** `derive.test.ts:585-588` remains a verbatim duplicate of `:580-583` (re-read this round). No failure scenario; fold-in remains at the implementer's discretion — reasonable to bundle into the seam-amendment task's touch of this file if convenient.
+
+### New findings
+
+None. The surface delta since round 1 is empty; nothing new to review.
+
+### Coverage (round 2 re-runs)
+
+- `npx vitest run packages/orchestrator/test/derive.test.ts packages/orchestrator/test/engine.test.ts` — 2 files, 60/60 passed (105.6s).
+- `npm run typecheck` — clean (both tsconfigs).
+- gh-shim probe re-run: `push.test.ts` 3 passed + `hosted.test.ts` 6 passed with shim `gh` first in PATH; probe log shows exactly two invocations (one per file), matching round 1 — confirms F1's exposure is unchanged and confined to those two files (engine/derive suites recorded zero invocations).
+- Not re-assessed: full `npm test` workspace run; real-`gh` created/exists paths (task 04's surface).
+
+### Boundary check (round 2)
+
+Clean. No commits after 343f06c touch the three surface files; the only post-343f06c commits are orchestration state commits and task 03's separate review/implement traffic, none of which contact this task's surface.

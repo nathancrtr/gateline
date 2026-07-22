@@ -88,7 +88,7 @@ export function PortfolioPage() {
                     <PhaseChip phase={run.phase} pausedReason={run.pausedReason} />
                   </td>
                   <td className={TD}>
-                    <GateLedger gates={run.gates} />
+                    <GateLedger gates={run.gates} profile={run.profile} />
                   </td>
                   <td className={NUM}>{run.tasks.total ? `${run.tasks.done}/${run.tasks.total}` : '—'}</td>
                   <td className={`${NUM} ${run.tasks.maxRounds >= 3 ? 'font-semibold text-bad' : ''}`}>

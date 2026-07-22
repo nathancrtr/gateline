@@ -1,6 +1,6 @@
 // The fixed status vocabulary: phases, gate states, inbox kinds, validation.
 // Used identically everywhere — status is encoded in form, not just color.
-import type { GateId, InboxItem, RunSummary } from '../api.ts'
+import { PROFILE_GATES, type GateId, type InboxItem, type Profile, type RunSummary } from '../api.ts'
 
 const PHASE_TONE: Record<string, string> = {
   spec: 'text-accent',
@@ -84,10 +84,10 @@ export function GateCell({ id, cell }: { id: GateId; cell: RunSummary['gates'][G
   )
 }
 
-export function GateLedger({ gates }: { gates: RunSummary['gates'] }) {
+export function GateLedger({ gates, profile = 'full' }: { gates: RunSummary['gates']; profile?: Profile }) {
   return (
     <span className="inline-flex gap-[3px]">
-      {(['G0', 'G1', 'G2', 'G3'] as const).map((g) => (
+      {PROFILE_GATES[profile].map((g) => (
         <GateCell key={g} id={g} cell={gates[g]} />
       ))}
     </span>

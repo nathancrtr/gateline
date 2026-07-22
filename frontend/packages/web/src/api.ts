@@ -8,13 +8,21 @@ import type {
   GateMetrics,
   InboxItem,
   Phase,
+  Profile,
   RunMetricsSummary,
   RunState,
   RunSummary,
   Validation,
 } from '@agentic/core'
 
-export type { Burden, DiffFile, GateId, InboxItem, RunState, RunSummary, Validation }
+export type { Burden, DiffFile, GateId, InboxItem, Profile, RunState, RunSummary, Validation }
+
+/** Mirror of core's PROFILE_GATES (DESIGN.md §4.1) — a value import from core would pull the node runtime into the browser bundle. */
+export const PROFILE_GATES: Record<Profile, GateId[]> = {
+  patch: ['G1', 'G2'],
+  standard: ['G0', 'G1', 'G2'],
+  full: ['G0', 'G1', 'G2', 'G3'],
+}
 
 export interface InboxResponse {
   items: InboxItem[]

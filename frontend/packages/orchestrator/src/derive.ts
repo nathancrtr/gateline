@@ -31,7 +31,15 @@
 //   D20 task failed (implementer failed twice); the naming escalation resolved
 //       after the last failure → record status pending (a fresh round
 //       supersedes); unresolved or stale → rest naming the frozen task
+//   D21 profile invariant violated: a decided gate outside the run's profile
+//       (mid-run downgrade), a phase outside the profile's sequence, or a
+//       patch run with no work item                  → escalate + pause
 //   DB  any dispatch would exceed the budget cap     → escalate + pause budget-exhausted
+//
+// The whole table is parameterized by the run's profile (DESIGN.md §4.1):
+// reduced profiles subset the gates (PROFILE_GATES), G2 advances to done
+// rather than release, and in `patch` the plan phase has no producing role —
+// the human authored the packet, so there is no one to dispatch or bounce to.
 //
 // Two invariants govern every row (§4.2): each action is derivable from
 // committed files alone, and each action is idempotent to re-derive — a tick
@@ -42,8 +50,10 @@ import {
   G2_COMPLETE_STATUSES,
   GATE_IDS,
   GATE_PHASES,
-  PHASE_AFTER_GATE,
+  PROFILE_GATES,
+  PROFILE_PHASES,
   gateUndecided,
+  phaseAfterGate,
   type GateId,
   type Phase,
 } from '@agentic/core'
@@ -123,11 +133,30 @@ export function deriveAction(obs: RunObservation): DerivedAction {
     }
   }
 
+  // Parsed states always carry a profile (absent → full); tolerate a
+  // hand-built observation the same way the parser would.
+  const profile = state.profile ?? 'full'
+
+  // D21 — profile invariants. A decided gate outside the profile means the
+  // profile was lightened under a decided ledger (upgrades are one-way); a
+  // phase outside the profile's sequence is a state the table has no rules
+  // for. Both are human problems — escalate, never guess.
+  for (const gate of GATE_IDS) {
+    if (!PROFILE_GATES[profile].includes(gate) && state.gates[gate].by !== null)
+      return escalate(
+        'D21',
+        `gate ${gate} is decided but does not exist in profile ${profile} — profiles upgrade mid-run, never downgrade`,
+        'escalation',
+      )
+  }
+  if (!PROFILE_PHASES[profile].includes(state.phase))
+    return escalate('D21', `phase "${state.phase}" does not exist in profile ${profile}`, 'escalation')
+
   // D5 — a gate decided approve while the phase still lists it (the frontend
   // normally advances in the same commit; converge when it didn't).
-  for (const gate of GATE_IDS) {
+  for (const gate of PROFILE_GATES[profile]) {
     if (GATE_PHASES[gate].includes(state.phase) && state.gates[gate].approved) {
-      const to = PHASE_AFTER_GATE[gate]
+      const to = phaseAfterGate(gate, profile)
       return record('D5', [{ field: 'phase', to }], `${gate} approved — advance phase to ${to}`)
     }
   }
@@ -164,8 +193,21 @@ function producerPhase(obs: RunObservation, gate: GateId): DerivedAction {
   return rest('D10', `${artifact} well-formed; ${gate} is on the table (the frontend inbox surfaces it)`)
 }
 
-/** Plan phase: the architect's packet is plan.md plus at least one task file. */
+/**
+ * Plan phase. In `patch` (DESIGN.md §4.1) there is no analyst or architect —
+ * the human authored the intent brief and a single work item at init, and G1
+ * approves both. The engine dispatches no one: a malformed packet surfaces in
+ * the inbox as a bounce card for the human (there is no producing role to
+ * bounce to), and a decline is likewise the human's to address by editing.
+ */
 function planPhase(obs: RunObservation): DerivedAction {
+  if (obs.state?.profile === 'patch') {
+    const taskFiles = obs.artifacts.filter((p) => p.startsWith('tasks/') && p.endsWith('.yaml'))
+    if (taskFiles.length === 0)
+      return escalate('D21', 'patch run has no work item — the human authors tasks/01-*.yaml alongside the intent brief at init', 'escalation')
+    return rest('D10', 'patch packet (intent brief + work item) is human-authored; G1 is on the table (the frontend inbox surfaces it)')
+  }
+
   const inFlight = obs.openDispatches.find((d) => d.role === 'architect')
   if (inFlight) return rest('D12', 'architect dispatched and not yet landed — in flight')
 
@@ -363,6 +405,9 @@ function implementPhase(obs: RunObservation): DerivedAction {
   const allComplete = state.tasks.every((t) => G2_COMPLETE_STATUSES.has(t.status))
   if (!allComplete) return rest('D12', 'tasks in flight — nothing derivable until an artifact lands')
 
+  // No verifier in `patch`: the reviews are the whole G2 packet (DESIGN.md §4.1).
+  if (state.profile === 'patch')
+    return rest('D10', 'all tasks review-complete; G2 is on the table (the frontend inbox surfaces it)')
   return producerPhase(obs, 'G2')
 }
 

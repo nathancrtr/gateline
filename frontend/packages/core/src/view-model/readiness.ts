@@ -12,7 +12,7 @@
 //
 // A gate whose packet is present but malformed yields a NON-reviewable item —
 // the bounce view (rule R3) — never a reviewable card.
-import { G2_COMPLETE_STATUSES, gateUndecided, GATE_PHASES, type GateId, type RunState } from '../record/schema.ts'
+import { G2_COMPLETE_STATUSES, gateUndecided, GATE_PHASES, PROFILE_GATES, type GateId, type RunState } from '../record/schema.ts'
 import { validateArtifact, type Validation } from '../record/validate.ts'
 import type { RunRef, RunSource } from '../sources/source.ts'
 
@@ -22,6 +22,9 @@ export const GATE_QUESTIONS: Record<GateId, string> = {
   G2: 'Does the evidence support merging?',
   G3: 'Ship it?',
 }
+
+/** In a patch run G1 absorbs the G0 question — brief and work item are approved together. */
+export const PATCH_G1_QUESTION = 'Is this the change we want, scoped this way?'
 
 export type InboxKind = 'gate' | 'escalation' | 'round-cap' | 'paused' | 'malformed'
 
@@ -56,9 +59,9 @@ function taskComplete(status: string): boolean {
   return G2_COMPLETE_STATUSES.has(status)
 }
 
-/** Which gate, if any, is on the table for the run's current phase. */
+/** Which gate, if any, is on the table for the run's current phase. Only the profile's gates exist. */
 export function pendingGate(state: RunState): GateId | null {
-  for (const gate of ['G0', 'G1', 'G2', 'G3'] as GateId[]) {
+  for (const gate of PROFILE_GATES[state.profile]) {
     if (GATE_PHASES[gate].includes(state.phase) && gateUndecided(state.gates[gate])) return gate
   }
   return null
@@ -173,17 +176,26 @@ export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<R
     trigger = ['spec.md']
     ready = has('spec.md')
     if (ready && !has('intent-brief.md')) problems.push('intent-brief.md missing from run directory')
+  } else if (gate === 'G1' && state.profile === 'patch') {
+    // Patch: no plan.md — G1 approves the human-authored brief + work item together.
+    const tasks = artifacts.filter(isTaskFile)
+    packet = ['intent-brief.md', ...tasks]
+    trigger = ['intent-brief.md', 'tasks']
+    ready = tasks.length > 0
+    if (ready && !has('intent-brief.md')) problems.push('intent-brief.md missing from run directory')
   } else if (gate === 'G1') {
     const tasks = artifacts.filter(isTaskFile)
     packet = ['plan.md', ...tasks]
     trigger = ['plan.md', 'tasks']
     ready = has('plan.md') && tasks.length > 0
   } else if (gate === 'G2') {
+    // Patch: no verifier — the reviews are the whole G2 packet.
     const reviews = artifacts.filter(isReviewFile)
-    packet = [...reviews, 'verification-report.md']
-    trigger = [...reviews, 'verification-report.md']
+    const verification = state.profile === 'patch' ? [] : ['verification-report.md']
+    packet = [...reviews, ...verification]
+    trigger = [...reviews, ...verification]
     const tasksComplete = state.tasks.length > 0 && state.tasks.every((t) => taskComplete(t.status))
-    ready = tasksComplete && reviews.length > 0 && has('verification-report.md')
+    ready = tasksComplete && reviews.length > 0 && verification.every((p) => has(p))
   } else {
     packet = ['release-plan.md']
     trigger = ['release-plan.md']
@@ -204,7 +216,7 @@ export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<R
     gate,
     source: ref.source,
     slug: ref.slug,
-    title: `${gate} — ${GATE_QUESTIONS[gate]}`,
+    title: `${gate} — ${state.profile === 'patch' && gate === 'G1' ? PATCH_G1_QUESTION : GATE_QUESTIONS[gate]}`,
     detail: problems.length ? 'Packet malformed — bounced, not reviewable' : `${ref.slug} is waiting on ${gate}`,
     since: touched?.time ?? null,
     reviewable: problems.length === 0,

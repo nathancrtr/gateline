@@ -34,6 +34,13 @@ Fill in the intent brief yourself — you're the human with the intent. For the 
 
 Commit: `git add runs/ && git commit -m "wordfreq: intent brief"`.
 
+This walkthrough runs the `full` profile — every role, every gate — which is also
+what an absent `profile:` field means. Smaller changes can declare a reduced
+profile in the brief and `state.yaml` (`standard`: no Ops/G3, the merge is the
+release; `patch`: Implementer + Reviewer only, you author the single work item
+yourself and G1 approves brief + work item together). See DESIGN.md §4.1 for the
+role/gate matrix and the upgrade guardrail.
+
 ## 1. Spec (Analyst → G0)
 
 Dispatch:

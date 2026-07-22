@@ -542,3 +542,93 @@ describe('the derivation table, one rule per row', () => {
     expect(a).toMatchObject({ kind: 'escalate', rule: 'DB' })
   })
 })
+
+// Run profiles (DESIGN.md §4.1): the same table, parameterized by state.profile.
+describe('profile-parameterized derivation', () => {
+  const patchState = (over: Partial<RunState> = {}): RunState => state({ profile: 'patch', phase: 'plan', ...over })
+
+  it('D21 — a decided gate outside the profile escalates: profiles never downgrade mid-run', () => {
+    const s = patchState({
+      gates: { G0: gate({ approved: true, by: 'Operator', at: '2026-07-01T00:00:00Z' }), G1: gate(), G2: gate(), G3: gate() },
+    })
+    const a = deriveAction(obs({ state: s }))
+    expect(a).toMatchObject({ kind: 'escalate', rule: 'D21', pause: 'escalation' })
+    expect((a as { reason: string }).reason).toMatch(/never downgrade/)
+  })
+
+  it('D21 — a phase outside the profile sequence escalates (patch has no spec phase)', () => {
+    const a = deriveAction(obs({ state: patchState({ phase: 'spec' }) }))
+    expect(a).toMatchObject({ kind: 'escalate', rule: 'D21' })
+  })
+
+  it('D21 — a patch run with no work item escalates: the human authors it at init', () => {
+    const a = deriveAction(obs({ state: patchState(), artifacts: ['intent-brief.md'] }))
+    expect(a).toMatchObject({ kind: 'escalate', rule: 'D21' })
+    expect((a as { reason: string }).reason).toMatch(/work item/)
+  })
+
+  it('patch plan phase rests with the packet on the table — no architect exists to dispatch', () => {
+    const a = deriveAction(obs({ state: patchState(), artifacts: ['intent-brief.md', 'tasks/01-fix.yaml'] }))
+    expect(a).toMatchObject({ kind: 'rest', rule: 'D10' })
+  })
+
+  it('D5 patch — G1 approved advances to implement, as in full', () => {
+    const s = patchState({
+      gates: { G0: gate(), G1: gate({ approved: true, by: 'Operator', at: '2026-07-01T00:00:00Z' }), G2: gate(), G3: gate() },
+    })
+    const a = deriveAction(obs({ state: s, artifacts: ['intent-brief.md', 'tasks/01-fix.yaml'] }))
+    expect(a).toMatchObject({ kind: 'record', rule: 'D5', updates: [{ field: 'phase', to: 'implement' }] })
+  })
+
+  it('D5 reduced profiles — G2 approved advances to done, not release (the merge is the release)', () => {
+    for (const profile of ['patch', 'standard'] as const) {
+      const s = state({
+        profile,
+        phase: 'integrate',
+        gates: {
+          G0: gate({ approved: profile === 'standard', by: profile === 'standard' ? 'Operator' : null }),
+          G1: gate({ approved: true, by: 'Operator' }),
+          G2: gate({ approved: true, by: 'Operator', at: '2026-07-02T00:00:00Z' }),
+          G3: gate(),
+        },
+        tasks: [{ id: '01-fix', status: 'done', review_rounds: 1 }],
+      })
+      const a = deriveAction(obs({ state: s }))
+      expect(a).toMatchObject({ kind: 'record', rule: 'D5', updates: [{ field: 'phase', to: 'done' }] })
+    }
+  })
+
+  it('patch implement tail — all tasks review-complete rests; no verifier is ever dispatched', () => {
+    const s = patchState({
+      phase: 'implement',
+      gates: { G0: gate(), G1: gate({ approved: true, by: 'Operator' }), G2: gate(), G3: gate() },
+      tasks: [{ id: '01-fix', status: 'review-approved', review_rounds: 1 }],
+    })
+    const a = deriveAction(obs({ state: s, artifacts: ['intent-brief.md', 'tasks/01-fix.yaml', 'review-01.md'] }))
+    expect(a).toMatchObject({ kind: 'rest', rule: 'D10' })
+  })
+
+  it('standard implement tail still dispatches the verifier — only patch drops it', () => {
+    const s = state({
+      profile: 'standard',
+      phase: 'implement',
+      gates: { G0: gate({ approved: true, by: 'Operator' }), G1: gate({ approved: true, by: 'Operator' }), G2: gate(), G3: gate() },
+      tasks: [{ id: '01-fix', status: 'review-approved', review_rounds: 1 }],
+    })
+    const a = deriveAction(obs({ state: s, artifacts: ['intent-brief.md', 'spec.md', 'plan.md', 'tasks/01-fix.yaml', 'review-01.md'] }))
+    expect(a).toMatchObject({ kind: 'dispatch', dispatches: [{ role: 'verifier' }] })
+  })
+
+  it('upgrade backfill — a patch run upgraded to standard derives the analyst dispatch for the missing spec', () => {
+    // The human edited profile: patch → standard and resumed into spec (the
+    // stateless reconciler needs no special upgrade handling: the missing
+    // artifact under the heavier profile derives as an ordinary D6 dispatch).
+    const s = state({
+      profile: 'standard',
+      phase: 'spec',
+      gates: { G0: gate(), G1: gate({ approved: true, by: 'Operator' }), G2: gate(), G3: gate() },
+    })
+    const a = deriveAction(obs({ state: s, artifacts: ['intent-brief.md', 'tasks/01-fix.yaml'] }))
+    expect(a).toMatchObject({ kind: 'dispatch', rule: 'D6', dispatches: [{ role: 'analyst' }] })
+  })
+})

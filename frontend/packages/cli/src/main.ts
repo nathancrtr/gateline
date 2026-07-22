@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline/promises'
 import { Command } from 'commander'
 import {
+  buildLexicon,
   buildPortfolio,
   BURDENS,
   DecisionError,
@@ -16,6 +17,8 @@ import {
   planDecision,
   PROFILE_GATES,
   resolveCodeRepo,
+  resolveId,
+  scanIds,
   SUPERSEDE_EXIT_CODE,
   type Burden,
   type DecisionInput,
@@ -115,6 +118,61 @@ function printItem(item: InboxItem): void {
     for (const p of item.problems) console.log(`${' '.repeat(17)}✕ BOUNCED: ${p}`)
   }
 }
+
+// The run lexicon in a terminal (#164): a hover can't exist here, so cited
+// R/AC/ADR definitions print once, as a footnote block, in first-citation
+// order. Quotes are verbatim (elision only — truncation shown as "…");
+// dangling ids are listed and flagged, not dropped.
+program
+  .command('show')
+  .description('print a run artifact, with cited R/AC/ADR definitions as footnotes (omit the artifact to list them)')
+  .argument('<slug>', 'run slug')
+  .argument('[artifact]', 'run-relative artifact path, e.g. plan.md or tasks/01-core.yaml')
+  .option('--source <id>', 'source id when the slug is ambiguous')
+  .option('--refs <mode>', 'footnotes: first-line | full | off', 'first-line')
+  .action(async (slug: string, artifact: string | undefined, flags: { source?: string; refs: string }) => {
+    if (!['first-line', 'full', 'off'].includes(flags.refs)) {
+      console.error('--refs must be one of: first-line | full | off')
+      process.exit(1)
+    }
+    const { sources } = await resolveSources()
+    const { source, ref } = await findRun(sources, slug, flags.source)
+    if (!artifact) {
+      const paths = await source.listArtifacts(ref)
+      if (paths.length === 0) return console.log('no artifacts yet')
+      for (const p of paths) console.log(p)
+      return
+    }
+    const content = await source.readArtifact(ref, artifact)
+    if (content === null) {
+      console.error(`no artifact at ${artifact}`)
+      process.exit(1)
+    }
+    process.stdout.write(content.endsWith('\n') ? content : `${content}\n`)
+    if (flags.refs === 'off') return
+
+    const [spec, plan] = await Promise.all([source.readArtifact(ref, 'spec.md'), source.readArtifact(ref, 'plan.md')])
+    const lexicon = buildLexicon({ spec, plan })
+    // An id defined in the shown artifact is a definition here, not a citation.
+    const cited = scanIds(content).filter((id) => resolveId(lexicon, id)?.artifact !== artifact)
+    if (cited.length === 0) return
+
+    const from = [...new Set(cited.map((id) => resolveId(lexicon, id)?.artifact).filter(Boolean))]
+    console.log('---')
+    console.log(`References${from.length ? ` (from ${from.join(', ')})` : ''}:`)
+    const width = Math.max(...cited.map((id) => id.length))
+    for (const id of cited) {
+      const def = resolveId(lexicon, id)
+      if (!def) {
+        console.log(`  ${id.padEnd(width)}  [not defined in this run's spec/plan]`)
+        continue
+      }
+      const name = def.shortName + (def.qualifier ? ` (${def.qualifier})` : '')
+      const body = def.body.replace(/\s+/g, ' ').trim()
+      const quote = body ? `"${flags.refs === 'full' ? body : truncate(body, 110)}"` : ''
+      console.log(`  ${id.padEnd(width)}  ${[name, quote].filter(Boolean).join(' — ')}`)
+    }
+  })
 
 // --- decision commands (the write path) -------------------------------------
 
@@ -471,6 +529,11 @@ program
   })
 
 // --- helpers ------------------------------------------------------------------
+
+/** Verbatim-or-elided: never rewords, and an elision is always visible. */
+function truncate(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`
+}
 
 function table(rows: Record<string, string>[], cols: string[]): void {
   const widths = cols.map((c) => Math.max(c.length, ...rows.map((r) => (r[c] ?? '').length)))

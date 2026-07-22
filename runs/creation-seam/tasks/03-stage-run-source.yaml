@@ -64,4 +64,18 @@ depends_on: [01-merge-main, 02-record-scaffold-and-arm]
 
 status: pending
 
-notes: ""
+notes: |
+  Implementer round 1: implemented as scoped. One discovery worth flagging for
+  the verifier's AC9.2 grep: `grep -rniE "issue|label|assignee|milestone"
+  frontend/packages/core/src/record/*.ts frontend/packages/core/src/sources/*.ts`
+  returns THREE matches in record/schema.ts, not the plan/spec's stated "two
+  pre-existing zod ZodError.issues false positives" — the third is
+  `ctx.addIssue(...)` in the profile-gates superRefine. All three predate this
+  run's own diff: `git show 70aae4c -- .../schema.ts` (the #156 profiles merge
+  task 01 pulled in) shows the addIssue line was added there, not by task 02 or
+  03. My own task 03 diff (source.ts, local-source.ts) adds zero matches to
+  this grep — confirmed by running it after implementation. Flagging the
+  discrepancy since AC9.2's "confirm exactly two" instruction is now
+  inaccurate; not fixing schema.ts here since it's outside this task's
+  file_contact_surface and the line itself is legitimate (not a tracker-vendor
+  leak).

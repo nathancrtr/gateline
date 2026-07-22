@@ -3,6 +3,7 @@
 // API. Nothing above it may know which driver it is talking to.
 import type { CommitInfo } from './git.ts'
 import type { Identity, RunState, StateDocMutation, StateParseResult } from '../record/schema.ts'
+import type { RunScaffold } from '../record/scaffold.ts'
 import type { ContractTemplates } from '../record/validate.ts'
 
 export interface RunRef {
@@ -23,6 +24,14 @@ export interface StateCommit extends CommitInfo {
 export type { Identity, StateDocMutation }
 
 export type WriteFailure = 'ref-moved' | 'dirty-worktree' | 'no-branch' | 'no-identity' | 'error'
+
+/** Why `stageRun` refused to mint a genesis commit (plan ADR-4). */
+export type StageRefusal = 'no-identity' | 'slug-taken' | 'conflict'
+
+export type StageOutcome =
+  | { outcome: 'created'; slug: string; branch: string; commit: string; pushFailed?: string }
+  | { outcome: 'exists'; slug: string; branch: string } // idempotent replay (AC1.3) — a success
+  | { outcome: 'refused'; reason: StageRefusal; message: string }
 
 export interface WriteResult {
   ok: boolean
@@ -71,4 +80,12 @@ export interface RunSource {
    * surfaces omit it: their reads happen inside this call.
    */
   writeState(ref: RunRef, mutate: StateDocMutation, message: string, options?: { expectedTip?: string }): Promise<WriteResult>
+  /**
+   * The only branch-minting path (plan ADR-3, R1): builds a genesis commit
+   * from `scaffold.files` against the default branch's tip and lands it via
+   * create-only CAS. Always authored as `who` — never a bot-pinned source
+   * identity — because a staged run must be attributable to the human who
+   * staged it, whoever is holding the write path.
+   */
+  stageRun(scaffold: RunScaffold, who: Identity): Promise<StageOutcome>
 }

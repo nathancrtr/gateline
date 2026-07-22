@@ -6,9 +6,10 @@ import { join } from 'node:path'
 import { parseDocument } from 'yaml'
 import { Git, type CommitInfo } from './git.ts'
 import { memoizedFrameworkRoots, type FrameworkRoots } from './framework-roots.ts'
-import { parseRunState } from '../record/schema.ts'
+import { parseRunState, STAGED_REASON } from '../record/schema.ts'
+import { readIntake, type RunScaffold } from '../record/scaffold.ts'
 import type { ContractTemplates } from '../record/validate.ts'
-import type { Identity, RunRef, RunSource, StateCommit, StateDocMutation, WriteResult } from './source.ts'
+import type { Identity, RunRef, RunSource, StageOutcome, StateCommit, StateDocMutation, WriteResult } from './source.ts'
 
 const RUN_BRANCH_PREFIX = 'run/'
 const ZERO_OID = '0'.repeat(40)
@@ -305,6 +306,101 @@ export class LocalGitSource implements RunSource {
       }
     }
     return { ok: true, commit }
+  }
+
+  /**
+   * ADR-4's idempotency/collision decision table, applied by both the
+   * pre-write scan and the post-CAS-loss re-derivation. Returns `exists`
+   * (a replay), `refused: slug-taken` (an active/historical run under this
+   * slug that is not this replay), or `null` when nothing conflicts and the
+   * caller may proceed to write.
+   */
+  private async scanForExisting(scaffold: RunScaffold): Promise<StageOutcome | null> {
+    const runs = await this.listRuns()
+
+    // 1. Client-key replay wins regardless of slug — the same staging
+    // request landing under a different slug is still "already staged".
+    if (scaffold.clientKey) {
+      for (const ref of runs) {
+        const { state } = await this.readState(ref)
+        if (state && readIntake(state)?.client_key === scaffold.clientKey)
+          return { outcome: 'exists', slug: ref.slug, branch: ref.branch }
+      }
+    }
+
+    // 2. Same slug already present: a replay only when that run is still in
+    // the staged rest state and the client key (if any) agrees — an active
+    // or historical run is never silently claimed as a replay.
+    const existing = runs.find((r) => r.slug === scaffold.slug)
+    if (!existing) return null
+    const { state } = await this.readState(existing)
+    const intake = state ? readIntake(state) : null
+    const isStagedRest = state?.phase === 'paused' && state.paused_reason === STAGED_REASON
+    const keyMatches = scaffold.clientKey === null || intake?.client_key === scaffold.clientKey
+    if (isStagedRest && keyMatches) return { outcome: 'exists', slug: existing.slug, branch: existing.branch }
+    return {
+      outcome: 'refused',
+      reason: 'slug-taken',
+      message: `${existing.branch} already exists (phase: ${state?.phase ?? 'unreadable'}) — not a staged replay`,
+    }
+  }
+
+  /**
+   * The only branch-minting path (plan ADR-3, R1): sequence per plan §"sources
+   * deltas" —
+   *   1. identity precondition (before any git write)
+   *   2. existence scan (ADR-4)
+   *   3. genesis commit against the default branch tip, composing
+   *      `writeTreeWithBlob` once per scaffold file
+   *   4. create-only CAS landing, re-scanning on a lost race
+   *   5. push when configured
+   */
+  async stageRun(scaffold: RunScaffold, who: Identity): Promise<StageOutcome> {
+    if (!who?.name || !who?.email || !(await this.identity()))
+      return {
+        outcome: 'refused',
+        reason: 'no-identity',
+        message: 'git user.name/user.email are unset — staged runs must be attributable to a named human',
+      }
+
+    const preScan = await this.scanForExisting(scaffold)
+    if (preScan) return preScan
+
+    const defaultBranch = await this.git.defaultBranch()
+    const tip = await this.git.revParse(defaultBranch)
+    if (!tip) return { outcome: 'refused', reason: 'conflict', message: `default branch ${defaultBranch} has no commits to stage against` }
+
+    const { runs: runsRoot } = await this.frameworkRoots()
+    const runDir = `${runsRoot}/${scaffold.slug}`
+    // Compose the genesis tree by writing one blob at a time: `read-tree`
+    // accepts any tree-ish, so each call's returned tree OID is the next
+    // call's base (plan ADR-3) — no new git.ts primitive needed.
+    let treeIsh = tip
+    for (const [path, content] of Object.entries(scaffold.files)) {
+      const blob = await this.git.hashObject(content)
+      treeIsh = await this.git.writeTreeWithBlob(treeIsh, `${runDir}/${path}`, blob)
+    }
+    // `who` explicitly — never `this.options.identity` — so a bot-pinned
+    // source still stages as the human who called it.
+    const commit = await this.git.commitTree(treeIsh, tip, scaffold.message, who)
+
+    const branchRef = `refs/heads/${scaffold.branch}`
+    if (!(await this.git.updateRefCAS(branchRef, commit, ZERO_OID))) {
+      // Lost the race: re-scan and re-derive rather than blindly retrying.
+      const rescanned = await this.scanForExisting(scaffold)
+      if (rescanned?.outcome === 'exists') return rescanned
+      return { outcome: 'refused', reason: 'conflict', message: `${scaffold.branch} appeared concurrently — re-check and retry` }
+    }
+
+    if (this.options.push) {
+      try {
+        await this.git.run(['push', 'origin', `${scaffold.branch}:${scaffold.branch}`])
+      } catch (e) {
+        const msg = (e as Error).message
+        return { outcome: 'created', slug: scaffold.slug, branch: scaffold.branch, commit, pushFailed: msg }
+      }
+    }
+    return { outcome: 'created', slug: scaffold.slug, branch: scaffold.branch, commit }
   }
 }
 

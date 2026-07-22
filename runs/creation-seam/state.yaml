@@ -303,6 +303,17 @@ budget:
           tokens_in: 6,
           tokens_out: 1827,
           cost_usd: 4.392674600000001
+        },
+      {
+          at: 2026-07-22T20:11:12.217Z,
+          role: reviewer,
+          task: 05-cli-new-arm,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 

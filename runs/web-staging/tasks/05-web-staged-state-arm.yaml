@@ -1,0 +1,66 @@
+id: 05-web-staged-state-arm
+title: "Staged rendering + Arm control: chips, DecidePanel branch, inbox routing"
+requirements: [R5, R6, R7]
+
+scope: |
+  Fix the click-to-error defect and render the staged rest state distinctly, per
+  plan ADR-4/ADR-7 and the "Web rendering seams" contract. Visual details follow
+  the candidate named in runs/web-staging/state.yaml gates.G1.notes (mockup
+  04-staged-rest/03-staged-rest-state and the arm mockup in
+  runs/web-staging/design/<candidate>/); both candidates specify hollow/outline
+  form differences using existing tokens only. If the note names no candidate,
+  stop and escalate.
+
+  1. frontend/packages/web/src/components/chips.tsx:
+     - PhaseChip: when phase === 'paused' && pausedReason === 'staged', render the
+       staged treatment — hollow ring marker (bordered, transparent center, no glow
+       shadow), accent tone, label 'staged' (not 'paused · staged'). All other
+       phases, including other paused reasons, unchanged. Tokens from the existing
+       set only; distinctness by form, not color alone (AC6.2).
+     - KindChip: kind === 'staged' → outline pill labeled STAGED
+       (border-accent, text-accent, transparent fill, hollow marker), distinct from
+       the solid PAUSE pill.
+  2. frontend/packages/web/src/components/decide.tsx:
+     - Add a 'staged' item branch and an 'arm' mode to the Mode union: idle shows
+       exactly one affordance, primary "Arm run…" (data-decide="arm"); it never
+       renders Resume and never submits action 'resume' (AC6.1). Confirm step
+       states the consequence (dispatch starts, budget begins metering — copy per
+       the selected candidate) with a confirm button (data-decide="arm-confirm")
+       submitting { action: 'arm' } through the existing api.decide mutation
+       (AC5.1) — pending label 'Committing…'. Errors ride the existing
+       ApiError→Flash paths: 400 DecisionError text shown verbatim in the error
+       tone, 409 keeps the conflict re-present posture (AC5.2, ux REC11).
+     - The paused branch stays exactly as-is for mid-flight pauses.
+  3. frontend/packages/web/src/pages/inbox.tsx: itemHref — kind 'staged' →
+     params.set('decide', 'staged').
+  4. frontend/packages/web/src/pages/run.tsx: only if the selected candidate is
+     genesis-preview, add its display-only genesis line in the run header
+     (rendered from data already in the run detail payload — intake fields are in
+     detail.state, the genesis commit is in detail.history; no new server data).
+     Under two-voices, run.tsx needs no change (header distinctness comes from
+     PhaseChip) — leave it untouched.
+  The staged run's portfolio row, run header, and inbox card must acquire their
+  staged treatment purely through these shared components (AC7.2) — do not add
+  bespoke rendering paths in the pages.
+  Wording guard: run the spec's grep targets (AC2.3, AC3.2) over
+  frontend/packages/web/src before handoff; introduce no new matches.
+
+file_contact_surface:
+  - frontend/packages/web/src/components/chips.tsx
+  - frontend/packages/web/src/components/decide.tsx
+  - frontend/packages/web/src/pages/inbox.tsx
+  - frontend/packages/web/src/pages/run.tsx
+
+acceptance_tests:
+  - "AC5.1 (control half): Arm issues POST /api/decisions {action:'arm'} and nothing else"
+  - "AC5.2 (surface half): DecisionError/409 rendered as error/conflict, never a silent no-op"
+  - "AC6.1: staged card's only affordance is Arm; no code path issues 'resume' for a staged item"
+  - AC6.2
+  - AC7.2
+  - "cd frontend && npm run typecheck && npm run build pass"
+
+depends_on: [02-core-staged-readiness]
+
+status: pending
+
+notes: |

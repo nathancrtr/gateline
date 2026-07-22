@@ -1,0 +1,46 @@
+id: 02-core-staged-readiness
+title: Staged rest state becomes its own InboxKind in deriveReadiness
+requirements: [R6]
+
+scope: |
+  Per plan ADR-4 and the "Readiness" interface contract:
+
+  1. In frontend/packages/core/src/view-model/readiness.ts, extend
+     `InboxKind` with `'staged'` and, inside the existing `phase === 'paused'`
+     branch of deriveReadiness, emit the staged item instead of the paused one when
+     `state.paused_reason === STAGED_REASON` (import STAGED_REASON from
+     ../record/schema.ts — view-model may import record per the layering rule):
+       kind: 'staged', gate: null,
+       title: 'Run staged: awaiting arm',
+       detail: 'Arm to start the run — dispatch begins and the budget starts metering',
+       reviewable: true, problems: [], packet: ['state.yaml', 'intent-brief.md'],
+       escalationIndex: null, since: lastTouched(['state.yaml']) (same as paused).
+     A staged run, like a paused one, surfaces no gate item (early return kept).
+     Mid-flight pauses (any other paused_reason, including null) are unchanged.
+  2. Update the rules-table comment at the top of the file (add the Staged row).
+  3. Tests in frontend/packages/core/test/readiness.test.ts (use the existing
+     fixture.helper.ts idiom): a run with paused_reason: staged yields exactly one
+     item of kind 'staged' with the fields above and no 'paused' item; a run
+     paused with another reason still yields 'paused'; a staged run yields no
+     gate item.
+
+  Do NOT touch web files here — task 05 owns the rendering and will be forced to
+  branch by this union extension. Full-workspace typecheck will fail between this
+  task and task 05 landing only if web has unhandled exhaustive switches; verify:
+  KindChip/DecidePanel/itemHref use object-lookup and if-chains (not exhaustive
+  switches), so typecheck stays green with staged items simply unrendered until 05.
+
+file_contact_surface:
+  - frontend/packages/core/src/view-model/readiness.ts
+  - frontend/packages/core/test/readiness.test.ts
+
+acceptance_tests:
+  - "AC6.1 (derivation half): a run with paused_reason: staged produces an InboxItem of kind 'staged', never kind 'paused'"
+  - "cd frontend && npx vitest run packages/core — all pass"
+  - "cd frontend && npm run typecheck passes"
+
+depends_on: []
+
+status: pending
+
+notes: |

@@ -1,0 +1,78 @@
+id: 04-web-staging-form
+title: "New-run staging form: Portfolio entry point, brief section editor, outcome taxonomy"
+requirements: [R1, R2, R3, R4, R7, R8]
+
+scope: |
+  Build the web staging surface per plan ADR-5/ADR-6/ADR-7 and the "Web API client"
+  + "Web rendering seams" contracts. Visual composition follows the design
+  candidate named in runs/web-staging/state.yaml gates.G1.notes (mockups and
+  look-and-feel spec under runs/web-staging/design/<candidate>/ — genesis-preview
+  adds a live record-preview panel; two-voices is the plain form). If the note
+  names no candidate, stop and escalate; do not guess.
+
+  1. frontend/packages/web/src/api.ts: add StagingConfigResponse / StageRequest /
+     StageOutcomeView types, api.stagingConfig(), and api.stage() exactly per the
+     plan contract — refusal outcomes resolve as values (carrying reason, message,
+     missing?, status); only network/parse failures throw ApiError.
+  2. New file frontend/packages/web/src/pages/new-run.tsx — the form:
+     - Source picker only when config.sources.length > 1 (AC1.3); with one source,
+       no picker rendered.
+     - Title input; slug input auto-suggested from title, editable, validated
+       against config.slugPattern, with the permanent run/<slug> ref displayed
+       (ux REC3). Profile choice (patch|standard|full, gate ledger per profile via
+       the existing PROFILE_GATES mirror). Budget input (empty → null).
+     - One empty multiline input per briefSections entry, headings as fixed chrome;
+       instructive placeholders only — no prefilled prose anywhere (AC2.1); client
+       assembles the intent-brief.md markdown (plan ADR-5). No model/API call of
+       any kind (AC2.3).
+     - Intake: three plain optional text inputs (source/ref/url) captioned as the
+       operator's own pointer text — no dropdown/preview/fetch (AC3.1); clientKey
+       generated once per form session via crypto.randomUUID(), not typed (ux REC8).
+     - Attribution rendered read-only from config identity; no name field (AC4.2).
+       Identity-null handling per ux REC7(d)/REC9.
+     - Client pre-check only disables submit (empty sections, invalid slug); it
+       never renders its own refusal wording (ux A8).
+     - Outcome rendering per ux REC6/REC7 and the selected candidate's mockups:
+       fresh success (names run/<slug> + commit oid, then navigate to
+       /runs/<src>/<slug> per REC12, after queryClient.invalidateQueries());
+       already-staged replay (informational tone, not error, links the run);
+       slug collision (names the existing branch from the server message);
+       no-identity (dashed config-voice refusal, server message verbatim);
+       missing-sections (error summary at top, focus moved, entries linked to
+       fields, identical wording inline, server message verbatim — AC2.2).
+       Build the outcome/flash rendering locally in this file — do not modify
+       decide.tsx (task 05 owns it).
+  3. frontend/packages/web/src/main.tsx: add child route
+     { path: 'portfolio/new', element: <NewRunPage /> }. No app.tsx/nav change
+     (AC7.1).
+  4. frontend/packages/web/src/pages/portfolio.tsx: "New run" button in the page
+     header and a second affordance in the empty state (replace the empty-state
+     copy's dangling gesture), both linking to /portfolio/new (ux REC1).
+  If genesis-preview is selected: first add the value import of planRunScaffold
+  from '@agentic/core/record' and run `npm run build` to verify Vite bundles it
+  (plan Risk 1); on failure, stop and escalate for a plan amendment. Update
+  api.ts's type-only-imports comment per ADR-6.
+  Wording guard: run the spec's grep targets (AC2.3, AC3.2) over
+  frontend/packages/web/src before handoff; introduce no new matches.
+
+file_contact_surface:
+  - frontend/packages/web/src/api.ts
+  - frontend/packages/web/src/pages/new-run.tsx
+  - frontend/packages/web/src/main.tsx
+  - frontend/packages/web/src/pages/portfolio.tsx
+
+acceptance_tests:
+  - AC2.1
+  - AC2.3
+  - AC3.1
+  - AC3.2
+  - "AC4.2 (form half): no name input exists"
+  - AC7.1
+  - "AC8.1/AC8.2 (rendering half): replay renders informational, collision renders as refusal naming the branch"
+  - "cd frontend && npm run typecheck && npm run build pass"
+
+depends_on: []
+
+status: pending
+
+notes: |

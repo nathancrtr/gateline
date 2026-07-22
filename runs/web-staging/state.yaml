@@ -105,6 +105,9 @@ escalations:
         reason: "architect failed twice: run branch run/web-staging is checked out at
           /Users/nthncrtr/.claude/jobs/eb248aaf/tmp/ws-run, which the
           orchestrator d…",
-        resolved: false
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-22T23:04:24.730Z,
+        resolution: stray hand-dispatch worktree removed; branch checkout freed
       }
   ]

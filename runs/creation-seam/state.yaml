@@ -13,7 +13,20 @@ paused_reason: null
 budget:
   cost_limit_usd: 60 # exhaustion pauses the run; it never silently degrades
   cost_spent_usd: 0 # derived: the sum of ledger[].cost_usd
-  ledger: []
+  ledger:
+    [
+      {
+          at: 2026-07-22T04:13:23.022Z,
+          role: analyst,
+          task: null,
+          round: null,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
+        }
+    ]
 
 gates:
   # standard profile: G0–G2; the merge is the release.

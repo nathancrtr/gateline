@@ -334,6 +334,12 @@ autonomy multiplies the cost of a missing meter. The design:
   for v1, trailing ledger averages a possible later upgrade) against
   `cost_limit_usd`; projected exceedance → pause `budget-exhausted` + escalation.
   Pause-don't-degrade, unchanged.
+- **Enforcement is a switch; metering is not** (#109). `--no-budget-enforcement`
+  disables the cap pauses — per-run, `--require-budget`, and `--spend-limit-usd`
+  alike — for operators whose harness bills flat-rate, where dollar caps don't
+  map to marginal cost. The ledger, `cost_spent_usd`, and token counts record
+  regardless: pause-don't-degrade governs enforcement, not measurement. Default
+  is on, and an opted-out orchestrator says so loudly at startup.
 - **v0 benefits immediately.** The ledger contract lands first (M0); a human
   orchestrator appends a ledger entry from harness usage output — a smaller, more
   concrete ask than maintaining a total, and exactly the shape v1 automates. The
@@ -564,11 +570,13 @@ on #141); `frontend/packages/orchestrator/README.md`'s trigger-packaging
 section carries one for `tick`, which doesn't need updating for this.
 
 **`agentic upgrade`.** Convenience over the same mechanism, not a second one:
-refuses on a dirty tree, `git pull --ff-only`, then `npm install` in the
-workspace (`frontend/` under the resolved code repo, falling back to the
-repo root, or skipped if neither carries a `package.json`) when `HEAD`
-moved, printing `upgraded <old7>..<new7>` (or `already up to date at
-<head7>`). It does not itself restart a running engine — the monitor's own
+refuses on a dirty tree, `git pull --ff-only`, then `npm install` — and,
+when the workspace carries the web app, `npm run build`: the server serves
+`packages/web/dist`, the one part of the tree that does not run from
+source — in the workspace (`frontend/` under the resolved code repo,
+falling back to the repo root, or skipped if neither carries a
+`package.json`) when `HEAD` moved, printing `upgraded <old7>..<new7>` (or
+`already up to date at <head7>`). It does not itself restart a running engine — the monitor's own
 tick-boundary check is what notices the moved `HEAD` and drives the exit, on
 whatever cadence the heartbeat runs.
 

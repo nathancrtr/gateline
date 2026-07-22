@@ -23,7 +23,7 @@ export interface StateCommit extends CommitInfo {
 
 export type { Identity, StateDocMutation }
 
-export type WriteFailure = 'ref-moved' | 'dirty-worktree' | 'no-branch' | 'no-identity' | 'error'
+export type WriteFailure = 'ref-moved' | 'dirty-worktree' | 'stale-checkout' | 'no-branch' | 'no-identity' | 'error'
 
 /** Why `stageRun` refused to mint a genesis commit (plan ADR-4). */
 export type StageRefusal = 'no-identity' | 'slug-taken' | 'conflict'
@@ -71,6 +71,13 @@ export interface RunSource {
    * nothing, never zero.
    */
   aheadOfOrigin?(ref: RunRef): Promise<number | null>
+  /**
+   * Commits origin has that the local run branch does not (#99). Non-zero
+   * together with aheadOfOrigin means the branch has genuinely diverged —
+   * local-wins observation is then a deliberate choice that must be visible,
+   * never silent. Absent method or null means "not knowable".
+   */
+  behindOrigin?(ref: RunRef): Promise<number | null>
   /**
    * The single write path (rule R2): apply a mutation to state.yaml and commit
    * it to the run branch, compare-and-swap semantics. `expectedTip` extends

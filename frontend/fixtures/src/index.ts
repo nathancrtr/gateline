@@ -78,12 +78,14 @@ The repository currently handles ${title} by hand. This spec automates it.
 ## Requirements
 
 ### R1 — Core behavior
+The tool reads sample input and emits the documented output, end to end.
 **Acceptance criteria:**
 - [ ] AC1.1 — running the tool on sample input produces the documented output
 
 ### R2 — Error handling
 **Acceptance criteria:**
 - [ ] AC2.1 — malformed input exits non-zero with a one-line diagnosis
+- [ ] AC2.2 — input larger than the documented cap is rejected before parsing
 
 ## Assumptions
 - **ASSUMPTION:** input fits in memory → resolved as yes because samples are <1MB.
@@ -195,7 +197,7 @@ exit=1
 Probed empty file, 100MB file, and mid-write interruption: all clean.
 
 ## Gaps
-None — both criteria verified.
+AC2.2 not verified — the fixture corpus has no oversized sample.
 `
 
 const releasePlan = () => `# Release Plan: run

@@ -40,6 +40,10 @@ program
   .option('--push', 'push every orchestrator commit to origin (hosted mode)')
   .option('--spend-limit-usd <usd>', 'refuse new dispatches when projected spend across all active runs exceeds this', parseFloat)
   .option('--require-budget', 'refuse dispatch on any run missing budget.cost_limit_usd')
+  .option(
+    '--no-budget-enforcement',
+    'meter spend but never pause on it: disables the per-run cap, --require-budget, and --spend-limit-usd (for flat-rate-billed harnesses, #109)',
+  )
   .option('--role-timeout <seconds>', 'wall clock per dispatched role before its process group is killed (default 1800)', parseFloat)
 
 interface Opened {
@@ -63,7 +67,13 @@ async function open(): Promise<Opened> {
 /** CLI flags → the shared assembly (start.ts): one construction path for the binary and `agentic up`. */
 async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler: Scheduler; manifestStaleProbe: () => Promise<string[]> }> {
   const names = program.opts<{ adapter: string[] }>().adapter
-  const hosted = program.opts<{ push?: boolean; spendLimitUsd?: number; requireBudget?: boolean; roleTimeout?: number }>()
+  const hosted = program.opts<{
+    push?: boolean
+    spendLimitUsd?: number
+    requireBudget?: boolean
+    budgetEnforcement?: boolean
+    roleTimeout?: number
+  }>()
   return assembleOrchestrator({
     repoDir: opened.dir,
     adapters: names,
@@ -71,6 +81,7 @@ async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler:
     push: hosted.push,
     spendLimitUsd: hosted.spendLimitUsd ?? null,
     requireBudget: hosted.requireBudget,
+    budgetEnforcement: hosted.budgetEnforcement,
     roleTimeoutSeconds: hosted.roleTimeout,
     log: (line: string) => console.log(line),
   })
@@ -88,6 +99,8 @@ program
     if (opts.dryRun) {
       const cfg = {
         estimates: opened.registry?.estimates ?? {},
+        // Dry-run predicts what a live tick would do — same enforcement stance.
+        enforceBudget: program.opts<{ budgetEnforcement?: boolean }>().budgetEnforcement !== false,
         isAncestor: (a: string, b: string) => opened.source.git.isAncestor(a, b),
       }
       for (const { ref, action } of await deriveAll(opened.source, cfg)) {

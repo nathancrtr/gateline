@@ -2,12 +2,15 @@
 // write path (rule R2 — POST /api/decisions is the only mutating route).
 import { Hono } from 'hono'
 import {
+  buildEvidenceRollup,
+  buildLexicon,
   buildPortfolio,
   collectRunDecisions,
   computeMetrics,
   deriveReadiness,
   DecisionError,
   engineHealthStale,
+  ID_PATTERN,
   parseUnifiedDiff,
   planDecision,
   readEngineHealth,
@@ -162,6 +165,43 @@ export function createApp(deps: AppDeps): Hono {
     if (content === null) return c.json({ error: `no artifact at ${path}` }, 404)
     const validation = await validateArtifact(path, content, source.templates)
     return c.json({ path, content, validation })
+  })
+
+  // The run lexicon (#163): verbatim R/AC/ADR definitions from this run's
+  // own spec.md + plan.md, plus the id grammar as a regex source — shipped
+  // as data because the browser must not bundle the core runtime.
+  app.get('/api/runs/:src/:slug/lexicon', async (c) => {
+    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+    if (!found) return c.json({ error: 'run not found' }, 404)
+    const { source, ref } = found
+    const lexicon = await cache.get(`lexicon:${ref.source}:${ref.slug}`, async () => {
+      const [spec, plan] = await Promise.all([source.readArtifact(ref, 'spec.md'), source.readArtifact(ref, 'plan.md')])
+      return buildLexicon({ spec, plan })
+    })
+    return c.json({ entries: lexicon.entries, pattern: ID_PATTERN })
+  })
+
+  // Evidence-presence rollup (#165): which criteria the verification record
+  // cites, computed from the artifacts. Presence, never verdicts — verdict
+  // text in the payload is a verbatim quote from the report.
+  app.get('/api/runs/:src/:slug/evidence', async (c) => {
+    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+    if (!found) return c.json({ error: 'run not found' }, 404)
+    const { source, ref } = found
+    const rollup = await cache.get(`evidence:${ref.source}:${ref.slug}`, async () => {
+      const [spec, verification, artifacts] = await Promise.all([
+        source.readArtifact(ref, 'spec.md'),
+        source.readArtifact(ref, 'verification-report.md'),
+        source.listArtifacts(ref),
+      ])
+      const reviews = await Promise.all(
+        artifacts
+          .filter((p) => /^review-\d+.*\.md$/.test(p))
+          .map(async (p) => ({ path: p, content: (await source.readArtifact(ref, p)) ?? '' })),
+      )
+      return buildEvidenceRollup({ lexicon: buildLexicon({ spec }), verification, reviews })
+    })
+    return c.json(rollup)
   })
 
   app.get('/api/runs/:src/:slug/diff', async (c) => {

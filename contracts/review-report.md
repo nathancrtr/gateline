@@ -20,7 +20,9 @@
 ## Coverage
 <!-- What you checked and found clean — the G2 human relies on this, not just
      the findings. E.g.: "requirement coverage R1-R3 ✓; error paths in X ✓;
-     concurrency not assessed (no concurrent access in scope)". -->
+     concurrency not assessed (no concurrent access in scope)".
+     Human-facing: write it as prose — give any id a noun phrase on first
+     use, never a naked cite. -->
 
 ## Boundary check
 <!-- Did the diff stay inside the task's declared file_contact_surface? -->

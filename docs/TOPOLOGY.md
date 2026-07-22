@@ -120,6 +120,37 @@ and open decisions older than the heartbeat interval. The Airflow banner,
 verbatim: if decisions are landing and no engine has ticked within N minutes, the
 portfolio view says so at the top, loudly (#100).
 
+### 3.5 Trying changes locally — the trial instance
+
+A corollary of §3.1: the blessed checkout (the tree the global `agentic`
+symlinks into) stays on the default branch, always. Trying an unmerged frontend
+change never means moving that checkout to a branch — if an engine is running
+there, that would put unreviewed code in charge of live, metered dispatch.
+
+Instead, the branch's own worktree is the trial instance. Two properties make
+this free: the CLI and server run from TypeScript source (`node
+packages/cli/src/main.ts` in any tree *is* that tree's `agentic`), and FleetView
+observes a repository through its git refs, so the observed repo's checked-out
+branch is irrelevant. From the worktree:
+
+```sh
+cd <worktree>/frontend
+npm install && npm run build     # the server serves web/dist — UI changes are invisible until built
+node packages/cli/src/main.ts ui --repo <path-to-repo> --port 4312
+```
+
+That is a self-contained second FleetView on a side port; the blessed instance
+is untouched and ctrl-C removes the trial. Rules of the road:
+
+- **`ui`, never `up`, from a trial tree.** `up` starts the dispatch engine;
+  trying UI changes never requires one.
+- **Decision clicks belong to `ui --demo`** (a generated throwaway repository).
+  `POST /api/decisions` writes real state commits to whatever repo is observed.
+- **Web-only changes** can use the hot-reload loop instead: `npm run dev -w
+  @agentic/web` (vite on 4311, proxying `/api` to 4310). For changes that touch
+  server or core routes, use the built self-contained flow above so the API
+  comes from the trial tree too.
+
 ## 4. What this deliberately does not change
 
 - The role/contract/registry architecture, the gate discipline, and

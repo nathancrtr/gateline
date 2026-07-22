@@ -112,9 +112,22 @@ export class LocalGitSource implements RunSource {
     const locals = await this.git.forEachRef([`refs/heads/${RUN_BRANCH_PREFIX}*`])
     const remotes = await this.git.forEachRef([`refs/remotes/*/${RUN_BRANCH_PREFIX}*`])
 
-    for (const { ref } of locals) {
+    for (const { ref, oid } of locals) {
       const branch = ref.replace('refs/heads/', '')
       const slug = branch.slice(RUN_BRANCH_PREFIX.length)
+      // #99: a local branch pinned strictly behind its remote-tracking ref —
+      // typically because it is checked out in a worktree, which
+      // syncFromRemote deliberately never fast-forwards — must not freeze
+      // observation at the stale tip. Strictly behind → serve the remote ref:
+      // it carries everything local has and nothing unpushed is lost. Ahead
+      // keeps local-wins (unpushed decisions). Diverged keeps local-wins too,
+      // surfaced via aheadOfOrigin/behindOrigin rather than silently.
+      const remoteRef = `refs/remotes/origin/${branch}`
+      const remoteTip = await this.git.revParse(remoteRef)
+      if (remoteTip && remoteTip !== oid && (await this.git.isAncestor(ref, remoteRef))) {
+        bySlug.set(slug, { source: this.id, slug, ref: `origin/${branch}`, kind: 'remote', branch })
+        continue
+      }
       bySlug.set(slug, { source: this.id, slug, ref: branch, kind: 'branch', branch })
     }
     for (const { ref } of remotes) {
@@ -220,6 +233,15 @@ export class LocalGitSource implements RunSource {
     return this.git.revListCount(`refs/remotes/origin/${ref.branch}..refs/heads/${ref.branch}`)
   }
 
+  async behindOrigin(ref: RunRef): Promise<number | null> {
+    // Only meaningful for a locally-served branch: a strictly-behind local is
+    // already served at its remote ref (#99), so a non-zero count here means
+    // the branch is ahead too — genuinely diverged.
+    if (ref.kind !== 'branch') return null
+    if (!(await this.git.revParse(`refs/remotes/origin/${ref.branch}`))) return null
+    return this.git.revListCount(`refs/heads/${ref.branch}..refs/remotes/origin/${ref.branch}`)
+  }
+
   async writeState(ref: RunRef, mutate: StateDocMutation, message: string, options: { expectedTip?: string } = {}): Promise<WriteResult> {
     if (!(await this.identity()))
       return { ok: false, reason: 'no-identity', message: 'git user.name/user.email are unset — decisions must be attributable to a named human' }
@@ -243,6 +265,31 @@ export class LocalGitSource implements RunSource {
       if (!(await this.git.updateRefCAS(branchRef, remoteTip, ZERO_OID)))
         return { ok: false, reason: 'ref-moved', message: 'branch appeared concurrently; re-read and retry' }
       tip = remoteTip
+    } else {
+      // #99 write-side: a decision must never build on a base strictly behind
+      // origin — the commit would be rejected at push, and observation (which
+      // now serves the remote tip for a behind local) would pin an expectedTip
+      // this branch can never match. Fast-forward first; ahead and diverged
+      // branches keep local as today.
+      const remoteRef = `refs/remotes/origin/${ref.branch}`
+      const remoteTip = await this.git.revParse(remoteRef)
+      if (remoteTip && remoteTip !== tip && (await this.git.isAncestor(branchRef, remoteRef))) {
+        const checkout = (await this.git.worktrees()).find((w) => w.branch === branchRef)
+        if (checkout) {
+          try {
+            await new Git(checkout.path).run(['merge', '--ff-only', remoteTip])
+          } catch {
+            return {
+              ok: false,
+              reason: 'stale-checkout',
+              message: `${ref.branch} is behind origin and its checkout at ${checkout.path} could not fast-forward — reconcile it first`,
+            }
+          }
+        } else if (!(await this.git.updateRefCAS(branchRef, remoteTip, tip))) {
+          return { ok: false, reason: 'ref-moved', message: `${ref.branch} moved while fast-forwarding — re-read and retry` }
+        }
+        tip = remoteTip
+      }
     }
     if (options.expectedTip && tip !== options.expectedTip)
       return { ok: false, reason: 'ref-moved', message: `${ref.branch} moved past the observed tip — re-derive and retry` }

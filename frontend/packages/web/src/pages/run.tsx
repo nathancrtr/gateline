@@ -1,7 +1,7 @@
 // One run's story: header + gate ledger, the "needs you" panel, and tabs for
 // artifacts, diff, and state history. Decision affordances live in the cards
 // (M2 wires them to POST /api/decisions).
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useKeys } from '../use-keys.ts'
@@ -9,6 +9,8 @@ import { api, formatAge, formatWhen, type InboxItem, type RunDetailResponse } fr
 import { AgeBadge, BudgetMeter, GateLedger, KindChip, PhaseChip, ValidationBadge } from '../components/chips.tsx'
 import { DecidePanel } from '../components/decide.tsx'
 import { DiffView } from '../components/diff-view.tsx'
+import { EvidenceRollupPanel } from '../components/evidence.tsx'
+import { CitedObjects, LexiconProvider, useRunLexicon } from '../components/lexicon.tsx'
 import { Markdown } from '../components/markdown.tsx'
 import { PageStatus } from './inbox.tsx'
 
@@ -26,6 +28,7 @@ export function RunPage() {
     queryFn: () => api.run(src!, slug!),
     enabled: Boolean(src && slug),
   })
+  const lexicon = useRunLexicon(src, slug)
 
   // e cycles artifacts; esc returns to the inbox unless a decision is open.
   const keyHandlers = useMemo(
@@ -68,14 +71,21 @@ export function RunPage() {
         <PhaseChip phase={summary.phase} pausedReason={summary.pausedReason} />
         <GateLedger gates={summary.gates} profile={summary.profile} />
         <span className="ml-auto flex items-center gap-4">
-          {summary.aheadOfOrigin != null && summary.aheadOfOrigin > 0 && (
+          {summary.aheadOfOrigin != null && summary.aheadOfOrigin > 0 && (summary.behindOrigin ?? 0) > 0 ? (
+            <span
+              className="rounded-full bg-bad-soft px-2 py-0.5 font-mono text-[11px] font-semibold tabular-nums text-bad"
+              title={`${summary.ref} has diverged from origin: ${summary.aheadOfOrigin} local-only commit(s), ${summary.behindOrigin} on origin only — reconcile the branch (#99)`}
+            >
+              ↑{summary.aheadOfOrigin}↓{summary.behindOrigin} diverged
+            </span>
+          ) : summary.aheadOfOrigin != null && summary.aheadOfOrigin > 0 ? (
             <span
               className="rounded-full bg-warn-soft px-2 py-0.5 font-mono text-[11px] font-semibold tabular-nums text-warn"
               title={`${summary.aheadOfOrigin} commit(s) on ${summary.ref} not yet pushed — origin consumers see an older run`}
             >
               ↑{summary.aheadOfOrigin} unpushed
             </span>
-          )}
+          ) : null}
           <BudgetMeter limit={summary.budget.limit} spent={summary.budget.spent} />
           <span className="font-mono text-xs text-faint" title={`read at ${summary.ref}`}>
             {summary.source} · {summary.ref}
@@ -124,16 +134,19 @@ export function RunPage() {
       </nav>
 
       {tab === 'artifacts' && (
-        <ArtifactsTab
-          detail={detail}
-          selected={artifact}
-          onSelect={(p) => {
-            const next = new URLSearchParams(params)
-            next.set('tab', 'artifacts')
-            next.set('artifact', p)
-            setParams(next, { replace: true })
-          }}
-        />
+        <LexiconProvider value={lexicon}>
+          <ArtifactsTab
+            detail={detail}
+            selected={artifact}
+            onSelect={(p) => {
+              const next = new URLSearchParams(params)
+              next.set('tab', 'artifacts')
+              next.set('artifact', p)
+              next.delete('anchor')
+              setParams(next, { replace: true })
+            }}
+          />
+        </LexiconProvider>
       )}
       {tab === 'diff' && <DiffTab src={summary.source} slug={summary.slug} />}
       {tab === 'history' && <HistoryTab history={detail.history} />}
@@ -186,6 +199,7 @@ function NeedsYouCard({ item, now, detail, primary }: { item: InboxItem; now: nu
             ))}
         </div>
       )}
+      {item.kind === 'gate' && item.gate === 'G2' && <EvidenceRollupPanel src={item.source} slug={item.slug} />}
       <DecidePanel item={item} primary={primary} />
     </section>
   )
@@ -255,6 +269,13 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
     queryKey: ['artifact', src, slug, path],
     queryFn: () => api.artifact(src, slug, path),
   })
+  // Jump-to-definition (#163): the anchor param lands on the def-<id> heading
+  // ids the lexicon rehype stage stamps onto R/ADR definition headings.
+  const [params] = useSearchParams()
+  const anchor = params.get('anchor')
+  useEffect(() => {
+    if (anchor && data) document.getElementById(anchor)?.scrollIntoView({ block: 'start' })
+  }, [anchor, data])
   if (isLoading) return <LoadingSkeleton text="Reading artifact…" />
   if (error) return <PageStatus text={(error as Error).message} bad />
   const { content, validation } = data!
@@ -265,7 +286,17 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
           Fails its {validation.contract} contract — missing: {validation.missing.join(', ')}
         </p>
       )}
-      {path.endsWith('.md') ? <Markdown>{content}</Markdown> : <pre className="overflow-x-auto font-mono text-xs leading-5">{content}</pre>}
+      <CitedObjects content={content} path={path} />
+      {path === 'verification-report.md' && (
+        <div className="mb-4">
+          <EvidenceRollupPanel src={src} slug={slug} />
+        </div>
+      )}
+      {path.endsWith('.md') ? (
+        <Markdown sourcePath={path}>{content}</Markdown>
+      ) : (
+        <pre className="overflow-x-auto font-mono text-xs leading-5">{content}</pre>
+      )}
     </article>
   )
 }

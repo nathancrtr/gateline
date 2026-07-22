@@ -34,6 +34,8 @@ export interface RunSummary {
    * origin tracking, remote-kind run).
    */
   aheadOfOrigin: number | null
+  /** Commits origin has that the local branch lacks (#99); with aheadOfOrigin > 0 the branch has diverged. */
+  behindOrigin: number | null
 }
 
 const cell = (g: GateEntry): GateLedgerCell => ({
@@ -51,6 +53,7 @@ export async function summarizeRun(
   const { items } = await deriveReadiness(source, ref)
   const touched = await source.lastTouched(ref, [''])
   const aheadOfOrigin = (await source.aheadOfOrigin?.(ref)) ?? null
+  const behindOrigin = (await source.behindOrigin?.(ref)) ?? null
 
   if (!state) {
     return {
@@ -70,6 +73,7 @@ export async function summarizeRun(
         updatedAt: touched?.time ?? null,
         needsHuman: items.length,
         aheadOfOrigin,
+        behindOrigin,
       },
       items,
     }
@@ -101,6 +105,7 @@ export async function summarizeRun(
       updatedAt: touched?.time ?? null,
       needsHuman: items.length,
       aheadOfOrigin,
+      behindOrigin,
     },
     items,
   }

@@ -11,6 +11,7 @@ import { createInterface } from 'node:readline/promises'
 import { Command } from 'commander'
 import {
   BUILTIN_SECTIONS,
+  buildLexicon,
   buildPortfolio,
   BURDENS,
   DecisionError,
@@ -23,7 +24,9 @@ import {
   PROFILE_GATES,
   PROFILES,
   resolveCodeRepo,
+  resolveId,
   ScaffoldError,
+  scanIds,
   SUPERSEDE_EXIT_CODE,
   type Burden,
   type DecisionInput,
@@ -126,6 +129,61 @@ function printItem(item: InboxItem): void {
     for (const p of item.problems) console.log(`${' '.repeat(17)}✕ BOUNCED: ${p}`)
   }
 }
+
+// The run lexicon in a terminal (#164): a hover can't exist here, so cited
+// R/AC/ADR definitions print once, as a footnote block, in first-citation
+// order. Quotes are verbatim (elision only — truncation shown as "…");
+// dangling ids are listed and flagged, not dropped.
+program
+  .command('show')
+  .description('print a run artifact, with cited R/AC/ADR definitions as footnotes (omit the artifact to list them)')
+  .argument('<slug>', 'run slug')
+  .argument('[artifact]', 'run-relative artifact path, e.g. plan.md or tasks/01-core.yaml')
+  .option('--source <id>', 'source id when the slug is ambiguous')
+  .option('--refs <mode>', 'footnotes: first-line | full | off', 'first-line')
+  .action(async (slug: string, artifact: string | undefined, flags: { source?: string; refs: string }) => {
+    if (!['first-line', 'full', 'off'].includes(flags.refs)) {
+      console.error('--refs must be one of: first-line | full | off')
+      process.exit(1)
+    }
+    const { sources } = await resolveSources()
+    const { source, ref } = await findRun(sources, slug, flags.source)
+    if (!artifact) {
+      const paths = await source.listArtifacts(ref)
+      if (paths.length === 0) return console.log('no artifacts yet')
+      for (const p of paths) console.log(p)
+      return
+    }
+    const content = await source.readArtifact(ref, artifact)
+    if (content === null) {
+      console.error(`no artifact at ${artifact}`)
+      process.exit(1)
+    }
+    process.stdout.write(content.endsWith('\n') ? content : `${content}\n`)
+    if (flags.refs === 'off') return
+
+    const [spec, plan] = await Promise.all([source.readArtifact(ref, 'spec.md'), source.readArtifact(ref, 'plan.md')])
+    const lexicon = buildLexicon({ spec, plan })
+    // An id defined in the shown artifact is a definition here, not a citation.
+    const cited = scanIds(content).filter((id) => resolveId(lexicon, id)?.artifact !== artifact)
+    if (cited.length === 0) return
+
+    const from = [...new Set(cited.map((id) => resolveId(lexicon, id)?.artifact).filter(Boolean))]
+    console.log('---')
+    console.log(`References${from.length ? ` (from ${from.join(', ')})` : ''}:`)
+    const width = Math.max(...cited.map((id) => id.length))
+    for (const id of cited) {
+      const def = resolveId(lexicon, id)
+      if (!def) {
+        console.log(`  ${id.padEnd(width)}  [not defined in this run's spec/plan]`)
+        continue
+      }
+      const name = def.shortName + (def.qualifier ? ` (${def.qualifier})` : '')
+      const body = def.body.replace(/\s+/g, ' ').trim()
+      const quote = body ? `"${flags.refs === 'full' ? body : truncate(body, 110)}"` : ''
+      console.log(`  ${id.padEnd(width)}  ${[name, quote].filter(Boolean).join(' — ')}`)
+    }
+  })
 
 // --- decision commands (the write path) -------------------------------------
 
@@ -631,6 +689,10 @@ program
     [] as string[],
   )
   .option('--spend-limit-usd <usd>', 'refuse new dispatches when projected spend across all active runs exceeds this', parseFloat)
+  .option(
+    '--no-budget-enforcement',
+    'meter spend but never pause on it: no per-run cap requirement, no cap pauses (for flat-rate-billed harnesses, #109)',
+  )
   .option('--no-push', 'keep orchestrator commits local (default pushes: origin is the record)')
   .option('--heartbeat <seconds>', 'engine heartbeat interval', '180')
   .option('--role-timeout <seconds>', 'wall clock per dispatched role before its process group is killed (default 1800)', parseFloat)
@@ -641,6 +703,7 @@ program
       open?: boolean
       adapter: string[]
       spendLimitUsd?: number
+      budgetEnforcement?: boolean
       push?: boolean
       heartbeat: string
       roleTimeout?: number
@@ -689,7 +752,11 @@ program
         repoDir,
         adapters: flags.adapter,
         push: flags.push !== false,
-        requireBudget: true,
+        // Hosted hard line unless the operator opts out (#109): with
+        // enforcement off, requiring a per-run cap would be requiring a
+        // number nothing reads.
+        requireBudget: flags.budgetEnforcement !== false,
+        budgetEnforcement: flags.budgetEnforcement,
         spendLimitUsd: flags.spendLimitUsd ?? null,
         roleTimeoutSeconds: flags.roleTimeout,
         heartbeatSeconds: Number(flags.heartbeat),
@@ -751,6 +818,18 @@ export async function runUpgrade(repoDir: string, log: (line: string) => void = 
       console.error(`agentic upgrade: npm install failed in ${workspaceDir} (exit ${npmCode})`)
       return npmCode
     }
+    // The web app is the one part of the tree that does NOT run from source:
+    // the server serves packages/web/dist, a built artifact. An upgrade that
+    // stops at `npm install` leaves the previous build's UI running over
+    // current APIs — invisibly, because everything else picks up the new
+    // code on restart.
+    if (existsSync(join(workspaceDir, 'packages', 'web', 'package.json'))) {
+      const buildCode = await streamCommand('npm', ['run', 'build'], workspaceDir)
+      if (buildCode !== 0) {
+        console.error(`agentic upgrade: npm run build failed in ${workspaceDir} (exit ${buildCode})`)
+        return buildCode
+      }
+    }
   } else {
     log('no package.json found under the repo — skipping npm install')
   }
@@ -801,6 +880,11 @@ program
   })
 
 // --- helpers ------------------------------------------------------------------
+
+/** Verbatim-or-elided: never rewords, and an elision is always visible. */
+function truncate(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`
+}
 
 function table(rows: Record<string, string>[], cols: string[]): void {
   const widths = cols.map((c) => Math.max(c.length, ...rows.map((r) => (r[c] ?? '').length)))

@@ -12,7 +12,7 @@ paused_reason: null
 
 budget:
   cost_limit_usd: 60 # exhaustion pauses the run; it never silently degrades
-  cost_spent_usd: 1.54 # derived: the sum of ledger[].cost_usd
+  cost_spent_usd: 4.47 # derived: the sum of ledger[].cost_usd
   ledger:
     [
       {
@@ -33,9 +33,9 @@ budget:
           round: null,
           adapter: claude-code,
           model: anthropic/claude-sonnet-5,
-          tokens_in: null,
-          tokens_out: null,
-          cost_usd: null
+          tokens_in: 27,
+          tokens_out: 10420,
+          cost_usd: 2.92986235
         }
     ]
 

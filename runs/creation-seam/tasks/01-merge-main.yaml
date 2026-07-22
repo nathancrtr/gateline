@@ -1,0 +1,58 @@
+id: 01-merge-main
+title: Mechanically merge current origin/main into the run branch (post-#156 tree)
+requirements: [R4, R5]
+
+scope: |
+  This branch's working tree predates merged PR #156: record/schema.ts,
+  record/actions.ts, and orchestrator/src/derive.ts lack the profile machinery
+  (PROFILES, PROFILE_GATES, PROFILE_PHASES, D20/D21, deriveResumePhase's
+  profile awareness) that every other task builds against. Run
+  `git fetch origin && git merge origin/main` on this run branch. The branch's
+  only divergence from main should be runs/creation-seam/**, so the merge
+  should carry zero content conflicts — if any conflict appears outside
+  runs/, or the merged files' shapes contradict plan.md's Interface contracts
+  (e.g. PROFILES absent, deriveResumePhase signature differs), STOP and
+  escalate per plan ADR-6; do not hand-resolve framework code.
+  Make no hand edits in this task: the merge commit is the entire change.
+
+file_contact_surface:
+  - "(merge commit only — entire tree, mechanical; no hand-authored hunks)"
+
+acceptance_tests:
+  - "grep -n 'PROFILES' frontend/packages/core/src/record/schema.ts finds the profile constants"
+  - "grep -n 'D21' frontend/packages/orchestrator/src/derive.ts finds the profile-invariant rule"
+  - "cd frontend && npm install && npm test passes on the merged tree"
+  - "cd frontend && npm run typecheck passes"
+
+depends_on: []
+
+status: pending
+
+notes: |
+  Implementer (round 1): confirmed the run branch's only divergence from
+  origin/main (merge-base 1733b41) is runs/creation-seam/** (verified via
+  `git diff --name-only <merge-base> HEAD | grep -v '^runs/'` -> empty)
+  before merging, per ADR-6. Ran exactly `git fetch origin && git merge
+  origin/main --no-edit`; origin/main tip was b11428e (#156, the exact
+  commit ADR-6 cites) at fetch time. Merge produced zero conflicts (28 files
+  changed, all outside runs/) and merge commit 282e7d3 (parents 47fc258,
+  b11428e). No hand edits made.
+
+  Acceptance tests, all pass:
+  1. `grep -n 'PROFILES' frontend/packages/core/src/record/schema.ts` ->
+     line 29 `export const PROFILES = ['patch', 'standard', 'full'] as const`.
+  2. `grep -n 'D21' frontend/packages/orchestrator/src/derive.ts` -> lines
+     34/140/147/153/207 (comment + rule labels + two call sites).
+  3. `cd frontend && npm install && npm test` -> 34 files passed, 1 skipped
+     (live-smoke, intentional); 244 tests passed, 1 skipped; exit 0.
+  4. `cd frontend && npm run typecheck` -> clean, no output, exit 0.
+
+  One deviation from the dispatch prompt worth recording (not an
+  escalation): the prompt's example located deriveResumePhase in
+  frontend/packages/orchestrator/src/derive.ts; in the merged tree it lives
+  in frontend/packages/core/src/record/schema.ts (schema.ts:210), which
+  matches plan.md's own "record/schema.ts + record/actions.ts deltas"
+  section, not orchestrator/derive.ts. Signature and semantics match the
+  plan exactly: `deriveResumePhase(state: RunState): Phase`, walking
+  PROFILE_GATES[state.profile] to the first undecided gate's first phase,
+  'done' if none. No plan contradiction, so no escalation triggered.

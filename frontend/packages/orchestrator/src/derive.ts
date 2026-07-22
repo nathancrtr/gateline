@@ -42,6 +42,11 @@
 // rather than release, and in `patch` the plan phase has no producing role —
 // the human authored the packet, so there is no one to dispatch or bounce to.
 //
+// The whole table is parameterized by the run's profile (DESIGN.md §4.1):
+// reduced profiles subset the gates (PROFILE_GATES), G2 advances to done
+// rather than release, and in `patch` the plan phase has no producing role —
+// the human authored the packet, so there is no one to dispatch or bounce to.
+//
 // Two invariants govern every row (§4.2): each action is derivable from
 // committed files alone, and each action is idempotent to re-derive — a tick
 // interrupted anywhere converges on re-run. Note what is deliberately absent:

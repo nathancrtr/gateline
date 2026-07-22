@@ -1,0 +1,77 @@
+id: 04-pr-ensure
+title: "sources/pr-ensure.ts: idempotent, never-fatal draft-PR ensure over the gh CLI"
+requirements: [R8]
+
+scope: |
+  New frontend/packages/core/src/sources/pr-ensure.ts implementing
+  `ensureDraftPr(dir, branch, slug, opts?)` per plan.md "Interface contracts":
+  returns { status: 'created' | 'exists' | 'skipped'; note } and NEVER throws.
+  Sequence: no remote.origin.url (Git.configGet) -> skipped; no
+  refs/remotes/origin/<branch> (Git.revParse) -> skipped ("branch not
+  pushed"); `gh pr list --head <branch> --state all --limit 1 --json number`
+  -> any PR -> exists; else `gh pr create --draft --head <branch> --base
+  <defaultBranch> --title "run/<slug>" --body` (one line pointing at
+  runs/<slug>/) -> created. Follow GhCliProvider's execFile invocation shape
+  (sources/sync.ts) but accept an injectable exec function in opts so tests
+  never shell out to real gh; any gh error (missing binary, unauthed,
+  network) -> skipped with the reason in note (AC8.2). Add
+  `export * from './pr-ensure.ts'` to sources/index.ts. Keep GitHub-Issues
+  vocabulary out entirely — PRs are fine (existing sync.ts precedent), Issues
+  identifiers are not (AC9.1).
+
+  Tests in frontend/packages/core/test/pr-ensure.test.ts (new), all through
+  the injected exec: creates when list returns empty; exists (and does NOT
+  call create) when a PR is listed — the AC8.1 idempotency half at unit
+  level; skipped on no-remote, unpushed branch, and a rejecting exec, each
+  completing without throwing and with a descriptive note (AC8.2).
+
+file_contact_surface:
+  - frontend/packages/core/src/sources/pr-ensure.ts
+  - frontend/packages/core/src/sources/index.ts
+  - frontend/packages/core/test/pr-ensure.test.ts
+
+acceptance_tests:
+  - AC8.1 (unit half: repeated ensure never creates a second PR)
+  - AC8.2
+  - "cd frontend && npx vitest run packages/core/test/pr-ensure.test.ts passes"
+  - "cd frontend && npm test && npm run typecheck pass"
+
+depends_on: [01-merge-main]
+
+status: pending
+
+notes: |
+  Implementer round 1: added frontend/packages/core/src/sources/pr-ensure.ts
+  (ensureDraftPr) exactly per plan.md's Interface contracts section — list
+  (gh pr list --head <branch> --state all --limit 1 --json number) then
+  create (gh pr create --draft --head <branch> --base <defaultBranch> --title
+  "run/<slug>" --body <one line pointing at runs/<slug>/>), gated by
+  Git.configGet('remote.origin.url') and Git.revParse('refs/remotes/origin/
+  <branch>') exactly as scoped. Injectable ExecLike opts.exec follows the
+  existing FetchLike/GhCliProvider precedent (RestPrProvider in github.ts,
+  GhCliProvider in sync.ts) so no test shells out to real gh. The whole
+  function body is additionally wrapped in a top-level try/catch (belt and
+  braces beyond the individual gh-call catches) so it structurally cannot
+  throw. Added the barrel line to sources/index.ts. New
+  frontend/packages/core/test/pr-ensure.test.ts (5 cases, all through the
+  injected exec): created when list is empty; exists (and create is never
+  called) when list returns a PR (AC8.1 idempotency, unit half); skipped on
+  no remote, skipped on an unpushed branch (local branch with no matching
+  refs/remotes/origin/<branch>), and skipped when the injected exec rejects
+  (simulating missing/unauthed/network gh) — all five complete without
+  throwing and assert a descriptive note (AC8.2). AC9.1 grep clean for both
+  new files (verified: `grep -niE "issue|label|assignee|milestone"` over
+  pr-ensure.ts and pr-ensure.test.ts returns nothing).
+
+  Test results: `npx vitest run packages/core/test/pr-ensure.test.ts` — 5/5
+  passed. `npm test` (full frontend suite) — 246 passed, 1 skipped
+  (live-smoke, intentionally skipped), 3 timeouts (config.test.ts's
+  subdirectory-inbox case, and two engine.test.ts M2 cases) that reproduced
+  only under full-suite parallel resource contention; re-run individually
+  with `npx vitest run packages/core/test/config.test.ts` and `npx vitest run
+  packages/orchestrator/test/engine.test.ts` both pass cleanly (10s and 92s
+  respectively, well under their configured timeouts) — pre-existing
+  environment flakiness unrelated to this task's diff (confirmed via `git
+  status --short`: only pr-ensure.ts, pr-ensure.test.ts, and the one-line
+  index.ts barrel edit are touched). `npm run typecheck` passed with no
+  errors.

@@ -1,0 +1,406 @@
+# Contract: maintained by Orchestrator (human in v0, orchestrator engine in v1);
+# read by everyone. Lives at runs/<slug>/state.yaml — the single source of truth
+# for a run.
+
+run: creation-seam
+branch: run/creation-seam
+phase: done
+  # staged by hand ahead of the seam this run builds;
+  # resume (= arm) derives spec from the gate ledger
+profile: standard # patch | standard | full (DESIGN.md §4.1)
+paused_reason: null
+
+budget:
+  cost_limit_usd: 60 # exhaustion pauses the run; it never silently degrades
+  cost_spent_usd: 104.54 # derived: the sum of ledger[].cost_usd
+  ledger:
+    [
+      {
+          at: 2026-07-22T04:13:23.022Z,
+          role: analyst,
+          task: null,
+          round: null,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 8,
+          tokens_out: 1447,
+          cost_usd: 1.5446063999999997
+        },
+      {
+          at: 2026-07-22T04:53:15.071Z,
+          role: analyst,
+          task: null,
+          round: null,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 27,
+          tokens_out: 10420,
+          cost_usd: 2.92986235
+        },
+      {
+          at: 2026-07-22T05:10:13.678Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 14,
+          tokens_out: 3256,
+          cost_usd: 12.069172
+        },
+      {
+          at: 2026-07-22T05:55:00.779Z,
+          role: implementer,
+          task: 01-merge-main,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 10,
+          tokens_out: 2323,
+          cost_usd: 1.2397096
+        },
+      {
+          at: 2026-07-22T06:01:12.376Z,
+          role: reviewer,
+          task: 01-merge-main,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 1462,
+          tokens_out: 4513,
+          cost_usd: 2.231945
+        },
+      {
+          at: 2026-07-22T06:06:07.720Z,
+          role: implementer,
+          task: 02-record-scaffold-and-arm,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: 8,
+          failed: true
+        },
+      {
+          at: 2026-07-22T06:06:07.720Z,
+          role: implementer,
+          task: 04-pr-ensure,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: 8,
+          failed: true
+        },
+      {
+          at: 2026-07-22T06:06:07.720Z,
+          role: implementer,
+          task: 07-contract-and-release-notes,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: 8,
+          failed: true
+        },
+      {
+          at: 2026-07-22T14:53:23.372Z,
+          role: implementer,
+          task: 02-record-scaffold-and-arm,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 8,
+          tokens_out: 1706,
+          cost_usd: 2.5791603
+        },
+      {
+          at: 2026-07-22T14:53:23.372Z,
+          role: implementer,
+          task: 04-pr-ensure,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 10,
+          tokens_out: 3052,
+          cost_usd: 1.6399312999999998
+        },
+      {
+          at: 2026-07-22T14:53:23.372Z,
+          role: implementer,
+          task: 07-contract-and-release-notes,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 12,
+          tokens_out: 2601,
+          cost_usd: 1.0753883
+        },
+      {
+          at: 2026-07-22T15:01:03.077Z,
+          role: reviewer,
+          task: 07-contract-and-release-notes,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 14,
+          tokens_out: 4683,
+          cost_usd: 2.182441
+        },
+      {
+          at: 2026-07-22T15:06:17.244Z,
+          role: reviewer,
+          task: 04-pr-ensure,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 21,
+          tokens_out: 8804,
+          cost_usd: 3.470091499999999
+        },
+      {
+          at: 2026-07-22T15:08:27.586Z,
+          role: reviewer,
+          task: 02-record-scaffold-and-arm,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 19,
+          tokens_out: 9950,
+          cost_usd: 4.477574999999999
+        },
+      {
+          at: 2026-07-22T15:19:50.961Z,
+          role: implementer,
+          task: 02-record-scaffold-and-arm,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 6,
+          tokens_out: 1680,
+          cost_usd: 1.5742723999999992
+        },
+      {
+          at: 2026-07-22T15:28:21.799Z,
+          role: reviewer,
+          task: 02-record-scaffold-and-arm,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 10,
+          tokens_out: 2216,
+          cost_usd: 2.4623515
+        },
+      {
+          at: 2026-07-22T18:01:19.926Z,
+          role: implementer,
+          task: 03-stage-run-source,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 8,
+          tokens_out: 1669,
+          cost_usd: 2.9320739
+        },
+      {
+          at: 2026-07-22T18:01:19.926Z,
+          role: implementer,
+          task: 06-derive-tests-engine-ensure,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 10,
+          tokens_out: 2488,
+          cost_usd: 3.1072540999999996
+        },
+      {
+          at: 2026-07-22T18:14:32.305Z,
+          role: reviewer,
+          task: 03-stage-run-source,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 12,
+          tokens_out: 2990,
+          cost_usd: 3.667214499999999
+        },
+      {
+          at: 2026-07-22T18:14:32.305Z,
+          role: reviewer,
+          task: 06-derive-tests-engine-ensure,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 11,
+          tokens_out: 4399,
+          cost_usd: 4.4812935
+        },
+      {
+          at: 2026-07-22T18:54:51.316Z,
+          role: implementer,
+          task: 03-stage-run-source,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 6,
+          tokens_out: 1691,
+          cost_usd: 1.25458705
+        },
+      {
+          at: 2026-07-22T18:54:51.316Z,
+          role: reviewer,
+          task: 06-derive-tests-engine-ensure,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 13,
+          tokens_out: 6451,
+          cost_usd: 2.5939414999999997
+        },
+      {
+          at: 2026-07-22T19:05:17.251Z,
+          role: reviewer,
+          task: 03-stage-run-source,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 12,
+          tokens_out: 3144,
+          cost_usd: 2.053456
+        },
+      {
+          at: 2026-07-22T19:17:46.063Z,
+          role: implementer,
+          task: 05-cli-new-arm,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 8,
+          tokens_out: 1638,
+          cost_usd: 3.4459638000000004
+        },
+      {
+          at: 2026-07-22T19:31:18.915Z,
+          role: reviewer,
+          task: 05-cli-new-arm,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 3078,
+          tokens_out: 3356,
+          cost_usd: 4.032557499999999
+        },
+      {
+          at: 2026-07-22T19:42:37.232Z,
+          role: implementer,
+          task: 05-cli-new-arm,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 6,
+          tokens_out: 1827,
+          cost_usd: 4.392674600000001
+        },
+      {
+          at: 2026-07-22T20:11:12.217Z,
+          role: reviewer,
+          task: 05-cli-new-arm,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 12,
+          tokens_out: 4111,
+          cost_usd: 5.990173500000001
+        },
+      {
+          at: 2026-07-22T21:00:02.977Z,
+          role: verifier,
+          task: null,
+          round: null,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 10,
+          tokens_out: 2034,
+          cost_usd: 3.1084012000000008
+        }
+    ]
+
+gates:
+  # standard profile: G0–G2; the merge is the release.
+  # G3 listed only for pre-#156 parser compatibility
+  # (all-four-gates schema); remove once #156 is merged
+  # and the deployed stack understands profiles.
+  G0:
+    {
+      approved: true,
+      by: Nathan Carter,
+      at: 2026-07-22T05:10:09.836Z,
+      notes: one round of rework based primarily on stale git HEAD,
+      burden: light-correction
+    }
+  G1:
+    {
+      approved: true,
+      by: Nathan Carter,
+      at: 2026-07-22T05:54:36.274Z,
+      notes: null,
+      burden: confirmation
+    }
+  G2:
+    {
+      approved: true,
+      by: Nathan Carter,
+      at: 2026-07-22T21:29:00.738Z,
+      notes: null,
+      burden: confirmation
+    }
+  G3: { approved: false, by: null, at: null, notes: null }
+
+tasks:
+  [
+    { id: 01-merge-main, status: review-approved, review_rounds: 1 },
+    { id: 02-record-scaffold-and-arm, status: review-approved, review_rounds: 2 },
+    { id: 03-stage-run-source, status: review-approved, review_rounds: 2 },
+    { id: 04-pr-ensure, status: review-approved, review_rounds: 1 },
+    { id: 05-cli-new-arm, status: review-approved, review_rounds: 2 },
+    {
+        id: 06-derive-tests-engine-ensure,
+        status: review-approved,
+        review_rounds: 2
+      },
+    {
+        id: 07-contract-and-release-notes,
+        status: review-approved,
+        review_rounds: 1
+      }
+  ]
+
+escalations:
+  [
+    {
+        at: 2026-07-22T14:03:51.201Z,
+        from_role: orchestrator,
+        reason: projected spend $68.02 (ledger $44.02 + estimates) exceeds
+          cost_limit_usd $60 — pausing rather than degrading,
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-22T14:52:59.036Z,
+        resolution: restarted orchestrator with budget constraints disabled -- resuming
+      },
+    {
+        at: 2026-07-22T18:25:19.022Z,
+        from_role: orchestrator,
+        reason: reviewer escalated task 06-derive-tests-engine-ensure — see review-06.md,
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-22T18:53:19.235Z,
+        resolution: 'Yes, and I agree with the proposed path forward: "thread an
+          ensure/exec seam through EngineConfig and amend a task surface to stub
+          it in the remote-configured tests". Send this back up the flagpole to
+          the appropriate handler so I can safely resume this run
+          post-resolution.'
+      }
+  ]

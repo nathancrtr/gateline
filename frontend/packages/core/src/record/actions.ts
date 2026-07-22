@@ -11,6 +11,7 @@ import {
   PHASES,
   PROFILE_GATES,
   PROFILE_PHASES,
+  STAGED_REASON,
   type Burden,
   type GateId,
   type Phase,
@@ -19,7 +20,7 @@ import {
   type StateDocMutation,
 } from './schema.ts'
 
-export type DecisionAction = 'approve' | 'decline' | 'resolve-escalation' | 'pause' | 'resume'
+export type DecisionAction = 'approve' | 'decline' | 'resolve-escalation' | 'pause' | 'resume' | 'arm'
 
 export interface DecisionInput {
   action: DecisionAction
@@ -146,6 +147,7 @@ export function planDecision(state: RunState, input: DecisionInput, who: Identit
       if (state.phase === 'paused') throw new DecisionError('run is already paused')
       if (state.phase === 'done') throw new DecisionError('run is done; nothing to pause')
       const reason = input.pauseReason?.trim() || 'escalation'
+      if (reason === STAGED_REASON) throw new DecisionError('staging is a birth state, not a pause reason')
       return {
         mutate: (doc: Document) => {
           doc.setIn(['phase'], 'paused')
@@ -157,6 +159,8 @@ export function planDecision(state: RunState, input: DecisionInput, who: Identit
     }
     case 'resume': {
       if (state.phase !== 'paused') throw new DecisionError(`run is not paused (phase: ${state.phase})`)
+      if (state.paused_reason === STAGED_REASON)
+        throw new DecisionError(`run is staged, not paused mid-flight — use \`agentic arm ${slug}\``)
       const target = input.resumePhase ?? deriveResumePhase(state)
       if (!PHASES.includes(target) || target === 'paused') throw new DecisionError(`invalid resume phase: ${target}`)
       if (!PROFILE_PHASES[state.profile].includes(target))
@@ -183,6 +187,21 @@ export function planDecision(state: RunState, input: DecisionInput, who: Identit
         },
         message: `state(${slug}): resumed to ${target} by ${who.name}${reopen.length ? ` (${reopen.join(', ')} re-opened)` : ''}`,
         summary: `Resume ${slug} at phase "${target}"${reopen.length ? `, re-opening ${reopen.join(', ')}` : ''}`,
+      }
+    }
+    case 'arm': {
+      if (state.phase !== 'paused' || state.paused_reason !== STAGED_REASON)
+        throw new DecisionError(
+          state.phase !== 'paused' ? `run is not staged (phase: ${state.phase})` : `run is not staged (paused_reason: ${state.paused_reason ?? 'none'})`,
+        )
+      const target = deriveResumePhase(state)
+      return {
+        mutate: (doc: Document) => {
+          doc.setIn(['phase'], target)
+          doc.setIn(['paused_reason'], null)
+        },
+        message: `state(${slug}): armed by ${who.name}`,
+        summary: `Arm ${slug} into phase "${target}"`,
       }
     }
   }

@@ -1,0 +1,198 @@
+id: 05-cli-new-arm
+title: "CLI: `agentic new` (flags-first, TTY fallback, $EDITOR brief confirm) and `agentic arm`"
+requirements: [R2, R3, R4, R6, R7, R8]
+
+scope: |
+  In frontend/packages/cli/src/main.ts, following the existing command idioms
+  (resolveSources/findRun, decide()'s exit codes, promptBurden's TTY gate):
+
+  1. `agentic new` with flags --slug, --title, --profile (default standard),
+     --brief-file, --budget (default 50), --key, --source — behavior exactly
+     per plan.md "Interface contracts" §CLI: flags-complete -> no prompts,
+     stage via source.identity() + planRunScaffold + source.stageRun, exit 0
+     (AC2.1). Missing required content (slug, title, or brief) with stdin a
+     TTY -> readline/promises prompts for slug/title; brief drafted from
+     source.templates.read('intent-brief.md') with the title substituted into
+     the H1 (structure only — the command must never invent
+     Problem/Motivation/Constraints prose, R3), written to a temp file,
+     opened in $EDITOR/$VISUAL (fallback vi), re-read, preview printed, then
+     an explicit `stage? [y/N]` confirm before any commit (AC3.1). Missing
+     content with stdin non-TTY -> exit 1 naming each missing flag, no commit
+     — promptBurden's refusal shape (AC2.3, AC3.2). Validate the brief's
+     required H2s via extractSections against the repo template (fallback
+     BUILTIN_SECTIONS); refuse (or re-edit interactively) on missing
+     sections, never pad. Identity check before staging with the exact
+     refusal decide() uses, adapted to staging (AC7.1's CLI half). Outcome
+     mapping: created -> 0; exists -> 0 printing
+     `already staged: <slug> (<branch>)`; refused -> 1; conflict -> 2.
+  2. `agentic arm <slug> [--source]` — decide()-style flow passing
+     { action: 'arm' } through planDecision/writeState (DecisionError -> exit
+     1 with the message: covers already-armed, nonexistent-run comes from
+     findRun's existing refusal — AC6.1/AC6.2), then call ensureDraftPr with
+     the source's dir (the sync command's `(source as {dir?}).dir` pattern),
+     printing its note (AC8.1's arm call site; a skipped note is success).
+  3. Factor the interactive prompt/edit/confirm flow into exported helpers
+     (the runUpgrade precedent) so it is unit-testable without a TTY.
+
+  Tests in frontend/packages/cli/test/cli.test.ts (extend): spawned-process
+  cases against a scratch repo — flags-complete stage exits 0 and creates the
+  branch; non-TTY with missing flags exits 1 naming them and creates nothing;
+  repeat invocation prints the `already staged:` line and exits 0; arm moves
+  a staged standard run to phase spec and a staged patch run to plan (read
+  state.yaml back); arm on a non-staged run exits 1 with a named error;
+  no-identity repo exits 1. Unit-test the exported helpers for the
+  interactive branch (editor spawn stubbed).
+
+file_contact_surface:
+  - frontend/packages/cli/src/main.ts
+  - frontend/packages/cli/test/cli.test.ts
+
+acceptance_tests:
+  - AC2.1
+  - AC2.2
+  - AC2.3
+  - AC3.1
+  - AC3.2
+  - AC6.1
+  - AC6.2
+  - "cd frontend && npx vitest run packages/cli/test/cli.test.ts passes"
+  - "cd frontend && npm test && npm run typecheck pass"
+
+depends_on: [02-record-scaffold-and-arm, 03-stage-run-source, 04-pr-ensure]
+
+status: pending
+
+notes: |
+  Round 1 (implementer): Added `agentic new` and `agentic arm` to
+  frontend/packages/cli/src/main.ts, exporting `draftBriefMarkdown`,
+  `runInteractiveNew` (+ `InteractiveNewIO`/`InteractiveNewResult`),
+  `stageNewRun`, and `armRun` per the runUpgrade precedent for testability.
+  `new`: validates --profile/--budget, resolves the source (--source or the
+  sole configured one), reads the repo's intent-brief.md template for the
+  required-H2 list (extractSections, BUILTIN_SECTIONS fallback), then:
+  flags-complete -> read --brief-file, validate its sections, identity
+  check, planRunScaffold + stageRun, exit per outcome (created/exists -> 0,
+  "already staged: <slug> (<branch>)" on exists; refused -> 1 unless
+  reason === 'conflict' -> 2). Missing slug/title/brief-file + non-TTY ->
+  exit 1 naming the missing flags (`--slug`/`--title`/`--brief-file`), no
+  commit. Missing content + TTY -> runInteractiveNew: prompts for missing
+  slug/title, drafts the brief from the template (or reuses --brief-file
+  content) via draftBriefMarkdown, opens it in a real $EDITOR/$VISUAL
+  (fallback vi) round trip, re-validates sections (offers re-edit rather
+  than padding), previews, and requires `stage? [y/N]` before returning —
+  declining or abandoning a re-edit loop returns null and the CLI refuses
+  (exit 1), no commit. `arm`: decide()-style flow with { action: 'arm' }
+  through planDecision/writeState (DecisionError -> exit 1 with its
+  message; nonexistent run -> findRun's existing "not found" refusal), then
+  ensureDraftPr(source.dir, ref.branch, slug) and prints its note — a
+  skipped note (no origin in test repos) is success, matching AC8.2.
+
+  Deviation from the literal plan text: the plan's CLI section describes
+  arm as reusing the generic `decide()` helper; I instead wrote a small
+  dedicated `armRun` (same shape: resolve source/run -> identity check ->
+  readState -> planDecision -> writeState -> exit-code mapping) because
+  `decide()` calls `process.exit` inline on every branch, which would have
+  made chaining `ensureDraftPr` after a successful write unreliable (no
+  return value to signal success, and continuing JS after `process.exit()`
+  is not something to rely on). `armRun` returns a plain exit code instead,
+  same as `stageNewRun`, so `arm`'s command action can call
+  `process.exit(await armRun(...))` uniformly with `new`'s. Recorded here
+  per the round-1 course-correction: reviewer, please confirm this satisfies
+  AC6.1's "decide()-style flow" wording — no plan or spec text is overridden,
+  only decide()'s literal reuse is swapped for an equivalent hand-written
+  flow for the reason above.
+
+  Tests: extended frontend/packages/cli/test/cli.test.ts with spawned-process
+  cases (flags-complete stage, non-TTY missing-flags refusal, idempotent
+  replay, arm standard->spec, arm patch->plan, arm-on-non-staged refusal,
+  arm-on-nonexistent refusal, no-identity refusal via a dedicated scratch
+  repo distinct from the shared fixture) plus a unit-test block for the
+  exported interactive helpers (draftBriefMarkdown x2, runInteractiveNew x3
+  covering prompt-fill+confirm, re-edit-on-missing-sections, and decline).
+
+  Results: `cd frontend && npx vitest run packages/cli/test/cli.test.ts`
+  20/20 passed. `cd frontend && npm test` 305 passed | 1 skipped (38 files,
+  1 pre-existing skip: live-smoke.test.ts) — full workspace suite green.
+  `cd frontend && npm run typecheck` clean (tsc -p tsconfig.json && tsc -p
+  packages/web/tsconfig.json, no errors).
+
+  Round 2 (implementer): responds to review-07.md's findings — all six fixed,
+  none rebutted.
+
+  F1 (major, fixed): the arm→ensureDraftPr call site is now observed two
+  ways. The existing arm-standard test (main.ts arm command) now asserts the
+  exact skip note text (`no remote.origin.url configured — nothing to open a
+  PR against`) that the fixture repo's no-origin case prints, catching a
+  dropped `console.log(note.note)`. A new dedicated test stages+arms a run
+  in a scratch repo carrying a configured-but-never-fetched `origin` remote,
+  which routes ensureDraftPr past the no-origin skip into the
+  branch-not-pushed skip — whose note literally embeds the branch string
+  (`branch not pushed: refs/remotes/origin/run/arm-note does not exist
+  yet`), directly killing a mis-wired-branch-argument mutant (e.g. passing
+  slug instead of branch, which would print `.../arm-note` without the
+  `run/` prefix). Verified live by hand-applying both mutants (dropped
+  print; branch→slug) against main.ts and confirming each fails exactly the
+  new test that targets it, then reverting.
+
+  F2 (minor, fixed): added `expect(stderr).not.toContain('--slug')` to the
+  AC2.3 missing-flags test (which supplies `--slug` but omits `--title`/
+  `--brief-file`), so a mutant that unconditionally names all three flags
+  now fails.
+
+  F3 (minor, fixed): hoisted the identity check in `stageNewRun` from just
+  before `planRunScaffold` to immediately after resolving `source` — before
+  the flags-complete/non-TTY/interactive branch is even chosen — matching
+  `decide()`'s resolve→identity ordering and removing the later duplicate
+  check. A no-identity repo now refuses before any prompt, editor session,
+  or `--brief-file` read, eliminating the session-loss UX the finding
+  described.
+
+  F4 (minor, fixed): `runInteractiveNew`'s slug prompt loop now validates
+  against `SLUG_RE` (`/^[a-z0-9][a-z0-9-]*$/`, duplicated from core
+  scaffold.ts's private, non-exported `SLUG_RE` — kept inside this task's
+  file surface rather than widening it into core), re-prompting with a
+  logged reason instead of accepting an invalid slug into the edit session.
+  Applies whether the slug came from a bad `--slug` flag or a bad prompt
+  answer. Added a unit test (`runInteractiveNew re-prompts on an invalid
+  slug...`) exercising the re-prompt; verified live that reverting the loop
+  to unconditional acceptance fails it.
+
+  F5 (minor, fixed): extracted the shared plan→write→exit-code core (the
+  `planDecision`/`writeState` CAS path, refusal strings, and exit-code
+  mapping) out of `decide()` into a new `planAndWrite(source, ref, who,
+  input)` helper returning `number | null`; both `decide()` (process.exits
+  on non-null) and `armRun` (returns/chains `ensureDraftPr` on null) now
+  call it, so a future change to a refusal string or the ref-moved→2 mapping
+  can no longer land in one and not the other. This also corrects the round-1
+  rationale the reviewer flagged as partly inaccurate — `decide()`'s
+  post-refactor body confirms `armRun` can indeed await a shared call and
+  branch on its return value, as the reviewer noted was viable; the
+  returned-exit-code shape is kept for the reason already given (uniform
+  `process.exit(await armRun(...))` at the command-action call site,
+  runUpgrade-precedent).
+
+  F6 (minor, fixed): `missingBriefSections`'s section-name normalization
+  (`normalizeSection`) now mirrors core validate.ts's private `normalize`
+  exactly — lowercase, collapse runs of non-alphanumerics (including
+  internal whitespace and punctuation) to a single space, trim — instead of
+  a bare lowercase+trim. Added a CLI test staging a run whose brief repeats
+  a punctuated template H2 (`Constraints & risks`) with different internal
+  spacing (`Constraints  &  risks`); verified live that this fails
+  (`--brief-file is missing required section(s): Constraints & risks`)
+  under the old normalization and passes under the fix.
+
+  Tests: extended frontend/packages/cli/test/cli.test.ts with 4 new/updated
+  cases — the arm-standard note assertion + a dedicated
+  ensureDraftPr-branch-argument test (F1), the missing-flags exclusion
+  assertion (F2), a slug re-prompt unit test (F4), and a punctuation/
+  whitespace H2-normalization CLI test (F6). F3 and F5 are exercised by the
+  existing AC7.1/AC6.1/AC6.2 tests, which continued to pass through the
+  refactor (no new assertions needed — the identity-refusal and
+  arm-exit-code tests already cover the reordered/shared code paths;
+  confirmed via typecheck + the full run below that nothing regressed).
+
+  Results: `cd frontend && npx vitest run packages/cli/test/cli.test.ts`
+  23/23 passed. `cd frontend && npm test` 308 passed | 1 skipped (38 files,
+  same 1 pre-existing skip: live-smoke.test.ts) — full workspace suite
+  green. `cd frontend && npm run typecheck` clean (tsc -p tsconfig.json &&
+  tsc -p packages/web/tsconfig.json, no errors).

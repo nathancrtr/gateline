@@ -11,6 +11,9 @@
 #     and the metrics reader:
 #       human decision grammar (reserved for humans):
 #         state(<slug>): G2 approved by <name> [burden: light-correction]
+#         state(<slug>): staged by <name> [client-key: <key>]
+#           (client-key suffix present only when a key was supplied at staging)
+#         state(<slug>): armed by <name>
 #       orchestrator bookkeeping verbs (bot identity only):
 #         state(<slug>): dispatched|bounced|advanced|escalated|paused|metered …
 
@@ -24,7 +27,18 @@ profile: full             # patch | standard | full — which roles run and whic
                           # init from the intent brief; upgrades mid-run are a
                           # human edit to a heavier value only — the orchestrator
                           # escalates on a downgrade rather than guessing.
-paused_reason: null       # set when phase=paused: budget-exhausted | round-cap | escalation | gate-declined
+paused_reason: null       # set when phase=paused: budget-exhausted | round-cap | escalation | gate-declined | staged
+                          # (staged: a staged-but-unarmed run; `agentic arm` starts it)
+
+# intake:                 # optional; present only on runs created via the staging
+#                          # seam. Source-agnostic staging provenance — written once
+#                          # at staging time and never edited after.
+#   source: cli            # what staged the run (e.g. cli, api, web)
+#   ref: "upstream item reference"  # a generic pointer to whatever prompted the
+#                          # run (opaque to this contract — no tracker vocabulary)
+#   url: null               # optional link for humans following the reference
+#   client_key: null        # optional idempotency key supplied by the caller
+#   staged_by: someone      # who (or what) staged the run
 
 budget:
   cost_limit_usd: 50      # exhaustion pauses the run; it never silently degrades

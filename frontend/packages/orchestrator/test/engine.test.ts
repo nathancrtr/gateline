@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { LocalGitSource } from '@agentic/core'
 import { Engine } from '../src/engine.ts'
 import { parseLedger } from '../src/observe.ts'
@@ -396,6 +396,51 @@ describe('the autonomous loop, one vendor (M2)', () => {
       state = (await source.readState(toyRef(dir))).state
       expect(state!.gates.G0.by).toBeNull() // re-opened, decidable again
       await humanDecide(dir, { action: 'approve', gate: 'G0', burden: 'heavy-correction' })
+    } finally {
+      await removeRunCheckout(dir, 'run/toy')
+    }
+  })
+
+  it('ensures a draft PR at most once per slug per process; a skipped ensure never affects the tick outcome (#118, AC8.1 engine half, AC8.2)', async () => {
+    // engine.ts memoizes ensureDraftPr in a module-level, per-process Set
+    // keyed by slug (ADR-5). Every other test in this file also dispatches
+    // for slug `toy` against the same statically-imported Engine module, so
+    // a fresh module instance is the only way to observe a genuinely
+    // first-ever ensure attempt here, independent of test order.
+    vi.resetModules()
+    const { Engine: FreshEngine } = await import('../src/engine.ts')
+    const { dir, clock } = makeToyRepo()
+    const dispatcher = new FakeDispatcher(pipelineScript(dir, clock))
+    const logs: string[] = []
+    const engine = new FreshEngine({
+      repoDir: dir,
+      identity: BOT,
+      dispatcher,
+      registry: TEST_REGISTRY,
+      staleMs: 10 * 60 * 1000,
+      log: (line: string) => logs.push(line),
+    })
+    const ensureLines = () => logs.filter((l) => l.includes('draft PR ensure'))
+    try {
+      // First dispatching tick (analyst, D6). makeToyRepo's scratch repo
+      // never configures a remote, so the ensure call degrades to AC8.2's
+      // `skipped` path — never fatal — while the tick still dispatches and
+      // rests normally.
+      await reconcile(engine) // analyst done, resting at G0
+      expect(ensureLines()).toHaveLength(1)
+      expect(ensureLines()[0]).toMatch(/skipped/)
+      let state = (await new LocalGitSource('check', dir).readState(toyRef(dir))).state
+      expect(state!.phase).toBe('spec')
+      expect(state!.gates.G0.by).toBeNull()
+
+      // Second dispatching tick for the same slug (the architect, once G0 is
+      // approved): the memo means no second `gh` round-trip is attempted —
+      // and the run still converges normally regardless.
+      await humanDecide(dir, { action: 'approve', gate: 'G0', burden: 'confirmation' })
+      await reconcile(engine)
+      state = (await new LocalGitSource('check', dir).readState(toyRef(dir))).state
+      expect(state!.phase).toBe('plan') // unaffected by the ensure: architect ran, resting at G1
+      expect(ensureLines()).toHaveLength(1) // memoized: attempted exactly once across two dispatching ticks
     } finally {
       await removeRunCheckout(dir, 'run/toy')
     }

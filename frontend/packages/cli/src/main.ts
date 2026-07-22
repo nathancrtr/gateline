@@ -3,28 +3,39 @@
 // single write path (R2), terminal rendering.
 import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, realpathSync } from 'node:fs'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline/promises'
 import { Command } from 'commander'
 import {
+  BUILTIN_SECTIONS,
   buildLexicon,
   buildPortfolio,
   BURDENS,
   DecisionError,
+  ensureDraftPr,
+  extractSections,
   formatDuration,
   loadSources,
   planDecision,
+  planRunScaffold,
   PROFILE_GATES,
+  PROFILES,
   resolveCodeRepo,
   resolveId,
+  ScaffoldError,
   scanIds,
   SUPERSEDE_EXIT_CODE,
   type Burden,
   type DecisionInput,
   type GateId,
+  type Identity,
   type InboxItem,
   type Phase,
+  type Profile,
+  type RunRef,
   type RunSource,
 } from '@agentic/core'
 
@@ -185,6 +196,41 @@ interface DecideFlags {
   push?: boolean
 }
 
+/**
+ * The shared plan → write → exit-code core of the decision flow
+ * (`planDecision`/`writeState`'s CAS path — AC6.1), factored out of `decide()`
+ * so `armRun` can reuse the exact same refusal strings and exit-code mapping
+ * instead of hand-duplicating them (F5: duplication was a drift risk between
+ * `arm` and the `decide()`-backed commands). Returns `null` on success (after
+ * printing the summary), or the exit code the caller should use on failure —
+ * never calls `process.exit` itself, so `armRun` can chain `ensureDraftPr`
+ * after a successful write.
+ */
+async function planAndWrite(source: RunSource, ref: RunRef, who: Identity, input: DecisionInput): Promise<number | null> {
+  const { state, error } = await source.readState(ref)
+  if (!state) {
+    console.error(`run state is malformed: ${error}`)
+    return 1
+  }
+  try {
+    const planned = planDecision(state, input, who)
+    const result = await source.writeState(ref, planned.mutate, planned.message)
+    if (!result.ok) {
+      console.error(`refused (${result.reason}): ${result.message}`)
+      return result.reason === 'ref-moved' ? 2 : 1
+    }
+    console.log(`${planned.summary}\n→ ${result.commit!.slice(0, 10)} ${planned.message}`)
+    if (result.message) console.warn(result.message)
+    return null
+  } catch (e) {
+    if (e instanceof DecisionError) {
+      console.error(e.message)
+      return 1
+    }
+    throw e
+  }
+}
+
 async function decide(slug: string, flags: DecideFlags, input: Omit<DecisionInput, 'notes' | 'burden'> & { notes?: string; burden?: Burden }) {
   const { sources } = await resolveSources()
   const { source, ref } = await findRun(sources, slug, flags.source)
@@ -193,27 +239,8 @@ async function decide(slug: string, flags: DecideFlags, input: Omit<DecisionInpu
     console.error('git user.name/user.email are unset — decisions must be attributable to a named human')
     process.exit(1)
   }
-  const { state, error } = await source.readState(ref)
-  if (!state) {
-    console.error(`run state is malformed: ${error}`)
-    process.exit(1)
-  }
-  try {
-    const planned = planDecision(state, input, who)
-    const result = await source.writeState(ref, planned.mutate, planned.message)
-    if (!result.ok) {
-      console.error(`refused (${result.reason}): ${result.message}`)
-      process.exit(result.reason === 'ref-moved' ? 2 : 1)
-    }
-    console.log(`${planned.summary}\n→ ${result.commit!.slice(0, 10)} ${planned.message}`)
-    if (result.message) console.warn(result.message)
-  } catch (e) {
-    if (e instanceof DecisionError) {
-      console.error(e.message)
-      process.exit(1)
-    }
-    throw e
-  }
+  const code = await planAndWrite(source, ref, who, input as DecisionInput)
+  if (code !== null) process.exit(code)
 }
 
 async function promptBurden(given?: string): Promise<Burden> {
@@ -301,6 +328,318 @@ program
   .option('--source <id>')
   .action(async (slug: string, flags: DecideFlags) => {
     await decide(slug, flags, { action: 'resume', resumePhase: flags.phase as Phase | undefined })
+  })
+
+// --- new / arm (the run-creation seam) --------------------------------------
+
+interface NewFlags {
+  slug?: string
+  title?: string
+  profile: string
+  briefFile?: string
+  budget: string
+  key?: string
+  source?: string
+}
+
+/**
+ * Structure-only brief draft (R3): the repo's own `intent-brief.md` template
+ * with the title substituted into the H1 — the CLI never invents
+ * Problem/Motivation/Constraints prose. Falls back to `BUILTIN_SECTIONS` when
+ * the target repo carries no `contracts/` tree. Pure (no I/O), so it is
+ * directly unit-testable.
+ */
+export function draftBriefMarkdown(template: string | null, title: string): string {
+  if (template) {
+    const lines = template.split('\n')
+    const h1 = lines.findIndex((l) => /^#\s+/.test(l))
+    if (h1 >= 0) lines[h1] = `# Intent Brief: ${title}`
+    return lines.join('\n')
+  }
+  const sections = BUILTIN_SECTIONS['intent-brief.md'] ?? ['Problem', 'Motivation', 'Constraints', 'Out of scope']
+  return `# Intent Brief: ${title}\n\n${sections.map((s) => `## ${s}\n`).join('\n')}`
+}
+
+// Mirrors core validate.ts's private `normalize` exactly (lowercase, collapse
+// runs of non-alphanumerics to a single space, trim) so the CLI's refusal
+// never disagrees with what `validateArtifact` would accept later (F6): a
+// stricter/looser normalization here would either refuse a brief core
+// accepts, or stage one core would bounce.
+const normalizeSection = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+
+function missingBriefSections(content: string, required: string[]): string[] {
+  const have = new Set(extractSections(content).map(normalizeSection))
+  return required.filter((s) => !have.has(normalizeSection(s)))
+}
+
+/** Branch- and path-safe slug grammar — mirrors core scaffold.ts's `SLUG_RE`
+ * (not exported, so duplicated here rather than widening this task's file
+ * surface into core; the `--slug` flag help below names the same pattern). */
+const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/
+
+export interface InteractiveNewIO {
+  prompt(question: string): Promise<string>
+  /**
+   * Writes `initialContent` somewhere editable, opens it in `$EDITOR`/
+   * `$VISUAL` (fallback `vi`), and resolves with the re-read, human-edited
+   * content — the whole seam a test stubs to avoid spawning a real editor.
+   */
+  editFile(initialContent: string): Promise<string>
+  log?: (line: string) => void
+}
+
+export interface InteractiveNewResult {
+  slug: string
+  title: string
+  briefMarkdown: string
+}
+
+/**
+ * The interactive fallback (AC2.2/AC3.1): prompts for missing slug/title,
+ * drafts (or reuses a supplied) brief, opens it for editing, validates its
+ * required sections (offering a re-edit rather than padding, R3), and
+ * requires an explicit `stage? [y/N]` confirmation. Returns null when the
+ * human declines to stage or abandons a re-edit loop — the caller refuses;
+ * this never commits on its own. Factored out (the `runUpgrade` precedent)
+ * so the editor/prompt seam is unit-testable without a real TTY.
+ */
+export async function runInteractiveNew(
+  current: { slug: string | null; title: string | null; initialBrief: string | null },
+  templateContent: string | null,
+  requiredSections: string[],
+  io: InteractiveNewIO,
+): Promise<InteractiveNewResult | null> {
+  const log = io.log ?? (() => {})
+  let slug = current.slug?.trim() || ''
+  // Validate here (F4), not just later via ScaffoldError: rejecting an
+  // invalid slug after the full edit/confirm session discards the human's
+  // authored brief with only the printed preview surviving scrollback.
+  while (!slug || !SLUG_RE.test(slug)) {
+    if (slug) log(`slug "${slug}" must match ${SLUG_RE} (branch- and path-safe)`)
+    slug = (await io.prompt('slug: ')).trim()
+  }
+  let title = current.title?.trim() || ''
+  while (!title) title = (await io.prompt('title: ')).trim()
+
+  let content = current.initialBrief ?? draftBriefMarkdown(templateContent, title)
+  for (;;) {
+    content = await io.editFile(content)
+    const missing = missingBriefSections(content, requiredSections)
+    if (missing.length > 0) {
+      log(`brief is missing required section(s): ${missing.join(', ')}`)
+      const again = (await io.prompt('re-edit? [Y/n] ')).trim().toLowerCase()
+      if (again === 'n' || again === 'no') return null
+      continue
+    }
+    log('--- intent-brief.md preview ---')
+    log(content)
+    log('--------------------------------')
+    const confirm = (await io.prompt('stage? [y/N] ')).trim().toLowerCase()
+    if (confirm === 'y' || confirm === 'yes') return { slug, title, briefMarkdown: content }
+    return null
+  }
+}
+
+/** Real (non-test) interactive IO: `readline/promises` + a temp-file `$EDITOR` round trip. */
+function realInteractiveIO(): InteractiveNewIO & { close(): void } {
+  const rl = createInterface({ input: process.stdin, output: process.stdout })
+  return {
+    prompt: (q) => rl.question(q),
+    editFile: async (initial) => {
+      const dir = await mkdtemp(join(tmpdir(), 'agentic-new-'))
+      const file = join(dir, 'intent-brief.md')
+      await writeFile(file, initial, 'utf8')
+      const editorCmd = process.env.VISUAL || process.env.EDITOR || 'vi'
+      const [cmd, ...args] = editorCmd.split(' ').filter(Boolean)
+      const code = await streamCommand(cmd!, [...args, file], process.cwd())
+      if (code !== 0) console.error(`warning: editor exited ${code} — using its saved contents anyway`)
+      const edited = await readFile(file, 'utf8')
+      await rm(dir, { recursive: true, force: true })
+      return edited
+    },
+    log: (line) => console.log(line),
+    close: () => rl.close(),
+  }
+}
+
+/**
+ * `agentic new`'s body (flags-first, TTY fallback — AC2.1–2.3/AC3.1–3.2).
+ * Returns the process exit code the caller should use; never calls
+ * `process.exit` itself (the `runUpgrade` precedent).
+ */
+export async function stageNewRun(flags: NewFlags): Promise<number> {
+  if (!(PROFILES as readonly string[]).includes(flags.profile)) {
+    console.error(`--profile must be one of: ${PROFILES.join(' | ')}`)
+    return 1
+  }
+  const budget = Number(flags.budget)
+  if (!Number.isFinite(budget)) {
+    console.error(`--budget must be a number (got "${flags.budget}")`)
+    return 1
+  }
+
+  const { sources } = await resolveSources()
+  const candidates = flags.source ? sources.filter((s) => s.id === flags.source) : sources
+  if (candidates.length === 0) {
+    console.error(flags.source ? `no source "${flags.source}" configured` : 'no run source configured')
+    return 1
+  }
+  if (candidates.length > 1) {
+    console.error(`several sources are configured — pass --source (${candidates.map((s) => s.id).join(', ')})`)
+    return 1
+  }
+  const source = candidates[0]!
+
+  // Identity check before staging (AC7.1's CLI half) — decide()'s own
+  // refusal shape, adapted for staging, and hoisted above the interactive
+  // prompt/edit/confirm session (F3): checking only after that session ends
+  // would let an operator in a no-identity repo complete a full editor round
+  // trip and answer `stage? y` only to be refused with the temp file already
+  // deleted — the authored prose surviving only in printed scrollback.
+  const who = await source.identity()
+  if (!who) {
+    console.error('git user.name/user.email are unset — staged runs must be attributable to a named human')
+    return 1
+  }
+
+  const templateContent = await source.templates.read('intent-brief.md')
+  const requiredSections = templateContent ? extractSections(templateContent) : (BUILTIN_SECTIONS['intent-brief.md'] ?? [])
+
+  const missingFlags: string[] = []
+  if (!flags.slug) missingFlags.push('--slug')
+  if (!flags.title) missingFlags.push('--title')
+  if (!flags.briefFile) missingFlags.push('--brief-file')
+
+  let slug: string
+  let title: string
+  let briefMarkdown: string
+
+  if (missingFlags.length === 0) {
+    // Flags-complete: no prompts, non-interactive brief content comes only
+    // from the operator-authored --brief-file (R3/AC3.2 — never generated).
+    slug = flags.slug!
+    title = flags.title!
+    let content: string
+    try {
+      content = await readFile(flags.briefFile!, 'utf8')
+    } catch (e) {
+      console.error(`cannot read --brief-file ${flags.briefFile}: ${(e as Error).message}`)
+      return 1
+    }
+    const missingSections = missingBriefSections(content, requiredSections)
+    if (missingSections.length > 0) {
+      console.error(`--brief-file is missing required section(s): ${missingSections.join(', ')}`)
+      return 1
+    }
+    briefMarkdown = content
+  } else if (!process.stdin.isTTY) {
+    // promptBurden's refusal shape, one-for-one (AC2.3).
+    console.error(`missing required content: ${missingFlags.join(', ')} — stdin is not a terminal, so nothing can be prompted`)
+    return 1
+  } else {
+    let initialBrief: string | null = null
+    if (flags.briefFile) {
+      try {
+        initialBrief = await readFile(flags.briefFile, 'utf8')
+      } catch (e) {
+        console.error(`cannot read --brief-file ${flags.briefFile}: ${(e as Error).message}`)
+        return 1
+      }
+    }
+    const io = realInteractiveIO()
+    let result: InteractiveNewResult | null
+    try {
+      result = await runInteractiveNew({ slug: flags.slug ?? null, title: flags.title ?? null, initialBrief }, templateContent, requiredSections, io)
+    } finally {
+      io.close()
+    }
+    if (!result) {
+      console.log('not staged')
+      return 1
+    }
+    ;({ slug, title, briefMarkdown } = result)
+  }
+
+  let scaffold
+  try {
+    scaffold = planRunScaffold({
+      slug,
+      title,
+      profile: flags.profile as Profile,
+      briefMarkdown,
+      costLimitUsd: budget,
+      intake: { source: null, ref: null, url: null, clientKey: flags.key ?? null },
+      stagedBy: who.name,
+    })
+  } catch (e) {
+    if (e instanceof ScaffoldError) {
+      console.error(e.message)
+      return 1
+    }
+    throw e
+  }
+
+  const outcome = await source.stageRun(scaffold, who)
+  if (outcome.outcome === 'created') {
+    console.log(`staged ${outcome.slug} → ${outcome.branch} (${outcome.commit.slice(0, 10)})`)
+    if (outcome.pushFailed) console.warn(`push failed: ${outcome.pushFailed}`)
+    return 0
+  }
+  if (outcome.outcome === 'exists') {
+    console.log(`already staged: ${outcome.slug} (${outcome.branch})`)
+    return 0
+  }
+  // refused: ref-moved-style conflicts get the same exit code decide() uses.
+  console.error(`refused (${outcome.reason}): ${outcome.message}`)
+  return outcome.reason === 'conflict' ? 2 : 1
+}
+
+program
+  .command('new')
+  .description('stage a new run (branch + intent-brief.md + state.yaml); unarmed until `agentic arm`')
+  .option('--slug <slug>', 'run slug (branch- and path-safe: [a-z0-9][a-z0-9-]*)')
+  .option('--title <title>', 'run title')
+  .option('--profile <profile>', 'patch | standard | full', 'standard')
+  .option('--brief-file <path>', 'path to an operator-authored intent-brief.md')
+  .option('--budget <usd>', 'cost ceiling in USD', '50')
+  .option('--key <key>', 'idempotency / replay client key (optional)')
+  .option('--source <id>', 'source id when several are configured')
+  .action(async (flags: NewFlags) => {
+    process.exit(await stageNewRun(flags))
+  })
+
+/**
+ * `agentic arm`'s body: `decide()`-style flow with `{ action: 'arm' }`
+ * (DecisionError → exit 1 with its message — covers already-armed;
+ * nonexistent-run comes from `findRun`'s existing refusal), then a
+ * best-effort draft-PR ensure (R8) using the source's dir (the `sync`
+ * command's `(source as {dir?}).dir` pattern) — a skipped note is success.
+ */
+export async function armRun(slug: string, flags: { source?: string }): Promise<number> {
+  const { sources } = await resolveSources()
+  const { source, ref } = await findRun(sources, slug, flags.source)
+  const who = await source.identity()
+  if (!who) {
+    console.error('git user.name/user.email are unset — decisions must be attributable to a named human')
+    return 1
+  }
+  const code = await planAndWrite(source, ref, who, { action: 'arm' })
+  if (code !== null) return code
+  const dir = (source as { dir?: string }).dir
+  if (dir) {
+    const note = await ensureDraftPr(dir, ref.branch, slug)
+    console.log(note.note)
+  }
+  return 0
+}
+
+program
+  .command('arm')
+  .description("arm a staged run — starts it at the profile's first undecided-gate phase")
+  .argument('<slug>', 'run slug')
+  .option('--source <id>', 'source id when the slug is ambiguous')
+  .action(async (slug: string, flags: { source?: string }) => {
+    process.exit(await armRun(slug, flags))
   })
 
 // --- sync ----------------------------------------------------------------------

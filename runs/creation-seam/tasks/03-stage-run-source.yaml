@@ -1,0 +1,128 @@
+id: 03-stage-run-source
+title: "Sources layer: stageRun on RunSource/LocalGitSource (create-only CAS genesis commit)"
+requirements: [R1, R7, R9, R10]
+
+scope: |
+  In frontend/packages/core/src/sources/:
+
+  1. source.ts — add StageRefusal, StageOutcome, and the required
+     `stageRun(scaffold: RunScaffold, who: Identity): Promise<StageOutcome>`
+     member to RunSource, exactly per plan.md "Interface contracts". Confirm
+     LocalGitSource is the only `implements RunSource` in the workspace
+     (grep); if another implementer exists, see plan Risks before proceeding.
+  2. local-source.ts — implement stageRun per the plan's 5-step sequence:
+     identity refusal first (message: "git user.name/user.email are unset —
+     staged runs must be attributable to a named human", AC7.1) before any
+     git object is written; existence scan implementing plan ADR-4's decision
+     table (client-key replay across all runs, then slug: staged-rest +
+     matching/null key -> exists, otherwise refused slug-taken naming the
+     existing run; use readIntake + phase/paused_reason to detect staged
+     rest); genesis commit against the default branch tip by composing
+     writeTreeWithBlob once per scaffold file (previous tree OID as next base
+     — read-tree accepts a tree-ish; comment this), file paths prefixed
+     `<runsRoot>/<slug>/` via frameworkRoots(); commitTree(tree, tip,
+     scaffold.message, who) — pass `who`, NEVER this.options.identity;
+     updateRefCAS(refs/heads/run/<slug>, commit, ZERO_OID); on CAS false,
+     re-scan and re-derive exists vs refused conflict; push when options.push
+     with pushFailed reporting like writeState. Do not use the words
+     issue/label/assignee/milestone anywhere, comments included (R9).
+
+  Tests in frontend/packages/core/test/stage-run.test.ts (new), using
+  fixture.helper's scratch-repo pattern (see existing write-path.test.ts):
+  - created: branch exists, `git show run/<slug>:runs/<slug>/state.yaml` and
+    intent-brief.md readable in a fresh Git instance with no server (AC10.1),
+    state parses via parseRunState.
+  - refuses when run/<slug> already exists as a non-staged run — no write,
+    branch tip unchanged (AC1.2).
+  - replay: same scaffold twice -> second returns exists, exactly one branch,
+    outcome distinguishable from created (AC1.3); same client_key under a
+    different slug also returns exists.
+  - conflict: pre-create the ref between scan and CAS (or race two calls) ->
+    refused conflict, no second branch.
+  - no-identity: unset user.name/user.email in the scratch repo -> refused
+    no-identity, zero new refs (AC7.1).
+  - authorship: construct LocalGitSource with options.identity set to a bot
+    identity, call stageRun with a human `who` -> commit author equals the
+    human, never the bot.
+  - patch profile: genesis commit carries tasks/01-<slug>.yaml.
+
+file_contact_surface:
+  - frontend/packages/core/src/sources/source.ts
+  - frontend/packages/core/src/sources/local-source.ts
+  - frontend/packages/core/test/stage-run.test.ts
+
+acceptance_tests:
+  - AC1.1
+  - AC1.2
+  - AC1.3
+  - AC7.1
+  - AC10.1
+  - "cd frontend && npx vitest run packages/core/test/stage-run.test.ts passes"
+  - "cd frontend && npm test && npm run typecheck pass"
+
+depends_on: [01-merge-main, 02-record-scaffold-and-arm]
+
+status: pending
+
+notes: |
+  Implementer round 1: implemented as scoped. One discovery worth flagging for
+  the verifier's AC9.2 grep: `grep -rniE "issue|label|assignee|milestone"
+  frontend/packages/core/src/record/*.ts frontend/packages/core/src/sources/*.ts`
+  returns THREE matches in record/schema.ts, not the plan/spec's stated "two
+  pre-existing zod ZodError.issues false positives" — the third is
+  `ctx.addIssue(...)` in the profile-gates superRefine. All three predate this
+  run's own diff: `git show 70aae4c -- .../schema.ts` (the #156 profiles merge
+  task 01 pulled in) shows the addIssue line was added there, not by task 02 or
+  03. My own task 03 diff (source.ts, local-source.ts) adds zero matches to
+  this grep — confirmed by running it after implementation. Flagging the
+  discrepancy since AC9.2's "confirm exactly two" instruction is now
+  inaccurate; not fixing schema.ts here since it's outside this task's
+  file_contact_surface and the line itself is legitimate (not a tracker-vendor
+  leak).
+
+  Implementer round 2 (responding to review-05.md, verdict request-changes):
+
+  F1 (blocking, test gap on ADR-4 rule 2's exists branch) — FIXED. Added
+  "the same slug staged twice with a null client key ... also returns exists"
+  to the AC1.3 replay describe block in stage-run.test.ts: stages one scaffold
+  with clientKey: null twice and asserts the second call returns exists with
+  exactly one branch minted. This routes through scanForExisting's rule 2
+  (same-slug + staged-rest + keyMatches) only, since rule 1's client-key loop
+  is skipped entirely when clientKey is null — confirmed the test fails
+  ('refused' instead of 'exists') against a mutant that hardcodes
+  isStagedRest = false, and passes against the real code. No production code
+  changed; local-source.ts is byte-identical to the round-1 diff (git diff
+  --stat shows no change to that file).
+
+  F2 (minor, test gap on CAS-loss re-derivation's exists branch) — FIXED.
+  Added "CAS-loss re-derivation returns exists (not conflict) when the rival
+  landed the identical staged replay" to the conflict describe block. Same
+  monkeypatch technique write-path.test.ts uses for its CAS-race test:
+  git.updateRefCAS is overridden so the first call for the target branch ref
+  lets a nested, unpatched stageRun call for the identical scaffold land for
+  real (a genuine identical genesis commit), then reports loss (returns
+  false) for the outer call, forcing it down the rescan path. Verified this
+  test fails ('refused' instead of 'exists') against a mutant that drops the
+  rescan and unconditionally returns refused: conflict on CAS loss, and
+  passes against the real code. No production code changed.
+
+  F3 (minor/PLAUSIBLE, empty-default-branch refusal reuses reason: 'conflict')
+  — REBUTTED, no change. The review's own text concludes "PLAUSIBLE and
+  cosmetic ... No change required unless round 2 touches the file anyway."
+  Round 2 only touched stage-run.test.ts (to close F1/F2's coverage gaps);
+  local-source.ts was not otherwise touched, so per the review's own
+  stated condition this finding does not require a change here. Substantively:
+  the StageRefusal union in plan.md:138 has no member for "no commits to
+  stage against" (it is not a race, not a naming collision, not an identity
+  problem), so 'conflict' is the least-wrong existing tag and the message
+  text ("has no commits to stage against") already names the real cause for
+  any caller inspecting result.message rather than pattern-matching on
+  reason alone. Introducing a new StageRefusal variant for this is a plan-
+  level change (touches the interface contract in source.ts, its call sites,
+  and probably task 05's CLI exit-code mapping) that is out of this task's
+  scope to originate unilaterally; flagging for the plan owner if a future
+  round decides it's worth a dedicated reason.
+
+  Verification after round 2: `npx vitest run
+  packages/core/test/stage-run.test.ts` — 10/10 pass (8 round-1 tests + the 2
+  new ones). `npm test` and `npm run typecheck` — both clean (see task report).

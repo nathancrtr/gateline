@@ -2,7 +2,7 @@
 // discipline the frontend's readiness table keeps. Observations are built
 // directly so each row is exercised in isolation.
 import { describe, expect, it } from 'vitest'
-import type { GateEntry, RunState, Validation } from '@agentic/core'
+import { PROFILES, STAGED_REASON, type GateEntry, type RunState, type Validation } from '@agentic/core'
 import { deriveAction, DEFAULT_ESTIMATE_USD } from '../src/derive.ts'
 import type { LedgerEntry, RunObservation, TaskFileInfo } from '../src/observe.ts'
 
@@ -86,6 +86,16 @@ describe('the derivation table, one rule per row', () => {
     })
     const a = deriveAction(obs({ state: s, artifacts: ['intent-brief.md', 'spec.md'] }))
     expect(a).toMatchObject({ kind: 'rest', rule: 'D2' })
+  })
+
+  it('D2 — a freshly staged run (plan.md scaffold: paused/staged, all profile gates undecided, no tasks) rests for every profile (AC5.3)', () => {
+    for (const profile of PROFILES) {
+      const s = state({ phase: 'paused', paused_reason: STAGED_REASON, profile, tasks: [] })
+      const a = deriveAction(obs({ state: s }))
+      expect(a.kind).not.toBe('dispatch')
+      expect(a.kind).not.toBe('escalate')
+      expect(a).toMatchObject({ kind: 'rest', rule: 'D2' })
+    }
   })
 
   it('D3 — unresolved escalation rests', () => {
@@ -576,6 +586,11 @@ describe('profile-parameterized derivation', () => {
 
   it('patch plan phase rests with the packet on the table — no architect exists to dispatch', () => {
     const a = deriveAction(obs({ state: patchState(), artifacts: ['intent-brief.md', 'tasks/01-fix.yaml'] }))
+    expect(a).toMatchObject({ kind: 'rest', rule: 'D10' })
+  })
+
+  it('post-arm patch — the scaffolded tasks/01-<slug>.yaml stub is load-bearing: rests at D10, never the D21 no-work-item escalation (AC4.2)', () => {
+    const a = deriveAction(obs({ state: patchState(), artifacts: ['intent-brief.md', 'tasks/01-toy.yaml'] }))
     expect(a).toMatchObject({ kind: 'rest', rule: 'D10' })
   })
 

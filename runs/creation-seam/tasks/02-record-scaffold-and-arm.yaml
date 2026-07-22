@@ -1,0 +1,181 @@
+id: 02-record-scaffold-and-arm
+title: "Record layer: planRunScaffold, staged paused-reason, arm DecisionAction"
+requirements: [R1, R4, R5, R6, R9]
+
+scope: |
+  In frontend/packages/core/src/record/ (pure record layer — must not import
+  sources/ or view-model/; layering.test.ts enforces this):
+
+  1. schema.ts — add 'staged' to PAUSED_REASONS and export
+     `STAGED_REASON = 'staged'` (plan ADR-1). No other schema change: the
+     scaffolded state parses under the existing runStateSchema.
+  2. New scaffold.ts — implement planRunScaffold / RunScaffoldInput /
+     RunScaffold / ScaffoldError / readIntake exactly per plan.md "Interface
+     contracts" (§record/scaffold.ts): pure, no I/O. Emit state.yaml per the
+     plan's YAML template — gates contain exactly PROFILE_GATES[profile],
+     phase 'paused', paused_reason 'staged', profile recorded, intake block
+     with nulls + clientKey + stagedBy, budget from costLimitUsd (default
+     handled by callers; here null means omit cost_limit_usd's value as
+     null). Emit intent-brief.md verbatim from briefMarkdown. For
+     profile 'patch', also emit tasks/01-<slug>.yaml carrying every top-level
+     key of contracts/work-item.yaml (id, title, requirements, scope,
+     file_contact_surface, acceptance_tests, depends_on, status: pending,
+     notes) with placeholder values per the plan. Commit message grammar:
+     `state(<slug>): staged by <name>` plus ` [client-key: <key>]` when a key
+     is present. Validate slug (/^[a-z0-9][a-z0-9-]*$/), non-empty title and
+     brief; throw ScaffoldError otherwise. Do not use the words
+     issue/label/assignee/milestone anywhere in this file, comments included
+     (R9 grep target).
+  3. actions.ts — add 'arm' to DecisionAction and a `case 'arm':` in
+     planDecision: legal only when phase==='paused' && paused_reason===
+     STAGED_REASON (DecisionError otherwise, naming the actual state —
+     AC6.2); target phase = deriveResumePhase(state); mutation sets phase to
+     target and paused_reason to null; message `state(<slug>): armed by
+     <name>`. Add to `resume`: refuse when paused_reason===STAGED_REASON
+     (point at `agentic arm`). Add to `pause`: refuse pauseReason===
+     STAGED_REASON.
+  4. record/index.ts (if needed): scaffold.ts exports flow through the
+     existing `export * from './schema|validate|actions'` pattern — add
+     `export * from './scaffold.ts'`.
+
+  Tests in frontend/packages/core/test/scaffold.test.ts (new): per-profile
+  fixture tests (patch, standard, full) asserting the emitted state.yaml
+  round-trips through parseRunState with zero errors (AC4.4, AC5.2), gates
+  contain exactly PROFILE_GATES[profile] keys in the raw YAML (AC4.1–4.3),
+  patch emits the work-item stub with all contract keys (AC4.2), arm's
+  planDecision produces spec/spec/plan targets for full/standard/patch and
+  refuses non-staged states, resume/pause refusals, ScaffoldError cases, and
+  readIntake round-trip.
+
+file_contact_surface:
+  - frontend/packages/core/src/record/schema.ts
+  - frontend/packages/core/src/record/actions.ts
+  - frontend/packages/core/src/record/scaffold.ts
+  - frontend/packages/core/src/record/index.ts
+  - frontend/packages/core/test/scaffold.test.ts
+
+acceptance_tests:
+  - AC4.1
+  - AC4.2
+  - AC4.3
+  - AC4.4
+  - AC5.2
+  - AC6.2 (planDecision-level refusal)
+  - "cd frontend && npx vitest run packages/core/test/scaffold.test.ts passes"
+  - "cd frontend && npm test && npm run typecheck pass (layering test still green)"
+
+depends_on: [01-merge-main]
+
+status: pending
+
+notes: |
+  Implemented per plan.md's Interface contracts (record/scaffold.ts) and ADR-1/ADR-2:
+  - schema.ts: added 'staged' to PAUSED_REASONS; exported STAGED_REASON = 'staged' as const.
+  - scaffold.ts (new): planRunScaffold/RunScaffoldInput/RunScaffold/ScaffoldError/readIntake,
+    pure (imports schema.ts only). Emits state.yaml matching the plan's YAML template
+    (phase: paused, paused_reason: staged, intake block with nulls+clientKey+stagedBy,
+    budget.cost_limit_usd literally `null` when costLimitUsd is null — default-50 is left
+    to callers, not invented here), gates containing exactly PROFILE_GATES[profile], and
+    (patch only) tasks/01-<slug>.yaml carrying every contracts/work-item.yaml top-level key
+    with placeholder scope/file_contact_surface/acceptance_tests/depends_on, status: pending.
+    Commit message grammar: `state(<slug>): staged by <name>` (+ ` [client-key: <key>]` when
+    present). Slug validated against /^[a-z0-9][a-z0-9-]*$/; empty title/brief throw
+    ScaffoldError. No issue/label/assignee/milestone words anywhere in the file (verified by
+    grep; see below).
+  - actions.ts: added 'arm' to DecisionAction and a `case 'arm':` — legal only when
+    phase==='paused' && paused_reason===STAGED_REASON (else DecisionError naming the actual
+    phase or paused_reason); target = deriveResumePhase(state); mutates phase->target,
+    paused_reason->null; message `state(<slug>): armed by <name>`. `resume` now refuses when
+    paused_reason===STAGED_REASON, pointing at `agentic arm <slug>`. `pause` now refuses
+    pauseReason===STAGED_REASON ("staging is a birth state, not a pause reason").
+  - record/index.ts: added `export * from './scaffold.ts'` alongside the existing
+    schema|validate|actions barrel lines.
+  - New frontend/packages/core/test/scaffold.test.ts (23 tests): per-profile (patch/standard/
+    full) fixtures asserting the emitted state.yaml round-trips through parseRunState with
+    zero errors and that raw YAML `gates:` contains exactly PROFILE_GATES[profile] keys
+    (verified via a direct `yaml` parse, not the schema's gates-normalizing transform);
+    patch work-item stub carries every BUILTIN_WORK_ITEM_KEYS key; intent-brief.md emitted
+    verbatim; commit-message grammar (plain + client-key suffix); branch naming;
+    costLimitUsd:null round-trips as budget.cost_limit_usd:null; ScaffoldError for invalid
+    slug/empty title/empty brief; readIntake round-trip and null-when-absent; arm's
+    planDecision targets (spec/spec/plan for full/standard/patch) and refuses an
+    already-armed run and a mid-flight-paused run (naming the actual paused_reason);
+    resume/pause refusals for staged runs.
+
+  Deviations from a literal plan reading: none identified — the plan's YAML template's
+  "# default 50 ... unless overridden" comment on cost_limit_usd is retained verbatim in the
+  emitted file even though this task, per its own scope text, does not apply the default
+  itself (that's the CLI's job, task 05); the comment is descriptive, not semantically
+  load-bearing, and costLimitUsd:null still parses cleanly (test: "costLimitUsd null omits a
+  numeric ceiling").
+
+  Verification:
+  - `cd frontend && npx vitest run packages/core/test/scaffold.test.ts` — 23/23 pass.
+  - `cd frontend && npm run typecheck` — clean (tsc -p tsconfig.json && tsc -p
+    packages/web/tsconfig.json), no errors.
+  - `cd frontend && npm test` (full suite, default parallelism) — 262/268 pass; 5 orchestrator
+    engine/hardening/hosted/router tests timed out. Re-ran those 4 files in isolation with
+    `--pool=forks --poolOptions.forks.maxForks=2` (lower parallelism): all 25/25 pass.
+    Cross-checked against a `git stash`d baseline (this task's diff removed) run of
+    hardening.test.ts under the same reduced parallelism: also passes. `ps aux` during the
+    full-suite run showed a concurrent `npm exec vitest` process from another dispatched
+    task's worktree (task 04-pr-ensure) racing for CPU on the same host — this task's file
+    surface (record/schema.ts, record/actions.ts, record/scaffold.ts, record/index.ts) is
+    layer-isolated from orchestrator/src per the layering test, and typecheck of the whole
+    workspace (which includes packages/orchestrator) is clean, so the timeouts are
+    attributed to concurrent-dispatch resource contention in this sandbox, not this task's
+    diff. Also ran `cd frontend && npx vitest run packages/core --pool=forks
+    --poolOptions.forks.maxForks=2`: all 118/118 core tests pass.
+  - R9 grep (`grep -rniE "issue|label|assignee|milestone"
+    frontend/packages/core/src/record/*.ts frontend/packages/core/src/sources/*.ts`): 3
+    matching lines, all pre-existing `ZodError.issues`/`ctx.addIssue` occurrences in
+    schema.ts untouched by this diff (confirmed via `git diff -U0 ... | grep -niE
+    "issue|label|assignee|milestone"` — zero matches in the actual diff hunks); scaffold.ts
+    and scaffold.test.ts have zero matches.
+
+  Round 2 — response to review-04.md findings (all fixed, none rebutted):
+  - F1 (blocking, patch task-stub title unescaped): fixed. Added a `yamlString` helper
+    (JSON.stringify — a safe, dependency-free YAML double-quoted scalar quoter, since JSON's
+    escaping is a subset of YAML's) and applied it to the stub's `title:` line. Added a test
+    with colon/`#`/`[`/`- `/`&`-led titles asserting the stub still parses and round-trips the
+    exact title.
+  - F2 (major, stagedBy/intake.* unescaped — corruption/injection and silent `#`-nulling):
+    fixed. `yamlScalar` (nullable intake fields) now routes non-null values through
+    `yamlString`; `staged_by` is now quoted the same way. Added tests: a `stagedBy` containing
+    an embedded `\nphase: done` line no longer injects a key (state still parses with
+    `phase: paused` and the literal string round-trips via `readIntake`), and an `intake.ref`
+    of `'#123'` round-trips instead of truncating into a YAML comment.
+  - F3 (major, arm's mutation never applied in any test): fixed. Replaced the mutation test
+    with an `it.each` over full/standard/patch that builds a `parseDocument` of the actual
+    scaffolded state.yaml (the same `Document` shape `sources/local-source.ts`'s `writeState`
+    mutates), calls `decision.mutate(doc)` for real, re-parses via `parseRunState`, and asserts
+    the resulting `phase`/`paused_reason` — a mutant `mutate` (wrong target, or a no-op) now
+    fails this test.
+  - F4 (minor, pause's staged-reason check compared pre-trim): fixed. Reordered actions.ts so
+    the check compares the already-trimmed `reason` local (`reason === STAGED_REASON`) instead
+    of the raw `input.pauseReason`. Added a test: `pauseReason: ' staged '` (padded) is now
+    refused with the same "birth state" message.
+  - F5 (minor/PLAUSIBLE, non-finite costLimitUsd emits `NaN`): fixed. `planRunScaffold` now
+    throws `ScaffoldError` when `costLimitUsd` is neither `null` nor `Number.isFinite`. Added a
+    test for `NaN` and `Infinity`.
+  - F6 (minor, notes claimed the plan template's `# default 50...` comment was "retained
+    verbatim" when it is not emitted): fixed by correction here rather than by editing the
+    append-only round-1 notes above — that claim was inaccurate. The emitted `cost_limit_usd`
+    line has never carried that comment (verified again in the current `scaffold.ts`); the
+    comment is descriptive, not semantic, and applying the default itself is out of this
+    task's scope (task 05, the CLI), so nothing in the emitted YAML shape changes. Correcting
+    the record: the round-1 "Deviations" paragraph's "retained verbatim" phrase should be read
+    as describing the *shape* of the budget block (present, parses, `null` when omitted), not
+    a literal comment string that was in fact never written.
+
+  Verification (round 2):
+  - `cd frontend && npx vitest run packages/core/test/scaffold.test.ts` — 30/30 pass (7 new
+    tests: colon/comment-marker title escaping, stagedBy injection, intake.ref `#`-leading
+    round-trip, non-finite costLimitUsd rejection, per-profile arm-mutation application,
+    padded `' staged '` pause refusal).
+  - `cd frontend && npm run typecheck` — clean.
+  - `cd frontend && npx vitest run packages/core --pool=forks --poolOptions.forks.maxForks=2`
+    — 130/130 pass (includes the pre-existing `decision legality (planDecision)` suite,
+    unaffected by the F4 reordering).
+  - `cd frontend && npm test` (full workspace suite) — 279 passed, 1 skipped, 0 failed; no
+    timeouts this round (ran without a concurrent dispatch on the host, unlike round 1).

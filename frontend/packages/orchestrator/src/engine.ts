@@ -5,7 +5,7 @@
 // updates, comment-preserving YAML, the orchestrator's own commit verbs
 // (dispatched | bounced | advanced | escalated | paused | metered), a bot
 // identity, and — structurally — no code path that writes gates.*.
-import { LocalGitSource, type Identity, type RunRef, type WriteResult } from '@agentic/core'
+import { ensureDraftPr, LocalGitSource, type Identity, type RunRef, type WriteResult } from '@agentic/core'
 import type { Document } from 'yaml'
 import { deriveAction, DEFAULT_ESTIMATE_USD, type Bookkeeping, type DerivedAction, type DispatchIntent } from './derive.ts'
 import { observeRun, parseLedger, type RunObservation } from './observe.ts'
@@ -59,6 +59,14 @@ export interface TickOutcome {
 
 const DEFAULT_ROLE_TIMEOUT_MS = 30 * 60 * 1000
 const DEFAULT_STALE_MS = 5 * 60 * 1000
+
+/**
+ * Slugs whose draft PR has already been ensured this process (ADR-5, R8):
+ * `ensureDraftPr` is idempotent regardless, so this memo exists only to skip
+ * the `gh` round-trip on every subsequent dispatching tick — a fresh process
+ * (restart) re-ensures once, which is harmless (list-then-create).
+ */
+const ensuredDraftPrs = new Set<string>()
 
 /** One in-flight dispatch, as reported to the operator during drain (#150). */
 export interface InFlightJob {
@@ -438,6 +446,18 @@ export class Engine {
         // later accepted push carry the intent commit.
         if (result.pushFailed) this.notePushFailure(ref, result.pushFailed)
         else this.notePushAccepted(ref.branch)
+
+        // Draft-PR ensure (#118, ADR-5, R8): the first dispatch a fresh
+        // process observes for this run is as good a "first arm/dispatch"
+        // moment as any to guarantee a reviewable PR exists, regardless of
+        // how the branch was made (hand, CLI, or a future driver). Never
+        // fatal — ensureDraftPr itself never throws, and its result never
+        // touches the tick outcome.
+        if (!ensuredDraftPrs.has(ref.slug)) {
+          ensuredDraftPrs.add(ref.slug)
+          const ensured = await ensureDraftPr(this.cfg.repoDir, ref.branch, ref.slug)
+          this.log(`${ref.slug}: draft PR ensure — ${ensured.status}: ${ensured.note}`)
+        }
 
         for (const intent of action.dispatches) this.launch(ref, obs, intent, at)
         return { ...base, wrote: true, launched: action.dispatches.length }

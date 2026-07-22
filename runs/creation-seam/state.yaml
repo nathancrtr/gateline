@@ -295,6 +295,13 @@ escalations:
         at: 2026-07-22T18:25:19.022Z,
         from_role: orchestrator,
         reason: reviewer escalated task 06-derive-tests-engine-ensure — see review-06.md,
-        resolved: false
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-22T18:53:19.235Z,
+        resolution: 'Yes, and I agree with the proposed path forward: "thread an
+          ensure/exec seam through EngineConfig and amend a task surface to stub
+          it in the remote-configured tests". Send this back up the flagpole to
+          the appropriate handler so I can safely resume this run
+          post-resolution.'
       }
   ]

@@ -93,6 +93,39 @@ budget:
           tokens_in: 10,
           tokens_out: 1783,
           cost_usd: 6.6182425
+        },
+      {
+          at: 2026-07-22T23:52:06.173Z,
+          role: implementer,
+          task: 01-core-shared-checks,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
+        },
+      {
+          at: 2026-07-22T23:52:06.173Z,
+          role: implementer,
+          task: 02-core-staged-readiness,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
+        },
+      {
+          at: 2026-07-22T23:52:06.173Z,
+          role: implementer,
+          task: 04-web-staging-form,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:
@@ -116,10 +149,10 @@ gates:
   G2: { approved: false, by: null, at: null, notes: null }
 tasks:
   [
-    { id: 01-core-shared-checks, status: pending, review_rounds: 0 },
-    { id: 02-core-staged-readiness, status: pending, review_rounds: 0 },
+    { id: 01-core-shared-checks, status: dispatched, review_rounds: 0 },
+    { id: 02-core-staged-readiness, status: dispatched, review_rounds: 0 },
     { id: 03-server-staging-routes, status: pending, review_rounds: 0 },
-    { id: 04-web-staging-form, status: pending, review_rounds: 0 },
+    { id: 04-web-staging-form, status: dispatched, review_rounds: 0 },
     { id: 05-web-staged-state-arm, status: pending, review_rounds: 0 },
     { id: 06-e2e-staging-arm, status: pending, review_rounds: 0 }
   ]

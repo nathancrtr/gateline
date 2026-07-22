@@ -96,3 +96,42 @@ describe('agentic CLI', () => {
     expect(stderr).toMatch(/not found/)
   })
 })
+
+describe('show — artifacts with lexicon footnotes (#164)', () => {
+  it('lists artifacts when no path is given', async () => {
+    const { stdout } = await run(['show', 'g2-pending'])
+    expect(stdout).toContain('spec.md')
+    expect(stdout).toContain('verification-report.md')
+  })
+
+  it('prints the artifact, then verbatim footnotes for cited ids in first-citation order', async () => {
+    const { stdout } = await run(['show', 'g2-pending', 'verification-report.md'])
+    expect(stdout).toContain('# Verification Report')
+    const [, footnotes] = stdout.split('\n---\n')
+    expect(footnotes).toBeDefined()
+    expect(footnotes).toContain('References (from spec.md):')
+    const acLine = footnotes!.split('\n').find((l) => l.trimStart().startsWith('AC1.1'))!
+    expect(acLine).toContain('"running the tool on sample input produces the documented output"')
+    // First-citation order: AC1.1 appears in the Results table before AC2.1.
+    expect(footnotes!.indexOf('AC1.1')).toBeLessThan(footnotes!.indexOf('AC2.1'))
+  })
+
+  it('excludes ids defined in the shown artifact itself', async () => {
+    const { stdout } = await run(['show', 'g2-pending', 'plan.md'])
+    const [, footnotes] = stdout.split('\n---\n')
+    expect(footnotes).toContain('R1')
+    // ADR-1 is defined in plan.md — a definition here, not a citation.
+    expect(footnotes).not.toContain('ADR-1')
+  })
+
+  it('--refs off suppresses the footnote block', async () => {
+    const { stdout } = await run(['show', 'g2-pending', 'verification-report.md', '--refs', 'off'])
+    expect(stdout).not.toContain('\n---\nReferences')
+  })
+
+  it('errors cleanly on a missing artifact', async () => {
+    const { code, stderr } = await run(['show', 'g2-pending', 'nope.md'], true)
+    expect(code).toBe(1)
+    expect(stderr).toMatch(/no artifact at nope\.md/)
+  })
+})

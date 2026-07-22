@@ -62,4 +62,56 @@ depends_on: [02-record-scaffold-and-arm, 03-stage-run-source, 04-pr-ensure]
 
 status: pending
 
-notes: ""
+notes: |
+  Round 1 (implementer): Added `agentic new` and `agentic arm` to
+  frontend/packages/cli/src/main.ts, exporting `draftBriefMarkdown`,
+  `runInteractiveNew` (+ `InteractiveNewIO`/`InteractiveNewResult`),
+  `stageNewRun`, and `armRun` per the runUpgrade precedent for testability.
+  `new`: validates --profile/--budget, resolves the source (--source or the
+  sole configured one), reads the repo's intent-brief.md template for the
+  required-H2 list (extractSections, BUILTIN_SECTIONS fallback), then:
+  flags-complete -> read --brief-file, validate its sections, identity
+  check, planRunScaffold + stageRun, exit per outcome (created/exists -> 0,
+  "already staged: <slug> (<branch>)" on exists; refused -> 1 unless
+  reason === 'conflict' -> 2). Missing slug/title/brief-file + non-TTY ->
+  exit 1 naming the missing flags (`--slug`/`--title`/`--brief-file`), no
+  commit. Missing content + TTY -> runInteractiveNew: prompts for missing
+  slug/title, drafts the brief from the template (or reuses --brief-file
+  content) via draftBriefMarkdown, opens it in a real $EDITOR/$VISUAL
+  (fallback vi) round trip, re-validates sections (offers re-edit rather
+  than padding), previews, and requires `stage? [y/N]` before returning —
+  declining or abandoning a re-edit loop returns null and the CLI refuses
+  (exit 1), no commit. `arm`: decide()-style flow with { action: 'arm' }
+  through planDecision/writeState (DecisionError -> exit 1 with its
+  message; nonexistent run -> findRun's existing "not found" refusal), then
+  ensureDraftPr(source.dir, ref.branch, slug) and prints its note — a
+  skipped note (no origin in test repos) is success, matching AC8.2.
+
+  Deviation from the literal plan text: the plan's CLI section describes
+  arm as reusing the generic `decide()` helper; I instead wrote a small
+  dedicated `armRun` (same shape: resolve source/run -> identity check ->
+  readState -> planDecision -> writeState -> exit-code mapping) because
+  `decide()` calls `process.exit` inline on every branch, which would have
+  made chaining `ensureDraftPr` after a successful write unreliable (no
+  return value to signal success, and continuing JS after `process.exit()`
+  is not something to rely on). `armRun` returns a plain exit code instead,
+  same as `stageNewRun`, so `arm`'s command action can call
+  `process.exit(await armRun(...))` uniformly with `new`'s. Recorded here
+  per the round-1 course-correction: reviewer, please confirm this satisfies
+  AC6.1's "decide()-style flow" wording — no plan or spec text is overridden,
+  only decide()'s literal reuse is swapped for an equivalent hand-written
+  flow for the reason above.
+
+  Tests: extended frontend/packages/cli/test/cli.test.ts with spawned-process
+  cases (flags-complete stage, non-TTY missing-flags refusal, idempotent
+  replay, arm standard->spec, arm patch->plan, arm-on-non-staged refusal,
+  arm-on-nonexistent refusal, no-identity refusal via a dedicated scratch
+  repo distinct from the shared fixture) plus a unit-test block for the
+  exported interactive helpers (draftBriefMarkdown x2, runInteractiveNew x3
+  covering prompt-fill+confirm, re-edit-on-missing-sections, and decline).
+
+  Results: `cd frontend && npx vitest run packages/cli/test/cli.test.ts`
+  20/20 passed. `cd frontend && npm test` 305 passed | 1 skipped (38 files,
+  1 pre-existing skip: live-smoke.test.ts) — full workspace suite green.
+  `cd frontend && npm run typecheck` clean (tsc -p tsconfig.json && tsc -p
+  packages/web/tsconfig.json, no errors).

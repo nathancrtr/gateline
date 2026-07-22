@@ -109,6 +109,24 @@ describe('LocalGitSource.stageRun — replay (AC1.3)', () => {
     const stray = await ctx.source.git.forEachRef(['refs/heads/run/second-slug'])
     expect(stray).toHaveLength(0)
   })
+
+  it('the same slug staged twice with a null client key (free-form intake, no --key) also returns exists', async () => {
+    // ADR-4 rule 2's positive branch: no clientKey on either call, so the
+    // scan never reaches rule 1 (client-key replay) — the same-slug +
+    // staged-rest + null-key-agreement path is the only thing that can
+    // recognize this as a replay rather than a slug collision.
+    const scaffold = planRunScaffold(input({ slug: 'null-key-run', clientKey: null }))
+
+    const first = await ctx.source.stageRun(scaffold, who)
+    expect(first.outcome).toBe('created')
+
+    const second = await ctx.source.stageRun(scaffold, who)
+    expect(second.outcome).toBe('exists')
+    expect(second).toMatchObject({ slug: 'null-key-run', branch: 'run/null-key-run' })
+
+    const branches = await ctx.source.git.forEachRef(['refs/heads/run/null-key-run'])
+    expect(branches).toHaveLength(1)
+  })
 })
 
 describe('LocalGitSource.stageRun — conflict', () => {
@@ -134,6 +152,43 @@ describe('LocalGitSource.stageRun — conflict', () => {
 
     // The rival commit is still the tip — our genesis commit never landed.
     expect(await git.revParse('refs/heads/run/race-run')).toBe(rival)
+  })
+
+  it('CAS-loss re-derivation returns exists (not conflict) when the rival landed the identical staged replay', async () => {
+    // Two operators race an identical scaffold (same slug, same client key).
+    // The pre-write scan sees nothing for either, so both proceed to the
+    // create-only CAS; the loser must re-derive via scanForExisting rather
+    // than blindly reporting conflict — plan §"sources deltas" step 4, ADR-4
+    // rule 3. We force the loss deterministically (same technique as
+    // write-path.test.ts's CAS-race test): let the real race happen for the
+    // first updateRefCAS call so a genuine identical genesis commit lands,
+    // then report loss on our own call.
+    const scaffold = planRunScaffold(input({ slug: 'race-replay', clientKey: 'race-replay-key' }))
+    const git = ctx.source.git
+    const branchRef = 'refs/heads/run/race-replay'
+
+    const realUpdateRefCAS = git.updateRefCAS.bind(git)
+    let intercepted = false
+    git.updateRefCAS = async (ref: string, newOid: string, expectedOld: string) => {
+      if (!intercepted && ref === branchRef) {
+        intercepted = true
+        // The rival: a second stageRun call for the exact same scaffold,
+        // which lands for real (this call's own updateRefCAS override has
+        // already flipped `intercepted`, so it goes through unpatched).
+        const rival = await ctx.source.stageRun(scaffold, who)
+        expect(rival.outcome).toBe('created')
+        // Our own CAS attempt lost the race.
+        return false
+      }
+      return realUpdateRefCAS(ref, newOid, expectedOld)
+    }
+
+    const result = await ctx.source.stageRun(scaffold, who)
+    expect(result.outcome).toBe('exists')
+    expect(result).toMatchObject({ slug: 'race-replay', branch: 'run/race-replay' })
+
+    const branches = await git.forEachRef([branchRef])
+    expect(branches).toHaveLength(1)
   })
 })
 

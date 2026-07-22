@@ -79,3 +79,50 @@ notes: |
   inaccurate; not fixing schema.ts here since it's outside this task's
   file_contact_surface and the line itself is legitimate (not a tracker-vendor
   leak).
+
+  Implementer round 2 (responding to review-05.md, verdict request-changes):
+
+  F1 (blocking, test gap on ADR-4 rule 2's exists branch) — FIXED. Added
+  "the same slug staged twice with a null client key ... also returns exists"
+  to the AC1.3 replay describe block in stage-run.test.ts: stages one scaffold
+  with clientKey: null twice and asserts the second call returns exists with
+  exactly one branch minted. This routes through scanForExisting's rule 2
+  (same-slug + staged-rest + keyMatches) only, since rule 1's client-key loop
+  is skipped entirely when clientKey is null — confirmed the test fails
+  ('refused' instead of 'exists') against a mutant that hardcodes
+  isStagedRest = false, and passes against the real code. No production code
+  changed; local-source.ts is byte-identical to the round-1 diff (git diff
+  --stat shows no change to that file).
+
+  F2 (minor, test gap on CAS-loss re-derivation's exists branch) — FIXED.
+  Added "CAS-loss re-derivation returns exists (not conflict) when the rival
+  landed the identical staged replay" to the conflict describe block. Same
+  monkeypatch technique write-path.test.ts uses for its CAS-race test:
+  git.updateRefCAS is overridden so the first call for the target branch ref
+  lets a nested, unpatched stageRun call for the identical scaffold land for
+  real (a genuine identical genesis commit), then reports loss (returns
+  false) for the outer call, forcing it down the rescan path. Verified this
+  test fails ('refused' instead of 'exists') against a mutant that drops the
+  rescan and unconditionally returns refused: conflict on CAS loss, and
+  passes against the real code. No production code changed.
+
+  F3 (minor/PLAUSIBLE, empty-default-branch refusal reuses reason: 'conflict')
+  — REBUTTED, no change. The review's own text concludes "PLAUSIBLE and
+  cosmetic ... No change required unless round 2 touches the file anyway."
+  Round 2 only touched stage-run.test.ts (to close F1/F2's coverage gaps);
+  local-source.ts was not otherwise touched, so per the review's own
+  stated condition this finding does not require a change here. Substantively:
+  the StageRefusal union in plan.md:138 has no member for "no commits to
+  stage against" (it is not a race, not a naming collision, not an identity
+  problem), so 'conflict' is the least-wrong existing tag and the message
+  text ("has no commits to stage against") already names the real cause for
+  any caller inspecting result.message rather than pattern-matching on
+  reason alone. Introducing a new StageRefusal variant for this is a plan-
+  level change (touches the interface contract in source.ts, its call sites,
+  and probably task 05's CLI exit-code mapping) that is out of this task's
+  scope to originate unilaterally; flagging for the plan owner if a future
+  round decides it's worth a dedicated reason.
+
+  Verification after round 2: `npx vitest run
+  packages/core/test/stage-run.test.ts` — 10/10 pass (8 round-1 tests + the 2
+  new ones). `npm test` and `npm run typecheck` — both clean (see task report).

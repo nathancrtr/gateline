@@ -16,13 +16,8 @@ export interface Identity {
 export const PHASES = ['spec', 'plan', 'implement', 'integrate', 'release', 'done', 'paused'] as const
 export type Phase = (typeof PHASES)[number]
 
-export const PAUSED_REASONS = ['budget-exhausted', 'round-cap', 'escalation', 'gate-declined', 'staged'] as const
+export const PAUSED_REASONS = ['budget-exhausted', 'round-cap', 'escalation', 'gate-declined'] as const
 export type PausedReason = (typeof PAUSED_REASONS)[number]
-
-/** A staged-but-unarmed run: `phase: paused` reused (ADR-1) rather than a new
- * phase value, so it needs no PROFILE_PHASES extension and no new derivation
- * row. Exported so callers never inline the literal twice. */
-export const STAGED_REASON = 'staged' as const
 
 export const GATE_IDS = ['G0', 'G1', 'G2', 'G3'] as const
 export type GateId = (typeof GATE_IDS)[number]

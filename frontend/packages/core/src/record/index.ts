@@ -5,4 +5,3 @@
 export * from './schema.ts'
 export * from './validate.ts'
 export * from './actions.ts'
-export * from './scaffold.ts'

@@ -14,6 +14,7 @@ Prose for the approver.
 ## Requirements
 
 ### R1 — Core behavior
+The core behavior, stated as prose for the approver.
 **Acceptance criteria:**
 - [ ] AC1.1 — running the tool produces the documented output
 - [ ] AC1.2 — a wrapped criterion whose text continues
@@ -55,23 +56,27 @@ None.
 describe('buildLexicon', () => {
   const lex = buildLexicon({ spec: SPEC, plan: PLAN })
 
-  it('extracts requirements with short names and verbatim blocks', () => {
+  it('extracts requirements with short names; the block stops before the criteria list', () => {
     const r1 = resolveId(lex, 'R1')!
     expect(r1).toMatchObject({ kind: 'requirement', shortName: 'Core behavior', artifact: 'spec.md', line: 8 })
     expect(r1.definition).toContain('### R1 — Core behavior')
-    expect(r1.definition).toContain('AC1.2')
-    expect(r1.definition).not.toContain('### R2')
+    expect(r1.definition).not.toContain('AC1.2')
+    expect(r1.definition).not.toContain('Acceptance criteria')
+    expect(r1.body).toBe('The core behavior, stated as prose for the approver.')
   })
 
   it('extracts criteria including wrapped continuation lines', () => {
     const ac = resolveId(lex, 'AC1.2')!
     expect(ac.kind).toBe('criterion')
     expect(ac.definition).toContain('onto an indented second line')
-    expect(resolveId(lex, 'AC2.1')!.definition).toContain('malformed input')
+    expect(ac.body).toBe('a wrapped criterion whose text continues onto an indented second line')
+    expect(resolveId(lex, 'AC2.1')!.body).toBe('malformed input exits non-zero')
   })
 
   it('extracts decisions, carrying the amendment qualifier', () => {
     expect(resolveId(lex, 'ADR-1')).toMatchObject({ kind: 'decision', shortName: 'Pure core, thin shell', artifact: 'plan.md' })
+    expect(resolveId(lex, 'ADR-1')!.body).toContain('**Choice:** keep logic pure.')
+    expect(resolveId(lex, 'ADR-1')!.body).not.toContain('ADR-1:')
     const amended = lex.entries.filter((e) => e.id === 'ADR-2')
     expect(amended).toHaveLength(2)
     expect(amended[0]!.qualifier).toBe('amendment, 2026-07-08')
@@ -122,6 +127,8 @@ describe('real finished runs', () => {
     const r4 = resolveId(lex, 'R4')!
     expect(r4.kind).toBe('requirement')
     expect(r4.shortName.length).toBeGreaterThan(0)
+    expect(r4.body).toMatch(/^Files of size 0 bytes/)
+    expect(r4.definition).not.toContain('AC4.1')
     expect(resolveId(lex, 'AC5.1')?.kind).toBe('criterion')
     expect(resolveId(lex, 'ADR-6')?.kind).toBe('decision')
   })

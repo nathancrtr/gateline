@@ -285,7 +285,11 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
         </p>
       )}
       <CitedObjects content={content} path={path} />
-      {path.endsWith('.md') ? <Markdown>{content}</Markdown> : <pre className="overflow-x-auto font-mono text-xs leading-5">{content}</pre>}
+      {path.endsWith('.md') ? (
+        <Markdown sourcePath={path}>{content}</Markdown>
+      ) : (
+        <pre className="overflow-x-auto font-mono text-xs leading-5">{content}</pre>
+      )}
     </article>
   )
 }

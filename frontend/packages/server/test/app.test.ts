@@ -67,6 +67,7 @@ describe('read routes', () => {
     const r1 = body.entries.find((e: { id: string }) => e.id === 'R1')
     expect(r1).toMatchObject({ kind: 'requirement', shortName: 'Core behavior', artifact: 'spec.md' })
     expect(r1.definition).toContain('### R1 — Core behavior')
+    expect(r1.body).toBe('The tool reads sample input and emits the documented output, end to end.')
     expect(body.entries.find((e: { id: string }) => e.id === 'AC2.1')?.kind).toBe('criterion')
     expect(body.entries.find((e: { id: string }) => e.id === 'ADR-1')).toMatchObject({ kind: 'decision', artifact: 'plan.md' })
     expect('cites AC10.2 and ADR-3'.match(new RegExp(body.pattern, 'g'))).toEqual(['AC10.2', 'ADR-3'])

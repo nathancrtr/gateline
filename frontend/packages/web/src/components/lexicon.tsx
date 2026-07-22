@@ -8,6 +8,8 @@
 import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { api, type LexiconEntry } from '../api.ts'
 
 export interface RunLexicon {
@@ -69,12 +71,23 @@ const SKIP = new Set(['code', 'pre', 'a', 'lex-ref'])
 const textOf = (node: HNode): string =>
   node.type === 'text' ? (node.value ?? '') : (node.children ?? []).map(textOf).join('')
 
-function splitText(value: string, re: RegExp): HNode[] | null {
+/** One id occurrence to leave unwrapped: the definition site itself — a card
+ * that covers its own definition with a copy of itself reads as a bug. */
+interface SkipOnce {
+  id: string
+  used: boolean
+}
+
+function splitText(value: string, re: RegExp, skip?: SkipOnce): HNode[] | null {
   re.lastIndex = 0
   const out: HNode[] = []
   let last = 0
   let m: RegExpExecArray | null
   while ((m = re.exec(value))) {
+    if (skip && !skip.used && m[0] === skip.id) {
+      skip.used = true
+      continue
+    }
     if (m.index > last) out.push({ type: 'text', value: value.slice(last, m.index) })
     out.push({ type: 'element', tagName: 'lex-ref', properties: {}, children: [{ type: 'text', value: m[0] }] })
     last = m.index + m[0].length
@@ -84,30 +97,55 @@ function splitText(value: string, re: RegExp): HNode[] | null {
   return out
 }
 
-function walk(node: HNode, re: RegExp): void {
+interface WalkOpts {
+  re: RegExp
+  /** This render is the artifact that defines criteria (spec.md). */
+  definesCriteria: boolean
+  /** This render is an artifact that defines R/ADR headings (spec.md / plan.md). */
+  definesHeadings: boolean
+}
+
+function walk(node: HNode, opts: WalkOpts, skip?: SkipOnce): void {
   if (node.type === 'element' && SKIP.has(node.tagName ?? '')) return
   if (node.type === 'element' && /^h[1-6]$/.test(node.tagName ?? '')) {
     const m = /^\s*(R\d+|ADR-\d+)\b/.exec(textOf(node))
-    if (m) (node.properties ??= {}).id = `def-${m[1]}`
+    if (m) {
+      ;(node.properties ??= {}).id = `def-${m[1]}`
+      if (opts.definesHeadings) skip = { id: m[1]!, used: false }
+    }
+  }
+  if (opts.definesCriteria && node.type === 'element' && node.tagName === 'li') {
+    const m = /^\s*(AC\d+\.\d+)\s+—/.exec(textOf(node))
+    if (m) skip = { id: m[1]!, used: false }
   }
   if (!node.children) return
   const next: HNode[] = []
   for (const child of node.children) {
     if (child.type === 'text' && child.value) {
-      const parts = splitText(child.value, re)
+      const parts = splitText(child.value, opts.re, skip)
       if (parts) {
         next.push(...parts)
         continue
       }
     }
-    walk(child, re)
+    walk(child, opts, skip)
     next.push(child)
   }
   node.children = next
 }
 
-/** A rehype plugin parameterized by the served grammar. */
-export const lexiconRehype = (pattern: string) => () => (tree: HNode) => walk(tree, new RegExp(pattern, 'g'))
+/** A rehype plugin parameterized by the served grammar. `sourcePath` scopes
+ * definition-site suppression to the artifacts that actually define ids —
+ * a report bullet that happens to start with `AC1.1 —` is a citation and
+ * keeps its card. */
+export const lexiconRehype = (pattern: string, sourcePath?: string) => () => (tree: HNode) => {
+  const base = sourcePath?.split('/').pop() ?? ''
+  walk(tree, {
+    re: new RegExp(pattern, 'g'),
+    definesCriteria: base === 'spec.md',
+    definesHeadings: base === 'spec.md' || base === 'plan.md',
+  })
+}
 
 // ---------------------------------------------------------------------------
 // The reference itself: dotted id, hover/focus opens the verbatim card.
@@ -139,7 +177,11 @@ export function LexRef({ children }: { children?: ReactNode }) {
             supersedes {defs.length - 1} earlier definition{defs.length > 2 ? 's' : ''}
           </span>
         )}
-        {entry && <span className="lex-card-def">{entry.definition}</span>}
+        {entry && entry.body && (
+          <span className="lex-card-def">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.body}</ReactMarkdown>
+          </span>
+        )}
         {entry && (
           <Link
             className="lex-card-jump"
@@ -218,9 +260,7 @@ export function CitedObjects({ content, path }: { content: string; path: string 
               <span className={`shrink-0 font-mono text-[11px] font-semibold ${entry ? 'text-accent' : 'text-warn'}`}>{id}</span>
               {entry ? (
                 <>
-                  <span className="min-w-0 truncate text-muted">
-                    {entry.shortName || entry.definition.replace(/\s+/g, ' ')}
-                  </span>
+                  <span className="min-w-0 truncate text-muted">{entry.shortName || entry.body.replace(/\s+/g, ' ')}</span>
                   <Link
                     className="ml-auto shrink-0 font-mono text-[11px] text-accent underline underline-offset-2"
                     to={`/runs/${lex.src}/${lex.slug}?tab=artifacts&artifact=${encodeURIComponent(entry.artifact)}&anchor=${anchorFor(id)}`}

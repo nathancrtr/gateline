@@ -184,9 +184,25 @@ body {
 .lex-card-qualifier {
   @apply font-mono text-[11px] text-warn;
 }
+/* The card body renders the definition's own markdown (verbatim source,
+   deterministic rendering — same standing as the artifact view itself).
+   Inherits .prose-artifact's code/list voices; margins tightened to card
+   scale (these rules are later in the file, so they win the tie). */
 .lex-card-def {
-  @apply block max-h-48 overflow-y-auto rounded-[4px] bg-inset p-2 font-mono text-[11.5px] leading-[1.55];
-  white-space: pre-wrap;
+  @apply block max-h-48 overflow-y-auto rounded-[4px] bg-inset px-2.5 py-1.5 text-[12px] leading-[1.55];
+}
+.lex-card-def p {
+  @apply my-1;
+}
+.lex-card-def ul,
+.lex-card-def ol {
+  @apply my-1 pl-4;
+}
+.lex-card-def li {
+  @apply my-0.5;
+}
+.lex-card-def code {
+  @apply text-[11px];
 }
 .lex-card-jump {
   @apply font-mono text-[11px] text-accent underline underline-offset-2;

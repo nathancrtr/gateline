@@ -17,8 +17,15 @@ export interface LexiconEntry {
   kind: LexiconKind
   /** Heading title for requirements/decisions; '' for criteria. */
   shortName: string
-  /** Verbatim definition block: the heading or list item through the end of its body. */
+  /** Verbatim definition block: the heading or list item through the end of
+   * its body. A requirement's block stops before its acceptance-criteria
+   * list — criteria are first-class entries of their own, and a card that
+   * repeats them renders the same content twice. */
   definition: string
+  /** The definition minus its defining marker (heading line or `AC<n>.<m> — `
+   * prefix): what a human-facing card or footnote shows under a header that
+   * already names the id. Derived by elision only — never rewording. */
+  body: string
   /** Run-relative path of the defining artifact ('spec.md' | 'plan.md'). */
   artifact: string
   /** 1-based line where the definition starts. */
@@ -41,6 +48,7 @@ const ANY_HEADING = /^#{1,6}\s/
 const R_HEADING = /^#{1,6}\s*R(\d+)\s+—\s+(.+?)\s*$/
 const ADR_HEADING = /^#{1,6}\s*ADR-(\d+)(?:\s*\(([^)]+)\))?:\s*(.+?)\s*$/
 const AC_ITEM = /^\s*[-*]\s*(?:\[[ xX]\]\s*)?(AC\d+\.\d+)\s+—\s*(.*)$/
+const AC_LABEL = /^\s*\*\*Acceptance criteria:?\*\*/i
 const LIST_ITEM = /^\s*[-*]\s/
 const FENCE = /^\s*(```|~~~)/
 
@@ -60,15 +68,25 @@ function toLines(text: string): Line[] {
 }
 
 /** The block from `start` up to (not including) the next heading outside a
- * fence, trailing blank lines trimmed. Verbatim — no reflow, no elision. */
-function blockFrom(lines: Line[], start: number): string {
+ * fence — or an earlier `stop` line — trailing blank lines trimmed.
+ * Verbatim — no reflow, no rewording. */
+function blockFrom(lines: Line[], start: number, stop?: (text: string) => boolean): string {
   let end = start + 1
-  while (end < lines.length && (lines[end]!.inFence || !ANY_HEADING.test(lines[end]!.text))) end++
+  while (
+    end < lines.length &&
+    (lines[end]!.inFence || (!ANY_HEADING.test(lines[end]!.text) && !(stop && stop(lines[end]!.text))))
+  )
+    end++
   while (end > start + 1 && lines[end - 1]!.text.trim() === '') end--
   return lines
     .slice(start, end)
     .map((l) => l.text)
     .join('\n')
+}
+
+/** A block's body: everything after its first (defining) line. */
+function bodyOf(block: string): string {
+  return block.split('\n').slice(1).join('\n').trim()
 }
 
 /** A list item plus its wrapped continuation lines (ends at a blank line,
@@ -100,11 +118,13 @@ export function buildLexicon(input: { spec?: string | null; plan?: string | null
       if (line.inFence) continue
       const r = R_HEADING.exec(line.text)
       if (r) {
+        const definition = blockFrom(lines, i, (t) => AC_LABEL.test(t) || AC_ITEM.test(t))
         entries.push({
           id: `R${r[1]}`,
           kind: 'requirement',
           shortName: r[2]!,
-          definition: blockFrom(lines, i),
+          definition,
+          body: bodyOf(definition),
           artifact: 'spec.md',
           line: line.n,
         })
@@ -112,11 +132,16 @@ export function buildLexicon(input: { spec?: string | null; plan?: string | null
       }
       const ac = AC_ITEM.exec(line.text)
       if (ac) {
+        const definition = itemFrom(lines, i)
+        // A criterion is one wrapped sentence; its body joins the
+        // continuation lines back into it (elision of markers, no rewording).
+        const body = [ac[2]!, ...definition.split('\n').slice(1).map((l) => l.trim())].join(' ').trim()
         entries.push({
           id: ac[1]!,
           kind: 'criterion',
           shortName: '',
-          definition: itemFrom(lines, i),
+          definition,
+          body,
           artifact: 'spec.md',
           line: line.n,
         })
@@ -131,11 +156,13 @@ export function buildLexicon(input: { spec?: string | null; plan?: string | null
       if (line.inFence) continue
       const adr = ADR_HEADING.exec(line.text)
       if (adr) {
+        const definition = blockFrom(lines, i)
         entries.push({
           id: `ADR-${adr[1]}`,
           kind: 'decision',
           shortName: adr[3]!,
-          definition: blockFrom(lines, i),
+          definition,
+          body: bodyOf(definition),
           artifact: 'plan.md',
           line: line.n,
           ...(adr[2] ? { qualifier: adr[2] } : {}),

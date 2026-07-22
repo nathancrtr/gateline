@@ -103,6 +103,11 @@ test('run lexicon (#163): ids resolve to verbatim hover cards and jump to their 
   await card.locator('.lex-card-jump').click()
   await expect(page).toHaveURL(/artifact=spec\.md/)
   await expect(page.locator('#def-R1')).toContainText('Core behavior')
+  // Definition sites are not self-links: the R1 heading and the AC1.1 bullet
+  // in spec.md render their own ids as plain text, while citations of ids
+  // defined elsewhere (ADR-1, from plan.md) still resolve.
+  await expect(page.locator('#def-R1 .lex-ref')).toHaveCount(0)
+  await expect(page.locator('.prose-artifact li .lex-ref', { hasText: 'AC1.1' })).toHaveCount(0)
 })
 
 function sourceId(): string {

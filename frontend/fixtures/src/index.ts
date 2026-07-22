@@ -78,6 +78,7 @@ The repository currently handles ${title} by hand. This spec automates it.
 ## Requirements
 
 ### R1 — Core behavior
+The tool reads sample input and emits the documented output, end to end.
 **Acceptance criteria:**
 - [ ] AC1.1 — running the tool on sample input produces the documented output
 

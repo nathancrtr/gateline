@@ -259,6 +259,17 @@ budget:
           tokens_in: 13,
           tokens_out: 6451,
           cost_usd: 2.5939414999999997
+        },
+      {
+          at: 2026-07-22T19:05:17.251Z,
+          role: reviewer,
+          task: 03-stage-run-source,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 

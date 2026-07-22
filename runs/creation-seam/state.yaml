@@ -301,7 +301,7 @@ tasks:
   [
     { id: 01-merge-main, status: review-approved, review_rounds: 1 },
     { id: 02-record-scaffold-and-arm, status: review-approved, review_rounds: 2 },
-    { id: 03-stage-run-source, status: in-review, review_rounds: 2 },
+    { id: 03-stage-run-source, status: review-approved, review_rounds: 2 },
     { id: 04-pr-ensure, status: review-approved, review_rounds: 1 },
     { id: 05-cli-new-arm, status: pending, review_rounds: 0 },
     {

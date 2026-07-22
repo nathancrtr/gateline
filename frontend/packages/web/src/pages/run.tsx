@@ -9,6 +9,7 @@ import { api, formatAge, formatWhen, type InboxItem, type RunDetailResponse } fr
 import { AgeBadge, BudgetMeter, GateLedger, KindChip, PhaseChip, ValidationBadge } from '../components/chips.tsx'
 import { DecidePanel } from '../components/decide.tsx'
 import { DiffView } from '../components/diff-view.tsx'
+import { EvidenceRollupPanel } from '../components/evidence.tsx'
 import { CitedObjects, LexiconProvider, useRunLexicon } from '../components/lexicon.tsx'
 import { Markdown } from '../components/markdown.tsx'
 import { PageStatus } from './inbox.tsx'
@@ -198,6 +199,7 @@ function NeedsYouCard({ item, now, detail, primary }: { item: InboxItem; now: nu
             ))}
         </div>
       )}
+      {item.kind === 'gate' && item.gate === 'G2' && <EvidenceRollupPanel src={item.source} slug={item.slug} />}
       <DecidePanel item={item} primary={primary} />
     </section>
   )
@@ -285,6 +287,11 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
         </p>
       )}
       <CitedObjects content={content} path={path} />
+      {path === 'verification-report.md' && (
+        <div className="mb-4">
+          <EvidenceRollupPanel src={src} slug={slug} />
+        </div>
+      )}
       {path.endsWith('.md') ? (
         <Markdown sourcePath={path}>{content}</Markdown>
       ) : (

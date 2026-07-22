@@ -4,11 +4,11 @@
 
 run: creation-seam
 branch: run/creation-seam
-phase: implement
+phase: paused
   # staged by hand ahead of the seam this run builds;
   # resume (= arm) derives spec from the gate ledger
 profile: standard # patch | standard | full (DESIGN.md §4.1)
-paused_reason: null
+paused_reason: escalation
 
 budget:
   cost_limit_usd: 60 # exhaustion pauses the run; it never silently degrades
@@ -290,5 +290,11 @@ escalations:
         resolved_by: Nathan Carter,
         resolved_at: 2026-07-22T14:52:59.036Z,
         resolution: restarted orchestrator with budget constraints disabled -- resuming
+      },
+    {
+        at: 2026-07-22T18:25:19.022Z,
+        from_role: orchestrator,
+        reason: reviewer escalated task 06-derive-tests-engine-ensure — see review-06.md,
+        resolved: false
       }
   ]

@@ -7,8 +7,10 @@ import {
   BURDENS,
   deriveResumePhase,
   gateUndecided,
-  PHASE_AFTER_GATE,
+  phaseAfterGate,
   PHASES,
+  PROFILE_GATES,
+  PROFILE_PHASES,
   type Burden,
   type GateId,
   type Phase,
@@ -65,7 +67,7 @@ export function planDecision(state: RunState, input: DecisionInput, who: Identit
   const slug = state.run
   switch (input.action) {
     case 'approve': {
-      const gate = requireGate(input)
+      const gate = requireGate(state, input)
       const entry = state.gates[gate]
       if (!gateUndecided(entry))
         throw new DecisionError(
@@ -80,7 +82,7 @@ export function planDecision(state: RunState, input: DecisionInput, who: Identit
       if (hold && input.advancePhase === false)
         throw new DecisionError('hold already implies not advancing — omit advancePhase')
       const advance = !hold && input.advancePhase !== false
-      const nextPhase = PHASE_AFTER_GATE[gate]
+      const nextPhase = phaseAfterGate(gate, state.profile)
       const at = nowIso()
       return {
         mutate: (doc: Document) => {
@@ -102,7 +104,7 @@ export function planDecision(state: RunState, input: DecisionInput, who: Identit
       }
     }
     case 'decline': {
-      const gate = requireGate(input)
+      const gate = requireGate(state, input)
       const entry = state.gates[gate]
       if (!gateUndecided(entry)) throw new DecisionError(`${gate} is already decided (by ${entry.by})`)
       const reason = input.notes?.trim()
@@ -157,6 +159,8 @@ export function planDecision(state: RunState, input: DecisionInput, who: Identit
       if (state.phase !== 'paused') throw new DecisionError(`run is not paused (phase: ${state.phase})`)
       const target = input.resumePhase ?? deriveResumePhase(state)
       if (!PHASES.includes(target) || target === 'paused') throw new DecisionError(`invalid resume phase: ${target}`)
+      if (!PROFILE_PHASES[state.profile].includes(target))
+        throw new DecisionError(`phase "${target}" does not exist in profile ${state.profile}`)
       // Resuming a gate-declined run re-opens the declined gate: the entry
       // resets to undecided so it can be re-decided (the approve path's
       // "resume the run to re-open it" made real). The decline stays in the
@@ -164,7 +168,7 @@ export function planDecision(state: RunState, input: DecisionInput, who: Identit
       // the notes to bounce back to the producing role (resolved question 5).
       const reopen =
         state.paused_reason === 'gate-declined'
-          ? (['G0', 'G1', 'G2', 'G3'] as GateId[]).filter((g) => !state.gates[g].approved && state.gates[g].by !== null)
+          ? PROFILE_GATES[state.profile].filter((g) => !state.gates[g].approved && state.gates[g].by !== null)
           : []
       return {
         mutate: (doc: Document) => {
@@ -184,7 +188,9 @@ export function planDecision(state: RunState, input: DecisionInput, who: Identit
   }
 }
 
-function requireGate(input: DecisionInput): GateId {
+function requireGate(state: RunState, input: DecisionInput): GateId {
   if (!input.gate) throw new DecisionError(`${input.action} requires a gate (G0–G3)`)
+  if (!PROFILE_GATES[state.profile].includes(input.gate))
+    throw new DecisionError(`gate ${input.gate} does not exist in profile ${state.profile} (gates: ${PROFILE_GATES[state.profile].join(', ')})`)
   return input.gate
 }

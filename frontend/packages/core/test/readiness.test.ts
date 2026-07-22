@@ -24,6 +24,8 @@ describe('run discovery', () => {
       'g2-pending',
       'g3-pending',
       'malformed-spec',
+      'patch-g1-pending',
+      'patch-g2-pending',
       'paused-budget',
       'round-cap',
     ])
@@ -66,6 +68,21 @@ describe('readiness derivation (§2.3, one row per test)', () => {
     const items = await gateItem('g3-pending')
     expect(items).toHaveLength(1)
     expect(items[0]).toMatchObject({ kind: 'gate', gate: 'G3', reviewable: true })
+  })
+
+  it('patch G1 ready: no plan.md — the brief + work item are the packet, G0 absorbed into the question', async () => {
+    const items = await gateItem('patch-g1-pending')
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ kind: 'gate', gate: 'G1', reviewable: true })
+    expect(items[0]!.packet).toEqual(['intent-brief.md', 'tasks/01-hotfix.yaml'])
+    expect(items[0]!.title).toContain('Is this the change we want, scoped this way?')
+  })
+
+  it('patch G2 ready: reviews alone are the packet — no verification-report required', async () => {
+    const items = await gateItem('patch-g2-pending')
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ kind: 'gate', gate: 'G2', reviewable: true })
+    expect(items[0]!.packet).toEqual(['review-01.md'])
   })
 
   it('escalation: unresolved escalations[] entry surfaces with age', async () => {

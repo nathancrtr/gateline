@@ -216,6 +216,8 @@ Smoke-run the published artifact against sample.txt.
 interface StateOpts {
   slug: string
   phase: string
+  /** Run profile (DESIGN.md §4.1); omitted → full. The gates section carries exactly the profile's gates. */
+  profile?: 'patch' | 'standard' | 'full'
   pausedReason?: string
   gates: Partial<Record<'G0' | 'G1' | 'G2' | 'G3', { by: string; at: string; notes?: string; burden?: string; approved?: boolean }>>
   tasks?: { id: string; status: string; rounds: number }[]
@@ -258,13 +260,19 @@ function stateYaml(o: StateOpts): string {
         `  - {at: ${l.at}, role: ${l.role}, task: ${l.task ?? 'null'}, round: ${l.round ?? 'null'}, adapter: ${l.adapter}, model: ${l.model}, tokens_in: ${l.tokensIn ?? 'null'}, tokens_out: ${l.tokensOut ?? 'null'}, cost_usd: ${l.costUsd}}`,
     )
     .join('\n')
+  const gateIds =
+    o.profile === 'patch'
+      ? (['G1', 'G2'] as const)
+      : o.profile === 'standard'
+        ? (['G0', 'G1', 'G2'] as const)
+        : (['G0', 'G1', 'G2', 'G3'] as const)
   return `# Contract: maintained by Orchestrator (human in v0); read by everyone.
 # Lives at runs/<slug>/state.yaml — the single source of truth for a run.
 
 run: ${o.slug}
 branch: run/${o.slug}
 phase: ${o.phase}               # spec | plan | implement | integrate | release | done | paused
-paused_reason: ${o.pausedReason ?? 'null'}
+${o.profile ? `profile: ${o.profile}           # patch | standard | full (DESIGN.md §4.1)\n` : ''}paused_reason: ${o.pausedReason ?? 'null'}
 
 budget:
   cost_limit_usd: ${budget.limit}      # exhaustion pauses the run; it never silently degrades
@@ -272,10 +280,7 @@ budget:
   ledger:${ledger ? `\n${ledger}` : ' []'}
 
 gates:                    # a gate entry is written ONLY by the named human
-${gate('G0')}
-${gate('G1')}
-${gate('G2')}
-${gate('G3')}
+${gateIds.map(gate).join('\n')}
 
 tasks:                    # mirrors tasks/*.yaml status; the ONLY home of review_rounds
 ${tasks || '  []'}
@@ -547,6 +552,39 @@ export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts 
           pausedReason: 'budget-exhausted',
           gates: { G0: { by: 'operator', at: '2026-06-27T09:00:00Z', burden: 'confirmation' } },
           budget: { limit: 10, spent: 10.4 },
+        }),
+      },
+    },
+    // Patch-profile runs (DESIGN.md §4.1): no spec/plan, no verifier — the
+    // human-authored brief + work item are the G1 packet, reviews alone are G2's.
+    {
+      slug: 'patch-g1-pending',
+      age: 1,
+      files: {
+        'intent-brief.md': brief('typo hotfix'),
+        'tasks/01-hotfix.yaml': workItem('01-hotfix', 'R1', 'pending'),
+        'state.yaml': stateYaml({
+          slug: 'patch-g1-pending',
+          phase: 'plan',
+          profile: 'patch',
+          gates: {},
+          tasks: [{ id: '01-hotfix', status: 'pending', rounds: 0 }],
+        }),
+      },
+    },
+    {
+      slug: 'patch-g2-pending',
+      age: 2,
+      files: {
+        'intent-brief.md': brief('off-by-one fix'),
+        'tasks/01-fix.yaml': workItem('01-fix', 'R1', 'review-approved'),
+        'review-01.md': review('01-fix', 1, 'approve'),
+        'state.yaml': stateYaml({
+          slug: 'patch-g2-pending',
+          phase: 'implement',
+          profile: 'patch',
+          gates: { G1: { by: 'operator', at: '2026-07-08T09:00:00Z', burden: 'confirmation' } },
+          tasks: [{ id: '01-fix', status: 'review-approved', rounds: 1 }],
         }),
       },
     },

@@ -1,7 +1,7 @@
 // Portfolio rows (interaction I6) and the cross-source inbox: pure
 // derivations over RunSource reads — nothing here is stored (rule R1).
 import { deriveReadiness, type InboxItem } from './readiness.ts'
-import type { GateEntry, RunState } from '../record/schema.ts'
+import type { GateEntry, Profile, RunState } from '../record/schema.ts'
 import type { RunRef, RunSource } from '../sources/source.ts'
 
 export interface GateLedgerCell {
@@ -19,6 +19,8 @@ export interface RunSummary {
   phase: string
   pausedReason: string | null
   malformed: string | null
+  /** Run profile (DESIGN.md §4.1); display layers filter the gate ledger through PROFILE_GATES. */
+  profile: Profile
   gates: Record<'G0' | 'G1' | 'G2' | 'G3', GateLedgerCell>
   tasks: { total: number; done: number; maxRounds: number }
   escalationsOpen: number
@@ -60,6 +62,7 @@ export async function summarizeRun(
         phase: 'unknown',
         pausedReason: null,
         malformed: error ?? 'state.yaml unreadable',
+        profile: 'full',
         gates: emptyLedger(),
         tasks: { total: 0, done: 0, maxRounds: 0 },
         escalationsOpen: 0,
@@ -81,6 +84,7 @@ export async function summarizeRun(
       phase: state.phase,
       pausedReason: state.paused_reason,
       malformed: null,
+      profile: state.profile,
       gates: {
         G0: cell(state.gates.G0),
         G1: cell(state.gates.G1),

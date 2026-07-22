@@ -22,6 +22,27 @@ export type PausedReason = (typeof PAUSED_REASONS)[number]
 export const GATE_IDS = ['G0', 'G1', 'G2', 'G3'] as const
 export type GateId = (typeof GATE_IDS)[number]
 
+// Run profiles (DESIGN.md §4.1): ceremony scaled to the change. Fixed sets,
+// not knobs — each profile declares which gates exist and which phases the
+// run passes through. A state.yaml with no `profile:` field is a `full` run,
+// so every pre-profile run record keeps its meaning unchanged.
+export const PROFILES = ['patch', 'standard', 'full'] as const
+export type Profile = (typeof PROFILES)[number]
+
+/** Which gates exist per profile. A gate absent from the profile is absent, never auto-approved. */
+export const PROFILE_GATES: Record<Profile, GateId[]> = {
+  patch: ['G1', 'G2'],
+  standard: ['G0', 'G1', 'G2'],
+  full: ['G0', 'G1', 'G2', 'G3'],
+}
+
+/** Which phases a run of each profile can legitimately be in. */
+export const PROFILE_PHASES: Record<Profile, Phase[]> = {
+  patch: ['plan', 'implement', 'integrate', 'done', 'paused'],
+  standard: ['spec', 'plan', 'implement', 'integrate', 'done', 'paused'],
+  full: [...PHASES],
+}
+
 export const BURDENS = ['confirmation', 'light-correction', 'heavy-correction'] as const
 export type Burden = (typeof BURDENS)[number]
 
@@ -78,23 +99,49 @@ const budgetSchema = z
   })
   .passthrough()
 
+/** An absent gate entry parses as undecided — it can never masquerade as approved. */
+const undecidedGate = () => gateEntrySchema.parse({ approved: false })
+
 export const runStateSchema = z
   .object({
     run: z.string(),
     branch: z.string(),
     phase: z.enum(PHASES),
+    profile: z
+      .enum(PROFILES)
+      .nullish()
+      .transform((v) => v ?? ('full' as Profile)),
     paused_reason: z.string().nullish().transform((v) => v ?? null),
     budget: budgetSchema.nullish().transform((v) => v ?? null),
     gates: z.object({
-      G0: gateEntrySchema,
+      G0: gateEntrySchema.optional(),
       G1: gateEntrySchema,
       G2: gateEntrySchema,
-      G3: gateEntrySchema,
+      G3: gateEntrySchema.optional(),
     }),
     tasks: z.array(taskEntrySchema).nullish().transform((v) => v ?? []),
     escalations: z.array(escalationSchema).nullish().transform((v) => v ?? []),
   })
   .passthrough()
+  .superRefine((s, ctx) => {
+    // Strictness scaled to the profile: the gates the profile declares must be
+    // present in the file; only gates outside the profile may be absent.
+    for (const gate of PROFILE_GATES[s.profile]) {
+      if (s.gates[gate] === undefined)
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['gates', gate], message: `required by profile ${s.profile}` })
+    }
+  })
+  .transform((s) => ({
+    ...s,
+    // Normalize to all four entries so consumers keep a total gates record;
+    // profile-aware consumers filter through PROFILE_GATES, never this shape.
+    gates: {
+      G0: s.gates.G0 ?? undecidedGate(),
+      G1: s.gates.G1,
+      G2: s.gates.G2,
+      G3: s.gates.G3 ?? undecidedGate(),
+    },
+  }))
 
 export type GateEntry = z.infer<typeof gateEntrySchema>
 export type TaskEntry = z.infer<typeof taskEntrySchema>
@@ -130,12 +177,21 @@ export function gateUndecided(g: GateEntry): boolean {
   return !g.approved && g.by === null
 }
 
-/** The phase a run enters when a gate is approved (v0 orchestrator convention). */
+/** The phase a run enters when a gate is approved (v0 orchestrator convention, full profile). */
 export const PHASE_AFTER_GATE: Record<GateId, Phase> = {
   G0: 'plan',
   G1: 'implement',
   G2: 'release',
   G3: 'done',
+}
+
+/**
+ * Profile-aware phase advance: in reduced profiles the run ends at G2 —
+ * the merge is the release — so G2 advances to done, not release.
+ */
+export function phaseAfterGate(gate: GateId, profile: Profile): Phase {
+  if (gate === 'G2' && profile !== 'full') return 'done'
+  return PHASE_AFTER_GATE[gate]
 }
 
 /** The phase in which each gate's decision is on the table. */
@@ -146,11 +202,14 @@ export const GATE_PHASES: Record<GateId, Phase[]> = {
   G3: ['release'],
 }
 
-/** Where a paused run should resume, derived from the gate ledger (never stored). */
+/**
+ * Where a paused run should resume, derived from the gate ledger (never
+ * stored). Walks only the profile's gates: the run resumes into the phase
+ * whose gate is the first not yet approved.
+ */
 export function deriveResumePhase(state: RunState): Phase {
-  if (gateUndecided(state.gates.G0) || !state.gates.G0.approved) return 'spec'
-  if (gateUndecided(state.gates.G1) || !state.gates.G1.approved) return 'plan'
-  if (gateUndecided(state.gates.G2) || !state.gates.G2.approved) return 'implement'
-  if (gateUndecided(state.gates.G3) || !state.gates.G3.approved) return 'release'
+  for (const gate of PROFILE_GATES[state.profile]) {
+    if (!state.gates[gate].approved) return GATE_PHASES[gate][0]!
+  }
   return 'done'
 }

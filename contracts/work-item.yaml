@@ -1,4 +1,6 @@
-# Contract: produced by Architect; consumed by exactly one Implementer.
+# Contract: produced by Architect (in a patch run: by the human author,
+# alongside the intent brief — DESIGN.md §4.1); consumed by exactly one
+# Implementer.
 # Filename: tasks/NN-slug.yaml (NN orders display, not execution — `depends_on` orders execution).
 # All top-level keys required; `notes` starts empty and is append-only during the run.
 

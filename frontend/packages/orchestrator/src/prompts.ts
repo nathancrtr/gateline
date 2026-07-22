@@ -8,12 +8,17 @@
 // work (the role specs default to leaving changes uncommitted "unless your
 // dispatch says otherwise" — headless runs say otherwise, because the commit
 // is how completion becomes observable to the next tick).
+import type { Profile } from '@agentic/core'
 import type { DispatchIntent } from './derive.ts'
 
 const COMMIT_LINE = (slug: string, what: string) =>
   `When your work is complete, commit it on the current branch (git add the files you produced or changed) with a message starting "${slug}: ${what}".`
 
-export function promptBody(slug: string, intent: DispatchIntent, taskPath: string | null, runsRoot = 'runs'): string {
+/** DESIGN.md §4.1: in a patch run there is no spec.md/plan.md — the brief and work item are the standard. */
+const PATCH_BASELINE = (runDir: string) =>
+  `This is a patch-profile run: there is no spec.md or plan.md. The intent brief (\`${runDir}/intent-brief.md\`) and the work item are the full scope and the standard to work against.`
+
+export function promptBody(slug: string, intent: DispatchIntent, taskPath: string | null, runsRoot = 'runs', profile: Profile = 'full'): string {
   const runDir = `${runsRoot}/${slug}`
   const parts: string[] = []
   switch (intent.role) {
@@ -27,12 +32,14 @@ export function promptBody(slug: string, intent: DispatchIntent, taskPath: strin
       break
     case 'implementer':
       parts.push(`on task \`${runDir}/${taskPath ?? `tasks/${intent.task}.yaml`}\`.`)
+      if (profile === 'patch') parts.push(PATCH_BASELINE(runDir))
       if (intent.round && intent.round > 1 && intent.bounce?.kind === 'review')
         parts.push(`This is round ${intent.round}: address every finding in \`${runDir}/${intent.bounce.report}\` — fix it, or rebut it finding-by-finding in the task file's notes.`)
       parts.push(COMMIT_LINE(slug, `task ${intent.task ?? ''} round ${intent.round ?? 1}`.trim()))
       break
     case 'reviewer':
       parts.push(`on task \`${runDir}/${taskPath ?? `tasks/${intent.task}.yaml`}\`, reviewing the diff of the last commit(s) for that task.`)
+      if (profile === 'patch') parts.push(PATCH_BASELINE(runDir))
       if (intent.round && intent.round > 1)
         parts.push(`This is round ${intent.round}: verify each prior finding is genuinely resolved and append a clearly-marked round section to the existing report — never overwrite earlier rounds.`)
       parts.push(COMMIT_LINE(slug, `review task ${intent.task ?? ''} round ${intent.round ?? 1}`.trim()))

@@ -20,7 +20,9 @@ are context, never the standard.
 ## Dispatch
 
 Your dispatch prompt names a task file and a diff (branch or commit range — inspect
-it with git via your shell tool; run nothing else). The diff must bound **this
+it with git via your shell tool; run nothing else). In a `patch`-profile run
+(DESIGN.md §4.1) there is no `spec.md` or `plan.md`: your dispatch names the
+intent brief and the work item as the standard to review against instead. The diff must bound **this
 task's changes only**. Sanity-check that before reviewing: if it plainly carries
 other tasks' completed work (a whole multi-task branch diffed against its base, or
 commits owned by other task files' surfaces), the dispatch is malformed — bounce it,

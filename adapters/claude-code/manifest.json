@@ -10,9 +10,7 @@
     "verifier",
     "ops",
     "integrator",
-    "historian",
-    "ux-researcher",
-    "designer"
+    "historian"
   ],
   "tools_style": "comma",
   "tool_map": {
@@ -32,10 +30,6 @@
     ],
     "shell": [
       "Bash"
-    ],
-    "web-research": [
-      "WebSearch",
-      "WebFetch"
     ]
   },
   "_comment_models": "Runner-specific spellings of the registry bindings (registry/models.yaml is the authority for WHICH model each role gets; this maps profile -> this runner's model name). Single-vendor harness: P5 vendor pins fall back to lineage split (fable reviews sonnet).",

@@ -658,7 +658,13 @@ gates:
       by: Nathan Carter,
       at: 2026-07-22T00:34:01.551Z,
       notes: "Verification report claims an escalation, but I didn't see it - shipping
-        as-is, but monitoring",
+        as-is, but monitoring. Amended 2026-07-22T00:42:30Z: the report's escalation
+        was prose-only (E9/E12 + Gaps) and never reached state.yaml — the two failed
+        criteria are explicitly waived at this gate: AC3.2 (G1 distinguishability
+        judgment was made but never recorded; retroactive-note obligation discharged
+        by this waiver) and AC4.3 (dead CSS class names confined to candidate-b's
+        non-shipped mockups; no code fix warranted). Neither requires rework before
+        G3",
       burden: light-correction
     }
   G3: { approved: false, by: null, at: null, notes: null }

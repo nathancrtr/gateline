@@ -228,6 +228,67 @@ describe('agentic CLI', () => {
     expect(stderr).toMatch(/not found/)
   })
 
+  it('arm starts a hand-authored staged run exactly like a CLI-staged one (AC8.1: idempotent ensure regardless of creation path)', async () => {
+    // A run staged by hand (no `agentic new` involved) — the genesis commit
+    // is written directly, not through stageRun — to prove `arm` (and the
+    // ensureDraftPr it calls) treats every staged run identically regardless
+    // of how its branch/state.yaml came to exist.
+    const scratch = makeScratchRepo()
+    try {
+      execFileSync('git', ['-C', scratch, 'config', 'user.name', 'Hand Operator'])
+      execFileSync('git', ['-C', scratch, 'config', 'user.email', 'hand@example.test'])
+      execFileSync('git', ['-C', scratch, 'checkout', '-q', '-b', 'run/hand-authored'])
+      mkdirSync(join(scratch, 'runs', 'hand-authored'), { recursive: true })
+      writeFileSync(
+        join(scratch, 'runs', 'hand-authored', 'state.yaml'),
+        [
+          'run: hand-authored',
+          'branch: run/hand-authored',
+          'phase: paused',
+          'paused_reason: staged',
+          'profile: standard',
+          'intake:',
+          '  source: null',
+          '  ref: null',
+          '  url: null',
+          '  client_key: null',
+          '  staged_by: "Hand Operator"',
+          'budget:',
+          '  cost_limit_usd: 50',
+          '  cost_spent_usd: 0',
+          '  ledger: []',
+          'gates:',
+          '  G0: { approved: false, by: null, at: null, notes: null }',
+          '  G1: { approved: false, by: null, at: null, notes: null }',
+          '  G2: { approved: false, by: null, at: null, notes: null }',
+          'tasks: []',
+          'escalations: []',
+          '',
+        ].join('\n'),
+      )
+      writeFileSync(
+        join(scratch, 'runs', 'hand-authored', 'intent-brief.md'),
+        '# Intent Brief: Hand Authored\n\n## Problem\nx\n\n## Motivation\nx\n\n## Constraints\nx\n\n## Out of scope\nx\n',
+      )
+      execFileSync('git', ['-C', scratch, 'add', '-A'])
+      execFileSync('git', ['-C', scratch, 'commit', '-q', '-m', 'state(hand-authored): staged by Hand Operator (hand-authored)'])
+      execFileSync('git', ['-C', scratch, 'checkout', '-q', 'main'])
+
+      const { code, stdout } = await runIn(scratch, ['arm', 'hand-authored'])
+      expect(code).toBe(0)
+      expect(stdout).toMatch(/armed/)
+      expect(stdout).toContain('no remote.origin.url configured — nothing to open a PR against')
+
+      const source = new LocalGitSource('scratch', scratch)
+      const ref = (await source.listRuns()).find((r) => r.slug === 'hand-authored')!
+      const { state } = await source.readState(ref)
+      expect(state!.phase).toBe('spec')
+      expect(state!.paused_reason).toBeNull()
+    } finally {
+      await rm(scratch, { recursive: true, force: true })
+    }
+  })
+
   it('new refuses when git identity is unresolvable, before any write (AC7.1)', async () => {
     const scratch = makeScratchRepo()
     try {

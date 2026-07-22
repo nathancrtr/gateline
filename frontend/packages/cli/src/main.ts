@@ -479,6 +479,18 @@ export async function runUpgrade(repoDir: string, log: (line: string) => void = 
       console.error(`agentic upgrade: npm install failed in ${workspaceDir} (exit ${npmCode})`)
       return npmCode
     }
+    // The web app is the one part of the tree that does NOT run from source:
+    // the server serves packages/web/dist, a built artifact. An upgrade that
+    // stops at `npm install` leaves the previous build's UI running over
+    // current APIs — invisibly, because everything else picks up the new
+    // code on restart.
+    if (existsSync(join(workspaceDir, 'packages', 'web', 'package.json'))) {
+      const buildCode = await streamCommand('npm', ['run', 'build'], workspaceDir)
+      if (buildCode !== 0) {
+        console.error(`agentic upgrade: npm run build failed in ${workspaceDir} (exit ${buildCode})`)
+        return buildCode
+      }
+    }
   } else {
     log('no package.json found under the repo — skipping npm install')
   }

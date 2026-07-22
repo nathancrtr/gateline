@@ -570,11 +570,13 @@ on #141); `frontend/packages/orchestrator/README.md`'s trigger-packaging
 section carries one for `tick`, which doesn't need updating for this.
 
 **`agentic upgrade`.** Convenience over the same mechanism, not a second one:
-refuses on a dirty tree, `git pull --ff-only`, then `npm install` in the
-workspace (`frontend/` under the resolved code repo, falling back to the
-repo root, or skipped if neither carries a `package.json`) when `HEAD`
-moved, printing `upgraded <old7>..<new7>` (or `already up to date at
-<head7>`). It does not itself restart a running engine — the monitor's own
+refuses on a dirty tree, `git pull --ff-only`, then `npm install` — and,
+when the workspace carries the web app, `npm run build`: the server serves
+`packages/web/dist`, the one part of the tree that does not run from
+source — in the workspace (`frontend/` under the resolved code repo,
+falling back to the repo root, or skipped if neither carries a
+`package.json`) when `HEAD` moved, printing `upgraded <old7>..<new7>` (or
+`already up to date at <head7>`). It does not itself restart a running engine — the monitor's own
 tick-boundary check is what notices the moved `HEAD` and drives the exit, on
 whatever cadence the heartbeat runs.
 

@@ -3,10 +3,11 @@
 // not committed state.
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { engineHealthStale, readEngineHealth, writeEngineHealth, type EngineHealth } from '../src/sources/engine-health.ts'
+import { engineHealthPath, engineHealthStale, readEngineHealth, writeEngineHealth, type EngineHealth } from '../src/sources/engine-health.ts'
 
 const cleanups: string[] = []
 afterEach(() => {
@@ -34,6 +35,30 @@ describe('engine health (#100)', () => {
     const dir = gitRepo()
     expect(await readEngineHealth(dir)).toBeNull() // viewer-only: no expectation, no banner
     const h = health({ pushRejections: { 'run/toy': 2 } })
+    await writeEngineHealth(dir, h)
+    expect(await readEngineHealth(dir)).toEqual(h)
+  })
+
+  it('parses a pre-#141 file that predates the drift fields', async () => {
+    const dir = gitRepo()
+    const path = await engineHealthPath(dir)
+    await mkdir(dirname(path), { recursive: true })
+    // Hand-authored, not run through writeEngineHealth: simulates a file
+    // written by an engine binary from before commit/codeHead/codeState
+    // existed at all.
+    const old = { at: new Date().toISOString(), pid: process.pid, heartbeatMs: 180_000, inFlight: 0, pushRejections: {} }
+    await writeFile(path, JSON.stringify(old), 'utf8')
+
+    const read = await readEngineHealth(dir)
+    expect(read).toEqual(old)
+    expect(read?.commit).toBeUndefined()
+    expect(read?.codeHead).toBeUndefined()
+    expect(read?.codeState).toBeUndefined()
+  })
+
+  it('round-trips the #141 drift fields', async () => {
+    const dir = gitRepo()
+    const h = health({ commit: 'a'.repeat(40), codeHead: 'b'.repeat(40), codeState: 'superseded-pending' })
     await writeEngineHealth(dir, h)
     expect(await readEngineHealth(dir)).toEqual(h)
   })

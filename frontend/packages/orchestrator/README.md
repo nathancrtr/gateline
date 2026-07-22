@@ -52,6 +52,18 @@ node packages/orchestrator/src/main.ts --repo ~/repos/myproject \
 node packages/orchestrator/src/main.ts --repo ~/repos/myproject sweep historian
 ```
 
+**Merge-updates.** `watch` (and `agentic up`, its co-located twin) checks the
+code checkout it runs from at each heartbeat/startup tick boundary; once a
+`git pull` there fast-forwards past the commit the process started on, it
+drains in-flight dispatches and exits `75` (`SUPERSEDE_EXIT_CODE`,
+docs/ORCHESTRATOR.md §13 — self-supersede, #141) instead of continuing to
+reconcile on stale code. Pair `watch` with a supervisor (systemd
+`RestartForceExitStatus=75`, launchd `KeepAlive`, or the Fly recipe's own
+restart loop) for hands-off merge-updates; unsupervised, the process just
+stops and waits for a manual restart. `agentic upgrade` is the one-command
+update: refuses on a dirty tree, `git pull --ff-only`, then `npm install` if
+`HEAD` moved.
+
 Scheduled roles (design §4.6): when the target repo commits an
 `orchestrator.yaml` with a `schedules:` section, every tick also reconciles
 those schedules — a due Historian sweep is seeded as `runs/historian-<date>/`

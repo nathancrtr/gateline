@@ -184,7 +184,11 @@ tasks:
     { id: 04-pr-ensure, status: in-review, review_rounds: 0 },
     { id: 05-cli-new-arm, status: pending, review_rounds: 0 },
     { id: 06-derive-tests-engine-ensure, status: pending, review_rounds: 0 },
-    { id: 07-contract-and-release-notes, status: in-review, review_rounds: 1 }
+    {
+        id: 07-contract-and-release-notes,
+        status: review-approved,
+        review_rounds: 1
+      }
   ]
 
 escalations:

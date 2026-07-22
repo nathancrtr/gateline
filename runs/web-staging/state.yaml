@@ -12,7 +12,7 @@ intake:
   staged_by: "Nathan Carter"
 budget:
   cost_limit_usd: 120
-  cost_spent_usd: 49.18
+  cost_spent_usd: 57.18
   ledger:
     [
       {
@@ -127,7 +127,8 @@ budget:
           model: anthropic/claude-sonnet-5,
           tokens_in: null,
           tokens_out: null,
-          cost_usd: null
+          cost_usd: 8,
+          failed: true
         }
     ]
 gates:
@@ -154,7 +155,7 @@ tasks:
     { id: 01-core-shared-checks, status: pending, review_rounds: 0 },
     { id: 02-core-staged-readiness, status: pending, review_rounds: 0 },
     { id: 03-server-staging-routes, status: pending, review_rounds: 0 },
-    { id: 04-web-staging-form, status: dispatched, review_rounds: 0 },
+    { id: 04-web-staging-form, status: pending, review_rounds: 0 },
     { id: 05-web-staged-state-arm, status: pending, review_rounds: 0 },
     { id: 06-e2e-staging-arm, status: pending, review_rounds: 0 }
   ]

@@ -57,3 +57,39 @@ Checked and found clean, against spec.md and plan.md directly:
 ## Boundary check
 
 Commit af8e73e touches exactly the five declared surface files plus the task file's own notes — inside `file_contact_surface`. The diff bounds this task only (no other tasks' work carried). Clean.
+
+---
+
+## Round 2 — 2026-07-22
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** commit 20b403b (branch run/creation-seam; round-2 delta over af8e73e)
+
+### Round-1 finding resolution
+
+- **F1 (blocking) — resolved.** `scaffold.ts:93` now emits `title: ${yamlString(title)}` (`yamlString` = `JSON.stringify`, `scaffold.ts:46`). Mutant killed: the new test (`scaffold.test.ts:64`) parses the stub for colon/`#`/`[`/`- `/`&`-led titles and asserts exact round-trip — the round-1 repro (`'Fix: the parser bug'`) now parses. Independently probed beyond the committed cases: quotes, backslashes, tabs, single quotes, trailing spaces, `?`/`{`/`|`/`>`/`%`/`@`/`` ` ``/`!`/`*`/`&`-led strings all parse and round-trip byte-for-byte (trailing-space *titles* round-trip trimmed — that is `title.trim()` by design, not an escaping loss).
+- **F2 (major) — resolved.** `yamlScalar` routes non-null values through `yamlString` (`scaffold.ts:48`) and `staged_by` is quoted (`scaffold.ts:75`). Mutant killed: `scaffold.test.ts:104` proves the round-1 injection payload (`'Eve\nphase: done'`) no longer lands a `phase` key (state still parses with `phase: paused`, literal string round-trips via `readIntake`); `scaffold.test.ts:112` proves `intake.ref: '#123'` round-trips instead of comment-truncating to null. My adversarial probe (above) covered `intake.ref`/`staged_by` with the same nasty-string set — all clean, no injection, trailing spaces preserved.
+- **F3 (major) — resolved.** The mutation test is now an `it.each` over full/standard/patch (`scaffold.test.ts:191`) that applies `decision.mutate` to a `parseDocument` of the actual scaffolded state.yaml and re-parses via `parseRunState`, asserting `phase` = derived target and `paused_reason` = null with zero errors. The round-1 surviving mutants (no-op mutate; `setIn(['phase'], 'done')`; un-cleared `paused_reason`) each now fail this test.
+- **F4 (minor) — resolved.** `actions.ts:149-150` reordered: the refusal compares the trimmed `reason` local. Test `scaffold.test.ts:239` proves `' staged '` at `phase: implement` is refused with the birth-state message. The `|| 'escalation'` default is unaffected (pre-existing `decision legality` suite still green).
+- **F5 (minor) — resolved.** `scaffold.ts:56-57` throws `ScaffoldError` for non-null, non-finite `costLimitUsd`; test covers `NaN` and `Infinity` (`scaffold.test.ts:131`). `undefined` (outside the declared type) would also be caught by the same guard.
+- **F6 (minor) — resolved.** Task-file notes corrected via an appended round-2 paragraph; the round-1 notes remain verbatim (the 20b403b task-file hunk has zero deletions — append-only, as required).
+
+### New findings (round-2 delta)
+
+### F7 — minor (PLAUSIBLE) — commit message still interpolates `stagedBy`/`clientKey` raw, so a newline-bearing `user.name` yields a multi-line audit subject
+- **Where:** `frontend/packages/core/src/record/scaffold.ts:111`
+- **Failure scenario:** none functional constructed — the F2 payload in `stagedBy` produces a two-line commit message, but git accepts it, replay detection reads `intake.client_key` from parsed state (plan.md:285-288), not messages, and no code parses the `staged by` grammar; the injected line lands in the message body where a human reads a confusing audit trail. PLAUSIBLE only; the plan grammar does not constrain `<name>`. Non-blocking; worth a trim/one-line guard when task 05 wires `user.name` in.
+- **Requirement:** plan §Commit grammar (lines 113-114), audit-trail legibility
+
+### Coverage (round 2)
+
+- **Delta scope:** 20b403b touches only `actions.ts` (one line moved), `scaffold.ts` (quoter + guard), `scaffold.test.ts` (+7 tests), and the task file's notes — no schema/index/derivation changes, so all round-1 clean findings (ADR-1/ADR-2 legality, gates-exactness, R9, purity/layering, commit grammar, `readIntake`) carry over unchanged ✓
+- **Quoter soundness:** `JSON.stringify` output verified as valid YAML-1.2 double-quoted scalars under the repo's `yaml` parser across 17 adversarial strings × 3 interpolation sites (stub title, `staged_by`, `intake.ref`) — parse + byte-exact round-trip + no key injection ✓
+- **R9 grep re-run:** `scaffold.ts` + `scaffold.test.ts` → zero matches for issue/label/assignee/milestone (new comments included) ✓
+- **Verification re-run (worktree at 20b403b code state):** `npx vitest run packages/core/test/scaffold.test.ts` 30/30 ✓; `npx vitest run packages/core` 130/130 ✓; `npm run typecheck` clean ✓; full `npm test` 279 passed / 1 skipped / 0 failed ✓ — all four match the implementer's round-2 claims
+- **Not assessed (unchanged from round 1):** `stageRun`/CAS (task 03), CLI carriers (05), AC5.3 (06)
+
+### Boundary check (round 2)
+
+Commit 20b403b touches three declared surface files plus the task file's own notes — inside `file_contact_surface`, this task's changes only. Clean.

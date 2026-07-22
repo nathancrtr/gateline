@@ -149,6 +149,17 @@ budget:
           tokens_in: 14,
           tokens_out: 4683,
           cost_usd: 2.182441
+        },
+      {
+          at: 2026-07-22T15:06:17.244Z,
+          role: reviewer,
+          task: 04-pr-ensure,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 

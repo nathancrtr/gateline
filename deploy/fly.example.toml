@@ -21,6 +21,8 @@ primary_region = "iad"
   # deployment. See docs/DEPLOY.md before first enabling.
   ORCH_ENABLED = "1"
   ORCH_SPEND_LIMIT_USD = "25"
+  # Flat-rate-billed harness? Set ORCH_NO_BUDGET_ENFORCEMENT = "1" to meter
+  # spend without ever pausing on caps (#109), and drop ORCH_SPEND_LIMIT_USD.
 
 # Secrets (fly secrets set ...): REPO_URL, GIT_TOKEN, GIT_USER_NAME,
 # GIT_USER_EMAIL, TUNNEL_TOKEN, GITHUB_WEBHOOK_SECRET, GITHUB_TOKEN,

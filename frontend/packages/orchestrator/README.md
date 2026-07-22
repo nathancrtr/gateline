@@ -18,7 +18,9 @@ Rules it is built to be checked against:
   grammar (`G2 approved by <name>`) is reserved for humans.
 - **Every model invocation flows through the dispatch seam** and is metered
   into `budget.ledger[]`; enforcement is a pre-flight cap check that pauses
-  (`budget-exhausted`), never degrades.
+  (`budget-exhausted`), never degrades. Enforcement — not metering — can be
+  switched off with `--no-budget-enforcement` (also on `agentic up`) for
+  flat-rate-billed harnesses (#109); the ledger records either way.
 - **R2 scoping:** the frontend's "exactly one write path" governs the human
   surfaces (web, CLI, server — still dispatch-free). The orchestrator is the
   sanctioned machine co-writer, a sibling consumer of the same `@agentic/core`

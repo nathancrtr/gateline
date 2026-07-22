@@ -35,6 +35,7 @@
 //       (mid-run downgrade), a phase outside the profile's sequence, or a
 //       patch run with no work item                  → escalate + pause
 //   DB  any dispatch would exceed the budget cap     → escalate + pause budget-exhausted
+//       (skipped when budget enforcement is off, #109 — metering still happens)
 //
 // The whole table is parameterized by the run's profile (DESIGN.md §4.1):
 // reduced profiles subset the gates (PROFILE_GATES), G2 advances to done
@@ -458,9 +459,13 @@ function declineRedispatch(obs: RunObservation, gate: GateId, role: Role, artifa
   )
 }
 
-/** DB — the pre-flight budget check wraps every dispatch decision (§6). */
+/**
+ * DB — the pre-flight budget check wraps every dispatch decision (§6).
+ * Skipped entirely when enforcement is off (#109): the cap stops pausing,
+ * while the ledger and cost_spent_usd keep metering unconditionally.
+ */
 function gatedDispatch(obs: RunObservation, dispatches: DispatchIntent[], rule: string): DerivedAction {
-  const limit = obs.state?.budget?.cost_limit_usd ?? null
+  const limit = obs.enforceBudget ? (obs.state?.budget?.cost_limit_usd ?? null) : null
   if (limit !== null) {
     const est = (role: string) => obs.estimates[role] ?? DEFAULT_ESTIMATE_USD
     const openProjected = obs.openDispatches.reduce((sum, d) => sum + est(d.role), 0)

@@ -4,11 +4,11 @@
 
 run: creation-seam
 branch: run/creation-seam
-phase: implement
+phase: paused
   # staged by hand ahead of the seam this run builds;
   # resume (= arm) derives spec from the gate ledger
 profile: standard # patch | standard | full (DESIGN.md §4.1)
-paused_reason: null
+paused_reason: budget-exhausted
 
 budget:
   cost_limit_usd: 60 # exhaustion pauses the run; it never silently degrades
@@ -143,4 +143,13 @@ tasks:
     { id: 07-contract-and-release-notes, status: pending, review_rounds: 0 }
   ]
 
-escalations: []
+escalations:
+  [
+    {
+        at: 2026-07-22T14:03:51.201Z,
+        from_role: orchestrator,
+        reason: projected spend $68.02 (ledger $44.02 + estimates) exceeds
+          cost_limit_usd $60 — pausing rather than degrading,
+        resolved: false
+      }
+  ]

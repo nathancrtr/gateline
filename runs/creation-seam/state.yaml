@@ -182,6 +182,17 @@ budget:
           tokens_in: 6,
           tokens_out: 1680,
           cost_usd: 1.5742723999999992
+        },
+      {
+          at: 2026-07-22T15:28:21.799Z,
+          role: reviewer,
+          task: 02-record-scaffold-and-arm,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 

@@ -336,6 +336,17 @@ budget:
           tokens_in: 102308,
           tokens_out: 1818,
           cost_usd: 0.261003564
+        },
+      {
+          at: 2026-07-23T22:29:57.313Z,
+          role: reviewer,
+          task: 01-seam-extend,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:

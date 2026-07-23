@@ -1,0 +1,70 @@
+id: 04-workstation-agent
+title: Workstation agent — poll, execute, report
+requirements: [R3, R4, R5, R8]
+
+scope: |
+  Create a new frontend package `frontend/packages/runner-agent/` containing a standalone
+  Node.js CLI process. It:
+  1. Accepts CLI flags: `--control-plane <url>`, `--token <string>`, `--work-dir <path>`,
+     `--poll-interval <seconds>` (default 5)
+  2. On startup, validates the control plane is reachable and the token is accepted
+     (GET /api/runner/intents returns 200, not 401/404)
+  3. Polls `GET /api/runner/intents` on the configured interval
+  4. When an intent is available, claims it via `POST /api/runner/claim`
+  5. Creates a disposable workspace:
+     a. Determines the repository remote URL from the control plane (server provides it
+        in the intents response, or the agent is configured with it)
+     b. `git clone --single-branch --branch <branch> <remote-url> <work-dir>/<slug>-<timestamp>`
+     c. Reads the adapter manifest from the clone to get the `headless.command` argv
+     d. Spawns the command with `{prompt}` and `{role}` substitution, cwd at the clone root
+     e. Captures stdout and exit code
+     f. Computes `DispatchOutcome` by parsing stdout per the manifest's `usage_report` format
+        (reuses the parsing logic from `seam.ts` — import the utility functions)
+     g. Removes the workspace directory (`rm -rf`)
+  6. Reports the outcome via `POST /api/runner/report`
+  7. Returns to polling
+
+  The agent is adapter-generic (R8): it reads the manifest's `headless` section to determine
+  what command to run and how to parse its output. No role names or vendor names appear in
+  the agent's dispatch-execution code outside of manifest data.
+
+  The agent never writes to `state.yaml`, `gates.*`, or any git ref (R5). It never opens a
+  listening port (R3).
+
+  Write tests for:
+  - Disposable workspace creation and cleanup (AC4.1, AC4.2)
+  - Adapter-generic command construction (AC8.1, AC8.2)
+  - Poll/claim/execute/report lifecycle with a mock server
+  - Outbound-connections-only (AC3.1 — inspect via unit test mocking the network layer)
+
+file_contact_surface:
+  - frontend/packages/runner-agent/src/main.ts
+  - frontend/packages/runner-agent/src/agent.ts
+  - frontend/packages/runner-agent/src/workspace.ts
+  - frontend/packages/runner-agent/package.json
+  - frontend/packages/runner-agent/test/agent.test.ts
+  - frontend/packages/runner-agent/test/workspace.test.ts
+
+acceptance_tests:
+  - AC3.1
+  - AC3.2
+  - AC4.1
+  - AC4.2
+  - AC5.1
+  - AC8.1
+  - AC8.2
+  - "npm test in frontend/ includes passing tests for the runner-agent package"
+
+depends_on: [03-runner-api]
+
+status: pending
+
+notes: |
+  The agent imports usage-parsing utilities from the orchestrator package (parseJsonOutput,
+  parseNdjson, sumField, matchesLineFilter, dig — seam.ts exports). These are pure functions
+  with no orchestrator dependencies; the runner-agent package declares @agentic/orchestrator
+  as a dependency.
+
+  The repository remote URL: the intents endpoint response includes the origin URL so the
+  agent doesn't need it configured separately. If the server cannot determine the remote URL,
+  the agent accepts `--repo-url` as a fallback CLI flag.

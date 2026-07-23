@@ -1,0 +1,26 @@
+id: 01-seam-extend
+title: Extend DispatchRequest with run identity fields
+requirements: [R2]
+
+scope: |
+  Add optional `slug` and `branch` fields to the `DispatchRequest` interface in
+  `seam.ts`. Update the engine's `launch()` method to pass `ref.slug` and
+  `ref.branch` through these new fields. HeadlessDispatcher ignores them — no
+  changes to its code. The engine already has these values in scope; this task
+  only threads them through.
+
+file_contact_surface:
+  - frontend/packages/orchestrator/src/seam.ts
+  - frontend/packages/orchestrator/src/engine.ts
+  - frontend/packages/orchestrator/test/seam.test.ts
+
+acceptance_tests:
+  - AC2.1
+  - "Existing seam.test.ts tests pass unmodified (HeadlessDispatcher ignores new optional fields)"
+  - "A new test verifies launch() passes slug and branch in the DispatchRequest"
+
+depends_on: []
+
+status: pending
+
+notes: |

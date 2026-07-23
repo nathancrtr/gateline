@@ -1,0 +1,33 @@
+id: 06-live-smoke
+title: Live smoke test — one real round-trip through the runner-agent path
+requirements: [R10]
+
+scope: |
+  Create an opt-in live smoke test `frontend/packages/orchestrator/test/live-smoke-runner.test.ts`,
+  analogous to the existing `live-smoke.test.ts` for `HeadlessDispatcher`. It:
+  1. Is skipped by default; enabled by `ORCH_LIVE_SMOKE_RUNNER=1`
+  2. Arms a real dispatch intent through a minimal engine setup with `RemoteDispatcher`
+  3. Runs the workstation agent as a child process (pointing at the same local server)
+  4. Waits for the workstation to claim, execute (a cheap prompt: "Reply with exactly the
+     word: pong"), and report
+  5. Asserts `ok: true`, `costUsd > 0`, `tokensIn > 0`, `tokensOut > 0`
+
+  The test uses the same adapter the existing live smoke uses (claude-code), and the same
+  neutral prompt. It spawns the server and agent as child processes, exercises the full
+  callback chain, and verifies the ledger entry is closed with real usage.
+
+file_contact_surface:
+  - frontend/packages/orchestrator/test/live-smoke-runner.test.ts
+
+acceptance_tests:
+  - AC10.1
+  - "When run manually with ORCH_LIVE_SMOKE_RUNNER=1, reports ok: true with costUsd, tokensIn, tokensOut all populated and greater than zero"
+
+depends_on: [04-workstation-agent, 05-wiring]
+
+status: pending
+
+notes: |
+  This test costs real money — it dispatches a real harness CLI invocation. It is
+  skipped in CI and only run manually. The test timeout should be generous (300s)
+  to account for harness startup and model latency.

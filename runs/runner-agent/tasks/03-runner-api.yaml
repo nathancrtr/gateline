@@ -1,0 +1,50 @@
+id: 03-runner-api
+title: Runner API server endpoints with token auth
+requirements: [R5, R6]
+
+scope: |
+  Add runner API endpoints to the server package:
+  1. New file `frontend/packages/server/src/runner-api.ts` exporting a `buildRunnerApi` function
+     (same shape as `buildWebhook`: config-gated on `RUNNER_TOKEN`; returns undefined when unset)
+  2. Three routes under `/api/runner/`:
+     - `GET /api/runner/intents` — returns open dispatch intents from the callback's `pendingIntents()`
+     - `POST /api/runner/claim` — atomically claims an intent (in-memory `Set<string>`)
+     - `POST /api/runner/report` — resolves the dispatcher's callback with the outcome
+  3. Token auth: every route verifies `Authorization: Bearer <token>` against `RUNNER_TOKEN`;
+     invalid/missing token returns 401
+  4. Register routes in `app.ts` (same pattern as webhook: conditional on `buildRunnerApi` returning
+     a value)
+  5. Wire in `main.ts`: read `RUNNER_TOKEN` from env, pass the `RunnerCallback` reference
+     (obtained from the orchestrator assembly in task 05)
+
+  Write a test file `frontend/packages/server/test/runner-api.test.ts` analogous to
+  `webhook.test.ts` covering:
+  - Route does not exist (404) when `RUNNER_TOKEN` is unset
+  - Invalid/missing token rejected (401)
+  - Valid token accepted
+  - Claim idempotency (second claim of same key returns already-claimed)
+  - Report resolves the callback
+
+  The test stubs `RunnerCallback` — no real dispatcher or engine required.
+
+file_contact_surface:
+  - frontend/packages/server/src/runner-api.ts
+  - frontend/packages/server/src/app.ts
+  - frontend/packages/server/src/main.ts
+  - frontend/packages/server/test/runner-api.test.ts
+
+acceptance_tests:
+  - AC6.1
+  - AC6.2
+  - "Automated test analogous to webhook.test.ts covers both valid and invalid token cases"
+  - "npm test in frontend/ includes passing tests for runner-api"
+
+depends_on: [02-remote-dispatcher]
+
+status: pending
+
+notes: |
+  The `RunnerCallback` reference is injected through `AppDeps` (a new optional field
+  `runnerCallback?: RunnerCallback`). The dispatcher-side wiring of that callback
+  reference is task 05's responsibility. Task 03 only needs the interface shape from
+  task 02 — it stubs the callback in tests.

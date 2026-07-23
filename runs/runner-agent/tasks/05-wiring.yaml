@@ -1,0 +1,58 @@
+id: 05-wiring
+title: Wire RemoteDispatcher into engine and server; coexistence with HeadlessDispatcher
+requirements: [R1, R7, R9]
+
+scope: |
+  Wire the `RemoteDispatcher` into the orchestrator assembly and connect it to the server:
+  1. In `start.ts`'s `assembleOrchestrator()`:
+     - Accept new options: `runner?: { enabled: boolean }`
+     - When `runner.enabled` is true, create a `RemoteDispatcher` alongside the
+       `HeadlessDispatcher`(s)
+     - Wrap in a `RoutingDispatcher` if needed, or expose it directly
+     - Expose the `RunnerCallback` from `RemoteDispatcher` on the returned handle
+       (new optional field `runnerCallback?: RunnerCallback`)
+  2. In `main.ts`'s `startServer()`:
+     - Accept new option `runnerCallback?: RunnerCallback`
+     - Read `RUNNER_TOKEN` from the environment
+     - Pass both to `buildRunnerApi()` (task 03) and inject into `createApp()`
+  3. Configuration: the dispatcher selection (Headless vs. Remote) is a configuration
+     choice — when `runner.enabled` is true, the engine dispatches via `RemoteDispatcher`;
+     when false or not set, it dispatches via `HeadlessDispatcher` exactly as before.
+     The engine's dispatch call site (`launch()`) is unchanged — it calls
+     `this.cfg.dispatcher.dispatch(req)` regardless.
+  4. Verify coexistence (AC9.1, AC9.2):
+     - The existing orchestrator test suite passes unmodified when runner is disabled
+     - A new integration test in `wiring.test.ts` verifies the end-to-end callback chain:
+       RemoteDispatcher.dispatch() → server receives report → Promise resolves →
+       closeDispatch completes
+     - The test uses a mock HTTP server (no real workstation) — injects the report
+       directly through the server's runner API handler
+  5. For R7 (lease semantics): the engine's existing `sweepStale` already checks
+     `this.jobs.has(key)` — the `RemoteDispatcher.dispatch()` Promise is stored there just
+     like `HeadlessDispatcher`'s. No new lease mechanism is needed. Verify:
+     - An open ledger entry with an active remote dispatch (Promise pending) is NOT aged out
+     - A stale entry with no live remote dispatch IS aged out by the heartbeat
+     - A killed workstation (dispatcher Promise never resolves) converges: the entry is
+       aged out, re-dispatched, and the next tick handles it correctly
+
+file_contact_surface:
+  - frontend/packages/orchestrator/src/start.ts
+  - frontend/packages/orchestrator/src/runner-dispatcher.ts
+  - frontend/packages/server/src/main.ts
+  - frontend/packages/orchestrator/test/wiring.test.ts
+
+acceptance_tests:
+  - AC7.1
+  - AC7.2
+  - AC9.1
+  - AC9.2
+  - "npm test in frontend/ passes for both existing engine tests and new wiring.test.ts"
+
+depends_on: [02-remote-dispatcher, 03-runner-api]
+
+status: pending
+
+notes: |
+  The coexistence test (AC9.1) is verified by running the existing test suite — the
+  default configuration (`runner` not enabled) produces a HeadlessDispatcher as before.
+  No existing test needs modification.

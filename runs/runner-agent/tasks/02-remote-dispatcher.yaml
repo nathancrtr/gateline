@@ -1,0 +1,33 @@
+id: 02-remote-dispatcher
+title: RemoteDispatcher implementation with callback map
+requirements: [R1, R5, R7]
+
+scope: |
+  Create `RemoteDispatcher` in a new file `frontend/packages/orchestrator/src/runner-dispatcher.ts`.
+  It implements `Dispatcher`. Its `dispatch()` method:
+  1. Validates that `req.slug` and `req.branch` are set (throws if not)
+  2. Creates a Promise and stores `{resolve, reject}` in an internal `Map<string, {resolve, reject}>` keyed by `slug|role|task|round`
+  3. Returns the Promise — it resolves when the server calls `resolveOutcome(key, outcome)` or rejects on timeout
+
+  Also exports a `RunnerCallback` interface (see plan Interface contracts) and a `pendingIntents()`
+  method that, given the engine's set of open ledger entries, returns `PendingIntent[]` for the
+  workstation to poll. The dispatcher does NOT read the ledger itself — the server provides the list.
+
+  Include unit tests (AC1.2) with a stubbed remote agent (no real network): test success,
+  failure, and timeout paths. The existing `seam.test.ts` must continue to pass unmodified.
+
+file_contact_surface:
+  - frontend/packages/orchestrator/src/runner-dispatcher.ts
+  - frontend/packages/orchestrator/test/runner-dispatcher.test.ts
+
+acceptance_tests:
+  - AC1.1
+  - AC1.2
+  - "npm test in frontend/ includes passing unit tests for the new dispatcher's dispatch() success, failure, and timeout paths"
+  - "Existing seam.test.ts passes unmodified (HeadlessDispatcher unchanged)"
+
+depends_on: [01-seam-extend]
+
+status: pending
+
+notes: |

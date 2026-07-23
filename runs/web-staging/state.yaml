@@ -272,6 +272,17 @@ budget:
           tokens_in: 10,
           tokens_out: 2299,
           cost_usd: 6.2514370999999995
+        },
+      {
+          at: 2026-07-23T01:15:26.906Z,
+          role: reviewer,
+          task: 06-e2e-staging-arm,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:

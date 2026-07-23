@@ -1,7 +1,7 @@
 run: local-only-mode
 branch: run/local-only-mode
-phase: implement # staged — not yet armed; `agentic arm local-only-mode` starts the run
-paused_reason: null
+phase: paused # staged — not yet armed; `agentic arm local-only-mode` starts the run
+paused_reason: escalation
 profile: standard # patch | standard | full
 intake:
   # source-agnostic staging provenance; free-form path: nulls + client_key
@@ -12,7 +12,7 @@ intake:
   staged_by: "Nathan Carter"
 budget:
   cost_limit_usd: 50
-  cost_spent_usd: 22.98
+  cost_spent_usd: 23.38
   ledger:
     [
       {
@@ -148,9 +148,10 @@ budget:
           round: 1,
           adapter: opencode,
           model: anthropic/claude-fable-5,
-          tokens_in: null,
-          tokens_out: null,
-          cost_usd: null
+          tokens_in: 264811,
+          tokens_out: 1857,
+          cost_usd: 0.401549652,
+          failed: true
         }
     ]
 gates:
@@ -228,5 +229,14 @@ escalations:
         resolved_by: Nathan Carter,
         resolved_at: 2026-07-23T18:02:49.358Z,
         resolution: manually killed - resuming
+      },
+    {
+        at: 2026-07-23T18:34:31.848Z,
+        from_role: orchestrator,
+        reason: "reviewer (01-core-mode-resolution) failed twice: Command failed
+          (SIGTERM): opencode run on task
+          `runs/local-only-mode/tasks/01-core-mode-resolution.yaml`, reviewing
+          the…",
+        resolved: false
       }
   ]

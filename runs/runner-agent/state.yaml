@@ -371,7 +371,7 @@ gates:
   G3: { approved: false, by: null, at: null, notes: null }
 tasks:
   [
-    { id: 01-seam-extend, status: in-review, review_rounds: 0 },
+    { id: 01-seam-extend, status: in-review, review_rounds: 1 },
     { id: 02-remote-dispatcher, status: pending, review_rounds: 0 },
     { id: 03-runner-api, status: pending, review_rounds: 0 },
     { id: 04-workstation-agent, status: pending, review_rounds: 0 },

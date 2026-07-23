@@ -152,6 +152,17 @@ budget:
           tokens_out: 1857,
           cost_usd: 0.401549652,
           failed: true
+        },
+      {
+          at: 2026-07-23T18:55:39.844Z,
+          role: reviewer,
+          task: 01-core-mode-resolution,
+          round: 1,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:

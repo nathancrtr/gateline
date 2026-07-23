@@ -239,6 +239,17 @@ budget:
           tokens_in: null,
           tokens_out: null,
           cost_usd: null
+        },
+      {
+          at: 2026-07-23T00:28:47.830Z,
+          role: reviewer,
+          task: 05-web-staged-state-arm,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:

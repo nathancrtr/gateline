@@ -18,6 +18,21 @@ const shManifest = (script: string): HeadlessManifest => ({
   modelVendors: {},
 })
 
+const ndjsonManifest = (script: string, opts: Partial<HeadlessManifest['usage']> = {}): HeadlessManifest => ({
+  adapter: 'toy-ndjson',
+  command: ['sh', '-c', script],
+  dispatchPrompt: '{body}',
+  usage: {
+    format: 'ndjson-sum',
+    lineFilter: { type: 'step_finish' },
+    fields: { cost_usd: 'part.cost', tokens_in: 'part.tokens.input', tokens_out: 'part.tokens.output' },
+    ...opts,
+  },
+  modelMap: {},
+  modelOverrides: {},
+  modelVendors: {},
+})
+
 const req = { cwd: tmpdir(), role: 'implementer', body: 'x', timeoutMs: 300 }
 
 describe('the dispatch seam timeout', () => {
@@ -56,6 +71,67 @@ describe('the dispatch seam timeout', () => {
     expect(outcome.ok).toBe(false)
     expect(outcome.error).not.toMatch(/timed out/)
     expect(outcome.error).toContain('Command failed')
+  })
+})
+
+describe('usage_report format ndjson-sum (opencode: one step_finish event per agent turn)', () => {
+  const twoTurnScript = [
+    'printf',
+    "'%s\\n'",
+    `'{"type":"step_start"}'`,
+    `'{"type":"tool_use"}'`,
+    `'{"type":"step_finish","part":{"cost":0.004602636,"tokens":{"input":6099,"output":61}}}'`,
+    `'{"type":"step_start"}'`,
+    `'{"type":"text"}'`,
+    `'{"type":"step_finish","part":{"cost":0.001549512,"tokens":{"input":192,"output":52}}}'`,
+  ].join(' ')
+
+  it('sums cost and tokens across every step_finish event, not just the last', async () => {
+    const dispatcher = new HeadlessDispatcher(ndjsonManifest(twoTurnScript))
+    const outcome = await dispatcher.dispatch({ ...req, timeoutMs: 30_000 })
+    expect(outcome.ok).toBe(true)
+    // A single-object parse (json-stdout's fallback) would only see the last
+    // line — cost 0.001549512, tokens_in 192 — silently dropping the first
+    // turn. The real total is the sum of both step_finish events.
+    expect(outcome.costUsd).toBeCloseTo(0.006152148, 9)
+    expect(outcome.tokensIn).toBe(6291)
+    expect(outcome.tokensOut).toBe(113)
+  })
+
+  it('ignores lines that do not match line_filter (step_start/tool_use/text have no cost)', async () => {
+    const dispatcher = new HeadlessDispatcher(ndjsonManifest(twoTurnScript))
+    const outcome = await dispatcher.dispatch({ ...req, timeoutMs: 30_000 })
+    // If non-matching lines leaked into the sum, this would throw (they carry no `part`).
+    expect(outcome.costUsd).not.toBeNull()
+  })
+
+  it('skips malformed lines instead of failing the whole parse', async () => {
+    const script = [
+      'printf',
+      "'%s\\n'",
+      `'not json'`,
+      `'{"type":"step_finish","part":{"cost":0.5,"tokens":{"input":10,"output":5}}}'`,
+    ].join(' ')
+    const dispatcher = new HeadlessDispatcher(ndjsonManifest(script))
+    const outcome = await dispatcher.dispatch({ ...req, timeoutMs: 30_000 })
+    expect(outcome.ok).toBe(true)
+    expect(outcome.costUsd).toBe(0.5)
+  })
+
+  it('reports null, not zero, when no line matches the filter', async () => {
+    const dispatcher = new HeadlessDispatcher(ndjsonManifest(`printf '%s\\n' '{"type":"step_start"}'`))
+    const outcome = await dispatcher.dispatch({ ...req, timeoutMs: 30_000 })
+    expect(outcome.ok).toBe(true)
+    expect(outcome.costUsd).toBeNull()
+    expect(outcome.tokensIn).toBeNull()
+    expect(outcome.tokensOut).toBeNull()
+  })
+
+  it('falls back to the harness failure message when no JSON parses at all', async () => {
+    const dispatcher = new HeadlessDispatcher(ndjsonManifest(`printf 'no json here at all'`))
+    const outcome = await dispatcher.dispatch({ ...req, timeoutMs: 30_000 })
+    expect(outcome.ok).toBe(false)
+    expect(outcome.error).toBe('harness produced no parseable JSON output')
   })
 })
 

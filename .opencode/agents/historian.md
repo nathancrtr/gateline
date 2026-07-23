@@ -9,7 +9,7 @@ permission:
   list: allow
   edit: allow
   bash: allow
-model: anthropic/claude-haiku-4-5
+model: openrouter/deepseek/deepseek-v4-flash
 mode: "all"
 ---
 

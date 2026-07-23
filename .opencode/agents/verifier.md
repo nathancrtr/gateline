@@ -9,7 +9,7 @@ permission:
   list: allow
   edit: allow
   bash: allow
-model: google/gemini-3-flash
+model: openrouter/minimax/minimax-m3
 mode: "all"
 ---
 

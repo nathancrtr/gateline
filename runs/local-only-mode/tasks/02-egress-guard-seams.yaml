@@ -50,3 +50,26 @@ depends_on: []
 status: pending
 
 notes: |
+  Implementer r1: built as scoped, no deviations.
+  - ensureDraftPr (pr-ensure.ts) now takes `localOnly?: boolean` in opts and
+    returns `{ status: 'skipped', note: 'local-only mode — draft-PR ensure
+    suppressed' }` as its first statement, before constructing Git or calling
+    exec. Verified this also covers a remoteless dir (localOnly checked before
+    the origin lookup).
+  - planSyncForSource added to sync.ts, reading `(source as { localOnly?:
+    boolean }).localOnly` and returning 'local-only' without invoking
+    providerFactory when true; otherwise delegates to planSync(source,
+    providerFactory()). planSync/applySync signatures untouched.
+  - Tests added: pr-ensure.test.ts gained the leak-shape case (origin +
+    pushed branch + localOnly:true, exec spy sees zero calls) and the
+    remoteless localOnly case. sync.test.ts gained a
+    describe('planSyncForSource') with a stubbed localOnly:true source
+    (built via Object.assign(Object.create(getPrototypeOf(ctx.source)),
+    ctx.source, { localOnly: true }) so prototype methods survive) proving
+    the factory vi.fn is never called, plus a delegate case with localOnly
+    absent.
+  - config.ts, local-source.ts, divergence.test.ts untouched, as scoped.
+  - Test results: `npx vitest run packages/core/test/pr-ensure.test.ts
+    packages/core/test/sync.test.ts` — 12/12 passed. Full `npm test` in
+    frontend/ — 373 passed, 1 skipped (40 files passed, 1 skipped), 0
+    failures.

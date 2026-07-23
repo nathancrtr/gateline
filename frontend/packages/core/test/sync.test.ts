@@ -1,7 +1,7 @@
 // PR-approval sync: plan (dry-run) and apply against the fixture repo, with a
 // fake provider standing in for GitHub.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { applySync, planSync, type PrApproval, type PrProvider } from '../src/index.ts'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { applySync, planSync, planSyncForSource, type PrApproval, type PrProvider } from '../src/index.ts'
 import { dropFixture, makeFixture, type FixtureContext } from './fixture.helper.ts'
 
 let ctx: FixtureContext
@@ -62,5 +62,29 @@ describe('applySync', () => {
 
     // Idempotent: a second sync finds nothing to do.
     expect(await planSync(ctx.source, provider)).toEqual([])
+  })
+})
+
+describe('planSyncForSource', () => {
+  it("returns 'local-only' without ever invoking the provider factory when the source is local-only", async () => {
+    const localOnlySource = Object.assign(Object.create(Object.getPrototypeOf(ctx.source)), ctx.source, {
+      localOnly: true,
+    })
+    const factory = vi.fn(() => providerWith({ 'run/g2-pending': APPROVAL }))
+
+    const result = await planSyncForSource(localOnlySource, factory)
+
+    expect(result).toBe('local-only')
+    expect(factory).not.toHaveBeenCalled()
+  })
+
+  it('delegates to planSync and returns its plan when localOnly is absent', async () => {
+    const provider = providerWith({ 'run/g2-pending': APPROVAL })
+    const factory = vi.fn(() => provider)
+
+    const result = await planSyncForSource(ctx.source, factory)
+
+    expect(factory).toHaveBeenCalledTimes(1)
+    expect(result).toEqual(await planSync(ctx.source, provider))
   })
 })

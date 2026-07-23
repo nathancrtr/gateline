@@ -31,3 +31,65 @@ depends_on: [01-seam-extend]
 status: pending
 
 notes: |
+  Round 1 (implementer): implemented `RemoteDispatcher` in
+  `frontend/packages/orchestrator/src/runner-dispatcher.ts`, plus its unit tests in
+  `frontend/packages/orchestrator/test/runner-dispatcher.test.ts`. Neither `seam.ts`
+  nor `engine.ts` was touched (both out of this task's file-contact surface).
+
+  What it does:
+  - `dispatch(req)` throws synchronously when `req.slug` or `req.branch` is unset,
+    otherwise returns a `Promise<DispatchOutcome>` that only ever settles via
+    `resolveOutcome(key, outcome)` (resolve — used for both the ok:true and ok:false
+    "failure" paths, since a reported failure is still a normal outcome) or via an
+    internal `setTimeout(req.timeoutMs)` that **rejects** (per this task's scope: "…
+    or rejects on timeout"). `dispatch()` never reads `req.cwd` (AC2.1's no-shared-
+    filesystem assumption holds by construction, not just by omission — the test
+    "never reads req.cwd…" asserts it doesn't leak into a PendingIntent either).
+  - `RunnerCallback` (exported) = `{ pendingIntents(openEntries), resolveOutcome(key,
+    outcome) }`. `RemoteDispatcher` implements both `Dispatcher` and `RunnerCallback`
+    on one object, since the pending-promise map is their shared state.
+  - `pendingIntents(openEntries: OpenLedgerEntry[])` is pure/idempotent: it takes the
+    caller-supplied open ledger entries (the dispatcher never reads the ledger
+    itself, as scoped) and returns the `PendingIntent[]` this dispatcher is actually
+    holding a promise for. Repeated polls before `resolveOutcome` return the same
+    intents with the same `key`.
+
+  Deviation (documented, not silent) — the internal map's key:
+  The scope says the pending map is "keyed by slug|role|task|round". `DispatchRequest`
+  (seam.ts), however, only carries `slug` and `branch` — task 01 threaded exactly the
+  two fields R2 named, and extending `DispatchRequest` further would touch seam.ts/
+  engine.ts, outside this task's file-contact surface. So at the moment `dispatch()`
+  is called there is no `task`/`round` to key on (and `branch` is always the *run*
+  branch per engine.ts's `launch()`, even for isolated implementer task dispatches,
+  so it adds no disambiguating power either). Implemented instead: a pending call is
+  provisionally grouped by `slug|role` (a FIFO queue per group), and is only assigned
+  its full `slug|role|task|round` key — the one `resolveOutcome` is called with,
+  mirroring engine.ts's private `jobKey` format — once `pendingIntents` links it to a
+  specific open ledger entry, taking the oldest not-yet-linked call in that group.
+  This is exact for the common case (at most one open dispatch per role per run) and,
+  for parallel same-role dispatches (parallel implementers on distinct tasks), is
+  correct as long as intents are drained in the order they were dispatched (tested:
+  "correlates parallel same-role dispatches … in issue order"). Flagging for the
+  reviewer / a possible future task: extending `DispatchRequest` with optional
+  `task`/`round` (the same shape of change task 01 made for `slug`/`branch`) would
+  let `dispatch()` key directly and retire this FIFO-linking layer; I did not do
+  that here since it's outside this task's declared surface and no acceptance test
+  for this task depends on it.
+
+  `PendingIntent` deliberately omits a base-OID/commit field (the plan's transport
+  section mentions one) — resolving that pin is a git-repo concern this dispatcher
+  has no access to (it never touches `req.cwd` or the filesystem); left to whichever
+  of tasks 03/04/05 assembles the intent for the wire.
+
+  `adapter` is a constructor parameter (default `'runner'`), since `RemoteDispatcher`
+  is not manifest-bound the way `HeadlessDispatcher` is (R8: it executes whatever
+  adapter the workstation's manifest declares) — wiring (task 05) can pass whatever
+  string the ledger should record.
+
+  Verified:
+  - `npx vitest run packages/orchestrator/test/runner-dispatcher.test.ts
+    packages/orchestrator/test/seam.test.ts` — 26/26 pass (14 new + 12 existing,
+    seam.test.ts unmodified).
+  - `npx vitest run packages/orchestrator` (full package) — 148 passed, 1 skipped
+    (the opt-in `live-smoke.test.ts`), 0 failed.
+  - `npm run typecheck` — clean.

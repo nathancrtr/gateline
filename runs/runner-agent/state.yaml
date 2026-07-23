@@ -1,7 +1,7 @@
 run: runner-agent
 branch: run/runner-agent
-phase: paused # staged — not yet armed; `agentic arm runner-agent` starts the run
-paused_reason: gate-declined
+phase: plan # staged — not yet armed; `agentic arm runner-agent` starts the run
+paused_reason: null
 profile: full # patch | standard | full
 intake:
   # source-agnostic staging provenance; free-form path: nulls + client_key
@@ -282,16 +282,7 @@ gates:
       notes: null,
       burden: confirmation
     }
-  G1:
-    {
-      approved: false,
-      by: Nathan Carter,
-      at: 2026-07-23T17:40:49.703Z,
-      notes: 'Am I correct in thinking that ADR-5 ("Disposable workspace via shallow
-        clone + checkout + rm") would end up _deleting_ the very work the runner
-        agent exists to make it easier to commit? If so, you need to re-design
-        this to take this core requirement into account.'
-    }
+  G1: { approved: false, by: null, at: null, notes: null }
   G2: { approved: false, by: null, at: null, notes: null }
   G3: { approved: false, by: null, at: null, notes: null }
 tasks: []

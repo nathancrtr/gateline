@@ -1,4 +1,7 @@
 // One test per row of the plan §2.3 readiness table, against the fixture repo.
+import { execFileSync } from 'node:child_process'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { deriveReadiness, buildPortfolio, type RunRef } from '../src/index.ts'
 import { dropFixture, makeFixture, type FixtureContext } from './fixture.helper.ts'
@@ -6,8 +9,54 @@ import { dropFixture, makeFixture, type FixtureContext } from './fixture.helper.
 let ctx: FixtureContext
 let refs: Map<string, RunRef>
 
+// Staged and other-reason paused runs are added directly to the fixture repo
+// (not the shared @agentic/fixtures generator — plan ADR-8 keeps that
+// count-sensitive for server/e2e assertions); this mirrors divergence.test.ts's
+// idiom of extending `ctx.repo.dir` with git commands from the test itself.
+function addPausedRun(dir: string, slug: string, pausedReason: string | null): void {
+  const git = (args: string[]) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' })
+  git(['checkout', '-q', '-b', `run/${slug}`, 'main'])
+  const runDir = join(dir, 'runs', slug)
+  mkdirSync(runDir, { recursive: true })
+  writeFileSync(
+    join(runDir, 'intent-brief.md'),
+    '# Intent Brief: paused fixture\n\n## Problem\n\n## Motivation\n\n## Constraints\n\n## Out of scope\n',
+    'utf8',
+  )
+  writeFileSync(
+    join(runDir, 'state.yaml'),
+    `run: ${slug}
+branch: run/${slug}
+phase: paused
+profile: patch
+paused_reason: ${pausedReason ?? 'null'}
+
+budget:
+  cost_limit_usd: 25
+  cost_spent_usd: 0
+  ledger: []
+
+gates:
+  G1: {approved: false, by: null, at: null, notes: null}
+  G2: {approved: false, by: null, at: null, notes: null}
+
+tasks:
+  []
+
+escalations:
+  []
+`,
+    'utf8',
+  )
+  git(['add', '-A'])
+  git(['commit', '-q', '-m', `state(${slug}): artifacts`])
+  git(['checkout', '-q', 'main'])
+}
+
 beforeAll(async () => {
   ctx = await makeFixture()
+  addPausedRun(ctx.repo.dir, 'staged-run', 'staged')
+  addPausedRun(ctx.repo.dir, 'paused-other-reason', 'gate-declined')
   refs = new Map((await ctx.source.listRuns()).map((r) => [r.slug, r]))
 })
 afterAll(() => dropFixture(ctx))
@@ -27,7 +76,9 @@ describe('run discovery', () => {
       'patch-g1-pending',
       'patch-g2-pending',
       'paused-budget',
+      'paused-other-reason',
       'round-cap',
+      'staged-run',
     ])
     expect(refs.get('done-merged')!.kind).toBe('default')
     expect(refs.get('g0-pending')!.kind).toBe('branch')
@@ -107,6 +158,33 @@ describe('readiness derivation (§2.3, one row per test)', () => {
     expect(items).toHaveLength(1)
     expect(items[0]).toMatchObject({ kind: 'paused' })
     expect(items[0]!.title).toContain('budget-exhausted')
+  })
+
+  it('staged: paused_reason=staged yields exactly one staged item, never a paused one (AC6.1, ADR-4)', async () => {
+    const items = await gateItem('staged-run')
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({
+      kind: 'staged',
+      gate: null,
+      title: 'Run staged: awaiting arm',
+      detail: 'Arm to start the run — dispatch begins and the budget starts metering',
+      reviewable: true,
+      problems: [],
+      escalationIndex: null,
+    })
+    expect(items[0]!.packet).toEqual(['state.yaml', 'intent-brief.md'])
+    expect(items[0]!.since).toBeGreaterThan(0)
+    expect(items.some((i) => i.kind === 'paused')).toBe(false)
+    // A staged run, like a paused one, surfaces no gate item.
+    expect(items.some((i) => i.kind === 'gate')).toBe(false)
+  })
+
+  it('paused with another reason still yields a paused item, not staged (mid-flight pauses unchanged)', async () => {
+    const items = await gateItem('paused-other-reason')
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ kind: 'paused' })
+    expect(items[0]!.title).toContain('gate-declined')
+    expect(items.some((i) => i.kind === 'staged')).toBe(false)
   })
 
   it('R3: malformed spec yields a NON-reviewable gate item (bounce)', async () => {

@@ -44,3 +44,43 @@ depends_on: []
 status: pending
 
 notes: |
+  Implementer r1: built exactly as specified — InboxKind gains 'staged',
+  deriveReadiness's paused branch checks state.paused_reason === STAGED_REASON
+  (imported from ../record/schema.ts) first and emits the staged item (fields
+  verbatim per plan's Readiness interface contract) with an early return;
+  any other paused_reason (including null) falls through to the unchanged
+  'paused' item. Rules-table comment updated with the Staged row.
+
+  Tests added to readiness.test.ts per the fixture.helper.ts idiom used by
+  divergence.test.ts (not the shared @agentic/fixtures generator — ADR-8 keeps
+  that count-sensitive): a helper `addPausedRun` checks out an extra branch
+  directly in `ctx.repo.dir` via git commands for two new fixture runs,
+  'staged-run' (paused_reason: staged) and 'paused-other-reason'
+  (paused_reason: gate-declined). Three new assertions: staged yields exactly
+  one 'staged' item with the spec'd fields and no 'paused'/'gate' item;
+  paused-other-reason still yields 'paused', never 'staged'. The run-discovery
+  test's expected slug list was updated to include both new branches.
+
+  `cd frontend && npx vitest run packages/core` — 20 files, 170 tests, all
+  pass (readiness.test.ts: 16 tests, ~26s).
+
+  DISCOVERY (affects the third acceptance test, "npm run typecheck passes"):
+  full-workspace typecheck currently FAILS with the union extension alone —
+  packages/web/src/components/chips.tsx:42 (KindChip) indexes an object
+  literal `{ escalation, 'round-cap', paused, malformed }` (no 'staged' key)
+  by `item.kind`, which TS now widens to include 'staged' after the 'gate'
+  early-return narrows away only 'gate'. That literal-object lookup is exactly
+  as unsafe under a union extension as an exhaustive switch would be — the
+  task's own scope note ("KindChip ... use[s] object-lookup ... so typecheck
+  stays green ... until 05") is incorrect for KindChip specifically; DecidePanel
+  (decide.tsx) and itemHref (inbox.tsx) are genuinely fine, both if-chains with
+  no compile-time exhaustiveness dependency, confirmed by isolating the tsc
+  error to the single chips.tsx line. This matches plan.md's own ADR-4
+  consequence verbatim ("typecheck fails until [task 05] does [handle the new
+  kind] — which is the point"), which contradicts this task's scope-note
+  claim and its own acceptance test as written. chips.tsx is outside this
+  task's file_contact_surface (task 05 owns it), so left untouched per the
+  boundary rule; not fixed here. Flagging for the orchestrating session:
+  full-workspace `npm run typecheck` will stay red until task 05 lands (or
+  is dispatched together with/immediately after 02) — this is plan-anticipated
+  per ADR-4, not an implementation defect in this task's diff.

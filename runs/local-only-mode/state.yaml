@@ -1,7 +1,7 @@
 run: local-only-mode
 branch: run/local-only-mode
-phase: implement # staged — not yet armed; `agentic arm local-only-mode` starts the run
-paused_reason: null
+phase: paused # staged — not yet armed; `agentic arm local-only-mode` starts the run
+paused_reason: escalation
 profile: standard # patch | standard | full
 intake:
   # source-agnostic staging provenance; free-form path: nulls + client_key
@@ -12,7 +12,7 @@ intake:
   staged_by: "Nathan Carter"
 budget:
   cost_limit_usd: 50
-  cost_spent_usd: 22.07
+  cost_spent_usd: 22.13
   ledger:
     [
       {
@@ -101,9 +101,10 @@ budget:
           round: 1,
           adapter: opencode,
           model: anthropic/claude-fable-5,
-          tokens_in: null,
-          tokens_out: null,
-          cost_usd: null
+          tokens_in: 36442,
+          tokens_out: 1086,
+          cost_usd: 0.05204484,
+          failed: true
         }
     ]
 gates:
@@ -147,5 +148,13 @@ escalations:
         resolved_by: Nathan Carter,
         resolved_at: 2026-07-23T05:55:44.935Z,
         resolution: fixed env issue
+      },
+    {
+        at: 2026-07-23T06:03:42.142Z,
+        from_role: orchestrator,
+        reason: "reviewer (01-core-mode-resolution) failed twice: dispatch aborted by
+          the operator during drain — process group killed (SIGKILL); the task
+          is freed for a retry",
+        resolved: false
       }
   ]

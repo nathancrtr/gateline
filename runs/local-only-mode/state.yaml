@@ -213,6 +213,9 @@ escalations:
         reason: "reviewer (01-core-mode-resolution) failed twice: dispatch aborted by
           the operator during drain — process group killed (SIGKILL); the task
           is freed for a retry",
-        resolved: false
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-23T18:02:49.358Z,
+        resolution: manually killed - resuming
       }
   ]

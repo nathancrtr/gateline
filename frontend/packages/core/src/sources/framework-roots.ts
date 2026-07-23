@@ -15,14 +15,22 @@ export interface FrameworkRoots {
   registry: string
   /** Directory containing `<adapter>/manifest.json` (the orchestrator's dispatch seam). */
   adapters: string
+  /** Directory containing `<role>.md` specs (the orchestrator's capability read). */
+  roles: string
 }
 
 export const DEFAULT_FRAMEWORK_PREFIX = '.agentic'
 
-const ROOT_LAYOUT: FrameworkRoots = { runs: 'runs', contracts: 'contracts', registry: 'registry', adapters: 'adapters' }
+const ROOT_LAYOUT: FrameworkRoots = { runs: 'runs', contracts: 'contracts', registry: 'registry', adapters: 'adapters', roles: 'roles' }
 
 function rootsForPrefix(prefix: string): FrameworkRoots {
-  return { runs: `${prefix}/runs`, contracts: `${prefix}/contracts`, registry: `${prefix}/registry`, adapters: `${prefix}/adapters` }
+  return {
+    runs: `${prefix}/runs`,
+    contracts: `${prefix}/contracts`,
+    registry: `${prefix}/registry`,
+    adapters: `${prefix}/adapters`,
+    roles: `${prefix}/roles`,
+  }
 }
 
 function rootsFromLock(raw: string | null, prefix: string): FrameworkRoots {

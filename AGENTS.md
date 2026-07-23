@@ -74,9 +74,9 @@ criterion.
 * **The orchestrator never writes `gates.*`.** Gate entries and the human decision
   grammar (`G<N> approved by <name>`) are reserved for named humans; the
   orchestrator commits under its own bot identity and verbs
-  (`dispatched | bounced | advanced | escalated | paused | metered`). Anything
-  touching `state.yaml` follows the co-writer contract: compare-and-swap ref
-  updates, comment-preserving YAML, ISO-8601 timestamps.
+  (`dispatched | bounced | advanced | escalated | paused | metered | harvested`).
+  Anything touching `state.yaml` follows the co-writer contract: compare-and-swap
+  ref updates, comment-preserving YAML, ISO-8601 timestamps.
 * **Never run a live orchestrator `tick`/`watch` against this repository as a
   test.** It dispatches real, metered agents onto live `run/*` branches. Verify
   with the test suites, `tick --dry-run`, or `shadow` replays of finished runs.

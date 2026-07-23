@@ -182,9 +182,9 @@ additions specific to a machine writer:
   decisions distinguishable at a glance.
 - **Reserved grammar.** Commit messages follow the frontend's structured form —
   `state(<slug>): <verb> …` — with the orchestrator using its own verbs
-  (`dispatched`, `bounced`, `advanced`, `escalated`, `paused`, `metered`) and never
-  the human decision grammar (`G2 approved by <name> …`), which the metrics reader
-  treats as authoritative for decisions.
+  (`dispatched`, `bounced`, `advanced`, `escalated`, `paused`, `metered`,
+  `harvested`) and never the human decision grammar (`G2 approved by <name> …`),
+  which the metrics reader treats as authoritative for decisions.
 
 Both writers carry their commits to origin themselves. The engine pushes with each
 bookkeeping commit (`--push`, #103), and zero-config frontend sources push human
@@ -200,9 +200,16 @@ hidden: run summaries carry an ahead-of-origin commit count, shown as an
 1. Derive a dispatch → **commit the intent first** (task/phase status →
    `dispatched`, ledger entry opened) via CAS.
 2. On CAS success, launch the job.
-3. On completion, the agent's artifacts are already on the run branch (agents commit
-   their own work, as today); the orchestrator commits the closing bookkeeping —
-   status, rounds, spend.
+3. On completion, the agent's artifacts are on the run branch: a shell-ful role
+   (implementer, reviewer, verifier, ops) commits its own work; a shell-less role
+   (analyst, architect — no adapter maps their capabilities to a git-capable tool,
+   #182) never attempts to, and the engine harvest-commits the run-scoped
+   working-tree diff for it instead, under the bot identity and the `harvested`
+   verb — the same harvest also runs as a defense-in-depth backstop for any
+   non-isolated role that simply didn't commit. This happens before the checkout
+   is force-removed once the run's last in-flight job settles, which is what
+   rescues the artifacts from that teardown. The orchestrator then commits the
+   closing bookkeeping — status, rounds, spend.
 
 The CAS on step 1 is the duplicate-dispatch guard: two orchestrator instances, or a
 tick racing its own heartbeat, serialize on the ref update — the loser re-reads,

@@ -12,7 +12,7 @@ intake:
   staged_by: "Nathan Carter"
 budget:
   cost_limit_usd: null
-  cost_spent_usd: 12.41
+  cost_spent_usd: 12.49
   ledger:
     [
       {
@@ -311,9 +311,9 @@ budget:
           round: 1,
           adapter: opencode,
           model: anthropic/claude-sonnet-5,
-          tokens_in: null,
-          tokens_out: null,
-          cost_usd: null
+          tokens_in: 156708,
+          tokens_out: 4971,
+          cost_usd: 0.078851638
         }
     ]
 gates:
@@ -338,7 +338,7 @@ gates:
   G3: { approved: false, by: null, at: null, notes: null }
 tasks:
   [
-    { id: 01-seam-extend, status: dispatched, review_rounds: 0 },
+    { id: 01-seam-extend, status: in-review, review_rounds: 0 },
     { id: 02-remote-dispatcher, status: pending, review_rounds: 0 },
     { id: 03-runner-api, status: pending, review_rounds: 0 },
     { id: 04-workstation-agent, status: pending, review_rounds: 0 },

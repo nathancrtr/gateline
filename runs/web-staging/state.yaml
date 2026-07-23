@@ -230,7 +230,7 @@ gates:
 tasks:
   [
     { id: 01-core-shared-checks, status: review-approved, review_rounds: 1 },
-    { id: 02-core-staged-readiness, status: in-review, review_rounds: 0 },
+    { id: 02-core-staged-readiness, status: in-review, review_rounds: 1 },
     { id: 03-server-staging-routes, status: dispatched, review_rounds: 0 },
     { id: 04-web-staging-form, status: in-review, review_rounds: 0 },
     { id: 05-web-staged-state-arm, status: pending, review_rounds: 0 },

@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>two-voices · Four staging outcomes</title>
+<style>
+:root{
+  color-scheme: light dark;
+  --ground: light-dark(#eef2f5,#0a0e11);
+  --surface: light-dark(#ffffff,#111820);
+  --inset: light-dark(#f3f6f8,#0d141a);
+  --raised: light-dark(#e4ebef,#18222b);
+  --ink: light-dark(#10202a,#dbe7ec);
+  --muted: light-dark(#4c5d67,#8ba1ac);
+  --faint: light-dark(#8598a2,#566771);
+  --line: light-dark(#d3dde3,#223039);
+  --accent: light-dark(#0b6f89,#45c8ec);
+  --accent-deep: light-dark(#075365,#8adcf5);
+  --ok: light-dark(#157a4a,#4ec98d);
+  --warn: light-dark(#8a6410,#e0b24e);
+  --bad: light-dark(#b23b28,#ff7f63);
+  --on-solid: light-dark(#ffffff,#06121a);
+  --accent-soft: light-dark(rgba(11,111,137,.12),rgba(69,200,236,.14));
+  --ok-soft: light-dark(rgba(21,122,74,.13),rgba(78,201,141,.15));
+  --warn-soft: light-dark(rgba(138,100,16,.13),rgba(224,178,78,.15));
+  --bad-soft: light-dark(rgba(178,59,40,.12),rgba(255,127,99,.16));
+  --glow: light-dark(rgba(11,111,137,.30),rgba(69,200,236,.40));
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.45}
+.wrap{max-width:820px;margin:0 auto;padding:24px 22px 60px}
+.mono{font-family:var(--mono)}
+.mockbar{border:1px dashed var(--line);border-radius:6px;background:var(--inset);padding:10px 13px;margin-bottom:20px}
+.mockbar h2{margin:0;font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.mockbar p{margin:5px 0 0;font-size:12px;color:var(--muted)}
+.mockbar .ac{font-family:var(--mono);font-size:11px;color:var(--accent)}
+
+.tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:20px}
+.tab{font:inherit;font-family:var(--mono);font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;
+  background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:9px 12px;cursor:pointer;margin-bottom:-1px}
+.tab:hover{color:var(--ink)}
+.tab.on{color:var(--accent);border-bottom-color:var(--accent)}
+.tab .swatch{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px;vertical-align:0}
+.sw-bad{background:var(--bad)} .sw-warn{background:var(--warn)} .sw-info{background:var(--accent)} .sw-ok{background:var(--ok)}
+
+.panel{display:none}
+.panel.on{display:block}
+
+.formtop{border:1px solid var(--line);border-radius:6px;background:var(--surface);padding:18px 20px}
+.formtop h3{margin:0 0 3px;font-family:var(--mono);font-size:14px;font-weight:600;text-transform:uppercase;letter-spacing:.1em}
+.formtop .sub{font-size:12px;color:var(--muted)}
+
+/* flashes — four distinct forms, not four colors ---------------------------- */
+.flash{border-radius:6px;padding:13px 15px;margin:16px 0 6px;font-size:13px}
+.flash h4{margin:0 0 4px;font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:8px}
+.flash p{margin:5px 0 0;line-height:1.55}
+.flash .glyph{font-family:var(--mono);font-size:14px}
+.flash a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+.flash .fix{font-size:11.5px;margin-top:8px;color:var(--muted)}
+
+/* (a) refusal — missing sections: bad tone, solid left rule, error summary */
+.flash-error{background:var(--bad-soft);border:1px solid var(--bad);border-left-width:4px;color:var(--bad)}
+.summary-list{margin:8px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:4px}
+.summary-list a{display:inline-flex;gap:8px;font-size:12.5px;font-weight:600}
+.summary-list a::before{content:"✕";font-family:var(--mono)}
+
+/* (d) refusal — no identity: also refusal, but framed as config not field. Dashed = "not your form's fault". */
+.flash-config{background:var(--bad-soft);border:1px dashed var(--bad);color:var(--bad)}
+
+/* (c) collision — different content under a taken slug: bad, names the branch */
+.flash-collision{background:var(--bad-soft);border:1px solid var(--bad);border-left-width:4px;color:var(--bad)}
+.branchpill{font-family:var(--mono);font-size:12px;background:var(--surface);border:1px solid var(--bad);border-radius:4px;padding:2px 7px;color:var(--bad)}
+
+/* (b) replay — benign: INFORMATIONAL accent tone, explicitly NOT red, offers Arm */
+.flash-info{background:var(--accent-soft);border:1px solid var(--accent);color:var(--accent)}
+
+/* the field-level echo of the summary (identical wording, GOV.UK P4) */
+.miniform{margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:560px){.miniform{grid-template-columns:1fr}}
+.mf{border:1px solid var(--line);border-radius:5px;background:var(--inset);padding:9px 11px}
+.mf.err{border-color:var(--bad);background:var(--bad-soft)}
+.mf label{display:block;font-size:12px;font-weight:600;margin-bottom:4px}
+.mf .box{height:26px;border-radius:4px;background:var(--surface);border:1px solid var(--line)}
+.mf.err .inline{margin:6px 0 0;font-size:11.5px;font-weight:600;color:var(--bad)}
+.mf.err .inline::before{content:"✕ ";font-family:var(--mono)}
+
+.btn{font:inherit;font-size:13px;font-weight:600;border-radius:999px;border:1px solid var(--line);background:var(--inset);color:var(--muted);padding:7px 15px;cursor:pointer}
+.btn-record{border-color:var(--accent);color:var(--accent);background:var(--surface)}
+.btn-gate{border-color:var(--accent);background:var(--accent);color:var(--on-solid);box-shadow:0 0 12px var(--glow)}
+.rowbtns{display:flex;gap:10px;margin-top:14px;align-items:center;flex-wrap:wrap}
+.note{font-size:11.5px;color:var(--muted)}
+.cfgbox{font-family:var(--mono);font-size:12px;background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:9px 11px;margin-top:8px;color:var(--ink)}
+.oid{font-family:var(--mono);color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="mockbar">
+    <h2>two-voices · mockup 2 / 5 — four distinct staging outcomes</h2>
+    <p>One request, four possible landings — each a different <b>form</b>, not just a different color. Same running example: staging <span class="mono">run-search</span>. <span class="ac">Serves AC2.2, AC4.1, AC8.1, AC8.2 · REC6, REC7.</span></p>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on" data-t="miss"><span class="swatch sw-bad"></span>Missing sections</button>
+    <button class="tab" data-t="ident"><span class="swatch sw-bad"></span>No git identity</button>
+    <button class="tab" data-t="coll"><span class="swatch sw-bad"></span>Slug collision</button>
+    <button class="tab" data-t="replay"><span class="swatch sw-info"></span>Already staged (replay)</button>
+  </div>
+
+  <!-- (a) MISSING SECTIONS ------------------------------------------------------- -->
+  <div class="panel on" id="miss">
+    <div class="formtop">
+      <h3>Stage a run · refused</h3>
+      <div class="sub">Refusal. No branch, no commit. The server's <span class="mono">missingBriefSections</span> output is shown verbatim.</div>
+
+      <div class="flash flash-error" role="alert" tabindex="-1">
+        <h4><span class="glyph">✕</span> Can't stage — 2 required sections are empty</h4>
+        <p>An intent brief is refused unless every contract section has content. Fill these, then stage:</p>
+        <ul class="summary-list">
+          <li><a href="#f-constraints">Constraints is empty</a></li>
+          <li><a href="#f-scope">Out of scope is empty</a></li>
+        </ul>
+        <p class="fix">Server-checked with the same <span class="mono">extractSections</span> the CLI uses — the summary wording and the field wording are identical.</p>
+      </div>
+
+      <div class="miniform">
+        <div class="mf"><label># Problem</label><div class="box"></div></div>
+        <div class="mf"><label># Motivation</label><div class="box"></div></div>
+        <div class="mf err" id="f-constraints"><label># Constraints</label><div class="box"></div><p class="inline">Constraints is empty</p></div>
+        <div class="mf err" id="f-scope"><label># Out of scope</label><div class="box"></div><p class="inline">Out of scope is empty</p></div>
+      </div>
+      <div class="rowbtns">
+        <button class="btn btn-record" disabled style="opacity:.4;cursor:not-allowed">Stage run</button>
+        <span class="note">Submit stays disabled while a section is empty (client pre-check); the displayed reasons are the server's, never a re-derived message.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- (b) NO IDENTITY ------------------------------------------------------------ -->
+  <div class="panel" id="ident">
+    <div class="formtop">
+      <h3>Stage a run · refused</h3>
+      <div class="sub">Refusal — but nothing on this form can fix it, so it isn't shown as a field error.</div>
+
+      <div class="flash flash-config" role="alert">
+        <h4><span class="glyph">⚠</span> No git identity configured on this deployment</h4>
+        <p>Staging records a named author in the genesis commit. With no identity set, Gate refuses rather than guess or ask you to type a name.</p>
+        <div class="cfgbox">no-identity: set user.name / user.email on the server, then retry</div>
+        <p class="fix">Same <span class="mono">no-identity</span> refusal shape <span class="mono">stageRun</span> returns to the CLI. A typed "your name" field is never offered — attribution comes from the server's git identity or the act is refused.</p>
+      </div>
+      <div class="rowbtns">
+        <button class="btn btn-record" disabled style="opacity:.4;cursor:not-allowed">Stage run</button>
+        <span class="note">The whole form is intact and re-submittable once the deployment is fixed; no field is marked in error, because no field is wrong.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- (c) COLLISION -------------------------------------------------------------- -->
+  <div class="panel" id="coll">
+    <div class="formtop">
+      <h3>Stage a run · refused</h3>
+      <div class="sub">Refusal. The slug is already a different run — this is not a replay.</div>
+
+      <div class="flash flash-collision" role="alert">
+        <h4><span class="glyph">✕</span> Slug <span class="branchpill">run-search</span> is already taken</h4>
+        <p>A different run already holds this slug — <a href="#">run/run-search</a>, staged 3 days ago by A. Rivera. Staging here would collide with it, so nothing was created.</p>
+        <p class="fix">Pick a different slug, or open the existing run. Your typed brief is preserved.</p>
+      </div>
+      <div class="rowbtns">
+        <button class="btn btn-record">Edit slug &amp; stage</button>
+        <button class="btn">Open run/run-search →</button>
+        <span class="note">Names the branch it collides with; never silently overwrites or retries.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- (d) REPLAY ----------------------------------------------------------------- -->
+  <div class="panel" id="replay">
+    <div class="formtop">
+      <h3>Stage a run · already staged</h3>
+      <div class="sub">Not an error — a benign replay of a request that already succeeded.</div>
+
+      <div class="flash flash-info" role="status">
+        <h4><span class="glyph">↺</span> Already staged — no second commit made</h4>
+        <p>This exact request (same slug, same client key) already created <a href="#"><b>run/run-search</b></a> at <span class="oid">a7c1e0f9b2</span>. Gate returned the saved result instead of staging twice.</p>
+        <p class="fix">Reads as information, in the accent voice — deliberately not red. The next step is the same one a fresh stage lands on: arm it.</p>
+      </div>
+      <div class="rowbtns">
+        <button class="btn btn-record">Open run/run-search →</button>
+        <button class="btn btn-gate">Arm run…</button>
+        <span class="note">Same client key + same content ⇒ replay. Same key + <i>changed</i> content ⇒ the collision refusal (tab 3), never a silent overwrite.</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.tab').forEach(function(t){
+  t.addEventListener('click',function(){
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+    document.querySelectorAll('.panel').forEach(x=>x.classList.remove('on'));
+    t.classList.add('on');
+    document.getElementById(t.dataset.t).classList.add('on');
+  });
+});
+</script>
+</body>
+</html>

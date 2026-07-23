@@ -4,6 +4,12 @@
 import { useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+// genesis-preview candidate (state.yaml gates.G1.notes): the run header's
+// genesis line is display-only, rendered from data already in the run detail
+// payload — readIntake reads the passthrough `intake:` block already on
+// detail.state, and the genesis commit is the oldest entry already in
+// detail.history. No new server data (ADR-6 rider, ADR-7).
+import { readIntake } from '@agentic/core/record'
 import { useKeys } from '../use-keys.ts'
 import { api, formatAge, formatWhen, type InboxItem, type RunDetailResponse } from '../api.ts'
 import { AgeBadge, BudgetMeter, GateLedger, KindChip, PhaseChip, ValidationBadge } from '../components/chips.tsx'
@@ -57,6 +63,16 @@ export function RunPage() {
   const detail = data!
   const { summary, items, now } = detail
 
+  // The genesis line (genesis-preview candidate): whenever a run carries the
+  // creation-seam's `intake:` block (every run staged via `agentic new`/`agentic
+  // arm` or this web surface), the header names who staged it, from what, and
+  // when — the record explaining why the run exists. Runs that predate the
+  // seam have no intake block, so readIntake returns null and the line is
+  // simply omitted.
+  const genesisIntake = detail.state ? readIntake(detail.state) : null
+  const genesisCommit = detail.history.length > 0 ? detail.history[detail.history.length - 1] : null
+  const genesisProvenance = genesisIntake ? [genesisIntake.source, genesisIntake.ref, genesisIntake.url].filter((v): v is string => Boolean(v)) : []
+
   const setTab = (t: Tab) => {
     const next = new URLSearchParams(params)
     next.set('tab', t)
@@ -91,6 +107,20 @@ export function RunPage() {
             {summary.source} · {summary.ref}
           </span>
         </span>
+        {genesisIntake && genesisCommit && (
+          <p className="basis-full font-mono text-[11.5px] text-muted">
+            genesis <span>{genesisCommit.oid.slice(0, 7)}</span>
+            {genesisIntake.staged_by && (
+              <>
+                {' '}
+                · staged by <span className="font-semibold text-ink">{genesisIntake.staged_by}</span>
+              </>
+            )}
+            {' · '}
+            {formatWhen(genesisCommit.time)}
+            {genesisProvenance.length > 0 && <> · from {genesisProvenance.join(' · ')}</>}
+          </p>
+        )}
       </header>
 
       {detail.stateError && (

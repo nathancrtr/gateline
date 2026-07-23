@@ -1,5 +1,10 @@
 // API client. Types come from @agentic/core as TYPE-ONLY imports — the core
 // runtime touches node:child_process and must never enter the browser bundle.
+// EXCEPTION (ADR-6, genesis-preview candidate): pages/new-run.tsx value-imports
+// planRunScaffold from '@agentic/core/record' for its live commit preview —
+// the record layer is probed browser-safe (yaml + zod only, no node builtins,
+// core/test/layering.test.ts enforces the ceiling). This file itself stays
+// type-only; the exception is scoped to that one subpath and that one page.
 import type {
   Burden,
   DecisionAction,
@@ -90,6 +95,42 @@ export interface MetricsResponse {
   }[]
 }
 
+export interface StagingSourceConfig {
+  id: string
+  identity: { name: string; email: string } | null
+  briefSections: string[]
+  briefTemplate: string | null
+}
+
+export interface StagingConfigResponse {
+  sources: StagingSourceConfig[]
+  slugPattern: string
+}
+
+export interface StageRequest {
+  source?: string
+  slug: string
+  title: string
+  profile: Profile
+  briefMarkdown: string
+  costLimitUsd: number | null
+  intake: { source: string | null; ref: string | null; url: string | null; clientKey: string | null }
+}
+
+/** The five-way submission outcome taxonomy (R8, ux REC7) — refusals resolve
+ * as values here, never as thrown errors, so the form renders the taxonomy
+ * instead of a generic toast (ux A5). */
+export type StageOutcomeView =
+  | { outcome: 'created'; slug: string; branch: string; commit: string; pushFailed?: string }
+  | { outcome: 'exists'; slug: string; branch: string }
+  | {
+      outcome: 'refused'
+      reason: 'slug-taken' | 'conflict' | 'no-identity' | 'missing-sections' | 'invalid-input'
+      message: string
+      missing?: string[]
+      status: number
+    }
+
 export interface DecisionRequest {
   source: string
   slug: string
@@ -143,6 +184,35 @@ export const api = {
   inbox: () => getJson<InboxResponse>('/api/inbox'),
   engineHealth: () => getJson<EngineHealthResponse>('/api/engine-health'),
   runs: () => getJson<RunsResponse>('/api/runs'),
+  stagingConfig: () => getJson<StagingConfigResponse>('/api/staging'),
+  /** Refusals (`outcome: 'refused'`) resolve as a value, carrying the HTTP
+   * status alongside the server's reason/message/missing — only a network
+   * failure or an unparseable/unrecognized body throws ApiError. */
+  stage: async (req: StageRequest): Promise<StageOutcomeView> => {
+    const res = await fetch('/api/runs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(req),
+    })
+    const body = (await res.json().catch(() => null)) as {
+      outcome?: 'created' | 'exists' | 'refused'
+      slug?: string
+      branch?: string
+      commit?: string
+      pushFailed?: string
+      reason?: 'slug-taken' | 'conflict' | 'no-identity' | 'missing-sections' | 'invalid-input'
+      message?: string
+      missing?: string[]
+      error?: string
+    } | null
+    if (body === null) throw new ApiError(`${res.status} ${res.statusText}`, res.status)
+    if (body.outcome === 'created' && body.slug && body.branch && body.commit)
+      return { outcome: 'created', slug: body.slug, branch: body.branch, commit: body.commit, pushFailed: body.pushFailed }
+    if (body.outcome === 'exists' && body.slug && body.branch) return { outcome: 'exists', slug: body.slug, branch: body.branch }
+    if (body.outcome === 'refused' && body.reason && body.message)
+      return { outcome: 'refused', reason: body.reason, message: body.message, missing: body.missing, status: res.status }
+    throw new ApiError(body.error ?? `${res.status} ${res.statusText}`, res.status)
+  },
   run: (src: string, slug: string) => getJson<RunDetailResponse>(`/api/runs/${src}/${slug}`),
   artifact: (src: string, slug: string, path: string) =>
     getJson<ArtifactResponse>(`/api/runs/${src}/${slug}/artifact?path=${encodeURIComponent(path)}`),

@@ -13,7 +13,7 @@ const BURDEN_OPTIONS: { value: Burden; key: string; label: string; hint: string 
   { value: 'heavy-correction', key: '3', label: 'Heavy correction', hint: 'took real work to accept' },
 ]
 
-type Mode = 'idle' | 'approve' | 'decline' | 'resolve'
+type Mode = 'idle' | 'approve' | 'decline' | 'resolve' | 'arm'
 
 export function DecidePanel({ item, primary = false }: { item: InboxItem; primary?: boolean }) {
   const queryClient = useQueryClient()
@@ -100,6 +100,10 @@ export function DecidePanel({ item, primary = false }: { item: InboxItem; primar
     mutation.mutate({ ...base, action: 'resolve-escalation', escalationIndex: item.escalationIndex, notes: notes.trim() })
   }
   const submitResume = () => mutation.mutate({ ...base, action: 'resume' })
+  // A staged run has never flown — arming, never resuming, is what starts it
+  // (AC6.1). This is the only path in this component that issues 'arm', and
+  // the staged branch below is the only one that can reach it.
+  const submitArm = () => mutation.mutate({ ...base, action: 'arm' })
 
   if (flash?.kind === 'ok') return <Flash kind="ok" text={flash.text} />
 
@@ -130,6 +134,11 @@ export function DecidePanel({ item, primary = false }: { item: InboxItem; primar
           {item.kind === 'paused' && (
             <Button primary onClick={submitResume} disabled={mutation.isPending} data-decide="resume">
               {mutation.isPending ? 'Resuming…' : 'Resume run'}
+            </Button>
+          )}
+          {item.kind === 'staged' && (
+            <Button primary onClick={() => setMode('arm')} data-decide="arm">
+              Arm run…
             </Button>
           )}
           {item.kind === 'round-cap' && (
@@ -216,6 +225,21 @@ export function DecidePanel({ item, primary = false }: { item: InboxItem; primar
           <div className="flex gap-2">
             <Button primary onClick={submitResolve} disabled={!notes.trim() || mutation.isPending} data-decide="resolve-confirm">
               {mutation.isPending ? 'Committing…' : 'Resolve escalation'}
+            </Button>
+            <Button onClick={() => setMode('idle')}>Cancel</Button>
+          </div>
+        </div>
+      )}
+
+      {mode === 'arm' && (
+        <div className="flex flex-col gap-3">
+          <p className="rounded-[5px] border border-line bg-inset px-[11px] py-[9px] text-sm leading-[1.6] text-muted">
+            Arming moves <b className="text-ink">{item.slug}</b> out of staged rest: dispatch begins and the budget starts
+            metering. The orchestrator picks it up on its next tick. This is the act that spends — staging spent nothing.
+          </p>
+          <div className="flex gap-2">
+            <Button primary onClick={submitArm} disabled={mutation.isPending} data-decide="arm-confirm">
+              {mutation.isPending ? 'Committing…' : `Arm ${item.slug}`}
             </Button>
             <Button onClick={() => setMode('idle')}>Cancel</Button>
           </div>

@@ -13,6 +13,7 @@ export function itemHref(item: InboxItem): string {
   if (item.kind === 'gate' && item.gate) params.set('decide', item.gate)
   else if (item.kind === 'escalation' && item.escalationIndex !== null) params.set('decide', `esc-${item.escalationIndex}`)
   else if (item.kind === 'paused') params.set('decide', 'paused')
+  else if (item.kind === 'staged') params.set('decide', 'staged')
   const q = params.toString()
   return `/runs/${item.source}/${item.slug}${q ? `?${q}` : ''}`
 }

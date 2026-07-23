@@ -1,0 +1,44 @@
+id: 01-core-shared-checks
+title: Hoist section-completeness check and slug grammar into core; CLI consumes them
+requirements: [R2]
+
+scope: |
+  Per plan ADR-3 and the "Core additions" interface contract:
+
+  1. In frontend/packages/core/src/record/validate.ts, add and export
+     `missingSections(content: string, required: string[]): string[]` — returns the
+     required section headings absent from `content`, using this module's existing
+     private `normalize` and `extractSections`. Behavior must be identical to the
+     CLI's current private `missingBriefSections` (cli/src/main.ts ~line 370).
+  2. In frontend/packages/core/src/record/scaffold.ts, export
+     `SLUG_PATTERN: string` (the regex source '^[a-z0-9][a-z0-9-]*$', the
+     ID_PATTERN precedent) and build the module's existing private SLUG_RE from it.
+     No behavior change to planRunScaffold.
+  3. In frontend/packages/cli/src/main.ts, delete the local `missingBriefSections`,
+     `normalizeSection`, and duplicated `SLUG_RE` (and the drift-warning comments
+     that justified the mirrors); import `missingSections` and `SLUG_PATTERN` from
+     @agentic/core instead. CLI behavior (agentic new flows, refusal wording) must
+     be byte-identical — existing cli tests must pass unmodified.
+  4. Unit-test missingSections in core/test/validate.test.ts: exact-match, heading
+     punctuation/case-insensitive match (normalize semantics), fenced-code-block
+     headings ignored (extractSections semantics), empty content.
+
+  The record layer must stay free of node builtins and of imports from sources/ or
+  view-model/ (core/test/layering.test.ts enforces this).
+
+file_contact_surface:
+  - frontend/packages/core/src/record/validate.ts
+  - frontend/packages/core/src/record/scaffold.ts
+  - frontend/packages/core/test/validate.test.ts
+  - frontend/packages/cli/src/main.ts
+
+acceptance_tests:
+  - "AC2.2 (single-truth half): server and CLI can share one exported check — grep shows no remaining missingBriefSections/normalizeSection/SLUG_RE definitions in frontend/packages/cli/src/main.ts"
+  - "cd frontend && npx vitest run packages/core packages/cli — all pass, cli tests unmodified"
+  - "cd frontend && npm run typecheck passes"
+
+depends_on: []
+
+status: pending
+
+notes: |

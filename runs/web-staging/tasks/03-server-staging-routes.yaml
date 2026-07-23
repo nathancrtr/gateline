@@ -1,0 +1,105 @@
+id: 03-server-staging-routes
+title: "Server staging carrier: GET /api/staging + POST /api/runs over planRunScaffold/stageRun"
+requirements: [R1, R2, R3, R4, R8]
+
+scope: |
+  Implement the two routes exactly per plan "Server routes" interface contract and
+  ADR-1/ADR-2, in frontend/packages/server/src/app.ts:
+
+  1. GET /api/staging — for each configured source: id, identity (source.identity(),
+     null when unresolvable), briefSections (extractSections of
+     source.templates.read('intent-brief.md'), falling back to
+     BUILTIN_SECTIONS['intent-brief.md']), briefTemplate (raw template or null);
+     plus top-level slugPattern (core SLUG_PATTERN).
+  2. POST /api/runs — body per the contract (source optional iff exactly one source
+     is configured; refuse 'invalid-input' when several are configured and none
+     named — AC1.3). Sequence: resolve source → resolve required sections (same
+     derivation as GET) → missingSections(briefMarkdown, required) → on any missing,
+     422 {outcome:'refused', reason:'missing-sections', missing, message:
+     "intent-brief.md is missing required section(s): <list>"} — this message is
+     what the web displays verbatim (AC2.2) → planRunScaffold (ScaffoldError → 400
+     invalid-input with the error's own message) with stagedBy: identity.name —
+     stagedBy/author come only from source.identity(), never the body (AC4.2) →
+     source.stageRun(scaffold, who) → map StageOutcome: created → 201 (+ pushFailed
+     passthrough) and cache.bump(); exists → 200; refused no-identity → 400 with
+     stageRun's message verbatim (AC4.1); refused slug-taken/conflict → 409 with
+     stageRun's message (it names the existing branch — AC8.2).
+     Note stageRun itself also guards identity; calling it and mapping the refusal
+     is fine — do not pre-empt with a differently-worded check.
+  3. Amend the file-header comment per ADR-2: two mutating routes, each riding its
+     core seam; no route touches sources/git.ts primitives (AC1.1).
+  4. Tests in frontend/packages/server/test/app.test.ts against generateFixtureRepo:
+     - GET /api/staging returns fixture source id, identity name 'Fixture Operator',
+       the four built-in brief sections, slugPattern.
+     - Staging succeeds for all three profiles; for each, read the branch via git
+       (execFileSync idiom from smoke.spec) and round-trip
+       run/<slug>:runs/<slug>/state.yaml through parseRunState with zero errors, and
+       for patch also validate tasks/01-<slug>.yaml via validateArtifact (AC1.2).
+     - Missing section → 422 naming the section, and no run/<slug> branch exists.
+     - Replay with same slug+clientKey → 200 exists, and the branch tip oid is
+       unchanged (no second commit — AC8.1).
+     - Slug of an existing non-staged fixture run (e.g. g0-pending) → 409 naming
+       the branch (AC8.2).
+     - Commit author and state.yaml intake.staged_by are the fixture identity (AC4.2).
+     - POST /api/decisions {action:'arm'} on a run staged in the test transitions it
+       (commit message 'state(<slug>): armed by Fixture Operator'); arm on a
+       non-staged run → 400 with planDecision's DecisionError message (AC5.2's API
+       half).
+  Wording guard: before handoff run the spec's grep targets (AC2.3, AC3.2) over
+  frontend/packages/server/src — introduce no new matches (avoid the literal words
+  matching complet(e|ion), generate...brief, tracker api, etc. in code/comments).
+
+file_contact_surface:
+  - frontend/packages/server/src/app.ts
+  - frontend/packages/server/test/app.test.ts
+
+acceptance_tests:
+  - AC1.1
+  - AC1.2
+  - AC1.3
+  - "AC2.2 (server half): refusal names the missing sections via core missingSections"
+  - AC4.1
+  - AC4.2
+  - "AC8.1 / AC8.2 at the API level"
+  - "cd frontend && npx vitest run packages/server — all pass; npm run typecheck passes"
+
+depends_on: [01-core-shared-checks]
+
+status: pending
+
+notes: |
+  Implementer (round 1): implemented both routes in app.ts exactly per the plan's
+  interface contract. GET /api/staging derives briefSections via a single shared
+  helper (requiredBriefSections(template)) called by both routes with each route's
+  own read of source.templates.read('intent-brief.md'), mirroring validate.ts's own
+  template/BUILTIN_SECTIONS fallback pattern — the same-derivation requirement in
+  the task text. POST /api/runs validates presence/profile-enum first (400
+  invalid-input), then resolves source (AC1.3: only required when >1 configured),
+  then runs the shared section derivation + core missingSections (422 on any
+  missing, message verbatim per contract), then calls planRunScaffold with
+  stagedBy: (await source.identity())?.name ?? '' (ScaffoldError -> 400
+  invalid-input), then source.stageRun(scaffold, who ?? {name:'',email:''}) —
+  stageRun's own no-identity guard is what actually refuses when identity is
+  unset, per the task's explicit instruction not to pre-empt it. Outcome mapping:
+  created -> 201 + cache.bump() (+pushFailed passthrough), exists -> 200,
+  refused/no-identity -> 400, refused/slug-taken|conflict -> 409, both with
+  stageRun's own message verbatim. Header comment amended per ADR-2.
+  Tests added to app.test.ts: GET /api/staging (fixture id/identity/four built-in
+  sections/slugPattern); POST /api/runs staged end-to-end for patch/standard/full
+  profiles (git show + parseRunState zero-error round-trip, plus validateArtifact
+  on tasks/01-<slug>.yaml for patch); missing-section 422 with no branch created
+  (via a show-ref --verify --quiet helper to avoid noisy git stderr passthrough on
+  the negative check); same slug+clientKey replay -> 200 exists with unchanged
+  branch tip oid; slug collision with existing g0-pending -> 409 naming the
+  branch; commit author + intake.staged_by both equal to the fixture identity;
+  arm via POST /api/decisions transitions a staged run (commit message asserted
+  verbatim) and refuses on a non-staged run with planDecision's own message.
+  Verified clean: cd frontend && npx vitest run packages/server (2 files, 32
+  tests, all pass) and the spec's three grep guards (AC2.3, AC1.1 clean; AC3.2's
+  one match is a pre-existing "linear-gradient"/"linear infinite" false positive
+  in web/src/styles.css, untouched by this diff and outside this task's surface).
+  npm run typecheck fails on one pre-existing error in
+  packages/web/src/components/chips.tsx (InboxKind 'staged' member from task 02,
+  not yet consumed — that's task 05's surface per ADR-4/the plan's explicit
+  "typecheck fails until it does" note); confirmed via git stash that this error
+  predates this task's diff and is unrelated to frontend/packages/server.

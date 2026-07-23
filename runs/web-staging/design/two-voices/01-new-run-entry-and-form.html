@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>two-voices · New-run entry + staging form</title>
+<style>
+:root{
+  color-scheme: light dark;
+  --ground: light-dark(#eef2f5,#0a0e11);
+  --surface: light-dark(#ffffff,#111820);
+  --inset: light-dark(#f3f6f8,#0d141a);
+  --raised: light-dark(#e4ebef,#18222b);
+  --ink: light-dark(#10202a,#dbe7ec);
+  --muted: light-dark(#4c5d67,#8ba1ac);
+  --faint: light-dark(#8598a2,#566771);
+  --line: light-dark(#d3dde3,#223039);
+  --accent: light-dark(#0b6f89,#45c8ec);
+  --accent-deep: light-dark(#075365,#8adcf5);
+  --ok: light-dark(#157a4a,#4ec98d);
+  --warn: light-dark(#8a6410,#e0b24e);
+  --bad: light-dark(#b23b28,#ff7f63);
+  --on-solid: light-dark(#ffffff,#06121a);
+  --accent-soft: light-dark(rgba(11,111,137,.12),rgba(69,200,236,.14));
+  --ok-soft: light-dark(rgba(21,122,74,.13),rgba(78,201,141,.15));
+  --warn-soft: light-dark(rgba(138,100,16,.13),rgba(224,178,78,.15));
+  --bad-soft: light-dark(rgba(178,59,40,.12),rgba(255,127,99,.16));
+  --glow: light-dark(rgba(11,111,137,.30),rgba(69,200,236,.40));
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.45}
+a{color:inherit}
+.shell{max-width:1160px;margin:0 auto;display:flex;min-height:100vh}
+.side{width:186px;flex:0 0 auto;border-right:1px solid var(--line);background:var(--surface);padding:16px 12px;display:flex;flex-direction:column;gap:22px}
+@media(max-width:720px){.side{display:none}}
+.brand{padding:6px 8px}
+.brand b{font-family:var(--mono);font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.16em}
+.brand p{margin:6px 0 0;font-size:10.5px;color:var(--faint)}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav a{display:flex;align-items:center;gap:9px;border-radius:4px;padding:7px 9px;font-size:12px;color:var(--muted);text-decoration:none}
+.nav a .dot{height:6px;width:6px;border-radius:50%;background:var(--faint)}
+.nav a.on{background:var(--accent-soft);color:var(--accent)}
+.nav a.on .dot{background:var(--accent);box-shadow:0 0 8px var(--glow)}
+.motto{margin-top:auto;padding:8px;font-family:var(--mono);font-size:10px;line-height:1.6;color:var(--faint)}
+.main{flex:1 1 auto;min-width:0;padding:22px 26px 60px}
+
+.mockbar{border:1px dashed var(--line);border-radius:6px;background:var(--inset);padding:10px 13px;margin-bottom:22px}
+.mockbar h2{margin:0;font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.mockbar p{margin:5px 0 0;font-size:12px;color:var(--muted);max-width:80ch}
+.mockbar .ac{font-family:var(--mono);font-size:11px;color:var(--accent)}
+
+.statecap{display:inline-flex;align-items:center;gap:7px;margin:26px 0 12px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.statecap::before{content:"";width:22px;height:1px;background:var(--line)}
+
+.h1{font-family:var(--mono);font-size:20px;font-weight:600;text-transform:uppercase;letter-spacing:.14em;margin:0}
+.phead{display:flex;align-items:flex-end;gap:16px;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:20px}
+.phead .count{margin-left:auto;font-size:12px;color:var(--muted)}
+
+.card{border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+.empty{border:1px solid var(--line);border-radius:5px;background:var(--surface);padding:34px 16px;text-align:center}
+.empty .brackets{font-family:var(--mono);font-size:18px;letter-spacing:.2em;color:var(--accent);display:block;margin-bottom:12px}
+.empty p{margin:6px auto 0;max-width:38ch;font-size:12px;color:var(--muted);line-height:1.6}
+.empty .big{font-size:15px;font-weight:600;color:var(--ink)}
+
+/* buttons ----------------------------------------------------------------- */
+.btn{font:inherit;font-size:13px;font-weight:600;border-radius:999px;border:1px solid var(--line);
+  background:var(--inset);color:var(--muted);padding:7px 15px;cursor:pointer;transition:all .14s}
+.btn:hover{color:var(--ink);border-color:var(--accent)}
+/* RECORD VOICE — staging. Accent outline, no glow: a deliberate act that spends nothing. */
+.btn-record{border-color:var(--accent);color:var(--accent);background:var(--surface)}
+.btn-record:hover{background:var(--accent-soft)}
+/* GATE VOICE — arming. Filled accent + glow: consequential, starts metered dispatch. */
+.btn-gate{border-color:var(--accent);background:var(--accent);color:var(--on-solid);box-shadow:0 0 12px var(--glow)}
+.btn-gate:hover{opacity:.9}
+.btn-lg{padding:9px 20px;font-size:14px}
+
+/* form -------------------------------------------------------------------- */
+.form{max-width:760px}
+.formhead{display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--line);padding-bottom:12px;margin-bottom:20px}
+.formhead h3{margin:0;font-family:var(--mono);font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.1em}
+.formhead .sub{font-size:12px;color:var(--muted)}
+.grp{margin-bottom:20px}
+.legend{font-family:var(--mono);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:9px}
+.field{margin-bottom:14px}
+.field > label{display:block;font-size:12.5px;font-weight:600;margin-bottom:5px}
+.field .req{color:var(--accent);font-family:var(--mono);font-size:10px;margin-left:6px;vertical-align:2px}
+.field .opt{color:var(--faint);font-weight:400;font-size:11px;margin-left:6px}
+.input,.textarea{width:100%;font:inherit;font-size:13.5px;color:var(--ink);background:var(--inset);
+  border:1px solid var(--line);border-radius:5px;padding:9px 11px}
+.input::placeholder,.textarea::placeholder{color:var(--faint)}
+.input:focus,.textarea:focus{outline:2px solid var(--accent);outline-offset:2px}
+.textarea{resize:vertical;min-height:64px;line-height:1.5}
+.hint{margin:5px 0 0;font-size:11.5px;color:var(--faint);line-height:1.5}
+.hint code,.mono{font-family:var(--mono)}
+
+.slugrow{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.slugrow .field{flex:1 1 200px;margin-bottom:0}
+.reftag{font-family:var(--mono);font-size:12px;color:var(--muted);background:var(--inset);border:1px solid var(--line);
+  border-radius:5px;padding:9px 11px;white-space:nowrap}
+.reftag b{color:var(--accent)}
+.permanent{font-family:var(--mono);font-size:10px;color:var(--warn);text-transform:uppercase;letter-spacing:.05em}
+
+.radios{display:flex;gap:8px;flex-wrap:wrap}
+.radio{display:flex;flex-direction:column;gap:2px;border:1px solid var(--line);background:var(--inset);
+  border-radius:5px;padding:9px 13px;cursor:pointer;min-width:120px}
+.radio .rt{font-size:13px;font-weight:600}
+.radio .rd{font-size:11px;color:var(--muted)}
+.radio.sel{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.radio.sel .rd{color:var(--accent)}
+
+.budrow{display:flex;align-items:center;gap:10px}
+.budrow .input{max-width:150px}
+.budrow .dollar{position:relative}
+.budrow .dollar span{position:absolute;left:11px;top:9px;color:var(--faint);font-family:var(--mono);font-size:13px}
+.budrow .dollar .input{padding-left:22px}
+
+.sectiongrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:620px){.sectiongrid{grid-template-columns:1fr}}
+
+.picker{display:flex;align-items:center;gap:10px;border:1px solid var(--line);background:var(--inset);border-radius:5px;padding:9px 11px}
+.picker select{font:inherit;font-size:13px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:5px 8px}
+
+.attrib{display:flex;align-items:center;gap:10px;background:var(--inset);border:1px solid var(--line);border-radius:5px;padding:10px 13px;margin:6px 0 18px}
+.attrib .who{font-size:12.5px}
+.attrib .who b{font-family:var(--mono)}
+.attrib .lock{font-family:var(--mono);font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin-left:auto}
+
+.actions{display:flex;align-items:center;gap:14px;border-top:1px solid var(--line);padding-top:18px}
+.actions .note{font-size:11.5px;color:var(--muted);max-width:44ch}
+
+.kv{font-family:var(--mono)}
+.divider{height:1px;background:var(--line);margin:28px 0}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><b>Gate</b><p>pipeline decisions</p></div>
+    <nav class="nav">
+      <a href="#"><span class="dot"></span>Inbox</a>
+      <a href="#" class="on"><span class="dot"></span>Portfolio</a>
+      <a href="#"><span class="dot"></span>Metrics</a>
+    </nav>
+    <div class="motto">The repo is the database.<br>Every view renders git.</div>
+  </aside>
+
+  <main class="main">
+    <div class="mockbar">
+      <h2>two-voices · mockup 1 / 5 — the entry point &amp; the staging form (record voice)</h2>
+      <p>The "New run" affordance lives <b>on the Portfolio page</b>, not in the nav (Inbox/Portfolio/Metrics is unchanged). Running example: staging a run named <b class="mono">run-search</b>. <span class="ac">Serves AC7.1, AC1.3, AC2.1, AC3.1, AC4.2, R2, R3, R4.</span></p>
+    </div>
+
+    <div class="statecap">State A · Portfolio header — entry point present</div>
+    <div class="phead">
+      <h1 class="h1">Portfolio</h1>
+      <button class="btn btn-record" title="Opens the staging form on this page (no route change)">+ New run</button>
+      <span class="count">7 runs</span>
+    </div>
+    <div class="card" style="padding:14px 16px;font-size:12.5px;color:var(--muted)">
+      <span class="mono" style="color:var(--faint)">…the runs table renders here, unchanged…</span>
+    </div>
+
+    <div class="statecap">State A′ · Portfolio empty state — second entry point, copy updated</div>
+    <div class="empty">
+      <span class="brackets">[ ]</span>
+      <p class="big">No runs found.</p>
+      <p>No <code class="mono">runs/&lt;slug&gt;</code> directories on any tracked source yet.
+         <a href="#" style="color:var(--accent)">Stage the first run</a>, or point Gate at a repo that has runs.</p>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="statecap">State B · Staging form open — pristine, no drafted prose</div>
+    <section class="form card" style="padding:22px 24px">
+      <div class="formhead">
+        <h3>Stage a run</h3>
+        <span class="sub">Mints the <span class="mono">run/&lt;slug&gt;</span> branch and its genesis commit. Nothing dispatches until you arm it.</span>
+      </div>
+
+      <!-- identity + title + slug ------------------------------------------------ -->
+      <div class="grp">
+        <div class="field">
+          <label>Title <span class="req">required</span></label>
+          <input class="input" value="Portfolio run search &amp; filter" oninput="derive(this.value)">
+        </div>
+        <div class="slugrow">
+          <div class="field">
+            <label>Slug <span class="req">required</span> <span class="permanent" id="permlabel">· permanent once staged</span></label>
+            <input class="input mono" id="slug" value="run-search">
+            <p class="hint">Auto-suggested from the title; edit until you stage. Becomes the branch name and the run directory — it cannot change afterward.</p>
+          </div>
+          <div class="reftag">will mint&nbsp; <b id="reftag">run/run-search</b></div>
+        </div>
+      </div>
+
+      <!-- profile + budget ------------------------------------------------------- -->
+      <div class="grp">
+        <div class="legend">Profile — which gates this run carries</div>
+        <div class="radios">
+          <label class="radio"><span class="rt">patch</span><span class="rd">G2 · G3</span></label>
+          <label class="radio sel"><span class="rt">standard</span><span class="rd">G0–G3</span></label>
+          <label class="radio"><span class="rt">full</span><span class="rd">G0–G3, all phases</span></label>
+        </div>
+      </div>
+      <div class="grp">
+        <div class="legend">Budget ceiling</div>
+        <div class="budrow">
+          <span class="dollar"><span>$</span><input class="input mono" value="8"></span>
+          <label style="font-size:12.5px;color:var(--muted);display:flex;gap:6px;align-items:center"><input type="checkbox"> no ceiling</label>
+        </div>
+        <p class="hint">Recorded as <span class="mono">budget.cost_limit_usd</span>. The run spends nothing until armed.</p>
+      </div>
+
+      <!-- brief sections --------------------------------------------------------- -->
+      <div class="grp">
+        <div class="legend">Intent brief — one box per required section &nbsp;·&nbsp; structure supplied, words are yours</div>
+        <div class="sectiongrid">
+          <div class="field">
+            <label># Problem <span class="req">required</span></label>
+            <textarea class="textarea" placeholder="What hurts, or what opportunity exists. Observable today."></textarea>
+          </div>
+          <div class="field">
+            <label># Motivation <span class="req">required</span></label>
+            <textarea class="textarea" placeholder="Why now, and for whom. What happens if we don't do this."></textarea>
+          </div>
+          <div class="field">
+            <label># Constraints <span class="req">required</span></label>
+            <textarea class="textarea" placeholder="Hard boundaries: deadlines, compatibility, budget. If none, say &quot;none known&quot;."></textarea>
+          </div>
+          <div class="field">
+            <label># Out of scope <span class="req">required</span></label>
+            <textarea class="textarea" placeholder="What a reasonable engineer might assume is included, but isn't."></textarea>
+          </div>
+        </div>
+        <p class="hint">Section headings come from the <span class="mono">intent-brief.md</span> contract — you can't add or remove them. Placeholder text describes each section; it is never submitted. No prose is drafted for you.</p>
+      </div>
+
+      <!-- provenance ------------------------------------------------------------- -->
+      <div class="grp">
+        <div class="legend">Provenance <span style="text-transform:none;letter-spacing:0;font-weight:400;color:var(--faint)">— your own pointer text (optional). Nothing here is fetched, previewed, or embedded.</span></div>
+        <div class="sectiongrid">
+          <div class="field"><label>source <span class="opt">optional</span></label><input class="input" value="planning-sync"></div>
+          <div class="field"><label>ref <span class="opt">optional</span></label><input class="input" value="2026-07-20"></div>
+          <div class="field"><label>url <span class="opt">optional</span></label><input class="input" placeholder="a link you vouch for — typed text only"></div>
+          <div class="field"><label>client key <span class="opt">auto</span></label><input class="input mono" value="ck_9f3a…session" disabled></div>
+        </div>
+        <p class="hint">The client key is generated once per form session for safe resubmit (replay → "already staged"), not typed. A URL here is a string you vouch for, not an object the system loaded.</p>
+      </div>
+
+      <!-- attribution (read only) ------------------------------------------------ -->
+      <div class="attrib">
+        <span class="who">Will be recorded as staged by <b>Nathan Carter</b></span>
+        <span class="lock">from the server's git identity · not editable</span>
+      </div>
+
+      <!-- one legitimate dropdown: source picker (AC1.3) ------------------------- -->
+      <div class="picker" style="margin-bottom:18px">
+        <span style="font-size:12.5px;color:var(--muted)">Repository</span>
+        <select><option>local (this checkout)</option><option>fleetview-consumer</option></select>
+        <span class="hint" style="margin:0">Shown only when more than one source is configured; it selects among Gate's own sources — never an external system.</span>
+      </div>
+
+      <div class="actions">
+        <button class="btn btn-record btn-lg">Stage run</button>
+        <button class="btn">Cancel</button>
+        <span class="note">Stage is the <b>record voice</b>: it creates the branch and commits the brief. Arming is a separate act, later, on the staged run's card.</span>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+// Trivial slug derivation, mirroring REC3 (auto-suggest, editable).
+function derive(t){
+  var s=t.toLowerCase().replace(/&/g,'and').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+  document.getElementById('slug').value=s;
+  document.getElementById('reftag').textContent='run/'+(s||'…');
+}
+document.getElementById('slug').addEventListener('input',function(){
+  document.getElementById('reftag').textContent='run/'+(this.value||'…');
+});
+</script>
+</body>
+</html>

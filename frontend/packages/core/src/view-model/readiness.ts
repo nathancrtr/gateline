@@ -8,11 +8,12 @@
 //   G3 ready     phase=release    ∧ release-plan.md present ∧ ¬G3
 //   Escalation   any escalations[] entry with resolved: false
 //   Round-cap    any task review_rounds ≥ 3 ∧ status not complete
-//   Paused       phase=paused
+//   Paused       phase=paused ∧ paused_reason ≠ staged
+//   Staged       phase=paused ∧ paused_reason = staged — awaiting arm, not resume/kill
 //
 // A gate whose packet is present but malformed yields a NON-reviewable item —
 // the bounce view (rule R3) — never a reviewable card.
-import { G2_COMPLETE_STATUSES, gateUndecided, GATE_PHASES, PROFILE_GATES, type GateId, type RunState } from '../record/schema.ts'
+import { G2_COMPLETE_STATUSES, gateUndecided, GATE_PHASES, PROFILE_GATES, STAGED_REASON, type GateId, type RunState } from '../record/schema.ts'
 import { validateArtifact, type Validation } from '../record/validate.ts'
 import type { RunRef, RunSource } from '../sources/source.ts'
 
@@ -26,7 +27,7 @@ export const GATE_QUESTIONS: Record<GateId, string> = {
 /** In a patch run G1 absorbs the G0 question — brief and work item are approved together. */
 export const PATCH_G1_QUESTION = 'Is this the change we want, scoped this way?'
 
-export type InboxKind = 'gate' | 'escalation' | 'round-cap' | 'paused' | 'malformed'
+export type InboxKind = 'gate' | 'escalation' | 'round-cap' | 'paused' | 'staged' | 'malformed'
 
 export interface InboxItem {
   kind: InboxKind
@@ -143,9 +144,28 @@ export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<R
     }
   }
 
-  // --- Paused runs need a resume/kill decision.
+  // --- Paused runs need a resume/kill decision — unless the rest state is
+  // "staged" (ADR-4): a staged-but-unarmed run never had a resume/kill
+  // choice to begin with, so it gets its own kind rather than a 'paused'
+  // item whose only affordance (Resume) is a guaranteed DecisionError.
   if (state.phase === 'paused') {
     const touched = await source.lastTouched(ref, ['state.yaml'])
+    if (state.paused_reason === STAGED_REASON) {
+      items.push({
+        kind: 'staged',
+        gate: null,
+        source: ref.source,
+        slug: ref.slug,
+        title: 'Run staged: awaiting arm',
+        detail: 'Arm to start the run — dispatch begins and the budget starts metering',
+        since: touched?.time ?? null,
+        reviewable: true,
+        problems: [],
+        packet: ['state.yaml', 'intent-brief.md'],
+        escalationIndex: null,
+      })
+      return { items, validations }
+    }
     items.push({
       kind: 'paused',
       gate: null,

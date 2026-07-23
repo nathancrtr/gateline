@@ -14,6 +14,19 @@ const PHASE_TONE: Record<string, string> = {
 }
 
 export function PhaseChip({ phase, pausedReason }: { phase: string; pausedReason?: string | null }) {
+  // A staged run is a rest state, not an interruption: hollow ring marker (no
+  // glow — nothing is burning energy), accent tone, and its own `staged`
+  // label rather than the `paused · <reason>` suffix. Every other paused
+  // reason (budget, gate-declined, …) keeps the filled glowing dot below
+  // unchanged (AC6.2 — form difference, not recolor).
+  if (phase === 'paused' && pausedReason === 'staged') {
+    return (
+      <span className="inline-flex items-center gap-[7px] whitespace-nowrap text-xs leading-none">
+        <span className="inline-block h-[7px] w-[7px] rounded-full border-[1.5px] border-accent bg-transparent" />
+        <span className="text-ink">staged</span>
+      </span>
+    )
+  }
   const tone = PHASE_TONE[phase] ?? 'text-muted'
   return (
     <span className="inline-flex items-center gap-[7px] whitespace-nowrap text-xs leading-none">
@@ -36,6 +49,16 @@ export function KindChip({ item }: { item: InboxItem }) {
       >
         <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-current shadow-[0_0_6px_currentColor]" />
         {item.gate}
+      </span>
+    )
+  }
+  if (item.kind === 'staged') {
+    // Outline pill, transparent fill, hollow marker — distinct in form (not
+    // just color) from the solid PAUSE pill below (AC6.2).
+    return (
+      <span className="inline-flex min-w-9 items-center justify-center gap-1.5 rounded-full border border-accent bg-transparent px-[11px] py-1 font-mono text-[11px] leading-none font-bold tracking-[0.04em] text-accent">
+        <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full border border-current bg-transparent" />
+        STAGED
       </span>
     )
   }

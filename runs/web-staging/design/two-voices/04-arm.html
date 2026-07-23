@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>two-voices · The arm act</title>
+<style>
+:root{
+  color-scheme: light dark;
+  --ground: light-dark(#eef2f5,#0a0e11);
+  --surface: light-dark(#ffffff,#111820);
+  --inset: light-dark(#f3f6f8,#0d141a);
+  --raised: light-dark(#e4ebef,#18222b);
+  --ink: light-dark(#10202a,#dbe7ec);
+  --muted: light-dark(#4c5d67,#8ba1ac);
+  --faint: light-dark(#8598a2,#566771);
+  --line: light-dark(#d3dde3,#223039);
+  --accent: light-dark(#0b6f89,#45c8ec);
+  --accent-deep: light-dark(#075365,#8adcf5);
+  --ok: light-dark(#157a4a,#4ec98d);
+  --warn: light-dark(#8a6410,#e0b24e);
+  --bad: light-dark(#b23b28,#ff7f63);
+  --on-solid: light-dark(#ffffff,#06121a);
+  --accent-soft: light-dark(rgba(11,111,137,.12),rgba(69,200,236,.14));
+  --ok-soft: light-dark(rgba(21,122,74,.13),rgba(78,201,141,.15));
+  --warn-soft: light-dark(rgba(138,100,16,.13),rgba(224,178,78,.15));
+  --bad-soft: light-dark(rgba(178,59,40,.12),rgba(255,127,99,.16));
+  --glow: light-dark(rgba(11,111,137,.30),rgba(69,200,236,.40));
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.45}
+.wrap{max-width:760px;margin:0 auto;padding:24px 22px 60px}
+.mono{font-family:var(--mono)}
+.mockbar{border:1px dashed var(--line);border-radius:6px;background:var(--inset);padding:10px 13px;margin-bottom:20px}
+.mockbar h2{margin:0;font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.mockbar p{margin:5px 0 0;font-size:12px;color:var(--muted)}
+.mockbar .ac{font-family:var(--mono);font-size:11px;color:var(--accent)}
+
+.tabs{display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--line);margin-bottom:20px}
+.tab{font:inherit;font-family:var(--mono);font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;
+  background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);padding:9px 12px;cursor:pointer;margin-bottom:-1px}
+.tab:hover{color:var(--ink)}
+.tab.on{color:var(--accent);border-bottom-color:var(--accent)}
+.panel{display:none}.panel.on{display:block}
+
+/* run header (staged) */
+.rhead{display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:20px;flex-wrap:wrap}
+.rhead h1{margin:0;font-family:var(--mono);font-size:18px;font-weight:600;letter-spacing:.05em}
+.chip{display:inline-flex;align-items:center;gap:7px;font-size:12px}
+.chip .ring{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--accent);background:transparent}
+.chip .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok)}
+.eyebrow{font-family:var(--mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;border-radius:3px;padding:2px 7px}
+.eyebrow.staged{color:var(--accent);border:1px solid var(--accent);background:var(--accent-soft)}
+.eyebrow.armed{color:var(--ok);border:1px solid var(--ok);background:var(--ok-soft)}
+
+/* the arm card — gate voice: accent rail + static glow ring (pulse-panel idiom) */
+.armcard{position:relative;border:1px solid var(--accent);border-left-width:3px;border-radius:8px;background:var(--surface);
+  padding:17px 19px;box-shadow:0 0 0 1px var(--accent-soft),0 0 18px var(--glow)}
+.armcard .kind{display:inline-flex;align-items:center;gap:6px;border-radius:999px;font-family:var(--mono);font-size:11px;font-weight:700;
+  letter-spacing:.04em;padding:3px 10px;border:1px solid var(--accent);color:var(--accent);background:var(--accent-soft)}
+.armcard .kind .kd{width:6px;height:6px;border-radius:50%;border:1.5px solid var(--accent)}
+.armcard .head{display:flex;align-items:center;gap:12px}
+.armcard .head .ttl{font-size:15px;font-weight:600}
+.armcard .body{font-size:13px;color:var(--muted);margin:12px 0 0;line-height:1.55;max-width:70ch}
+.armcard .body b{color:var(--ink)}
+.consequences{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.consequences li{font-size:12.5px;display:flex;gap:9px;align-items:baseline}
+.consequences li::before{content:"→";font-family:var(--mono);color:var(--accent)}
+
+.divider{border-top:1px solid var(--line);margin:16px 0 14px}
+.btnrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.btn{font:inherit;font-size:13.5px;font-weight:600;border-radius:999px;border:1px solid var(--line);background:var(--inset);color:var(--muted);padding:8px 17px;cursor:pointer}
+.btn:hover{color:var(--ink);border-color:var(--accent)}
+.btn-gate{border-color:var(--accent);background:var(--accent);color:var(--on-solid);box-shadow:0 0 12px var(--glow)}
+.btn-gate:hover{opacity:.9}
+.btn-gate:disabled{opacity:.55;cursor:progress}
+.confirmnote{font-size:12px;color:var(--muted);background:var(--accent-soft);border:1px solid var(--accent);border-radius:6px;padding:10px 12px;margin:0 0 12px}
+.confirmnote b{color:var(--accent)}
+
+/* flashes */
+.flash{border-radius:6px;padding:12px 14px;font-size:13px;font-weight:600;margin-bottom:16px}
+.flash-ok{background:var(--ok-soft);color:var(--ok)}
+.flash-conflict{background:var(--warn-soft);color:var(--warn)}
+.flash-error{background:var(--bad-soft);color:var(--bad)}
+.flash .oid{font-family:var(--mono);font-weight:400}
+.flash p{margin:5px 0 0;font-weight:400;line-height:1.5}
+
+/* armed aftermath */
+.metric{display:inline-flex;align-items:center;gap:8px}
+.meter{width:70px;height:5px;border-radius:3px;border:1px solid var(--line);background:var(--inset);overflow:hidden}
+.meter span{display:block;height:100%;width:4%;background:var(--faint)}
+.hint{font-size:11.5px;color:var(--faint);margin-top:6px}
+.spine{position:relative;margin:16px 0 0;padding-left:22px}
+.spine::before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.spine li{position:relative;list-style:none;padding:6px 0;font-size:12.5px}
+.spine li::before{content:"";position:absolute;left:-21px;top:11px;width:9px;height:9px;border-radius:50%;border:2px solid var(--faint);background:var(--inset)}
+.spine li.hot::before{border-color:var(--accent);background:var(--accent);box-shadow:0 0 10px var(--glow)}
+.spine .t{font-family:var(--mono);color:var(--faint);font-size:11px;margin-right:8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="mockbar">
+    <h2>two-voices · mockup 4 / 5 — arming a staged run (the consequential voice)</h2>
+    <p>Arm rides <span class="mono">POST /api/decisions {action:'arm'}</span> — the same write the gate decisions use. A separate, confirmed, glowing control. Running example: arming <span class="mono">run-search</span>. <span class="ac">Serves AC5.1, AC5.2, R5 · REC4, REC11, REC12, P2.</span></p>
+  </div>
+
+  <div class="tabs">
+    <button class="tab on" data-t="idle">Idle</button>
+    <button class="tab" data-t="confirm">Confirm</button>
+    <button class="tab" data-t="committing">Committing…</button>
+    <button class="tab" data-t="armed">Armed (aftermath)</button>
+    <button class="tab" data-t="refuse">Arm refused</button>
+  </div>
+
+  <!-- shared staged header -->
+  <div class="rhead" id="hdr">
+    <span class="eyebrow staged" id="eyebrow">staged · awaiting arm</span>
+    <h1>run-search</h1>
+    <span class="chip" id="hdrchip"><span class="ring"></span>staged</span>
+    <span class="mono" style="margin-left:auto;font-size:11px;color:var(--faint)">local · run/run-search</span>
+  </div>
+
+  <!-- IDLE -->
+  <div class="panel on" id="idle">
+    <div class="armcard">
+      <div class="head"><span class="kind"><span class="kd"></span>STAGED</span><span class="ttl">Ready to arm</span></div>
+      <p class="body">This run is minted and idle. <b>Arming starts it</b>: the orchestrator begins dispatching agents against the brief, and the run starts spending its budget. Staging spent nothing; this is where the meter opens.</p>
+      <div class="divider"></div>
+      <div class="btnrow">
+        <button class="btn btn-gate" onclick="go('confirm')">Arm run…</button>
+        <span style="font-size:11.5px;color:var(--muted)">One control, one purpose. There is no "resume" here — a staged run has nothing to resume.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFIRM -->
+  <div class="panel" id="confirm">
+    <div class="armcard">
+      <div class="head"><span class="kind"><span class="kd"></span>STAGED</span><span class="ttl">Arm run-search?</span></div>
+      <div class="confirmnote" style="margin-top:14px">Arming is <b>consequential</b> and separate from staging — it can't happen by accident on the form.</div>
+      <ul class="consequences">
+        <li>Dispatch begins against the intent brief (standard profile · G0–G3).</li>
+        <li>Budget starts spending toward the <b>$8</b> ceiling.</li>
+        <li>Records <span class="mono">state(run-search): armed by Nathan Carter</span> as one commit.</li>
+      </ul>
+      <div class="divider"></div>
+      <div class="btnrow">
+        <button class="btn btn-gate" onclick="go('committing')">Arm run</button>
+        <button class="btn" onclick="go('idle')">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMMITTING -->
+  <div class="panel" id="committing">
+    <div class="armcard">
+      <div class="head"><span class="kind"><span class="kd"></span>STAGED</span><span class="ttl">Arming…</span></div>
+      <p class="body">Writing the arm decision to <span class="mono">run/run-search</span> via compare-and-swap. If the run moved underneath you, this re-presents rather than retrying.</p>
+      <div class="divider"></div>
+      <div class="btnrow">
+        <button class="btn btn-gate" disabled>Arming…</button>
+      </div>
+      <p class="hint">Mirrors <span class="mono">DecidePanel</span>'s "Committing…" busy state — same idiom, same wording family.</p>
+    </div>
+  </div>
+
+  <!-- ARMED -->
+  <div class="panel" id="armed">
+    <div class="flash flash-ok" role="status">
+      Armed — committed <span class="oid">c4d0e19a</span>
+      <p>run-search is running. Dispatch has begun; the budget meter is now live.</p>
+    </div>
+    <div class="armcard" style="box-shadow:none;border-color:var(--line);border-left-color:var(--ok)">
+      <div class="head">
+        <span class="kind" style="border-color:var(--ok);color:var(--ok);background:var(--ok-soft)"><span class="kd" style="border-color:var(--ok);background:var(--ok)"></span>ARMED</span>
+        <span class="ttl">run-search · spec phase</span>
+      </div>
+      <div class="metric" style="margin-top:12px">
+        <span class="meter"><span></span></span>
+        <span class="mono" style="font-size:12px;color:var(--muted)">$0.11 / $8</span>
+        <span style="font-size:12px;color:var(--muted)">· dispatch in progress</span>
+      </div>
+      <ol class="spine">
+        <li><span class="t">2h ago</span>staged by Nathan Carter — <span class="mono" style="color:var(--faint)">a7c1e0f</span></li>
+        <li class="hot"><span class="t">just now</span><b style="color:var(--accent)">armed by Nathan Carter</b> — <span class="mono" style="color:var(--faint)">c4d0e19</span> → dispatch</li>
+      </ol>
+      <p class="hint">The header eyebrow flips to <b>armed</b>, the chip fills and glows (running, not at rest), and the two-phase lifecycle reads as a sequence in the history spine.</p>
+    </div>
+  </div>
+
+  <!-- REFUSE -->
+  <div class="panel" id="refuse">
+    <div class="flash flash-error" role="alert">
+      Can't arm — run is not staged
+      <p>run-search was already armed 40s ago (now in the spec phase). <span class="mono">planDecision</span>'s arm case refuses a run that isn't in the staged rest state — surfaced here verbatim, not swallowed.</p>
+    </div>
+    <div class="armcard" style="box-shadow:none;border-color:var(--line)">
+      <p class="body" style="margin-top:0">The arm control is gone because there is nothing to arm; the run's live decisions (gates, escalations) take over the card. A concurrent-move (409) keeps the existing conflict posture: <span class="mono">re-read, don't auto-retry</span>.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+function go(id){
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('on'));
+  [...document.querySelectorAll('.tab')].find(t=>t.dataset.t===id).classList.add('on');
+  document.getElementById(id).classList.add('on');
+  syncHeader(id);
+  if(id==='committing') setTimeout(()=>go('armed'),900);
+}
+function syncHeader(id){
+  var armed = (id==='armed'||id==='refuse');
+  document.getElementById('eyebrow').className = 'eyebrow '+(armed?'armed':'staged');
+  document.getElementById('eyebrow').textContent = armed?'armed · running':'staged · awaiting arm';
+  document.getElementById('hdrchip').innerHTML = armed?'<span class="dot"></span>'+(id==='refuse'?'spec':'spec'):'<span class="ring"></span>staged';
+}
+document.querySelectorAll('.tab').forEach(function(t){ t.addEventListener('click',()=>go(t.dataset.t)); });
+</script>
+</body>
+</html>

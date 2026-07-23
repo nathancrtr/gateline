@@ -76,3 +76,49 @@ depends_on: []
 status: pending
 
 notes: |
+  round 1 (implementer): G1's notes name `genesis-preview` (state.yaml
+  gates.G1.notes) — built that candidate; two-voices not touched.
+
+  Risk 1 (Vite bundling @agentic/core/record) discharged first, as directed:
+  added a throwaway value import of planRunScaffold in a scratch file and ran
+  `npm run build --workspace=@agentic/web` before writing the form — it
+  bundled cleanly (esbuild compiles the workspace TS source directly), so no
+  plan amendment was needed. The real import lives in pages/new-run.tsx;
+  api.ts's "TYPE-ONLY imports" header comment now carries the ADR-6 exception
+  note (the file itself still imports only types).
+
+  Dependency note (04 runs before 01/03 land): SLUG_PATTERN and the hoisted
+  missingSections are task 01's exports and GET /api/staging is task 03's
+  route — neither exists in this tree yet. Per the plan's parallelism note
+  (01/02/04 start immediately, disjoint surfaces) I did not block on them:
+  api.stagingConfig()/api.stage() are written strictly to the interface
+  contract in plan.md so they'll work once 03 lands; the client's slug check
+  falls back to core scaffold.ts's own SLUG_RE literal
+  (`^[a-z0-9][a-z0-9-]*$`) whenever config.slugPattern hasn't loaded, then
+  switches to the server-supplied pattern once GET /api/staging responds.
+  The client-side section-completeness pre-check does not call
+  extractSections/missingSections at all — with one controlled textarea per
+  required heading (config-supplied list), "any section textarea still
+  blank" is sufficient locally and only ever disables submit (ADR-3/ux A8);
+  the displayed refusal wording always comes from the server's `message`
+  verbatim, never from this check.
+
+  Outcome navigation: on `created`, invalidateQueries() then navigate() fire
+  synchronously in the mutation's onSuccess (REC12); the success Flash is
+  still rendered in local state first so it's not dead code, but in practice
+  the route transition happens on the same tick. No artificial delay was
+  added — none of the task/spec/plan text asked for a visible pause, and
+  decide.tsx's own success flash sets no precedent for one either.
+
+  Wording guard: ran both spec grep targets over
+  frontend/packages/{server,web}/src before handoff. First pass caught one
+  new AC2.3 match — a comment using "incomplete" (contains "complete") in
+  new-run.tsx — reworded to "left blank"; re-ran clean. AC3.2's only hits are
+  pre-existing "linear-gradient"/"animation: linear" lines in styles.css
+  (untouched by this diff, not in this task's file_contact_surface).
+
+  Verification: `cd frontend && npm run typecheck` and
+  `npm run build --workspace=@agentic/web` both pass; `npm test` (root,
+  vitest across all workspaces) — 350 passed, 1 skipped (pre-existing
+  live-smoke skip), 0 failed — confirming no regression outside this task's
+  surface (web still has no unit-test harness of its own, per plan).

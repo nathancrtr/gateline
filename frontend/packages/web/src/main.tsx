@@ -6,6 +6,7 @@ import './styles.css'
 import { App } from './app.tsx'
 import { InboxPage } from './pages/inbox.tsx'
 import { PortfolioPage } from './pages/portfolio.tsx'
+import { NewRunPage } from './pages/new-run.tsx'
 import { RunPage } from './pages/run.tsx'
 import { MetricsPage } from './pages/metrics.tsx'
 
@@ -20,6 +21,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <InboxPage /> },
       { path: 'portfolio', element: <PortfolioPage /> },
+      { path: 'portfolio/new', element: <NewRunPage /> },
       { path: 'metrics', element: <MetricsPage /> },
       { path: 'runs/:src/:slug', element: <RunPage /> },
     ],

@@ -39,6 +39,13 @@ export function PortfolioPage() {
       <header className="mb-[22px] flex items-end gap-4 border-b border-line pb-[14px]">
         <h1 className="font-mono text-xl font-semibold uppercase tracking-[0.14em]">Portfolio</h1>
         <span className="ml-auto text-xs text-muted">{runs.length} runs</span>
+        <Link
+          to="/portfolio/new"
+          title="Stages a run record on a new run/<slug> branch. Nothing dispatches, nothing is spent."
+          className="rounded-full border border-line bg-inset px-4 py-[7px] text-sm font-semibold text-muted transition-all hover:border-accent hover:text-ink"
+        >
+          + New run
+        </Link>
       </header>
       {runs.length === 0 ? (
         <div className="rounded-[5px] border border-line bg-surface px-4 py-[34px] text-center">
@@ -47,8 +54,19 @@ export function PortfolioPage() {
           </span>
           <p className="text-[15px] font-semibold">No runs found.</p>
           <p className="mx-auto mt-1.5 max-w-xs text-xs leading-relaxed text-muted">
-            No <code className="font-mono">runs/&lt;slug&gt;</code> directories on any tracked source yet. Start one
-            with the orchestrator, or point Gate at a repo that has runs.
+            No <code className="font-mono">runs/&lt;slug&gt;</code> directories on any tracked source yet. Stage the
+            first one here — or point Gate at a repo that has runs.
+          </p>
+          <div className="mt-4">
+            <Link
+              to="/portfolio/new"
+              className="inline-block rounded-full border border-accent bg-accent px-4 py-[7px] text-sm font-semibold text-on-solid shadow-[0_0_12px_var(--glow)] hover:opacity-90"
+            >
+              Stage the first run
+            </Link>
+          </div>
+          <p className="mt-2 font-mono text-[11px] text-faint">
+            creates run/&lt;slug&gt; and its genesis commit — nothing dispatches until you arm it
           </p>
         </div>
       ) : (

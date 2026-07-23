@@ -24,3 +24,23 @@ depends_on: []
 status: pending
 
 notes: |
+  Round 2 (implementer): addressed review-01.md finding F1 (empty diff, task not
+  attempted in round 1) by fixing it in code — this round lands the actual
+  implementation on the run branch:
+    - seam.ts: added optional `slug` and `branch` fields to `DispatchRequest`
+      (HeadlessDispatcher untouched, as scoped).
+    - engine.ts: `launch()` now passes `ref.slug` and `ref.branch` in the
+      dispatch call.
+    - test/seam.test.ts: added a new test ("the engine threads run identity
+      through the seam (R2)") that drives a real `Engine` + `FakeDispatcher`
+      over a toy repo and asserts the captured `DispatchRequest` carries
+      `slug: 'toy'` and `branch: 'run/toy'`. It imports test scaffolding from
+      `test/engine.helper.ts` (unmodified) and `removeRunCheckout` from
+      `src/workspace.ts` (unmodified) — neither file was edited, only
+      imported, so the file-contact surface for code changes stays the three
+      declared files.
+  No findings were rebutted; F1 was the only finding and it is fixed.
+  Verified: `npx vitest run packages/orchestrator/test/seam.test.ts` — 12/12
+  pass (including the new test); `npx vitest run
+  packages/orchestrator/test/engine.test.ts` — 11/11 pass (no regression);
+  `npm run typecheck` — clean.

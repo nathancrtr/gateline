@@ -12,6 +12,9 @@ export interface DispatchRequest {
   /** Run-specific prompt body; the adapter's template wraps it. */
   body: string
   timeoutMs: number
+  /** Run identity (optional): the engine always sets these; HeadlessDispatcher ignores them. */
+  slug?: string
+  branch?: string
 }
 
 export interface DispatchOutcome {

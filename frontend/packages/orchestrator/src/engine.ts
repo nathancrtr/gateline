@@ -485,6 +485,8 @@ export class Engine {
           role: intent.role,
           body: promptBody(ref.slug, intent, taskPath, runsRoot, obs.state?.profile ?? 'full'),
           timeoutMs: this.cfg.roleTimeoutMs ?? DEFAULT_ROLE_TIMEOUT_MS,
+          slug: ref.slug,
+          branch: ref.branch,
         })
         if (isolate) {
           const fold = await this.withLock(ref.slug, () => foldTaskBranch(this.cfg.repoDir, ref.branch, checkout as TaskCheckout))

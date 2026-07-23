@@ -5,8 +5,11 @@
 // minutes late, labeled only "Command failed: claude -p …").
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
+import { Engine } from '../src/engine.ts'
 import type { HeadlessManifest } from '../src/manifest.ts'
 import { HeadlessDispatcher } from '../src/seam.ts'
+import { removeRunCheckout } from '../src/workspace.ts'
+import { agentCommit, FakeDispatcher, makeToyRepo, SPEC, TEST_REGISTRY } from './engine.helper.ts'
 
 const shManifest = (script: string): HeadlessManifest => ({
   adapter: 'toy-sh',
@@ -132,6 +135,29 @@ describe('usage_report format ndjson-sum (opencode: one step_finish event per ag
     const outcome = await dispatcher.dispatch({ ...req, timeoutMs: 30_000 })
     expect(outcome.ok).toBe(false)
     expect(outcome.error).toBe('harness produced no parseable JSON output')
+  })
+})
+
+describe('the engine threads run identity through the seam (R2)', () => {
+  const BOT = { name: 'agentic-orchestrator', email: 'orchestrator@agentic.invalid' }
+
+  it("launch() passes the run's slug and branch in the DispatchRequest", async () => {
+    const { dir, clock } = makeToyRepo()
+    const dispatcher = new FakeDispatcher((req) => {
+      if (req.role === 'analyst') agentCommit(req.cwd, clock, { 'runs/toy/spec.md': SPEC }, 'toy: spec')
+      return {}
+    })
+    const engine = new Engine({ repoDir: dir, identity: BOT, dispatcher, registry: TEST_REGISTRY, staleMs: 10 * 60 * 1000 })
+    try {
+      await engine.tick()
+      await engine.drain()
+      expect(dispatcher.calls.length).toBeGreaterThan(0)
+      const call = dispatcher.calls[0]!
+      expect(call.slug).toBe('toy')
+      expect(call.branch).toBe('run/toy')
+    } finally {
+      await removeRunCheckout(dir, 'run/toy')
+    }
   })
 })
 

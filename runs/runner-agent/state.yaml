@@ -303,6 +303,17 @@ budget:
           tokens_in: 290018,
           tokens_out: 6589,
           cost_usd: 0.5763275296000001
+        },
+      {
+          at: 2026-07-23T19:23:05.721Z,
+          role: implementer,
+          task: 01-seam-extend,
+          round: 1,
+          adapter: opencode,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:
@@ -327,7 +338,7 @@ gates:
   G3: { approved: false, by: null, at: null, notes: null }
 tasks:
   [
-    { id: 01-seam-extend, status: pending, review_rounds: 0 },
+    { id: 01-seam-extend, status: dispatched, review_rounds: 0 },
     { id: 02-remote-dispatcher, status: pending, review_rounds: 0 },
     { id: 03-runner-api, status: pending, review_rounds: 0 },
     { id: 04-workstation-agent, status: pending, review_rounds: 0 },

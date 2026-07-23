@@ -12,7 +12,7 @@ intake:
   staged_by: "Nathan Carter"
 budget:
   cost_limit_usd: null
-  cost_spent_usd: 11.37
+  cost_spent_usd: 11.38
   ledger:
     [
       {
@@ -134,9 +134,9 @@ budget:
           round: null,
           adapter: opencode,
           model: anthropic/claude-fable-5,
-          tokens_in: null,
-          tokens_out: null,
-          cost_usd: null
+          tokens_in: 7656,
+          tokens_out: 340,
+          cost_usd: 0.0106278308
         }
     ]
 gates:

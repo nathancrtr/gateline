@@ -122,3 +122,78 @@ notes: |
   vitest across all workspaces) — 350 passed, 1 skipped (pre-existing
   live-smoke skip), 0 failed — confirming no regression outside this task's
   surface (web still has no unit-test harness of its own, per plan).
+
+  round 2 (implementer): responding to review-04.md, finding by finding —
+  all fixed except F6 (left as-is per the review's own instruction).
+
+  F1 (major, pushFailed dropped) — fixed. `new-run.tsx`'s mutation
+  `onSuccess` now only fires `navigate()` when `!result.pushFailed`; a
+  `created` outcome carrying `pushFailed` renders a new `warn`-tone Flash
+  naming the local commit, the push error verbatim, and a manual "Continue
+  to <slug>" link — the operator sees the partial state and chooses to
+  proceed rather than being silently carried past it.
+
+  F2 (major, budget degrades to unmetered) — fixed. The `Number.isNaN →
+  null` coercion is gone; `costLimitUsd` now carries the raw parsed value
+  straight through, and a new `budgetInvalid` check (`!Number.isFinite ||
+  < 0`) blocks `planRunScaffold` from even being called — `scaffoldError`
+  is set directly for the non-finite case (Infinity/NaN) and `ready` now
+  requires `!scaffoldError`, so Infinity/negative/NaN budgets all disable
+  submit instead of silently landing as `null` or as-is. `submitHint`
+  surfaces the same message; the budget input also gets `border-bad` +
+  `min="0"` for a visual/native-level cue.
+
+  F3 (major, conflict collapsed into slug-taken) — fixed. `conflict` no
+  longer shares the slug-taken branch/headline/link. It now renders its own
+  `warn`-tone Flash ("Refused — re-check and retry."), quoting the server
+  message verbatim, with a note that this is not a slug collision and no
+  link to a run that may not exist — matching REC11's re-present-don't-retry
+  posture and reusing the same `warn` tone `decide.tsx`'s own 409 conflict
+  already uses (ux P6).
+
+  F4 (minor, author line dangling/miskeyed) — fixed. `RecordPreview` now
+  takes an `identity` prop (`source.identity`, wired from the page) and
+  renders "`<name>` <`<email>`> — author & committer" when present, or a
+  `text-bad` "(no identity configured) — author & committer" fallback when
+  not — matching mockup `02-staging-form.html`'s `.rec-author` line
+  (`Nathan Carter <nathan@carter.dev> — author & committer`). The old
+  `scaffold.clientKey`-keyed conditional (always true, never showed
+  identity) is gone.
+
+  F5 (minor, re-duplicated slug grammar) — fixed. `FALLBACK_SLUG_PATTERN`
+  now reads `SLUG_PATTERN` value-imported from `@agentic/core/record`
+  (already value-imported in this file for `planRunScaffold`/`ScaffoldError`
+  — no new import surface) instead of a hand-copied literal; a comment notes
+  it's a pre-config-load fallback only.
+
+  F6 (minor, PLAUSIBLE — multi-source picker preselects) — left unchanged.
+  The review itself flags this "for G2 visibility, not as an implementer
+  deviation," noting the G1-approved mockup
+  (`design/genesis-preview/02-staging-form.html:203`) itself preselects the
+  first source. Concur: this is a plan/mockup-level reading of AC1.3 for the
+  human gate to weigh, not a code defect in this diff — no change made.
+
+  Wording guard re-run after the F1/F3 edits (new `warn`-tone Flash prose):
+  `grep -rniE "openai|anthropic|complet(e|ion)|generate.*brief"
+  frontend/packages/{server,web}/src` caught one new hit — a code comment
+  using "incomplete" — reworded to "partial"; re-ran clean (both AC2.3 and
+  AC3.2 grep targets, zero matches / only the untouched pre-existing
+  styles.css hits).
+
+  Verification (round 2): `npm install` (node_modules was absent in this
+  checkout at dispatch) then `cd frontend && npm run typecheck` — clean
+  except one pre-existing error in `chips.tsx:42` (`item.kind === 'staged'`
+  not yet in that file's lookup object) confirmed present before this
+  round's diff too (`git stash` + rerun) — task 05's surface, not touched
+  here, expected to resolve when that task's branch lands.
+  `npm run build --workspace=@agentic/web` fails on the same pre-existing
+  `chips.tsx` error (tsc gates the build before vite bundles) — same
+  cross-task dependency, not a regression from this round.  `npm test`
+  (root, vitest across all workspaces) — full run reported 6 failures, all
+  `Test timed out in 30000ms` in `packages/orchestrator/test/{engine,
+  fixture}.test.ts` under this sandbox's parallel worker load (41 files
+  across ~12 vitest workers); re-ran those two files alone and all 13 of
+  their tests passed (engine.test.ts's slowest case took 70s solo, well
+  past the 30s timeout it hit when contending for CPU) — resource
+  contention, not a regression from this diff, which touches only
+  `new-run.tsx`.

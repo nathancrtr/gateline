@@ -8,12 +8,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { planRunScaffold, ScaffoldError, type RunScaffold } from '@agentic/core/record'
+import { planRunScaffold, ScaffoldError, SLUG_PATTERN, type RunScaffold } from '@agentic/core/record'
 import { ApiError, PROFILE_GATES, api, type Profile, type StageOutcomeView, type StagingSourceConfig } from '../api.ts'
 import { PageStatus } from './inbox.tsx'
 
 const PROFILES: Profile[] = ['patch', 'standard', 'full']
-const FALLBACK_SLUG_PATTERN = '^[a-z0-9][a-z0-9-]*$'
+// Fallback only until GET /api/staging responds; core's own SLUG_PATTERN (not
+// a re-derived literal, ADR-3) — the server-supplied pattern takes over the
+// instant config loads, so this value is never in force while the form is
+// interactive.
+const FALLBACK_SLUG_PATTERN = SLUG_PATTERN
 
 /** Suggests a slug from a title — lowercase, dashes, trimmed. Also reused to
  * turn a section heading into a stable anchor id. */
@@ -99,8 +103,15 @@ export function NewRunPage() {
   const sectionEntries = source?.briefSections ?? []
   const missingLocal = sectionEntries.filter((h) => !(sections[h] ?? '').trim())
   const briefMarkdown = useMemo(() => assembleBrief(title, sectionEntries, sections), [title, sectionEntries, sections])
-  const budgetParsed = budget.trim() === '' ? null : Number(budget)
-  const costLimitUsd = budgetParsed !== null && Number.isNaN(budgetParsed) ? null : budgetParsed
+  const budgetTrimmed = budget.trim()
+  // Never coerce a bad value to null (that silently degrades to an unmetered
+  // run, F2) — an operator who typed a ceiling gets that ceiling or a
+  // refusal to submit, never silence. `costLimitUsd` carries the raw parsed
+  // number through to both the preview and the request; `budgetInvalid`
+  // gates readiness so a non-finite or negative value can never reach
+  // either.
+  const costLimitUsd = budgetTrimmed === '' ? null : Number(budgetTrimmed)
+  const budgetInvalid = costLimitUsd !== null && (!Number.isFinite(costLimitUsd) || costLimitUsd < 0)
   const intake = {
     source: intakeSource.trim() || null,
     ref: intakeRef.trim() || null,
@@ -112,25 +123,37 @@ export function NewRunPage() {
   // with, called on every keystroke. It never fails on a section left blank
   // (the assembled markdown always carries its heading chrome, so it is
   // never literally empty) — only an invalid slug/title/budget throws.
+  // `budgetInvalid` is checked first so a non-finite value (e.g. `1e999` →
+  // `Infinity`) never even reaches the planner with a coerced-away ceiling;
+  // core's own ScaffoldError text still surfaces for the finite-but-rejected
+  // shapes the planner itself catches.
   let scaffold: RunScaffold | null = null
   let scaffoldError: string | null = null
   if (title.trim() && slug) {
-    try {
-      scaffold = planRunScaffold({
-        slug,
-        title,
-        profile,
-        briefMarkdown,
-        costLimitUsd,
-        intake,
-        stagedBy: source?.identity?.name ?? '(no identity configured)',
-      })
-    } catch (e) {
-      scaffoldError = e instanceof ScaffoldError ? e.message : (e as Error).message
+    if (budgetInvalid) {
+      scaffoldError = `Budget ceiling must be a finite, non-negative number (got ${budgetTrimmed}).`
+    } else {
+      try {
+        scaffold = planRunScaffold({
+          slug,
+          title,
+          profile,
+          briefMarkdown,
+          costLimitUsd,
+          intake,
+          stagedBy: source?.identity?.name ?? '(no identity configured)',
+        })
+      } catch (e) {
+        scaffoldError = e instanceof ScaffoldError ? e.message : (e as Error).message
+      }
     }
   }
 
-  const ready = Boolean(source) && slugValid && title.trim().length > 0 && missingLocal.length === 0
+  // `!scaffoldError` closes F2: any budget the planner itself would reject —
+  // and by construction the only remaining path into scaffoldError once
+  // title/slug/sections are already valid — keeps submit disabled rather
+  // than degrading the request into an unmetered run.
+  const ready = Boolean(source) && slugValid && title.trim().length > 0 && missingLocal.length === 0 && !scaffoldError
 
   const mutation = useMutation({
     mutationFn: api.stage,
@@ -138,7 +161,12 @@ export function NewRunPage() {
       setOutcome(result)
       if (result.outcome === 'created' && source) {
         void queryClient.invalidateQueries()
-        navigate(`/runs/${source.id}/${result.slug}`)
+        // Only navigate away on a clean create. When the push failed
+        // (F1), the record is real but the remote never got run/<slug> —
+        // stay put and render the warning below with a manual link, rather
+        // than silently carrying the operator to a page that implies full
+        // replication.
+        if (!result.pushFailed) navigate(`/runs/${source.id}/${result.slug}`)
       }
     },
     onError: (e) => {
@@ -166,6 +194,7 @@ export function NewRunPage() {
   let submitHint: string
   if (missingLocal.length > 0) submitHint = `${missingLocal.length} required section${missingLocal.length > 1 ? 's are' : ' is'} still empty — ${missingLocal.join(', ')}. The server re-checks on submit; its wording is what you would see.`
   else if (!slugValid) submitHint = `Slug must match ${slugPattern} (branch- and path-safe).`
+  else if (scaffoldError) submitHint = scaffoldError
   else submitHint = `Creates run/${slug} and commits the record shown. Nothing dispatches, nothing is spent — Arm is a separate decision on the staged run.`
 
   return (
@@ -183,7 +212,7 @@ export function NewRunPage() {
 
       <div className="flex flex-col-reverse gap-[22px] lg:flex-row lg:items-start">
         <div className="min-w-0 flex-1">
-          {outcome?.outcome === 'created' && (
+          {outcome?.outcome === 'created' && !outcome.pushFailed && (
             <Flash tone="ok">
               <p className="font-semibold">
                 Staged {outcome.slug} — committed {outcome.commit.slice(0, 10)} on {outcome.branch}.
@@ -191,6 +220,22 @@ export function NewRunPage() {
               <p className="mt-1 text-muted">
                 Taking you to the run, where Arm is the next decision. Nothing has dispatched and nothing is spent.
               </p>
+            </Flash>
+          )}
+
+          {outcome?.outcome === 'created' && outcome.pushFailed && (
+            <Flash tone="warn">
+              <p className="font-semibold">
+                Staged {outcome.slug} — committed {outcome.commit.slice(0, 10)} on {outcome.branch}, but the push failed.
+              </p>
+              <p className="mt-1.5 font-mono text-xs text-muted">{outcome.pushFailed}</p>
+              <p className="mt-1.5 text-muted">
+                The commit is local only — the remote never received run/{outcome.slug}. Nothing has dispatched and
+                nothing is spent; retry the push from the server, then continue.
+              </p>
+              <Link to={`/runs/${source.id}/${outcome.slug}`} className="mt-2 inline-block font-semibold text-warn hover:underline">
+                Continue to {outcome.slug}
+              </Link>
             </Flash>
           )}
 
@@ -204,13 +249,30 @@ export function NewRunPage() {
             </Flash>
           )}
 
-          {outcome?.outcome === 'refused' && (outcome.reason === 'slug-taken' || outcome.reason === 'conflict') && (
+          {outcome?.outcome === 'refused' && outcome.reason === 'slug-taken' && (
             <Flash tone="bad">
               <p className="font-semibold">Refused — slug taken.</p>
               <p className="mt-1 text-muted">{outcome.message}</p>
               <Link to={`/runs/${source.id}/${slug}`} className="mt-2 inline-block font-semibold text-bad hover:underline">
                 Open the existing {slug}
               </Link>
+            </Flash>
+          )}
+
+          {/* `conflict` is not a slug-taken collision — it's the default branch
+              having no commits to stage against, or a lost CAS race. Neither
+              implies an existing run at this slug, so this taxonomy member
+              gets its own re-present-don't-retry posture (ux P6/REC11), the
+              same `warn` tone `decide.tsx` already uses for its 409 conflict,
+              never the slug-taken headline or a link that may 404. */}
+          {outcome?.outcome === 'refused' && outcome.reason === 'conflict' && (
+            <Flash tone="warn">
+              <p className="font-semibold">Refused — re-check and retry.</p>
+              <p className="mt-1 text-muted">{outcome.message}</p>
+              <p className="mt-1.5 text-[12px] text-faint">
+                Not a slug collision — the branch could not be created as requested. Nothing was committed; review the
+                details above and submit again.
+              </p>
             </Flash>
           )}
 
@@ -358,9 +420,10 @@ export function NewRunPage() {
             <input
               id="budget"
               type="number"
+              min="0"
               value={budget}
               onChange={(e) => setBudget(e.target.value)}
-              className="w-full rounded-[5px] border border-line bg-inset px-2.5 py-2 text-sm"
+              className={`w-full rounded-[5px] border bg-inset px-2.5 py-2 text-sm ${budgetInvalid ? 'border-bad' : 'border-line'}`}
             />
             <p className="mt-1 text-[11.5px] text-faint">Blank = no ceiling; the run reads as unmetered.</p>
           </div>
@@ -488,6 +551,7 @@ export function NewRunPage() {
           sections={sections}
           sectionEntries={sectionEntries}
           clientKey={clientKey}
+          identity={source.identity}
         />
       </div>
     </div>
@@ -503,6 +567,7 @@ function RecordPreview({
   sections,
   sectionEntries,
   clientKey,
+  identity,
 }: {
   slug: string
   profile: Profile
@@ -512,6 +577,7 @@ function RecordPreview({
   sections: Record<string, string>
   sectionEntries: string[]
   clientKey: string
+  identity: { name: string; email: string } | null
 }) {
   const filledCount = sectionEntries.filter((h) => (sections[h] ?? '').trim()).length
   const branchLabel = slug || '…'
@@ -540,11 +606,15 @@ function RecordPreview({
           <p className="font-mono text-xs leading-[1.5] font-semibold break-words">
             {scaffold ? scaffold.message : (scaffoldError ?? `state(${branchLabel}): staged by …`)}
           </p>
-          {scaffold && (
-            <p className="mt-0.5 font-mono text-[11.5px] text-muted">
-              <span className="font-semibold text-ink">{scaffold.clientKey ? 'author & committer' : 'author'}</span>
-            </p>
-          )}
+          {scaffold &&
+            (identity ? (
+              <p className="mt-0.5 font-mono text-[11.5px] text-muted">
+                <span className="font-semibold text-ink">{identity.name}</span> <span className="text-faint">&lt;{identity.email}&gt;</span>{' '}
+                — author &amp; committer
+              </p>
+            ) : (
+              <p className="mt-0.5 font-mono text-[11.5px] font-semibold text-bad">(no identity configured) — author &amp; committer</p>
+            ))}
         </div>
 
         <div className="border-t border-line pt-2.5">
@@ -614,12 +684,16 @@ function RecordPreview({
   )
 }
 
-function Flash({ tone, children }: { tone: 'ok' | 'info' | 'bad' | 'cfg'; children: React.ReactNode }) {
+function Flash({ tone, children }: { tone: 'ok' | 'info' | 'bad' | 'cfg' | 'warn'; children: React.ReactNode }) {
   const cls = {
     ok: 'bg-ok-soft text-ok',
     info: 'border border-accent bg-accent-soft text-accent',
     bad: 'bg-bad-soft text-bad',
     cfg: 'border border-dashed border-bad bg-bad-soft text-bad',
+    // Same tone `decide.tsx`'s 409 conflict Flash uses (ux P6) — a third
+    // class between ok and bad, for outcomes that are real but partial
+    // (push failed) or need a re-present rather than an error (conflict).
+    warn: 'border border-warn bg-warn-soft text-warn',
   }[tone]
   return (
     <div role={tone === 'bad' || tone === 'cfg' ? 'alert' : 'status'} className={`mb-4 rounded-[5px] px-3.5 py-3 text-[13px] leading-[1.55] ${cls}`}>

@@ -311,7 +311,7 @@ tasks:
     { id: 03-server-staging-routes, status: review-approved, review_rounds: 1 },
     { id: 04-web-staging-form, status: review-approved, review_rounds: 2 },
     { id: 05-web-staged-state-arm, status: review-approved, review_rounds: 1 },
-    { id: 06-e2e-staging-arm, status: in-review, review_rounds: 1 }
+    { id: 06-e2e-staging-arm, status: review-approved, review_rounds: 1 }
   ]
 escalations:
   [

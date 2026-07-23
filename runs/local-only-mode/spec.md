@@ -2,32 +2,16 @@
 
 ## Context
 
-Local-only operation already works today as an emergent property of a three-layer
-`push` resolution — CLI `--no-push` → per-source config `push:` → the
-`pushWhenOriginExists()` origin auto-detect in
-`frontend/packages/core/src/view-model/config.ts` — not as a named mode. All three
-gaps the intent brief cites are confirmed in the checked-out code: `ensureDraftPr`
-(`frontend/packages/core/src/sources/pr-ensure.ts`) gates on `remote.origin.url` and
-whether the branch is already on origin, never on the `push` flag, so `--no-push` on
-a repo with an origin and a previously pushed branch still opens a draft PR; the CLI
-`sync` command (`frontend/packages/cli/src/main.ts:647-675`) wires
-`GhCliProvider.approval` (`frontend/packages/core/src/sources/sync.ts:90-110`) with
-no try/catch, so a remoteless repo's rejected `gh pr list` propagates as an uncaught
-throw instead of a clean report; and `docs/TOPOLOGY.md` §3.1 claims "the orchestrator
-refuses `--push` without a sync provider," but neither `EngineConfig`
-(`frontend/packages/orchestrator/src/engine.ts`) nor the `up` command
-(`main.ts:679-771`) has any such guard or sync-provider concept at all. A fourth,
-unnamed gap surfaces from the same reading: the engine's heartbeat `syncFromRemote`
-(`engine.ts:165-171`) and the server's per-source interval sync
-(`frontend/packages/server/src/main.ts:76-92`) both always issue `git fetch origin`
-even on a remoteless clone, tolerating the resulting failure rather than skipping the
-attempt — at odds with the brief's "no fetch against origin is attempted"
-constraint. `agentic up` already logs an informal `local-only` vs `pushing to origin`
-marker keyed off the `push` boolean (`main.ts:771`), the closest existing precedent
-for the named mode this run introduces. The webhook's own PR-review sync
-(`frontend/packages/server/src/webhook.ts`) already self-skips without a configured
-secret and belongs to the hosted topology the brief marks out of scope, so it needs
-no separate suppression work here.
+Local-only operation already works today, but only as a side effect of existing push logic — not as a named mode. Every gap the intent brief flags is confirmed in the code, plus one more gap the brief didn't name.
+
+Local-only resolves through three layers: an explicit CLI flag, per-source config, and origin auto-detection (`pushWhenOriginExists()`, `frontend/packages/core/src/view-model/config.ts`). None of these layers names it as a mode — it's only inferable from the result. `agentic up` already logs an informal `local-only`/`pushing to origin` marker off the `push` boolean (`frontend/packages/cli/src/main.ts:771`), the closest existing precedent.
+
+Reading the code confirmed four gaps:
+
+- **PR auto-creation ignores local-only.** `ensureDraftPr` (`frontend/packages/core/src/sources/pr-ensure.ts`) checks `remote.origin.url` and prior pushes, never `push`, so `--no-push` on an already-pushed repo with an origin still opens a draft PR.
+- **`agentic sync` throws instead of reporting.** The CLI `sync` command (`main.ts:647-675`) wires `GhCliProvider.approval` with no try/catch, so a remoteless repo's rejected `gh pr list` throws uncaught.
+- **Docs claim a guard that doesn't exist.** `docs/TOPOLOGY.md` §3.1 says the orchestrator refuses `--push` without a sync provider, but neither `EngineConfig` nor `up` enforces it.
+- **Fetch still hits origin on remoteless clones.** The engine's heartbeat sync and the server's interval sync both always run `git fetch origin`, tolerating failure instead of skipping it — a gap the brief didn't name.
 
 ## Requirements
 

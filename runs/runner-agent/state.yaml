@@ -1,7 +1,7 @@
 run: runner-agent
 branch: run/runner-agent
-phase: paused # staged — not yet armed; `agentic arm runner-agent` starts the run
-paused_reason: escalation
+phase: plan # staged — not yet armed; `agentic arm runner-agent` starts the run
+paused_reason: null
 profile: full # patch | standard | full
 intake:
   # source-agnostic staging provenance; free-form path: nulls + client_key

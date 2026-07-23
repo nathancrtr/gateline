@@ -12,7 +12,7 @@ intake:
   staged_by: "Nathan Carter"
 budget:
   cost_limit_usd: 50
-  cost_spent_usd: 27.23
+  cost_spent_usd: 30.93
   ledger:
     [
       {
@@ -193,9 +193,9 @@ budget:
           round: 2,
           adapter: claude-code,
           model: anthropic/claude-sonnet-5,
-          tokens_in: null,
-          tokens_out: null,
-          cost_usd: null
+          tokens_in: 6,
+          tokens_out: 2263,
+          cost_usd: 3.696497650000001
         }
     ]
 gates:
@@ -219,7 +219,7 @@ gates:
   G2: { approved: false, by: null, at: null, notes: null }
 tasks:
   [
-    { id: 01-core-mode-resolution, status: dispatched, review_rounds: 1 },
+    { id: 01-core-mode-resolution, status: in-review, review_rounds: 1 },
     { id: 02-egress-guard-seams, status: review-approved, review_rounds: 1 },
     { id: 03-cli-wiring, status: pending, review_rounds: 0 },
     { id: 04-server-orchestrator-wiring, status: pending, review_rounds: 0 },

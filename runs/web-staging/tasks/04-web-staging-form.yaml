@@ -1,0 +1,199 @@
+id: 04-web-staging-form
+title: "New-run staging form: Portfolio entry point, brief section editor, outcome taxonomy"
+requirements: [R1, R2, R3, R4, R7, R8]
+
+scope: |
+  Build the web staging surface per plan ADR-5/ADR-6/ADR-7 and the "Web API client"
+  + "Web rendering seams" contracts. Visual composition follows the design
+  candidate named in runs/web-staging/state.yaml gates.G1.notes (mockups and
+  look-and-feel spec under runs/web-staging/design/<candidate>/ — genesis-preview
+  adds a live record-preview panel; two-voices is the plain form). If the note
+  names no candidate, stop and escalate; do not guess.
+
+  1. frontend/packages/web/src/api.ts: add StagingConfigResponse / StageRequest /
+     StageOutcomeView types, api.stagingConfig(), and api.stage() exactly per the
+     plan contract — refusal outcomes resolve as values (carrying reason, message,
+     missing?, status); only network/parse failures throw ApiError.
+  2. New file frontend/packages/web/src/pages/new-run.tsx — the form:
+     - Source picker only when config.sources.length > 1 (AC1.3); with one source,
+       no picker rendered.
+     - Title input; slug input auto-suggested from title, editable, validated
+       against config.slugPattern, with the permanent run/<slug> ref displayed
+       (ux REC3). Profile choice (patch|standard|full, gate ledger per profile via
+       the existing PROFILE_GATES mirror). Budget input (empty → null).
+     - One empty multiline input per briefSections entry, headings as fixed chrome;
+       instructive placeholders only — no prefilled prose anywhere (AC2.1); client
+       assembles the intent-brief.md markdown (plan ADR-5). No model/API call of
+       any kind (AC2.3).
+     - Intake: three plain optional text inputs (source/ref/url) captioned as the
+       operator's own pointer text — no dropdown/preview/fetch (AC3.1); clientKey
+       generated once per form session via crypto.randomUUID(), not typed (ux REC8).
+     - Attribution rendered read-only from config identity; no name field (AC4.2).
+       Identity-null handling per ux REC7(d)/REC9.
+     - Client pre-check only disables submit (empty sections, invalid slug); it
+       never renders its own refusal wording (ux A8).
+     - Outcome rendering per ux REC6/REC7 and the selected candidate's mockups:
+       fresh success (names run/<slug> + commit oid, then navigate to
+       /runs/<src>/<slug> per REC12, after queryClient.invalidateQueries());
+       already-staged replay (informational tone, not error, links the run);
+       slug collision (names the existing branch from the server message);
+       no-identity (dashed config-voice refusal, server message verbatim);
+       missing-sections (error summary at top, focus moved, entries linked to
+       fields, identical wording inline, server message verbatim — AC2.2).
+       Build the outcome/flash rendering locally in this file — do not modify
+       decide.tsx (task 05 owns it).
+  3. frontend/packages/web/src/main.tsx: add child route
+     { path: 'portfolio/new', element: <NewRunPage /> }. No app.tsx/nav change
+     (AC7.1).
+  4. frontend/packages/web/src/pages/portfolio.tsx: "New run" button in the page
+     header and a second affordance in the empty state (replace the empty-state
+     copy's dangling gesture), both linking to /portfolio/new (ux REC1).
+  If genesis-preview is selected: first add the value import of planRunScaffold
+  from '@agentic/core/record' and run `npm run build` to verify Vite bundles it
+  (plan Risk 1); on failure, stop and escalate for a plan amendment. Update
+  api.ts's type-only-imports comment per ADR-6.
+  Wording guard: run the spec's grep targets (AC2.3, AC3.2) over
+  frontend/packages/web/src before handoff; introduce no new matches.
+
+file_contact_surface:
+  - frontend/packages/web/src/api.ts
+  - frontend/packages/web/src/pages/new-run.tsx
+  - frontend/packages/web/src/main.tsx
+  - frontend/packages/web/src/pages/portfolio.tsx
+
+acceptance_tests:
+  - AC2.1
+  - AC2.3
+  - AC3.1
+  - AC3.2
+  - "AC4.2 (form half): no name input exists"
+  - AC7.1
+  - "AC8.1/AC8.2 (rendering half): replay renders informational, collision renders as refusal naming the branch"
+  - "cd frontend && npm run typecheck && npm run build pass"
+
+depends_on: []
+
+status: pending
+
+notes: |
+  round 1 (implementer): G1's notes name `genesis-preview` (state.yaml
+  gates.G1.notes) — built that candidate; two-voices not touched.
+
+  Risk 1 (Vite bundling @agentic/core/record) discharged first, as directed:
+  added a throwaway value import of planRunScaffold in a scratch file and ran
+  `npm run build --workspace=@agentic/web` before writing the form — it
+  bundled cleanly (esbuild compiles the workspace TS source directly), so no
+  plan amendment was needed. The real import lives in pages/new-run.tsx;
+  api.ts's "TYPE-ONLY imports" header comment now carries the ADR-6 exception
+  note (the file itself still imports only types).
+
+  Dependency note (04 runs before 01/03 land): SLUG_PATTERN and the hoisted
+  missingSections are task 01's exports and GET /api/staging is task 03's
+  route — neither exists in this tree yet. Per the plan's parallelism note
+  (01/02/04 start immediately, disjoint surfaces) I did not block on them:
+  api.stagingConfig()/api.stage() are written strictly to the interface
+  contract in plan.md so they'll work once 03 lands; the client's slug check
+  falls back to core scaffold.ts's own SLUG_RE literal
+  (`^[a-z0-9][a-z0-9-]*$`) whenever config.slugPattern hasn't loaded, then
+  switches to the server-supplied pattern once GET /api/staging responds.
+  The client-side section-completeness pre-check does not call
+  extractSections/missingSections at all — with one controlled textarea per
+  required heading (config-supplied list), "any section textarea still
+  blank" is sufficient locally and only ever disables submit (ADR-3/ux A8);
+  the displayed refusal wording always comes from the server's `message`
+  verbatim, never from this check.
+
+  Outcome navigation: on `created`, invalidateQueries() then navigate() fire
+  synchronously in the mutation's onSuccess (REC12); the success Flash is
+  still rendered in local state first so it's not dead code, but in practice
+  the route transition happens on the same tick. No artificial delay was
+  added — none of the task/spec/plan text asked for a visible pause, and
+  decide.tsx's own success flash sets no precedent for one either.
+
+  Wording guard: ran both spec grep targets over
+  frontend/packages/{server,web}/src before handoff. First pass caught one
+  new AC2.3 match — a comment using "incomplete" (contains "complete") in
+  new-run.tsx — reworded to "left blank"; re-ran clean. AC3.2's only hits are
+  pre-existing "linear-gradient"/"animation: linear" lines in styles.css
+  (untouched by this diff, not in this task's file_contact_surface).
+
+  Verification: `cd frontend && npm run typecheck` and
+  `npm run build --workspace=@agentic/web` both pass; `npm test` (root,
+  vitest across all workspaces) — 350 passed, 1 skipped (pre-existing
+  live-smoke skip), 0 failed — confirming no regression outside this task's
+  surface (web still has no unit-test harness of its own, per plan).
+
+  round 2 (implementer): responding to review-04.md, finding by finding —
+  all fixed except F6 (left as-is per the review's own instruction).
+
+  F1 (major, pushFailed dropped) — fixed. `new-run.tsx`'s mutation
+  `onSuccess` now only fires `navigate()` when `!result.pushFailed`; a
+  `created` outcome carrying `pushFailed` renders a new `warn`-tone Flash
+  naming the local commit, the push error verbatim, and a manual "Continue
+  to <slug>" link — the operator sees the partial state and chooses to
+  proceed rather than being silently carried past it.
+
+  F2 (major, budget degrades to unmetered) — fixed. The `Number.isNaN →
+  null` coercion is gone; `costLimitUsd` now carries the raw parsed value
+  straight through, and a new `budgetInvalid` check (`!Number.isFinite ||
+  < 0`) blocks `planRunScaffold` from even being called — `scaffoldError`
+  is set directly for the non-finite case (Infinity/NaN) and `ready` now
+  requires `!scaffoldError`, so Infinity/negative/NaN budgets all disable
+  submit instead of silently landing as `null` or as-is. `submitHint`
+  surfaces the same message; the budget input also gets `border-bad` +
+  `min="0"` for a visual/native-level cue.
+
+  F3 (major, conflict collapsed into slug-taken) — fixed. `conflict` no
+  longer shares the slug-taken branch/headline/link. It now renders its own
+  `warn`-tone Flash ("Refused — re-check and retry."), quoting the server
+  message verbatim, with a note that this is not a slug collision and no
+  link to a run that may not exist — matching REC11's re-present-don't-retry
+  posture and reusing the same `warn` tone `decide.tsx`'s own 409 conflict
+  already uses (ux P6).
+
+  F4 (minor, author line dangling/miskeyed) — fixed. `RecordPreview` now
+  takes an `identity` prop (`source.identity`, wired from the page) and
+  renders "`<name>` <`<email>`> — author & committer" when present, or a
+  `text-bad` "(no identity configured) — author & committer" fallback when
+  not — matching mockup `02-staging-form.html`'s `.rec-author` line
+  (`Nathan Carter <nathan@carter.dev> — author & committer`). The old
+  `scaffold.clientKey`-keyed conditional (always true, never showed
+  identity) is gone.
+
+  F5 (minor, re-duplicated slug grammar) — fixed. `FALLBACK_SLUG_PATTERN`
+  now reads `SLUG_PATTERN` value-imported from `@agentic/core/record`
+  (already value-imported in this file for `planRunScaffold`/`ScaffoldError`
+  — no new import surface) instead of a hand-copied literal; a comment notes
+  it's a pre-config-load fallback only.
+
+  F6 (minor, PLAUSIBLE — multi-source picker preselects) — left unchanged.
+  The review itself flags this "for G2 visibility, not as an implementer
+  deviation," noting the G1-approved mockup
+  (`design/genesis-preview/02-staging-form.html:203`) itself preselects the
+  first source. Concur: this is a plan/mockup-level reading of AC1.3 for the
+  human gate to weigh, not a code defect in this diff — no change made.
+
+  Wording guard re-run after the F1/F3 edits (new `warn`-tone Flash prose):
+  `grep -rniE "openai|anthropic|complet(e|ion)|generate.*brief"
+  frontend/packages/{server,web}/src` caught one new hit — a code comment
+  using "incomplete" — reworded to "partial"; re-ran clean (both AC2.3 and
+  AC3.2 grep targets, zero matches / only the untouched pre-existing
+  styles.css hits).
+
+  Verification (round 2): `npm install` (node_modules was absent in this
+  checkout at dispatch) then `cd frontend && npm run typecheck` — clean
+  except one pre-existing error in `chips.tsx:42` (`item.kind === 'staged'`
+  not yet in that file's lookup object) confirmed present before this
+  round's diff too (`git stash` + rerun) — task 05's surface, not touched
+  here, expected to resolve when that task's branch lands.
+  `npm run build --workspace=@agentic/web` fails on the same pre-existing
+  `chips.tsx` error (tsc gates the build before vite bundles) — same
+  cross-task dependency, not a regression from this round.  `npm test`
+  (root, vitest across all workspaces) — full run reported 6 failures, all
+  `Test timed out in 30000ms` in `packages/orchestrator/test/{engine,
+  fixture}.test.ts` under this sandbox's parallel worker load (41 files
+  across ~12 vitest workers); re-ran those two files alone and all 13 of
+  their tests passed (engine.test.ts's slowest case took 70s solo, well
+  past the 30s timeout it hit when contending for CPU) — resource
+  contention, not a regression from this diff, which touches only
+  `new-run.tsx`.

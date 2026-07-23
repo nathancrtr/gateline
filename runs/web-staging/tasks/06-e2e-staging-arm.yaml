@@ -1,0 +1,126 @@
+id: 06-e2e-staging-arm
+title: "Playwright e2e: stage through the UI, staged rendering, arm, replay/collision"
+requirements: [R1, R2, R4, R5, R6, R8]
+
+scope: |
+  New spec file frontend/e2e/staging.spec.ts proving the whole loop against a
+  fresh fixture repo, per plan ADR-8. Follow smoke.spec.ts's idioms (spawned
+  server, readiness poll, execFileSync git assertions) but self-contained: own
+  generateFixtureRepo() dir, own server on a port other than 4399 (e.g. 4398),
+  and test.use({ baseURL: 'http://127.0.0.1:<port>' }) so it never collides with
+  smoke.spec.ts's server under parallel workers (plan Risk 2). Do not modify
+  smoke.spec.ts, the fixtures package, or playwright.config.ts.
+
+  Flows to cover:
+  1. Entry + stage (happy path): Portfolio → "New run" affordance (nav still shows
+     exactly Inbox/Portfolio/Metrics — AC7.1) → fill title (slug auto-suggested),
+     keep standard profile, fill every brief section, submit → success names
+     run/<slug> and a commit oid; land on the run detail page. Assert via git:
+     branch exists, commit author 'Fixture Operator', subject
+     'state(<slug>): staged by Fixture Operator' (+ client-key suffix when the form
+     sent one), state.yaml contains phase: paused / paused_reason: staged /
+     staged_by (AC1.2's e2e slice, AC4.2).
+  2. Submit disabled while any required section is empty (client pre-check —
+     AC2.1/AC2.2's prevention half; the server refusal wording is covered by task
+     03's tests).
+  3. Staged rendering (AC6.1/AC6.2): the staged run's portfolio row and run header
+     show the staged treatment ('staged' label, not 'paused'); its card offers
+     Arm ([data-decide="arm"]) and has no Resume ([data-decide="resume"] count 0).
+  4. Arm (AC5.1): Arm → confirm → success flash; git subject of the new tip is
+     'state(<slug>): armed by Fixture Operator'; state.yaml phase is no longer
+     paused; the staged treatment is gone on reload.
+  5. Replay (AC8.1): re-submit the identical staging request (same slug/client
+     key — drive the form again or POST via page.request with the captured key) →
+     "already staged" rendered as information (not the error tone), and the
+     branch tip oid is unchanged.
+  6. Collision (AC8.2): stage with slug 'g0-pending' (an existing non-staged
+     fixture run) → visible refusal naming run/g0-pending; no branch mutation.
+  Optional (best-effort, keep if stable): two-page concurrent arm — second arm
+  attempt surfaces the DecisionError as an error flash (AC5.2's e2e slice).
+
+file_contact_surface:
+  - frontend/e2e/staging.spec.ts
+
+acceptance_tests:
+  - AC1.2
+  - AC5.1
+  - AC6.1
+  - AC6.2
+  - AC7.1
+  - AC8.1
+  - AC8.2
+  - "cd frontend && npm run build && npx playwright test — full e2e suite passes (both spec files)"
+
+depends_on: [03-server-staging-routes, 04-web-staging-form, 05-web-staged-state-arm]
+
+status: pending
+
+notes: |
+  Implementer (round 1): wrote frontend/e2e/staging.spec.ts self-contained per
+  ADR-8 — own generateFixtureRepo() dir, own server on port 4398 (smoke.spec.ts
+  owns 4399), test.use({ baseURL: 'http://127.0.0.1:4398' }). All six flows
+  mint/mutate their run through the actual UI (stage via the /portfolio/new
+  form, arm via the run page's DecidePanel), never a raw API shortcut, then
+  assert on git facts (execFileSync idiom) exactly like smoke.spec.ts.
+
+  Covered: (1) entry+stage happy path — Portfolio nav asserted as exactly
+  Inbox/Portfolio/Metrics (AC7.1) before following "+ New run"; title fill
+  auto-suggests the slug; all four brief sections filled; submit lands on the
+  run detail page; git asserts branch/author/commit-subject (with the
+  client-key suffix — the form always mints one per session) and
+  state.yaml's phase/paused_reason/staged_by (AC1.2, AC4.2). (2) submit stays
+  disabled with one required section left blank (AC2.1/AC2.2's client-side
+  prevention half). (3) staged rendering — portfolio row and run header show
+  'staged', not 'paused'; the needs-card offers exactly one
+  data-decide="arm" and zero data-decide="resume" (AC6.1/AC6.2). (4) arm —
+  data-decide="arm"/"arm-confirm", commit subject asserted verbatim, state no
+  longer phase:paused, staged treatment gone after reload (AC5.1). (5)
+  replay — captures the first submission's intake.client_key from the
+  committed state.yaml, then resubmits the form with a Playwright route
+  interception that swaps the form's freshly-minted clientKey for the
+  captured one (proving the server-side idempotency match, not a
+  client-side shortcut); asserts role=status (not alert) and an unchanged
+  branch tip (AC8.1). (6) collision — slug field manually overridden to the
+  existing non-staged fixture run g0-pending; asserts role=alert naming
+  run/g0-pending and an unchanged branch tip (AC8.2).
+
+  Deviation from scope: the optional two-page concurrent-arm probe
+  (AC5.2's e2e slice) is not included. Diagnosed as genuinely unstable, not
+  a flaky race: these e2e-minted runs carry only intent-brief.md/state.yaml
+  (staging never authors spec.md), so once armed a standard-profile run has
+  no reviewable readiness item at all; react-query's refetchOnWindowFocus
+  (main.tsx's QueryClient default) refetches the second page's run query on
+  the OS-level focus change opening/switching to a second Playwright page
+  itself triggers, removing the needs-card (and the error flash inside it)
+  before it can be asserted — independent of whether the arm refusal itself
+  worked (it does; confirmed by hand and already covered server-side by task
+  03's app.test.ts "refuses arm on a non-staged run" case). Per the task's
+  own "keep if stable" instruction, left out rather than landed flaky.
+
+  Also fixed a wrong assumption caught by the first full run: the server
+  derives a zero-config source's id from the fixture repo's temp-dir
+  basename (loadSources' slugForPath), not the literal "fixture" — the same
+  thing smoke.spec.ts's own sourceId() helper already works around. Adopted
+  the identical helper here; all `/runs/<src>/<slug>` URLs and navigations
+  use it. (The first attempt's hardcoded '/runs/fixture/...' 404s on the run
+  page, which starved the Arm test of its needs-card and hit a hard 60s
+  Playwright test timeout — killing that worker before its afterAll could
+  free the port/tmp dir, so a respawned worker's server answered subsequent
+  tests' health checks while serving the *old* worker's stale repo,
+  producing confusing cross-test git failures. Root-caused via a --workers=1
+  isolation run; fixing the source-id assumption removed the timeout and the
+  whole cascade.) Also fixed a genesis-preview-specific assertion bug: the
+  run header's permanent "genesis ... staged by <name>" provenance line
+  (task 05) is unrelated to the staged *rest state* and persists after
+  arming, so "header has no 'staged' text" is the wrong check post-arm;
+  narrowed to the PhaseChip element itself (`header h1 + span`).
+
+  Verification: `cd frontend && npm run build && npx playwright test` — 13
+  passed (7 smoke.spec.ts unchanged + 6 staging.spec.ts), run three times
+  (twice under the default 2-worker config, once isolated at
+  --workers=1 for diagnosis) with no flakes. `npm install` was run first
+  (node_modules was absent in this checkout at dispatch).
+  Wording guard: `grep -rniE "openai|anthropic|complet(e|ion)|generate.*brief"
+  frontend/e2e/staging.spec.ts` and the AC3.2 tracker-api grep both clean
+  (the guard's actual scope, frontend/packages/{server,web}/src, doesn't
+  cover e2e/ at all, but wording was tidied anyway).

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { contractFor, extractSections, validateArtifact, type ContractTemplates } from '../src/index.ts'
+import { contractFor, extractSections, missingSections, validateArtifact, type ContractTemplates } from '../src/index.ts'
 
 const noTemplates: ContractTemplates = { read: async () => null }
 
@@ -18,6 +18,27 @@ describe('extractSections', () => {
   it('reads H2s and ignores headings inside code fences', () => {
     const md = '# T\n\n## Real\n\n```\n## Not a heading\n```\n\n## Also real\n'
     expect(extractSections(md)).toEqual(['Real', 'Also real'])
+  })
+})
+
+describe('missingSections', () => {
+  it('reports no missing sections on an exact match', () => {
+    const md = '# Brief\n\n## Problem\nx\n\n## Motivation\nx\n'
+    expect(missingSections(md, ['Problem', 'Motivation'])).toEqual([])
+  })
+
+  it('matches headings case- and punctuation-insensitively (normalize semantics)', () => {
+    const md = '# Brief\n\n## Out-of-Scope!!\nx\n'
+    expect(missingSections(md, ['Out of scope'])).toEqual([])
+  })
+
+  it('ignores headings inside fenced code blocks (extractSections semantics)', () => {
+    const md = '# Brief\n\n```\n## Constraints\n```\n'
+    expect(missingSections(md, ['Constraints'])).toEqual(['Constraints'])
+  })
+
+  it('reports every required section as missing for empty content', () => {
+    expect(missingSections('', ['Problem', 'Motivation'])).toEqual(['Problem', 'Motivation'])
   })
 })
 

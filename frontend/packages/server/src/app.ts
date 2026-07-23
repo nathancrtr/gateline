@@ -1,25 +1,35 @@
-// The HTTP layer: thin JSON views over @agentic/core plus the single decision
-// write path (rule R2 — POST /api/decisions is the only mutating route).
+// The HTTP layer: thin JSON views over @agentic/core. Every mutation rides
+// its own sanctioned core seam (ADR-2): decisions over
+// planDecision/writeState, staging over planRunScaffold/stageRun. No route
+// here composes a sources/git.ts primitive directly (AC1.1).
 import { Hono } from 'hono'
 import {
   buildEvidenceRollup,
   buildLexicon,
   buildPortfolio,
+  BUILTIN_SECTIONS,
   collectRunDecisions,
   computeMetrics,
   deriveReadiness,
   DecisionError,
   engineHealthStale,
+  extractSections,
   ID_PATTERN,
+  missingSections,
   parseUnifiedDiff,
   planDecision,
+  planRunScaffold,
+  PROFILES,
   readEngineHealth,
+  ScaffoldError,
+  SLUG_PATTERN,
   summarizeRun,
   validateArtifact,
   type Burden,
   type DecisionAction,
   type GateId,
   type Phase,
+  type Profile,
   type RunRef,
   type RunSource,
 } from '@agentic/core'
@@ -74,6 +84,15 @@ export function createApp(deps: AppDeps): Hono {
     return ref ? { source, ref } : null
   }
 
+  // The one derivation of "required intent-brief.md sections" from a
+  // (possibly absent) template, shared verbatim by GET /api/staging (form
+  // config) and POST /api/runs (server-side check) — AC2.2's single-truth
+  // demand.
+  const requiredBriefSections = (template: string | null): string[] => {
+    const fromTemplate = template ? extractSections(template) : []
+    return fromTemplate.length ? fromTemplate : BUILTIN_SECTIONS['intent-brief.md']!
+  }
+
   app.get('/api/health', (c) => c.json({ ok: true, sources: deps.sources.map((s) => s.id) }))
 
   // Engine liveness per source (#100): null = no co-located engine has ever
@@ -120,6 +139,107 @@ export function createApp(deps: AppDeps): Hono {
   app.get('/api/runs', async (c) => {
     const { runs } = await cache.get('portfolio', () => buildPortfolio(deps.sources))
     return c.json({ runs, now: Math.floor(Date.now() / 1000) })
+  })
+
+  // The staging form's configuration (plan "Server routes"): per-source
+  // identity and required brief sections, plus the slug grammar as data —
+  // core stays out of the browser bundle (ADR-6).
+  app.get('/api/staging', async (c) => {
+    const sources = await Promise.all(
+      deps.sources.map(async (s) => {
+        const [identity, briefTemplate] = await Promise.all([s.identity(), s.templates.read('intent-brief.md')])
+        return { id: s.id, identity, briefSections: requiredBriefSections(briefTemplate), briefTemplate }
+      }),
+    )
+    return c.json({ sources, slugPattern: SLUG_PATTERN })
+  })
+
+  // Staging a new run (R1/R4/R8): a second mutating route riding its own
+  // core seam (planRunScaffold + stageRun, ADR-1/ADR-2) — the only
+  // branch-minting path, never a git primitive called directly (AC1.1).
+  app.post('/api/runs', async (c) => {
+    let body: {
+      source?: string
+      slug?: string
+      title?: string
+      profile?: Profile
+      briefMarkdown?: string
+      costLimitUsd?: number | null
+      intake?: { source: string | null; ref: string | null; url: string | null; clientKey: string | null }
+    }
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ outcome: 'refused', reason: 'invalid-input', message: 'invalid JSON body' }, 400)
+    }
+
+    if (!body.slug || !body.title || !body.profile || !body.briefMarkdown || !PROFILES.includes(body.profile))
+      return c.json({ outcome: 'refused', reason: 'invalid-input', message: 'slug, title, a valid profile, and briefMarkdown are required' }, 400)
+
+    // Source resolution (AC1.3): named only when more than one is configured.
+    let source: RunSource
+    if (body.source) {
+      const found = sourceById(body.source)
+      if (!found) return c.json({ outcome: 'refused', reason: 'invalid-input', message: `unknown source "${body.source}"` }, 400)
+      source = found
+    } else if (deps.sources.length === 1) {
+      source = deps.sources[0]!
+    } else {
+      return c.json(
+        { outcome: 'refused', reason: 'invalid-input', message: 'source is required when more than one source is configured' },
+        400,
+      )
+    }
+
+    // Same section derivation GET /api/staging serves the form (AC2.2).
+    const required = requiredBriefSections(await source.templates.read('intent-brief.md'))
+    const missing = missingSections(body.briefMarkdown, required)
+    if (missing.length)
+      return c.json(
+        {
+          outcome: 'refused',
+          reason: 'missing-sections',
+          missing,
+          message: `intent-brief.md is missing required section(s): ${missing.join(', ')}`,
+        },
+        422,
+      )
+
+    // stagedBy/author come only from the source's own identity (AC4.2) — the
+    // body carries no free-text "your name" field. `stageRun` below is the
+    // one that actually guards identity; this call only needs a string.
+    const who = await source.identity()
+    let scaffold
+    try {
+      scaffold = planRunScaffold({
+        slug: body.slug,
+        title: body.title,
+        profile: body.profile,
+        briefMarkdown: body.briefMarkdown,
+        costLimitUsd: body.costLimitUsd ?? null,
+        intake: body.intake ?? { source: null, ref: null, url: null, clientKey: null },
+        stagedBy: who?.name ?? '',
+      })
+    } catch (e) {
+      if (e instanceof ScaffoldError) return c.json({ outcome: 'refused', reason: 'invalid-input', message: e.message }, 400)
+      throw e
+    }
+
+    const result = await source.stageRun(scaffold, who ?? { name: '', email: '' })
+    if (result.outcome === 'created') {
+      cache.bump()
+      return c.json(
+        result.pushFailed
+          ? { outcome: 'created', slug: result.slug, branch: result.branch, commit: result.commit, pushFailed: result.pushFailed }
+          : { outcome: 'created', slug: result.slug, branch: result.branch, commit: result.commit },
+        201,
+      )
+    }
+    if (result.outcome === 'exists') return c.json({ outcome: 'exists', slug: result.slug, branch: result.branch }, 200)
+    // refused: no-identity is a 400 (nothing to retry against); slug-taken
+    // and conflict are 409s naming the branch that already holds the slug.
+    const status = result.reason === 'no-identity' ? 400 : 409
+    return c.json({ outcome: 'refused', reason: result.reason, message: result.message }, status)
   })
 
   app.get('/api/runs/:src/:slug', async (c) => {

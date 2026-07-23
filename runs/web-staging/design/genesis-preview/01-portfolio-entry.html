@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>genesis-preview · 01 portfolio entry</title>
+<style>
+/* ============ Signal Deck tokens — verbatim from styles.css ============ */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  color-scheme:light dark;
+  --ground:light-dark(#eef2f5,#0a0e11);
+  --surface:light-dark(#ffffff,#111820);
+  --inset:light-dark(#f3f6f8,#0d141a);
+  --raised:light-dark(#e4ebef,#18222b);
+  --ink:light-dark(#10202a,#dbe7ec);
+  --muted:light-dark(#4c5d67,#8ba1ac);
+  --faint:light-dark(#8598a2,#566771);
+  --line:light-dark(#d3dde3,#223039);
+  --accent:light-dark(#0b6f89,#45c8ec);
+  --ok:light-dark(#157a4a,#4ec98d);
+  --warn:light-dark(#8a6410,#e0b24e);
+  --bad:light-dark(#b23b28,#ff7f63);
+  --on-solid:light-dark(#ffffff,#06121a);
+  --accent-soft:light-dark(rgba(11,111,137,.12),rgba(69,200,236,.14));
+  --ok-soft:light-dark(rgba(21,122,74,.13),rgba(78,201,141,.15));
+  --warn-soft:light-dark(rgba(138,100,16,.13),rgba(224,178,78,.15));
+  --bad-soft:light-dark(rgba(178,59,40,.12),rgba(255,127,99,.16));
+  --glow:light-dark(rgba(11,111,137,.30),rgba(69,200,236,.40));
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+}
+body{background:var(--ground);color:var(--ink);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+a{color:var(--accent)}
+.mono{font-family:var(--mono)}
+
+/* ============ mockup chrome (not product UI) ============ */
+.mock-bar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);background:var(--surface);padding:8px 14px}
+.mock-bar .tag{font:700 10px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--warn);border:1px dashed var(--warn);border-radius:4px;padding:3px 7px}
+.mock-bar .name{font:600 12px var(--mono);color:var(--muted)}
+.tabs{display:flex;gap:6px;margin-left:auto}
+.tabs button{border:1px solid var(--line);background:var(--inset);color:var(--muted);border-radius:999px;padding:4px 12px;font:600 11.5px var(--sans);cursor:pointer}
+.tabs button.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.state{display:none}.state.on{display:block}
+.callout{margin:14px 0 0;border-left:2px solid var(--warn);background:var(--warn-soft);border-radius:0 5px 5px 0;padding:8px 12px;font-size:12px;color:var(--muted)}
+.callout b{color:var(--warn)}
+
+/* ============ app shell ============ */
+.shell{display:flex;max-width:1280px;margin:0 auto;min-height:calc(100vh - 41px)}
+.side{width:192px;flex-shrink:0;display:flex;flex-direction:column;gap:22px;border-right:1px solid var(--line);background:var(--surface);padding:16px 12px}
+.brand{padding:6px 8px}
+.brand .t{font:600 15px var(--mono);letter-spacing:.16em;text-transform:uppercase}
+.brand .s{margin-top:6px;font-size:10.5px;line-height:1.35;color:var(--faint)}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav a{display:flex;align-items:center;gap:9px;border-radius:4px;padding:7px 9px;font-size:12px;color:var(--muted);text-decoration:none}
+.nav a.on{background:var(--accent-soft);color:var(--accent)}
+.nav a .d{width:6px;height:6px;border-radius:50%;background:var(--faint)}
+.nav a.on .d{background:var(--accent);box-shadow:0 0 8px var(--glow)}
+.motto{margin-top:auto;padding:8px;font:10px/1.6 var(--mono);color:var(--faint)}
+.main{flex:1;min-width:0;padding:24px}
+
+/* ============ portfolio page ============ */
+.pghead{display:flex;align-items:flex-end;gap:16px;border-bottom:1px solid var(--line);margin-bottom:22px;padding-bottom:14px}
+.pghead h1{font:600 20px var(--mono);letter-spacing:.14em;text-transform:uppercase}
+.pghead .count{margin-left:auto;font-size:12px;color:var(--muted)}
+.btn{border-radius:999px;border:1px solid var(--line);background:var(--inset);color:var(--muted);padding:7px 16px;font:600 14px var(--sans);cursor:pointer;transition:all .14s}
+.btn:hover{color:var(--ink);border-color:var(--accent)}
+.btn-primary{border-color:var(--accent);background:var(--accent);color:var(--on-solid);box-shadow:0 0 12px var(--glow)}
+.btn-primary:hover{opacity:.9}
+.newrun{display:inline-flex;align-items:baseline;gap:8px}
+.newrun .sub{font:11px var(--mono);color:var(--faint)}
+
+.grid{overflow-x:auto;border:1px solid var(--line);border-radius:5px;background:var(--surface)}
+table{width:100%;min-width:820px;border-collapse:collapse;font-size:13px}
+th{border-bottom:1px solid var(--line);background:var(--inset);padding:10px 12px;font:600 10px var(--mono);letter-spacing:.12em;text-transform:uppercase;white-space:nowrap;color:var(--muted);text-align:left}
+th.r,td.r{text-align:right}
+td{padding:8px 12px;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--raised)}
+td .slug{font-weight:600;color:var(--accent);text-decoration:none}
+td .slug:hover{text-decoration:underline}
+td .src{margin-left:8px;font:11px var(--mono);color:var(--faint)}
+.num{font:12px var(--mono);font-variant-numeric:tabular-nums}
+
+/* phase chip — filled glowing dot = engaged/mid-flight states (verbatim idiom) */
+.phase{display:inline-flex;align-items:center;gap:7px;font-size:12px;line-height:1;white-space:nowrap}
+.phase .d{display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 6px currentColor}
+/* staged variant — hollow ring, no glow: a record at rest, not an engaged state */
+.phase .d-hollow{display:inline-block;width:7px;height:7px;border-radius:50%;border:1.5px solid currentColor;background:transparent;box-shadow:none}
+.t-accent{color:var(--accent)}.t-warn{color:var(--warn)}.t-ok{color:var(--ok)}.t-bad{color:var(--bad)}
+.phase .lbl{color:var(--ink)}
+.phase .why{color:var(--muted)}
+
+/* gate ledger cells */
+.gates{display:inline-flex;gap:3px}
+.gc{display:inline-flex;height:22px;width:30px;align-items:center;justify-content:center;gap:2px;border-radius:3px;border:1px solid;font:11px var(--mono)}
+.gc .id{font-size:8px;color:var(--faint)}
+.gc-pend{color:var(--faint);border-color:var(--line);border-style:dashed;background:var(--inset)}
+.gc-ok{color:var(--ok);border-color:var(--ok);background:var(--ok-soft)}
+
+/* budget meter */
+.meter{display:inline-flex;align-items:center;gap:8px}
+.meter .bar{height:5px;width:64px;overflow:hidden;border-radius:3px;border:1px solid var(--line);background:var(--inset)}
+.meter .fill{display:block;height:100%}
+.meter .txt{font:12px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.needs{display:inline-flex;min-width:22px;justify-content:center;border-radius:999px;background:var(--accent);padding:3px 8px;font:700 11px var(--mono);color:var(--on-solid);box-shadow:0 0 8px var(--glow);font-variant-numeric:tabular-nums}
+
+/* empty state */
+.empty{border:1px solid var(--line);border-radius:5px;background:var(--surface);padding:34px 16px;text-align:center}
+.empty .glyph{display:block;margin-bottom:12px;font:18px var(--mono);letter-spacing:.2em;color:var(--accent)}
+.empty .h{font-size:15px;font-weight:600}
+.empty p.sub{max-width:340px;margin:6px auto 0;font-size:12px;line-height:1.6;color:var(--muted)}
+.empty code{font:12px var(--mono);background:var(--raised);border-radius:3px;padding:1px 5px}
+.empty .act{margin-top:16px}
+.empty .actsub{margin-top:8px;font:11px var(--mono);color:var(--faint)}
+</style>
+</head>
+<body>
+
+<div class="mock-bar">
+  <span class="tag">Mockup</span>
+  <span class="name">genesis-preview · 01 — the entry point lives on Portfolio (REC1, AC7.1)</span>
+  <div class="tabs">
+    <button class="on" onclick="show('st-populated',this)">Populated portfolio</button>
+    <button onclick="show('st-empty',this)">Empty state</button>
+  </div>
+</div>
+
+<div class="shell">
+  <aside class="side">
+    <div class="brand"><span class="t">Gate</span><p class="s">pipeline decisions</p></div>
+    <nav class="nav">
+      <a href="#"><span class="d"></span>Inbox</a>
+      <a href="#" class="on"><span class="d"></span>Portfolio</a>
+      <a href="#"><span class="d"></span>Metrics</a>
+    </nav>
+    <div class="motto">The repo is the database.<br>Every view renders git.</div>
+  </aside>
+
+  <main class="main">
+
+    <!-- STATE 1: populated portfolio -->
+    <section id="st-populated" class="state on">
+      <header class="pghead">
+        <h1>Portfolio</h1>
+        <span class="count">3 runs</span>
+        <span class="newrun">
+          <button class="btn" title="Stages a run record on a new run/&lt;slug&gt; branch. Nothing dispatches, nothing is spent.">+ New run</button>
+        </span>
+      </header>
+
+      <div class="grid">
+        <table>
+          <thead><tr>
+            <th>Run</th><th>Phase</th><th>Gates</th><th class="r">Tasks</th><th class="r">Rounds</th><th>Budget</th><th class="r">Updated</th><th class="r">Needs</th>
+          </tr></thead>
+          <tbody>
+            <tr>
+              <td><a class="slug" href="#">web-staging</a><span class="src">sandbox</span></td>
+              <td><span class="phase t-warn"><span class="d"></span><span class="lbl">implement</span></span></td>
+              <td><span class="gates">
+                <span class="gc gc-ok"><span class="id">0</span>✓</span>
+                <span class="gc gc-ok"><span class="id">1</span>✓</span>
+                <span class="gc gc-pend"><span class="id">2</span>·</span>
+              </span></td>
+              <td class="r num">2/5</td><td class="r num">1</td>
+              <td><span class="meter"><span class="bar"><span class="fill" style="width:38%;background:var(--accent);box-shadow:0 0 6px var(--glow)"></span></span><span class="txt">$76/200</span></span></td>
+              <td class="r num" style="color:var(--muted)">2h</td>
+              <td class="r">—</td>
+            </tr>
+            <tr>
+              <td><a class="slug" href="#">mdtoc</a><span class="src">sandbox</span></td>
+              <td><span class="phase t-ok"><span class="d"></span><span class="lbl">done</span></span></td>
+              <td><span class="gates">
+                <span class="gc gc-ok"><span class="id">0</span>✓</span>
+                <span class="gc gc-ok"><span class="id">1</span>✓</span>
+                <span class="gc gc-ok"><span class="id">2</span>✓</span>
+                <span class="gc gc-ok"><span class="id">3</span>✓</span>
+              </span></td>
+              <td class="r num">4/4</td><td class="r num">2</td>
+              <td><span class="meter"><span class="bar"><span class="fill" style="width:72%;background:var(--accent)"></span></span><span class="txt">$36/50</span></span></td>
+              <td class="r num" style="color:var(--muted)">9d</td>
+              <td class="r">—</td>
+            </tr>
+            <tr>
+              <td><a class="slug" href="#">dupefind</a><span class="src">sandbox</span></td>
+              <td><span class="phase t-ok"><span class="d"></span><span class="lbl">done</span></span></td>
+              <td><span class="gates">
+                <span class="gc gc-ok"><span class="id">0</span>✓</span>
+                <span class="gc gc-ok"><span class="id">1</span>✓</span>
+                <span class="gc gc-ok"><span class="id">2</span>✓</span>
+                <span class="gc gc-ok"><span class="id">3</span>✓</span>
+              </span></td>
+              <td class="r num">3/3</td><td class="r num">1</td>
+              <td><span class="meter"><span class="bar"><span class="fill" style="width:55%;background:var(--accent)"></span></span><span class="txt">$41/75</span></span></td>
+              <td class="r num" style="color:var(--muted)">9d</td>
+              <td class="r">—</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout"><b>Annotation.</b> "+ New run" sits in the Portfolio page header — the surface that lists runs is the surface that mints them (P9). It is the <em>quiet</em> button shape, not the primary glow: staging is the cheap act; Arm carries the weight (P2). It opens the staging form as a portfolio sub-route (<span class="mono">/portfolio/new</span>) — the nav stays exactly Inbox/Portfolio/Metrics (AC7.1). Hover title: "Stages a run record on a new run/&lt;slug&gt; branch. Nothing dispatches, nothing is spent."</div>
+    </section>
+
+    <!-- STATE 2: empty portfolio -->
+    <section id="st-empty" class="state">
+      <header class="pghead">
+        <h1>Portfolio</h1>
+        <span class="count">0 runs</span>
+        <span class="newrun"><button class="btn">+ New run</button></span>
+      </header>
+
+      <div class="empty">
+        <span class="glyph" aria-hidden="true">[ ]</span>
+        <p class="h">No runs found.</p>
+        <p class="sub">No <code>runs/&lt;slug&gt;</code> directories on any tracked source yet. Stage the first one here — or point Gate at a repo that has runs.</p>
+        <div class="act"><button class="btn btn-primary">Stage the first run</button></div>
+        <p class="actsub">creates run/&lt;slug&gt; and its genesis commit — nothing dispatches until you arm it</p>
+      </div>
+
+      <div class="callout"><b>Annotation.</b> The empty state keeps its existing copy shape but now points at a real affordance instead of gesturing at the orchestrator (the current copy predates any web path). Here — and only here, where there is nothing else on the page to outshine — the button takes the primary accent, and its subcaption speaks in the record's voice: what git object gets created, and that arming is separate.</div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+function show(id,btn){
+  document.querySelectorAll('.state').forEach(s=>s.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+}
+</script>
+</body>
+</html>

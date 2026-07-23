@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>genesis-preview · 03 staging outcomes</title>
+<style>
+/* ============ Signal Deck tokens — verbatim from styles.css ============ */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  color-scheme:light dark;
+  --ground:light-dark(#eef2f5,#0a0e11);
+  --surface:light-dark(#ffffff,#111820);
+  --inset:light-dark(#f3f6f8,#0d141a);
+  --raised:light-dark(#e4ebef,#18222b);
+  --ink:light-dark(#10202a,#dbe7ec);
+  --muted:light-dark(#4c5d67,#8ba1ac);
+  --faint:light-dark(#8598a2,#566771);
+  --line:light-dark(#d3dde3,#223039);
+  --accent:light-dark(#0b6f89,#45c8ec);
+  --ok:light-dark(#157a4a,#4ec98d);
+  --warn:light-dark(#8a6410,#e0b24e);
+  --bad:light-dark(#b23b28,#ff7f63);
+  --on-solid:light-dark(#ffffff,#06121a);
+  --accent-soft:light-dark(rgba(11,111,137,.12),rgba(69,200,236,.14));
+  --ok-soft:light-dark(rgba(21,122,74,.13),rgba(78,201,141,.15));
+  --warn-soft:light-dark(rgba(138,100,16,.13),rgba(224,178,78,.15));
+  --bad-soft:light-dark(rgba(178,59,40,.12),rgba(255,127,99,.16));
+  --glow:light-dark(rgba(11,111,137,.30),rgba(69,200,236,.40));
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+}
+body{background:var(--ground);color:var(--ink);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+a{color:var(--accent)}
+.mono{font-family:var(--mono)}
+
+/* mockup chrome */
+.mock-bar{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;align-items:center;gap:10px;border-bottom:1px solid var(--line);background:var(--surface);padding:8px 14px}
+.mock-bar .tag{font:700 10px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--warn);border:1px dashed var(--warn);border-radius:4px;padding:3px 7px}
+.mock-bar .name{font:600 12px var(--mono);color:var(--muted)}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
+.tabs button{border:1px solid var(--line);background:var(--inset);color:var(--muted);border-radius:999px;padding:4px 12px;font:600 11.5px var(--sans);cursor:pointer}
+.tabs button.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.state{display:none}.state.on{display:block}
+.callout{margin:18px 0 0;border-left:2px solid var(--warn);background:var(--warn-soft);border-radius:0 5px 5px 0;padding:8px 12px;font-size:12px;color:var(--muted)}
+.callout b{color:var(--warn)}
+
+.wrap{max-width:1060px;margin:0 auto;padding:24px}
+.pghead{display:flex;align-items:flex-end;gap:14px;border-bottom:1px solid var(--line);margin-bottom:22px;padding-bottom:14px}
+.pghead .crumb{font:600 20px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.pghead h1{font:600 20px var(--mono);letter-spacing:.14em;text-transform:uppercase}
+.panes{display:flex;gap:22px;align-items:flex-start}
+.form-pane{flex:1;min-width:0;max-width:560px}
+.rec-pane{width:400px;flex-shrink:0}
+@media (max-width:980px){.panes{flex-direction:column}.rec-pane{width:100%}}
+
+/* outcome banners */
+.flash{display:block;border-radius:5px;padding:12px 14px;font-size:13px;line-height:1.55;margin-bottom:16px}
+.flash .h{font-weight:700;display:block}
+.flash .b{margin-top:2px;color:var(--muted);font-weight:400}
+.flash .acts{margin-top:9px;display:flex;gap:8px}
+.f-ok{background:var(--ok-soft);color:var(--ok)}
+.f-info{background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent)}
+.f-bad{background:var(--bad-soft);color:var(--bad)}
+.f-cfg{background:var(--bad-soft);color:var(--bad);border:1px dashed var(--bad)}
+.flash .mono{font-family:var(--mono)}
+
+/* GOV.UK-style error summary */
+.errsum{border:2px solid var(--bad);border-radius:5px;background:var(--surface);padding:14px 16px;margin-bottom:16px}
+.errsum .h{font-size:14px;font-weight:700;color:var(--bad)}
+.errsum .verbatim{margin-top:6px;font:12px var(--mono);color:var(--muted)}
+.errsum ul{margin:8px 0 0 2px;list-style:none;display:flex;flex-direction:column;gap:4px}
+.errsum a{font-size:13px;font-weight:600;color:var(--bad)}
+.btn{border-radius:999px;border:1px solid var(--line);background:var(--inset);color:var(--muted);padding:6px 14px;font:600 13px var(--sans);cursor:pointer}
+.btn:hover{color:var(--ink);border-color:var(--accent)}
+.btn-primary{border-color:var(--accent);background:var(--accent);color:var(--on-solid);box-shadow:0 0 12px var(--glow)}
+.btn-ghost-accent{border-color:var(--accent);background:transparent;color:var(--accent)}
+
+/* condensed form sketch */
+.sk{border:1px solid var(--line);border-radius:5px;background:var(--surface);padding:14px 16px}
+.sk .zone-h{font:600 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line);padding-bottom:6px;margin-bottom:12px}
+.sect{border:1px solid var(--line);border-radius:5px;background:var(--surface);margin-bottom:8px;overflow:hidden}
+.sect.err{border-color:var(--bad)}
+.sect-head{display:flex;align-items:baseline;gap:8px;background:var(--inset);border-bottom:1px solid var(--line);padding:6px 11px}
+.sect-head .h{font:600 12px var(--mono)}
+.sect-head .presence{margin-left:auto;font:600 11px var(--mono)}
+.p-ok{color:var(--ok)}.p-empty{color:var(--faint)}.p-bad{color:var(--bad)}
+.inline-err{padding:6px 11px 0;font-size:12px;font-weight:600;color:var(--bad)}
+textarea{width:100%;border:none;background:transparent;color:var(--ink);padding:8px 11px;font:13.5px var(--sans);resize:vertical;min-height:44px;line-height:1.5}
+::placeholder{color:var(--faint)}
+.skrow{display:flex;gap:10px;align-items:center;margin-bottom:10px;font:12px var(--mono);color:var(--muted)}
+.skrow .k{font:600 10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint);width:64px}
+.skrow .v{color:var(--ink)}
+.dim{opacity:.45;pointer-events:none}
+
+/* the record panel — outcome display surface */
+.record{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:6px;background:var(--surface);padding:16px 18px}
+.record.r-ok{border-left-color:var(--ok)}
+.record.r-info{border-left-color:var(--accent)}
+.record.r-bad{border-left-color:var(--bad)}
+.rec-h{font:600 10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+.rec-branch{display:flex;align-items:baseline;gap:8px;margin-bottom:12px}
+.rec-branch .ref{font:600 13.5px var(--mono);color:var(--accent)}
+.rec-branch .ref.bad{color:var(--bad);text-decoration:line-through;text-decoration-thickness:1px}
+.rec-branch .tag{font:10px var(--mono);color:var(--faint);letter-spacing:.06em;text-transform:uppercase}
+.rec-branch .tag.bad{color:var(--bad)}
+.rec-node{position:relative;padding-left:22px;margin-bottom:12px}
+.rec-node::before{content:'';position:absolute;left:2px;top:5px;width:10px;height:10px;border-radius:50%;border:2px solid var(--accent);background:var(--accent);box-shadow:0 0 10px var(--glow)}
+.rec-node.ok::before{border-color:var(--ok);background:var(--ok);box-shadow:0 0 10px var(--ok-soft)}
+.rec-node.pending::before{background:var(--inset);border-color:var(--faint);box-shadow:none}
+.rec-node.dead::before{background:transparent;border-color:var(--bad);border-style:dashed;box-shadow:none}
+.rec-msg{font:600 12px var(--mono);line-height:1.5;overflow-wrap:anywhere}
+.rec-msg.struck{color:var(--faint);text-decoration:line-through}
+.rec-oid{margin-top:3px;font:11.5px var(--mono);color:var(--ok)}
+.rec-author{margin-top:3px;font:11.5px var(--mono);color:var(--muted)}
+.rec-author .who{color:var(--ink);font-weight:600}
+.rec-author.broken{color:var(--bad)}
+.rec-files{border-top:1px solid var(--line);margin-top:4px;padding-top:10px}
+.rec-file{display:flex;align-items:baseline;gap:8px;padding:3px 0;font:12px var(--mono)}
+.rec-file .new{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ok);border:1px solid var(--ok);border-radius:3px;padding:1px 4px}
+.rec-file .chk{margin-left:auto;font-size:11px}
+.rec-secs{margin:2px 0 4px 14px;display:flex;flex-direction:column;gap:1px}
+.rec-sec{display:flex;gap:7px;font:11px var(--mono);color:var(--muted)}
+.rec-sec .g{width:12px;text-align:center}
+.rec-foot{border-top:1px solid var(--line);margin-top:12px;padding-top:10px;font-size:11.5px;line-height:1.55;color:var(--muted)}
+.rec-foot b{color:var(--ink)}
+</style>
+</head>
+<body>
+
+<div class="mock-bar">
+  <span class="tag">Mockup</span>
+  <span class="name">genesis-preview · 03 — five outcomes, each mapped onto the record (AC2.2, AC4.1, AC8.1, AC8.2)</span>
+  <div class="tabs">
+    <button class="on" onclick="show('st-success',this)">Fresh success</button>
+    <button onclick="show('st-replay',this)">Already staged</button>
+    <button onclick="show('st-collision',this)">Slug taken</button>
+    <button onclick="show('st-missing',this)">Missing sections</button>
+    <button onclick="show('st-noid',this)">No identity</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <header class="pghead"><span class="crumb">Portfolio&nbsp;/&nbsp;</span><h1>New run</h1></header>
+
+  <!-- ============ 1. FRESH SUCCESS ============ -->
+  <section id="st-success" class="state on">
+    <div class="panes">
+      <div class="form-pane">
+        <div class="flash f-ok" role="status">
+          <span class="h">Staged budget-alerts — committed <span class="mono">a1b2c3d4e5</span> on <span class="mono">run/budget-alerts</span>.</span>
+          <span class="b">Taking you to the run, where <b>Arm</b> is the next decision. Nothing has dispatched and nothing is spent.</span>
+        </div>
+        <div class="sk dim">
+          <div class="zone-h">New run — submitted</div>
+          <div class="skrow"><span class="k">slug</span><span class="v">budget-alerts → run/budget-alerts</span></div>
+          <div class="skrow"><span class="k">profile</span><span class="v">standard · G0 G1 G2</span></div>
+          <div class="skrow"><span class="k">budget</span><span class="v">$150</span></div>
+          <div class="skrow"><span class="k">brief</span><span class="v">4 of 4 required sections</span></div>
+        </div>
+      </div>
+      <aside class="rec-pane">
+        <div class="record r-ok">
+          <div class="rec-h">The record — committed</div>
+          <div class="rec-branch"><span class="tag">created</span><span class="ref">run/budget-alerts</span></div>
+          <div class="rec-node ok">
+            <p class="rec-msg">state(budget-alerts): staged by Nathan Carter [client-key: 3f9c-a1d2]</p>
+            <p class="rec-oid">a1b2c3d4e5 · genesis commit</p>
+            <p class="rec-author"><span class="who">Nathan Carter</span> &lt;nathan@carter.dev&gt;</p>
+          </div>
+          <div class="rec-files">
+            <div class="rec-file"><span>runs/budget-alerts/state.yaml</span><span class="new">new</span><span class="chk p-ok">✓</span></div>
+            <div class="rec-file"><span>runs/budget-alerts/intent-brief.md</span><span class="new">new</span><span class="chk p-ok">✓ 4 of 4</span></div>
+          </div>
+          <div class="rec-foot"><b>The preview became the record.</b> Success is reported in the record's own terms — branch and commit oid — never a generic "Run created!"</div>
+        </div>
+      </aside>
+    </div>
+    <div class="callout"><b>Annotation.</b> The ok flash reuses DecidePanel's success grammar ("… — committed &lt;oid&gt;"). The operator then lands on the run detail page (mockup 05, idle state) where the staged card holds Arm.</div>
+  </section>
+
+  <!-- ============ 2. ALREADY STAGED (replay) ============ -->
+  <section id="st-replay" class="state">
+    <div class="panes">
+      <div class="form-pane">
+        <div class="flash f-info" role="status">
+          <span class="h">Already staged — this exact request was recorded before.</span>
+          <span class="b">Your replay key matched the genesis commit <span class="mono">a1b2c3d4e5</span> on <span class="mono">run/budget-alerts</span>. No second commit was made; there is nothing to redo. This is not an error.</span>
+          <span class="acts"><button class="btn btn-ghost-accent">Open budget-alerts</button><button class="btn">Arm…</button></span>
+        </div>
+        <div class="sk dim">
+          <div class="zone-h">New run — resubmitted (connection dropped after first submit)</div>
+          <div class="skrow"><span class="k">slug</span><span class="v">budget-alerts → run/budget-alerts</span></div>
+          <div class="skrow"><span class="k">replay</span><span class="v">client-key 3f9c-a1d2 · matched</span></div>
+        </div>
+      </div>
+      <aside class="rec-pane">
+        <div class="record r-info">
+          <div class="rec-h">The record — already exists</div>
+          <div class="rec-branch"><span class="tag">existing</span><span class="ref">run/budget-alerts</span></div>
+          <div class="rec-node ok">
+            <p class="rec-msg">state(budget-alerts): staged by Nathan Carter [client-key: 3f9c-a1d2]</p>
+            <p class="rec-oid">a1b2c3d4e5 · committed 2 min ago</p>
+            <p class="rec-author"><span class="who">Nathan Carter</span> &lt;nathan@carter.dev&gt;</p>
+          </div>
+          <div class="rec-foot"><b>Replay is information, not an error.</b> The record you asked for already stands, so the panel points at it — accent voice, not red. The natural next act, Arm, is offered right here.</div>
+        </div>
+      </aside>
+    </div>
+    <div class="callout"><b>Annotation.</b> A fourth flash tone — <b>informational</b> (accent) — extends the existing ok/conflict/error triad, exactly as REC7 prescribes. Form-wise it is bordered and accent-tinted: unmistakably not the bad-soft refusal and not the ok-soft fresh success.</div>
+  </section>
+
+  <!-- ============ 3. SLUG TAKEN (genuine collision) ============ -->
+  <section id="st-collision" class="state">
+    <div class="panes">
+      <div class="form-pane">
+        <div class="flash f-bad" role="alert">
+          <span class="h">Refused — slug taken.</span>
+          <span class="b"><span class="mono">run/budget-alerts</span> already exists and its genesis does not match this request (staged by Nathan Carter, 3 days ago). Nothing was created and nothing was overwritten. Open the existing run, or choose a different slug.</span>
+          <span class="acts"><button class="btn">Open the existing budget-alerts</button></span>
+        </div>
+        <div class="sk">
+          <div class="zone-h">New run — slug field re-focused</div>
+          <div class="skrow"><span class="k">slug</span><span class="v" style="color:var(--bad);font-weight:600">budget-alerts</span><span style="color:var(--bad);font-size:12px;font-weight:600">✕ taken by an existing run</span></div>
+          <div class="skrow"><span class="k">try</span><span class="v">budget-alerts-2 · portfolio-budget-alerts</span></div>
+        </div>
+      </div>
+      <aside class="rec-pane">
+        <div class="record r-bad">
+          <div class="rec-h">The record — name refused</div>
+          <div class="rec-branch"><span class="tag bad">already exists</span><span class="ref bad">run/budget-alerts</span></div>
+          <div class="rec-node dead">
+            <p class="rec-msg struck">state(budget-alerts): staged by Nathan Carter [client-key: 8c2e-77b1]</p>
+            <p class="rec-author">no commit was made</p>
+          </div>
+          <div class="rec-foot"><b>The branch line is the broken part.</b> A record's name must be unique; the panel strikes the branch, not your words. Your brief text is untouched in the form — rename and stage.</div>
+        </div>
+      </aside>
+    </div>
+    <div class="callout"><b>Annotation.</b> Collision and replay must never look alike: collision is the bad voice with a struck branch line; replay is the accent voice pointing at a live commit. Both name <span class="mono">run/budget-alerts</span> and link to it (AC8.2's "naming the existing run/branch").</div>
+  </section>
+
+  <!-- ============ 4. MISSING SECTIONS (server refusal) ============ -->
+  <section id="st-missing" class="state">
+    <div class="panes">
+      <div class="form-pane">
+        <div class="errsum" role="alert" tabindex="-1">
+          <p class="h">Staging refused — the brief is missing required sections</p>
+          <p class="verbatim">server: intent-brief.md missing required section(s): Motivation, Constraints</p>
+          <ul>
+            <li><a href="#f-motivation">## Motivation is empty — the record cannot carry a blank section</a></li>
+            <li><a href="#f-constraints">## Constraints is empty — the record cannot carry a blank section</a></li>
+          </ul>
+        </div>
+        <div class="sect">
+          <div class="sect-head"><span class="h">## Problem</span><span class="presence p-ok">✓</span></div>
+          <textarea rows="2">Budget overruns surface only after the fact: the portfolio meter turns red once spent exceeds the ceiling…</textarea>
+        </div>
+        <div class="sect err" id="f-motivation">
+          <div class="sect-head"><span class="h">## Motivation</span><span class="presence p-bad">✕</span></div>
+          <p class="inline-err">## Motivation is empty — the record cannot carry a blank section</p>
+          <textarea rows="2" placeholder="Why now — what changes if this lands, in your words."></textarea>
+        </div>
+        <div class="sect err" id="f-constraints">
+          <div class="sect-head"><span class="h">## Constraints</span><span class="presence p-bad">✕</span></div>
+          <p class="inline-err">## Constraints is empty — the record cannot carry a blank section</p>
+          <textarea rows="2" placeholder="Boundaries the work must respect."></textarea>
+        </div>
+        <div class="sect">
+          <div class="sect-head"><span class="h">## Out of scope</span><span class="presence p-ok">✓</span></div>
+          <textarea rows="2">Notification delivery channels (email, chat). Changing budget semantics or the ledger format.</textarea>
+        </div>
+      </div>
+      <aside class="rec-pane">
+        <div class="record r-bad">
+          <div class="rec-h">The record — refused, incomplete</div>
+          <div class="rec-branch"><span class="tag">not created</span><span class="ref" style="color:var(--faint)">run/budget-alerts</span></div>
+          <div class="rec-node dead">
+            <p class="rec-msg struck">state(budget-alerts): staged by Nathan Carter [client-key: 3f9c-a1d2]</p>
+            <p class="rec-author">no commit was made</p>
+          </div>
+          <div class="rec-files">
+            <div class="rec-file"><span>runs/budget-alerts/intent-brief.md</span><span class="chk p-bad">✕ 2 of 4</span></div>
+            <div class="rec-secs">
+              <span class="rec-sec"><span class="g p-ok">✓</span>Problem</span>
+              <span class="rec-sec"><span class="g p-bad">✕</span>Motivation — missing</span>
+              <span class="rec-sec"><span class="g p-bad">✕</span>Constraints — missing</span>
+              <span class="rec-sec"><span class="g p-ok">✓</span>Out of scope</span>
+            </div>
+          </div>
+          <div class="rec-foot"><b>The brief is the broken part.</b> A contract-malformed artifact is never committed — the same bounce posture gates apply to agent packets, applied to yours.</div>
+        </div>
+      </aside>
+    </div>
+    <div class="callout"><b>Annotation.</b> GOV.UK error-summary mechanics: summary at the top of the form container, keyboard focus moves to it, each entry links to its field, and the inline wording is <em>identical</em> to the summary wording. The server's <span class="mono">missingBriefSections</span> output is quoted verbatim (the mono "server:" line) — the client renders it, never rewrites it. Normally the client-side pre-check (mockup 02) prevents this submit; this state exists for the divergence case, and the server always wins.</div>
+  </section>
+
+  <!-- ============ 5. NO IDENTITY (deployment refusal) ============ -->
+  <section id="st-noid" class="state">
+    <div class="panes">
+      <div class="form-pane">
+        <div class="flash f-cfg" role="alert">
+          <span class="h">Refused — no resolvable identity.</span>
+          <span class="b"><span class="mono">git user.name/user.email are unset — decisions must be attributable to a named human</span><br>
+          This is deployment configuration, not a form problem: no field here can cure it, and Gate will not guess or ask you to type a name. Set the identity on the Gate host (<span class="mono">git config user.name / user.email</span>) and stage again — your draft is intact.</span>
+        </div>
+        <div class="sk dim">
+          <div class="zone-h">New run — draft preserved, submit disabled</div>
+          <div class="skrow"><span class="k">slug</span><span class="v">budget-alerts → run/budget-alerts</span></div>
+          <div class="skrow"><span class="k">brief</span><span class="v">4 of 4 required sections</span></div>
+        </div>
+      </div>
+      <aside class="rec-pane">
+        <div class="record r-bad">
+          <div class="rec-h">The record — no author, no record</div>
+          <div class="rec-branch"><span class="tag">not created</span><span class="ref" style="color:var(--faint)">run/budget-alerts</span></div>
+          <div class="rec-node dead">
+            <p class="rec-msg struck">state(budget-alerts): staged by ?</p>
+            <p class="rec-author broken">✕ no resolvable identity — the author line cannot be written</p>
+          </div>
+          <div class="rec-foot"><b>The author line is the broken part.</b> Every record answers "as whom?" from the server's git identity or not at all. A typed name here would make the record lie politely.</div>
+        </div>
+      </aside>
+    </div>
+    <div class="callout"><b>Annotation.</b> Distinct in form from every other refusal: a <em>dashed</em> bad border (the deployment-config voice, cousin to the engine-outage banner) rather than the solid field-error voice — because the fix lives outside the form. The core's message is quoted verbatim (AC4.1's "same no-identity message shape").</div>
+  </section>
+
+</div>
+
+<script>
+function show(id,btn){
+  document.querySelectorAll('.state').forEach(s=>s.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  var s=document.getElementById(id).querySelector('[role=alert]');
+}
+</script>
+</body>
+</html>

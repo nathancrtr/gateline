@@ -35,7 +35,11 @@ export class ScaffoldError extends Error {
   }
 }
 
-const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/
+/** Branch- and path-safe slug grammar as a regex source string (the
+ * `ID_PATTERN` precedent) — carriers (CLI, web form) ship it to clients as
+ * data instead of re-deriving it. */
+export const SLUG_PATTERN = '^[a-z0-9][a-z0-9-]*$'
+const SLUG_RE = new RegExp(SLUG_PATTERN)
 
 /** YAML double-quoted scalar for any free-form string — titles, names, and
  * intake fields all come from humans or upstream systems and may contain

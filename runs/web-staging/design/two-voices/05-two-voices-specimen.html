@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>two-voices · Grammar specimen + success landing</title>
+<style>
+:root{
+  color-scheme: light dark;
+  --ground: light-dark(#eef2f5,#0a0e11);
+  --surface: light-dark(#ffffff,#111820);
+  --inset: light-dark(#f3f6f8,#0d141a);
+  --raised: light-dark(#e4ebef,#18222b);
+  --ink: light-dark(#10202a,#dbe7ec);
+  --muted: light-dark(#4c5d67,#8ba1ac);
+  --faint: light-dark(#8598a2,#566771);
+  --line: light-dark(#d3dde3,#223039);
+  --accent: light-dark(#0b6f89,#45c8ec);
+  --accent-deep: light-dark(#075365,#8adcf5);
+  --ok: light-dark(#157a4a,#4ec98d);
+  --warn: light-dark(#8a6410,#e0b24e);
+  --bad: light-dark(#b23b28,#ff7f63);
+  --on-solid: light-dark(#ffffff,#06121a);
+  --accent-soft: light-dark(rgba(11,111,137,.12),rgba(69,200,236,.14));
+  --ok-soft: light-dark(rgba(21,122,74,.13),rgba(78,201,141,.15));
+  --warn-soft: light-dark(rgba(138,100,16,.13),rgba(224,178,78,.15));
+  --bad-soft: light-dark(rgba(178,59,40,.12),rgba(255,127,99,.16));
+  --glow: light-dark(rgba(11,111,137,.30),rgba(69,200,236,.40));
+  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.45}
+.wrap{max-width:900px;margin:0 auto;padding:24px 22px 60px}
+.mono{font-family:var(--mono)}
+.mockbar{border:1px dashed var(--line);border-radius:6px;background:var(--inset);padding:10px 13px;margin-bottom:22px}
+.mockbar h2{margin:0;font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.mockbar p{margin:5px 0 0;font-size:12px;color:var(--muted)}
+.mockbar .ac{font-family:var(--mono);font-size:11px;color:var(--accent)}
+
+.statecap{display:flex;align-items:center;gap:10px;margin:30px 0 14px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.statecap::after{content:"";flex:1;height:1px;background:var(--line)}
+
+/* specimen: two voices side by side ---------------------------------------- */
+.voices{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+@media(max-width:680px){.voices{grid-template-columns:1fr}}
+.voice{border:1px solid var(--line);border-radius:8px;background:var(--surface);padding:18px}
+.voice .role{font-family:var(--mono);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin-bottom:3px}
+.voice h3{margin:0 0 4px;font-size:15px}
+.voice .say{font-size:12.5px;color:var(--muted);font-style:italic;margin:0 0 16px}
+.stagebtn,.armbtn{font:inherit;font-size:14px;font-weight:600;border-radius:999px;padding:9px 20px;cursor:pointer}
+/* record voice: accent outline, calm, no glow */
+.stagebtn{border:1px solid var(--accent);color:var(--accent);background:var(--surface)}
+/* gate voice: filled accent, glow, weight */
+.armbtn{border:1px solid var(--accent);color:var(--on-solid);background:var(--accent);box-shadow:0 0 14px var(--glow)}
+.attrs{list-style:none;margin:16px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.attrs li{display:grid;grid-template-columns:96px 1fr;gap:10px;font-size:12px;align-items:baseline}
+.attrs .k{font-family:var(--mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--faint)}
+.attrs .v{color:var(--ink)}
+.attrs .v b{color:var(--accent)}
+
+.shared{border:1px solid var(--line);border-radius:8px;background:var(--inset);padding:16px 18px;margin-top:18px}
+.shared h4{margin:0 0 8px;font-size:12.5px;font-weight:700}
+.shared ul{margin:0;padding-left:18px;font-size:12.5px;color:var(--muted);line-height:1.65}
+.shared code{font-family:var(--mono);color:var(--ink)}
+
+/* success landing --------------------------------------------------------- */
+.rhead{display:flex;align-items:center;gap:14px;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:16px;flex-wrap:wrap}
+.rhead h1{margin:0;font-family:var(--mono);font-size:18px;font-weight:600;letter-spacing:.05em}
+.chip{display:inline-flex;align-items:center;gap:7px;font-size:12px}
+.chip .ring{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--accent);background:transparent}
+.eyebrow{font-family:var(--mono);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;border-radius:3px;padding:2px 7px;color:var(--accent);border:1px solid var(--accent);background:var(--accent-soft)}
+.flash-ok{background:var(--ok-soft);color:var(--ok);border-radius:6px;padding:12px 14px;font-size:13px;font-weight:600;margin-bottom:16px}
+.flash-ok p{margin:5px 0 0;font-weight:400;line-height:1.55}
+.flash-ok .oid,.flash-ok .ref{font-family:var(--mono);font-weight:600}
+.flash-ok a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+
+.armcard{position:relative;border:1px solid var(--accent);border-left-width:3px;border-radius:8px;background:var(--surface);
+  padding:16px 18px;box-shadow:0 0 0 1px var(--accent-soft),0 0 18px var(--glow)}
+.armcard .kind{display:inline-flex;align-items:center;gap:6px;border-radius:999px;font-family:var(--mono);font-size:11px;font-weight:700;
+  letter-spacing:.04em;padding:3px 10px;border:1px solid var(--accent);color:var(--accent);background:var(--accent-soft)}
+.armcard .kind .kd{width:6px;height:6px;border-radius:50%;border:1.5px solid var(--accent)}
+.armcard .head{display:flex;align-items:center;gap:12px}
+.armcard .head .ttl{font-size:15px;font-weight:600}
+.armcard .body{font-size:13px;color:var(--muted);margin:11px 0 0;line-height:1.55}
+.armcard .body b{color:var(--ink)}
+.divider{border-top:1px solid var(--line);margin:14px 0 12px}
+.btn-gate{font:inherit;font-size:13.5px;font-weight:600;border-radius:999px;border:1px solid var(--accent);background:var(--accent);color:var(--on-solid);box-shadow:0 0 12px var(--glow);padding:8px 17px;cursor:pointer}
+.note{font-size:11.5px;color:var(--muted);margin-top:16px;line-height:1.55}
+.note b{color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="mockbar">
+    <h2>two-voices · mockup 5 / 5 — the thesis: two voices, one grammar &amp; the success landing</h2>
+    <p>Staging and arming are one interaction family with two weights. Below: the specimen that names the difference, then the staging-success screen the operator actually lands on. <span class="ac">Serves AC1.2, R5, R6 · REC4, REC12, P2, P10.</span></p>
+  </div>
+
+  <div class="statecap">Specimen · the two voices, named</div>
+  <div class="voices">
+    <div class="voice">
+      <div class="role">Record voice</div>
+      <h3>Stage</h3>
+      <p class="say">"I am writing down what we intend to do. Nothing starts."</p>
+      <button class="stagebtn">Stage run</button>
+      <ul class="attrs">
+        <li><span class="k">shape</span><span class="v">accent <b>outline</b>, no glow — a deliberate but weightless act</span></li>
+        <li><span class="k">spends</span><span class="v">nothing — mints a branch + genesis commit</span></li>
+        <li><span class="k">confirm</span><span class="v">none beyond a full, valid form</span></li>
+        <li><span class="k">lands as</span><span class="v"><span class="mono">state(run-search): staged by …</span></span></li>
+      </ul>
+    </div>
+    <div class="voice">
+      <div class="role">Gate voice</div>
+      <h3>Arm</h3>
+      <p class="say">"I am starting the machine. It will act and it will spend."</p>
+      <button class="armbtn">Arm run</button>
+      <ul class="attrs">
+        <li><span class="k">shape</span><span class="v">filled accent + <b>glow</b> — the app's consequential idiom</span></li>
+        <li><span class="k">spends</span><span class="v">opens the budget meter; dispatch begins</span></li>
+        <li><span class="k">confirm</span><span class="v">a separate confirm step, like an approve</span></li>
+        <li><span class="k">lands as</span><span class="v"><span class="mono">state(run-search): armed by …</span></span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="shared">
+    <h4>…but one grammar — the same family FleetView's gate decisions already speak</h4>
+    <ul>
+      <li>Every act lands as an <b>attributable commit</b>, authored by the server's git identity — displayed, never typed.</li>
+      <li>Refusals are <b>first-class</b>: missing sections, no identity, collision, replay — each names its cause and its fix, reusing the <code>Flash</code> ok / conflict / error triad plus one informational tone.</li>
+      <li>A concurrent move <b>re-presents</b> (409), never auto-retries — the same posture <code>DecidePanel</code> already takes.</li>
+      <li>Both acts ride <b>one write path</b>: <code>stageRun</code> for staging, <code>POST /api/decisions {action:'arm'}</code> for arming. No parallel mutation route, no new nav.</li>
+    </ul>
+  </div>
+
+  <div class="statecap">Success landing · REC12 — a fresh stage lands on the run, holding Arm as the next decision</div>
+  <div class="flash-ok" role="status">
+    Staged — committed <span class="oid">a7c1e0f9b2</span>
+    <p>Minted <a href="#" class="ref">run/run-search</a> from the intent brief. Nothing has dispatched. The next decision is yours: arm it, or leave it staged.</p>
+  </div>
+  <div class="rhead">
+    <span class="eyebrow">staged · awaiting arm</span>
+    <h1>run-search</h1>
+    <span class="chip"><span class="ring"></span>staged</span>
+    <span class="mono" style="margin-left:auto;font-size:11px;color:var(--faint)">local · run/run-search</span>
+  </div>
+  <div class="armcard">
+    <div class="head"><span class="kind"><span class="kd"></span>STAGED</span><span class="ttl">Ready to arm</span></div>
+    <p class="body">The record exists; the machine hasn't started. <b>Arming</b> begins dispatch and opens the budget. This is the second voice — a separate, consequential decision, not a step the form took for you.</p>
+    <div class="divider"></div>
+    <button class="btn-gate">Arm run…</button>
+  </div>
+
+  <p class="note"><b>Why this closes the thesis:</b> the operator sees the two-phase lifecycle as a sequence — record first (quiet), then a distinct decision to start (loud) — exactly the way a planned run waits for confirm-and-apply. The success message names the durable facts (the ref and the genesis oid, per P10), never a generic "created!" — because in FleetView, the repo is the database and every view renders git.</p>
+</div>
+</body>
+</html>

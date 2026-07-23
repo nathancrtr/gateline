@@ -29,6 +29,17 @@ export function extractSections(markdown: string): string[] {
 
 const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 
+/** Required section headings absent from `content` (normalize-insensitive,
+ * fenced-code-block headings ignored via `extractSections`). The single
+ * section-completeness truth shared by the CLI and the server (AC2.2) —
+ * narrower than `validateArtifact` because callers here already hold the
+ * resolved required-section list (e.g. the staging route also serves it to
+ * the form) rather than re-reading a template per call. */
+export function missingSections(content: string, required: string[]): string[] {
+  const have = new Set(extractSections(content).map(normalize))
+  return required.filter((s) => !have.has(normalize(s)))
+}
+
 /** Built-in section lists, mirroring contracts/ at the time of writing. */
 export const BUILTIN_SECTIONS: Record<string, string[]> = {
   'intent-brief.md': ['Problem', 'Motivation', 'Constraints', 'Out of scope'],

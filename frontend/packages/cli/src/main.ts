@@ -19,6 +19,7 @@ import {
   extractSections,
   formatDuration,
   loadSources,
+  missingSections,
   planDecision,
   planRunScaffold,
   PROFILE_GATES,
@@ -27,6 +28,7 @@ import {
   resolveId,
   ScaffoldError,
   scanIds,
+  SLUG_PATTERN,
   SUPERSEDE_EXIT_CODE,
   type Burden,
   type DecisionInput,
@@ -360,22 +362,10 @@ export function draftBriefMarkdown(template: string | null, title: string): stri
   return `# Intent Brief: ${title}\n\n${sections.map((s) => `## ${s}\n`).join('\n')}`
 }
 
-// Mirrors core validate.ts's private `normalize` exactly (lowercase, collapse
-// runs of non-alphanumerics to a single space, trim) so the CLI's refusal
-// never disagrees with what `validateArtifact` would accept later (F6): a
-// stricter/looser normalization here would either refuse a brief core
-// accepts, or stage one core would bounce.
-const normalizeSection = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
-
-function missingBriefSections(content: string, required: string[]): string[] {
-  const have = new Set(extractSections(content).map(normalizeSection))
-  return required.filter((s) => !have.has(normalizeSection(s)))
-}
-
-/** Branch- and path-safe slug grammar — mirrors core scaffold.ts's `SLUG_RE`
- * (not exported, so duplicated here rather than widening this task's file
- * surface into core; the `--slug` flag help below names the same pattern). */
-const SLUG_RE = /^[a-z0-9][a-z0-9-]*$/
+// Both the section-completeness check and the slug grammar are core's own
+// exports now (AC2.2's single-truth demand) — the CLI carries no mirrored
+// copy to drift out of sync with `validateArtifact`/`planRunScaffold`.
+const SLUG_RE = new RegExp(SLUG_PATTERN)
 
 export interface InteractiveNewIO {
   prompt(question: string): Promise<string>
@@ -424,7 +414,7 @@ export async function runInteractiveNew(
   let content = current.initialBrief ?? draftBriefMarkdown(templateContent, title)
   for (;;) {
     content = await io.editFile(content)
-    const missing = missingBriefSections(content, requiredSections)
+    const missing = missingSections(content, requiredSections)
     if (missing.length > 0) {
       log(`brief is missing required section(s): ${missing.join(', ')}`)
       const again = (await io.prompt('re-edit? [Y/n] ')).trim().toLowerCase()
@@ -526,9 +516,9 @@ export async function stageNewRun(flags: NewFlags): Promise<number> {
       console.error(`cannot read --brief-file ${flags.briefFile}: ${(e as Error).message}`)
       return 1
     }
-    const missingSections = missingBriefSections(content, requiredSections)
-    if (missingSections.length > 0) {
-      console.error(`--brief-file is missing required section(s): ${missingSections.join(', ')}`)
+    const missing = missingSections(content, requiredSections)
+    if (missing.length > 0) {
+      console.error(`--brief-file is missing required section(s): ${missing.join(', ')}`)
       return 1
     }
     briefMarkdown = content

@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>genesis-preview · 05 arm</title>
+<style>
+/* ============ Signal Deck tokens — verbatim from styles.css ============ */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  color-scheme:light dark;
+  --ground:light-dark(#eef2f5,#0a0e11);
+  --surface:light-dark(#ffffff,#111820);
+  --inset:light-dark(#f3f6f8,#0d141a);
+  --raised:light-dark(#e4ebef,#18222b);
+  --ink:light-dark(#10202a,#dbe7ec);
+  --muted:light-dark(#4c5d67,#8ba1ac);
+  --faint:light-dark(#8598a2,#566771);
+  --line:light-dark(#d3dde3,#223039);
+  --accent:light-dark(#0b6f89,#45c8ec);
+  --ok:light-dark(#157a4a,#4ec98d);
+  --warn:light-dark(#8a6410,#e0b24e);
+  --bad:light-dark(#b23b28,#ff7f63);
+  --on-solid:light-dark(#ffffff,#06121a);
+  --accent-soft:light-dark(rgba(11,111,137,.12),rgba(69,200,236,.14));
+  --ok-soft:light-dark(rgba(21,122,74,.13),rgba(78,201,141,.15));
+  --warn-soft:light-dark(rgba(138,100,16,.13),rgba(224,178,78,.15));
+  --bad-soft:light-dark(rgba(178,59,40,.12),rgba(255,127,99,.16));
+  --glow:light-dark(rgba(11,111,137,.30),rgba(69,200,236,.40));
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',sans-serif;
+  --mono:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,monospace;
+}
+body{background:var(--ground);color:var(--ink);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:2px}
+a{color:var(--accent)}
+.mono{font-family:var(--mono)}
+
+.mock-bar{position:sticky;top:0;z-index:20;display:flex;flex-wrap:wrap;align-items:center;gap:10px;border-bottom:1px solid var(--line);background:var(--surface);padding:8px 14px}
+.mock-bar .tag{font:700 10px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--warn);border:1px dashed var(--warn);border-radius:4px;padding:3px 7px}
+.mock-bar .name{font:600 12px var(--mono);color:var(--muted)}
+.tabs{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
+.tabs button{border:1px solid var(--line);background:var(--inset);color:var(--muted);border-radius:999px;padding:4px 12px;font:600 11.5px var(--sans);cursor:pointer}
+.tabs button.on{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.state{display:none}.state.on{display:block}
+.callout{margin:16px 0 0;border-left:2px solid var(--warn);background:var(--warn-soft);border-radius:0 5px 5px 0;padding:8px 12px;font-size:12px;color:var(--muted)}
+.callout b{color:var(--warn)}
+.wrap{max-width:900px;margin:0 auto;padding:24px}
+
+/* run header */
+.runhead{display:flex;flex-wrap:wrap;align-items:center;gap:14px;border-bottom:1px solid var(--line);margin-bottom:20px;padding-bottom:16px}
+.runhead h1{font:600 20px var(--mono);letter-spacing:.06em}
+.runhead .right{margin-left:auto;display:flex;align-items:center;gap:14px}
+.runhead .ref{font:12px var(--mono);color:var(--faint)}
+.genesis{flex-basis:100%;font:11.5px var(--mono);color:var(--muted)}
+.genesis .who{color:var(--ink);font-weight:600}
+.phase{display:inline-flex;align-items:center;gap:7px;font-size:12px;line-height:1;white-space:nowrap}
+.phase .d{display:inline-block;width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 6px currentColor}
+.phase .d-hollow{display:inline-block;width:7px;height:7px;border-radius:50%;border:1.5px solid currentColor;background:transparent;box-shadow:none}
+.t-accent{color:var(--accent)}.t-bad{color:var(--bad)}
+.phase .lbl{color:var(--ink)}
+.gates{display:inline-flex;gap:3px}
+.gc{display:inline-flex;height:22px;width:30px;align-items:center;justify-content:center;gap:2px;border-radius:3px;border:1px solid;font:11px var(--mono)}
+.gc .id{font-size:8px;color:var(--faint)}
+.gc-pend{color:var(--faint);border-color:var(--line);border-style:dashed;background:var(--inset)}
+.meter{display:inline-flex;align-items:center;gap:8px}
+.meter .bar{height:5px;width:64px;overflow:hidden;border-radius:3px;border:1px solid var(--line);background:var(--inset)}
+.meter .fill{display:block;height:100%}
+.meter .txt{font:12px var(--mono);color:var(--muted)}
+
+/* needs-you card */
+.card{position:relative;border:1px solid var(--accent);border-left-width:3px;border-radius:6px;background:var(--surface);padding:16px 18px;box-shadow:0 0 0 1px var(--accent-soft),0 0 18px var(--glow)}
+.card .head{display:flex;align-items:center;gap:12px}
+.kchip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent);padding:3px 9px;font:600 11px var(--mono);letter-spacing:.04em;line-height:1}
+.kchip .d-hollow{display:inline-block;width:6px;height:6px;border-radius:50%;border:1.5px solid currentColor;background:transparent}
+.card .t{font-size:15px;font-weight:600}
+.age{margin-left:auto;flex-shrink:0;border:1px solid var(--line);border-radius:4px;background:var(--inset);padding:4px 8px;font:11px var(--mono);color:var(--muted)}
+.card .detail{margin-top:8px;max-width:76ch;font-size:13.5px;color:var(--muted)}
+.packet{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
+.packet a{border:1px solid var(--line);border-radius:4px;background:var(--inset);padding:2px 8px;font:11px var(--mono);color:var(--muted);text-decoration:none}
+.packet a:hover{border-color:var(--accent);color:var(--accent)}
+.panel{margin-top:14px;border-top:1px solid var(--line);padding-top:14px}
+.btn{border-radius:999px;border:1px solid var(--line);background:var(--inset);color:var(--muted);padding:7px 16px;font:600 14px var(--sans);cursor:pointer;transition:all .14s}
+.btn:hover{color:var(--ink);border-color:var(--accent)}
+.btn-primary{border-color:var(--accent);background:var(--accent);color:var(--on-solid);box-shadow:0 0 12px var(--glow)}
+.btn-primary:hover{opacity:.9}
+.btn[disabled]{opacity:.4;cursor:not-allowed}
+.acts{display:flex;gap:8px;align-items:center}
+.acts .never{font:11px var(--mono);color:var(--faint)}
+
+/* confirm block */
+.confirm{display:flex;flex-direction:column;gap:12px}
+.consequence{border:1px solid var(--line);border-radius:5px;background:var(--inset);padding:11px 13px;font-size:13px;line-height:1.6;color:var(--muted)}
+.consequence b{color:var(--ink)}
+.armrec{border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:5px;background:var(--surface);padding:10px 13px}
+.armrec .cap{font:600 10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:5px}
+.armrec .msg{font:600 12px var(--mono)}
+.armrec .who{margin-top:2px;font:11.5px var(--mono);color:var(--muted)}
+
+/* flashes */
+.flash{border-radius:5px;padding:9px 13px;font-size:12.5px;font-weight:600;margin-bottom:12px;line-height:1.5}
+.f-ok{background:var(--ok-soft);color:var(--ok)}
+.f-warn{background:var(--warn-soft);color:var(--warn)}
+.f-bad{background:var(--bad-soft);color:var(--bad)}
+
+/* history spine */
+.hist{position:relative;margin:20px 0 0 6px;display:flex;flex-direction:column}
+.hist::before{content:'';position:absolute;left:6px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.hrow{position:relative;display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--line);padding:10px 0 10px 28px;font-size:13px}
+.hrow:last-child{border-bottom:none}
+.hrow::before{content:'';position:absolute;left:2px;top:15px;width:10px;height:10px;border-radius:50%;border:2px solid var(--faint);background:var(--inset)}
+.hrow.node::before{border-color:var(--accent);background:var(--accent);box-shadow:0 0 10px var(--glow)}
+.hrow .when{width:110px;flex-shrink:0;font:11.5px var(--mono);color:var(--faint)}
+.hrow .subj{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.hrow .ph{flex-shrink:0;font:11px var(--mono);color:var(--accent)}
+.hrow .by{width:96px;flex-shrink:0;text-align:right;font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hrow .oid{flex-shrink:0;font:11px var(--mono);color:var(--faint)}
+</style>
+</head>
+<body>
+
+<div class="mock-bar">
+  <span class="tag">Mockup</span>
+  <span class="name">genesis-preview · 05 — Arm: a separate, weighted act (AC5.1, AC5.2, AC6.1) · never Resume</span>
+  <div class="tabs">
+    <button class="on" onclick="show('st-idle',this)">Staged · idle</button>
+    <button onclick="show('st-confirm',this)">Arm · confirm</button>
+    <button onclick="show('st-armed',this)">Armed · aftermath</button>
+    <button onclick="show('st-refused',this)">Arm refused</button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- shared staged header (idle/confirm) -->
+  <!-- ============ 1. IDLE ============ -->
+  <section id="st-idle" class="state on">
+    <header class="runhead">
+      <h1>budget-alerts</h1>
+      <span class="phase t-accent"><span class="d-hollow"></span><span class="lbl">staged</span></span>
+      <span class="gates"><span class="gc gc-pend"><span class="id">0</span>·</span><span class="gc gc-pend"><span class="id">1</span>·</span><span class="gc gc-pend"><span class="id">2</span>·</span></span>
+      <span class="right"><span class="meter"><span class="bar"><span class="fill" style="width:4%;background:var(--faint)"></span></span><span class="txt">unmetered</span></span><span class="ref">sandbox · run/budget-alerts</span></span>
+      <p class="genesis">genesis <span class="mono">a1b2c3d</span> · staged by <span class="who">Nathan Carter</span> · 2026-07-22 · from retro-notes "2026-07 retro §3"</p>
+    </header>
+
+    <div class="card">
+      <div class="head">
+        <span class="kchip"><span class="d-hollow"></span>STAGED</span>
+        <span class="t">budget-alerts is staged, not started</span>
+        <span class="age">waiting 2m</span>
+      </div>
+      <p class="detail">The record exists — branch, brief, and state scaffold committed as shown below. No agent has been dispatched and no budget has metered. Arming starts the pipeline at <span class="mono">spec</span> and opens the $150 ceiling to spend.</p>
+      <div class="packet">
+        <a href="#">intent-brief.md</a>
+        <a href="#">state.yaml</a>
+      </div>
+      <div class="panel">
+        <div class="acts">
+          <button class="btn btn-primary" onclick="show('st-confirm',document.querySelectorAll('.tabs button')[1])">Arm…</button>
+          <span class="never">there is no Resume here — a staged run has never flown</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout"><b>Annotation.</b> The staged card is a first-class readiness card (accent rail, pulse-panel glow — a decision is genuinely wanted). Its <em>only</em> affordance is "Arm…" (AC6.1): the ellipsis marks it as a two-step consequential act, same idiom as "Approve…". The packet chips open the very artifacts the genesis commit created — reviewing the record is the preparation for arming it.</div>
+  </section>
+
+  <!-- ============ 2. CONFIRM ============ -->
+  <section id="st-confirm" class="state">
+    <header class="runhead">
+      <h1>budget-alerts</h1>
+      <span class="phase t-accent"><span class="d-hollow"></span><span class="lbl">staged</span></span>
+      <span class="gates"><span class="gc gc-pend"><span class="id">0</span>·</span><span class="gc gc-pend"><span class="id">1</span>·</span><span class="gc gc-pend"><span class="id">2</span>·</span></span>
+      <span class="right"><span class="meter"><span class="bar"><span class="fill" style="width:4%;background:var(--faint)"></span></span><span class="txt">unmetered</span></span><span class="ref">sandbox · run/budget-alerts</span></span>
+    </header>
+
+    <div class="card">
+      <div class="head">
+        <span class="kchip"><span class="d-hollow"></span>STAGED</span>
+        <span class="t">budget-alerts is staged, not started</span>
+        <span class="age">waiting 3m</span>
+      </div>
+      <div class="panel">
+        <div class="confirm">
+          <div class="consequence">
+            Arming moves the run to phase <b>spec</b> and opens dispatch: <b>agents start work on your brief, and the $150 budget starts metering.</b> The orchestrator picks it up on its next tick. This is the act that spends — staging spent nothing.
+          </div>
+          <div class="armrec">
+            <p class="cap">the record this writes</p>
+            <p class="msg">state(budget-alerts): armed by Nathan Carter</p>
+            <p class="who">Nathan Carter &lt;nathan@carter.dev&gt; — the server's git identity</p>
+          </div>
+          <div class="acts">
+            <button class="btn btn-primary">Arm budget-alerts</button>
+            <button class="btn" onclick="show('st-idle',document.querySelectorAll('.tabs button')[0])">Cancel</button>
+            <span class="never">while committing, the button reads "Committing…" and disables</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout"><b>Annotation.</b> The confirm step mirrors DecidePanel's approve mode: consequence copy that explains itself (the approve-and-hold idiom), then a named, primary-accent commit button — "Arm budget-alerts", not a bare "Confirm". Record-first even here: the exact commit message and author are shown before the operator commits to them. Pending state reuses the "Committing…" verb — every mutation in Gate is a commit and says so.</div>
+  </section>
+
+  <!-- ============ 3. ARMED AFTERMATH ============ -->
+  <section id="st-armed" class="state">
+    <header class="runhead">
+      <h1>budget-alerts</h1>
+      <span class="phase t-accent"><span class="d"></span><span class="lbl">spec</span></span>
+      <span class="gates"><span class="gc gc-pend"><span class="id">0</span>·</span><span class="gc gc-pend"><span class="id">1</span>·</span><span class="gc gc-pend"><span class="id">2</span>·</span></span>
+      <span class="right"><span class="meter"><span class="bar"><span class="fill" style="width:4%;background:var(--faint)"></span></span><span class="txt">unmetered</span></span><span class="ref">sandbox · run/budget-alerts</span></span>
+      <p class="genesis">genesis <span class="mono">a1b2c3d</span> · staged by <span class="who">Nathan Carter</span> · armed <span class="mono">9f3e2a1</span> · 2026-07-22</p>
+    </header>
+
+    <div class="flash f-ok" role="status">Arm budget-alerts into phase "spec" — committed <span class="mono">9f3e2a1c04</span>. The orchestrator dispatches on its next tick; the budget meters from here.</div>
+
+    <div class="hist">
+      <div class="hrow node">
+        <span class="when">22 Jul 14:41</span>
+        <span class="subj">state(budget-alerts): armed by Nathan Carter</span>
+        <span class="ph">→ spec</span>
+        <span class="by">Nathan Carter</span>
+        <span class="oid">9f3e2a1</span>
+      </div>
+      <div class="hrow">
+        <span class="when">22 Jul 14:32</span>
+        <span class="subj">state(budget-alerts): staged by Nathan Carter [client-key: 3f9c-a1d2]</span>
+        <span class="ph"></span>
+        <span class="by">Nathan Carter</span>
+        <span class="oid">a1b2c3d</span>
+      </div>
+    </div>
+
+    <div class="callout"><b>Annotation.</b> The aftermath is the record reading itself back: the success flash carries planDecision's own summary ("Arm budget-alerts into phase "spec"") plus the commit oid; the history spine now shows the two-commit life story — staged, then armed, both attributed. The phase chip's dot fills and glows: the run is now an engaged, mid-flight thing. The staged card is gone; nothing on this page offers Arm twice.</div>
+  </section>
+
+  <!-- ============ 4. ARM REFUSED ============ -->
+  <section id="st-refused" class="state">
+    <header class="runhead">
+      <h1>budget-alerts</h1>
+      <span class="phase t-accent"><span class="d"></span><span class="lbl">spec</span></span>
+      <span class="gates"><span class="gc gc-pend"><span class="id">0</span>·</span><span class="gc gc-pend"><span class="id">1</span>·</span><span class="gc gc-pend"><span class="id">2</span>·</span></span>
+      <span class="right"><span class="ref">sandbox · run/budget-alerts</span></span>
+    </header>
+
+    <div class="flash f-bad" role="alert">Arm refused — <span class="mono">run is not staged (phase: spec)</span>. Someone armed this run while your page was open; it is already flying. Nothing was committed by your click.</div>
+    <div class="flash f-warn" role="status">Concurrent-move variant (409): "The run moved while you were deciding — re-read and decide again." The page re-reads; nothing auto-retries.</div>
+
+    <div class="callout"><b>Annotation.</b> Both refusal shapes surface the core's words verbatim (AC5.2): the DecisionError from planDecision's arm case in the error voice, and the existing CAS-conflict posture in the conflict voice — re-present, never retry. The two tones stay distinct: bad = this act is illegal now; warn = the world moved, look again.</div>
+  </section>
+
+</div>
+
+<script>
+function show(id,btn){
+  document.querySelectorAll('.state').forEach(s=>s.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+}
+</script>
+</body>
+</html>

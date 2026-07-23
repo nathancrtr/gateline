@@ -1,0 +1,65 @@
+id: 04-server-orchestrator-wiring
+title: Thread localOnly through ServeOptions, EngineConfig, and assembleOrchestrator; suppress engine PR-ensure and server interval sync
+requirements: [R2, R4]
+
+scope: |
+  Server (frontend/packages/server/src/main.ts):
+  - `ServeOptions` gains `localOnly?: boolean`; pass it to loadSources alongside
+    push. A thrown LocalOnlyPushConflictError propagates (the direct-invocation
+    handler at the bottom already prints and exits 1; `agentic up` catches its
+    own copy first — task 03).
+  - In the interval-sync loop, skip scheduling for a source whose
+    `(source as { localOnly?: boolean }).localOnly` is true, logging
+    `local-only: not syncing <id> from origin` instead of the "syncing every Ns"
+    line. (LocalGitSource.syncFromRemote self-guards too — task 01 — so this is
+    honesty in the log, not the safety mechanism.)
+
+  Orchestrator (frontend/packages/orchestrator/src/):
+  - engine.ts: `EngineConfig` gains `localOnly?: boolean`; the constructor passes
+    it into its LocalGitSource options (the heartbeat syncFromRemote then
+    self-guards, AC2.4). The first-dispatch ensure call (currently engine.ts:458)
+    becomes `ensureDraftPr(this.cfg.repoDir, ref.branch, ref.slug,
+    { localOnly: this.cfg.localOnly })` — the existing log line then shows
+    "skipped: local-only mode — …" (AC2.2 engine site).
+  - start.ts: `OrchestratorOptions` gains `localOnly?: boolean`.
+    assembleOrchestrator: throw core's LocalOnlyPushConflictError when
+    `opts.localOnly && opts.push` (the binary never goes through loadSources,
+    ADR-5); otherwise resolve
+    `localOnly = opts.localOnly ?? (opts.push ? false : originMissing)` where
+    originMissing = `(await git.configGet('remote.origin.url')) === null` (same
+    trigger as the core auto-detect, AC1.1); force push=false when localOnly and
+    put both into the `common` config so engine and scheduler sources carry it.
+  - main.ts: add a root `--local-only` flag; buildEngine passes it through. A
+    conflict with `--push` must exit non-zero (propagating the throw is fine).
+
+  Tests: new file frontend/packages/orchestrator/test/local-only.test.ts (do not
+  edit existing orchestrator test files):
+  - Engine assembled with localOnly over a cloned fixture: syncFromRemote()
+    performs zero git invocations (spy on engine.source.git.run) — AC2.4 engine
+    half.
+  - A dispatching tick with localOnly set: the tick log contains the ensure
+    "skipped … local-only" note and no gh process is needed (the engine helper's
+    fake dispatcher pattern from engine.helper.ts applies) — AC2.2 engine site.
+  - assembleOrchestrator with { localOnly: true, push: true } rejects with
+    LocalOnlyPushConflictError — AC4.1 binary half.
+  - assembleOrchestrator on a remoteless repoDir with no flags resolves
+    local-only (auto-detect) — AC1.1.
+
+file_contact_surface:
+  - frontend/packages/server/src/main.ts
+  - frontend/packages/orchestrator/src/engine.ts
+  - frontend/packages/orchestrator/src/start.ts
+  - frontend/packages/orchestrator/src/main.ts
+  - frontend/packages/orchestrator/test/local-only.test.ts
+
+acceptance_tests:
+  - AC2.2 (engine call site)
+  - AC2.4 (engine heartbeat and server interval — zero fetch)
+  - AC4.1 (standalone binary flag pair)
+  - "npm test in frontend/ passes in full, including orchestrator hosted/push suites (AC7.2)"
+
+depends_on: [01-core-mode-resolution, 02-egress-guard-seams]
+
+status: pending
+
+notes: |

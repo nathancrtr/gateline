@@ -1,0 +1,71 @@
+id: 03-cli-wiring
+title: "agentic CLI: --local-only/--push on up, startup conflict exit, mode marker, arm suppression, and the sync short-circuit"
+requirements: [R1, R2, R3, R4]
+
+scope: |
+  All changes in frontend/packages/cli/src/main.ts plus its acceptance tests.
+
+  `up` command:
+  - Add `--local-only` and `--push` (pairing with the existing `--no-push`).
+    Explicitness of the push pair via the command's
+    `getOptionValueSource('push') === 'cli'` (commander ^14 — verify with a test
+    first; plan risk #1 names the argv-scan fallback).
+  - Before starting anything: call `loadSources({ repoOverrides: [repoDir],
+    push: <explicit push or undefined>, localOnly: flags.localOnly || undefined })`
+    in a try/catch. LocalOnlyPushConflictError → print message, exit 1 — no
+    server, no engine (AC4.1).
+  - Export a pure helper `resolveUpMode(flags, sourceLocalOnly)` returning
+    `{ enginePush, localOnly, marker }` with the plan's five exact marker strings
+    (AC4.2). Use it to replace the informal marker in the "engine watching …"
+    line (currently main.ts:771), and feed enginePush/localOnly to
+    startOrchestrator and push/localOnly through to startServer (ADR-7 —
+    OrchestratorOptions/ServeOptions fields land in task 04; coordinate on the
+    names given in the plan's interface contracts).
+  - enginePush := false when localOnly resolved, else explicit push if given,
+    else true (equivalent to the source's resolved push in every table row).
+
+  `resolveSources()`:
+  - Wrap loadSources in try/catch: LocalOnlyPushConflictError → print, exit 1,
+    so a config-tier conflict fails every command at startup (AC4.1).
+
+  `armRun`:
+  - Read `(source as { localOnly?: boolean }).localOnly` (the existing `.dir`
+    cast pattern) and pass `{ localOnly }` to ensureDraftPr (AC2.2 arm site).
+    Its skipped note prints as today.
+
+  `sync` command:
+  - Replace the direct `planSync(source, new GhCliProvider(dir))` with
+    `planSyncForSource(source, () => new GhCliProvider(dir))`. On 'local-only',
+    print exactly `local-only: nothing to sync` and continue to the next source
+    — exit stays 0, zero gh calls, and with --live no applySync runs (AC3.1,
+    AC3.2). Suppress the trailing generic "nothing to sync" line when the
+    local-only line already printed for every considered source (keep output
+    non-contradictory; exact handling is yours).
+
+  Tests (frontend/packages/cli/test/cli.test.ts, spawn pattern already there):
+  - `agentic sync` against a remoteless fixture: exit 0, stdout contains the
+    literal line, and no throw (today's uncaught `gh pr list` rejection is the
+    regression case) — AC3.1.
+  - Same with `--live`: exit 0, `git log` of the run branch unchanged — AC3.2.
+  - `agentic up --local-only --push --no-open` on a fixture: non-zero exit, error
+    names the conflict, and nothing listens on the port — AC4.1.
+  - resolveUpMode unit cases: all five markers, including auto-detect on a
+    remoteless source — AC4.2, AC1.1 (mode nameable in the startup log), AC1.2.
+
+file_contact_surface:
+  - frontend/packages/cli/src/main.ts
+  - frontend/packages/cli/test/cli.test.ts
+
+acceptance_tests:
+  - AC3.1
+  - AC3.2
+  - AC4.1
+  - AC4.2
+  - AC2.2 (arm call site suppressed)
+  - "npm test in frontend/ passes in full"
+
+depends_on: [01-core-mode-resolution, 02-egress-guard-seams]
+
+status: pending
+
+notes: |

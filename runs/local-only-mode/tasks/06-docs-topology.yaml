@@ -1,0 +1,54 @@
+id: 06-docs-topology
+title: Name local-only as a supported topology in the docs and reconcile the TOPOLOGY.md §3.1 guard claim
+requirements: [R5, R6]
+
+scope: |
+  docs/TOPOLOGY.md:
+  - §3.1 currently claims "the orchestrator refuses --push without a sync
+    provider so the unsupported topology fails at startup" (lines ~80-82). Per
+    ADR-6 no such guard exists and none is being built: rewrite the sentence to
+    describe actual behavior — the retired second-clone pattern is superseded by
+    the single `up` authority, and origin-egress posture is now governed by the
+    named local-only mode (AC5.1, doc-edit option).
+  - Add a section naming **local-only** as a supported, first-class topology
+    (AC6.1). State the resolution tiers exactly as implemented (explicit
+    `--local-only` / `local_only: true` > explicit push > origin auto-detect —
+    plan table), the alias (`up --no-push` resolves to local-only; config
+    `push: false` with an origin does not — ADR-1/ADR-2), and the guarantees:
+    no `git push`, no `gh`/GitHub API call, no `git fetch` of origin, `agentic
+    sync` reports "nothing to sync". Note the conflict rejection (`--local-only`
+    + explicit push fails at startup, named error).
+  - State the boundary (AC6.2): the deploy/ hosted entrypoint (PUSH_DECISIONS,
+    the GitHub webhook) legitimately requires a remote and is out of the mode's
+    scope.
+
+  docs/ORCHESTRATOR.md:
+  - Sweep for push-behavior claims that now contradict the code (its §"both
+    writers push to origin" text around lines 189-196 must acknowledge the
+    local-only case or cross-reference the new TOPOLOGY section). AC5.2 is a
+    repo-wide docs/ check: `grep -ri "push" docs/` and verify no doc claims a
+    `--push`-without-sync-provider refusal or unconditional pushing.
+
+  docs/DEPLOY.md:
+  - At most a one-line cross-reference from the hosted recipe to the local-only
+    topology section (AC6.2 allows no more).
+
+  Write against the code as merged by tasks 03 and 04 — verify flag names and
+  log markers against frontend/packages/cli/src/main.ts before claiming them.
+
+file_contact_surface:
+  - docs/TOPOLOGY.md
+  - docs/ORCHESTRATOR.md
+  - docs/DEPLOY.md
+
+acceptance_tests:
+  - AC5.1
+  - AC5.2
+  - AC6.1
+  - AC6.2
+
+depends_on: [03-cli-wiring, 04-server-orchestrator-wiring]
+
+status: pending
+
+notes: |

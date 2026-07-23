@@ -1,0 +1,69 @@
+id: 01-core-mode-resolution
+title: Resolve local-only onto the push chain in loadSources and LocalGitSource, with the named conflict error and the fetch guard
+requirements: [R1, R2, R4]
+
+scope: |
+  Implement the plan's normative mode-resolution table in
+  frontend/packages/core/src/view-model/config.ts and carry the resolved flag on
+  frontend/packages/core/src/sources/local-source.ts.
+
+  config.ts:
+  - Add `local_only: z.boolean().optional()` to the source entry schema and drop
+    the `.default(false)` from `push` (apply `?? false` inside resolution instead,
+    so explicit `push: false` stays distinguishable from unset — AC1.3 behavior
+    identical).
+  - Define and export `class LocalOnlyPushConflictError extends Error` with
+    `name = 'LocalOnlyPushConflictError'` and a message naming both conflicting
+    settings and the source they were found on. It is star-exported via the
+    existing view-model index — do not edit any index file.
+  - `loadSources` gains `localOnly?: boolean` in opts. Apply the plan's table to
+    every path (repoOverrides, config entries, fallbackToCwd): conflict → throw;
+    localOnly per rules 2a–2d (the CLI-only rule: opts.push === false implies
+    localOnly at this tier, per ADR-1); push per rule 3. Config entries now need
+    the origin probe (`pushWhenOriginExists`) for auto-detect — one extra
+    `git config` read per source. Warn (existing warnings array) when a source
+    resolves local-only but sets `fetch_interval` ("fetch_interval ignored —
+    local-only").
+  - Pass the resolved `localOnly` into every LocalGitSource constructed here.
+
+  local-source.ts:
+  - Options gain `localOnly?: boolean`; add `get localOnly(): boolean`. The
+    constructor treats `localOnly: true` as forcing push off (belt-and-braces —
+    loadSources already resolves push=false).
+  - `syncFromRemote()` returns immediately, before any git invocation, when
+    `this.localOnly` (AC2.4's mechanism for both the engine heartbeat and the
+    server interval sync). Direct construction without the option is unchanged.
+
+  Tests:
+  - frontend/packages/core/test/config.test.ts: table cases — remoteless
+    zero-config resolves localOnly=true (AC1.1 trigger unchanged); explicit
+    opts.localOnly on an origin repo gives push=false (AC1.2 core half);
+    opts.push=false implies localOnly at the CLI tier; config `push: false` with
+    origin stays localOnly=false (ADR-2 poller case); config `local_only: true`
+    + `push: true` and opts localOnly+push both throw LocalOnlyPushConflictError
+    (AC4.1 core half); config remoteless entry auto-detects localOnly; existing
+    push-precedence cases untouched (AC1.3).
+  - frontend/packages/core/test/fetch-sync.test.ts: a LocalGitSource built with
+    `localOnly: true` over the clone fixture — `vi.spyOn(source.git, 'run')`
+    records zero invocations from `syncFromRemote()` (not a caught failure).
+
+  Do not touch pr-ensure.ts, sync.ts, or divergence.test.ts (other tasks own them).
+
+file_contact_surface:
+  - frontend/packages/core/src/view-model/config.ts
+  - frontend/packages/core/src/sources/local-source.ts
+  - frontend/packages/core/test/config.test.ts
+  - frontend/packages/core/test/fetch-sync.test.ts
+
+acceptance_tests:
+  - AC1.1
+  - AC1.3
+  - AC4.1 (loadSources half — throw on conflict, both tiers)
+  - AC2.4 (guard mechanism — zero fetch via the git-run spy)
+  - "npm test in frontend/ passes in full (AC7.2 baseline kept green)"
+
+depends_on: []
+
+status: pending
+
+notes: |

@@ -304,6 +304,10 @@ escalations:
         from_role: orchestrator,
         reason: "architect failed twice: dispatch aborted by the operator during drain —
           process group killed (SIGKILL); the task is freed for a retry",
-        resolved: false
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-23T17:33:52.713Z,
+        resolution: architect tried to write its commit without shell tool access and got
+          stuck in a loop (#183)
       }
   ]

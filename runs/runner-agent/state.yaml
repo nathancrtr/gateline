@@ -73,6 +73,9 @@ escalations:
         reason: "architect failed twice: Command failed (exit 1): opencode run for run
           `runs/runner-agent`. When your work is complete, commit it on the
           current…",
-        resolved: false
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-23T05:56:08.785Z,
+        resolution: fixed env issue
       }
   ]

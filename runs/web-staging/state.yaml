@@ -261,6 +261,17 @@ budget:
           tokens_in: 10,
           tokens_out: 3539,
           cost_usd: 3.3667415000000003
+        },
+      {
+          at: 2026-07-23T00:52:19.532Z,
+          role: implementer,
+          task: 06-e2e-staging-arm,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:
@@ -289,7 +300,7 @@ tasks:
     { id: 03-server-staging-routes, status: review-approved, review_rounds: 1 },
     { id: 04-web-staging-form, status: review-approved, review_rounds: 2 },
     { id: 05-web-staged-state-arm, status: review-approved, review_rounds: 1 },
-    { id: 06-e2e-staging-arm, status: pending, review_rounds: 0 }
+    { id: 06-e2e-staging-arm, status: dispatched, review_rounds: 0 }
   ]
 escalations:
   [

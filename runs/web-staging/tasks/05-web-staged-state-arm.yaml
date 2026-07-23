@@ -64,3 +64,56 @@ depends_on: [02-core-staged-readiness]
 status: pending
 
 notes: |
+  Round 1 (implementer): candidate = genesis-preview, per state.yaml gates.G1.notes
+  ("I select the `genesis-preview` design."). Implemented all four scope items:
+  (1) chips.tsx: PhaseChip early-returns the staged treatment (hollow ring, no
+  glow, accent tone, label 'staged') only for phase==='paused' &&
+  pausedReason==='staged'; all other phases/paused-reasons fall through
+  unchanged. KindChip early-returns an outline STAGED pill (border-accent,
+  text-accent, transparent fill, hollow ring marker) for kind==='staged',
+  distinct from the solid PAUSE pill. (2) decide.tsx: added 'arm' to the Mode
+  union; idle renders exactly one affordance for kind==='staged'
+  (data-decide="arm", label "Arm run…"); confirm mode states the consequence
+  (dispatch begins, budget starts metering) and a data-decide="arm-confirm"
+  button submitting {action:'arm'} via the existing api.decide mutation,
+  pending label "Committing…"; the paused branch (submitResume/'resume') is
+  untouched and unreachable for staged items since it's a separate kind
+  (ADR-4) — no code path this component owns can submit 'resume' for a staged
+  item. Errors/409 ride the existing generic onError handler (unchanged) —
+  no new Flash tone was needed since decide.tsx's scope here is only the
+  staged/arm branch, not the staging-form's replay outcome (that's task 04's
+  surface). (3) inbox.tsx: itemHref adds kind==='staged' -> ?decide=staged.
+  (4) run.tsx: genesis-preview selected, so added the display-only genesis
+  line to the run header, value-importing `readIntake` from
+  `@agentic/core/record` (ADR-6 rider, already precedented in
+  pages/new-run.tsx from task 04) — computed from detail.state's passthrough
+  `intake:` block and the oldest entry in detail.history (the genesis
+  commit); no new server data. Renders whenever a run carries an intake block
+  (any run staged through the creation seam, staged or already armed), not
+  gated only on the staged phase, matching mockup 05's armed-aftermath state
+  which still shows the genesis line.
+
+  Deviation: the STAGED kind-chip's fill is rendered fully transparent
+  (bg-transparent), per this task's own scope text and plan.md's "Web
+  rendering seams" section (both say "transparent fill" verbatim). The
+  genesis-preview mockup's CSS (`04-staged-rest.html`/`05-arm.html`, class
+  `.kchip`/`.k-staged`) instead uses a soft accent tint
+  (`background:var(--accent-soft)`) with the same border/hollow-marker/label.
+  I followed the task/plan text as authoritative since it is the more
+  specific implementation instruction; the visual delta (no tint vs. a faint
+  tint) is minor and the pill remains distinct in form (outline + hollow
+  marker + label) per AC6.2's own test. Flagging for reviewer judgment in
+  case the mockup's literal swatch was intended to govern instead.
+
+  Verification: `cd frontend && npm run typecheck && npm run build` — both
+  pass (typecheck: clean; build: vite build succeeds, 442 modules
+  transformed). Full workspace `npm test`: 40 test files passed, 1 skipped,
+  356 tests passed (0 failed) — unaffected by this diff (web has no unit-test
+  harness per plan.md, consistent with tasks 01-04's verification pattern).
+  Wording guard: `grep -rniE "openai|anthropic|complet(e|ion)|generate.*brief"
+  frontend/packages/web/src` → no matches at all (exit 1/empty). `grep -rniE
+  "octokit|jira|linear|tracker.*api" frontend/packages/web/src` → 2
+  pre-existing matches in styles.css (`linear-gradient`, `animation: ... linear
+  ...`), both outside this diff's four files and predating this task —
+  confirmed via `git diff --stat` (only chips.tsx/decide.tsx/inbox.tsx/run.tsx
+  touched) and a grep of the diff itself for the same patterns (no hits).

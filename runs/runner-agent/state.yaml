@@ -82,6 +82,17 @@ budget:
           tokens_in: 7273,
           tokens_out: 239,
           cost_usd: 0.0165907278
+        },
+      {
+          at: 2026-07-23T05:59:09.716Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:

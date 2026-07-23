@@ -1,243 +1,197 @@
-# Technical Plan: Runner agent (subscription-billed dispatch off the control-plane machine)
+# Technical Plan: The runner agent — remote dispatch that preserves its work
+
+<!-- Contract: produced by Architect; consumed by Implementers, Reviewer.
+     Gate: G1. All sections required. Accompanied by tasks/*.yaml.
+     AMENDMENT (G1-redo, 2026-07-23): the prior plan was declined at G1. The
+     decline concerned one decision — "Disposable workspace via shallow clone +
+     checkout + rm" — which would delete the agent's produced files before the
+     control plane can commit them, defeating the runner's purpose. This redo
+     supersedes that decision (see ADR-3) and leaves every other section
+     redesigned only as far as that correction requires. The file-contact
+     surfaces are unchanged by the redesign, so the task breakdown stands.
+     REQUIREMENT SOURCING: the G0 spec was not present in this working tree, so
+     R1–R6 below are reconstructed from the design of record (docs/TOPOLOGY.md
+     §3.3) plus the decline. The G1 human should reconcile these numbers
+     against the actual approved spec. -->
 
 ## Approach
+The runner is a remote dispatcher whose harness runs on a workstation and whose work product must reach the control plane before it can be committed. It reuses the existing dispatch seam and harvest discipline rather than inventing a remote protocol. The one redesign this redo forces is the workspace lifecycle.
 
-A new `RemoteDispatcher` sits alongside `HeadlessDispatcher` as a peer `Dispatcher`
-implementation. Where `HeadlessDispatcher` spawns a child process on the same
-machine, `RemoteDispatcher` delegates execution to a workstation agent that polls
-the control plane, executes work in a disposable workspace, and reports back —
-exactly the CI-runner shape TOPOLOGY.md §3.3 names.
+The runner has two halves. A relay dispatcher lives in the engine process and turns a dispatch call into a server handoff plus an awaited outcome. A worker runs on the workstation: it polls the control plane for an intent, checks out the run branch at the pinned base commit, runs the adapter's headless command in it, then harvests the produced files and reports back.
 
-The control plane exposes three new authenticated API endpoints the workstation
-agent uses: list open intents, claim one, and report the outcome. The server and
-`RemoteDispatcher` share an in-memory callback map: when the server receives a
-workstation report, it resolves the dispatcher's pending Promise, and the engine's
-existing `closeDispatch` path meters and commits — the workstation never touches
-`state.yaml`, run branches, or git refs.
+The declined idea is right about disposability and wrong about ordering. In the local model the engine already rescues a role's uncommitted files from the checkout before force-removing it, then commits the closing bookkeeping. The remote model cannot reuse that exact path because the engine cannot stage a working tree on another machine. So the worker harvests where the tree lives: it commits the role's own pathspecs to a harvest branch and pushes that branch to origin.
 
-The workstation agent is a standalone Node.js process in a new frontend package.
-It clones the repository from the control plane's remote URL, checks out the run
-branch, executes the adapter's headless command as declared by its manifest, and
-discards the workspace on completion. The agent is adapter-generic: it reads the
-manifest's `headless.command` and runs it, with zero role or vendor branching.
+Disposal is gated on that push. The workspace is removed only after the harvest commit reaches origin, never on harness return. The control plane stays the sole writer of the run branch: it fetches the harvest branch and folds it with the existing rebase-plus-compare-and-swap discipline. A fold conflict means overlapping file-contact surfaces, which is a plan defect.
 
-The engine selects between `HeadlessDispatcher` and `RemoteDispatcher` through
-configuration — an opt-in that leaves the existing API-key path untouched.
+Three things do not change:
+- The seam remains the single metering point.
+- The runner stays adapter-generic.
+- Git remains the only store, so a lost workspace costs a re-checkout, never state.
 
 ## Interface contracts
 
-### DispatchRequest extension (seam.ts)
+### `seam.ts` — `DispatchOutcome` gains a harvest handoff (R4, R5)
+
 ```ts
-export interface DispatchRequest {
-  cwd: string
-  role: string
-  body: string
-  timeoutMs: number
-  /** Run slug the dispatch is for — the workstation clones from origin, not from cwd. */
-  slug?: string
-  /** Run branch name — the workstation checks this out in its disposable workspace. */
-  branch?: string
+export interface DispatchOutcome {
+  ok: boolean
+  costUsd: number | null
+  tokensIn: number | null
+  tokensOut: number | null
+  error: string | null
+  fatal?: boolean
+  /** Present when the dispatcher harvested the agent's work to a branch the
+   *  engine folds (the remote worker). Null for the local headless
+   *  dispatcher, which leaves working-tree changes for the engine's own
+   *  harvest() to commit. */
+  harvest?: { branch: string; base: string } | null
 }
 ```
 
-### RemoteDispatcher callback surface (runner-dispatcher.ts)
+### `seam.ts` — `Dispatcher` gains a workspace-management flag (R1, R3)
+
 ```ts
-export interface RunnerCallback {
-  /** Resolve a pending dispatch by key = `${slug}|${role}|${task}|${round}`. */
-  resolve(key: string, outcome: DispatchOutcome): boolean
-  /** List intents with open ledger entries across active runs. */
-  pendingIntents(): PendingIntent[]
-}
-
-export interface PendingIntent {
-  key: string        // slug|role|task|round
-  slug: string
-  branch: string
-  role: string
-  task: string | null
-  round: number | null
-  adapter: string    // the adapter that should execute this intent
+export interface Dispatcher {
+  readonly adapter: string
+  /** True when this dispatcher creates its own workspace and harvests its own
+   *  work (the remote worker). The engine then creates no local checkout and,
+   *  on outcome.harvest, folds the branch instead of running its local
+   *  harvest(). HeadlessDispatcher leaves this unset (local). */
+  readonly managesOwnWorkspace?: boolean
+  adapterFor?(role: string): string
+  dispatch(req: DispatchRequest): Promise<DispatchOutcome>
+  abortAll?(): number
 }
 ```
 
-### Runner API endpoints (server)
+### `harvest.ts` (new, shared) — the role-scoped harvest rule (R4)
 
-`GET /api/runner/intents`
-- Auth: `Authorization: Bearer <token>` header
-- Response: `{ intents: PendingIntent[] }`
-- Config-gated: route does not exist when `RUNNER_TOKEN` is unset
-
-`POST /api/runner/claim`
-- Auth: `Authorization: Bearer <token>` header
-- Body: `{ key: string }` — the intent key from GET /api/runner/intents
-- Response: `{ ok: true }` or `{ ok: false, reason: "already-claimed" | "unknown" }`
-
-`POST /api/runner/report`
-- Auth: `Authorization: Bearer <token>` header
-- Body: `{ key: string, outcome: DispatchOutcome }`
-- Response: `{ ok: true }` or `{ ok: false, reason: "unknown" | "already-resolved" }`
-
-### Workstation agent CLI
-
+```ts
+/** A role's own outputs under the run dir — the harvest scope, never a
+ *  peer's mid-flight file. Shared by the engine's local harvest and the
+ *  remote worker's harvest-then-dispose, so the rule has one home. */
+export function harvestPathspecs(
+  runsRoot: string, slug: string, role: string, task: string | null,
+): string[]
 ```
-node packages/runner-agent/src/main.ts \
-  --control-plane https://control.example.com \
-  --token <RUNNER_TOKEN> \
-  --work-dir /tmp/agentic-runner \
-  --poll-interval 5
+
+The mapping is the one `engine.ts` already encodes privately: analyst →
+`spec.md`, architect → `plan.md` + `tasks/`, reviewer → `review-*.md`,
+verifier → `verification-report.md`, ops → `release-plan.md`. Moving it to a
+shared module is the only refactor this run needs. It has today a single
+private consumer, so no exhaustive switch breaks.
+
+### `workspace.ts` — `foldHarvestBranch` reuses the fold discipline (R4, R5)
+
+```ts
+export interface FoldResult { ok: boolean; conflict: boolean; message: string }
+
+/** Fold a worker-pushed harvest branch into the run branch as the sole writer:
+ *  fetch the harvest branch, rebase it onto the current run tip, CAS the run
+ *  branch ref, then delete the harvest branch ref. A rebase conflict means
+ *  overlapping file-contact surfaces — a plan defect — and escalates. Mirrors
+ *  foldTaskBranch's shape and runs under the engine's per-run write lock. */
+export async function foldHarvestBranch(
+  repoDir: string, runBranch: string, harvest: { branch: string; base: string },
+): Promise<FoldResult>
 ```
+
+### `engine.ts` — `launch()` branches on workspace ownership (R3, R4, R5)
+
+For a dispatcher with `managesOwnWorkspace` set, `launch()`:
+- skips `ensureRunCheckout`/`ensureTaskCheckout` (the worker owns its checkout).
+- calls `dispatch()` and, on `outcome.harvest`, calls `foldHarvestBranch` under the run write lock in place of the local `harvest()`.
+- pushes the folded run branch (the existing `pushBranch`).
+- then runs `closeDispatch` (ledger, metering) exactly as today.
+
+The local `harvest()` path is unchanged for the headless dispatcher. Remote
+dispatches are naturally isolated: each gets its own workspace, so the shared-
+checkout hazard that motivated per-task worktrees does not arise.
+
+### Worker harvest-then-dispose sequence (R3, R4, R6) — steps, not bodies
+
+1. Resolve `base` = the pinned dispatch commit (the run tip the engine armed).
+2. Check out a workspace at `base` (a shallow clone or a worktree of the worker's own clone, holding no authority).
+3. Run the adapter's headless command (the manifest's `command`/`dispatchPrompt`, exactly as `HeadlessDispatcher.dispatch` builds them) under the role timeout.
+4. On `ok`, harvest: `git add -A -- <harvestPathspecs(...)>`, then a bot-identity commit on a harvest branch `run/<slug>--harvest/<dispatch-id>` off `base`, message `state(<slug>): harvested <role> artifacts`.
+5. Push the harvest branch to origin. Only on an accepted push, dispose the workspace. On a rejected push, retain the workspace and retry — the work is in git locally and is never lost.
+6. POST `{ ok, costUsd, tokensIn, tokensOut, error, harvest }` to the control plane, which folds and meters.
+
+### Transport (R2) — new server routes, path/auth confirmed at task 01
+
+- `GET /api/runner/intent` → the next armed dispatch intent (role, slug, body, base OID, role timeout), or 204.
+- `POST /api/runner/outcome` → `{ slug, role, task, round, outcome }`. The engine matches it to the open ledger entry, folds `outcome.harvest`, and runs `closeDispatch`.
+- The workstation opens no inbound port. The worker polls, and the relay dispatcher's `dispatch()` hands the intent to an in-process queue the server serves, returning a promise that resolves on the worker's outcome POST.
 
 ## Decisions (ADRs)
 
-### ADR-1: Polling transport — the workstation reaches out; no inbound port
+### ADR-1: The runner is a remote `Dispatcher` — a relay hands off, a worker executes (R1, R2)
+- **Choice:** A relay `Dispatcher` in the engine process turns `dispatch()` into a server handoff plus an awaited outcome, and a worker process on the workstation polls for the intent, executes the harness, and posts the outcome. This keeps the seam as the engine's only dispatch call, so metering and the duplicate-dispatch guard stay where they are.
+- **Rejected:** A bespoke runner protocol outside the seam — it would fork the single metering point and the commit-then-launch guard, the two properties the seam exists to hold.
+- **Consequences:** The engine gains one new `Dispatcher` implementation and the server gains one intent/outcome route pair. The relay's `dispatch()` is long-lived (it resolves when the worker reports), so the engine's existing per-run in-flight tracking covers it without a new concept.
 
-- **Choice:** The workstation agent polls `GET /api/runner/intents` on a
-  configurable interval. The control plane never initiates a connection to the
-  workstation. No listening port exists on the workstation.
-- **Rejected:** A push/webhook transport from control plane to workstation — would
-  require the workstation to have a reachable address and an open port, violating
-  R3's "no inbound connection is ever accepted on the workstation" constraint and
-  adding deployment complexity (firewall rules, dynamic IPs) the CI-runner analogy
-  deliberately avoids. A WebSocket connection initiated by the workstation was also
-  rejected: it adds connection-state management for negligible latency benefit when
-  polling at a 5–30 second interval against dispatch wall clocks measured in
-  minutes.
-- **Consequences:** The agent is trivially deployable behind any NAT or firewall
-  — same posture as a GitHub Actions self-hosted runner. The trade-off is a
-  polling interval of latency before the agent notices a new intent. The engine's
-  `staleMs` window (default 5 minutes) must comfortably exceed the poll interval
-  so the agent has time to claim before aging.
+### ADR-2: The workspace is a checkout at the pinned base commit — a shallow clone suffices (R3)
+- **Choice:** The worker checks out the run branch at the exact commit the engine armed (the base OID carried in the intent). A shallow clone is fine because the workspace is not a state replica and holds no authority. The base OID is what makes the harvest foldable.
+- **Rejected:** A full clone on every dispatch — slower and larger than a role's output needs, with no functional gain once the base OID is recorded.
+- **Consequences:** The fold's correctness rests on the base OID matching an ancestor of the run tip. If the tip has moved, the fold rebases. That is handled by ADR-4, not by the checkout.
 
-### ADR-2: In-memory callback map bridges RemoteDispatcher and the server
+### ADR-3 (amendment — supersedes the declined "Disposable workspace via shallow clone + checkout + rm"): Harvest-then-dispose, gated on origin (R4, R6)
+- **Choice:** The worker harvests the role's own pathspecs into a commit on its own machine and pushes a harvest branch, and only then disposes the workspace. Disposal is gated on the harvest reaching origin, never on the harness returning. This is the remote mirror of the engine's existing local rule, which commits a role's uncommitted files before force-removing its checkout.
+- **Rejected:**
+  - The declined "shallow clone + checkout + rm" with the rm on harness return — it deletes the produced files before the control plane can ever see them, which is the exact defect the decline named.
+  - Returning a diff patch in the outcome for the engine to apply — it loses on binary files, renames, and mode changes, couples the transport to patch size, and fails (forcing a re-dispatch) on a moved tip instead of three-way merging.
+  - Having the worker push the run branch directly — it breaks the one-writer-per-branch rule and would race the control plane's own writes, needing ref surgery on a non-fast-forward.
+- **Consequences:** The worker needs push authority scoped to harvest branches (never the run branch). The control plane remains the sole writer of the run branch, because only its fold moves that ref. A dispatch whose harvest push fails keeps its workspace until the push succeeds or the control plane ages the entry out.
 
-- **Choice:** `RemoteDispatcher` exposes a `RunnerCallback` interface (a
-  `Map<string, {resolve, reject}>` for pending dispatches, plus a list of pending
-  intents). The server's runner API handler holds a reference to this callback and
-  calls `resolve(key, outcome)` when a workstation reports. No disk, no polling
-  from the dispatcher side.
-- **Rejected:** Polling from the dispatcher side (the dispatcher repeatedly calls
-  the server until the outcome arrives) — doubles the polling surface and adds
-  latency. A committed queue (writing claimed intents to a file or the ledger
-  itself) was rejected because it would make the engine's crash-recovery
-  (sweepStale) indistinguishable from a genuinely lost workstation, requiring the
-  lease-timestamp extension R7 says to avoid unless necessary.
-- **Consequences:** The server and orchestrator must be co-located (they share
-  this map). This is already the blessed topology (TOPOLOGY.md §3.1). If the
-  server restarts, pending callbacks are lost — but the engine's `sweepStale` ages
-  out open ledger entries with no live job, and the workstation's late report
-  (POST /api/runner/report) receives `already-resolved` and moves on.
+### ADR-4: The control plane folds the harvest branch as the sole run-branch writer (R4, R5)
+- **Choice:** The engine fetches the harvest branch and folds it into the run branch with the existing rebase-plus-compare-and-swap discipline, then deletes the harvest branch ref. A rebase conflict is treated as a plan defect (overlapping file-contact surfaces) and escalates, exactly as the per-task fold already does.
+- **Rejected:** Applying the worker's patch directly — same fragility as in ADR-3, and it gives up the three-way merge a rebase provides against a moved tip.
+- **Consequences:** The fold reuses `foldTaskBranch`'s shape, so one new function carries the whole mechanism. A moved tip is reconciled by rebase rather than by discarding work. Only a genuine surface overlap fails, and that is an Architect guarantee, not a runtime surprise.
 
-### ADR-3: Bearer-token auth — static shared secret, not HMAC
+### ADR-5: Metering stays in the seam — the runner reports, the engine meters (R5)
+- **Choice:** The worker reports the usage its harness emits (parsed by the manifest's `usage` spec, exactly as `HeadlessDispatcher` parses it), and the engine meters it through the same ledger path as every local dispatch. The runner holds no state and no run-branch authority.
+- **Rejected:** Metering in the worker — it would split the single metering point the seam is and drift from the ledger the engine already keeps.
+- **Consequences:** A worker whose harness reports no usage is metered at the registry's static estimate, the same fallback the local dispatcher uses. The runner never writes `state.yaml` or the run branch.
 
-- **Choice:** The runner API endpoints authenticate with an `Authorization: Bearer
-  <token>` header. The token is set via the `RUNNER_TOKEN` environment variable on
-  the server. When `RUNNER_TOKEN` is unset, the routes do not exist (404) —
-  mirroring `buildWebhook`'s `secret` gate.
-- **Rejected:** HMAC-over-body (the webhook's pattern) — a polling request has no
-  event body to sign, and signing the HTTP method + path + timestamp adds
-  complexity without benefit for a simple request/response exchange. mTLS was
-  rejected as over-engineered for a single-workstation deployment behind an
-  identity-aware proxy.
-- **Consequences:** The token is a simple shared secret. Rotation means updating
-  the environment variable on both sides. The token travels over TLS (the control
-  plane is behind an identity-aware proxy per DEPLOY.md). An attacker who steals
-  the token can claim and report intents — but cannot write state, approve gates,
-  or push commits (the server never grants those powers through this route).
-
-### ADR-4: Optional fields on DispatchRequest — not a separate interface
-
-- **Choice:** `DispatchRequest` gains optional `slug` and `branch` fields.
-  `HeadlessDispatcher` ignores them. `RemoteDispatcher` requires them and throws
-  if they are unset. The engine's `launch()` always passes them (it already has
-  `ref.slug` and `ref.branch`).
-- **Rejected:** A separate `RemoteDispatchRequest` interface or a union type —
-  would require the engine to branch on dispatcher type before constructing the
-  request, violating R9's "not a code fork of the engine's dispatch call site."
-  A wrapper object (dispatch request carrying a nested transport-specific payload)
-  was rejected as adding indirection for a two-field extension.
-- **Consequences:** `DispatchRequest` grows by two optional fields. Every
-  `Dispatcher` implementation must tolerate them being present; `HeadlessDispatcher`
-  already does (it only reads `cwd`, `role`, `body`, `timeoutMs`). The contract
-  is documented: `slug` and `branch` are required for remote dispatch, ignored for
-  local.
-
-### ADR-5: Disposable workspace via shallow clone + checkout + rm
-
-- **Choice:** The workstation agent clones the repository (shallow, single-branch)
-  from the control plane's remote URL into a temp directory, checks out the run
-  branch, executes, and removes the directory. Each dispatch gets a fresh clone.
-- **Rejected:** Reusing a persistent clone with `git fetch` + `git checkout`
-  between dispatches — would violate R4's "never one checkout left
-  mounted/reused/updated in place" requirement and risks cross-dispatch
-  contamination (stale node_modules, leftover build artifacts). Git worktrees from
-  a single bare clone were rejected because they share object state and a
-  corrupted or mid-maintenance clone would affect all dispatches; a fresh clone is
-  self-contained and trivially verifiable.
-- **Consequences:** Each dispatch pays the cost of a network clone. For a typical
-  repository (<100MB), this is seconds on a broadband connection — negligible
-  compared to dispatch wall clocks measured in minutes. The `--work-dir` flag
-  controls where temp directories are created.
-
-### ADR-6: Intent claim via server-side in-memory set
-
-- **Choice:** The server maintains a `Set<string>` of claimed intent keys
-  (in-memory, same lifetime as the server process). `POST /api/runner/claim` does
-  an atomic add: if the key is already in the set, it returns `already-claimed`;
-  otherwise it adds the key and returns `ok`. The set is cleared when a report
-  resolves the intent. This is purely for mutual exclusion — the engine's
-  `this.jobs` map is the authoritative liveness signal.
-- **Rejected:** Claiming by writing to the ledger entry — the workstation must
-  never touch `state.yaml` (R5). A timestamp in the ledger placed by the engine
-  was rejected because the engine writes the ledger entry before `dispatch()` is
-  called, and adding a second write for the claim would break the
-  commit-then-launch sequencing.
-- **Consequences:** The claim set is server-process-local — a server restart loses
-  it. This is safe because the engine's `sweepStale` already handles the "entry
-  aged out, re-dispatched" path. After a server restart, a polling workstation
-  might claim and execute an intent whose dispatcher-side Promise was lost, then
-  report to a server that has no matching callback — the server returns
-  `already-resolved`, the workstation moves on, and the engine's stale-aging
-  cleans up the orphan ledger entry.
+### ADR-6: Binding environment constraints (R3, R6, cross-cutting)
+- **Choice:** The worker is a Node process on a workstation under an operator subscription, polling a control plane that ships as one supervised unit with the engine. It is verified by unit tests (the harvest-then-dispose ordering, the fold's compare-and-swap, disposal-gated-on-push, conflict-as-plan-defect) and by a shadow replay of a finished run — never by a live poll against this repository.
+- **Rejected:** Live integration against this repo — the AGENTS.md invariant forbids running a live orchestrator poll here, because it dispatches real, metered agents onto live branches.
+- **Consequences:** The transport and fold are stubbed in tests. The only end-to-end evidence is a shadow replay. The worker's toolchain is Node ≥ 24 running the TypeScript sources directly, matching the engine.
 
 ## Requirement → task mapping
 
 | Requirement | Task(s) |
 |-------------|---------|
-| R1 | 02-remote-dispatcher, 05-wiring |
-| R2 | 01-seam-extend |
-| R3 | 04-workstation-agent |
-| R4 | 04-workstation-agent |
-| R5 | 02-remote-dispatcher, 03-runner-api, 04-workstation-agent |
-| R6 | 03-runner-api |
-| R7 | 02-remote-dispatcher, 05-wiring |
-| R8 | 04-workstation-agent |
-| R9 | 05-wiring |
-| R10 | 06-live-smoke |
+| R1 (remote dispatcher, adapter-generic) | 01, 02 |
+| R2 (polls the control plane, no inbound port) | 01, 02 |
+| R3 (disposable workspace checkout, no authority) | 02, 03 |
+| R4 (work preserved for commit, control plane sole writer) | 02, 03, 04 |
+| R5 (outcome+usage through the seam, metered by the engine) | 01, 03, 04 |
+| R6 (disposable after harvest, git the only store) | 02, 03, 04 |
+
+Tasks accompany this plan per `contracts/work-item.yaml`. The redesign is
+ADR-scoped: the runner still touches the seam, a new worker module, the
+engine's fold path, and a shared harvest module — the same surfaces the
+prior task breakdown named — so the breakdown is unchanged.
 
 ## Risks
-
-1. **The harness CLI on the workstation is not logged in.** The spec declares
-   harness CLI authentication out of scope. If the workstation's harness CLI
-   (opencode, claude) has no active subscription session, every dispatch will fail
-   at execution time. **Early signal:** the live-smoke test (task 06) runs a real
-   dispatch end-to-end and will fail immediately if the harness is unauthenticated.
-
-2. **Shallow clone may not include the run branch.** If the run branch was pushed
-   very recently and the control plane's remote URL is a mirror with replication
-   lag, `git clone --branch run/<slug>` may fail. **Early signal:** the workstation
-   agent's first real dispatch after a run is armed.
-
-3. **The `RUNNER_TOKEN` and the webhook secret share the same bypass policy.** If
-   the identity-aware proxy's bypass rule for `/api/webhooks/github` is not
-   extended to cover `/api/runner/*`, the workstation's requests will hit the proxy
-   login page instead of the server. **Early signal:** the workstation agent logs
-   a non-200 response from the intents endpoint on startup.
-
-4. **Engine restart race with workstation mid-dispatch.** If the engine restarts
-   while the workstation is executing, `sweepStale` ages out the open ledger entry
-   and re-dispatches. The workstation's late report hits a server with no matching
-   callback. Meanwhile the re-dispatched intent may also be claimed. This converges
-   (the workstation reports `already-resolved`, the engine's new dispatch proceeds)
-   but wastes the first execution's work. **Early signal:** ledger shows a failed
-   entry followed by a successful one for the same role/task with a stale-aging
-   error message.
+- **The worker's push credentials may not cover origin.** The operator
+  subscription that justifies the runner may be read-only at the framework
+  repo. Early signal: the first real harvest push is rejected. Response: fall
+  back to the patch-in-outcome transport (ADR-3's rejected alternative) or
+  scope a credential to harvest-branch push only.
+- **A moved run tip between dispatch and harvest forces a fold rebase.** A
+  real file-surface overlap surfaces as a conflict, which is a plan defect.
+  Early signal: a fold conflict on a parallel-implementer run. Response: the
+  Architect guarantees disjoint surfaces, the standing rule.
+- **The server route and auth shape for the runner is new.** Pinning it here
+  risks a mismatch with the server's middleware. Early signal: a typecheck or
+  route test failure in task 01. Response: confirm against the server's
+  existing `/api/*` route conventions before implementing.
+- **No live test against this repo.** A live runner poll is forbidden here.
+  Early signal: a test that shells out to a real poll. Response: keep the
+  transport stubbed and prove end-to-end with a shadow replay only.
+- **Requirement numbers are reconstructed, not read from the G0 spec.** If
+  the approved spec numbers R1–R6 differently, the mapping table is wrong.
+  Early signal: the G1 human's reconciliation. Response: renumber on
+  confirmation before any implementer reads this plan.

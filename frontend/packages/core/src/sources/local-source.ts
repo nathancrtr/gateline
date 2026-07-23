@@ -19,7 +19,13 @@ export class LocalGitSource implements RunSource {
   readonly dir: string
   readonly git: Git
   readonly templates: ContractTemplates
-  private readonly options: { push?: boolean; identity?: Identity; fetchIntervalSeconds?: number; frameworkPrefix?: string }
+  private readonly options: {
+    push?: boolean
+    localOnly?: boolean
+    identity?: Identity
+    fetchIntervalSeconds?: number
+    frameworkPrefix?: string
+  }
   /**
    * Resolved core-layer roots, cached for the life of this source and
    * shared with any other consumer resolving paths against this same repo
@@ -35,15 +41,27 @@ export class LocalGitSource implements RunSource {
    *
    * `options.frameworkPrefix` overrides the default `.agentic` probe location
    * for a host integrated with a custom `integrate.py --prefix` (#94).
+   *
+   * `options.localOnly` forces push off (belt-and-braces — `loadSources`
+   * already resolves `push: false` under local-only) and is what
+   * `syncFromRemote` reads to skip fetching origin entirely. Direct
+   * construction without this option behaves exactly as before it existed:
+   * no source-level auto-detect.
    */
   constructor(
     id: string,
     dir: string,
-    options: { push?: boolean; identity?: Identity; fetchIntervalSeconds?: number; frameworkPrefix?: string } = {},
+    options: {
+      push?: boolean
+      localOnly?: boolean
+      identity?: Identity
+      fetchIntervalSeconds?: number
+      frameworkPrefix?: string
+    } = {},
   ) {
     this.id = id
     this.dir = dir
-    this.options = options
+    this.options = options.localOnly ? { ...options, push: false } : options
     this.git = new Git(dir)
     const git = this.git
     this.frameworkRoots = memoizedFrameworkRoots(git, options.frameworkPrefix)
@@ -67,6 +85,11 @@ export class LocalGitSource implements RunSource {
     return this.options.fetchIntervalSeconds
   }
 
+  /** True when this source is running in local-only mode — no push, no origin fetch. */
+  get localOnly(): boolean {
+    return this.options.localOnly === true
+  }
+
   /**
    * Pull remote state into this clone. Remote-tracking refs always update
    * (listRuns already reads refs/remotes/*); existing local branches are
@@ -74,8 +97,13 @@ export class LocalGitSource implements RunSource {
    * holding an unpushed decision commit is never clobbered — the decision's
    * own push reconciles it. New remote branches are not materialized locally;
    * writeState does that lazily on the first decision.
+   *
+   * Local-only mode (AC2.4) short-circuits before any git invocation — the
+   * one guard covering both the engine's heartbeat sync and the server's
+   * interval sync.
    */
   async syncFromRemote(): Promise<void> {
+    if (this.localOnly) return
     await this.git.run(['fetch', '--prune', 'origin'])
     // Prefix patterns (no glob): `*` in for-each-ref doesn't cross `/`, and
     // run branches live at refs/heads/run/<slug>.

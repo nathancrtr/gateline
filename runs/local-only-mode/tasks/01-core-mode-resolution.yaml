@@ -67,3 +67,40 @@ depends_on: []
 status: pending
 
 notes: |
+  Implementer (round 1): implemented as scoped, no deviations.
+  - config.ts: added `local_only` to the schema, dropped `.default(false)` from
+    `push`, added `LocalOnlyPushConflictError` (name set in the constructor),
+    and a shared `resolveMode()` helper implementing the plan's table exactly
+    (rule 1 conflict throw; rule 2 localOnly precedence with the CLI-only
+    push:false-implies-localOnly branch; rule 3 push default split by tier).
+    `memoizedOriginExists()` caches the one extra `pushWhenOriginExists` read
+    per source so rules 2d/3 share it. Config entries warn
+    `source <id>: fetch_interval ignored — local-only` when they resolve
+    local-only with `fetch_interval` set. `fallbackToCwd` gained a `localOnly`
+    parameter threaded from `loadSources`'s new opt. Every LocalGitSource
+    construction site passes the resolved `localOnly` through.
+  - local-source.ts: options gained `localOnly?: boolean`, a `get localOnly()`
+    getter, the constructor forces `push: false` into `this.options` when
+    `localOnly` is set (belt-and-braces per the plan), and `syncFromRemote()`
+    returns before any git invocation when `this.localOnly`.
+  - config.test.ts: added a `local-only mode resolution` describe covering
+    AC1.1 (remoteless auto-detect), AC1.2 (explicit opts.localOnly forces push
+    off, verified via `pushFailed` absence against a real-but-unreachable
+    origin — no public `push` getter exists so this mirrors
+    divergence.test.ts's existing observation pattern), the CLI-only
+    push:false-implies-localOnly rule, the config-tier ADR-2 poller case
+    (push:false + origin stays localOnly:false), config-tier auto-detect,
+    both conflict-throw tiers (AC4.1), the AC1.3 push-precedence regression
+    (explicit push:true still overrides auto-detect even with no origin at
+    all), and the fetch_interval-ignored warning. Uses its own
+    beforeEach/afterEach fixture (not the file's shared `ctx`) so mutating a
+    fixture's remotes never bleeds into the pre-existing #83 tests in the
+    same file.
+  - fetch-sync.test.ts: added a `syncFromRemote under local-only (AC2.4)`
+    describe: a `LocalGitSource` built with `{ localOnly: true }` over the
+    existing clone fixture, `vi.spyOn(source.git, 'run')` asserted never
+    called by `syncFromRemote()`.
+  - Verified: `npm run typecheck` clean; `npm test` in frontend/ — 379 passed,
+    1 skipped (live-smoke, expected), 0 failed, across all 41 test files
+    including the existing hosted-push-path suites (divergence.test.ts,
+    pr-ensure.test.ts, sync.test.ts) and the shadow-replay suites.

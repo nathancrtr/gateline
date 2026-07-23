@@ -3,7 +3,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Git, LocalGitSource, loadSources } from '../src/index.ts'
 import { dropFixture, makeFixture, type FixtureContext } from './fixture.helper.ts'
 
@@ -127,6 +127,17 @@ describe('push through the worktree write path', () => {
     expect(write.ok).toBe(true)
     expect(write.message ?? '').not.toContain('push failed')
     expect(await upstream.source.git.revParse('refs/heads/run/checked-out')).toBe(write.commit)
+  })
+})
+
+describe('syncFromRemote under local-only (AC2.4)', () => {
+  it('returns before any git invocation when localOnly is set', async () => {
+    const localOnlySource = new LocalGitSource('clone', cloneDir, { localOnly: true })
+    const runSpy = vi.spyOn(localOnlySource.git, 'run')
+
+    await localOnlySource.syncFromRemote()
+
+    expect(runSpy).not.toHaveBeenCalled()
   })
 })
 

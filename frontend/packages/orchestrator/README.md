@@ -13,9 +13,9 @@ Rules it is built to be checked against:
   is structural, not behavioral.
 - **The co-writer contract** (design §7): CAS ref updates; comment-preserving
   YAML; ISO-8601 timestamps; the orchestrator's own commit verbs
-  (`dispatched | bounced | advanced | escalated | paused | metered`) under a
-  bot identity (`agentic-orchestrator`, one per install) — the human decision
-  grammar (`G2 approved by <name>`) is reserved for humans.
+  (`dispatched | bounced | advanced | escalated | paused | metered | harvested`)
+  under a bot identity (`agentic-orchestrator`, one per install) — the human
+  decision grammar (`G2 approved by <name>`) is reserved for humans.
 - **Every model invocation flows through the dispatch seam** and is metered
   into `budget.ledger[]`; enforcement is a pre-flight cap check that pauses
   (`budget-exhausted`), never degrades. Enforcement — not metering — can be
@@ -142,7 +142,8 @@ has earned trust (design §10).
 |---|---|
 | `derive.ts` | The derivation table (D0–D19 + DB): observation → rest / dispatch / record / escalate. Pure; one test per row. |
 | `observe.ts` | One immutable snapshot per run from committed files: validations, review verdicts, decline events, bounce counts, the ledger. |
-| `engine.ts` | The execute half: commit-then-launch (the CAS intent commit is the duplicate-dispatch guard), closing bookkeeping with real usage, stale-dispatch aging, per-run write serialization. |
+| `engine.ts` | The execute half: commit-then-launch (the CAS intent commit is the duplicate-dispatch guard), closing bookkeeping with real usage, stale-dispatch aging, per-run write serialization, and the harvest-commit (#182) that rescues a non-isolated role's uncommitted artifacts before its checkout is torn down. |
+| `capabilities.ts` | Reads `roles/<role>.md` frontmatter for `capabilities: [...]` (#182): the engine's only signal for which roles have no shell and must be told the orchestrator will harvest their work rather than to commit it themselves. |
 | `seam.ts` + `manifest.ts` | `dispatch()` driven entirely by adapters' `headless` manifest sections; a new runner costs one manifest. |
 | `router.ts` | Dispatch-time P5: `avoid_vendor_of` routes reviewer/verifier to an adapter on a different vendor than the implementer; refuses when two adapters both violate the pin; advisory when one single-vendor adapter makes it unsatisfiable. |
 | `workspace.ts` | Run checkouts as disposable worktrees; per-task isolation for parallel implementers with serial fold-back (a fold conflict = plan defect → escalate). |

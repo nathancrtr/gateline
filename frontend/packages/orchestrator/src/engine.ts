@@ -3,10 +3,11 @@
 // most one state transition per run per tick; a transition may carry several
 // dispatches. Every write follows the co-writer contract (§7): CAS ref
 // updates, comment-preserving YAML, the orchestrator's own commit verbs
-// (dispatched | bounced | advanced | escalated | paused | metered), a bot
-// identity, and — structurally — no code path that writes gates.*.
-import { ensureDraftPr, LocalGitSource, type Identity, type RunRef, type WriteResult } from '@agentic/core'
+// (dispatched | bounced | advanced | escalated | paused | metered | harvested),
+// a bot identity, and — structurally — no code path that writes gates.*.
+import { ensureDraftPr, Git, LocalGitSource, type Identity, type RunRef, type WriteResult } from '@agentic/core'
 import type { Document } from 'yaml'
+import { hasShell, loadRoleCapabilities } from './capabilities.ts'
 import { deriveAction, DEFAULT_ESTIMATE_USD, type Bookkeeping, type DerivedAction, type DispatchIntent } from './derive.ts'
 import { observeRun, parseLedger, type RunObservation } from './observe.ts'
 import { promptBody } from './prompts.ts'
@@ -118,6 +119,18 @@ export class Engine {
 
   private enforcing(): boolean {
     return this.cfg.budgetEnforcement !== false
+  }
+
+  /** Loaded once per process (roles/ doesn't change mid-run); a failed read just leaves every role shell-ful. */
+  private capsPromise: Promise<Map<string, Set<string>>> | null = null
+  private capabilities(): Promise<Map<string, Set<string>>> {
+    if (!this.capsPromise) {
+      this.capsPromise = loadRoleCapabilities(this.cfg.repoDir, this.cfg.frameworkPrefix).catch((e) => {
+        this.log(`failed to load role capabilities: ${(e as Error).message} — every role defaults shell-ful`)
+        return new Map()
+      })
+    }
+    return this.capsPromise
   }
 
   private withLock<T>(slug: string, fn: () => Promise<T>): Promise<T> {
@@ -480,10 +493,11 @@ export class Engine {
           : { path: await ensureRunCheckout(this.cfg.repoDir, ref.branch), branch: ref.branch }
         const taskPath = intent.task ? (obs.taskFiles.get(intent.task)?.path ?? null) : null
         const { runs: runsRoot } = await this.source.frameworkRoots()
+        const caps = await this.capabilities()
         outcome = await this.cfg.dispatcher.dispatch({
           cwd: checkout.path,
           role: intent.role,
-          body: promptBody(ref.slug, intent, taskPath, runsRoot, obs.state?.profile ?? 'full'),
+          body: promptBody(ref.slug, intent, taskPath, runsRoot, obs.state?.profile ?? 'full', hasShell(caps, intent.role)),
           timeoutMs: this.cfg.roleTimeoutMs ?? DEFAULT_ROLE_TIMEOUT_MS,
         })
         if (isolate) {
@@ -494,6 +508,20 @@ export class Engine {
           // The fold moves the run ref outside writeState; push it explicitly
           // so agent work reaches origin even if the closing commit fails.
           if (fold.ok) await this.pushBranch(ref.branch)
+        } else if (outcome.ok) {
+          // Harvest-commit (#182): a shell-less role (analyst, architect) has
+          // no way to commit its own artifacts, and even a shell-ful role may
+          // simply not have (the harvest is a defense-in-depth backstop for
+          // those). Scoped to this role's own outputs so a peer reviewer
+          // sharing the checkout is never swept into a torn commit. Runs
+          // under the run's write lock — the same lock serializing the
+          // worktree-fallback state writes — and, crucially, before
+          // `removeRunCheckout` force-removes this checkout in `finally`
+          // below: this is what rescues the work from that force-remove.
+          const harvest = await this.withLock(ref.slug, () => this.harvest(ref, checkout.path, runsRoot, intent))
+          if (!harvest.ok) {
+            outcome = { ok: false, costUsd: outcome.costUsd, tokensIn: outcome.tokensIn, tokensOut: outcome.tokensOut, error: harvest.error }
+          }
         }
       } catch (e) {
         outcome = { ok: false, costUsd: null, tokensIn: null, tokensOut: null, error: (e as Error).message }
@@ -517,9 +545,10 @@ export class Engine {
 
   /**
    * Closing bookkeeping (§4.4 step 3): the agent's artifacts are already on
-   * the run branch (it commits its own work); this commit closes the ledger
-   * entry with real usage, keeps cost_spent_usd the derived sum, and flips an
-   * implementer's task to in-review. Everything else re-derives next tick.
+   * the run branch (it commits its own work, or the engine harvested it —
+   * §4.4); this commit closes the ledger entry with real usage, keeps
+   * cost_spent_usd the derived sum, and flips an implementer's task to
+   * in-review. Everything else re-derives next tick.
    */
   private async closeDispatch(
     ref: RunRef,
@@ -620,6 +649,46 @@ export class Engine {
   }
 
   /**
+   * Harvest-commit (#182, ORCHESTRATOR.md §4.4): a non-isolated dispatch may
+   * leave its artifacts uncommitted — the only path for a shell-less role,
+   * and possible for a shell-ful one too. Scoped to this role's own outputs
+   * (`harvestPathspecs`) so a peer sharing the run checkout is never swept
+   * into a torn commit. `git status` first: `git add` errors on a pathspec
+   * matching nothing, and the normal case (a shell-ful role already
+   * committed) must be a clean no-op. Bot-identity commit via `-c`, since
+   * this is a real working-tree commit (`git add` + `git commit`), not the
+   * plumbing path `LocalGitSource` uses for state.yaml.
+   */
+  private async harvest(
+    ref: RunRef,
+    cwd: string,
+    runsRoot: string,
+    intent: { role: string; task: string | null; round: number | null },
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    const pathspecs = harvestPathspecs(runsRoot, ref.slug, intent.role, intent.task)
+    const git = new Git(cwd)
+    try {
+      const status = await git.run(['status', '--porcelain', '--', ...pathspecs])
+      if (!status.trim()) return { ok: true } // nothing uncommitted in scope — the normal case for a shell-ful role
+      await git.run(['add', '-A', '--', ...pathspecs])
+      const what = `${intent.role}${intent.task ? `(${intent.task}${intent.round ? ` r${intent.round}` : ''})` : ''}`
+      await git.run([
+        '-c',
+        `user.name=${this.cfg.identity.name}`,
+        '-c',
+        `user.email=${this.cfg.identity.email}`,
+        'commit',
+        '-m',
+        `state(${ref.slug}): harvested ${what} artifacts`,
+      ])
+      await this.pushBranch(ref.branch)
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+  }
+
+  /**
    * Push of agent work after a fold: these are real commits that can never
    * be dropped, so a rejection here only counts against push health (#103)
    * and warns — a later accepted push of the branch carries them.
@@ -646,6 +715,27 @@ export class Engine {
 
 function jobKey(slug: string, role: string, task: string | null, round: number | null): string {
   return `${slug}|${role}|${task ?? ''}|${round ?? ''}`
+}
+
+/** This role's own outputs under the run dir — the harvest's scope, never a peer's mid-flight file. */
+function harvestPathspecs(runsRoot: string, slug: string, role: string, task: string | null): string[] {
+  const runDir = `${runsRoot}/${slug}`
+  switch (role) {
+    case 'analyst':
+      return [`${runDir}/spec.md`]
+    case 'architect':
+      return [`${runDir}/plan.md`, `${runDir}/tasks/`]
+    case 'reviewer': {
+      const nn = task ? /^\d+/.exec(task)?.[0] : null
+      return [`${runDir}/${nn ? `review-${nn}*.md` : 'review-*.md'}`]
+    }
+    case 'verifier':
+      return [`${runDir}/verification-report.md`]
+    case 'ops':
+      return [`${runDir}/release-plan.md`]
+    default:
+      return [`${runDir}/`]
+  }
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100

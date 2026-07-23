@@ -8,7 +8,7 @@ permission:
   glob: allow
   list: allow
   edit: allow
-model: anthropic/claude-fable-5
+model: openrouter/z-ai/glm-5.2
 mode: "all"
 ---
 

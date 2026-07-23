@@ -33,29 +33,30 @@
       "bash"
     ]
   },
-  "_comment_models": "Runner-specific spellings of the registry bindings (registry/models.yaml is the authority for WHICH model each role gets), in opencode's provider/model-id form from its Models.dev catalog. Any-provider harness: model_overrides implement the P5 vendor pins (reviewer/verifier decorrelated from the Claude-backed implementer), mirroring the copilot-cli choices. IDs are ILLUSTRATIVE like the registry's — pin to your org's models and verify the spelling with `opencode models <provider>`.",
+  "_comment_models": "Runner-specific spellings of the registry bindings (registry/models.yaml is the authority for WHICH model each role gets), in opencode's provider/model-id form from its Models.dev catalog. Open-weight POC (2026-07-23): all five models below are routed through the OpenRouter provider (one OPENROUTER_API_KEY covers every lab) as `openrouter/<org>/<model>` — opencode splits on the first '/' only, so the rest of the id passes through to OpenRouter. Any-provider harness: model_overrides implement the P5 vendor pins, and here implementer/reviewer/verifier land on three DISTINCT labs (DeepSeek / Moonshot / MiniMax) rather than just reviewer+verifier avoiding implementer's vendor — real three-way decorrelation, not the single-axis pin the claude-code and illustrative copilot-cli bindings settle for. Chosen for open-weight frontier capability at low cost as of 2026-07-23; re-verify pricing/availability before relying on this for anything beyond a POC, same as any registry/manifest binding.",
   "model_map": {
-    "frontier-reasoning": "anthropic/claude-fable-5",
-    "balanced": "anthropic/claude-sonnet-5",
-    "fast-cheap": "anthropic/claude-haiku-4-5"
+    "frontier-reasoning": "openrouter/z-ai/glm-5.2",
+    "balanced": "openrouter/deepseek/deepseek-v4-pro",
+    "fast-cheap": "openrouter/deepseek/deepseek-v4-flash"
   },
   "model_overrides": {
-    "reviewer": "openai/gpt-5.4",
-    "verifier": "google/gemini-3-flash"
+    "reviewer": "openrouter/moonshotai/kimi-k2.6",
+    "verifier": "openrouter/minimax/minimax-m3"
   },
-  "_comment_model_vendors": "Vendor of each runner spelling above, for the orchestrator's dispatch-time P5 check (avoid_vendor_of).",
+  "_comment_reviewer_pending_swap": "TEMPORARY: reviewer is Moonshot's current open-weight release (K2.6). Kimi K3 (2.8T params, already ranked above Claude Opus 4.8 on Artificial Analysis as of 2026-07-16) is the stronger Moonshot model but its open weights don't land until 2026-07-27 — revisit this binding then and swap to K3's OpenRouter slug once it's live, rather than treating K2.6 as settled.",
+  "_comment_model_vendors": "Vendor of each runner spelling above, for the orchestrator's dispatch-time P5 check (avoid_vendor_of). Vendor is the underlying model lab, not the OpenRouter routing layer they're all fetched through — that's what P5 decorrelation actually means to guard (independent training/RLHF blind spots), and it's what the router's adapterVendor() keys on.",
   "model_vendors": {
-    "anthropic/claude-fable-5": "anthropic",
-    "anthropic/claude-sonnet-5": "anthropic",
-    "anthropic/claude-haiku-4-5": "anthropic",
-    "openai/gpt-5.4": "openai",
-    "google/gemini-3-flash": "google"
+    "openrouter/z-ai/glm-5.2": "z-ai",
+    "openrouter/deepseek/deepseek-v4-pro": "deepseek",
+    "openrouter/deepseek/deepseek-v4-flash": "deepseek",
+    "openrouter/moonshotai/kimi-k2.6": "moonshotai",
+    "openrouter/minimax/minimax-m3": "minimax"
   },
   "_comment_mode": "mode: all lets a rendered agent be dispatched directly (`opencode run --agent <role>`) and invoked as a subagent; the rendered permission map is the ceiling either way.",
   "extra_frontmatter": {
     "mode": "all"
   },
-  "_comment_headless": "v1 orchestrator dispatch (docs/ORCHESTRATOR.md §5). --agent selects the rendered agent, whose frontmatter (incl. model_overrides above) pins the model. --auto is what makes runs unattended: it auto-approves ask-level permission prompts and honors deny, and the rendered maps only contain allow/deny, so nothing is silently widened. usage_report format static-estimate: `opencode run --format json` emits an event stream whose usage fields are not yet verified live; until they are, metering falls back to the registry's dispatch_estimates_usd entry, recorded in the ledger with tokens null (same posture as copilot-cli).",
+  "_comment_headless": "v1 orchestrator dispatch (docs/ORCHESTRATOR.md §5). --agent selects the rendered agent, whose frontmatter (incl. model_overrides above) pins the model. --auto is what makes runs unattended: it auto-approves ask-level permission prompts and honors deny, and the rendered maps only contain allow/deny, so nothing is silently widened. usage_report format ndjson-sum (verified live 2026-07-23): `opencode run --format json` streams one JSON event per line, one `step_finish` per agent turn (tool-using dispatches emit several), each carrying that turn's own cost/tokens rather than a running total — a live 2-tool-call probe produced two step_finish events summing to real cost, versus the old single-line-scan static-estimate fallback which either ignored usage entirely or would have picked up only the last turn (undercounting ~75% in that probe). line_filter selects step_finish lines; fields are dotted paths into each matching event.",
   "headless": {
     "command": [
       "opencode",
@@ -69,7 +70,15 @@
     ],
     "dispatch_prompt": "{body}",
     "usage_report": {
-      "format": "static-estimate"
+      "format": "ndjson-sum",
+      "line_filter": {
+        "type": "step_finish"
+      },
+      "fields": {
+        "cost_usd": "part.cost",
+        "tokens_in": "part.tokens.input",
+        "tokens_out": "part.tokens.output"
+      }
     }
   }
 }

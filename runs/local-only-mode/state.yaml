@@ -1,0 +1,21 @@
+run: local-only-mode
+branch: run/local-only-mode
+phase: paused             # staged — not yet armed; `agentic arm local-only-mode` starts the run
+paused_reason: staged
+profile: standard        # patch | standard | full
+intake:                   # source-agnostic staging provenance; free-form path: nulls + client_key
+  source: null
+  ref: null
+  url: null
+  client_key: null
+  staged_by: "Nathan Carter"
+budget:
+  cost_limit_usd: 50
+  cost_spent_usd: 0
+  ledger: []
+gates:                    # exactly PROFILE_GATES[standard] — no others
+  G0: { approved: false, by: null, at: null, notes: null }
+  G1: { approved: false, by: null, at: null, notes: null }
+  G2: { approved: false, by: null, at: null, notes: null }
+tasks: []
+escalations: []

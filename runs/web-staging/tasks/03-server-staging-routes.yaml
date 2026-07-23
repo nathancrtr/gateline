@@ -68,3 +68,38 @@ depends_on: [01-core-shared-checks]
 status: pending
 
 notes: |
+  Implementer (round 1): implemented both routes in app.ts exactly per the plan's
+  interface contract. GET /api/staging derives briefSections via a single shared
+  helper (requiredBriefSections(template)) called by both routes with each route's
+  own read of source.templates.read('intent-brief.md'), mirroring validate.ts's own
+  template/BUILTIN_SECTIONS fallback pattern — the same-derivation requirement in
+  the task text. POST /api/runs validates presence/profile-enum first (400
+  invalid-input), then resolves source (AC1.3: only required when >1 configured),
+  then runs the shared section derivation + core missingSections (422 on any
+  missing, message verbatim per contract), then calls planRunScaffold with
+  stagedBy: (await source.identity())?.name ?? '' (ScaffoldError -> 400
+  invalid-input), then source.stageRun(scaffold, who ?? {name:'',email:''}) —
+  stageRun's own no-identity guard is what actually refuses when identity is
+  unset, per the task's explicit instruction not to pre-empt it. Outcome mapping:
+  created -> 201 + cache.bump() (+pushFailed passthrough), exists -> 200,
+  refused/no-identity -> 400, refused/slug-taken|conflict -> 409, both with
+  stageRun's own message verbatim. Header comment amended per ADR-2.
+  Tests added to app.test.ts: GET /api/staging (fixture id/identity/four built-in
+  sections/slugPattern); POST /api/runs staged end-to-end for patch/standard/full
+  profiles (git show + parseRunState zero-error round-trip, plus validateArtifact
+  on tasks/01-<slug>.yaml for patch); missing-section 422 with no branch created
+  (via a show-ref --verify --quiet helper to avoid noisy git stderr passthrough on
+  the negative check); same slug+clientKey replay -> 200 exists with unchanged
+  branch tip oid; slug collision with existing g0-pending -> 409 naming the
+  branch; commit author + intake.staged_by both equal to the fixture identity;
+  arm via POST /api/decisions transitions a staged run (commit message asserted
+  verbatim) and refuses on a non-staged run with planDecision's own message.
+  Verified clean: cd frontend && npx vitest run packages/server (2 files, 32
+  tests, all pass) and the spec's three grep guards (AC2.3, AC1.1 clean; AC3.2's
+  one match is a pre-existing "linear-gradient"/"linear infinite" false positive
+  in web/src/styles.css, untouched by this diff and outside this task's surface).
+  npm run typecheck fails on one pre-existing error in
+  packages/web/src/components/chips.tsx (InboxKind 'staged' member from task 02,
+  not yet consumed — that's task 05's surface per ADR-4/the plan's explicit
+  "typecheck fails until it does" note); confirmed via git stash that this error
+  predates this task's diff and is unrelated to frontend/packages/server.

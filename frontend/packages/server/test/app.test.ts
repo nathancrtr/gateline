@@ -1,12 +1,14 @@
 // Route tests over the fixture source (plan §9).
+import { execFileSync } from 'node:child_process'
 import { rm } from 'node:fs/promises'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { generateFixtureRepo, type FixtureRepo } from '@agentic/fixtures'
-import { LocalGitSource, writeEngineHealth } from '@agentic/core'
+import { LocalGitSource, parseRunState, SLUG_PATTERN, validateArtifact, writeEngineHealth } from '@agentic/core'
 import type { Hono } from 'hono'
 import { createApp } from '../src/app.ts'
 
 let fixture: FixtureRepo
+let source: LocalGitSource
 let app: Hono
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -15,9 +17,51 @@ const get = async (path: string) => {
   return { status: res.status, body: (await res.json()) as any }
 }
 
+const postJson = async (path: string, payload: object) => {
+  const res = await app.request(path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  return { status: res.status, body: (await res.json()) as any }
+}
+
+// smoke.spec's idiom: read committed content back through plumbing rather
+// than the checkout, so a staged branch is asserted the same way a human
+// operator would inspect it.
+const git = (args: string[]) => execFileSync('git', ['-C', fixture.dir, ...args], { encoding: 'utf8' })
+
+const branchExists = (branch: string): boolean => {
+  try {
+    git(['show-ref', '--verify', '--quiet', `refs/heads/${branch}`])
+    return true
+  } catch {
+    return false
+  }
+}
+
+// The full required-section set (fixture's built-in intent-brief.md
+// template), filled with placeholder prose — a stand-in for what the web
+// form assembles client-side (ADR-5); these tests exercise the server half.
+const fullBrief = (title: string) => `# Intent Brief: ${title}
+
+## Problem
+Something needs fixing.
+
+## Motivation
+It saves time.
+
+## Constraints
+None known.
+
+## Out of scope
+Everything else.
+`
+
 beforeAll(() => {
   fixture = generateFixtureRepo()
-  app = createApp({ sources: [new LocalGitSource('fixture', fixture.dir)] })
+  source = new LocalGitSource('fixture', fixture.dir)
+  app = createApp({ sources: [source] })
 })
 afterAll(() => rm(fixture.dir, { recursive: true, force: true }))
 
@@ -97,6 +141,18 @@ describe('read routes', () => {
     expect(merged.body.merged).toBe(true)
     expect(merged.body.files).toHaveLength(0)
   })
+
+  it('GET /api/staging serves the fixture source config and the slug grammar', async () => {
+    const { status, body } = await get('/api/staging')
+    expect(status).toBe(200)
+    expect(body.sources).toHaveLength(1)
+    const src = body.sources[0]
+    expect(src.id).toBe('fixture')
+    expect(src.identity).toEqual({ name: 'Fixture Operator', email: 'operator@example.test' })
+    expect(src.briefSections).toEqual(['Problem', 'Motivation', 'Constraints', 'Out of scope'])
+    expect(typeof src.briefTemplate).toBe('string')
+    expect(body.slugPattern).toBe(SLUG_PATTERN)
+  })
 })
 
 describe('the write route (R2/R3)', () => {
@@ -158,6 +214,136 @@ describe('the write route (R2/R3)', () => {
     })
     expect(status).toBe(400)
     expect(body.error).toMatch(/already approved/)
+  })
+})
+
+describe('the staging route pair (R1/R4/R8)', () => {
+  it.each(['patch', 'standard', 'full'] as const)('stages a %s-profile run end to end (AC1.2)', async (profile) => {
+    const slug = `stage-${profile}`
+    const { status, body } = await postJson('/api/runs', {
+      slug,
+      title: `${profile} staging run`,
+      profile,
+      briefMarkdown: fullBrief(`${profile} staging run`),
+      costLimitUsd: 25,
+      intake: { source: null, ref: null, url: null, clientKey: null },
+    })
+    expect(status).toBe(201)
+    expect(body).toMatchObject({ outcome: 'created', slug, branch: `run/${slug}` })
+    expect(body.commit).toMatch(/^[0-9a-f]{40}$/)
+
+    const raw = git(['show', `run/${slug}:runs/${slug}/state.yaml`])
+    const { state, error } = parseRunState(raw)
+    expect(error).toBeNull()
+    expect(state?.phase).toBe('paused')
+    expect(state?.paused_reason).toBe('staged')
+
+    if (profile === 'patch') {
+      const taskRaw = git(['show', `run/${slug}:runs/${slug}/tasks/01-${slug}.yaml`])
+      const validation = await validateArtifact(`tasks/01-${slug}.yaml`, taskRaw, source.templates)
+      expect(validation.ok).toBe(true)
+    }
+  })
+
+  it('refuses staging with a missing brief section — no branch is created (AC2.2)', async () => {
+    const slug = 'stage-missing-section'
+    const briefMissingConstraints = `# Intent Brief: gap
+
+## Problem
+Something needs fixing.
+
+## Motivation
+It saves time.
+
+## Out of scope
+Everything else.
+`
+    const { status, body } = await postJson('/api/runs', {
+      slug,
+      title: 'gap',
+      profile: 'standard',
+      briefMarkdown: briefMissingConstraints,
+      costLimitUsd: null,
+      intake: { source: null, ref: null, url: null, clientKey: null },
+    })
+    expect(status).toBe(422)
+    expect(body).toMatchObject({ outcome: 'refused', reason: 'missing-sections', missing: ['Constraints'] })
+    expect(body.message).toBe('intent-brief.md is missing required section(s): Constraints')
+    expect(branchExists(`run/${slug}`)).toBe(false)
+  })
+
+  it('replaying the same slug+clientKey makes no second commit (AC8.1)', async () => {
+    const slug = 'stage-replay'
+    const payload = {
+      slug,
+      title: 'replay test',
+      profile: 'standard' as const,
+      briefMarkdown: fullBrief('replay test'),
+      costLimitUsd: null,
+      intake: { source: null, ref: null, url: null, clientKey: 'replay-key-1' },
+    }
+    const first = await postJson('/api/runs', payload)
+    expect(first.status).toBe(201)
+    const tip = git(['rev-parse', `run/${slug}`]).trim()
+
+    const second = await postJson('/api/runs', payload)
+    expect(second.status).toBe(200)
+    expect(second.body).toMatchObject({ outcome: 'exists', slug, branch: `run/${slug}` })
+    expect(git(['rev-parse', `run/${slug}`]).trim()).toBe(tip)
+  })
+
+  it('refuses a slug already taken by a different, non-staged run, naming its branch (AC8.2)', async () => {
+    const { status, body } = await postJson('/api/runs', {
+      slug: 'g0-pending',
+      title: 'collision',
+      profile: 'standard',
+      briefMarkdown: fullBrief('collision'),
+      costLimitUsd: null,
+      intake: { source: null, ref: null, url: null, clientKey: null },
+    })
+    expect(status).toBe(409)
+    expect(body.outcome).toBe('refused')
+    expect(body.reason).toBe('slug-taken')
+    expect(body.message).toContain('run/g0-pending')
+  })
+
+  it('attributes the commit author and intake.staged_by to the source identity, never the body (AC4.2)', async () => {
+    const slug = 'stage-attribution'
+    const { status } = await postJson('/api/runs', {
+      slug,
+      title: 'attribution test',
+      profile: 'standard',
+      briefMarkdown: fullBrief('attribution test'),
+      costLimitUsd: null,
+      intake: { source: null, ref: null, url: null, clientKey: null },
+    })
+    expect(status).toBe(201)
+    const author = git(['log', '-1', '--format=%an <%ae>', `run/${slug}`]).trim()
+    expect(author).toBe('Fixture Operator <operator@example.test>')
+    const raw = git(['show', `run/${slug}:runs/${slug}/state.yaml`])
+    expect(raw).toContain('staged_by: "Fixture Operator"')
+  })
+
+  it('arms a staged run over the existing decision path (R5)', async () => {
+    const slug = 'stage-arm'
+    await postJson('/api/runs', {
+      slug,
+      title: 'arm test',
+      profile: 'standard',
+      briefMarkdown: fullBrief('arm test'),
+      costLimitUsd: null,
+      intake: { source: null, ref: null, url: null, clientKey: null },
+    })
+    const { status } = await postJson('/api/decisions', { source: 'fixture', slug, action: 'arm' })
+    expect(status).toBe(200)
+    const subject = git(['log', '-1', '--format=%s', `run/${slug}`]).trim()
+    expect(subject).toBe(`state(${slug}): armed by Fixture Operator`)
+  })
+
+  it("refuses arm on a non-staged run with planDecision's DecisionError message (AC5.2)", async () => {
+    const { status, body } = await postJson('/api/decisions', { source: 'fixture', slug: 'g0-pending', action: 'arm' })
+    expect(status).toBe(400)
+    expect(body.error).toMatch(/not staged/)
   })
 })
 

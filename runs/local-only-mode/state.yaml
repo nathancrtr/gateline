@@ -1,7 +1,7 @@
 run: local-only-mode
 branch: run/local-only-mode
-phase: paused # staged — not yet armed; `agentic arm local-only-mode` starts the run
-paused_reason: escalation
+phase: implement # staged — not yet armed; `agentic arm local-only-mode` starts the run
+paused_reason: null
 profile: standard # patch | standard | full
 intake:
   # source-agnostic staging provenance; free-form path: nulls + client_key

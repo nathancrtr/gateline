@@ -19,6 +19,15 @@ export class LocalGitSource implements RunSource {
   readonly dir: string
   readonly git: Git
   readonly templates: ContractTemplates
+  /**
+   * True when this source is running in local-only mode — no push, no origin
+   * fetch. A plain own field rather than a prototype accessor: `sync.ts`'s
+   * `planSyncForSource` test (task 02) stubs a source via
+   * `Object.assign(Object.create(getPrototypeOf(real)), real, { localOnly: true })`,
+   * which throws against a getter-only prototype accessor (no setter) but
+   * assigns cleanly onto a plain own data property.
+   */
+  readonly localOnly: boolean
   private readonly options: {
     push?: boolean
     localOnly?: boolean
@@ -61,7 +70,8 @@ export class LocalGitSource implements RunSource {
   ) {
     this.id = id
     this.dir = dir
-    this.options = options.localOnly ? { ...options, push: false } : options
+    this.localOnly = options.localOnly === true
+    this.options = this.localOnly ? { ...options, push: false } : options
     this.git = new Git(dir)
     const git = this.git
     this.frameworkRoots = memoizedFrameworkRoots(git, options.frameworkPrefix)
@@ -83,11 +93,6 @@ export class LocalGitSource implements RunSource {
   /** Seconds between remote syncs, when this source is configured to poll. */
   get fetchIntervalSeconds(): number | undefined {
     return this.options.fetchIntervalSeconds
-  }
-
-  /** True when this source is running in local-only mode — no push, no origin fetch. */
-  get localOnly(): boolean {
-    return this.options.localOnly === true
   }
 
   /**

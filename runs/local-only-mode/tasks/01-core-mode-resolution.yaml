@@ -104,3 +104,68 @@ notes: |
     1 skipped (live-smoke, expected), 0 failed, across all 41 test files
     including the existing hosted-push-path suites (divergence.test.ts,
     pr-ensure.test.ts, sync.test.ts) and the shadow-replay suites.
+
+  Implementer (round 2): addressed review-02.md findings F1, F2, F3 — all fixed
+  in frontend/packages/core/test/config.test.ts, no rebuttals.
+  - F1 (blocking, AC1.2 non-discriminating): `addOrigin` now returns the bare
+    origin's path, and a new `originTip(bare, branch)` helper (mirroring
+    divergence.test.ts's own discriminator) reads the ref's tip in the bare
+    repo directly, instead of relying on `pushFailed` absence against a
+    reachable origin (which is silent whether push was suppressed or
+    succeeded). The AC1.2 test now captures `before = originTip(...)` prior to
+    the decision and asserts the tip is unchanged after, in addition to the
+    pre-existing `pushFailed` check. Verified empirically: reintroducing the
+    described mutant (deleting rule 3's `if (localOnly) push = false` in
+    config.ts and the constructor's push-off force in local-source.ts) now
+    fails this test (origin tip changes), then reverted cleanly.
+  - F2 (major, config-tier push default unpinned): added a new case, "AC1.3: a
+    config entry with an origin and no push key stays push:false (existing
+    default)" — a config entry with a real origin and no `push:` key, verifying
+    `localOnly === false` (origin exists) and, via the same `originTip`
+    discriminator, that a decision through it never reaches the origin (the
+    config-tier default is push:false, unlike the CLI tier's origin
+    auto-detect). Verified empirically: reintroducing the described mutant
+    (`else push = await originExists()`, dropping the config-tier `false`
+    branch) fails this new test, then reverted cleanly.
+  - F3 (minor, ADR-2 poller test's vacuous assertion): replaced the
+    non-discriminating `expect(result.pushFailed).toBeUndefined()` with the
+    same before/after `originTip` comparison, so the assertion actually pins
+    "push:false ceiling honored" rather than passing regardless of whether a
+    push occurred.
+  - F1/F2/F3 themselves needed no production-code change — review's own
+    Coverage section already confirmed `resolveMode` and the two
+    mode-resolution sites are faithful to the plan's table; all three were
+    test-side gaps.
+  - Deviation (discovered running the full suite, as AC7.2 requires, not just
+    this task's three test files): `local-source.ts`'s `get localOnly()`
+    accessor — reviewed and approved in review-02 — collided with a sibling
+    task's test. Task 02 (egress-guard-seams, already merged onto this branch
+    ahead of this task's round 1, per `git log`) built a fake local-only
+    source in sync.test.ts via `Object.assign(Object.create(getPrototypeOf(
+    ctx.source)), ctx.source, { localOnly: true })`; assigning into an object
+    whose prototype carries a getter-only accessor throws
+    `TypeError: Cannot set property localOnly ... which has only a getter` in
+    strict-mode ESM. `sync.test.ts`/`sync.ts` are out of this task's file
+    contact surface (task 02 owns them, per this task's own scope note: "Do
+    not touch pr-ensure.ts, sync.ts, or divergence.test.ts"), so the fix had
+    to land on this task's side: `localOnly` is now a plain `readonly` own
+    field assigned once in the constructor (`this.localOnly = options.localOnly
+    === true`) instead of a prototype accessor — same name, same read-only
+    boolean contract for every existing caller (`.localOnly` reads identically
+    everywhere in config.ts, fetch-sync.test.ts, config.test.ts), but an own
+    data property assigns cleanly under `Object.assign` instead of hitting a
+    missing setter. No behavior change for any real construction path; the
+    `fetchIntervalSeconds` getter (pre-existing, unrelated) is untouched. This
+    is a genuine deviation from the round-1 scope's literal "add `get
+    localOnly(): boolean`" wording, made because AC7.2 ("npm test passes in
+    full") is this task's own acceptance test and reproducibly failed without
+    it — not a reinterpretation of the mode-resolution table itself, which is
+    unchanged.
+  - Verified: `npm run typecheck` clean (no errors). Focused run of
+    config.test.ts + fetch-sync.test.ts + divergence.test.ts + sync.test.ts +
+    pr-ensure.test.ts: 41/41 passed. Full `npm test` in frontend/ (rerun twice
+    to rule out a shared-machine contention artifact — the first full run
+    showed two unrelated timeouts, in cli.test.ts and engine.test.ts, that
+    vanished when nothing else was contending for the CPU; both files are
+    outside this task's surface and untouched by this diff): 40 files passed,
+    1 skipped (live-smoke, expected), 389 tests passed, 1 skipped, 0 failed.

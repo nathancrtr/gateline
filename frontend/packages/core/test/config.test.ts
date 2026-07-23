@@ -68,15 +68,26 @@ describe('local-only mode resolution', () => {
     for (const dir of cleanups.splice(0)) await rm(dir, { recursive: true, force: true })
   })
 
-  /** Gives the fixture repo a real bare origin — an unreachable-but-present
-   * remote lets a decision write actually attempt `git push` (surfacing
-   * `pushFailed` when it does), the same signal `divergence.test.ts` uses to
-   * observe the resolved `push` boolean without a public getter for it. */
-  function addOrigin(dir: string): void {
+  /** Gives the fixture repo a real, reachable bare origin, returning its path
+   * so callers can observe whether a decision actually pushed to it — via
+   * `originTip`, the same discriminator `divergence.test.ts` uses. A reachable
+   * origin means `pushFailed` alone never tells apart "push suppressed" from
+   * "push succeeded"; only the origin's own ref tip does. */
+  function addOrigin(dir: string): string {
     const bare = `${dir}-origin.git`
     cleanups.push(bare)
     execFileSync('git', ['clone', '--quiet', '--bare', dir, bare])
     execFileSync('git', ['-C', dir, 'remote', 'add', 'origin', bare])
+    return bare
+  }
+
+  /** The current tip of `branch` in a bare origin, or null if the ref doesn't exist there yet. */
+  function originTip(bare: string, branch: string): string | null {
+    try {
+      return execFileSync('git', ['-C', bare, 'rev-parse', `refs/heads/${branch}`], { encoding: 'utf8' }).trim()
+    } catch {
+      return null
+    }
   }
 
   /** Approve G0 on the fixture's pending run through `source`, returning the write result. */
@@ -102,14 +113,17 @@ describe('local-only mode resolution', () => {
   })
 
   it('AC1.2: explicit opts.localOnly on an origin repo forces push off', async () => {
-    addOrigin(fx.repo.dir)
+    const bare = addOrigin(fx.repo.dir)
     const { sources } = await loadSources({ repoOverrides: [fx.repo.dir], localOnly: true, ...modeNoConfig })
     const source = sources[0] as LocalGitSource
     expect(source.localOnly).toBe(true)
 
+    const ref = (await source.listRuns()).find((r) => r.slug === 'g0-pending')!
+    const before = originTip(bare, ref.branch)
     const result = await decide(source)
     expect(result.ok).toBe(true)
     expect(result.pushFailed).toBeUndefined() // push never attempted
+    expect(originTip(bare, ref.branch)).toBe(before) // origin untouched — a reachable origin would otherwise accept the push
   })
 
   it('opts.push=false implies local-only at the CLI tier (ADR-1)', async () => {
@@ -119,16 +133,18 @@ describe('local-only mode resolution', () => {
   })
 
   it("config push:false with an origin stays localOnly=false (ADR-2's poller case)", async () => {
-    addOrigin(fx.repo.dir)
+    const bare = addOrigin(fx.repo.dir)
     const configPath = await writeConfig(`sources:\n  - name: poller\n    path: ${fx.repo.dir}\n    push: false\n`)
 
     const { sources } = await loadSources({ configPath })
     const source = sources[0] as LocalGitSource
     expect(source.localOnly).toBe(false)
 
+    const ref = (await source.listRuns()).find((r) => r.slug === 'g0-pending')!
+    const before = originTip(bare, ref.branch)
     const result = await decide(source)
     expect(result.ok).toBe(true)
-    expect(result.pushFailed).toBeUndefined() // push:false ceiling, not local-only — no push attempted either way
+    expect(originTip(bare, ref.branch)).toBe(before) // push:false ceiling honored — origin untouched either way
   })
 
   it('a remoteless config entry auto-detects local-only', async () => {
@@ -136,6 +152,25 @@ describe('local-only mode resolution', () => {
 
     const { sources } = await loadSources({ configPath })
     expect((sources[0] as LocalGitSource).localOnly).toBe(true)
+  })
+
+  it('AC1.3: a config entry with an origin and no push key stays push:false (existing default)', async () => {
+    // Unlike the CLI tier, a config entry with no explicit `push` key does not
+    // auto-detect on origin existence — it keeps the pre-diff default of
+    // push:false (plan table rule 3, config-tier branch). Only `localOnly`
+    // itself auto-detects from origin existence (here: false, since one exists).
+    const bare = addOrigin(fx.repo.dir)
+    const configPath = await writeConfig(`sources:\n  - name: quiet\n    path: ${fx.repo.dir}\n`)
+
+    const { sources } = await loadSources({ configPath })
+    const source = sources[0] as LocalGitSource
+    expect(source.localOnly).toBe(false)
+
+    const ref = (await source.listRuns()).find((r) => r.slug === 'g0-pending')!
+    const before = originTip(bare, ref.branch)
+    const result = await decide(source)
+    expect(result.ok).toBe(true)
+    expect(originTip(bare, ref.branch)).toBe(before) // config-tier default is push:false — origin untouched
   })
 
   it('AC4.1: config local_only:true + push:true throws LocalOnlyPushConflictError', async () => {

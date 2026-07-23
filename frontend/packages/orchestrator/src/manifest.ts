@@ -6,7 +6,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { resolveFrameworkRootsFromDisk } from '@agentic/core'
 
-export type UsageFormat = 'json-stdout' | 'static-estimate'
+export type UsageFormat = 'json-stdout' | 'static-estimate' | 'ndjson-sum'
 
 export interface HeadlessManifest {
   adapter: string
@@ -16,8 +16,16 @@ export interface HeadlessManifest {
   dispatchPrompt: string
   usage: {
     format: UsageFormat
-    /** Dotted paths into the harness's JSON output, when format is json-stdout. */
+    /**
+     * Dotted paths into the harness's JSON output. For json-stdout, read
+     * from the one parsed object. For ndjson-sum, summed across every
+     * line matching lineFilter (a harness that streams one JSON event per
+     * agent turn — e.g. opencode's `step_finish` — reports cost/tokens
+     * per turn, not as a single running total).
+     */
     fields?: { cost_usd?: string; tokens_in?: string; tokens_out?: string }
+    /** ndjson-sum only: a line is summed iff every dotted-path field here matches (as a string). */
+    lineFilter?: Record<string, string>
     errorField?: string
     resultField?: string
   }
@@ -46,7 +54,7 @@ export async function loadHeadlessManifest(repoDir: string, adapter: string, pre
   if (!headless) throw new Error(`adapter "${adapter}" has no headless section in ${path} — it cannot be dispatched`)
   const usage = (headless.usage_report ?? {}) as Record<string, unknown>
   const format = usage.format as UsageFormat
-  if (format !== 'json-stdout' && format !== 'static-estimate')
+  if (format !== 'json-stdout' && format !== 'static-estimate' && format !== 'ndjson-sum')
     throw new Error(`adapter "${adapter}": unknown usage_report.format "${String(usage.format)}"`)
   if (!Array.isArray(headless.command) || headless.command.length === 0)
     throw new Error(`adapter "${adapter}": headless.command must be a non-empty argv array`)
@@ -61,6 +69,7 @@ export async function loadHeadlessManifest(repoDir: string, adapter: string, pre
     usage: {
       format,
       fields: (usage.fields ?? undefined) as HeadlessManifest['usage']['fields'],
+      lineFilter: usage.line_filter && typeof usage.line_filter === 'object' ? strMap(usage.line_filter) : undefined,
       errorField: typeof usage.error_field === 'string' ? usage.error_field : undefined,
       resultField: typeof usage.result_field === 'string' ? usage.result_field : undefined,
     },

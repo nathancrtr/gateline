@@ -42,6 +42,22 @@ pricing:
   anthropic/claude-sonnet-5:  {usd_per_mtok_in: 3,  usd_per_mtok_out: 15}
   anthropic/claude-haiku-4-5: {usd_per_mtok_in: 1,  usd_per_mtok_out: 5}
 
+  # opencode's open-weight POC bindings (adapters/opencode/manifest.json,
+  # 2026-07-23), OpenRouter rates at the time. NOTE — currently a fallback
+  # only, not live-wired: resolveModel() (registry.ts) resolves a role to
+  # this file's OWN profile default (the anthropic ids above), never an
+  # adapter's model_map/model_overrides spelling, so computeCost()'s registry
+  # lookup will never actually key on these. In practice this doesn't cost
+  # accuracy today because the opencode adapter reports real per-dispatch
+  # cost directly (usage_report format ndjson-sum sums each event's own
+  # `cost` field) — these entries are for reference/a future adapter-aware
+  # resolveModel, not an active code path.
+  openrouter/z-ai/glm-5.2:            {usd_per_mtok_in: 0.78,  usd_per_mtok_out: 2.45}
+  openrouter/deepseek/deepseek-v4-pro:   {usd_per_mtok_in: 0.435, usd_per_mtok_out: 0.87}
+  openrouter/deepseek/deepseek-v4-flash: {usd_per_mtok_in: 0.09,  usd_per_mtok_out: 0.18}
+  openrouter/moonshotai/kimi-k2.6:    {usd_per_mtok_in: 0.66,  usd_per_mtok_out: 3.41}
+  openrouter/minimax/minimax-m3:      {usd_per_mtok_in: 0.60,  usd_per_mtok_out: 2.40}
+
 dispatch_estimates_usd:
   # Conservative static per-dispatch estimates for the pre-flight budget check
   # (settled 2026-07-10: static for v1; trailing ledger averages are a possible

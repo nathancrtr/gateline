@@ -33,7 +33,7 @@
       "bash"
     ]
   },
-  "_comment_models": "Runner-specific spellings of the registry bindings (registry/models.yaml is the authority for WHICH model each role gets), in opencode's provider/model-id form from its Models.dev catalog. Open-weight POC (2026-07-23): all five models below are routed through the OpenRouter provider (one OPENROUTER_API_KEY covers every lab) as `openrouter/<org>/<model>` — opencode splits on the first '/' only, so the rest of the id passes through to OpenRouter. Any-provider harness: model_overrides implement the P5 vendor pins, and here implementer/reviewer/verifier land on three DISTINCT labs (DeepSeek / Moonshot / MiniMax) rather than just reviewer+verifier avoiding implementer's vendor — real three-way decorrelation, not the single-axis pin the claude-code and illustrative copilot-cli bindings settle for. Chosen for open-weight frontier capability at low cost as of 2026-07-23 (see runs/opencode-poc for sourcing); re-verify pricing/availability before relying on this for anything beyond a POC, same as any registry/manifest binding.",
+  "_comment_models": "Runner-specific spellings of the registry bindings (registry/models.yaml is the authority for WHICH model each role gets), in opencode's provider/model-id form from its Models.dev catalog. Open-weight POC (2026-07-23): all five models below are routed through the OpenRouter provider (one OPENROUTER_API_KEY covers every lab) as `openrouter/<org>/<model>` — opencode splits on the first '/' only, so the rest of the id passes through to OpenRouter. Any-provider harness: model_overrides implement the P5 vendor pins, and here implementer/reviewer/verifier land on three DISTINCT labs (DeepSeek / Moonshot / MiniMax) rather than just reviewer+verifier avoiding implementer's vendor — real three-way decorrelation, not the single-axis pin the claude-code and illustrative copilot-cli bindings settle for. Chosen for open-weight frontier capability at low cost as of 2026-07-23; re-verify pricing/availability before relying on this for anything beyond a POC, same as any registry/manifest binding.",
   "model_map": {
     "frontier-reasoning": "openrouter/z-ai/glm-5.2",
     "balanced": "openrouter/deepseek/deepseek-v4-pro",
@@ -56,7 +56,7 @@
   "extra_frontmatter": {
     "mode": "all"
   },
-  "_comment_headless": "v1 orchestrator dispatch (docs/ORCHESTRATOR.md §5). --agent selects the rendered agent, whose frontmatter (incl. model_overrides above) pins the model. --auto is what makes runs unattended: it auto-approves ask-level permission prompts and honors deny, and the rendered maps only contain allow/deny, so nothing is silently widened. usage_report format static-estimate: `opencode run --format json` emits an event stream whose usage fields are not yet verified live; until they are, metering falls back to the registry's dispatch_estimates_usd entry, recorded in the ledger with tokens null (same posture as copilot-cli).",
+  "_comment_headless": "v1 orchestrator dispatch (docs/ORCHESTRATOR.md §5). --agent selects the rendered agent, whose frontmatter (incl. model_overrides above) pins the model. --auto is what makes runs unattended: it auto-approves ask-level permission prompts and honors deny, and the rendered maps only contain allow/deny, so nothing is silently widened. usage_report format ndjson-sum (verified live 2026-07-23): `opencode run --format json` streams one JSON event per line, one `step_finish` per agent turn (tool-using dispatches emit several), each carrying that turn's own cost/tokens rather than a running total — a live 2-tool-call probe produced two step_finish events summing to real cost, versus the old single-line-scan static-estimate fallback which either ignored usage entirely or would have picked up only the last turn (undercounting ~75% in that probe). line_filter selects step_finish lines; fields are dotted paths into each matching event.",
   "headless": {
     "command": [
       "opencode",
@@ -70,7 +70,15 @@
     ],
     "dispatch_prompt": "{body}",
     "usage_report": {
-      "format": "static-estimate"
+      "format": "ndjson-sum",
+      "line_filter": {
+        "type": "step_finish"
+      },
+      "fields": {
+        "cost_usd": "part.cost",
+        "tokens_in": "part.tokens.input",
+        "tokens_out": "part.tokens.output"
+      }
     }
   }
 }

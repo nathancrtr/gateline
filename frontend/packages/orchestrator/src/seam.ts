@@ -99,6 +99,31 @@ export class HeadlessDispatcher implements Dispatcher {
       return { ok: !error && !timedOut && !aborted, costUsd: null, tokensIn: null, tokensOut: null, error: failure }
     }
 
+    if (this.manifest.usage.format === 'ndjson-sum') {
+      const events = parseNdjson(stdout)
+      if (events.length === 0) {
+        return {
+          ok: false,
+          costUsd: null,
+          tokensIn: null,
+          tokensOut: null,
+          error: failure ?? 'harness produced no parseable JSON output',
+        }
+      }
+      const matching = events.filter((e) => matchesLineFilter(e, this.manifest.usage.lineFilter))
+      const fields = this.manifest.usage.fields ?? {}
+      const last = events[events.length - 1]
+      const harnessError = this.manifest.usage.errorField ? dig(last, this.manifest.usage.errorField) === true : false
+      const resultText = this.manifest.usage.resultField ? dig(last, this.manifest.usage.resultField) : null
+      return {
+        ok: !error && !timedOut && !aborted && !harnessError,
+        costUsd: sumField(matching, fields.cost_usd),
+        tokensIn: sumField(matching, fields.tokens_in),
+        tokensOut: sumField(matching, fields.tokens_out),
+        error: failure ?? (harnessError ? String(resultText ?? 'harness reported an error') : null),
+      }
+    }
+
     const parsed = parseJsonOutput(stdout)
     if (!parsed) {
       return {
@@ -206,4 +231,52 @@ export function parseJsonOutput(stdout: string): unknown | null {
     }
   }
   return null
+}
+
+/**
+ * Newline-delimited JSON, in emission order: one event per agent turn
+ * (opencode's `--format json` shape). Malformed or non-object lines are
+ * skipped rather than failing the whole parse — a harness's stderr chatter
+ * or a truncated final line shouldn't cost the events already captured.
+ */
+export function parseNdjson(stdout: string): unknown[] {
+  const events: unknown[] = []
+  for (const line of stdout.split('\n')) {
+    const t = line.trim()
+    if (!t.startsWith('{')) continue
+    try {
+      events.push(JSON.parse(t))
+    } catch {
+      /* skip malformed line */
+    }
+  }
+  return events
+}
+
+/** True iff every dotted-path field in `filter` matches that event (string-compared). No filter matches everything. */
+export function matchesLineFilter(event: unknown, filter?: Record<string, string>): boolean {
+  if (!filter) return true
+  return Object.entries(filter).every(([path, want]) => String(dig(event, path)) === want)
+}
+
+/**
+ * Sums a numeric dotted-path field across events — e.g. opencode emits one
+ * `step_finish` per agent turn, each carrying that turn's own cost/tokens,
+ * not a running total, so a multi-turn dispatch (any real tool use) needs
+ * every matching line added together. Returns `null` iff the path itself
+ * is unset, or no event had a numeric value there — distinct from a real
+ * measured 0.
+ */
+export function sumField(events: unknown[], path?: string): number | null {
+  if (!path) return null
+  let sum = 0
+  let found = false
+  for (const event of events) {
+    const v = dig(event, path)
+    if (typeof v === 'number') {
+      sum += v
+      found = true
+    }
+  }
+  return found ? sum : null
 }

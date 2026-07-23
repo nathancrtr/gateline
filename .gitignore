@@ -3,3 +3,5 @@ node_modules/
 __pycache__/
 # instance deployment config (copy deploy/fly.example.toml; never commit)
 /fly.toml
+# local API keys / secrets (e.g. OPENROUTER_API_KEY); never commit
+/.env

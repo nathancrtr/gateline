@@ -1,7 +1,7 @@
 run: runner-agent
 branch: run/runner-agent
-phase: implement # staged — not yet armed; `agentic arm runner-agent` starts the run
-paused_reason: null
+phase: paused # staged — not yet armed; `agentic arm runner-agent` starts the run
+paused_reason: escalation
 profile: full # patch | standard | full
 intake:
   # source-agnostic staging provenance; free-form path: nulls + client_key
@@ -445,5 +445,11 @@ escalations:
         resolved_at: 2026-07-23T17:33:52.713Z,
         resolution: architect tried to write its commit without shell tool access and
           got stuck in a loop (#183)
+      },
+    {
+        at: 2026-07-23T23:58:21.361Z,
+        from_role: orchestrator,
+        reason: reviewer escalated task 02-remote-dispatcher — see review-02.md,
+        resolved: false
       }
   ]

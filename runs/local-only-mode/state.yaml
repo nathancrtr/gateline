@@ -237,6 +237,9 @@ escalations:
           (SIGTERM): opencode run on task
           `runs/local-only-mode/tasks/01-core-mode-resolution.yaml`, reviewing
           the…",
-        resolved: false
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-23T18:55:15.675Z,
+        resolution: a commit ended up on `main` and broke things - cleaned up
       }
   ]

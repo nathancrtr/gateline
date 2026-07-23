@@ -40,3 +40,39 @@ The mode-resolution logic itself is faithful to the plan's normative table and b
 ## Boundary check
 
 Diff touches exactly the four declared surface files plus the task file itself (implementer notes — customary, acknowledged by dispatch). No scope creep; the forbidden files (pr-ensure.ts, sync.ts, divergence.test.ts) are untouched. Clean.
+
+---
+
+## Round 2 — 2026-07-23
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** 746370173d8c7a188cef676c4b656d9f230f4dff
+
+### Prior-finding resolutions
+
+- **F1 (blocking) — RESOLVED.** The AC1.2 test (config.test.ts:114-127) now captures the bare origin's ref tip before the decision and asserts it unchanged after, via the new `originTip` helper. Mutant re-verified empirically: reapplying F1's exact mutant (neutralizing rule 3's `if (localOnly) push = false` at config.ts:114 and the constructor push-off force at local-source.ts:74) fails this test and only this test — the surviving mutant is dead. Mutant reverted; tree clean.
+- **F2 (major) — RESOLVED.** New config-tier default case (config.test.ts:157-175): origin present, no `push:` key, asserts `localOnly === false` plus origin tip unchanged. Mutant re-verified empirically: `else push = await originExists()` (dropping the config-tier `false` branch at config.ts:116) fails exactly this test. Reverted; tree clean.
+- **F3 (minor) — RESOLVED.** The ADR-2 poller case (config.test.ts:135-148) replaced the vacuous `pushFailed` assertion with the before/after origin-tip comparison. Verified with a stronger mutant than round 1 proposed: forcing `push = true` in the explicit-push branch (config.ts:115) — i.e. ignoring the `push: false` ceiling outright — fails exactly this test. Reverted; tree clean.
+
+### New findings
+
+None.
+
+### Coverage
+
+The round-2 delta fixes all three round-1 findings with genuinely discriminating assertions and introduces no new defect; the one production-code change is a semantics-preserving accessor-to-field swap forced by a sibling task's test stub.
+
+- All three mutants from round 1 (plus a stronger ceiling-ignoring variant for F3) applied, killed by exactly the intended test, and reverted ✓
+- `originTip` helper (config.test.ts:82-89): reads `refs/heads/<branch>` in the bare origin directly, null-safe on missing refs — same discriminator divergence.test.ts uses ✓
+- `addOrigin` now returns the bare path; its docstring corrects round 1's wrong "unreachable origin" model ✓
+- Deviation — `localOnly` getter → plain `readonly` own field (local-source.ts:28, :73): reproduced the collision in isolation — `Object.assign` onto a getter-only prototype accessor throws in strict-mode ESM, an own data field assigns cleanly, which is what task 02's sync.test.ts:70 stub needs. Read contract identical for every consumer (config.ts, sync.ts's structural `{ localOnly?: boolean }` read, all three test files); field assigned before first use in the constructor. TS `readonly` loses the getter's runtime immutability, but that is precisely the property the stub requires — deliberate and documented in-code ✓
+- Delta scope: production diff is local-source.ts only; config.ts's resolution logic untouched from the round-1-approved state (F1-F3 were test-side gaps, matching round 1's Coverage) ✓
+- Commits between the round-1 diff and 7463701 on frontend/ paths are a main merge (fb7fcbf, aec22f9 — orchestrator NDJSON metering, .opencode bindings), not this task's work; the reviewed diff is 7463701 alone as dispatched ✓
+- Full `npm test` in frontend/: 40 files passed, 1 skipped (live-smoke), 389 tests passed, 1 skipped, 0 failed — AC7.2 baseline green, matching the implementer's claim ✓
+- Focused baseline (config, fetch-sync, sync, divergence suites): 34/34 before mutation work ✓
+- Concurrency not assessed (no concurrent access in scope)
+
+### Boundary check
+
+The round-2 commit touches local-source.ts and config.test.ts (both declared surface) plus the task file's notes (customary). Forbidden files (pr-ensure.ts, sync.ts, divergence.test.ts) untouched. Clean.

@@ -2,21 +2,32 @@
 
 ## Context
 
-The dispatch seam (`frontend/packages/orchestrator/src/seam.ts`) has exactly one
-`Dispatcher` implementation, `HeadlessDispatcher` (`seam.ts:47`), which `spawn()`s the
-headless harness CLI as a same-machine child process, in a worktree checkout the
-engine itself manages under the control plane's own `repoDir` (`workspace.ts`'s
-`ensureRunCheckout`/`ensureTaskCheckout`). `DispatchRequest.cwd` (`seam.ts:9`) is
-therefore a local filesystem path, not a portable identifier — the seam as it stands
-has no way to tell a process on a different machine which branch to check out. This
-is a real mismatch with the brief's framing ("exactly one new component"): closing it
-needs the seam to convey run/branch identity, not only a path, which the requirements
-below state as a need without dictating the interface change itself (the Architect's
-call). TOPOLOGY.md §3.3 already names the target shape — poll, execute in a disposable
-workspace, report back, no authority on the workstation — and ORCHESTRATOR.md §4.4's
-commit-then-launch plus the engine's stale-dispatch aging (`engine.ts`'s `sweepStale`,
-keyed off `this.jobs`/`staleMs`) is the reuse target the brief names for lease
-semantics.
+The orchestrator can only dispatch agent work to a process on the same machine as the
+control plane. It has exactly one dispatch implementation, `HeadlessDispatcher`
+(`frontend/packages/orchestrator/src/seam.ts:47`), which spawns the headless harness
+CLI as a same-machine child process inside a worktree checkout. The engine manages
+that checkout under the control plane's own `repoDir`, via
+`frontend/packages/orchestrator/src/workspace.ts`'s
+`ensureRunCheckout`/`ensureTaskCheckout`. The request that starts it,
+`DispatchRequest.cwd` (`seam.ts:9`), carries a local filesystem path rather than a
+portable run or branch identifier.
+
+A process on a different machine has no way to learn from that request alone which
+branch to check out. That gap is a real mismatch with the intent brief's framing of
+this run ("exactly one new component"). Closing it requires the seam to convey run
+and branch identity, not just a filesystem path. The requirements below state that
+need without dictating the interface change itself, which is left to the Architect.
+
+TOPOLOGY.md §3.3 already names the target shape for this new component:
+- Polling the control plane for dispatch intents
+- Executing each one in a disposable workspace
+- Reporting the outcome back
+- Taking no authority on the workstation
+
+For lease semantics, this run reuses two pieces of existing machinery rather than
+building a new queue. The first is ORCHESTRATOR.md §4.4's commit-then-launch
+sequencing. The second is the engine's stale-dispatch aging, `sweepStale` in
+`frontend/packages/orchestrator/src/engine.ts`, keyed off `this.jobs` and `staleMs`.
 
 ## Requirements
 

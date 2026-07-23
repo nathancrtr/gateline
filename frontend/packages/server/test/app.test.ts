@@ -345,6 +345,93 @@ Everything else.
     expect(status).toBe(400)
     expect(body.error).toMatch(/not staged/)
   })
+
+  it('refuses staging with the no-identity message stageRun already returns, and creates no branch (AC4.1)', async () => {
+    // Mirrors core/test/stage-run.test.ts's own "unresolvable identity"
+    // technique: pin config lookups to /dev/null so the host's ~/.gitconfig
+    // can never leak an identity into this repo's "unset" scratch state.
+    const savedGlobal = process.env.GIT_CONFIG_GLOBAL
+    const savedSystem = process.env.GIT_CONFIG_SYSTEM
+    process.env.GIT_CONFIG_GLOBAL = '/dev/null'
+    process.env.GIT_CONFIG_SYSTEM = '/dev/null'
+    try {
+      await source.git.run(['config', '--unset', 'user.name'])
+      await source.git.run(['config', '--unset', 'user.email'])
+      expect(await source.identity()).toBeNull()
+
+      const slug = 'stage-no-identity'
+      const { status, body } = await postJson('/api/runs', {
+        slug,
+        title: 'no identity test',
+        profile: 'standard',
+        briefMarkdown: fullBrief('no identity test'),
+        costLimitUsd: null,
+        intake: { source: null, ref: null, url: null, clientKey: null },
+      })
+      expect(status).toBe(400)
+      expect(body).toMatchObject({ outcome: 'refused', reason: 'no-identity' })
+      expect(body.message).toContain('attributable to a named human')
+      expect(branchExists(`run/${slug}`)).toBe(false)
+    } finally {
+      await source.git.run(['config', 'user.name', 'Fixture Operator'])
+      await source.git.run(['config', 'user.email', 'operator@example.test'])
+      if (savedGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL
+      else process.env.GIT_CONFIG_GLOBAL = savedGlobal
+      if (savedSystem === undefined) delete process.env.GIT_CONFIG_SYSTEM
+      else process.env.GIT_CONFIG_SYSTEM = savedSystem
+    }
+  })
+})
+
+describe('POST /api/runs with more than one source configured (AC1.3)', () => {
+  // A second LocalGitSource id pointed at the same fixture repo — cheap and
+  // valid for exercising source *selection*, which never reaches git state:
+  // the negative case is refused before any source is touched, and naming
+  // one explicitly resolves to the same fixture identity/behavior already
+  // covered above.
+  let multiApp: Hono
+
+  beforeAll(() => {
+    multiApp = createApp({ sources: [new LocalGitSource('fixture', fixture.dir), new LocalGitSource('fixture-2', fixture.dir)] })
+  })
+
+  const postJsonTo = async (app: Hono, path: string, payload: object) => {
+    const res = await app.request(path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    return { status: res.status, body: (await res.json()) as any }
+  }
+
+  it('refuses to guess which source when none is named', async () => {
+    const { status, body } = await postJsonTo(multiApp, '/api/runs', {
+      slug: 'stage-ambiguous-source',
+      title: 'ambiguous source test',
+      profile: 'standard',
+      briefMarkdown: fullBrief('ambiguous source test'),
+      costLimitUsd: null,
+      intake: { source: null, ref: null, url: null, clientKey: null },
+    })
+    expect(status).toBe(400)
+    expect(body).toMatchObject({ outcome: 'refused', reason: 'invalid-input' })
+    expect(body.message).toContain('source is required when more than one source is configured')
+    expect(branchExists('run/stage-ambiguous-source')).toBe(false)
+  })
+
+  it('proceeds without asking once a source is named', async () => {
+    const { status, body } = await postJsonTo(multiApp, '/api/runs', {
+      source: 'fixture-2',
+      slug: 'stage-named-source',
+      title: 'named source test',
+      profile: 'standard',
+      briefMarkdown: fullBrief('named source test'),
+      costLimitUsd: null,
+      intake: { source: null, ref: null, url: null, clientKey: null },
+    })
+    expect(status).toBe(201)
+    expect(body).toMatchObject({ outcome: 'created', slug: 'stage-named-source', branch: 'run/stage-named-source' })
+  })
 })
 
 describe('GET /api/engine-health (#141 drift passthrough)', () => {

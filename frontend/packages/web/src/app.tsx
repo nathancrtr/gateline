@@ -87,10 +87,20 @@ function EngineDriftChip() {
             <span className={`${paused ? 'text-bad' : 'text-warn'} text-[9px] leading-none`}>●</span>
             {showId ? <span className="text-muted">{id}</span> : null}
             {paused ? (
-              <span>
-                engine paused — code tree at <code className="font-mono">{shortOid(entry.codeHead)}</code> not clean (engine at{' '}
-                <code className="font-mono">{shortOid(entry.commit)}</code>)
-              </span>
+              entry.codeReason ? (
+                // The monitor's own cause, rendered in full and allowed to wrap:
+                // hiding it behind a tooltip is the failure mode #185 exists to fix.
+                <span>
+                  engine paused — {entry.codeReason} (engine at <code className="font-mono">{shortOid(entry.commit)}</code>, tree at{' '}
+                  <code className="font-mono">{shortOid(entry.codeHead)}</code>)
+                </span>
+              ) : (
+                // Pre-#185 engine: no reason in the heartbeat, so keep the generic wording.
+                <span>
+                  engine paused — code tree at <code className="font-mono">{shortOid(entry.codeHead)}</code> not clean (engine at{' '}
+                  <code className="font-mono">{shortOid(entry.commit)}</code>)
+                </span>
+              )
             ) : (
               <span>
                 engine at <code className="font-mono">{shortOid(entry.commit)}</code> · main at <code className="font-mono">{shortOid(entry.codeHead)}</code>

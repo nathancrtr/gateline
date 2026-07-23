@@ -151,6 +151,10 @@ export async function runLoop(engine: EngineLike, repoDir: string, cfg: RunLoopC
             commit: cfg.codeMonitor.startHead,
             codeHead: lastStatus?.codeHead ?? cfg.codeMonitor.startHead,
             codeState: heartbeatCodeState(lastStatus?.state ?? 'fresh'),
+            // No fallback, unlike codeHead: `reason` exists only on `paused`,
+            // and JSON.stringify drops undefined keys — which is what makes
+            // the field self-clearing once the tree recovers to fresh.
+            codeReason: lastStatus?.reason,
           }
         : {}
       await writeEngineHealth(repoDir, {

@@ -34,10 +34,14 @@ export interface EngineHealth {
    * `supersede-confirmed` maps to `superseded-pending` here, since by the
    * time a confirmed heartbeat is written the process is already draining
    * to exit — there is no steady state to report beyond "pending restart".
+   * `codeReason` is set only when `codeState === 'paused'` and carries the
+   * monitor's `CodeTreeStatus.reason` verbatim, so a viewer can show *why*
+   * the engine paused rather than a generic message.
    */
   commit?: string
   codeHead?: string
   codeState?: 'fresh' | 'superseded-pending' | 'paused'
+  codeReason?: string
 }
 
 /** Grace beyond the expected cadence before a heartbeat reads as stale. */

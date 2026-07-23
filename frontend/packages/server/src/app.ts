@@ -110,6 +110,7 @@ export function createApp(deps: AppDeps): Hono {
         commit?: string
         codeHead?: string
         codeState?: 'fresh' | 'superseded-pending' | 'paused'
+        codeReason?: string
       } | null
     > = {}
     for (const s of deps.sources) {
@@ -125,6 +126,7 @@ export function createApp(deps: AppDeps): Hono {
             commit: health.commit,
             codeHead: health.codeHead,
             codeState: health.codeState,
+            codeReason: health.codeReason,
           }
         : null
     }

@@ -9,7 +9,7 @@ permission:
   list: allow
   edit: allow
   bash: allow
-model: openai/gpt-5.4
+model: openrouter/moonshotai/kimi-k2.6
 mode: "all"
 ---
 

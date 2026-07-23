@@ -8,7 +8,7 @@ permission:
   glob: allow
   list: allow
   edit: allow
-model: anthropic/claude-sonnet-5
+model: openrouter/deepseek/deepseek-v4-pro
 mode: "all"
 ---
 

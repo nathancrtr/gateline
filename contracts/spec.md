@@ -7,13 +7,24 @@
      exactly `### R<n> — <short name>`; criteria as list items whose text
      begins `AC<n>.<m> — `. A deviation is a malformed artifact.
      BUDGET: reference the intent brief, never restate it. Target: reviewable
-     by the G0 human in ten minutes. -->
+     by the G0 human in ten minutes.
+     READABILITY (normative — human-facing section: Context). The G0 approver
+     reads it as prose; a breach is bounced like a grammar deviation, with the
+     rule cited. (a) The first sentence states the takeaway in plain words —
+     no code spans, paths, or parenthetical cites. (b) One idea per paragraph:
+     at most 4 sentences and 120 words each. (c) Three or more parallel items
+     (gaps, cases, call sites) become a bulleted list under a lead-in
+     sentence — never a semicolon chain. (d) One claim per sentence; never
+     join clauses with a semicolon. (e) Name before cite: give any id or file
+     a noun phrase on first use ("the ordering rule (R5)"), at most one
+     parenthetical file:line cite per sentence, full path at first mention
+     only — short name after. -->
 
 ## Context
-<!-- 2-5 sentences: the problem, grounded in the system as it exists.
-     Note any mismatch between the intent brief and observed reality.
-     Human-facing: the G0 approver reads this as prose — give any id a noun
-     phrase on first use ("the ordering rule (R5)"), never a naked cite. -->
+<!-- The problem, grounded in the system as it exists. Note any mismatch
+     between the intent brief and observed reality. Target ~150 words; never
+     exceed 250 — the cap is on words, not sentences, and the READABILITY
+     rules govern the shape (a sentence budget invites clause-chaining). -->
 
 ## Requirements
 

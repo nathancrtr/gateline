@@ -450,6 +450,12 @@ escalations:
         at: 2026-07-23T23:58:21.361Z,
         from_role: orchestrator,
         reason: reviewer escalated task 02-remote-dispatcher — see review-02.md,
-        resolved: false
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-24T00:21:31.275Z,
+        resolution: "Resolution: the architect must update the plan to include
+          `seam.ts/engine.ts` in the file surface somewhere so that the
+          `02-remote-dispatcher` review's blocking finding can be fixed by an
+          implementer"
       }
   ]

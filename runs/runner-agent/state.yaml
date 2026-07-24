@@ -608,6 +608,15 @@ escalations:
         at: 2026-07-24T16:57:52.028Z,
         from_role: orchestrator,
         reason: reviewer escalated task 04-workstation-agent — see review-04.md,
-        resolved: false
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-24T19:54:54.865Z,
+        resolution: "Fixed directly (round 2, af372de): implemented harvest-then-dispose
+          per plan.md ADR-3/ADR-8 across seam.ts (DispatchOutcome.harvest), new
+          harvest.ts (harvestPathspecs), workspace.ts (foldHarvestBranch),
+          engine.ts (launch()'s managesOwnWorkspace branch), runner-api.ts, and
+          the runner-agent package. Task 04's file-contact surface widened
+          accordingly. 259 tests pass, typecheck clean. Ready for reviewer
+          re-review (round 2) against this delta."
       }
   ]

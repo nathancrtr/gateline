@@ -52,3 +52,44 @@ depends_on: [03-cli-wiring, 04-server-orchestrator-wiring]
 status: pending
 
 notes: |
+  Implementer (round 1): edited docs/TOPOLOGY.md §3.1 (removed the false
+  --push-without-sync-provider guard claim, added a §3.6 "Local-only: a
+  supported, first-class topology" section — resolution tiers, --no-push
+  alias/its CLI-only scope, guarantees, startup-log markers, and the
+  deploy/ hosted boundary), docs/ORCHESTRATOR.md §4.3 (the "both writers
+  push to origin" paragraph now scopes itself to "when the resolved
+  deployment mode pushes at all" and cross-references TOPOLOGY.md §3.6 for
+  the local-only case), and docs/DEPLOY.md (one-line cross-reference from
+  the intro to TOPOLOGY.md §3.6, stating the hosted recipe's remote
+  requirement is out of local-only's scope). All flag names
+  (--local-only/--no-push/--push), the config key (local_only:), the error
+  name (LocalOnlyPushConflictError), and the log markers/literal strings
+  ('local-only (--local-only)', 'local-only (--no-push)', 'local-only (no
+  origin remote)', 'pushing to origin (--push)', 'pushing to origin (origin
+  auto-detected)', 'local-only: nothing to sync', 'local-only: not syncing
+  <id> from origin') were verified against frontend/packages/cli/src/main.ts
+  (resolveUpMode, the up/sync/arm commands), frontend/packages/core/src/
+  view-model/config.ts (resolveMode, LocalOnlyPushConflictError),
+  sources/local-source.ts, sources/pr-ensure.ts, sources/sync.ts,
+  frontend/packages/server/src/main.ts, and frontend/packages/orchestrator/
+  src/{main,start}.ts before being named in the docs.
+
+  Discovery, left unedited (outside this task's DEPLOY.md scope of "at most
+  a one-line cross-reference"): docs/DEPLOY.md's "Run it locally in one
+  command" paragraph (line ~210) says `agentic up` carries "the same hard
+  lines (`--push` by default, ...)" as the hosted recipe. That predates this
+  run (introduced in the #100 deployment-consolidation commit) and reads as
+  a parity recommendation rather than a behavior claim, but taken literally
+  it overstates `up`'s actual default (auto-detect off origin presence, or
+  local-only with no origin) — the same way §3.1's retired guard claim did.
+  Flagging for a maintainer/future task rather than fixing, since this
+  task's file_contact_surface for docs/DEPLOY.md was capped at one line.
+
+  AC5.2 sweep (`grep -rni "push" docs/`, run after the edits above): every
+  remaining hit is either historical incident narration (#96/#97/#103/#104),
+  a hosted-specific accurate claim (entrypoint literally passes `--push`/
+  `push: true`), or inside the new local-only section itself; no doc claims
+  a --push-without-sync-provider startup refusal, and no doc claims
+  unconditional pushing outside the hosted-only context (with the one
+  pre-existing DEPLOY.md exception noted above, out of scope here).
+

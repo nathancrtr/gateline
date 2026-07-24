@@ -77,9 +77,15 @@ Server + engine ship and run as one supervised unit over one clone, one sync loo
 one push path — hosted (the entrypoint already co-locates them; make
 `ORCH_ENABLED=1` the blessed default once §3.3 lands) and locally (a single
 `up`-style command for consumers). The ad-hoc pattern this replaces — a second
-clone with its own fetch loop and `watch --push` — is retired; the orchestrator
-refuses `--push` without a sync provider so the unsupported topology fails at
-startup rather than drifting at runtime (#104).
+clone with its own fetch loop and `watch --push` — is retired in favor of that
+single `up` authority (#104). There is no startup guard that refuses `--push`
+without a sync provider — "sync provider" is not a first-class object anywhere
+in the `up`/engine startup path, and building one would be exactly the new
+remote-abstraction layer this proposal doesn't need. What a deployment's
+origin-egress posture actually is — pushing, polling read-only, or touching
+origin not at all — is a property of each source's resolved mode, decided once
+at startup and named unambiguously in the log; the fully-off case is the
+first-class **local-only** topology described in §3.6.
 
 Direct git edits to run branches remain legal — break-glass is git's charm — but
 are treated as *foreign writes to reconcile* (fast-forward sync, then re-derive),
@@ -150,6 +156,68 @@ is untouched and ctrl-C removes the trial. Rules of the road:
   @agentic/web` (vite on 4311, proxying `/api` to 4310). For changes that touch
   server or core routes, use the built self-contained flow above so the API
   comes from the trial tree too.
+
+### 3.6 Local-only: a supported, first-class topology
+
+A deployment that never touches origin at all — no `git push`, no `gh`/GitHub
+API call, no `git fetch` of `origin` — is not an accident of `--no-push` left
+with a fetch loop that happens to fail quietly. It is a named, first-class
+mode: **local-only**. `agentic up`, the standalone `agentic-orchestrator`
+binary, and per-source config all resolve onto the one `push`/local-only
+precedence chain in `loadSources`
+(`frontend/packages/core/src/view-model/config.ts`); there is no second
+resolution mechanism.
+
+**Resolution tiers, in order:**
+
+1. An explicit local-only designator (`--local-only` on the CLI, or
+   `local_only: true` per source in config) together with an explicit request
+   to push (`--push` / `push: true`) on the same source is rejected at
+   startup: `LocalOnlyPushConflictError`, non-zero exit, no server or engine
+   started.
+2. Otherwise, the explicit local-only designator wins, if set.
+3. Otherwise, an explicit push setting wins: `--push`/`push: true` turns
+   local-only off; **at the CLI tier only**, `--no-push` turns it on (the
+   alias below).
+4. Otherwise, origin auto-detect decides: no `remote.origin.url` configured →
+   local-only; an origin exists → push mode.
+
+**The `--no-push` alias, and where it stops.** `agentic up --no-push` resolves
+to full local-only — no push, no `gh` calls, no origin fetch — not merely a
+push ceiling; a `--no-push` clone that still fetched origin and opened draft
+PRs behind the operator's back was exactly the leak this topology closes. (The
+standalone `agentic-orchestrator` binary has no `--no-push` of its own — it
+takes `--push` and `--local-only` directly.) The alias holds only at the CLI
+tier.
+A **config-tier** source with an explicit `push: false` and an origin present
+is a different, legal topology — a read-only poller that keeps fetching on
+`fetch_interval` and stays on the sync/PR paths — and is left alone; only
+`local_only: true`, or a config-tier source with no origin at all, puts a
+config source into local-only.
+
+**Guarantees, while local-only is active:**
+
+- No `git push` ever runs — the resolved `push` boolean is forced `false`.
+- No `gh`/GitHub API call is made — the draft-PR ensure short-circuits before
+  any git or `gh` invocation (at both call sites: the engine's first-dispatch
+  ensure and `agentic arm`), and the PR-approval sync path never even
+  constructs its provider.
+- No `git fetch` of `origin` runs, from either the engine's heartbeat sync or
+  the server's per-source interval sync.
+- `agentic sync` never throws, including on a repo with no `origin` remote at
+  all; it prints the literal `local-only: nothing to sync` and exits 0.
+
+**Naming the mode, not just inferring it.** `agentic up`'s startup log states
+which resolution path fired: `local-only (--local-only)`, `local-only
+(--no-push)`, or `local-only (no origin remote)` on one side; `pushing to
+origin (--push)` or `pushing to origin (origin auto-detected)` on the other.
+The log line alone answers "will this run touch origin?" without reading
+code.
+
+**Out of scope: the hosted deployment.** The `deploy/` hosted entrypoint
+(`PUSH_DECISIONS`, the GitHub webhook) legitimately requires a remote — it
+clones from `REPO_URL`, and its entire purpose is a shared, origin-backed
+record. Local-only is not an option there; see [DEPLOY.md](DEPLOY.md).
 
 ## 4. What this deliberately does not change
 

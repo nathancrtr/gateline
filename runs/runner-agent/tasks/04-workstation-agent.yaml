@@ -68,3 +68,77 @@ notes: |
   The repository remote URL: the intents endpoint response includes the origin URL so the
   agent doesn't need it configured separately. If the server cannot determine the remote URL,
   the agent accepts `--repo-url` as a fallback CLI flag.
+
+  Round 1 (implementer): implemented the new `@agentic/runner-agent` package —
+  `src/workspace.ts` (disposable per-dispatch git clone: `createWorkspace`/`Workspace.remove`),
+  `src/agent.ts` (the poll/claim/execute/report loop: `ControlPlaneClient`, `buildCommand`,
+  `runCommand`, `computeOutcome`, `executeIntent`, `runAgent`), and `src/main.ts` (a thin
+  commander-based CLI over `runAgent`). `buildCommand`/`computeOutcome` are direct ports of
+  `HeadlessDispatcher.dispatch()`'s substitution order and three `usage_report` branches
+  (seam.ts), built on that file's own imported parsing utilities
+  (`parseJsonOutput`/`parseNdjson`/`matchesLineFilter`/`sumField`/`dig`), so a dispatch run
+  through this remote path produces a `DispatchOutcome` equivalent in shape to a local
+  `HeadlessDispatcher` one (AC3.2). Tests: `test/workspace.test.ts` (5 tests, real throwaway
+  git repos — clone, remove, baseOid checkout incl. the tolerant-failure case, and two
+  independent concurrent workspaces) and `test/agent.test.ts` (23 tests — command
+  construction, all `computeOutcome` branches, `executeIntent` end to end with real spawned
+  shell commands, `ControlPlaneClient` against a mocked `fetch`, the full poll/claim/execute/
+  report lifecycle against a mocked control plane, and three static-analysis-style tests
+  reading this package's own source for AC3.1/AC5.1/AC8.1's grep assertions).
+
+  Deviations / design decisions (not silent, flagged for the reviewer):
+
+  - **`--adapter` is a required CLI flag with no hardcoded default**, not defaulted to
+    `claude-code` as the dispatching context suggested. AC8.1 is a literal grep of "the
+    runner agent's dispatch-execution code" for harness/vendor names outside manifest-driven
+    data; a `'claude-code'` string anywhere in this package's source (even as a flag default)
+    is exactly the kind of literal this invariant forbids, and grep tests (by nature) don't
+    parse "is this a CLI default vs. dispatch logic" — they just match text. Requiring the
+    flag with no default keeps the package's source free of any harness/vendor/role name
+    (verified: `grep -inE` for every role name in `roles/` and every adapter name in
+    `adapters/` across `src/agent.ts`, `src/workspace.ts`, `src/main.ts` returns nothing —
+    the same check `test/agent.test.ts`'s R8 describe block runs), and still satisfies AC8.2
+    exactly as intended: pointing the same binary at a different adapter is a different value
+    for one flag, zero code changes.
+
+  - **`frontend/tsconfig.json` gained two include entries**
+    (`packages/runner-agent/src/**/*.ts`, `packages/runner-agent/test/**/*.ts`), outside the
+    task's declared file-contact surface. Without this, `tsc -p tsconfig.json` (the
+    `typecheck` script) never sees the new package's files at all — not a failure, just
+    silent non-coverage, which would let a real type error in this package go undetected
+    while `npm run typecheck` still reports clean. No other task's file-contact surface
+    claims `tsconfig.json` (checked 01–03, 05), so this isn't a collision with a parallel
+    implementer; flagging it here rather than treating "add a package" as implicitly
+    permission to edit the root tsconfig, since the task's file-contact surface is meant to
+    be the complete word on what a task may touch.
+
+  - **`executeIntent`/`runAgent` take injectable `createWorkspaceImpl`/`runCommandImpl`/
+    `manifestLoaderImpl`/`fetchImpl`/`sleep`/`maxCycles` parameters**, all defaulting to the
+    real implementations in production. This is what makes the poll/claim/execute/report
+    lifecycle test (scope's 3rd bullet) exercise the real `runAgent` function end-to-end
+    against a mocked `fetch` and a mocked manifest/command layer, rather than needing a real
+    HTTP server or a real adapter-equipped repo checkout.
+
+  - **No `--agentic-prefix`-equivalent default beyond the flag itself**: `loadHeadlessManifest`
+    auto-detects the metadata prefix per clone (via `framework-lock.json`) when
+    `--agentic-prefix` is unset, matching how `agentic-orchestrator`'s own `--agentic-prefix`
+    flag works — not a deviation, just noting the flag exists for parity with hosts using
+    `integrate.py --prefix`.
+
+  Verified:
+  - `npx vitest run packages/runner-agent/test/` — 28/28 pass (5 workspace.test.ts,
+    23 agent.test.ts).
+  - `npm run typecheck` (frontend/) — clean (after the `tsconfig.json` include addition
+    above).
+  - `npm test` (frontend/, full workspace) — 445 passed, 1 skipped (opt-in live-smoke),
+    0 failures — exactly 28 more passing tests than the pre-existing 417 passed/1 skipped
+    baseline (task 03 round 2's verified count), confirming no existing test regressed.
+
+  Stayed inside the declared file-contact surface for the new package itself
+  (`src/main.ts`, `src/agent.ts`, `src/workspace.ts`, `package.json`, `test/agent.test.ts`,
+  `test/workspace.test.ts`); the two files touched outside it are `frontend/tsconfig.json`
+  (called out above) and `frontend/package-lock.json` (a 15-line addition from `npm install`
+  registering the new `@agentic/runner-agent` workspace package and its `commander`
+  dependency — unavoidable for a genuinely new package with its own `dependencies`, and not
+  hand-edited). No other file touched — task 05's surface (`start.ts`, `runner-dispatcher.ts`,
+  `server/src/main.ts`, `wiring.test.ts`) was not touched.

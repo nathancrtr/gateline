@@ -20,6 +20,8 @@
     "packages/orchestrator/test/**/*.ts",
     "packages/server/src/**/*.ts",
     "packages/server/test/**/*.ts",
+    "packages/runner-agent/src/**/*.ts",
+    "packages/runner-agent/test/**/*.ts",
     "fixtures/src/**/*.ts"
   ]
 }

@@ -120,3 +120,71 @@ notes: |
 
   Stayed inside the declared file-contact surface: `runner-api.ts` (new),
   `app.ts`, `main.ts`, `runner-api.test.ts` (new). No other file touched.
+
+  Round 2 (implementer), responding to review-03.md F1-F6:
+
+  - F1 (blocking) — fixed. `claimed: Set<string>` replaced with `claims: Map<string,
+    number>` (key -> expiry timestamp). `claim(key)` now treats a claim as free once
+    `now() > expiresAt`, sizing the TTL from the matching pending intent's own
+    `timeoutMs` (falling back to a 10-minute `DEFAULT_CLAIM_TTL_MS` for a key naming
+    no currently-known intent). `buildRunnerApi` gained an optional injectable `now:
+    () => number` (defaults to `Date.now`; only tests pass it) so the TTL test needs
+    no wall-clock sleep. `report()` still deletes the claim immediately on report,
+    ahead of any TTL. Three new tests: an expired claim is re-claimable
+    (`packages/server/test/runner-api.test.ts:159`), a fresh claim after expiry gets
+    a full new TTL rather than the stale one (`:177`), and report releases a claim
+    immediately (`:189`) — all clock-injected, zero sleeps.
+  - F2 (blocking) — fixed (test-only; the route already carried the same
+    `authorized(c)` guard as intents/claim — this was a coverage gap, not a code
+    bug). Added "rejects a report with no Authorization header" and "...with an
+    invalid token" (`runner-api.test.ts:248`, `:264`), both asserting 401 *and* that
+    `callback.resolveOutcome` was never called — pins directly against the mutant
+    that drops the guard, not just the status code.
+  - F3 (blocking) — fixed. The bogus-repoDir augmentation test is replaced with a
+    real throwaway git repo (`makeRepo()`, `runner-api.test.ts:24` — `git init -b
+    <branch>`, one commit, `git rev-parse <branch>` captured as the expected OID),
+    asserting the served intent's `baseOid` equals that OID exactly
+    (`runner-api.test.ts:94`). The original no-throw case is kept as a distinct test
+    ("degrades gracefully..." — `:108`) per the review's "keep/verify the graceful
+    degradation case" instruction, plus a third new test asserting no augmentation
+    (and implicitly no git call) happens when `repoDir` is absent (`:122`).
+  - F4 (minor) — fixed. `app.ts`'s `authorized()` now compares with
+    `node:crypto`'s `timingSafeEqual` (length-checked first, matching
+    `webhook.ts`'s `verifySignature` exactly), not `===`.
+  - F5 (minor) — documented, not code-changed (the review named either as
+    acceptable). Rewrote `PendingIntent.baseOid`'s doc comment to state plainly
+    that this is the branch tip *at poll time*, not a captured pin of the armed
+    commit — names both failure modes the review raised (tip drift past the armed
+    commit from a sibling commit between arm and poll; an unpushed local OID the
+    workstation's origin-clone cannot fetch) and says explicitly that a true pin
+    requires arm-time capture in task 05's wiring, which has engine access this
+    route does not. No behavior change: this route still has no way to know the
+    armed OID independent of the ref state it can read.
+  - F6 (minor) — fixed (chose to add, not rebut — task 04's notes already assume
+    this exists, and no later task's surface includes `runner-api.ts` to add it
+    afterward). Added `RunnerApi.repoUrl(): Promise<string | null>`, resolved via
+    `git -C repoDir remote get-url origin` (a local `resolveRepoUrl` helper
+    mirroring `webhook.ts`'s `originUrl`, tolerant of failure like the existing
+    `resolveOid`), memoized per `buildRunnerApi` call since the origin doesn't
+    change across the process lifetime unlike per-intent `baseOid`. `GET
+    /api/runner/intents`'s response gained a top-level `repoUrl` field alongside
+    `intents`. Four new tests cover: resolved from a real `origin` remote, null with
+    no `repoDir`, and null with a `repoDir` that has no `origin` remote
+    (`runner-api.test.ts:129`, `:139`).
+
+  No change to `main.ts` was needed for any of F1-F6 — `buildRunnerApi`'s call
+  site there passes the same `{ token, callback, repoDir, log }` it always did;
+  the new `now` and `repoUrl()` surfaces are internal/derived respectively.
+
+  Verified:
+  - `npx vitest run packages/server/test/runner-api.test.ts
+    packages/server/test/webhook.test.ts packages/server/test/app.test.ts` —
+    57/57 pass (22 in runner-api.test.ts, up from 13 round 1).
+  - `npm run typecheck` (frontend/) — clean.
+  - `npm test` (frontend/, full workspace) — 417/418 pass, 1 skipped (opt-in
+    live-smoke), 0 failures — the round-1 `upgrade.test.ts` flake did not
+    reproduce this run (also reconfirmed standalone: 3/3 pass).
+
+  Stayed inside the declared file-contact surface: `runner-api.ts`, `app.ts`,
+  `runner-api.test.ts` edited; `main.ts` untouched this round (no change
+  needed). No other file touched.

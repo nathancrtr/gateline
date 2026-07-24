@@ -2,6 +2,7 @@
 // its own sanctioned core seam (ADR-2): decisions over
 // planDecision/writeState, staging over planRunScaffold/stageRun. No route
 // here composes a sources/git.ts primitive directly (AC1.1).
+import { timingSafeEqual } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import {
   buildEvidenceRollup,
@@ -82,16 +83,27 @@ export function createApp(deps: AppDeps): Hono {
   // callback to serve it), the routes above never mount at all.
   if (deps.runnerApi) {
     const runner = deps.runnerApi
+    // Constant-time, matching webhook.ts's own convention (verifySignature) —
+    // a naive `===` compare leaks token-prefix timing to anyone who can reach
+    // the port (review-03.md F4).
     const authorized = (c: Context): boolean => {
       const header = c.req.header('authorization') ?? ''
       const presented = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : undefined
-      return presented === runner.token
+      if (!presented) return false
+      const a = Buffer.from(presented)
+      const b = Buffer.from(runner.token)
+      return a.length === b.length && timingSafeEqual(a, b)
     }
 
     app.get('/api/runner/intents', async (c) => {
       if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401)
-      const intents = await runner.listIntents()
-      return c.json({ intents })
+      // repoUrl rides the same response (review-03.md F6): task 04's
+      // workstation agent clones from this rather than requiring
+      // `--repo-url` on every invocation; null when unconfigured/
+      // unresolvable, in which case the agent's `--repo-url` flag is the
+      // documented fallback.
+      const [intents, repoUrl] = await Promise.all([runner.listIntents(), runner.repoUrl()])
+      return c.json({ intents, repoUrl })
     })
 
     app.post('/api/runner/claim', async (c) => {

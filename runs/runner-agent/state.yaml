@@ -503,6 +503,17 @@ budget:
           tokens_in: null,
           tokens_out: null,
           cost_usd: null
+        },
+      {
+          at: 2026-07-24T16:49:17.815Z,
+          role: reviewer,
+          task: 04-workstation-agent,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:

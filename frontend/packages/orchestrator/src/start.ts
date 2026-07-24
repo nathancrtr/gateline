@@ -3,7 +3,7 @@
 // a frontend can co-locate the engine over its own clone (`agentic up`) —
 // one deployment, one clone, one authority (docs/TOPOLOGY.md §3.1).
 import { stat } from 'node:fs/promises'
-import { CodeTreeMonitor, Git, LocalGitSource, resolveCodeRepo, type CodeTreeStatus, type Identity } from '@agentic/core'
+import { CodeTreeMonitor, Git, LocalGitSource, LocalOnlyPushConflictError, resolveCodeRepo, type CodeTreeStatus, type Identity } from '@agentic/core'
 import { Engine, type InFlightJob } from './engine.ts'
 import { headlessManifestPath, loadHeadlessManifest } from './manifest.ts'
 import { loadRegistry } from './registry.ts'
@@ -26,6 +26,13 @@ export interface OrchestratorOptions {
   frameworkPrefix?: string
   /** Push every orchestrator commit to origin — origin is the record. */
   push?: boolean
+  /**
+   * Explicit local-only designator (mirrors `push`'s explicit tier, the
+   * core resolution table's rule 2/AC1.1): unset auto-detects off a missing
+   * `remote.origin.url`, same trigger as `loadSources`. Conflicts with an
+   * explicit `push: true` — rejected before anything starts (AC4.1).
+   */
+  localOnly?: boolean
   /** Refuse dispatch on any run missing budget.cost_limit_usd. */
   requireBudget?: boolean
   /** Host-wide spend ceiling across active runs. */
@@ -56,6 +63,14 @@ export async function assembleOrchestrator(
 ): Promise<{ engine: Engine; scheduler: Scheduler; manifestStaleProbe: () => Promise<string[]> }> {
   const log = opts.log ?? (() => {})
   const git = new Git(opts.repoDir)
+  // Local-only + explicit push is refused before anything else starts (ADR-5,
+  // AC4.1): the binary never goes through `loadSources`, so it repeats the
+  // same conflict check here.
+  if (opts.localOnly && opts.push) throw new LocalOnlyPushConflictError(opts.repoDir)
+  // Unset auto-detects off a missing origin — the same trigger `loadSources`
+  // uses (AC1.1) — only when neither `localOnly` nor `push` was explicit.
+  const localOnly = opts.localOnly ?? (opts.push ? false : (await git.configGet('remote.origin.url')) === null)
+  const push = localOnly ? false : opts.push
   const registry = await loadRegistry(git, await git.defaultBranch(), opts.frameworkPrefix)
   const watched: { adapter: string; path: string; loadedMtimeMs: number }[] = []
   const adapters = await Promise.all(
@@ -91,7 +106,8 @@ export async function assembleOrchestrator(
     dispatcher,
     registry,
     frameworkPrefix: opts.frameworkPrefix,
-    push: opts.push,
+    push,
+    localOnly,
     log,
   }
   // An uncapped host must be visible, not quiet (#109): say so at every

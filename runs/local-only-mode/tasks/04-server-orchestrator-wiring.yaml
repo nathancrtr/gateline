@@ -63,3 +63,45 @@ depends_on: [01-core-mode-resolution, 02-egress-guard-seams]
 status: pending
 
 notes: |
+  Implementer round 1: built as scoped, no deviations from plan/spec.
+  - server/src/main.ts: ServeOptions.localOnly threaded into loadSources; the
+    interval-sync loop now skips a localOnly source with
+    `local-only: not syncing <id> from origin` instead of scheduling a timer.
+    Left the direct-invocation argv parser untouched (it never parsed --push
+    either; out of this task's stated scope).
+  - engine.ts: EngineConfig.localOnly forwarded into the LocalGitSource ctor
+    and into the first-dispatch `ensureDraftPr` call
+    (`{ localOnly: this.cfg.localOnly }`).
+  - start.ts: assembleOrchestrator throws core's LocalOnlyPushConflictError
+    (imported from @agentic/core) on `opts.localOnly && opts.push`, checked
+    immediately after constructing `Git` and before any other async work (so
+    "no engine or server started" holds); otherwise resolves
+    `localOnly = opts.localOnly ?? (opts.push ? false : originMissing)` via
+    `git.configGet('remote.origin.url')`, forces `push=false` when localOnly,
+    and both are carried in `common` (read structurally by Scheduler, whose
+    SchedulerConfig doesn't declare `localOnly` — harmless excess property on
+    a variable spread, not a literal, so no TS error; Scheduler itself is
+    outside this task's file_contact_surface).
+  - main.ts (orchestrator binary): added root `--local-only` flag (commander
+    auto-camelCases to `hosted.localOnly`); buildEngine passes it through.
+    A conflict with --push propagates assembleOrchestrator's throw as an
+    unhandled rejection, which Node (>=15 default behavior) turns into a
+    non-zero exit — matches the task's "propagating the throw is fine".
+  - New test/local-only.test.ts (4 tests, all passing): AC2.4 engine half
+    (zero git.run invocations via syncFromRemote over a cloned-from-bare
+    fixture), AC2.2 engine site (tick log contains the ensure
+    "skipped ... local-only" note, dispatcher still launches), AC4.1 binary
+    half (assembleOrchestrator({localOnly:true, push:true}) rejects with
+    LocalOnlyPushConflictError), AC1.1 (assembleOrchestrator on a remoteless
+    toy repo with no flags resolves engine.source.localOnly === true — this
+    test needed a hand-written minimal adapters/claude-code/manifest.json
+    fixture since makeToyRepo doesn't ship one and assembleOrchestrator reads
+    the adapter manifest unconditionally from disk).
+  Test results: typecheck clean (npm run typecheck). New test file: 4/4
+  passing. Full `npm test` in one pass hit 10 unrelated timeouts under this
+  sandbox's parallelism (config.test.ts, divergence.test.ts, fetch-sync,
+  stage-run, write-path, server/app.test.ts, cli.test.ts, orchestrator
+  engine/hardening/shadow-mdtoc) — re-ran every one of those files
+  individually (and in smaller batches) and all passed (79 + 46 tests green),
+  confirming resource contention rather than a regression from this task's
+  changes.

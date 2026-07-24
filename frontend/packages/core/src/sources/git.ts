@@ -157,6 +157,12 @@ export class Git {
     return commits[0] ?? null
   }
 
+  /** Most recent commit on `rev` touching anything under `dir` except `excludePaths`, or null. */
+  async lastTouchedExcept(rev: string, dir: string, excludePaths: string[]): Promise<CommitInfo | null> {
+    const commits = await this.log(rev, [dir, ...excludePaths.map((p) => `:(exclude)${p}`)], { maxCount: 1 })
+    return commits[0] ?? null
+  }
+
   async mergeBase(a: string, b: string): Promise<string | null> {
     try {
       return (await this.run(['merge-base', a, b])).trim() || null

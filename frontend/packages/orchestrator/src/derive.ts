@@ -25,7 +25,9 @@
 //   D15 request-changes, implementer responded       → dispatch reviewer (verify round)
 //   D16 latest verdict approve                       → record task status review-approved
 //   D17 reviewer verdict escalate                    → escalate + pause; a resolution newer
-//       than the verdict → dispatch re-review round (the fresh verdict supersedes)
+//       than the verdict AND a non-state.yaml commit newer than the verdict
+//       → dispatch re-review round (the fresh verdict supersedes); resolved
+//       with no such commit → rest (acknowledgment alone is not a fix, #188)
 //   D18 all tasks review-approved+, no verification  → dispatch verifier
 //   D19 phase implement, state lists no tasks        → record: seed tasks[] from tasks/*.yaml (the v0 human's mirror step)
 //   D20 task failed (implementer failed twice); the naming escalation resolved
@@ -362,6 +364,20 @@ function implementPhase(obs: RunObservation): DerivedAction {
             Date.parse(e.resolved_at) / 1000 > review!.lastTouched,
         )
         if (!acknowledged) return escalate('D17', `reviewer escalated task ${task.id} — see ${review!.path}`, 'escalation')
+        // The resolution note alone proves nothing changed — it is a state.yaml
+        // edit the human could write without touching the condition it names.
+        // Require a real commit under the run directory, excluding state.yaml
+        // itself, newer than the escalate verdict: that is the fix landing, not
+        // just the acknowledgment. Without this a zero-delta resolve+resume
+        // dispatches a re-review round against a byte-identical range, burning
+        // one of the ROUND_CAP rounds for nothing (#188).
+        const landed =
+          obs.lastNonStateCommit !== null && review!.lastTouched !== null && obs.lastNonStateCommit > review!.lastTouched
+        if (!landed)
+          return rest(
+            'D17',
+            `task ${task.id}: escalation resolved but nothing has landed since the verdict — land the fix; the re-review dispatches on the tick after it does`,
+          )
         dispatches.push({
           role: 'reviewer',
           task: task.id,

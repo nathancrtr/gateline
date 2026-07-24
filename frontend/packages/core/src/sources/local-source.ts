@@ -217,6 +217,15 @@ export class LocalGitSource implements RunSource {
     )
   }
 
+  async lastTouchedExcept(ref: RunRef, excludePaths: string[]): Promise<CommitInfo | null> {
+    const runDir = await this.runDir(ref.slug)
+    return this.git.lastTouchedExcept(
+      ref.ref,
+      runDir,
+      excludePaths.map((p) => `${runDir}/${p}`),
+    )
+  }
+
   async identity(): Promise<Identity | null> {
     if (this.options.identity) return this.options.identity
     const name = await this.git.configGet('user.name')

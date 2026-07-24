@@ -43,6 +43,14 @@ export interface RunObservation {
   /** Run-relative path → newest commit epoch seconds touching it. */
   lastTouched: Record<string, number | null>
   /**
+   * Epoch seconds of the newest run-branch commit touching anything other
+   * than `state.yaml` (#188) — the delta guard for D17's post-resolution
+   * re-review: a resolution commit only ever edits state.yaml itself, so
+   * without this a re-review round can dispatch against a byte-identical
+   * range and burn a capped round for nothing.
+   */
+  lastNonStateCommit: number | null
+  /**
    * Most recent decline per gate, from state history (survives resume
    * resets). `redone` is true once the gate's packet artifact has landed
    * again after the decline — decided by commit ancestry when available,
@@ -149,6 +157,11 @@ export async function observeRun(source: RunSource, ref: RunRef, cfg: ObserveCon
       : touched.time > decline.at
   }
 
+  // One extra git query, mirroring the per-path lastTouched calls above:
+  // the newest commit touching anything in the run directory except
+  // state.yaml itself (#188).
+  const lastNonStateCommit = (await source.lastTouchedExcept(ref, ['state.yaml']))?.time ?? null
+
   const ledger = parseLedger(state)
   const openDispatches = ledger
     .filter((e) => e.cost_usd === null && !e.failed)
@@ -172,6 +185,7 @@ export async function observeRun(source: RunSource, ref: RunRef, cfg: ObserveCon
     validations,
     reviews,
     lastTouched,
+    lastNonStateCommit,
     declineEvents,
     bounceCounts,
     ledger,

@@ -32,6 +32,7 @@ const obs = (over: Partial<RunObservation> = {}): RunObservation => ({
   validations: {},
   reviews: [],
   lastTouched: {},
+  lastNonStateCommit: null,
   declineEvents: {},
   bounceCounts: {},
   ledger: [],
@@ -339,7 +340,7 @@ describe('the derivation table, one rule per row', () => {
     expect(a).toMatchObject({ kind: 'escalate', rule: 'D17', pause: 'escalation' })
   })
 
-  it('D17 — a resolution newer than the escalate verdict dispatches the re-review round instead of re-escalating', () => {
+  it('D17 — a resolution newer than the escalate verdict, with a code commit landed since, dispatches the re-review round instead of re-escalating', () => {
     // The fleetview-design regression: resolve+resume re-escalated identically
     // every tick because the escalate verdict stands in an append-only artifact.
     const s = state({
@@ -362,10 +363,102 @@ describe('the derivation table, one rule per row', () => {
         state: s,
         taskFiles: new Map([taskFile('01-a')]),
         reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+        lastNonStateCommit: 700, // a real commit landed after the verdict
       }),
     )
     expect(a).toMatchObject({ kind: 'dispatch', rule: 'D13' })
     expect(a.kind === 'dispatch' && a.dispatches[0]).toMatchObject({ role: 'reviewer', task: '01-a', round: 2 })
+  })
+
+  it('D17 — a resolution newer than the escalate verdict but no commit has landed since rests instead of dispatching (#188 zero-delta guard)', () => {
+    // The runner-agent regression: nothing checked that anything actually
+    // changed in the tree, so a resolve+resume with no fix on the branch burned
+    // a capped review round against a byte-identical range.
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600 > lastTouched 500
+          resolution: 'acknowledged, but nothing landed yet',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+        lastNonStateCommit: null, // no non-state.yaml commit at all
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'rest', rule: 'D17' })
+    expect((a as { why: string }).why).toMatch(/nothing has landed since the verdict/)
+  })
+
+  it('D17 — a plan.md-only commit after the verdict counts as a landed delta (docs-side remedies count, #188)', () => {
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600 > lastTouched 500
+          resolution: 'plan corrected to match the intended surface',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+        lastNonStateCommit: 700, // e.g. a plan.md or tasks/ edit landed after the verdict
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'dispatch', rule: 'D13' })
+    expect(a.kind === 'dispatch' && a.dispatches[0]).toMatchObject({ role: 'reviewer', task: '01-a', round: 2 })
+  })
+
+  it('D17 — a state.yaml-only commit after the verdict never counts as a landed delta (#188)', () => {
+    // lastNonStateCommit is derived excluding state.yaml, so a resolution
+    // commit that only edits state.yaml (marking the escalation resolved)
+    // must not, by itself, look newer than the verdict — this observation
+    // shape (older-than-verdict, as lastTouched excludes state.yaml history
+    // entirely) is what a real repo produces in that case.
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600 > lastTouched 500
+          resolution: 'acknowledged only',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+        lastNonStateCommit: 300, // stale: predates the escalate verdict itself
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'rest', rule: 'D17' })
   })
 
   it('D20 — a failed task whose naming escalation resolved after the last failure returns to pending', () => {

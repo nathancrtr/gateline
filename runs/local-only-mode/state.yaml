@@ -275,6 +275,17 @@ budget:
           tokens_out: null,
           cost_usd: 4,
           failed: true
+        },
+      {
+          at: 2026-07-24T01:48:28.095Z,
+          role: implementer,
+          task: 06-docs-topology,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:
@@ -307,7 +318,7 @@ tasks:
         review_rounds: 1
       },
     { id: 05-remoteless-test-coverage, status: review-approved, review_rounds: 1 },
-    { id: 06-docs-topology, status: pending, review_rounds: 0 }
+    { id: 06-docs-topology, status: dispatched, review_rounds: 0 }
   ]
 escalations:
   [

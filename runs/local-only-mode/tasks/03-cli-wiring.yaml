@@ -69,3 +69,97 @@ depends_on: [01-core-mode-resolution, 02-egress-guard-seams]
 status: pending
 
 notes: |
+  Implementer (round 1): implemented as scoped, no deviations from the scope
+  text; a few implementation choices worth recording.
+  - main.ts: `resolveSources()` now wraps `loadSources` in try/catch,
+    printing `LocalOnlyPushConflictError.message` and exiting 1 on a
+    config-tier conflict (AC4.1's non-`up` half). `armRun` reads
+    `(source as { localOnly?: boolean }).localOnly` (the existing `.dir`
+    cast pattern) and passes `{ localOnly }` to `ensureDraftPr` (AC2.2 arm
+    site). `sync` now calls `planSyncForSource(source, () => new
+    GhCliProvider(dir))`; on `'local-only'` it prints exactly `local-only:
+    nothing to sync` and `continue`s to the next source (zero `gh` calls,
+    exit stays 0 whether or not `--live` is passed, since `applySync` is
+    never reached). The trailing generic "nothing to sync — no undecided G2
+    …" line is suppressed only when every considered source resolved
+    local-only (tracked via `anyConsidered`/`allLocalOnly`), so a
+    local-only source never prints a second, contradictory line; a mixed
+    fleet still gets both lines (the per-source line, then the fleet-wide
+    summary), which are not contradictory.
+  - `up` gained `--push` (paired with the existing `--no-push`) and
+    `--local-only`. Explicitness is read via `cmd.getOptionValueSource('push')
+    === 'cli'` (commander ^14 confirmed working exactly as plan risk #1
+    describes — verified interactively before writing any test). `up` now
+    calls `loadSources({ repoOverrides: [repoDir], push: pushExplicit ?
+    flags.push : undefined, localOnly: flags.localOnly || undefined })` in a
+    try/catch *before* importing `@agentic/server/main` or
+    `@agentic/orchestrator` at all, so a `LocalOnlyPushConflictError` exits 1
+    with neither module even loaded (AC4.1's "no server, no engine" — the
+    dynamic `import()`s are textually after the catch block). Also added a
+    defensive exit when `repoDir` isn't a git repository at all (sources[0]
+    undefined) — `resolveUpMode` needs a source's resolved `.localOnly` to
+    read, so `up` needs a source in hand regardless; previously this case
+    surfaced as an uncaught "no run sources" Error from inside `startServer`,
+    now it's a direct, clearer exit 1 before anything starts either way (not
+    a behavior regression, strictly earlier/clearer).
+  - Exported `resolveUpMode(flags, sourceLocalOnly)` exactly as the plan's
+    interface contract: a pure function that does *not* re-derive the
+    push/local-only precedence (that stays solely in `loadSources`/
+    `resolveMode`, core's job) — it only selects which of the five marker
+    strings names the *reason* the already-resolved `sourceLocalOnly`/`push`
+    combination came out the way it did, and computes `enginePush` per the
+    scope's formula (`false` when local-only, else explicit push if given,
+    else `true`). Used to replace the old informal marker at the "engine
+    watching …" line and to feed `enginePush`/`localOnly` to
+    `startOrchestrator` and `push`/`localOnly` (same resolved values) to
+    `startServer`, per ADR-7.
+  - Cross-task coordination note (expected, not a defect): `ServeOptions`
+    and `OrchestratorOptions` don't carry a `localOnly` field in this
+    worktree yet — that's task 04's file-contact surface, dispatched in
+    parallel with this one. `npx tsc -p frontend/tsconfig.json --noEmit`
+    shows exactly two errors, both "object literal may only specify known
+    properties … 'localOnly' does not exist" at the `startServer`/
+    `startOrchestrator` call sites — the two spots this task's scope names
+    explicitly ("OrchestratorOptions/ServeOptions fields land in task 04;
+    coordinate on the names given in the plan's interface contracts"). No
+    other typecheck errors. `npm test` (vitest) is unaffected — vitest
+    transforms via esbuild and does not typecheck, and at runtime an extra
+    object-literal property is simply ignored by a function that doesn't yet
+    destructure it, so `startServer`/`startOrchestrator` behave exactly as
+    they did before this diff until task 04 lands and starts reading the
+    field. This should resolve itself once both branches merge; flagging
+    for the reviewer in case task 04's field names ever drift from the
+    plan's contract.
+  - cli.test.ts: added `agentic sync — local-only short-circuit (R3)` (AC3.1
+    dry-run, AC3.2 `--live`, both against the existing remoteless `fixture`
+    — no `remote add` anywhere in `generateFixtureRepo`, so it already
+    auto-detects local-only per AC1.1); `agentic up — startup conflict
+    (AC4.1)` (spawns `up --local-only --push --no-open` on a scratch port,
+    asserts non-zero exit + the conflict message, then attempts a raw TCP
+    connect to the same port and asserts it's refused, not accepted —
+    "nothing listens"); and `resolveUpMode — the five startup markers` (six
+    unit cases: all five marker literals, plus one showing `--local-only`
+    winning over an auto-detected-pushing source exactly as `--no-push`
+    already does today, AC1.2).
+  - Deviation, required by the wiring itself, not a scope reinterpretation:
+    two pre-existing `arm` tests ("arm moves a staged standard run to phase
+    spec (AC6.1)" and the hand-authored-run test) asserted the *old*
+    `ensureDraftPr` note, `'no remote.origin.url configured — nothing to
+    open a PR against'`, on the shared remoteless `fixture`/`scratch` repos.
+    Now that `resolveSources()` resolves those same remoteless sources to
+    `localOnly: true` (AC1.1's auto-detect, wired through task 01, reaching
+    `armRun` for the first time via this task's own `{ localOnly }` pass-
+    through), `ensureDraftPr`'s `opts?.localOnly` check fires *before* its
+    "no remote" check and both tests now observably print `'local-only mode
+    — draft-PR ensure suppressed'` instead. Updated both assertions
+    in-place (with a comment noting why) rather than leaving them red — this
+    is exactly AC2.2's arm-call-site suppression demonstrating itself
+    through the existing test fixtures, not a fixture bug.
+  - Verified: `npx vitest run packages/cli/test/cli.test.ts` — 38/38
+    passed. Full `npm test` (`npx vitest run`) in `frontend/` — 40 files
+    passed, 1 skipped (live-smoke, expected), 398 tests passed, 1 skipped, 0
+    failed (includes this task's own new tests plus every existing suite
+    task 01/02 already touched — `config.test.ts`, `fetch-sync.test.ts`,
+    `pr-ensure.test.ts`, `sync.test.ts`, `divergence.test.ts` — all still
+    green). `npx tsc -p tsconfig.json --noEmit`: clean except the two
+    expected task-04-boundary errors noted above.

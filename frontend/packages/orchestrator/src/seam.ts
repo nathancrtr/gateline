@@ -33,6 +33,13 @@ export interface DispatchOutcome {
   error: string | null
   /** Retrying cannot help (e.g. a fold conflict = plan defect): escalate now. */
   fatal?: boolean
+  /** Present when the dispatcher harvested the agent's work to a branch the
+   *  engine folds (the remote runner, run "runner-agent" ADR-3/ADR-4). `base`
+   *  is the commit the harvest branch was committed on top of (the dispatch's
+   *  pinned base OID) — what the fold rebases onto the run tip. Null/unset
+   *  for the local headless dispatcher, which leaves working-tree changes for
+   *  the engine's own local checkout to carry directly on the run branch. */
+  harvest?: { branch: string; base: string } | null
 }
 
 export interface Dispatcher {

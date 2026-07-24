@@ -12,7 +12,7 @@ import { observeRun, parseLedger, type RunObservation } from './observe.ts'
 import { promptBody } from './prompts.ts'
 import { resolveModel, type Registry } from './registry.ts'
 import type { Dispatcher, DispatchOutcome } from './seam.ts'
-import { ensureRunCheckout, ensureTaskCheckout, foldTaskBranch, removeRunCheckout, type TaskCheckout } from './workspace.ts'
+import { ensureRunCheckout, ensureTaskCheckout, foldHarvestBranch, foldTaskBranch, removeRunCheckout, type TaskCheckout } from './workspace.ts'
 
 export interface EngineConfig {
   repoDir: string
@@ -468,20 +468,30 @@ export class Engine {
   private launch(ref: RunRef, obs: RunObservation, intent: DispatchIntent, openedAt: string): void {
     const key = jobKey(ref.slug, intent.role, intent.task, intent.round)
     this.jobMeta.set(key, { slug: ref.slug, role: intent.role, task: intent.task, round: intent.round, startedAt: Date.now() })
-    // Implementers get per-task isolation (§5.3): a private branch and
-    // worktree off the run tip, folded back serially on success — parallel
-    // implementers never observe each other's mid-flight state.
-    const isolate = intent.role === 'implementer' && intent.task !== null
+    // A dispatcher with managesOwnWorkspace (the remote runner, run
+    // "runner-agent" ADR-3) creates and harvests its own checkout — the
+    // engine creates no local checkout for it and folds a harvest branch in
+    // place of the local per-task fold. Implementers otherwise get per-task
+    // isolation (§5.3): a private branch and worktree off the run tip,
+    // folded back serially on success — parallel implementers never observe
+    // each other's mid-flight state.
+    const managesOwnWorkspace = this.cfg.dispatcher.managesOwnWorkspace === true
+    const isolate = !managesOwnWorkspace && intent.role === 'implementer' && intent.task !== null
     const job = (async () => {
       let outcome: DispatchOutcome
       try {
-        const checkout = isolate
-          ? await ensureTaskCheckout(this.cfg.repoDir, ref.branch, intent.task!)
-          : { path: await ensureRunCheckout(this.cfg.repoDir, ref.branch), branch: ref.branch }
+        const checkout = managesOwnWorkspace
+          ? null
+          : isolate
+            ? await ensureTaskCheckout(this.cfg.repoDir, ref.branch, intent.task!)
+            : { path: await ensureRunCheckout(this.cfg.repoDir, ref.branch), branch: ref.branch }
         const taskPath = intent.task ? (obs.taskFiles.get(intent.task)?.path ?? null) : null
         const { runs: runsRoot } = await this.source.frameworkRoots()
         outcome = await this.cfg.dispatcher.dispatch({
-          cwd: checkout.path,
+          // managesOwnWorkspace dispatchers never read cwd (they check out
+          // their own workspace on the workstation) — repoDir is a harmless
+          // placeholder to satisfy the required field.
+          cwd: checkout?.path ?? this.cfg.repoDir,
           role: intent.role,
           body: promptBody(ref.slug, intent, taskPath, runsRoot, obs.state?.profile ?? 'full'),
           timeoutMs: this.cfg.roleTimeoutMs ?? DEFAULT_ROLE_TIMEOUT_MS,
@@ -498,6 +508,13 @@ export class Engine {
           // The fold moves the run ref outside writeState; push it explicitly
           // so agent work reaches origin even if the closing commit fails.
           if (fold.ok) await this.pushBranch(ref.branch)
+        } else if (managesOwnWorkspace && outcome.harvest) {
+          const harvest = outcome.harvest
+          const fold = await this.withLock(ref.slug, () => foldHarvestBranch(this.cfg.repoDir, ref.branch, harvest))
+          if (outcome.ok && !fold.ok) {
+            outcome = { ok: false, costUsd: outcome.costUsd, tokensIn: outcome.tokensIn, tokensOut: outcome.tokensOut, error: fold.message, fatal: fold.conflict }
+          }
+          if (fold.ok) await this.pushBranch(ref.branch)
         }
       } catch (e) {
         outcome = { ok: false, costUsd: null, tokensIn: null, tokensOut: null, error: (e as Error).message }
@@ -511,7 +528,9 @@ export class Engine {
         this.jobMeta.delete(key)
         // Last job out releases the run's checkout, so subsequent state
         // writes go through plumbing + CAS instead of the worktree fallback.
-        if (![...this.jobs.keys()].some((k) => k.startsWith(`${ref.slug}|`))) {
+        // Nothing to release for a managesOwnWorkspace dispatcher — it never
+        // had a local checkout to begin with.
+        if (!managesOwnWorkspace && ![...this.jobs.keys()].some((k) => k.startsWith(`${ref.slug}|`))) {
           await removeRunCheckout(this.cfg.repoDir, ref.branch)
         }
         this.onSettled?.()

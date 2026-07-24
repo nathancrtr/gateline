@@ -1,8 +1,10 @@
-import { readFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { HeadlessManifest } from '@agentic/orchestrator'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildCommand,
   computeOutcome,
@@ -17,6 +19,11 @@ import type { Workspace } from '../src/workspace.ts'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const SRC_DIR = join(__dirname, '..', 'src')
 const sourceOf = (file: string) => readFileSync(join(SRC_DIR, file), 'utf8')
+
+const cleanups: string[] = []
+afterEach(() => {
+  for (const dir of cleanups.splice(0)) rmSync(dir, { recursive: true, force: true })
+})
 
 const shManifest = (script: string, opts: Partial<HeadlessManifest['usage']> = {}): HeadlessManifest => ({
   adapter: 'toy-sh',
@@ -166,9 +173,17 @@ describe('executeIntent (workspace + manifest + spawn + outcome, end to end)', (
         const { runCommand } = await import('../src/agent.ts')
         return runCommand(cmd, args, cwd, timeoutMs)
       },
+      // The harvest-then-dispose step (ADR-3) is exercised by its own
+      // describe block below with real git repos; here it's a no-op so this
+      // test stays scoped to AC3.2's outcome-shape claim.
+      harvestAndPushImpl: async (ws, branch, _pathspecs, _identity, slug, role) => {
+        expect(slug).toBe(INTENT.slug)
+        expect(role).toBe(INTENT.role)
+        return { pushed: false, branch, base: 'irrelevant' }
+      },
     })
     expect(outcome).toEqual({ ok: true, costUsd: 1, tokensIn: 2, tokensOut: 3, error: null })
-    expect(removed.count).toBe(1) // the workspace is always torn down
+    expect(removed.count).toBe(1) // torn down once nothing needed harvesting
   })
 
   it('removes the workspace even when the command fails', async () => {
@@ -234,8 +249,95 @@ describe('executeIntent (workspace + manifest + spawn + outcome, end to end)', (
         const { runCommand } = await import('../src/agent.ts')
         return runCommand(cmd, args, cwd, timeoutMs)
       },
+      harvestAndPushImpl: async (ws, branch) => ({ pushed: false, branch, base: 'irrelevant' }),
     })
     expect(outcome.ok).toBe(true)
+  })
+})
+
+describe('executeIntent — harvest-then-dispose (run "runner-agent" ADR-3, review-04.md F1)', () => {
+  const GIT_ENV = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' }
+  const git = (dir: string, args: string[]) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', env: GIT_ENV }).trim()
+
+  /** A real throwaway "origin" repo with a run branch — clones and pushes
+   *  against it exercise the actual git plumbing, not a mock. */
+  function makeOrigin(branch: string): string {
+    const dir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-origin-'))
+    cleanups.push(dir)
+    git(dir, ['init', '-q', '-b', branch])
+    git(dir, ['config', 'user.name', 'Toy'])
+    git(dir, ['config', 'user.email', 'toy@example.com'])
+    writeFileSync(join(dir, 'README.md'), 'toy')
+    git(dir, ['add', '.'])
+    git(dir, ['commit', '-q', '-m', 'seed'])
+    return dir
+  }
+
+  it('a successful dispatch that produced changes harvests them to a branch and pushes it, only then removing the workspace', async () => {
+    const origin = makeOrigin('run/toy')
+    const workDir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-work-'))
+    cleanups.push(workDir)
+    const outcome = await executeIntent({
+      intent: INTENT,
+      repoUrl: origin,
+      adapter: 'toy-sh',
+      workDir,
+      manifestLoaderImpl: async () =>
+        shManifest('mkdir -p runs/toy && echo hi > runs/toy/spec.md; echo \'{"cost":1,"in":2,"out":3}\''),
+    })
+    expect(outcome.ok).toBe(true)
+    expect(outcome.harvest?.branch).toMatch(/^run\/toy--harvest\/implementer-01-core-r1-\d+$/)
+
+    // The pushed branch exists on origin and carries the harvested file —
+    // the run branch itself is untouched (the control plane, not the
+    // worker, is the one that ever writes it).
+    const branches = git(origin, ['branch', '--list', '--format=%(refname:short)'])
+    expect(branches.split('\n')).toContain(outcome.harvest!.branch)
+    const content = git(origin, ['show', `${outcome.harvest!.branch}:runs/toy/spec.md`])
+    expect(content).toBe('hi')
+    expect(() => git(origin, ['show', 'run/toy:runs/toy/spec.md'])).toThrow()
+  })
+
+  it('a successful dispatch that produced no changes reports ok with no harvest field', async () => {
+    const origin = makeOrigin('run/toy')
+    const workDir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-work-'))
+    cleanups.push(workDir)
+    const outcome = await executeIntent({
+      intent: INTENT,
+      repoUrl: origin,
+      adapter: 'toy-sh',
+      workDir,
+      manifestLoaderImpl: async () => shManifest('echo \'{"cost":1,"in":2,"out":3}\''),
+    })
+    expect(outcome).toEqual({ ok: true, costUsd: 1, tokensIn: 2, tokensOut: 3, error: null })
+    expect(git(origin, ['branch', '--list'])).toBe('* run/toy') // no harvest branch created
+  })
+
+  it('a rejected harvest push keeps the workspace and reports failure instead of discarding the work', async () => {
+    const origin = makeOrigin('run/toy')
+    const workDir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-work-'))
+    cleanups.push(workDir)
+    let workspacePath = ''
+    const outcome = await executeIntent({
+      intent: INTENT,
+      repoUrl: origin,
+      adapter: 'toy-sh',
+      workDir,
+      manifestLoaderImpl: async () =>
+        shManifest('mkdir -p runs/toy && echo hi > runs/toy/spec.md; echo \'{"cost":1,"in":2,"out":3}\''),
+      harvestAndPushImpl: async (ws) => {
+        workspacePath = ws.path
+        throw new Error('remote rejected the push (simulated)')
+      },
+    })
+    expect(outcome.ok).toBe(false)
+    expect(outcome.error).toContain('harvest push failed')
+    expect(outcome.error).toContain('remote rejected the push')
+    // The paid usage figures survive into the failure outcome — the caller
+    // (the ledger) never loses cost visibility on a harvest-push failure.
+    expect(outcome.costUsd).toBe(1)
+    expect(existsSync(workspacePath)).toBe(true) // retained, not removed (ADR-3)
+    rmSync(workspacePath, { recursive: true, force: true })
   })
 })
 
@@ -307,6 +409,7 @@ describe('runAgent (poll → claim → execute → report lifecycle, against a m
       fetchImpl,
       createWorkspaceImpl: async () => ({ path: '/tmp', remove: async () => void removed.count++ }),
       manifestLoaderImpl: async () => shManifest('echo \'{"cost":1,"in":2,"out":3}\''),
+      harvestAndPushImpl: async (ws, branch) => ({ pushed: false, branch, base: 'irrelevant' }),
       log: () => {},
     })
 
@@ -413,22 +516,40 @@ describe('R3 — outbound connections only (AC3.1)', () => {
 })
 
 describe('R5 — the control plane remains the sole writer (AC5.1)', () => {
-  it('a grep of the agent source shows no call that writes to a run branch, state.yaml, or gates.*', () => {
-    for (const file of ['agent.ts', 'main.ts', 'workspace.ts']) {
+  it('a grep of the agent/main source shows no call that writes to a run branch, state.yaml, or gates.* (agent.ts and main.ts never touch git directly at all)', () => {
+    for (const file of ['agent.ts', 'main.ts']) {
       const src = sourceOf(file)
-      // No git subcommand this file ever passes to execFile/spawn mutates
-      // the source repo's history or refs (clone + checkout are read-only
-      // from origin's perspective) — in particular, never push or commit.
       expect(src).not.toMatch(/['"`]push['"`]/)
       expect(src).not.toMatch(/['"`]commit['"`]/)
-      // No write call targets state.yaml or gates.* (documentation prose
-      // mentioning those filenames, e.g. this file's own header comment
-      // explaining R5, is not a write call).
       expect(src).not.toMatch(/write\w*\([^)]*state\.yaml/is)
       expect(src).not.toMatch(/write\w*\([^)]*gates\./is)
       expect(src).not.toMatch(/updateRefCAS/)
       expect(src).not.toMatch(/writeState/)
     }
+  })
+
+  it('workspace.ts never writes state.yaml or gates.*, and its only push target is a harvest branch — never the run branch itself (ADR-3 restated: R5 forbids run-branch/state/gates writes, not the harvest-branch push plan.md ADR-3 explicitly grants)', () => {
+    const src = sourceOf('workspace.ts')
+    expect(src).not.toMatch(/write\w*\([^)]*state\.yaml/is)
+    expect(src).not.toMatch(/write\w*\([^)]*gates\./is)
+    expect(src).not.toMatch(/updateRefCAS/)
+    expect(src).not.toMatch(/writeState/)
+    // The one `git push` call in this file targets `refs/heads/${branch}`,
+    // where `branch` is a parameter this file never constructs itself
+    // (agent.ts's own R5-adjacent test below pins that agent.ts only ever
+    // hands it a `--harvest/`-suffixed name) — workspace.ts has no branch
+    // name of its own to push, only whatever its caller supplies.
+    const pushCalls = src.match(/git',\s*\[[^\]]*'push'[^\]]*\]/gs) ?? []
+    expect(pushCalls.length).toBeGreaterThan(0) // the harvest push exists
+    for (const call of pushCalls) expect(call).toMatch(/refs\/heads\/\$\{branch\}/)
+  })
+
+  it('agent.ts only ever hands workspace.ts a harvest branch name, never the run branch itself', () => {
+    const src = sourceOf('agent.ts')
+    // The branch name constructed for harvestAndPush is the intent's run
+    // branch plus a `--harvest/` suffix — never the run branch passed
+    // through bare.
+    expect(src).toMatch(/\$\{opts\.intent\.branch\}--harvest\//)
   })
 })
 

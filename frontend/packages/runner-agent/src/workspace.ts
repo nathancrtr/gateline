@@ -52,3 +52,52 @@ export async function createWorkspace(opts: CreateWorkspaceOptions): Promise<Wor
     remove: () => rm(path, { recursive: true, force: true }),
   }
 }
+
+export interface HarvestResult {
+  /** True when a harvest commit was made and its branch pushed to origin.
+   *  False when the pathspecs matched no changes — nothing to harvest,
+   *  nothing to fold, not a failure. */
+  pushed: boolean
+  branch: string
+  /** The commit the harvest branch is based on (the workspace's HEAD before
+   *  the harvest commit) — the control plane's fold rebases onto this. */
+  base: string
+}
+
+/**
+ * Harvest-then-dispose (run "runner-agent" ADR-3): commits the role's own
+ * pathspecs to `branch` (off the workspace's current HEAD) and pushes it to
+ * origin — never the run branch itself, which stays the control plane's
+ * alone to write. A push failure throws: the caller is expected to keep the
+ * workspace rather than dispose of completed, paid work it could not
+ * deliver (ADR-3's ordering — disposal is gated on the push landing, never
+ * on the harness returning).
+ */
+export async function harvestAndPush(
+  ws: Workspace,
+  branch: string,
+  pathspecs: string[],
+  identity: { name: string; email: string },
+  slug: string,
+  role: string,
+): Promise<HarvestResult> {
+  const base = (await execFileAsync('git', ['-C', ws.path, 'rev-parse', 'HEAD'])).stdout.trim()
+  await execFileAsync('git', ['-C', ws.path, 'add', '-A', '--', ...pathspecs])
+  const staged = (await execFileAsync('git', ['-C', ws.path, 'diff', '--cached', '--name-only'])).stdout.trim()
+  if (!staged) return { pushed: false, branch, base }
+  await execFileAsync('git', [
+    '-C',
+    ws.path,
+    '-c',
+    `user.name=${identity.name}`,
+    '-c',
+    `user.email=${identity.email}`,
+    'commit',
+    '-q',
+    '-m',
+    `state(${slug}): harvested ${role} artifacts`,
+  ])
+  const head = (await execFileAsync('git', ['-C', ws.path, 'rev-parse', 'HEAD'])).stdout.trim()
+  await execFileAsync('git', ['-C', ws.path, 'push', 'origin', `${head}:refs/heads/${branch}`])
+  return { pushed: true, branch, base }
+}

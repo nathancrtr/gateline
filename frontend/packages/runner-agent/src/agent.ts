@@ -19,15 +19,18 @@
 // shape to one `HeadlessDispatcher` would have produced locally (AC3.2).
 import { spawn } from 'node:child_process'
 import {
+  BOT_IDENTITY,
   dig,
+  harvestPathspecs,
   loadHeadlessManifest,
   matchesLineFilter,
   parseJsonOutput,
   parseNdjson,
+  resolveFrameworkRootsFromDisk,
   sumField,
   type HeadlessManifest,
 } from '@agentic/orchestrator'
-import { createWorkspace, type CreateWorkspaceOptions, type Workspace } from './workspace.ts'
+import { createWorkspace, harvestAndPush, type CreateWorkspaceOptions, type HarvestResult, type Workspace } from './workspace.ts'
 
 /** Mirrors runner-api.ts's `PendingIntent` (server side of this relay). */
 export interface PendingIntent {
@@ -50,6 +53,9 @@ export interface DispatchOutcome {
   tokensOut: number | null
   error: string | null
   fatal?: boolean
+  /** Present when this dispatch harvested its work to a branch for the
+   *  control plane to fold (ADR-3/ADR-4). */
+  harvest?: { branch: string; base: string } | null
 }
 
 type FetchImpl = typeof fetch
@@ -257,17 +263,29 @@ export interface ExecuteIntentOptions {
   createWorkspaceImpl?: (opts: CreateWorkspaceOptions) => Promise<Workspace>
   runCommandImpl?: (cmd: string, args: string[], cwd: string, timeoutMs: number) => Promise<RunResult>
   manifestLoaderImpl?: (repoDir: string, adapter: string, prefixHint?: string) => Promise<HeadlessManifest>
+  harvestAndPushImpl?: typeof harvestAndPush
+  resolveFrameworkRootsImpl?: typeof resolveFrameworkRootsFromDisk
 }
 
 /** One full dispatch: clone → read the manifest from the clone (so the
  *  clone's own adapter config governs, not the workstation's) → spawn its
- *  command → parse the outcome → remove the workspace unconditionally
- *  (AC4.1/AC4.2), whether the dispatch succeeded, failed, or the manifest
- *  itself could not be read. */
+ *  command → parse the outcome → harvest-then-dispose (ADR-3).
+ *
+ *  A command failure, a timeout, or a manifest that could not be read
+ *  produced nothing to harvest — the workspace is removed immediately
+ *  (AC4.1/AC4.2). A successful command harvests the role's own pathspecs
+ *  (harvestPathspecs) to a branch and pushes it to origin; disposal is
+ *  gated on that push landing, never on the harness returning — a failed
+ *  push keeps the workspace and reports failure instead, so the control
+ *  plane retries rather than silently losing paid, completed work (the
+ *  defect review-04.md F1 named: unconditional removal deletes the agent's
+ *  produced files before the control plane can ever see them). */
 export async function executeIntent(opts: ExecuteIntentOptions): Promise<DispatchOutcome> {
   const create = opts.createWorkspaceImpl ?? createWorkspace
   const run = opts.runCommandImpl ?? runCommand
   const loadManifest = opts.manifestLoaderImpl ?? loadHeadlessManifest
+  const harvest = opts.harvestAndPushImpl ?? harvestAndPush
+  const resolveRoots = opts.resolveFrameworkRootsImpl ?? resolveFrameworkRootsFromDisk
 
   const ws = await create({
     workDir: opts.workDir,
@@ -276,18 +294,44 @@ export async function executeIntent(opts: ExecuteIntentOptions): Promise<Dispatc
     repoUrl: opts.repoUrl,
     baseOid: opts.intent.baseOid,
   })
+
+  let outcome: DispatchOutcome
   try {
     const manifest = await loadManifest(ws.path, opts.adapter, opts.prefixHint)
     const argv = buildCommand(manifest, opts.intent.role, opts.intent.body)
     const [cmd, ...args] = argv
-    if (!cmd) return { ok: false, costUsd: null, tokensIn: null, tokensOut: null, error: 'adapter manifest command is empty', fatal: true }
-    const result = await run(cmd, args, ws.path, opts.intent.timeoutMs)
-    return computeOutcome(manifest, result, opts.intent.timeoutMs)
+    if (!cmd) {
+      outcome = { ok: false, costUsd: null, tokensIn: null, tokensOut: null, error: 'adapter manifest command is empty', fatal: true }
+    } else {
+      const result = await run(cmd, args, ws.path, opts.intent.timeoutMs)
+      outcome = computeOutcome(manifest, result, opts.intent.timeoutMs)
+    }
   } catch (e) {
-    return { ok: false, costUsd: null, tokensIn: null, tokensOut: null, error: (e as Error).message }
-  } finally {
-    await ws.remove()
+    outcome = { ok: false, costUsd: null, tokensIn: null, tokensOut: null, error: (e as Error).message }
   }
+
+  if (!outcome.ok) {
+    await ws.remove()
+    return outcome
+  }
+
+  let harvestResult: HarvestResult
+  try {
+    const { runs: runsRoot } = await resolveRoots(ws.path, opts.prefixHint)
+    const pathspecs = harvestPathspecs(runsRoot, opts.intent.slug, opts.intent.role, opts.intent.task)
+    const dispatchId = `${opts.intent.role}${opts.intent.task ? `-${opts.intent.task}` : ''}${opts.intent.round ? `-r${opts.intent.round}` : ''}-${Date.now()}`
+    const branch = `${opts.intent.branch}--harvest/${dispatchId}`
+    harvestResult = await harvest(ws, branch, pathspecs, BOT_IDENTITY, opts.intent.slug, opts.intent.role)
+  } catch (e) {
+    // Retain the workspace: the harvest commit (if it made it that far) is
+    // still on disk even though the push failed, and disposing of it now
+    // would repeat exactly the defect this ordering exists to prevent.
+    return { ok: false, costUsd: outcome.costUsd, tokensIn: outcome.tokensIn, tokensOut: outcome.tokensOut, error: `harvest push failed: ${(e as Error).message}` }
+  }
+
+  await ws.remove()
+  if (!harvestResult.pushed) return outcome // nothing to harvest — not a failure
+  return { ...outcome, harvest: { branch: harvestResult.branch, base: harvestResult.base } }
 }
 
 export interface AgentOptions {
@@ -310,6 +354,8 @@ export interface AgentOptions {
   createWorkspaceImpl?: ExecuteIntentOptions['createWorkspaceImpl']
   runCommandImpl?: ExecuteIntentOptions['runCommandImpl']
   manifestLoaderImpl?: ExecuteIntentOptions['manifestLoaderImpl']
+  harvestAndPushImpl?: ExecuteIntentOptions['harvestAndPushImpl']
+  resolveFrameworkRootsImpl?: ExecuteIntentOptions['resolveFrameworkRootsImpl']
   /** Stop after this many poll cycles instead of running forever (tests only). */
   maxCycles?: number
   /** Poll-interval sleep, overridable so tests need no real timers. */
@@ -349,6 +395,8 @@ export async function runAgent(opts: AgentOptions): Promise<void> {
           createWorkspaceImpl: opts.createWorkspaceImpl,
           runCommandImpl: opts.runCommandImpl,
           manifestLoaderImpl: opts.manifestLoaderImpl,
+          harvestAndPushImpl: opts.harvestAndPushImpl,
+          resolveFrameworkRootsImpl: opts.resolveFrameworkRootsImpl,
         })
         const resolved = await client.report(intent.key, outcome)
         log(`runner-agent: reported ${intent.key} ok=${outcome.ok} resolved=${resolved}`)

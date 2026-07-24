@@ -18,7 +18,25 @@
      declared surface — a decomposition defect. ADR-7 supersedes the FIFO
      linking approach and widens task 02's surface to the seam files task 01
      owned. Recorded by the G1 human per the escalation's resolution; every
-     other section stands. -->
+     other section stands.
+     AMENDMENT (review-04.md F1, 2026-07-24): task 04's round 1 implemented
+     the workstation agent's clone/spawn/parse loop faithfully, but its
+     unconditional `finally { await ws.remove() }` deletes the agent's
+     produced files before the control plane can ever see them — the exact
+     defect ADR-3 exists to prevent. The fix (harvest-then-dispose per the
+     Interface contracts' `harvestPathspecs`/`foldHarvestBranch`/`launch()`
+     branching, all already specified above) spans `seam.ts` (the `harvest`
+     field on `DispatchOutcome`, not yet added despite the interface contract
+     naming it), `harvest.ts` (new — `harvestPathspecs` had no existing
+     private consumer to extract, contrary to this plan's Interface contracts
+     section; written fresh), `workspace.ts` (`foldHarvestBranch`),
+     `engine.ts` (`launch()`'s `managesOwnWorkspace` branch), and
+     `runner-api.ts` (the outcome mirror's `harvest` field) — none of which
+     task 04 or 05 declared. ADR-8 widens task 04's surface to cover them, the
+     same widening pattern ADR-7 used for task 02. Recorded by the G1 human
+     (direct implementation, this escalation) per review-04.md F1's own
+     resolution guidance ("a decomposition defect for the Architect/G1 human,
+     not an implementer round"); every other section stands. -->
 
 ## Approach
 The runner is a remote dispatcher whose harness runs on a workstation and whose work product must reach the control plane before it can be committed. It reuses the existing dispatch seam and harvest discipline rather than inventing a remote protocol. The one redesign this redo forces is the workspace lifecycle.

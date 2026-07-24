@@ -44,6 +44,18 @@ file_contact_surface:
   - frontend/packages/runner-agent/package.json
   - frontend/packages/runner-agent/test/agent.test.ts
   - frontend/packages/runner-agent/test/workspace.test.ts
+  # Widened round 2 (plan.md ADR-8, review-04.md F1) — the harvest-then-dispose
+  # fix spans the seam and the engine's fold path, matching how ADR-7 widened
+  # task 02 to seam.ts/engine.ts:
+  - frontend/packages/orchestrator/src/seam.ts
+  - frontend/packages/orchestrator/src/harvest.ts
+  - frontend/packages/orchestrator/src/index.ts
+  - frontend/packages/orchestrator/src/manifest.ts
+  - frontend/packages/orchestrator/src/workspace.ts
+  - frontend/packages/orchestrator/src/engine.ts
+  - frontend/packages/orchestrator/test/harvest.test.ts
+  - frontend/packages/orchestrator/test/harvest-fold.test.ts
+  - frontend/packages/server/src/runner-api.ts
 
 acceptance_tests:
   - AC3.1
@@ -142,3 +154,77 @@ notes: |
   dependency — unavoidable for a genuinely new package with its own `dependencies`, and not
   hand-edited). No other file touched — task 05's surface (`start.ts`, `runner-dispatcher.ts`,
   `server/src/main.ts`, `wiring.test.ts`) was not touched.
+
+  Round 2 (review-04.md F1, plan.md ADR-8): implemented harvest-then-dispose exactly
+  as the plan's Interface contracts already specified, none of which round 1's
+  declared surface covered:
+
+  - `seam.ts`: `DispatchOutcome` gains the `harvest?: {branch, base} | null` field
+    the Interface contracts section named but round 1 never added.
+  - `harvest.ts` (new): `harvestPathspecs(runsRoot, slug, role, task)` — role→pathspec
+    mapping (analyst→spec.md, architect→plan.md+tasks/, reviewer→review-*.md,
+    ops→release-plan.md; implementer/verifier/historian/anything else→`.`, since
+    their surfaces are task-specific or span arbitrary files and are policed by
+    review, not git — see review-04.md F7's own precedent of a G2-ratified
+    out-of-surface edit rather than a silent drop). The plan's text claimed this
+    mapping already existed privately in `engine.ts` with one consumer to extract;
+    that consumer does not exist (local dispatch commits directly in the shared
+    checkout via the harness's own role-prompt instruction, unrestricted) — written
+    fresh instead, flagged here as a correction to the plan's stated premise.
+  - `workspace.ts` (orchestrator): `foldHarvestBranch` — fetches the worker-pushed
+    branch, rebases it (`--onto <runTip> <harvest.base>`, more explicit than
+    `foldTaskBranch`'s single-arg form since the harvest branch's real parent is
+    known exactly rather than inferred via merge-base) onto the run tip, CASes the
+    ref, deletes both the local and origin harvest-branch refs. Conflict path
+    mirrors `foldTaskBranch`'s exactly (escalates as a plan defect).
+  - `engine.ts`: `launch()` now branches on `dispatcher.managesOwnWorkspace` —
+    skips `ensureRunCheckout`/`ensureTaskCheckout` entirely (the worker owns its
+    own checkout; `cwd` gets a harmless `repoDir` placeholder `RemoteDispatcher`
+    never reads), and on `outcome.harvest` calls `foldHarvestBranch` + `pushBranch`
+    in place of the local per-task fold — regardless of whether the dispatched role
+    was an isolated implementer round or not, since a remote dispatch always
+    produces a harvest branch rather than writing a shared local checkout.
+  - `runner-api.ts` (server): the `DispatchOutcome` mirror gains the same `harvest`
+    field, passed through verbatim (this route never inspects it).
+  - `runner-agent/src/workspace.ts`: new `harvestAndPush(ws, branch, pathspecs,
+    identity, slug, role)` — commits the role's own pathspecs to `branch` (off the
+    workspace's current HEAD) with the bot identity, message
+    `state(<slug>): harvested <role> artifacts` (plan.md's exact wording), pushes
+    to origin. Returns `pushed: false` (not an error) when the pathspecs matched no
+    changes. Throws on a rejected push — the caller is responsible for retaining
+    the workspace rather than disposing of paid, undelivered work.
+  - `runner-agent/src/agent.ts`: `executeIntent` restructured so a command
+    failure/timeout/manifest-load failure removes the workspace immediately
+    (nothing to harvest, matches AC4.1's existing "manifest cannot be loaded" case
+    unchanged), while a successful command harvests via `harvestPathspecs` +
+    `harvestAndPush` before disposal — a harvest-push failure returns `ok: false`
+    (with the harness's own `costUsd`/tokens preserved) and *retains* the
+    workspace, exactly inverting round 1's unconditional-removal defect. The
+    branch name is `${intent.branch}--harvest/<role>[-<task>][-r<round>]-<ts>`.
+
+  Tests: `orchestrator/test/harvest.test.ts` (8, `harvestPathspecs`'s role mapping),
+  `orchestrator/test/harvest-fold.test.ts` (3 — `foldHarvestBranch`'s fold+CAS+
+  cleanup and its conflict path against real throwaway git repos with a real bare
+  origin, plus an `engine.ts` `launch()` integration test proving the local
+  checkout is skipped and the harvest branch reaches both the run branch and
+  origin), 3 new `executeIntent` tests in `runner-agent/test/agent.test.ts`
+  against real git repos (harvest-and-push happy path; no-changes path; rejected-
+  push retains the workspace), plus the 3 pre-existing "removes the workspace"
+  tests updated to inject a no-op harvest (they test AC3.2/argv-threading, not the
+  harvest mechanism) and the R5 grep test split so `agent.ts`/`main.ts` still
+  forbid `push`/`commit` entirely while `workspace.ts`'s one legitimate push is
+  verified to target only a `--harvest/`-suffixed branch, never the run branch.
+
+  Verified: `npm run typecheck` (frontend/) clean. Full `npm test` (frontend/,
+  all packages) — 259 passed, 1 skipped (pre-existing live-smoke opt-in), 0
+  failures, including the full pre-existing orchestrator suite (engine.ts's M2
+  autonomous-loop tests, hardening/crash-recovery, per-task worktree isolation,
+  the three shadow replays, hosted budget-enforcement, wiring.test.ts's
+  RemoteDispatcher-through-the-real-runner-API tests) passing unmodified —
+  `launch()`'s local-checkout path for `HeadlessDispatcher` is untouched by the
+  `managesOwnWorkspace` branch.
+
+  Boundary: stayed inside the widened surface above. Did not touch task 05's
+  surface (`start.ts`, `runner-dispatcher.ts`, `server/src/main.ts`,
+  `wiring.test.ts`) or `app.ts` (already passes `body.outcome` through generically
+  — no route-layer change needed for the new field).

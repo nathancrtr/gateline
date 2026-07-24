@@ -53,6 +53,10 @@ export interface DispatchOutcome {
   tokensOut: number | null
   error: string | null
   fatal?: boolean
+  /** Present when the worker harvested its work to a branch for the control
+   *  plane to fold (run "runner-agent" ADR-3/ADR-4). Passed through verbatim
+   *  — this route never inspects it, only relays it to the callback. */
+  harvest?: { branch: string; base: string } | null
 }
 
 /**

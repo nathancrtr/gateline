@@ -19,6 +19,10 @@ scope: |
 file_contact_surface:
   - frontend/packages/orchestrator/src/runner-dispatcher.ts
   - frontend/packages/orchestrator/test/runner-dispatcher.test.ts
+  # Widened per ADR-7 (escalation #3, 2026-07-23) — the same files task 01 owned:
+  - frontend/packages/orchestrator/src/seam.ts
+  - frontend/packages/orchestrator/src/engine.ts
+  - frontend/packages/orchestrator/test/seam.test.ts
 
 acceptance_tests:
   - AC1.1

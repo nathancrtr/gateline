@@ -12,7 +12,13 @@
      REQUIREMENT SOURCING: the G0 spec was not present in this working tree, so
      R1–R6 below are reconstructed from the design of record (docs/TOPOLOGY.md
      §3.3) plus the decline. The G1 human should reconcile these numbers
-     against the actual approved spec. -->
+     against the actual approved spec.
+     AMENDMENT (escalation #3, 2026-07-23): review-02.md F1 found task 02's
+     required correlation key (`slug|role|task|round`) unimplementable in its
+     declared surface — a decomposition defect. ADR-7 supersedes the FIFO
+     linking approach and widens task 02's surface to the seam files task 01
+     owned. Recorded by the G1 human per the escalation's resolution; every
+     other section stands. -->
 
 ## Approach
 The runner is a remote dispatcher whose harness runs on a workstation and whose work product must reach the control plane before it can be committed. It reuses the existing dispatch seam and harvest discipline rather than inventing a remote protocol. The one redesign this redo forces is the workspace lifecycle.
@@ -157,6 +163,11 @@ checkout hazard that motivated per-task worktrees does not arise.
 - **Choice:** The worker is a Node process on a workstation under an operator subscription, polling a control plane that ships as one supervised unit with the engine. It is verified by unit tests (the harvest-then-dispose ordering, the fold's compare-and-swap, disposal-gated-on-push, conflict-as-plan-defect) and by a shadow replay of a finished run — never by a live poll against this repository.
 - **Rejected:** Live integration against this repo — the AGENTS.md invariant forbids running a live orchestrator poll here, because it dispatches real, metered agents onto live branches.
 - **Consequences:** The transport and fold are stubbed in tests. The only end-to-end evidence is a shadow replay. The worker's toolchain is Node ≥ 24 running the TypeScript sources directly, matching the engine.
+
+### ADR-7 (amendment — escalation #3, 2026-07-23): Dispatch correlation is keyed at dispatch time — `DispatchRequest` carries optional `task` and `round` (R1, R5)
+- **Choice:** Extend `DispatchRequest` with optional `task` and `round`, threaded through the engine's `launch()` exactly as task 01 threaded `slug`/`branch`. The relay dispatcher keys its pending map and `pendingIntents()` directly from the request at dispatch time and retires its FIFO `slug|role` linking layer. While the seam is open, the relay also declares the `managesOwnWorkspace` marker from the Interface contracts so the engine's remote-path branching has its hook (review-02.md F2), and task 03's intents response carries the base OID of the armed commit (ADR-2's pin), augmented server-side where the repo lives (review-02.md F3).
+- **Rejected:** Pinning the engine's dispatch-call order and the server's projection order as contracts so FIFO linking stays sound — two orderings no test can economically hold, and review-02.md F1 shows the cross-wiring failure under parallel same-role dispatches.
+- **Consequences:** Task 02's file-contact surface widens to include `seam.ts`, `engine.ts`, and `test/seam.test.ts` — the same files task 01 owned. No pending task's surface overlaps the widened set, and task 05 (which shares `runner-dispatcher.ts`) is already serialized behind 02 via `depends_on`. Correctness under parallel same-role dispatches no longer rests on unpinned ordering. Widened under the G1 human's authority (docs/WALKTHROUGH.md) per escalation #3's resolution.
 
 ## Requirement → task mapping
 

@@ -27,6 +27,10 @@ scope: |
 
   The test stubs `RunnerCallback` — no real dispatcher or engine required.
 
+  Per ADR-7 (escalation #3): the intents response augments each pending intent with the
+  base OID of the armed commit — the server has the repo; the workstation cannot pin its
+  checkout from the intent alone (review-02.md F3, ADR-2).
+
 file_contact_surface:
   - frontend/packages/server/src/runner-api.ts
   - frontend/packages/server/src/app.ts

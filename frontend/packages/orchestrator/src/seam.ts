@@ -15,6 +15,13 @@ export interface DispatchRequest {
   /** Run identity (optional): the engine always sets these; HeadlessDispatcher ignores them. */
   slug?: string
   branch?: string
+  /** Task/round identity (optional, task-scoped roles only): the engine always sets these
+   *  from the dispatch intent (null for non-task-scoped roles); HeadlessDispatcher ignores
+   *  them. RemoteDispatcher (runner-dispatcher.ts) keys its pending map directly from these
+   *  fields, so a parallel same-role dispatch (e.g. two implementers on distinct tasks)
+   *  correlates on the request itself rather than on dispatch or poll order (ADR-7). */
+  task?: string | null
+  round?: number | null
 }
 
 export interface DispatchOutcome {
@@ -30,6 +37,11 @@ export interface DispatchOutcome {
 
 export interface Dispatcher {
   readonly adapter: string
+  /** True when this dispatcher creates its own workspace and harvests its own work (the
+   *  remote runner). The engine then creates no local checkout and, on a harvest handoff,
+   *  folds the harvested branch instead of running its own local harvest(). Unset for
+   *  HeadlessDispatcher (local checkout, local harvest). */
+  readonly managesOwnWorkspace?: boolean
   /** The adapter that would run this role (routing dispatchers differ per role). */
   adapterFor?(role: string): string
   dispatch(req: DispatchRequest): Promise<DispatchOutcome>

@@ -85,10 +85,10 @@ describe('RemoteDispatcher — success path', () => {
     expect(intents).toHaveLength(0)
   })
 
-  it('correlates parallel same-role dispatches (distinct tasks) to distinct ledger entries in issue order', async () => {
+  it('correlates parallel same-role dispatches (distinct tasks) to distinct ledger entries', async () => {
     const dispatcher = new RemoteDispatcher()
-    const first = dispatcher.dispatch(req({ role: 'implementer', body: 'task one' }))
-    const second = dispatcher.dispatch(req({ role: 'implementer', body: 'task two' }))
+    const first = dispatcher.dispatch(req({ role: 'implementer', task: '01-a', body: 'task one' }))
+    const second = dispatcher.dispatch(req({ role: 'implementer', task: '02-b', body: 'task two' }))
 
     const openEntries: OpenLedgerEntry[] = [
       { slug: 'toy', role: 'implementer', task: '01-a', round: null },
@@ -103,6 +103,53 @@ describe('RemoteDispatcher — success path', () => {
     dispatcher.resolveOutcome(intents[1]!.key, FAIL)
     await expect(first).resolves.toEqual(OK)
     await expect(second).resolves.toEqual(FAIL)
+  })
+
+  it('correlates parallel same-role dispatches correctly regardless of dispatch or poll order (ADR-7, review-02.md F1)', async () => {
+    // The scenario review-02.md F1 named: two implementer checkouts race, so the order
+    // dispatch() happens to be called in (here: 02-b before 01-a) does not match the
+    // order the ledger later projects (01-a before 02-b). A dispatch-time key (task/round
+    // on the request itself) must correlate correctly anyway — no FIFO grouping to fool.
+    const dispatcher = new RemoteDispatcher()
+    const second = dispatcher.dispatch(req({ role: 'implementer', task: '02-b', body: 'task two' }))
+    const first = dispatcher.dispatch(req({ role: 'implementer', task: '01-a', body: 'task one' }))
+
+    const openEntries: OpenLedgerEntry[] = [
+      { slug: 'toy', role: 'implementer', task: '01-a', round: null },
+      { slug: 'toy', role: 'implementer', task: '02-b', round: null },
+    ]
+    const intents = dispatcher.pendingIntents(openEntries)
+    expect(intents).toHaveLength(2)
+    const byTask = new Map(intents.map((i) => [i.task, i]))
+    expect(byTask.get('01-a')).toMatchObject({ body: 'task one' })
+    expect(byTask.get('02-b')).toMatchObject({ body: 'task two' })
+
+    // Resolve in yet another order — still keyed correctly, never FIFO-linked.
+    dispatcher.resolveOutcome(byTask.get('02-b')!.key, FAIL)
+    dispatcher.resolveOutcome(byTask.get('01-a')!.key, OK)
+    await expect(first).resolves.toEqual(OK)
+    await expect(second).resolves.toEqual(FAIL)
+  })
+
+  it('distinguishes rounds of the same task by the round field (ADR-7)', async () => {
+    const dispatcher = new RemoteDispatcher()
+    const round1 = dispatcher.dispatch(req({ role: 'reviewer', task: '01-a', round: 1, body: 'review round 1' }))
+    const round2 = dispatcher.dispatch(req({ role: 'reviewer', task: '01-a', round: 2, body: 'review round 2' }))
+
+    const openEntries: OpenLedgerEntry[] = [
+      { slug: 'toy', role: 'reviewer', task: '01-a', round: 2 },
+      { slug: 'toy', role: 'reviewer', task: '01-a', round: 1 },
+    ]
+    const intents = dispatcher.pendingIntents(openEntries)
+    expect(intents).toHaveLength(2)
+    const byRound = new Map(intents.map((i) => [i.round, i]))
+    expect(byRound.get(1)).toMatchObject({ body: 'review round 1' })
+    expect(byRound.get(2)).toMatchObject({ body: 'review round 2' })
+
+    dispatcher.resolveOutcome(byRound.get(1)!.key, OK)
+    dispatcher.resolveOutcome(byRound.get(2)!.key, FAIL)
+    await expect(round1).resolves.toEqual(OK)
+    await expect(round2).resolves.toEqual(FAIL)
   })
 })
 
@@ -139,6 +186,12 @@ describe('RemoteDispatcher — timeout path', () => {
     await expect(pending).rejects.toThrow(/timed out/)
   })
 
+  it('names a sub-minute timeout precisely instead of rounding it to "0min" (F4)', async () => {
+    const dispatcher = new RemoteDispatcher()
+    const pending = dispatcher.dispatch(req({ timeoutMs: 20 }))
+    await expect(pending).rejects.toThrow(/timed out after 20ms/)
+  })
+
   it('a timed-out dispatch is no longer resolvable — a late report is a no-op', async () => {
     const dispatcher = new RemoteDispatcher()
     const pending = dispatcher.dispatch(req({ timeoutMs: 20 }))
@@ -160,5 +213,20 @@ describe('RemoteDispatcher.adapter', () => {
   it('defaults to "runner" and is overridable, for the ledger\'s adapter field', () => {
     expect(new RemoteDispatcher().adapter).toBe('runner')
     expect(new RemoteDispatcher('copilot-cli').adapter).toBe('copilot-cli')
+  })
+})
+
+describe('RemoteDispatcher.managesOwnWorkspace (F2)', () => {
+  it('is true, so the engine skips its own local checkout/harvest for this dispatcher', () => {
+    expect(new RemoteDispatcher().managesOwnWorkspace).toBe(true)
+  })
+})
+
+describe('PendingIntent.baseOid (F3)', () => {
+  it('is left undefined by RemoteDispatcher — it never reads the repo, so it cannot pin a base commit itself', () => {
+    const dispatcher = new RemoteDispatcher()
+    dispatcher.dispatch(req())
+    const [intent] = dispatcher.pendingIntents([{ slug: 'toy', role: 'implementer', task: null, round: null }])
+    expect(intent!.baseOid).toBeUndefined()
   })
 })

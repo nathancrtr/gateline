@@ -1,7 +1,7 @@
 // The runner's relay half (ORCHESTRATOR.md / TOPOLOGY.md §3.3, run "runner-agent"
 // ADR-1): `RemoteDispatcher` is a `Dispatcher` peer to `HeadlessDispatcher` that
 // never spawns a harness itself. Its `dispatch()` turns the engine's call into a
-// long-lived Promise, parked in an in-process queue, that resolves only when the
+// long-lived Promise, parked in an in-process map, that resolves only when the
 // workstation agent — polling `pendingIntents()` and reporting through
 // `resolveOutcome()` — hands back a real `DispatchOutcome`. This keeps the seam
 // (seam.ts) the engine's only dispatch call site and its only metering point:
@@ -34,6 +34,11 @@ export interface PendingIntent {
   round: number | null
   body: string
   timeoutMs: number
+  /** The commit the engine armed this dispatch at (ADR-2's pin) — what the workstation
+   *  checks out and what the harvest fold rebases onto. `RemoteDispatcher` never reads
+   *  the repo, so it cannot supply this itself; left undefined here and augmented by
+   *  the server (task 03), which does have the repo, before the intent reaches the wire. */
+  baseOid?: string
 }
 
 /**
@@ -63,14 +68,9 @@ export interface RunnerCallback {
 }
 
 /** Mirrors engine.ts's private `jobKey` format, so an open ledger entry and a
- *  pending dispatch correlate on sight once linked. */
+ *  pending dispatch correlate on sight. */
 function fullKey(slug: string, role: string, task: string | null, round: number | null): string {
   return `${slug}|${role}|${task ?? ''}|${round ?? ''}`
-}
-
-/** Ledger entries carry no branch (branch is a run-level fact, not per-dispatch); group pending calls by the pair that *is* on both sides. */
-function groupKey(slug: string, role: string): string {
-  return `${slug}|${role}`
 }
 
 interface PendingCall {
@@ -78,8 +78,15 @@ interface PendingCall {
   resolve: (outcome: DispatchOutcome) => void
   reject: (err: Error) => void
   timer: ReturnType<typeof setTimeout>
-  /** Set once `pendingIntents` has surfaced this call under a full ledger key; null until then. */
-  linkedKey: string | null
+}
+
+/** Renders a timeout for a human reading the ledger's error field — `Math.round(ms /
+ *  60000)` alone reports "0min" for any sub-30s timeout (every unit test's timeoutMs,
+ *  and any short role timeout in practice), which reads as "instant" rather than "short". */
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`
+  return `${Math.round(ms / 60_000)}min`
 }
 
 /**
@@ -88,28 +95,23 @@ interface PendingCall {
  * a promise; the workstation agent (task 04) is the only thing that ever
  * settles it, via `resolveOutcome`.
  *
- * Correlation note: `DispatchRequest` (seam.ts) carries `slug` and `branch`
- * but not `task`/`round` — task 01 threaded only the fields R2 named, and
- * extending `DispatchRequest` further is outside this task's file-contact
- * surface. A ledger entry (`OpenLedgerEntry`), by contrast, always carries
- * `task`/`round`. So a pending call is provisionally grouped by `slug|role`
- * (branch is constant per run, so it adds no discriminating power) and only
- * gets its full `slug|role|task|round` key — the one `resolveOutcome` is
- * called with — once `pendingIntents` links it to a specific open ledger
- * entry, in FIFO order within that group. For the common case (at most one
- * open dispatch per role per run) this is exact; for parallel same-role
- * dispatches (parallel implementers on distinct tasks) it assumes intents are
- * drained in dispatch order, which holds as long as the workstation reports
- * outcomes for intents it was actually handed. A future task extending
- * `DispatchRequest` with `task`/`round` (mirroring task 01's `slug`/`branch`
- * addition) would let dispatch() key directly and retire this layer.
+ * Correlation (ADR-7): `DispatchRequest` (seam.ts) carries `task`/`round` alongside
+ * `slug`/`branch` — the engine's `launch()` threads them straight from the dispatch
+ * intent, exactly as it threads `slug`/`branch`. So `dispatch()` keys its pending map
+ * directly by `slug|role|task|round`, the same key an `OpenLedgerEntry` carries: no
+ * FIFO grouping or linking step, and so no dependency on the order dispatch() is
+ * called in versus the order the ledger is projected in. (An earlier version of this
+ * dispatcher grouped pending calls by `slug|role` and linked them to a full key in
+ * dispatch order on the first `pendingIntents` poll; review-02.md F1 found that a
+ * reordered dispatch-call sequence — e.g. two parallel implementer checkouts racing —
+ * could cross-wire two same-role dispatches. Keying at dispatch time removes the
+ * class of bug rather than testing around it.)
  */
 export class RemoteDispatcher implements Dispatcher, RunnerCallback {
   readonly adapter: string
-  /** Pending calls not yet linked to a full ledger key, FIFO per `slug|role`. */
-  private readonly queues = new Map<string, PendingCall[]>()
-  /** Pending calls once linked to the full `slug|role|task|round` key `resolveOutcome` is called with. */
-  private readonly linked = new Map<string, PendingCall>()
+  readonly managesOwnWorkspace = true
+  /** Pending calls, keyed by the same `slug|role|task|round` key `resolveOutcome` is called with. */
+  private readonly calls = new Map<string, PendingCall>()
 
   constructor(adapter = 'runner') {
     this.adapter = adapter
@@ -119,23 +121,18 @@ export class RemoteDispatcher implements Dispatcher, RunnerCallback {
     if (!req.slug || !req.branch) {
       throw new Error('RemoteDispatcher.dispatch requires req.slug and req.branch (run identity) to route to a workstation')
     }
-    const slug = req.slug
-    const role = req.role
+    const key = fullKey(req.slug, req.role, req.task ?? null, req.round ?? null)
     return new Promise<DispatchOutcome>((resolve, reject) => {
       const call: PendingCall = {
         req,
         resolve,
         reject,
-        linkedKey: null,
         timer: setTimeout(() => {
-          this.retire(call)
-          reject(new Error(`runner dispatch timed out after ${Math.round(req.timeoutMs / 60000)}min — no workstation report`))
+          this.calls.delete(key)
+          reject(new Error(`runner dispatch timed out after ${formatDuration(req.timeoutMs)} — no workstation report`))
         }, req.timeoutMs),
       }
-      const key = groupKey(slug, role)
-      const queue = this.queues.get(key)
-      if (queue) queue.push(call)
-      else this.queues.set(key, [call])
+      this.calls.set(key, call)
     })
   }
 
@@ -143,15 +140,8 @@ export class RemoteDispatcher implements Dispatcher, RunnerCallback {
     const intents: PendingIntent[] = []
     for (const entry of openEntries) {
       const key = fullKey(entry.slug, entry.role, entry.task, entry.round)
-      let call = this.linked.get(key)
-      if (!call) {
-        const queue = this.queues.get(groupKey(entry.slug, entry.role))
-        const candidate = queue?.find((c) => c.linkedKey === null)
-        if (!candidate) continue // no pending call this dispatcher is holding for that entry
-        candidate.linkedKey = key
-        this.linked.set(key, candidate)
-        call = candidate
-      }
+      const call = this.calls.get(key)
+      if (!call) continue // no pending call this dispatcher is holding for that entry
       intents.push({
         key,
         slug: entry.slug,
@@ -167,24 +157,11 @@ export class RemoteDispatcher implements Dispatcher, RunnerCallback {
   }
 
   resolveOutcome(key: string, outcome: DispatchOutcome): boolean {
-    const call = this.linked.get(key)
+    const call = this.calls.get(key)
     if (!call) return false
-    this.retire(call)
+    clearTimeout(call.timer)
+    this.calls.delete(key)
     call.resolve(outcome)
     return true
-  }
-
-  /** Removes a call from every internal index and cancels its timeout, regardless of whether it was ever linked. */
-  private retire(call: PendingCall): void {
-    clearTimeout(call.timer)
-    if (call.linkedKey) this.linked.delete(call.linkedKey)
-    for (const [key, queue] of this.queues) {
-      const index = queue.indexOf(call)
-      if (index >= 0) {
-        queue.splice(index, 1)
-        if (queue.length === 0) this.queues.delete(key)
-        break
-      }
-    }
   }
 }

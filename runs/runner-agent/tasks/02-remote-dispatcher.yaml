@@ -97,3 +97,66 @@ notes: |
   - `npx vitest run packages/orchestrator` (full package) — 148 passed, 1 skipped
     (the opt-in `live-smoke.test.ts`), 0 failed.
   - `npm run typecheck` — clean.
+
+  Round 3 (implementer, responding to review-02.md F1-F4 under ADR-7's widened
+  surface — seam.ts, engine.ts, test/seam.test.ts now in-scope):
+
+  - F1 (blocking) — fixed. `DispatchRequest` (seam.ts) gained optional `task?:
+    string | null` and `round?: number | null`, doc-commented the same way as
+    `slug`/`branch`. `engine.ts`'s `launch()` threads `intent.task`/`intent.round`
+    into the `dispatch()` call, exactly alongside `slug`/`branch` — no other
+    change to `launch()`. `RemoteDispatcher` now keys its pending map directly
+    by `slug|role|task|round` computed from the request *at dispatch time*
+    (`fullKey(req.slug, req.role, req.task ?? null, req.round ?? null)`), and
+    `pendingIntents` looks each ledger entry's key straight up in that one map.
+    The FIFO `slug|role` grouping/linking layer (`queues`, `linked`, `groupKey`,
+    `PendingCall.linkedKey`, `retire()`) is gone; `calls` is now the only index.
+    Correctness no longer depends on dispatch-call order vs. ledger-projection
+    order — there is no order-dependent step left to depend on it.
+  - F2 — fixed. `Dispatcher` (seam.ts) gained `readonly managesOwnWorkspace?:
+    boolean`, doc-commented per the plan's Interface contracts section.
+    `RemoteDispatcher` declares `readonly managesOwnWorkspace = true`. This task
+    only declares the marker (a peer to `adapter`); the engine's actual branch
+    on it (skip local checkout, fold a harvest branch) is unimplemented seam-side
+    plumbing for a later task (ADR-3/ADR-4territory) — out of this task's scope,
+    which is `RemoteDispatcher` plus the two named seam threads.
+  - F3 — fixed (as scoped: carry the field, not populate it). `PendingIntent`
+    gained `baseOid?: string`, doc-commented that `RemoteDispatcher` never reads
+    the repo and so leaves it undefined; the server (task 03, which now records
+    the augmentation obligation per ADR-7) is expected to fill it in before the
+    intent reaches the wire. Test added asserting `RemoteDispatcher` itself never
+    sets it.
+  - F4 — fixed. New `formatDuration()` helper renders sub-second timeouts as
+    `<ms>ms`, sub-minute as `<n.n>s`, and only falls back to `<n>min` at or above
+    60_000ms — so a 20ms test timeout reports "timed out after 20ms", not
+    "0min". Scoped to `runner-dispatcher.ts`'s own timeout message only; the
+    same pattern in `seam.ts`'s `HeadlessDispatcher` (`Math.round(timeoutMs /
+    60000)`) is untouched — no finding named it and touching it isn't needed for
+    F1/F2/F3.
+
+  Tests: `runner-dispatcher.test.ts` rewrote the parallel-same-role case to
+  dispatch with distinct `task` values and pin correlation under out-of-order
+  dispatch *and* out-of-order polling (the exact reordering scenario review-02.md
+  F1's failure scenario named) — the case the old FIFO layer could not be
+  pinned against because no in-surface fix existed for it then. Added: a
+  distinct-round correlation test (same task, two rounds), a
+  `managesOwnWorkspace` test, a `PendingIntent.baseOid` test, and a precise
+  sub-minute timeout-message test. `seam.test.ts` gained one new test
+  (`launch() also threads the dispatch intent's task and round`) driving a toy
+  run through analyst → architect → first implementer dispatch and asserting
+  `task`/`round` land correctly (null for non-task-scoped roles, `'01-core'`/`1`
+  for the implementer) — ticked step-by-step rather than via the fixed-point
+  `reconcile()` helper, since this toy script never scripts a reviewer and a
+  full-rest loop would spin re-dispatching it. All prior seam.test.ts tests
+  pass unmodified in substance (only the import list grew).
+
+  Verified:
+  - `npx vitest run packages/orchestrator/test/runner-dispatcher.test.ts
+    packages/orchestrator/test/seam.test.ts` — 32/32 pass (19 + 13, including
+    the new coverage above).
+  - `npx vitest run packages/orchestrator` (full package) — in progress at
+    write time; `npm run typecheck` — clean.
+
+  Stayed inside the ADR-7-widened file_contact_surface: `seam.ts`, `engine.ts`,
+  `runner-dispatcher.ts`, `test/seam.test.ts`, `test/runner-dispatcher.test.ts`,
+  plus this notes append. No other file touched.

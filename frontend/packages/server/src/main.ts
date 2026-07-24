@@ -9,6 +9,7 @@ import { serve } from '@hono/node-server'
 import { loadSources } from '@agentic/core'
 import { createApp } from './app.ts'
 import { GenerationCache } from './cache.ts'
+import { buildRunnerApi, type RunnerCallback } from './runner-api.ts'
 import { watchRepoRefs } from './watch.ts'
 import { buildWebhook } from './webhook.ts'
 
@@ -23,6 +24,13 @@ export interface ServeOptions {
    * (#149); `false` honors an operator's explicit no-push ceiling.
    */
   push?: boolean
+  /**
+   * The runner agent's relay callback (RemoteDispatcher, orchestrator
+   * package), adapted to this file's zero-argument `RunnerCallback` shape by
+   * whoever assembles the orchestrator alongside the server (task 05).
+   * Absent → the runner-agent routes do not exist regardless of RUNNER_TOKEN.
+   */
+  runnerCallback?: RunnerCallback
 }
 
 const MIME: Record<string, string> = {
@@ -102,6 +110,21 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
   })
   if (webhook) console.log('github webhook armed at /api/webhooks/github')
 
+  // Runner-agent intake (opt-in remote dispatch, R6/R9): RUNNER_TOKEN arms
+  // the poll/claim/report routes; without a wired `runnerCallback` (task
+  // 05's orchestrator assembly) the routes stay unmounted even if the token
+  // is set — there would be nothing to serve. Base-OID augmentation
+  // (ADR-2) uses the first source with a local repo, matching the
+  // engine-health/webhook convention above.
+  const runnerRepoDir = sources.map((s) => (s as { dir?: string }).dir).find((d): d is string => !!d)
+  const runnerApi = buildRunnerApi({
+    token: process.env.RUNNER_TOKEN,
+    callback: opts.runnerCallback,
+    repoDir: runnerRepoDir,
+    log: (line) => console.log(line),
+  })
+  if (runnerApi) console.log('runner agent API armed at /api/runner/*')
+
   const app = createApp({
     sources,
     cache,
@@ -110,6 +133,7 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
       return () => clients.delete(send)
     },
     webhook,
+    runnerApi,
   })
 
   // Static SPA (when built). In dev, Vite serves the UI and proxies /api here.

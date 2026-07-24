@@ -1,7 +1,7 @@
 run: runner-agent
 branch: run/runner-agent
-phase: implement # staged — not yet armed; `agentic arm runner-agent` starts the run
-paused_reason: null
+phase: paused # staged — not yet armed; `agentic arm runner-agent` starts the run
+paused_reason: escalation
 profile: full # patch | standard | full
 intake:
   # source-agnostic staging provenance; free-form path: nulls + client_key
@@ -468,5 +468,11 @@ escalations:
           `seam.ts/engine.ts` in the file surface somewhere so that the
           `02-remote-dispatcher` review's blocking finding can be fixed by an
           implementer"
+      },
+    {
+        at: 2026-07-24T00:29:32.028Z,
+        from_role: orchestrator,
+        reason: reviewer escalated task 02-remote-dispatcher — see review-02.md,
+        resolved: false
       }
   ]

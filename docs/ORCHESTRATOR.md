@@ -583,9 +583,11 @@ restart" is the only steady state left to describe).
   progress reads `superseded-pending` once rather than firing early on a
   half-updated tree.
 - **`paused` is deliberate idling, not a silent hang.** The heartbeat keeps
-  writing while paused (`codeState: 'paused'`), and FleetView's drift chip
-  renders it as a distinct, stronger-tone pill beside the engine outage
-  banner — a paused engine reads differently from a dead one.
+  writing while paused (`codeState: 'paused'`, plus `codeReason` carrying the
+  monitor's specific cause), and FleetView's drift chip renders that reason —
+  which branch, which conflict — rather than a generic message, as a distinct,
+  stronger-tone pill beside the engine outage banner; a paused engine reads
+  differently from a dead one, and points at the actual fix.
 
 **What stays human-owned.** The engine never calls `git pull`; the update
 input is always an operator action (a manual pull, or `agentic upgrade`).

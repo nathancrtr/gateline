@@ -107,6 +107,7 @@ describe('runLoop code-tree wiring (#141)', () => {
     let health = await readHealth(dir)
     expect(health.codeState).toBe('paused')
     expect(health.commit).toBe(monitor.startHead)
+    expect(health.codeReason).toBe('the working tree has uncommitted local changes')
 
     // Cached paused state must also govern non-boundary triggers, with no
     // further check() needed to prove it — a refs/completion tick arriving
@@ -122,6 +123,9 @@ describe('runLoop code-tree wiring (#141)', () => {
     expect(engine.tickCalls).toBe(4)
     health = await readHealth(dir)
     expect(health.codeState).toBe('fresh')
+    // Self-clearing (#185): the recovered heartbeat carries no stale cause —
+    // `reason` is undefined off `paused`, and JSON.stringify drops the key.
+    expect(health.codeReason).toBeUndefined()
 
     await loop.stop()
   })
@@ -144,6 +148,7 @@ describe('runLoop code-tree wiring (#141)', () => {
     expect(engine.tickCalls).toBe(0)
     const health = await readHealth(dir)
     expect(health.codeState).toBe('paused')
+    expect(health.codeReason).toBe('the working tree has uncommitted local changes')
     expect(superseded).toHaveLength(0)
 
     await loop.trigger('heartbeat')

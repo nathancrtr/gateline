@@ -12,7 +12,7 @@ intake:
   staged_by: "Nathan Carter"
 budget:
   cost_limit_usd: null
-  cost_spent_usd: 35.35
+  cost_spent_usd: 37.67
   ledger:
     [
       {
@@ -443,9 +443,9 @@ budget:
           round: 2,
           adapter: claude-code,
           model: anthropic/claude-sonnet-5,
-          tokens_in: null,
-          tokens_out: null,
-          cost_usd: null
+          tokens_in: 8,
+          tokens_out: 3644,
+          cost_usd: 2.320180750000001
         }
     ]
 gates:
@@ -472,7 +472,7 @@ tasks:
   [
     { id: 01-seam-extend, status: review-approved, review_rounds: 2 },
     { id: 02-remote-dispatcher, status: review-approved, review_rounds: 3 },
-    { id: 03-runner-api, status: dispatched, review_rounds: 1 },
+    { id: 03-runner-api, status: in-review, review_rounds: 1 },
     { id: 04-workstation-agent, status: pending, review_rounds: 0 },
     { id: 05-wiring, status: pending, review_rounds: 0 },
     { id: 06-live-smoke, status: pending, review_rounds: 0 }

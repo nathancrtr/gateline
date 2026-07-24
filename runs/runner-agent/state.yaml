@@ -473,6 +473,12 @@ escalations:
         at: 2026-07-24T00:29:32.028Z,
         from_role: orchestrator,
         reason: reviewer escalated task 02-remote-dispatcher — see review-02.md,
-        resolved: false
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-24T01:34:21.840Z,
+        resolution: "ADR-7 amendment (820c21e) and implementer round 3 (2a143d2) landed:
+          dispatch correlation keyed by slug|role|task|round at dispatch time,
+          FIFO linking retired, F2-F4 folded in; orchestrator package 154 passed
+          + typecheck clean. Dispatch re-review round 3 against this delta."
       }
   ]

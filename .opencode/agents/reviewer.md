@@ -64,7 +64,12 @@ trail matters.
 - Verdict: `approve` | `request-changes` | `escalate`. Never approve past unresolved
   blocking findings to keep things moving; the round cap exists so you don't have to.
 - A defect that traces to the plan or spec is an `escalate`, not a finding to paper
-  over.
+  over — including one that doesn't block the task under review at all. If this
+  diff is sound but you can see the plan leaves a **not-yet-dispatched** task's
+  required surface unowned or unimplementable, that's still an `escalate`:
+  approving this diff and escalating the run are not in tension, so verdict both.
+  A gap folded into a low-severity finding or a Coverage-section aside has no
+  power to pause dispatch — the next task dispatches right past it.
 - Concision is a contract requirement: reference the spec and diff by number and
   file:line, never re-quote them.
 - Write only inside `runs/<slug>/`; you never modify code.

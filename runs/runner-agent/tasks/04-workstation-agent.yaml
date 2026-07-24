@@ -228,3 +228,56 @@ notes: |
   surface (`start.ts`, `runner-dispatcher.ts`, `server/src/main.ts`,
   `wiring.test.ts`) or `app.ts` (already passes `body.outcome` through generically
   — no route-layer change needed for the new field).
+
+  Round 3 (review-04.md round-2 findings F8/F9/F2/F10/F12, plan.md ADR-8 amendment):
+  the live pipeline auto-dispatched a real reviewer against round 2 (verdict:
+  request-changes) and then a real implementer round 3, which hung and timed out
+  twice at the 90-minute wall-clock ceiling with no commit landed — this round
+  fixes the review's findings directly instead of a further automated retry.
+
+  - **F8 (blocking) fixed:** `harvestAndPush` now takes `base` as a parameter
+    instead of computing it internally; `executeIntent` captures it via the new
+    `getHead(ws)` immediately after `createWorkspace`, *before* the harness runs.
+    The function sweeps any of the role's own pathspecs left uncommitted into one
+    more commit, then pushes whenever `HEAD != base` — covering a harness that
+    commits its own work directly (the norm every dispatch prompt instructs),
+    which round 2 only handled if left uncommitted.
+  - **F9 (major) fixed:** `foldHarvestBranch`'s origin-branch deletion moved
+    outside the `finally` block to run only when the fold's `result.ok` is true —
+    a conflict or CAS exhaustion now leaves the origin harvest branch as the
+    escalated human's recovery point instead of deleting the only surviving copy
+    of the paid work.
+  - **F10 (minor) fixed:** `harvestAndPush`'s sweep now calls `git add -A --
+    <pathspec>` once per pathspec (each failure caught independently) instead of
+    one combined call — verified empirically that a single unmatched pathspec
+    makes the combined form exit 128 and stage *nothing*, silently dropping
+    pathspecs that did match alongside it.
+  - **F11 (minor) addressed:** the push step in `harvestAndPush` now retries once
+    before throwing, absorbing a transient network blip without a full
+    re-dispatch.
+  - **F2 (minor) fixed:** the R8 grep test now covers `main.ts` alongside
+    `agent.ts`/`workspace.ts`.
+  - **F12 (minor) fixed:** added the actual `### ADR-8` Decisions entry plan.md
+    was missing — round 2's amendment comment named it but the Decisions section
+    never got one.
+  - **F13 (plausible) explained, not a real discrepancy:** round 1's "445 passed"
+    and round 2's "259 passed" were different *subsets* (445 = the full `npm test`
+    across all frontend packages; 259 = only `packages/orchestrator packages/server
+    packages/runner-agent`, the packages this round's surface touches) — this
+    round's verification below reports the full-suite count to remove the
+    ambiguity.
+  - **Not changed:** F3 (report-POST retry), F4 (adapter identity on the intent),
+    F5 (duplicated seam.ts ports), F6 (crash-leaked clone sweep on startup) — all
+    pre-date this run's rounds, remain open, minor, and out of this fix's scope
+    per the review's own framing (converges via the existing retry-then-escalate
+    path; not the defect this escalation was about).
+
+  New tests: a committing-harness `executeIntent` test and a `harvestAndPush`
+  committing-harness test (F8), a mixed matched/unmatched pathspec test (F10), a
+  "nothing to harvest" test with the new signature, and an assertion on the
+  existing fold-conflict test that the origin harvest branch survives (F9).
+
+  Verified: `npm run typecheck` (frontend/) clean. `npm test` (frontend/, full
+  monorepo, every package) — 469 passed, 1 skipped (pre-existing live-smoke
+  opt-in), 0 failures, 47 test files — the accurate full-suite count F13 asked
+  for, superseding both round 1's and round 2's partial-suite numbers.

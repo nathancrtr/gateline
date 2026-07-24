@@ -1,11 +1,13 @@
 // Disposable workspace creation/cleanup (AC4.1, AC4.2): each dispatch gets
 // its own clone, and that clone stops existing once the dispatch is done.
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createWorkspace } from '../src/workspace.ts'
+import { createWorkspace, getHead, harvestAndPush } from '../src/workspace.ts'
+
+const BOT = { name: 'agentic-orchestrator', email: 'orchestrator@agentic.invalid' }
 
 // Isolate from the operator's real ~/.gitconfig, same convention as
 // server/test/runner-api.test.ts's makeRepo.
@@ -109,5 +111,62 @@ describe('createWorkspace', () => {
     expect(existsSync(second.path)).toBe(true)
 
     await second.remove()
+  })
+})
+
+describe('harvestAndPush (run "runner-agent" ADR-3, review-04.md round-2 F8/F9/F10)', () => {
+  it('an unmatched pathspec alongside a matched one does not drop the matched file (F10)', async () => {
+    const repo = makeRepo('run/toy')
+    const workDir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-work-'))
+    cleanups.push(workDir)
+    const ws = await createWorkspace({ workDir, slug: 'toy', branch: 'run/toy', repoUrl: repo.dir })
+    const base = await getHead(ws)
+
+    mkdirSync(join(ws.path, 'runs/toy'), { recursive: true })
+    writeFileSync(join(ws.path, 'runs/toy/plan.md'), 'the plan')
+    // 'runs/toy/tasks/' never got created — a single combined `git add -A --
+    // plan.md tasks/` would fail atomically and drop plan.md too (verified
+    // against real git: an unmatched pathspec makes the whole call exit 128
+    // and stage nothing at all).
+    const result = await harvestAndPush(ws, 'run/toy--harvest/architect-1', ['runs/toy/plan.md', 'runs/toy/tasks/'], base, BOT, 'toy', 'architect')
+
+    expect(result.pushed).toBe(true)
+    const content = execFileSync('git', ['-C', repo.dir, 'show', `${result.branch}:runs/toy/plan.md`], { encoding: 'utf8', env: GIT_ENV }).trim()
+    expect(content).toBe('the plan')
+
+    await ws.remove()
+  })
+
+  it('a harness commit alone (nothing left uncommitted) is still pushed — HEAD moved past base (F8)', async () => {
+    const repo = makeRepo('run/toy')
+    const workDir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-work-'))
+    cleanups.push(workDir)
+    const ws = await createWorkspace({ workDir, slug: 'toy', branch: 'run/toy', repoUrl: repo.dir })
+    const base = await getHead(ws)
+
+    writeFileSync(join(ws.path, 'file.txt'), 'harness wrote and committed this')
+    execFileSync('git', ['-C', ws.path, 'add', '-A'], { env: GIT_ENV })
+    execFileSync('git', ['-C', ws.path, '-c', 'user.name=harness', '-c', 'user.email=harness@example.test', 'commit', '-q', '-m', 'harness commit'], { env: GIT_ENV })
+
+    const result = await harvestAndPush(ws, 'run/toy--harvest/implementer-1', ['.'], base, BOT, 'toy', 'implementer')
+    expect(result.pushed).toBe(true)
+    expect(result.base).toBe(base)
+    const content = execFileSync('git', ['-C', repo.dir, 'show', `${result.branch}:file.txt`], { encoding: 'utf8', env: GIT_ENV }).trim()
+    expect(content).toBe('harness wrote and committed this')
+
+    await ws.remove()
+  })
+
+  it('nothing committed and nothing matching the sweep reports pushed: false, base unchanged', async () => {
+    const repo = makeRepo('run/toy')
+    const workDir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-work-'))
+    cleanups.push(workDir)
+    const ws = await createWorkspace({ workDir, slug: 'toy', branch: 'run/toy', repoUrl: repo.dir })
+    const base = await getHead(ws)
+
+    const result = await harvestAndPush(ws, 'run/toy--harvest/analyst-1', ['runs/toy/spec.md'], base, BOT, 'toy', 'analyst')
+    expect(result).toEqual({ pushed: false, branch: 'run/toy--harvest/analyst-1', base })
+
+    await ws.remove()
   })
 })

@@ -146,8 +146,12 @@ export async function foldTaskBranch(repoDir: string, runBranch: string, checkou
  * run branch ref, then delete both the local and origin harvest-branch refs.
  * A rebase conflict means overlapping file-contact surfaces — a plan defect
  * — and returns `conflict: true` so the caller escalates, exactly as
- * `foldTaskBranch`'s conflict path does. Call under the engine's per-run
- * write lock.
+ * `foldTaskBranch`'s conflict path does. The origin harvest branch is
+ * deleted only once the fold actually lands (review-04.md round-2 F9): on a
+ * conflict or CAS exhaustion, the pushed work is the only surviving copy of
+ * a paid dispatch and stays on origin for the escalated human to recover,
+ * rather than being deleted alongside the failure. Call under the engine's
+ * per-run write lock.
  */
 export async function foldHarvestBranch(
   repoDir: string,
@@ -173,36 +177,43 @@ export async function foldHarvestBranch(
   await git.run(['worktree', 'add', '-b', localBranch, path, fetchedTip])
   const wtGit = new Git(path)
 
+  let result: FoldResult
   try {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const runTip = await git.revParse(`refs/heads/${runBranch}`)
-      if (!runTip) return { ok: false, conflict: false, message: `${runBranch} disappeared mid-fold` }
-      try {
-        // Explicit --onto (rather than foldTaskBranch's single-arg rebase):
-        // the harvest branch's real parent (harvest.base) is known exactly,
-        // so replay precisely base..HEAD onto the current tip rather than
-        // relying on merge-base to rediscover it.
-        await wtGit.run(['rebase', '--onto', runTip, harvest.base])
-      } catch (e) {
-        await wtGit.run(['rebase', '--abort']).catch(() => {})
-        return {
-          ok: false,
-          conflict: true,
-          message: `rebase of harvest branch ${harvest.branch} onto ${runBranch} conflicted — overlapping file-contact surfaces, a plan defect: ${(e as Error).message}`,
+    result = await (async (): Promise<FoldResult> => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const runTip = await git.revParse(`refs/heads/${runBranch}`)
+        if (!runTip) return { ok: false, conflict: false, message: `${runBranch} disappeared mid-fold` }
+        try {
+          // Explicit --onto (rather than foldTaskBranch's single-arg rebase):
+          // the harvest branch's real parent (harvest.base) is known exactly,
+          // so replay precisely base..HEAD onto the current tip rather than
+          // relying on merge-base to rediscover it.
+          await wtGit.run(['rebase', '--onto', runTip, harvest.base])
+        } catch (e) {
+          await wtGit.run(['rebase', '--abort']).catch(() => {})
+          return {
+            ok: false,
+            conflict: true,
+            message: `rebase of harvest branch ${harvest.branch} onto ${runBranch} conflicted — overlapping file-contact surfaces, a plan defect: ${(e as Error).message}`,
+          }
         }
+        const folded = await wtGit.revParse('HEAD')
+        if (!folded) return { ok: false, conflict: false, message: 'rebased head unreadable' }
+        if (await git.updateRefCAS(`refs/heads/${runBranch}`, folded, runTip)) {
+          return { ok: true, conflict: false, message: `folded harvest branch ${harvest.branch} into ${runBranch}` }
+        }
+        // The run branch moved (another fold, a human decision): rebase again.
       }
-      const folded = await wtGit.revParse('HEAD')
-      if (!folded) return { ok: false, conflict: false, message: 'rebased head unreadable' }
-      if (await git.updateRefCAS(`refs/heads/${runBranch}`, folded, runTip)) {
-        return { ok: true, conflict: false, message: `folded harvest branch ${harvest.branch} into ${runBranch}` }
-      }
-      // The run branch moved (another fold, a human decision): rebase again.
-    }
-    return { ok: false, conflict: false, message: 'fold lost CAS 3× — will re-derive' }
+      return { ok: false, conflict: false, message: 'fold lost CAS 3× — will re-derive' }
+    })()
   } finally {
     await git.run(['worktree', 'remove', '--force', path]).catch(() => {})
     await git.run(['branch', '-D', localBranch]).catch(() => {})
     await git.run(['update-ref', '-d', fetchRef]).catch(() => {})
-    await git.run(['push', 'origin', '--delete', harvest.branch]).catch(() => {})
   }
+  // Only a landed fold retires the origin branch (F9) — a conflict or CAS
+  // exhaustion leaves it as the sole surviving copy of the paid work, for
+  // the escalated human to recover.
+  if (result.ok) await git.run(['push', 'origin', '--delete', harvest.branch]).catch(() => {})
+  return result
 }

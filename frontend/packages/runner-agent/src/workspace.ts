@@ -33,6 +33,13 @@ export interface CreateWorkspaceOptions {
   baseOid?: string
 }
 
+/** The workspace's current HEAD — callers capture this before the harness
+ *  runs (review-04.md round-2 F8: `base` must be the pre-harness commit, not
+ *  post, since the harness itself is instructed to commit its own work). */
+export async function getHead(ws: Workspace): Promise<string> {
+  return (await execFileAsync('git', ['-C', ws.path, 'rev-parse', 'HEAD'])).stdout.trim()
+}
+
 export async function createWorkspace(opts: CreateWorkspaceOptions): Promise<Workspace> {
   await mkdir(opts.workDir, { recursive: true })
   // slug + timestamp + a random suffix (AC4.2): two dispatches issued for
@@ -65,39 +72,73 @@ export interface HarvestResult {
 }
 
 /**
- * Harvest-then-dispose (run "runner-agent" ADR-3): commits the role's own
- * pathspecs to `branch` (off the workspace's current HEAD) and pushes it to
- * origin — never the run branch itself, which stays the control plane's
- * alone to write. A push failure throws: the caller is expected to keep the
- * workspace rather than dispose of completed, paid work it could not
- * deliver (ADR-3's ordering — disposal is gated on the push landing, never
- * on the harness returning).
+ * Harvest-then-dispose (run "runner-agent" ADR-3; review-04.md round-2 F8):
+ * `base` is the workspace's HEAD *before* the harness ran (the caller
+ * captures it at that point — every dispatch prompt instructs the harness
+ * to commit its own work, so by the time this runs HEAD may already be past
+ * `base`). This sweeps up any of the role's own pathspecs the harness left
+ * *uncommitted* into one more commit, then pushes whatever's reachable from
+ * HEAD back to `base` — the harness's own commit(s) included — to `branch`,
+ * never the run branch itself, which stays the control plane's alone to
+ * write. Nothing to push (HEAD never moved past `base`, and nothing matched
+ * the sweep) resolves `pushed: false`, not an error. A push failure throws:
+ * the caller is expected to keep the workspace rather than dispose of
+ * completed, paid work it could not deliver (ADR-3's ordering — disposal is
+ * gated on the push landing, never on the harness returning).
  */
 export async function harvestAndPush(
   ws: Workspace,
   branch: string,
   pathspecs: string[],
+  base: string,
   identity: { name: string; email: string },
   slug: string,
   role: string,
 ): Promise<HarvestResult> {
-  const base = (await execFileAsync('git', ['-C', ws.path, 'rev-parse', 'HEAD'])).stdout.trim()
-  await execFileAsync('git', ['-C', ws.path, 'add', '-A', '--', ...pathspecs])
+  // One pathspec per `git add` call (review-04.md round-2 F10): `git add -A
+  // -- a b` is all-or-nothing — a single unmatched pathspec (e.g. a
+  // narrow-pathspec role whose harness never created its artifact) fails
+  // the whole call and stages nothing, silently dropping pathspecs that DID
+  // match alongside it.
+  for (const pathspec of pathspecs) {
+    try {
+      await execFileAsync('git', ['-C', ws.path, 'add', '-A', '--', pathspec])
+    } catch {
+      /* pathspec matched nothing — not an error, nothing to sweep for it */
+    }
+  }
   const staged = (await execFileAsync('git', ['-C', ws.path, 'diff', '--cached', '--name-only'])).stdout.trim()
-  if (!staged) return { pushed: false, branch, base }
-  await execFileAsync('git', [
-    '-C',
-    ws.path,
-    '-c',
-    `user.name=${identity.name}`,
-    '-c',
-    `user.email=${identity.email}`,
-    'commit',
-    '-q',
-    '-m',
-    `state(${slug}): harvested ${role} artifacts`,
-  ])
+  if (staged) {
+    await execFileAsync('git', [
+      '-C',
+      ws.path,
+      '-c',
+      `user.name=${identity.name}`,
+      '-c',
+      `user.email=${identity.email}`,
+      'commit',
+      '-q',
+      '-m',
+      `state(${slug}): harvested ${role} artifacts`,
+    ])
+  }
   const head = (await execFileAsync('git', ['-C', ws.path, 'rev-parse', 'HEAD'])).stdout.trim()
-  await execFileAsync('git', ['-C', ws.path, 'push', 'origin', `${head}:refs/heads/${branch}`])
-  return { pushed: true, branch, base }
+  if (head === base) return { pushed: false, branch, base } // harness committed nothing, sweep found nothing
+
+  // One bounded retry on the push itself (review-04.md round-2 F11): a
+  // transient network blip is the case worth absorbing here — the workspace
+  // is only disposed after this function returns `pushed: true`, so a
+  // second successful attempt costs nothing beyond the retry itself, and
+  // avoids the caller reporting failure (and the control plane paying for a
+  // full re-dispatch) over a blip that would have succeeded on retry.
+  let lastError: Error | undefined
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      await execFileAsync('git', ['-C', ws.path, 'push', 'origin', `${head}:refs/heads/${branch}`])
+      return { pushed: true, branch, base }
+    } catch (e) {
+      lastError = e as Error
+    }
+  }
+  throw lastError
 }

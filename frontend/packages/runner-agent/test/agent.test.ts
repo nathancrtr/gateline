@@ -176,10 +176,12 @@ describe('executeIntent (workspace + manifest + spawn + outcome, end to end)', (
       // The harvest-then-dispose step (ADR-3) is exercised by its own
       // describe block below with real git repos; here it's a no-op so this
       // test stays scoped to AC3.2's outcome-shape claim.
-      harvestAndPushImpl: async (ws, branch, _pathspecs, _identity, slug, role) => {
+      getHeadImpl: async () => 'fake-base-oid',
+      harvestAndPushImpl: async (ws, branch, _pathspecs, base, _identity, slug, role) => {
+        expect(base).toBe('fake-base-oid')
         expect(slug).toBe(INTENT.slug)
         expect(role).toBe(INTENT.role)
-        return { pushed: false, branch, base: 'irrelevant' }
+        return { pushed: false, branch, base }
       },
     })
     expect(outcome).toEqual({ ok: true, costUsd: 1, tokensIn: 2, tokensOut: 3, error: null })
@@ -194,6 +196,7 @@ describe('executeIntent (workspace + manifest + spawn + outcome, end to end)', (
       adapter: 'toy-sh',
       workDir: '/tmp',
       createWorkspaceImpl: async () => fakeWorkspace('/tmp', removed),
+      getHeadImpl: async () => 'fake-base-oid',
       manifestLoaderImpl: async () => shManifest('echo boom >&2; exit 3'),
       runCommandImpl: async (cmd, args, cwd, timeoutMs) => {
         const { runCommand } = await import('../src/agent.ts')
@@ -213,6 +216,7 @@ describe('executeIntent (workspace + manifest + spawn + outcome, end to end)', (
       adapter: 'toy-sh',
       workDir: '/tmp',
       createWorkspaceImpl: async () => fakeWorkspace('/tmp', removed),
+      getHeadImpl: async () => 'fake-base-oid',
       manifestLoaderImpl: async () => {
         throw new Error('adapter "toy-sh" has no headless section')
       },
@@ -244,12 +248,13 @@ describe('executeIntent (workspace + manifest + spawn + outcome, end to end)', (
       adapter: 'toy-echo',
       workDir: '/tmp',
       createWorkspaceImpl: async () => fakeWorkspace('/tmp', removed),
+      getHeadImpl: async () => 'fake-base-oid',
       manifestLoaderImpl: async () => manifest,
       runCommandImpl: async (cmd, args, cwd, timeoutMs) => {
         const { runCommand } = await import('../src/agent.ts')
         return runCommand(cmd, args, cwd, timeoutMs)
       },
-      harvestAndPushImpl: async (ws, branch) => ({ pushed: false, branch, base: 'irrelevant' }),
+      harvestAndPushImpl: async (ws, branch, _pathspecs, base) => ({ pushed: false, branch, base }),
     })
     expect(outcome.ok).toBe(true)
   })
@@ -296,6 +301,33 @@ describe('executeIntent — harvest-then-dispose (run "runner-agent" ADR-3, revi
     const content = git(origin, ['show', `${outcome.harvest!.branch}:runs/toy/spec.md`])
     expect(content).toBe('hi')
     expect(() => git(origin, ['show', 'run/toy:runs/toy/spec.md'])).toThrow()
+  })
+
+  it('a harness that commits its own work (every dispatch prompt instructs this) is still harvested — review-04.md round-2 F8', async () => {
+    const origin = makeOrigin('run/toy')
+    const workDir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-work-'))
+    cleanups.push(workDir)
+    // The harness writes AND commits, per prompts.ts's own instruction to
+    // every dispatched role ("commit it on the current branch") — the
+    // committed work must not depend on anything being left uncommitted.
+    const script = [
+      'mkdir -p runs/toy',
+      'echo committed > runs/toy/spec.md',
+      'git add -A',
+      "git -c user.name=harness -c user.email=harness@example.test commit -q -m 'harness commit'",
+      'echo \'{"cost":1,"in":2,"out":3}\'',
+    ].join(' && ')
+    const outcome = await executeIntent({
+      intent: INTENT,
+      repoUrl: origin,
+      adapter: 'toy-sh',
+      workDir,
+      manifestLoaderImpl: async () => shManifest(script),
+    })
+    expect(outcome.ok).toBe(true)
+    expect(outcome.harvest).toBeTruthy()
+    const content = git(origin, ['show', `${outcome.harvest!.branch}:runs/toy/spec.md`])
+    expect(content).toBe('committed')
   })
 
   it('a successful dispatch that produced no changes reports ok with no harvest field', async () => {
@@ -408,8 +440,9 @@ describe('runAgent (poll → claim → execute → report lifecycle, against a m
       maxCycles: 1,
       fetchImpl,
       createWorkspaceImpl: async () => ({ path: '/tmp', remove: async () => void removed.count++ }),
+      getHeadImpl: async () => 'fake-base-oid',
       manifestLoaderImpl: async () => shManifest('echo \'{"cost":1,"in":2,"out":3}\''),
-      harvestAndPushImpl: async (ws, branch) => ({ pushed: false, branch, base: 'irrelevant' }),
+      harvestAndPushImpl: async (ws, branch, _pathspecs, base) => ({ pushed: false, branch, base }),
       log: () => {},
     })
 
@@ -557,7 +590,7 @@ describe('R8 — adapter-generic dispatch-execution code (AC8.1)', () => {
   it('a grep of the dispatch-execution source shows no role names or harness/vendor names outside manifest-driven data', () => {
     const roleNames = ['analyst', 'architect', 'implementer', 'reviewer', 'historian', 'integrator', 'verifier']
     const harnessNames = ['claude-code', 'claude', 'copilot-cli', 'copilot', 'opencode', 'anthropic', 'openai', 'gpt-', 'gemini']
-    for (const file of ['agent.ts', 'workspace.ts']) {
+    for (const file of ['agent.ts', 'main.ts', 'workspace.ts']) {
       const src = sourceOf(file).toLowerCase()
       for (const name of [...roleNames, ...harnessNames]) {
         expect(src.includes(name), `${file} should not mention "${name}"`).toBe(false)

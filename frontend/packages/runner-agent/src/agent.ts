@@ -30,7 +30,7 @@ import {
   sumField,
   type HeadlessManifest,
 } from '@agentic/orchestrator'
-import { createWorkspace, harvestAndPush, type CreateWorkspaceOptions, type HarvestResult, type Workspace } from './workspace.ts'
+import { createWorkspace, getHead, harvestAndPush, type CreateWorkspaceOptions, type HarvestResult, type Workspace } from './workspace.ts'
 
 /** Mirrors runner-api.ts's `PendingIntent` (server side of this relay). */
 export interface PendingIntent {
@@ -265,6 +265,7 @@ export interface ExecuteIntentOptions {
   manifestLoaderImpl?: (repoDir: string, adapter: string, prefixHint?: string) => Promise<HeadlessManifest>
   harvestAndPushImpl?: typeof harvestAndPush
   resolveFrameworkRootsImpl?: typeof resolveFrameworkRootsFromDisk
+  getHeadImpl?: typeof getHead
 }
 
 /** One full dispatch: clone → read the manifest from the clone (so the
@@ -274,18 +275,21 @@ export interface ExecuteIntentOptions {
  *  A command failure, a timeout, or a manifest that could not be read
  *  produced nothing to harvest — the workspace is removed immediately
  *  (AC4.1/AC4.2). A successful command harvests the role's own pathspecs
- *  (harvestPathspecs) to a branch and pushes it to origin; disposal is
- *  gated on that push landing, never on the harness returning — a failed
- *  push keeps the workspace and reports failure instead, so the control
- *  plane retries rather than silently losing paid, completed work (the
- *  defect review-04.md F1 named: unconditional removal deletes the agent's
- *  produced files before the control plane can ever see them). */
+ *  (harvestPathspecs) to a branch and pushes it to origin — including
+ *  whatever the harness itself already committed (review-04.md round-2 F8:
+ *  every dispatch prompt instructs the harness to commit its own work, so
+ *  `base` is captured *before* the harness runs, not after, or a committing
+ *  harness's work is silently dropped exactly like the original defect).
+ *  Disposal is gated on that push landing, never on the harness returning
+ *  — a failed push keeps the workspace and reports failure instead, so the
+ *  control plane retries rather than silently losing paid, completed work. */
 export async function executeIntent(opts: ExecuteIntentOptions): Promise<DispatchOutcome> {
   const create = opts.createWorkspaceImpl ?? createWorkspace
   const run = opts.runCommandImpl ?? runCommand
   const loadManifest = opts.manifestLoaderImpl ?? loadHeadlessManifest
   const harvest = opts.harvestAndPushImpl ?? harvestAndPush
   const resolveRoots = opts.resolveFrameworkRootsImpl ?? resolveFrameworkRootsFromDisk
+  const getWorkspaceHead = opts.getHeadImpl ?? getHead
 
   const ws = await create({
     workDir: opts.workDir,
@@ -294,6 +298,10 @@ export async function executeIntent(opts: ExecuteIntentOptions): Promise<Dispatc
     repoUrl: opts.repoUrl,
     baseOid: opts.intent.baseOid,
   })
+  // Captured before the harness runs (F8) — this is what the control
+  // plane's fold rebases onto, and what determines whether the harness (or
+  // the post-harness sweep) changed anything at all.
+  const base = await getWorkspaceHead(ws)
 
   let outcome: DispatchOutcome
   try {
@@ -321,7 +329,7 @@ export async function executeIntent(opts: ExecuteIntentOptions): Promise<Dispatc
     const pathspecs = harvestPathspecs(runsRoot, opts.intent.slug, opts.intent.role, opts.intent.task)
     const dispatchId = `${opts.intent.role}${opts.intent.task ? `-${opts.intent.task}` : ''}${opts.intent.round ? `-r${opts.intent.round}` : ''}-${Date.now()}`
     const branch = `${opts.intent.branch}--harvest/${dispatchId}`
-    harvestResult = await harvest(ws, branch, pathspecs, BOT_IDENTITY, opts.intent.slug, opts.intent.role)
+    harvestResult = await harvest(ws, branch, pathspecs, base, BOT_IDENTITY, opts.intent.slug, opts.intent.role)
   } catch (e) {
     // Retain the workspace: the harvest commit (if it made it that far) is
     // still on disk even though the push failed, and disposing of it now
@@ -356,6 +364,7 @@ export interface AgentOptions {
   manifestLoaderImpl?: ExecuteIntentOptions['manifestLoaderImpl']
   harvestAndPushImpl?: ExecuteIntentOptions['harvestAndPushImpl']
   resolveFrameworkRootsImpl?: ExecuteIntentOptions['resolveFrameworkRootsImpl']
+  getHeadImpl?: ExecuteIntentOptions['getHeadImpl']
   /** Stop after this many poll cycles instead of running forever (tests only). */
   maxCycles?: number
   /** Poll-interval sleep, overridable so tests need no real timers. */
@@ -397,6 +406,7 @@ export async function runAgent(opts: AgentOptions): Promise<void> {
           manifestLoaderImpl: opts.manifestLoaderImpl,
           harvestAndPushImpl: opts.harvestAndPushImpl,
           resolveFrameworkRootsImpl: opts.resolveFrameworkRootsImpl,
+          getHeadImpl: opts.getHeadImpl,
         })
         const resolved = await client.report(intent.key, outcome)
         log(`runner-agent: reported ${intent.key} ok=${outcome.ok} resolved=${resolved}`)

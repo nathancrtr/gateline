@@ -97,6 +97,11 @@ describe('foldHarvestBranch', () => {
 
     // No leftover rebase-in-progress state or worktree.
     expect(git(dir, ['worktree', 'list'])).not.toContain('harvest')
+
+    // F9: the origin harvest branch survives a failed fold — it is the only
+    // surviving copy of the paid work, and the escalation ADR-4 designs for
+    // needs something for the human to recover.
+    expect(git(bare, ['rev-parse', 'refs/heads/run/toy--harvest/a-1'])).toBeTruthy()
   })
 })
 

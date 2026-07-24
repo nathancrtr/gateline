@@ -94,3 +94,53 @@ No code changed in range, so no surface to breach. The state.yaml edits are the 
 ## Escalation summary (round 2, for the Architect / G2)
 
 Round 1's escalation was resolved with the right directive — amend the plan/task surface so `seam.ts`/`engine.ts` (optional `task`/`round` on `DispatchRequest`, plus the `managesOwnWorkspace` flag) belong to some task — but the directive has not been executed: no plan amendment or implementer round landed before this review was dispatched. There is nothing new to review and F1 remains unfixable in-surface. Requested sequence before round 3: (1) architect lands the plan/task-surface amendment covering seam.ts/engine.ts per escalation #3, folding F2 (and ideally F3's intent-augmentation obligation) into it; (2) an implementer round lands the keyed-at-dispatch fix and retires the FIFO layer, plus the F4 message fix; (3) then dispatch round 3 against that real delta. One review round remains — please do not spend it on another empty diff.
+
+---
+
+# Round 3 (of 3)
+
+**Verdict:** approve
+**Round:** 3 of 3
+**Diff reviewed:** 8f5bf93..2a143d2 (run/runner-agent): 820c21e (ADR-7 plan amendment, G1 human) + 2a143d2 (implementation). The dispatch prompt's "820c308" is a typo for 820c21e; no such revision exists.
+
+## Prior findings — resolution status
+
+- **F1 (blocking) — RESOLVED.** `dispatch()` keys the pending map by `slug|role|task|round` at dispatch time (`runner-dispatcher.ts:124,135`) from the new `DispatchRequest.task`/`round` fields (`seam.ts:23-24`), threaded by `launch()` from the same intent that derives the ledger entry and the engine's private `jobKey` (`engine.ts:490-491` vs `:414-415,:469`) — key coherence holds by construction. `pendingIntents` is a direct map lookup (`runner-dispatcher.ts:142-144`); the FIFO `queues`/`linked`/`groupKey`/`retire` layer is deleted entirely. The round-1 failure scenario is pinned: the new out-of-order test (runner-dispatcher.test.ts:108-132) dispatches 02-b before 01-a, projects the ledger in the opposite order, and resolves in a third order — the FIFO mutant assigns 01-a's entry the body "task two" and fails it. Mutant killed.
+- **F2 (major, PLAUSIBLE) — RESOLVED as re-scoped by ADR-7.** `Dispatcher.managesOwnWorkspace?` declared per the plan's Interface contracts (`seam.ts:40-44`); `RemoteDispatcher` sets it `true` (`runner-dispatcher.ts:112`), tested (runner-dispatcher.test.ts:219-223). ADR-7's choice sentence scopes this task to declaring the marker; the engine-side consumption is not this task's scope — but see F6.
+- **F3 (minor) — RESOLVED as re-scoped by ADR-7.** `PendingIntent.baseOid?` carried and doc-committed to server-side augmentation (`runner-dispatcher.ts:37-41`); a test pins that the dispatcher never sets it (runner-dispatcher.test.ts:225-232); the augmentation obligation now lives in task 03's scope text (tasks/03-runner-api.yaml:30-33), no longer only in task 02's notes.
+- **F4 (minor) — RESOLVED.** `formatDuration` (`runner-dispatcher.ts:86-90`) replaces the whole-minute rounding at the timeout message (`:132`); test pins "timed out after 20ms" (runner-dispatcher.test.ts:189-194).
+- **F5 (major, process) — RESOLVED.** This round reviewed a real delta: the escalation-#3 plan amendment (820c21e) landed before the implementer round (2a143d2), in the sequence round 2 requested.
+
+## Findings (new this round)
+
+### F6 — major, PLAUSIBLE — the plan's remaining engine-side remote contracts have no owning task surface once task 02 closes
+- **Where:** plan.md Interface contracts (`DispatchOutcome.harvest`, `harvest.ts`'s `harvestPathspecs`, `workspace.ts`'s `foldHarvestBranch`, `launch()` branching on `managesOwnWorkspace`) vs. the surfaces of tasks 03 (server files only), 04 (`packages/runner-agent/` only), 05 (`start.ts`, `runner-dispatcher.ts`, server `main.ts`), 06 (one test file). `grep managesOwnWorkspace engine.ts` is empty; `DispatchOutcome` has no `harvest` field.
+- **Failure scenario:** task 05 wires `RemoteDispatcher`; `launch()` (engine.ts:478-481) still unconditionally creates a local checkout and runs the local fold/harvest for a dispatch executed on another machine — the harvest branch the worker pushes (tasks 03/04) is never folded, so R4/R5's mapping to tasks 02/03/04 cannot be satisfied inside those tasks' declared surfaces. PLAUSIBLE: bites at task 03/04/05 implementation time, not in this diff; the exact decomposition-gap shape that forced escalation #3, visible now rather than at round cap.
+- **Requirement:** plan Interface contracts (engine `launch()` branching, `foldHarvestBranch`); requirement→task mapping rows R3/R4. Addressed to the Architect/G1 human: a surface amendment (engine.ts/workspace.ts/harvest.ts into 03, 04, or a new task) before dispatching task 03 or 04 — not an implementer round on this task.
+
+### F7 — minor, PLAUSIBLE — a duplicate-key `dispatch()` silently orphans the first pending call
+- **Where:** `runner-dispatcher.ts:135` (unguarded `calls.set`), `:131` (the first call's timer then deletes whichever call now holds the key)
+- **Failure scenario:** two `dispatch()` calls with identical `slug|role|task|round` while the first is pending → the second overwrites the map entry; the first's timer later deletes the second's entry, so a legitimate workstation report for the second returns `false` from `resolveOutcome` and the second only ever times out. Not constructible through the engine today — commit-then-launch plus the `jobKey`-keyed job tracking dedupes upstream, and the engine is `dispatch()`'s only caller — hence PLAUSIBLE. A one-line guard (reject on duplicate key) would close it for whatever task 05 wires.
+
+## Coverage
+
+I verified every prior finding against the actual round-3 code, re-reviewed the full delta against the spec and the ADR-7-amended plan, and ran the tests and typecheck on this checkout; everything outside F6 and F7 came back clean.
+
+- F1 fix mechanics: dispatch-time keying, direct lookup, FIFO layer fully deleted ✓
+- Key coherence: request fields, ledger entry, and engine `jobKey` all derive from one intent ✓
+- Mutation reasoning on the new tests: order-shuffled correlation, round-dropped-key, engine-not-threading, marker-absent, baseOid-set, 0min-message mutants all killed ✓; sole survivor is `formatDuration`'s untested seconds branch — message-only, trivial
+- R1/AC1.1: `HeadlessDispatcher` untouched (seam.ts delta is optional fields + doc comments); prior 12 seam tests unchanged in substance, one new test appended under the ADR-7-widened surface ✓
+- AC1.2: success/failure/timeout paths still stub-tested, no network ✓
+- R5/AC2.1: still no fs, git, or child-process access in the dispatcher; `req.cwd` never read ✓
+- R7: timeout rejection still lands in `launch()`'s catch and flows to `closeDispatch`; no parallel aging added ✓
+- State hygiene: single `calls` map; both settle paths clear timer and entry ✓
+- Tests: target suites 32/32; full orchestrator package 154 passed, 1 skipped (opt-in live smoke), 0 failed; `npm run typecheck` clean ✓
+- Plan amendment (820c21e) faithfully records escalation #3: ADR-7, header note, task 02 surface widening, task 03 baseOid obligation ✓
+
+## Boundary check
+
+Implementation commit 2a143d2 touches exactly five code files, all inside the ADR-7-widened surface (`seam.ts`, `engine.ts`, `runner-dispatcher.ts`, both test files), plus task 02's append-only notes — the contract's report-back channel. The engine.ts delta is minimally scoped: two threaded fields in `launch()`, nothing else. Amendment commit 820c21e (plan.md, tasks/02 surface, tasks/03 scope) is the G1 human's own escalation-resolution edit, not implementer work. Remaining commits in range are orchestrator/human state.yaml bookkeeping. No breach.
+
+## Note for G2
+
+Approving on this task's own merits: all four round-1 findings are genuinely resolved, the fix removes the defect class rather than testing around it, and the suite now discriminates the reordering failure that drove escalation #3. F6 is a plan-decomposition gap affecting not-yet-dispatched tasks — it needs an Architect surface amendment before task 03/04 dispatch, and approving task 02 does not foreclose that.

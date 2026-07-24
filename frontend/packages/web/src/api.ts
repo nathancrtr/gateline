@@ -172,6 +172,8 @@ export interface EngineHealthEntry {
   commit?: string
   codeHead?: string
   codeState?: 'fresh' | 'superseded-pending' | 'paused'
+  /** The monitor's specific cause, present only while paused (and only from engines new enough to report it). */
+  codeReason?: string
 }
 
 export interface EngineHealthResponse {

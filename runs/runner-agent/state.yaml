@@ -514,6 +514,28 @@ budget:
           tokens_in: 14,
           tokens_out: 2747,
           cost_usd: 3.5633915
+        },
+      {
+          at: 2026-07-24T19:57:47.442Z,
+          role: reviewer,
+          task: 04-workstation-agent,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
+        },
+      {
+          at: 2026-07-24T19:57:47.442Z,
+          role: reviewer,
+          task: 05-wiring,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:

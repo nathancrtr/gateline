@@ -483,7 +483,7 @@ tasks:
   [
     { id: 01-seam-extend, status: review-approved, review_rounds: 2 },
     { id: 02-remote-dispatcher, status: review-approved, review_rounds: 3 },
-    { id: 03-runner-api, status: in-review, review_rounds: 1 },
+    { id: 03-runner-api, status: in-review, review_rounds: 2 },
     { id: 04-workstation-agent, status: pending, review_rounds: 0 },
     { id: 05-wiring, status: pending, review_rounds: 0 },
     { id: 06-live-smoke, status: pending, review_rounds: 0 }

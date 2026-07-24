@@ -391,6 +391,17 @@ budget:
           tokens_in: 12,
           tokens_out: 3644,
           cost_usd: 3.2271704999999997
+        },
+      {
+          at: 2026-07-24T00:22:26.323Z,
+          role: reviewer,
+          task: 02-remote-dispatcher,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:

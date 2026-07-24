@@ -1,7 +1,7 @@
 run: runner-agent
 branch: run/runner-agent
-phase: implement # staged — not yet armed; `agentic arm runner-agent` starts the run
-paused_reason: null
+phase: paused # staged — not yet armed; `agentic arm runner-agent` starts the run
+paused_reason: escalation
 profile: full # patch | standard | full
 intake:
   # source-agnostic staging provenance; free-form path: nulls + client_key
@@ -603,5 +603,11 @@ escalations:
         resolved_at: 2026-07-24T16:13:39.509Z,
         resolution: accidentally started agentic service without
           `--no-budget--enforcement` option -- restarted and resolving
+      },
+    {
+        at: 2026-07-24T16:57:52.028Z,
+        from_role: orchestrator,
+        reason: reviewer escalated task 04-workstation-agent — see review-04.md,
+        resolved: false
       }
   ]

@@ -1,7 +1,7 @@
 run: runner-agent
 branch: run/runner-agent
-phase: implement # staged — not yet armed; `agentic arm runner-agent` starts the run
-paused_reason: null
+phase: paused # staged — not yet armed; `agentic arm runner-agent` starts the run
+paused_reason: escalation
 profile: full # patch | standard | full
 intake:
   # source-agnostic staging provenance; free-form path: nulls + client_key
@@ -12,7 +12,7 @@ intake:
   staged_by: "Nathan Carter"
 budget:
   cost_limit_usd: null
-  cost_spent_usd: 86.28
+  cost_spent_usd: 94.28
   ledger:
     [
       {
@@ -557,7 +557,8 @@ budget:
           model: anthropic/claude-sonnet-5,
           tokens_in: null,
           tokens_out: null,
-          cost_usd: null
+          cost_usd: 8,
+          failed: true
         },
       {
           at: 2026-07-24T20:18:49.451Z,
@@ -596,7 +597,7 @@ tasks:
     { id: 01-seam-extend, status: review-approved, review_rounds: 2 },
     { id: 02-remote-dispatcher, status: review-approved, review_rounds: 3 },
     { id: 03-runner-api, status: review-approved, review_rounds: 2 },
-    { id: 04-workstation-agent, status: dispatched, review_rounds: 2 },
+    { id: 04-workstation-agent, status: failed, review_rounds: 2 },
     { id: 05-wiring, status: review-approved, review_rounds: 2 },
     { id: 06-live-smoke, status: pending, review_rounds: 0 }
   ]
@@ -673,5 +674,12 @@ escalations:
           the runner-agent package. Task 04's file-contact surface widened
           accordingly. 259 tests pass, typecheck clean. Ready for reviewer
           re-review (round 2) against this delta."
+      },
+    {
+        at: 2026-07-24T21:43:30.362Z,
+        from_role: orchestrator,
+        reason: "implementer (04-workstation-agent) failed twice: harness timed out
+          after 90min wall clock — process group killed (SIGKILL)",
+        resolved: false
       }
   ]

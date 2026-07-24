@@ -49,3 +49,48 @@ Code changes touch exactly the two declared surface files (`src/runner-dispatche
 ## Escalation summary (for the Architect / G2)
 
 Task 02's scope requires keying the pending map by `slug|role|task|round`, but `DispatchRequest` carries neither `task` nor `round` — task 01 threaded only R2's minimum, and no remaining task owns seam.ts/engine.ts. The implementer's FIFO workaround is the best in-surface option and is well-tested for the aligned case, but it makes correctness under parallel same-role dispatches depend on unpinned ordering in the engine and in task 03's unwritten projection (F1), and the plan's `managesOwnWorkspace`/harvest seam contract is likewise homeless (F2). Recommended resolution: a small seam amendment (optional `task`/`round` on `DispatchRequest`, populated in `launch()`; the `managesOwnWorkspace` flag while there), then this dispatcher keys directly at dispatch time and the FIFO layer is retired — the implementer proposed exactly this in the task notes.
+
+---
+
+# Round 2 (of 3)
+
+**Verdict:** escalate
+**Round:** 2 of 3
+**Diff reviewed:** 7e4b819..6260f0a (run/runner-agent); code range unchanged at 4cf4689..e4684ef
+
+## Delta since round 1
+
+Empty of reviewable work. Every commit in 7e4b819..HEAD (8e651c6, 4872eab, 8559893, a739e17, 6260f0a) touches only `runs/runner-agent/state.yaml`; `git diff --stat e4684ef..HEAD -- frontend/ runs/runner-agent/plan.md runs/runner-agent/spec.md runs/runner-agent/tasks/` is empty. No implementer round ran between round 1 and this dispatch.
+
+## Prior findings — resolution status
+
+- **F1 (blocking) — NOT RESOLVED.** `runner-dispatcher.ts` is byte-identical to e4684ef; the FIFO `slug|role` link at :141-163 stands and the round-1 failure scenario reproduces unchanged. Escalation #3's resolution (state.yaml: "the architect must update the plan to include `seam.ts/engine.ts` in the file surface") names the correct remedy, but no plan amendment, task-surface change, or seam change has landed — the prerequisite for any in-surface fix still does not exist.
+- **F2 (major, PLAUSIBLE) — NOT RESOLVED.** Class still declares only `adapter` (`runner-dispatcher.ts:117-124`); no `managesOwnWorkspace` marker, and the pending seam amendment is the natural landing place for it — flagged so the architect's amendment covers it in one pass.
+- **F3 (minor) — NOT RESOLVED.** `PendingIntent` (:26-36) still omits a base-OID field; the augmentation obligation is still recorded only in task 02's notes, not in task 03/04/05's scope.
+- **F4 (minor) — NOT RESOLVED.** Timeout message at :145 still rounds to whole minutes.
+
+## Findings (new this round)
+
+### F5 — major (process) — round 2 was dispatched with the escalation prerequisite unmet, consuming a review round on a zero-delta diff
+- **Where:** `runs/runner-agent/state.yaml` escalations[2] (resolution) vs. commits a739e17/6260f0a; no commit amends `runs/runner-agent/plan.md` or any task's `file_contact_surface`
+- **Failure scenario:** rounds are capped at 3; this round can only restate round 1. If the sequence repeats (resume → re-review without the architect's plan amendment and an implementer round landing first), the cap is exhausted with F1 never fixable, forcing a G2 decision on a known-defective correlation layer.
+- **Requirement:** escalation #3 resolution (state.yaml); review-round cap (DESIGN.md gate/round model).
+
+## Coverage
+
+I re-verified the entire delta since round 1 and the current tree state of both surface files, and found no new code to assess — the round reduces to confirming that nothing changed and that each prior finding still stands, which I did with git evidence rather than re-execution.
+
+- Delta audit 7e4b819..HEAD: state.yaml only, all five commits ✓
+- Surface files vs. e4684ef: byte-identical (`git diff` empty) ✓
+- Plan/spec/task files vs. e4684ef: unchanged — escalation prerequisite not landed ✓
+- F1–F4 re-checked against current tree at the round-1 file:line anchors: all reproduce ✓
+- Tests/typecheck: not re-run — `node_modules` missing in this checkout; round-1 results (26/26, 148 passed package-wide, typecheck clean) carry over exactly because the tree is identical ✓
+- Round-1 coverage claims: no reason to revisit; no new code ✓
+
+## Boundary check
+
+No code changed in range, so no surface to breach. The state.yaml edits are the orchestrator's and the human approver's own bookkeeping (its co-writer contract), not task-02 work. This report append is the only file this round modifies.
+
+## Escalation summary (round 2, for the Architect / G2)
+
+Round 1's escalation was resolved with the right directive — amend the plan/task surface so `seam.ts`/`engine.ts` (optional `task`/`round` on `DispatchRequest`, plus the `managesOwnWorkspace` flag) belong to some task — but the directive has not been executed: no plan amendment or implementer round landed before this review was dispatched. There is nothing new to review and F1 remains unfixable in-surface. Requested sequence before round 3: (1) architect lands the plan/task-surface amendment covering seam.ts/engine.ts per escalation #3, folding F2 (and ideally F3's intent-augmentation obligation) into it; (2) an implementer round lands the keyed-at-dispatch fix and retires the FIFO layer, plus the F4 message fix; (3) then dispatch round 3 against that real delta. One review round remains — please do not spend it on another empty diff.

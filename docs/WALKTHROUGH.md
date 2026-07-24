@@ -110,6 +110,29 @@ artifacts:
    the rebuttal note in `notes:`), then re-dispatch the reviewer — round 2 verifies
    the finding against the amended task file and appends its section to the report.
 
+Hand-widening the surface yourself (steps 1–4 above) remains valid v0 practice —
+nothing about the orchestrated path below deprecates it.
+
+**The orchestrated path (v1, issue #190).** When the reviewer's verdict is
+`escalate` rather than `request-changes` — the finding is a decomposition defect,
+not something an implementer round can fix — resolve the escalation with
+`--disposition re-plan` (`agentic resolve-escalation <slug> <index> --note "…" --disposition re-plan`,
+or the web decide card's "Re-plan" option). The engine dispatches the **architect**
+in amendment mode, carrying the review report path and your resolution note: the
+architect amends `plan.md` with a dated ADR and, if the finding names a surface or
+decomposition defect, may widen the affected task's `file_contact_surface` in
+`tasks/*.yaml` itself — checking it against every other task's surface and
+serializing any overlap via `depends_on`, exactly as step 1 above describes, just
+performed by the architect rather than by you.
+
+The widening does not take effect silently. Once the amendment lands, the engine
+raises a *fresh* escalation naming the task, pauses, and waits for you to
+acknowledge it — the architect proposes the widened boundary, you dispose. Resolve
+that escalation the normal way, typically with `--disposition return-to-implement`:
+the engine sends the task back to the implementer with the review report (its job
+is the same as step 4's rebuttal note, now against the amended task file), then on
+to the reviewer for a fresh round once the implementer responds.
+
 ## 4. Verify (Verifier)
 
 Once tasks are approved:

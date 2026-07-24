@@ -25,10 +25,11 @@
 //   D15 request-changes, implementer responded       → dispatch reviewer (verify round)
 //   D16 latest verdict approve                       → record task status review-approved
 //   D17 reviewer verdict escalate                    → escalate + pause; the LATEST resolution
-//       newer than the verdict routes by its disposition (#189): `re-review` dispatches the
+//       newer than the verdict routes by its disposition (#189, #190): `re-review` dispatches the
 //       re-review round immediately, an explicit human override of the #188 zero-delta guard;
 //       `return-to-implement` mirrors D14/D15's turn-taking off the resolution's timestamp;
-//       absent disposition → legacy behavior, gated on a non-state.yaml commit newer than the
+//       `re-plan` sends the finding to the architect's amendment mode — see D22/D23; absent
+//       disposition → legacy behavior, gated on a non-state.yaml commit newer than the
 //       verdict (dispatch re-review) or rest naming the fix still to land (#188)
 //   D18 all tasks review-approved+, no verification  → dispatch verifier
 //   D19 phase implement, state lists no tasks        → record: seed tasks[] from tasks/*.yaml (the v0 human's mirror step)
@@ -38,6 +39,14 @@
 //   D21 profile invariant violated: a decided gate outside the run's profile
 //       (mid-run downgrade), a phase outside the profile's sequence, or a
 //       patch run with no work item                  → escalate + pause
+//   D22 D17 resolution disposition `re-plan`, no amendment landed yet (#190) → dispatch the
+//       architect in amendment mode, carrying the review report path and the resolution note;
+//       an architect already in flight rests instead (D12 shape)
+//   D23 D17 resolution disposition `re-plan`, amendment landed since resolved_at (plan.md or a
+//       tasks/*.yaml touched newer, #190) → raise a fresh escalation naming `task <id>` and
+//       pause for human acknowledgment; its resolution (typically `return-to-implement`) is
+//       just another resolution matching that same `task <id>` text, so "latest matching
+//       resolution" (D17) picks it up and routes through #189's machinery unchanged
 //   DB  any dispatch would exceed the budget cap     → escalate + pause budget-exhausted
 //       (skipped when budget enforcement is off, #109 — metering still happens)
 //
@@ -89,6 +98,14 @@ export type Bounce =
   | { kind: 'malformed'; artifact: string; missing: string[] }
   | { kind: 'gate-declined'; gate: GateId; notes: string | null }
   | { kind: 'review'; report: string }
+  /**
+   * Amendment-mode architect dispatch (#190, disposition `re-plan`): the
+   * review report the finding lives in, the resolving human's note, and the
+   * task whose surface may need widening — named so the reason-matching
+   * convention (`task <id>`) that D17/D20 already key on stays intact when
+   * the amendment lands and a fresh acknowledgment escalation is raised.
+   */
+  | { kind: 'amendment'; report: string; note: string; task: string }
 
 export interface DispatchIntent {
   role: Role
@@ -412,6 +429,51 @@ function implementPhase(obs: RunObservation): DerivedAction {
             })
           }
           continue
+        }
+
+        // disposition `re-plan` (#190) — the routed finding names a surface
+        // or decomposition defect no task's file_contact_surface can absorb;
+        // the human sends it to the architect's amendment mode rather than
+        // the implementer. The architect is a run-wide resource, not a
+        // per-task one (mirrors planPhase's architect dispatch), so this
+        // branch returns immediately instead of batching with other tasks'
+        // dispatches below — at most one architect amendment in flight.
+        if (resolution.disposition === 're-plan') {
+          const inFlight = obs.openDispatches.find((d) => d.role === 'architect')
+          if (inFlight)
+            return rest(
+              'D12',
+              `architect dispatched ${inFlight.at ?? ''} and not yet landed — in flight (task ${task.id} awaits the amendment)`,
+            )
+
+          const resolvedAtSec = Date.parse(resolution.resolved_at!) / 1000
+          const touchedSince = (path: string | undefined) => {
+            const t = path ? (obs.lastTouched[path] ?? null) : null
+            return t !== null && t > resolvedAtSec
+          }
+          const amendmentLanded =
+            touchedSince('plan.md') || [...obs.taskFiles.values()].some((f) => touchedSince(f.path))
+
+          if (amendmentLanded)
+            return escalate(
+              'D23',
+              `task ${task.id}: architect amendment landed for the re-plan disposition — acknowledge to proceed (see plan.md's dated ADR)`,
+              'escalation',
+            )
+
+          return gatedDispatch(
+            obs,
+            [
+              {
+                role: 'architect',
+                task: null,
+                round: null,
+                bounce: { kind: 'amendment', report: review!.path, note: resolution.resolution ?? '', task: task.id },
+                reason: `task ${task.id}: escalation resolved with disposition re-plan — dispatch architect in amendment mode with the review report and resolution note`,
+              },
+            ],
+            'D22',
+          )
         }
 
         // No disposition — legacy behavior. The resolution note alone proves

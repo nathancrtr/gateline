@@ -40,6 +40,10 @@ export function promptBody(
       break
     case 'architect':
       parts.push(`for run \`${runDir}\`.`)
+      if (intent.bounce?.kind === 'amendment')
+        parts.push(
+          `This is an amendment-mode dispatch (disposition re-plan): task ${intent.bounce.task}'s reviewer escalation — see \`${runDir}/${intent.bounce.report}\` — was resolved with this note from the human: "${intent.bounce.note}". Amend plan.md with a new, dated ADR; if the finding names a surface/decomposition defect, you may also widen the affected task's file_contact_surface in tasks/*.yaml — check it against every other task's surface and serialize any overlap via depends_on. Change nothing else.`,
+        )
       parts.push(hasShell ? COMMIT_LINE(slug, 'plan and task breakdown') : HARVEST_LINE(slug))
       break
     case 'implementer':

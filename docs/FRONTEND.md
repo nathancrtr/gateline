@@ -217,8 +217,8 @@ Two small tools, both repo-resident:
    `decline` / `resolve-escalation` — writes the `state.yaml` entry with name (from
    git config), timestamp, and prompted correction-category, then commits;
    `resolve-escalation` also takes an optional `--disposition` naming a
-   machine-actionable route (`re-review` | `return-to-implement`, ORCHESTRATOR.md
-   §4.2) the v1 orchestrator acts on. Kills the hand-editing error class and makes
+   machine-actionable route (`re-review` | `return-to-implement` | `re-plan`,
+   ORCHESTRATOR.md §4.2) the v1 orchestrator acts on. Kills the hand-editing error class and makes
    principle 3 real. Also the natural home for the PR-approval → `state.yaml` sync
    (§2).
 2. A static dashboard: CI renders `runs/*/state.yaml` (across the repos that carry

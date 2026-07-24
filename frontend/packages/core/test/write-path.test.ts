@@ -197,6 +197,26 @@ describe('decision legality (planDecision)', () => {
     expect(after.state!.escalations[0]!.disposition).toBe('return-to-implement')
   })
 
+  it('resolve-escalation accepts re-plan as a third disposition (#190)', async () => {
+    const ref = await refFor('escalated')
+    const { state } = await ctx.source.readState(ref)
+    const planned = planDecision(
+      state!,
+      { action: 'resolve-escalation', escalationIndex: 0, notes: 'decomposition defect — send to the architect', disposition: 're-plan' },
+      who,
+    )
+    expect(planned.message).toContain('[disposition: re-plan]')
+    expect(planned.summary).toContain('disposition: re-plan')
+    await ctx.source.writeState(ref, planned.mutate, planned.message)
+    const after = await ctx.source.readState(ref)
+    expect(after.state!.escalations[0]).toMatchObject({
+      resolved: true,
+      resolved_by: 'Fixture Operator',
+      resolution: 'decomposition defect — send to the architect',
+      disposition: 're-plan',
+    })
+  })
+
   it('resolve-escalation rejects a junk disposition', async () => {
     const ref = await refFor('escalated')
     const { state } = await ctx.source.readState(ref)

@@ -136,7 +136,8 @@ implementation time (one test per row, like the frontend's); its shape:
 | Task diff ready, `review_rounds` < 3 | Dispatch Reviewer (P5-constrained, §5.3) |
 | Review requests changes, rounds < 3 | Dispatch Implementer, round n+1 |
 | Round cap hit, or two bounces of the same artifact | Escalate; pause the run |
-| Review verdict `escalate` | Escalate; pause. Resolving the escalation *after* the verdict landed routes by the LATEST matching resolution's optional `disposition` (issue #189): `re-review` dispatches the re-review round immediately — an explicit human override of the #188 zero-delta guard; `return-to-implement` sends the task back to the implementer with the review report, or on to a verify round if the implementer already responded (whose-turn logic keyed off the resolution's timestamp, mirroring the request-changes row above); no disposition named falls back to the legacy behavior — a re-review round only once a real commit (anything other than `state.yaml`) has also landed newer than the verdict, else rest naming the fix that still needs to land (issue #188) |
+| Review verdict `escalate` | Escalate; pause. Resolving the escalation *after* the verdict landed routes by the LATEST matching resolution's optional `disposition` (issues #189, #190): `re-review` dispatches the re-review round immediately — an explicit human override of the #188 zero-delta guard; `return-to-implement` sends the task back to the implementer with the review report, or on to a verify round if the implementer already responded (whose-turn logic keyed off the resolution's timestamp, mirroring the request-changes row above); `re-plan` sends the finding to the architect's amendment mode (see the next row); no disposition named falls back to the legacy behavior — a re-review round only once a real commit (anything other than `state.yaml`) has also landed newer than the verdict, else rest naming the fix that still needs to land (issue #188) |
+| Disposition `re-plan` | Dispatch the architect in amendment mode, carrying the review report path and the resolution note (rule D22) — an architect already in flight rests instead, same as any other in-flight producer. Once the amendment lands (`plan.md` or a `tasks/*.yaml` touched newer than the resolution), the engine raises a *fresh* escalation naming `task <id>` and pauses for human acknowledgment (rule D23, issue #190) rather than acting on the widened surface unattended — the architect proposes, the human still disposes. That acknowledgment escalation's own resolution (typically `return-to-implement`) is just another resolution matching the same `task <id>` text, so the LATEST-matching-resolution rule above picks it up and routes through the ordinary machinery unchanged |
 | Implementer dispatch fails | Return the task to `pending` for its one retry; a second failure marks the task `failed` (nothing reads it as in-flight), escalates, and pauses. Resolving the escalation *after* the last failed attempt returns the task to `pending` — a fresh round supersedes the failure (issue #147) |
 | Budget pre-flight fails (§6) | Pause `budget-exhausted`; escalate |
 
@@ -177,7 +178,21 @@ guard as an explicit override (the human's judgment stands in for the commit
 check); `return-to-implement` routes the task back to the implementer with the
 review report first — or straight to a verify round, if the implementer already
 responded since the resolution landed — mirroring the request-changes
-turn-taking but keyed off the resolution's timestamp rather than the review's.
+turn-taking but keyed off the resolution's timestamp rather than the review's;
+`re-plan` names a surface or decomposition defect no task's `file_contact_surface`
+can absorb (issue #190) and sends it to the architect instead — dispatched in
+amendment mode with the review report path and the resolution note (rule D22),
+same in-flight/budget-gated dispatch path as any other producer. The architect
+may widen a task's `file_contact_surface` in amendment mode (roles/architect.md),
+but the widening does not take effect silently: once it lands (`plan.md` or a
+`tasks/*.yaml` touched newer than the resolution), the engine raises a *fresh*
+escalation naming `task <id>` and pauses (rule D23) rather than resuming
+unattended — the agent proposes, the named human still disposes. Resolving that
+acknowledgment escalation (typically `return-to-implement`) is, to the engine,
+just one more resolution whose reason happens to match the same `task <id>`
+text, so the "latest matching resolution" rule immediately above composes
+correctly without any special case: it becomes the new latest match and routes
+through the ordinary `return-to-implement`/`re-review` machinery unchanged.
 When more than one resolution matches (a human may acknowledge, then later
 resolve with a disposition), only the latest one's disposition governs. A
 twice-failed implementer task is the same shape as the disposition-less

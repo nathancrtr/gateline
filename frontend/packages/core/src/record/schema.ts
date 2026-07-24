@@ -55,8 +55,12 @@ export type Burden = (typeof BURDENS)[number]
 // engine's D17 rule (ORCHESTRATOR.md §4.2): `re-review` re-dispatches the
 // reviewer immediately (a human override of the #188 zero-delta guard);
 // `return-to-implement` sends the task back to the implementer with the
-// review report first. Absent → the engine's legacy guarded-re-review default.
-export const DISPOSITIONS = ['re-review', 'return-to-implement'] as const
+// review report first; `re-plan` (#190) sends the finding to the architect's
+// amendment mode — the fix is a surface/decomposition defect no task can
+// absorb — and, once the amendment lands, the engine raises a fresh
+// escalation for the human to acknowledge before work resumes. Absent → the
+// engine's legacy guarded-re-review default.
+export const DISPOSITIONS = ['re-review', 'return-to-implement', 're-plan'] as const
 export type Disposition = (typeof DISPOSITIONS)[number]
 
 // Task statuses from contracts/state.yaml. A task is "complete for G2"

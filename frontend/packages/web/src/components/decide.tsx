@@ -16,6 +16,7 @@ const BURDEN_OPTIONS: { value: Burden; key: string; label: string; hint: string 
 const DISPOSITION_OPTIONS: { value: Disposition; label: string; hint: string }[] = [
   { value: 're-review', label: 'Re-review', hint: 'the named condition is addressed; verify now' },
   { value: 'return-to-implement', label: 'Return to implement', hint: 'dispatch the implementer with the review report first' },
+  { value: 're-plan', label: 'Re-plan', hint: 'the fix needs the architect: amend the plan/task surfaces first' },
 ]
 
 type Mode = 'idle' | 'approve' | 'decline' | 'resolve' | 'arm'

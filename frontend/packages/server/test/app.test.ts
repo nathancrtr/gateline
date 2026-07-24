@@ -450,6 +450,7 @@ describe('GET /api/engine-health (#141 drift passthrough)', () => {
     expect(noDrift.body.engines.fixture.commit).toBeUndefined()
     expect(noDrift.body.engines.fixture.codeHead).toBeUndefined()
     expect(noDrift.body.engines.fixture.codeState).toBeUndefined()
+    expect(noDrift.body.engines.fixture.codeReason).toBeUndefined()
 
     await writeEngineHealth(fixture.dir, {
       at: new Date().toISOString(),
@@ -466,6 +467,25 @@ describe('GET /api/engine-health (#141 drift passthrough)', () => {
       commit: 'a'.repeat(40),
       codeHead: 'b'.repeat(40),
       codeState: 'superseded-pending',
+    })
+    expect(drift.body.engines.fixture.codeReason).toBeUndefined()
+
+    // A paused heartbeat carries the monitor's cause verbatim (#185).
+    await writeEngineHealth(fixture.dir, {
+      at: new Date().toISOString(),
+      pid: process.pid,
+      heartbeatMs: 180_000,
+      inFlight: 0,
+      pushRejections: {},
+      commit: 'a'.repeat(40),
+      codeHead: 'b'.repeat(40),
+      codeState: 'paused',
+      codeReason: "checkout is on branch 'run/toy', not the default branch (main)",
+    })
+    const paused = await get('/api/engine-health')
+    expect(paused.body.engines.fixture).toMatchObject({
+      codeState: 'paused',
+      codeReason: "checkout is on branch 'run/toy', not the default branch (main)",
     })
   })
 })

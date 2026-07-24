@@ -300,9 +300,13 @@ tasks:
   [
     { id: 01-core-mode-resolution, status: review-approved, review_rounds: 2 },
     { id: 02-egress-guard-seams, status: review-approved, review_rounds: 1 },
-    { id: 03-cli-wiring, status: in-review, review_rounds: 1 },
-    { id: 04-server-orchestrator-wiring, status: in-review, review_rounds: 1 },
-    { id: 05-remoteless-test-coverage, status: in-review, review_rounds: 1 },
+    { id: 03-cli-wiring, status: review-approved, review_rounds: 1 },
+    {
+        id: 04-server-orchestrator-wiring,
+        status: review-approved,
+        review_rounds: 1
+      },
+    { id: 05-remoteless-test-coverage, status: review-approved, review_rounds: 1 },
     { id: 06-docs-topology, status: pending, review_rounds: 0 }
   ]
 escalations:

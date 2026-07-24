@@ -427,7 +427,7 @@ gates:
 tasks:
   [
     { id: 01-seam-extend, status: review-approved, review_rounds: 2 },
-    { id: 02-remote-dispatcher, status: in-review, review_rounds: 1 },
+    { id: 02-remote-dispatcher, status: in-review, review_rounds: 2 },
     { id: 03-runner-api, status: pending, review_rounds: 0 },
     { id: 04-workstation-agent, status: pending, review_rounds: 0 },
     { id: 05-wiring, status: pending, review_rounds: 0 },

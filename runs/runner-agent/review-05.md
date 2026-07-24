@@ -43,3 +43,39 @@ I checked the wiring diff end to end against the task scope and spec R1/R7/R9, a
 ## Boundary check
 
 Four of six touched paths are inside the declared surface (`start.ts`, `main.ts`, `wiring.test.ts`, the task YAML's own notes; `runner-dispatcher.ts` is in-surface but untouched, which is fine). Two are outside: `orchestrator/package.json` and the `package-lock.json` delta — see F2.
+
+## Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** commit `62041db` on `run/runner-agent`
+
+### Prior findings
+
+- **F1 (major) — resolved.** Verified in the committed `start.ts`: the shared config `common` now carries `localDispatcher` (`:158`), only the Engine's own literal overrides it with `remote ?? localDispatcher` (`:170`), and `common` is consumed by exactly two sites — the Engine spread and `new Scheduler(common)` (`:177`) — so the round-1 mutant (a due sweep under `runner.enabled` throwing at the dispatcher's slug/branch guard and resting the role via S1) is dead by construction. The new site comment's factual claims all check against the code (`schedule.ts:328` dispatches without `slug`/`branch`; `runner-dispatcher.ts:121-123` throws on that; `makeRunnerCallback` reads only `engine.inFlightDetail()`). Disabled path: `remote` is `undefined`, engine gets `localDispatcher` — selection identical to round 1's disabled path.
+- **F2 (minor) — adequately deferred, stays open for G2.** devDependency + lockfile delta kept and untouched this round; the rebuttal's convention claim verified by grep (no file in the tree imports a sibling package's `src/*.ts` by relative path — every cross-package edge is a `package.json` dep). Disposition matches round 1's ask exactly: G2 ratifies or rejects the surface deviation explicitly. One audit note: the task notes' paraphrase ("the review … left fixing-vs-rebutting to implementer judgment", "low-risk") overstates round 1's wording — F2 was an automatic boundary finding — but the substance of the rebuttal is sound.
+- **F3 (minor, PLAUSIBLE) — appropriately deferred.** Verified the implementer's surface claim: the capture would land in `seam.ts`'s `DispatchRequest` and `engine.ts`'s `launch()`, both outside the declared surface; the task scope indeed never names the baseOid handoff review-03.md F5 pointed at task 05. Explicitly flagged in the task notes for G2 assignment (round 3, new task, or accept poll-time best-effort) — consistent with round 1's "decomposition-level, not an implementer defect".
+- **F4 (minor) — adequately rebutted.** The implementer concurs with the round-1 reading and records it for G2 to reconcile AC7.1's wording against what the R7 test pair actually demonstrates; no code change is the right change (engine aging is out of surface and scope point 3 pins the call site). Nothing further to verify.
+
+### Findings
+
+### F5 — minor — the F1 fix has no discriminating test; a dispatcher-re-share mutant survives the full suite
+- **Where:** `frontend/packages/orchestrator/src/start.ts:158-177` vs `frontend/packages/orchestrator/test/wiring.test.ts:63-67` (all four wiring tests construct `Engine` + `RemoteDispatcher` directly; grep confirms nothing under `test/` calls `assembleOrchestrator` at all)
+- **Failure scenario:** a future edit moves `dispatcher: remote ?? localDispatcher` back into `common` → every orchestrator/server test still passes → F1's wedged-sweeps defect ships again undetected. Mitigations are real: today's exposure is nil (no production entrypoint can enable the runner — `main.ts:77`'s `assembleOrchestrator` call passes no `runner` option), the implementer's scaffolding rationale is verified accurate (`assembleOrchestrator` unconditionally loads a headless manifest the toy-repo fixture lacks), and the site comment records the invariant. Non-blocking; the natural home for a regression test is the follow-on entrypoint wiring already named at G2 (round 1 observations).
+- **Requirement:** R9 / AC9.1 regression safety (tests-as-product)
+
+### Coverage
+
+I re-verified each round-1 finding against the committed round-2 diff and checked the restructured assembly and comment fixes end to end; everything is clean except the untested-fix gap recorded as F5.
+
+- F1 fix ✓ — `common`'s two consumers traced through the full `start.ts` at `62041db`; no other reader of the dispatcher selection exists in the file
+- New comments ✓ — every file:line claim in the round-2 comments verified against the commit tree: `engine.ts:489` is exactly the `frameworkRoots()` await, and a `managesOwnWorkspace` launch takes the `null`-checkout branch with no earlier await, so the corrected `pollIntents` comment is now accurate
+- wiring.test.ts delta ✓ — comment-only (12 lines inside one block comment); test behavior byte-identical to the round-1 code already reviewed
+- Task YAML ✓ — append-only; round-1 notes preserved intact (missing trailing newline, cosmetic)
+- Disabled path ✓ — `runner` unset yields the same dispatcher object selection as pre-task code; schedule tests unaffected by construction
+- Test execution — implementer-reported (226 pass / 1 pre-existing skip, tsc clean); per role constraints I executed nothing and verified by reading
+- Note for G2: the working tree at review time carries an uncommitted staged reversion of this exact commit's three files; out of scope per dispatch (HEAD already contains the fix), named here so it is not mistaken for the submission
+
+### Boundary check
+
+Round 2 touches `start.ts` and `wiring.test.ts` (both in the declared surface) plus the task YAML's own notes (conventional). No new out-of-surface contact; round 1's two out-of-surface files (`orchestrator/package.json`, `package-lock.json`) are untouched this round — F2's G2 ratification stands as the open disposition.

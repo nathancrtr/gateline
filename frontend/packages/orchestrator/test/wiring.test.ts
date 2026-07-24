@@ -42,13 +42,11 @@ const authedPost = (token: string, body: unknown) => ({
  * Polls `/api/runner/intents` until it reports at least one intent. `launch()`
  * (engine.ts) registers a job (so `engine.inFlight()` is already accurate)
  * synchronously, but only *calls* `dispatcher.dispatch()` — and so populates
- * `RemoteDispatcher`'s own pending-call map — after an async gap: for a
- * `managesOwnWorkspace` dispatcher (RemoteDispatcher included, so no local
- * checkout is created) that gap is the `await this.source.frameworkRoots()`
- * call (`engine.ts:489`), not checkout I/O. A poll issued the instant
- * `engine.tick()` returns can race that gap; a real workstation polling on an
- * interval never notices, so this mirrors that tolerance instead of coupling
- * the test to engine internals.
+ * `RemoteDispatcher`'s own pending-call map — after its checkout setup
+ * (`ensureRunCheckout`/`ensureTaskCheckout`, real git-worktree I/O) resolves.
+ * A poll issued the instant `engine.tick()` returns can race that setup; a
+ * real workstation polling on an interval never notices, so this mirrors
+ * that tolerance instead of coupling the test to engine internals.
  */
 async function pollIntents(app: ReturnType<typeof createApp>, token: string, tries = 100): Promise<{ status: number; intents: WireIntent[] }> {
   for (let i = 0; i < tries; i++) {

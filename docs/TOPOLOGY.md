@@ -162,11 +162,15 @@ is untouched and ctrl-C removes the trial. Rules of the road:
 A deployment that never touches origin at all — no `git push`, no `gh`/GitHub
 API call, no `git fetch` of `origin` — is not an accident of `--no-push` left
 with a fetch loop that happens to fail quietly. It is a named, first-class
-mode: **local-only**. `agentic up`, the standalone `agentic-orchestrator`
-binary, and per-source config all resolve onto the one `push`/local-only
-precedence chain in `loadSources`
-(`frontend/packages/core/src/view-model/config.ts`); there is no second
-resolution mechanism.
+mode: **local-only**. `agentic up` and per-source config resolve through the
+one `push`/local-only precedence table implemented once in `resolveMode`
+(`frontend/packages/core/src/view-model/config.ts`, called from
+`loadSources`). The standalone `agentic-orchestrator` binary never calls
+`loadSources` — it has its own repo (no config file, no multi-source list) —
+so `assembleOrchestrator` (`frontend/packages/orchestrator/src/start.ts`)
+repeats the same conflict check and auto-detect logic against its own
+`--push`/`--local-only` flags. Two call sites, one precedence table: the
+tiers below hold for both.
 
 **Resolution tiers, in order:**
 
@@ -179,8 +183,15 @@ resolution mechanism.
 3. Otherwise, an explicit push setting wins: `--push`/`push: true` turns
    local-only off; **at the CLI tier only**, `--no-push` turns it on (the
    alias below).
-4. Otherwise, origin auto-detect decides: no `remote.origin.url` configured →
-   local-only; an origin exists → push mode.
+4. Otherwise, origin auto-detect decides *local-only*, not push: no
+   `remote.origin.url` configured → local-only; an origin exists → not
+   local-only. Whether a not-local-only source then pushes is a separate
+   question, answered by rule 3's push default for its tier — CLI-tier
+   sources (`agentic up` against `--repo` paths or the cwd default) also
+   auto-detect push the same way (`push = originExists`, #149); config-file
+   entries and the standalone binary default `push` to `false` even with an
+   origin present, and stay a read-only poller (or touch origin not at all)
+   unless `push`/`--push` is set explicitly.
 
 **The `--no-push` alias, and where it stops.** `agentic up --no-push` resolves
 to full local-only — no push, no `gh` calls, no origin fetch — not merely a

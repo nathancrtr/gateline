@@ -93,3 +93,51 @@ notes: |
   unconditional pushing outside the hosted-only context (with the one
   pre-existing DEPLOY.md exception noted above, out of scope here).
 
+  Implementer (round 2), responding to review-06.md:
+
+  F1 (blocking, fixed) — §3.6 tier 4 conflated "origin auto-detect" with
+  "push mode." Re-verified against config.ts:110-114 (resolveMode rule 3:
+  `push = cliTier ? await originExists() : false` when no explicit push is
+  set) and start.ts:69-70 (`push = localOnly ? false : opts.push`, so an
+  un-set `--push` on the standalone binary yields a falsy push regardless of
+  origin). Rewrote tier 4 to state auto-detect decides local-only only, and
+  that whether a not-local-only source then pushes follows rule 3's
+  per-tier default: CLI-tier sources (`--repo`/cwd) auto-detect push the
+  same way origin does; config-file entries and the standalone binary
+  default push to false even with an origin present, matching the existing
+  poller paragraph two paragraphs down (which was already correct and is
+  now consistent with tier 4 instead of contradicting it). docs/TOPOLOGY.md
+  §3.6, tier 4.
+
+  F2 (minor, fixed) — the intro paragraph said "agentic up, the standalone
+  binary, and per-source config all resolve onto the one precedence chain
+  in `loadSources`," which is false as a code-location claim: `start.ts`
+  never imports or calls `loadSources` (grepped
+  frontend/packages/orchestrator/ — no hits); it duplicates the conflict
+  check and auto-detect in `assembleOrchestrator` itself (start.ts:69-70,
+  its own comment says so: "the binary never goes through `loadSources`, so
+  it repeats the same conflict check here"). Rewrote to say `agentic up`
+  and per-source config call `loadSources` (which calls `resolveMode`); the
+  standalone binary has its own repo notion (no config file, no
+  multi-source list) and reimplements the same precedence table directly in
+  `assembleOrchestrator` — two call sites, one table, semantics unchanged.
+  docs/TOPOLOGY.md §3.6, intro paragraph.
+
+  F3 (minor, not a task action) — the review's own verdict on this finding
+  is that the round-1 disclose-don't-fix call was correct ("the
+  implementer's disclose-don't-fix call is correct and AC5.2's literal
+  scope... is not violated... needs a follow-up task, not a fix in this
+  one"). No requirement was found violated. Left docs/DEPLOY.md:210
+  unchanged and the round-1 discovery note in place for the maintainer;
+  nothing to rebut or fix here since the reviewer already agrees the
+  original call stands.
+
+  Post-fix re-verification: re-ran `grep -rni "push" docs/` (matches the
+  review's own re-run) — same classification as round 1, no new
+  contradictions introduced by the tier-4/intro rewrite. Re-read
+  docs/TOPOLOGY.md §3.6 end to end after editing to confirm tier 4 no
+  longer contradicts the poller paragraph (lines ~203-207) or the
+  `--no-push` alias paragraph (lines ~196-202), and that the intro's
+  call-site claim now matches both `loadSources`'s callers (cli/main.ts,
+  server/main.ts) and `start.ts`'s independent path.
+

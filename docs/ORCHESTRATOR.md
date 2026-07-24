@@ -136,7 +136,7 @@ implementation time (one test per row, like the frontend's); its shape:
 | Task diff ready, `review_rounds` < 3 | Dispatch Reviewer (P5-constrained, §5.3) |
 | Review requests changes, rounds < 3 | Dispatch Implementer, round n+1 |
 | Round cap hit, or two bounces of the same artifact | Escalate; pause the run |
-| Review verdict `escalate` | Escalate; pause. Resolving the escalation *after* the verdict landed dispatches a re-review round only once a real commit — anything other than `state.yaml` — has also landed newer than the verdict; resolved with no such commit rests, naming the fix that still needs to land (issue #188) — the fresh verdict supersedes the standing `escalate`, but the resolution note alone is not evidence anything changed |
+| Review verdict `escalate` | Escalate; pause. Resolving the escalation *after* the verdict landed routes by the LATEST matching resolution's optional `disposition` (issue #189): `re-review` dispatches the re-review round immediately — an explicit human override of the #188 zero-delta guard; `return-to-implement` sends the task back to the implementer with the review report, or on to a verify round if the implementer already responded (whose-turn logic keyed off the resolution's timestamp, mirroring the request-changes row above); no disposition named falls back to the legacy behavior — a re-review round only once a real commit (anything other than `state.yaml`) has also landed newer than the verdict, else rest naming the fix that still needs to land (issue #188) |
 | Implementer dispatch fails | Return the task to `pending` for its one retry; a second failure marks the task `failed` (nothing reads it as in-flight), escalates, and pauses. Resolving the escalation *after* the last failed attempt returns the task to `pending` — a fresh round supersedes the failure (issue #147) |
 | Budget pre-flight fails (§6) | Pause `budget-exhausted`; escalate |
 
@@ -169,9 +169,21 @@ engine also requires a real commit under the run directory, excluding `state.yam
 itself, newer than the escalate verdict before it will spend a re-review round:
 resolved with no such commit rests, naming the fix that still needs to land rather
 than burning one of the capped rounds against a byte-identical range (issue #188).
-A twice-failed implementer task is the same shape: the failed ledger entries are
-append-only facts, so the resolution's timestamp is the input — resolved after the
-last failure, the task returns to `pending` for a fresh round (issue #147).
+That guard is the *default* absent an instruction otherwise — a human resolving
+the escalation may instead name a `disposition` (issue #189), a machine-actionable
+route captured in the same resolve decision as the free-text note: `re-review`
+tells the engine the condition is addressed and to verify now, bypassing the
+guard as an explicit override (the human's judgment stands in for the commit
+check); `return-to-implement` routes the task back to the implementer with the
+review report first — or straight to a verify round, if the implementer already
+responded since the resolution landed — mirroring the request-changes
+turn-taking but keyed off the resolution's timestamp rather than the review's.
+When more than one resolution matches (a human may acknowledge, then later
+resolve with a disposition), only the latest one's disposition governs. A
+twice-failed implementer task is the same shape as the disposition-less
+default: the failed ledger entries are append-only facts, so the resolution's
+timestamp is the input — resolved after the last failure, the task returns to
+`pending` for a fresh round (issue #147).
 
 ### 4.3 Writes: the same discipline as the frontend
 

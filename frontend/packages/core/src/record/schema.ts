@@ -51,6 +51,14 @@ export const PROFILE_PHASES: Record<Profile, Phase[]> = {
 export const BURDENS = ['confirmation', 'light-correction', 'heavy-correction'] as const
 export type Burden = (typeof BURDENS)[number]
 
+// A resolve-escalation decision may name a machine-actionable route for the
+// engine's D17 rule (ORCHESTRATOR.md §4.2): `re-review` re-dispatches the
+// reviewer immediately (a human override of the #188 zero-delta guard);
+// `return-to-implement` sends the task back to the implementer with the
+// review report first. Absent → the engine's legacy guarded-re-review default.
+export const DISPOSITIONS = ['re-review', 'return-to-implement'] as const
+export type Disposition = (typeof DISPOSITIONS)[number]
+
 // Task statuses from contracts/state.yaml. A task is "complete for G2"
 // once review has approved it — verification presence is checked separately
 // via verification-report.md, so review-approved and later all count.
@@ -94,6 +102,7 @@ const escalationSchema = z
     resolved_by: z.string().nullish().transform((v) => v ?? null),
     resolved_at: yamlScalarToString.nullish().transform((v) => v ?? null),
     resolution: z.string().nullish().transform((v) => v ?? null),
+    disposition: z.enum(DISPOSITIONS).nullish().transform((v) => v ?? null),
   })
   .passthrough()
 

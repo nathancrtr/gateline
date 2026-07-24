@@ -4,13 +4,18 @@
 // the refusal is the designed outcome.
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ApiError, api, type Burden, type GateId, type InboxItem } from '../api.ts'
+import { ApiError, api, type Burden, type Disposition, type GateId, type InboxItem } from '../api.ts'
 import { useKeys } from '../use-keys.ts'
 
 const BURDEN_OPTIONS: { value: Burden; key: string; label: string; hint: string }[] = [
   { value: 'confirmation', key: '1', label: 'Confirmation', hint: 'looked right as delivered' },
   { value: 'light-correction', key: '2', label: 'Light correction', hint: 'approved, notes attached' },
   { value: 'heavy-correction', key: '3', label: 'Heavy correction', hint: 'took real work to accept' },
+]
+
+const DISPOSITION_OPTIONS: { value: Disposition; label: string; hint: string }[] = [
+  { value: 're-review', label: 'Re-review', hint: 'the named condition is addressed; verify now' },
+  { value: 'return-to-implement', label: 'Return to implement', hint: 'dispatch the implementer with the review report first' },
 ]
 
 type Mode = 'idle' | 'approve' | 'decline' | 'resolve' | 'arm'
@@ -20,6 +25,7 @@ export function DecidePanel({ item, primary = false }: { item: InboxItem; primar
   const [mode, setMode] = useState<Mode>('idle')
   const [burden, setBurden] = useState<Burden | null>(null)
   const [notes, setNotes] = useState('')
+  const [disposition, setDisposition] = useState<Disposition | null>(null)
   const [hold, setHold] = useState(false)
   const [holdReason, setHoldReason] = useState('')
   const [flash, setFlash] = useState<{ kind: 'ok' | 'conflict' | 'error'; text: string } | null>(null)
@@ -61,6 +67,7 @@ export function DecidePanel({ item, primary = false }: { item: InboxItem; primar
       setMode('idle')
       setBurden(null)
       setNotes('')
+      setDisposition(null)
       setHold(false)
       setHoldReason('')
       void queryClient.invalidateQueries()
@@ -97,7 +104,13 @@ export function DecidePanel({ item, primary = false }: { item: InboxItem; primar
   }
   const submitResolve = () => {
     if (item.escalationIndex === null || !notes.trim()) return
-    mutation.mutate({ ...base, action: 'resolve-escalation', escalationIndex: item.escalationIndex, notes: notes.trim() })
+    mutation.mutate({
+      ...base,
+      action: 'resolve-escalation',
+      escalationIndex: item.escalationIndex,
+      notes: notes.trim(),
+      disposition: disposition ?? undefined,
+    })
   }
   const submitResume = () => mutation.mutate({ ...base, action: 'resume' })
   // A staged run has never flown — arming, never resuming, is what starts it
@@ -222,6 +235,33 @@ export function DecidePanel({ item, primary = false }: { item: InboxItem; primar
       {mode === 'resolve' && (
         <div className="flex flex-col gap-3">
           <NotesField value={notes} onChange={setNotes} autoFocus placeholder="Disposition — what unblocks the run, recorded on the escalation. Required." />
+          <fieldset>
+            <legend className="mb-[9px] font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted">
+              Route the run on resolve (optional — unset leaves the engine's default)
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              {DISPOSITION_OPTIONS.map((o) => (
+                <label
+                  key={o.value}
+                  className={`flex cursor-pointer items-baseline gap-2 rounded-[5px] border px-3 py-2 text-sm transition-colors ${
+                    disposition === o.value ? 'border-accent bg-accent-soft font-semibold text-accent' : 'border-line bg-inset hover:border-accent'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name={`disposition-${item.slug}-${item.escalationIndex}`}
+                    className="sr-only"
+                    checked={disposition === o.value}
+                    onChange={() => setDisposition(o.value)}
+                  />
+                  <span>
+                    {o.label}
+                    <span className="ml-1.5 text-xs font-normal text-muted">{o.hint}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
           <div className="flex gap-2">
             <Button primary onClick={submitResolve} disabled={!notes.trim() || mutation.isPending} data-decide="resolve-confirm">
               {mutation.isPending ? 'Committing…' : 'Resolve escalation'}

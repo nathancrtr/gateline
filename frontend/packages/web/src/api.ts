@@ -8,6 +8,7 @@
 import type {
   Burden,
   DecisionAction,
+  Disposition,
   DiffFile,
   GateId,
   GateMetrics,
@@ -23,7 +24,20 @@ import type {
   Validation,
 } from '@agentic/core'
 
-export type { Burden, CriterionEvidence, DiffFile, EvidenceRollup, GateId, InboxItem, LexiconEntry, Profile, RunState, RunSummary, Validation }
+export type {
+  Burden,
+  CriterionEvidence,
+  DiffFile,
+  Disposition,
+  EvidenceRollup,
+  GateId,
+  InboxItem,
+  LexiconEntry,
+  Profile,
+  RunState,
+  RunSummary,
+  Validation,
+}
 
 /** Mirror of core's PROFILE_GATES (DESIGN.md §4.1) — a value import from core would pull the node runtime into the browser bundle. */
 export const PROFILE_GATES: Record<Profile, GateId[]> = {
@@ -139,6 +153,7 @@ export interface DecisionRequest {
   notes?: string
   burden?: Burden
   escalationIndex?: number
+  disposition?: Disposition
   pauseReason?: string
   resumePhase?: Phase
   hold?: boolean

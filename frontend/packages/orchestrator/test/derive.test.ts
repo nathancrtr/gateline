@@ -100,7 +100,9 @@ describe('the derivation table, one rule per row', () => {
   })
 
   it('D3 — unresolved escalation rests', () => {
-    const s = state({ escalations: [{ at: null, from_role: 'verifier', reason: 'x', resolved: false, resolved_by: null, resolved_at: null, resolution: null }] })
+    const s = state({
+      escalations: [{ at: null, from_role: 'verifier', reason: 'x', resolved: false, resolved_by: null, resolved_at: null, resolution: null, disposition: null }],
+    })
     expect(deriveAction(obs({ state: s }))).toMatchObject({ kind: 'rest', rule: 'D3' })
   })
 
@@ -327,6 +329,7 @@ describe('the derivation table, one rule per row', () => {
           resolved_by: 'op',
           resolved_at: '1970-01-01T00:05:00.000Z', // epoch 300 < lastTouched 500
           resolution: 'stale resolution from an earlier round',
+          disposition: null,
         },
       ],
     })
@@ -355,6 +358,7 @@ describe('the derivation table, one rule per row', () => {
           resolved_by: 'op',
           resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600 > lastTouched 500
           resolution: 'condition repaired on the branch',
+          disposition: null,
         },
       ],
     })
@@ -386,6 +390,7 @@ describe('the derivation table, one rule per row', () => {
           resolved_by: 'op',
           resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600 > lastTouched 500
           resolution: 'acknowledged, but nothing landed yet',
+          disposition: null,
         },
       ],
     })
@@ -414,6 +419,7 @@ describe('the derivation table, one rule per row', () => {
           resolved_by: 'op',
           resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600 > lastTouched 500
           resolution: 'plan corrected to match the intended surface',
+          disposition: null,
         },
       ],
     })
@@ -447,6 +453,7 @@ describe('the derivation table, one rule per row', () => {
           resolved_by: 'op',
           resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600 > lastTouched 500
           resolution: 'acknowledged only',
+          disposition: null,
         },
       ],
     })
@@ -459,6 +466,143 @@ describe('the derivation table, one rule per row', () => {
       }),
     )
     expect(a).toMatchObject({ kind: 'rest', rule: 'D17' })
+  })
+
+  it('D17 — disposition re-review dispatches immediately, bypassing the #188 zero-delta guard (#189)', () => {
+    // The human's disposition choice IS the judgment the guard exists to
+    // stand in for when no one has looked — no non-state.yaml commit at all,
+    // yet the re-review still dispatches.
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600 > lastTouched 500
+          resolution: 'condition confirmed addressed; verify now',
+          disposition: 're-review',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+        lastNonStateCommit: null, // no commit has landed at all — the guard would normally rest
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'dispatch', rule: 'D13' })
+    expect(a.kind === 'dispatch' && a.dispatches[0]).toMatchObject({ role: 'reviewer', task: '01-a', round: 2 })
+  })
+
+  it('D17 — disposition return-to-implement with no implementer response yet dispatches the implementer with the review report (#189)', () => {
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600
+          resolution: 'send back to the implementer first',
+          disposition: 'return-to-implement',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+        lastTouched: { 'tasks/01-a.yaml': 400 }, // predates the resolution — not yet responded
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'dispatch', rule: 'D11' })
+    expect(a.kind === 'dispatch' && a.dispatches[0]).toMatchObject({
+      role: 'implementer',
+      task: '01-a',
+      round: 2,
+      bounce: { kind: 'review', report: 'review-01.md' },
+    })
+  })
+
+  it('D17 — disposition return-to-implement with a task-file touch newer than the resolution dispatches the verify round (#189)', () => {
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600
+          resolution: 'send back to the implementer first',
+          disposition: 'return-to-implement',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+        lastTouched: { 'tasks/01-a.yaml': 700 }, // newer than the resolution — implementer responded
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'dispatch', rule: 'D13' })
+    expect(a.kind === 'dispatch' && a.dispatches[0]).toMatchObject({ role: 'reviewer', task: '01-a', round: 2 })
+  })
+
+  it('D17 — with two matching resolutions, the LATEST resolution disposition governs the routing (#189)', () => {
+    // An earlier acknowledgment-only resolution (no disposition, so the
+    // legacy guarded path) is superseded by a later resolution that names a
+    // disposition — the later resolution is what actually unblocks the run.
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600 — earlier acknowledgment
+          resolution: 'acknowledged only, no disposition yet',
+          disposition: null,
+        },
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:15:00.000Z', // epoch 900 — the later, governing resolution
+          resolution: 'condition confirmed addressed; verify now',
+          disposition: 're-review',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+        lastNonStateCommit: null, // the legacy guard on the first resolution would rest; the later re-review disposition overrides it
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'dispatch', rule: 'D13' })
+    expect(a.kind === 'dispatch' && a.dispatches[0]).toMatchObject({ role: 'reviewer', task: '01-a', round: 2 })
   })
 
   it('D20 — a failed task whose naming escalation resolved after the last failure returns to pending', () => {
@@ -476,6 +620,7 @@ describe('the derivation table, one rule per row', () => {
           resolved_by: 'op',
           resolved_at: '1970-01-01T00:10:00.000Z', // after the 00:05 failure below
           resolution: 'outage over — retry',
+          disposition: null,
         },
       ],
     })
@@ -504,6 +649,7 @@ describe('the derivation table, one rule per row', () => {
           resolved_by: 'op',
           resolved_at: '1970-01-01T00:04:00.000Z', // before the 00:05 failure below
           resolution: 'unblocked',
+          disposition: null,
         },
       ],
     })
@@ -530,6 +676,7 @@ describe('the derivation table, one rule per row', () => {
           resolved_by: 'op',
           resolved_at: '1970-01-01T00:10:00.000Z',
           resolution: 'unblocked',
+          disposition: null,
         },
       ],
     })

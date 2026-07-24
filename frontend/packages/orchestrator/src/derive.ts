@@ -24,10 +24,12 @@
 //   D14 request-changes, implementer not responded   → dispatch implementer, round n+1, with the report
 //   D15 request-changes, implementer responded       → dispatch reviewer (verify round)
 //   D16 latest verdict approve                       → record task status review-approved
-//   D17 reviewer verdict escalate                    → escalate + pause; a resolution newer
-//       than the verdict AND a non-state.yaml commit newer than the verdict
-//       → dispatch re-review round (the fresh verdict supersedes); resolved
-//       with no such commit → rest (acknowledgment alone is not a fix, #188)
+//   D17 reviewer verdict escalate                    → escalate + pause; the LATEST resolution
+//       newer than the verdict routes by its disposition (#189): `re-review` dispatches the
+//       re-review round immediately, an explicit human override of the #188 zero-delta guard;
+//       `return-to-implement` mirrors D14/D15's turn-taking off the resolution's timestamp;
+//       absent disposition → legacy behavior, gated on a non-state.yaml commit newer than the
+//       verdict (dispatch re-review) or rest naming the fix still to land (#188)
 //   D18 all tasks review-approved+, no verification  → dispatch verifier
 //   D19 phase implement, state lists no tasks        → record: seed tasks[] from tasks/*.yaml (the v0 human's mirror step)
 //   D20 task failed (implementer failed twice); the naming escalation resolved
@@ -354,8 +356,10 @@ function implementPhase(obs: RunObservation): DerivedAction {
         // no later state edit can amend it, so the escalation entry's
         // resolution is the unblocking input. A resolution newer than the
         // verdict means a human addressed the named condition in the repo;
-        // verify that by re-review instead of re-escalating every tick.
-        const acknowledged = state.escalations.some(
+        // verify that by re-review instead of re-escalating every tick. A
+        // human may resolve more than once (acknowledge, then later resolve
+        // with a disposition) — only the LATEST matching resolution governs.
+        const matching = state.escalations.filter(
           (e) =>
             e.resolved &&
             e.resolved_at !== null &&
@@ -363,14 +367,61 @@ function implementPhase(obs: RunObservation): DerivedAction {
             review!.lastTouched !== null &&
             Date.parse(e.resolved_at) / 1000 > review!.lastTouched,
         )
-        if (!acknowledged) return escalate('D17', `reviewer escalated task ${task.id} — see ${review!.path}`, 'escalation')
-        // The resolution note alone proves nothing changed — it is a state.yaml
-        // edit the human could write without touching the condition it names.
-        // Require a real commit under the run directory, excluding state.yaml
-        // itself, newer than the escalate verdict: that is the fix landing, not
-        // just the acknowledgment. Without this a zero-delta resolve+resume
-        // dispatches a re-review round against a byte-identical range, burning
-        // one of the ROUND_CAP rounds for nothing (#188).
+        if (matching.length === 0) return escalate('D17', `reviewer escalated task ${task.id} — see ${review!.path}`, 'escalation')
+        const resolution = matching.reduce((latest, e) => (Date.parse(e.resolved_at!) > Date.parse(latest.resolved_at!) ? e : latest))
+
+        // disposition `re-review` (#189) — an explicit human choice made at
+        // resolve time, which is itself the judgment the #188 zero-delta
+        // guard exists to protect when no human has looked. Bypass it.
+        if (resolution.disposition === 're-review') {
+          dispatches.push({
+            role: 'reviewer',
+            task: task.id,
+            round: task.review_rounds + 1,
+            bounce: null,
+            reason: `task ${task.id}: escalation resolved with disposition re-review — dispatch re-review round (human override bypasses the #188 guard)`,
+          })
+          continue
+        }
+
+        // disposition `return-to-implement` (#189) — the human chose to send
+        // the task back to the implementer rather than straight to
+        // re-review. Whose turn is it? Mirrors D14/D15 below, but keyed off
+        // the resolution's timestamp rather than the review's: the task
+        // file's notes record the implementer's response, newer than the
+        // resolution means responded.
+        if (resolution.disposition === 'return-to-implement') {
+          const taskPath = obs.taskFiles.get(task.id)?.path
+          const taskTouched = taskPath ? (obs.lastTouched[taskPath] ?? null) : null
+          const respondedToResolution = taskTouched !== null && taskTouched > Date.parse(resolution.resolved_at!) / 1000
+          if (respondedToResolution) {
+            dispatches.push({
+              role: 'reviewer',
+              task: task.id,
+              round: task.review_rounds + 1,
+              bounce: null,
+              reason: `task ${task.id}: implementer responded after the return-to-implement disposition; dispatch verify round`,
+            })
+          } else {
+            dispatches.push({
+              role: 'implementer',
+              task: task.id,
+              round: task.review_rounds + 1,
+              bounce: { kind: 'review', report: review!.path },
+              reason: `task ${task.id}: escalation resolved with disposition return-to-implement — dispatch implementer with the review report`,
+            })
+          }
+          continue
+        }
+
+        // No disposition — legacy behavior. The resolution note alone proves
+        // nothing changed; it is a state.yaml edit the human could write
+        // without touching the condition it names. Require a real commit
+        // under the run directory, excluding state.yaml itself, newer than
+        // the escalate verdict: that is the fix landing, not just the
+        // acknowledgment. Without this a zero-delta resolve+resume dispatches
+        // a re-review round against a byte-identical range, burning one of
+        // the ROUND_CAP rounds for nothing (#188).
         const landed =
           obs.lastNonStateCommit !== null && review!.lastTouched !== null && obs.lastNonStateCommit > review!.lastTouched
         if (!landed)

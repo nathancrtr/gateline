@@ -15,6 +15,7 @@ import {
   buildPortfolio,
   BURDENS,
   DecisionError,
+  DISPOSITIONS,
   ensureDraftPr,
   extractSections,
   formatDuration,
@@ -32,6 +33,7 @@ import {
   SUPERSEDE_EXIT_CODE,
   type Burden,
   type DecisionInput,
+  type Disposition,
   type GateId,
   type Identity,
   type InboxItem,
@@ -307,9 +309,18 @@ program
   .argument('<slug>', 'run slug')
   .argument('<index>', 'escalation index (see `agentic inbox`)')
   .requiredOption('--note <text>', 'disposition')
+  .option('--disposition <route>', `${DISPOSITIONS.join(' | ')} — optional machine-actionable route for the engine; omit for the engine default`)
   .option('--source <id>')
-  .action(async (slug: string, index: string, flags: DecideFlags & { note: string }) => {
-    await decide(slug, flags, { action: 'resolve-escalation', escalationIndex: Number(index), notes: flags.note })
+  .action(async (slug: string, index: string, flags: DecideFlags & { note: string; disposition?: string }) => {
+    let disposition: Disposition | undefined
+    if (flags.disposition !== undefined) {
+      if (!(DISPOSITIONS as readonly string[]).includes(flags.disposition)) {
+        console.error(`--disposition must be one of: ${DISPOSITIONS.join(' | ')}`)
+        process.exit(1)
+      }
+      disposition = flags.disposition as Disposition
+    }
+    await decide(slug, flags, { action: 'resolve-escalation', escalationIndex: Number(index), notes: flags.note, disposition })
   })
 
 program

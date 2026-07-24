@@ -481,6 +481,28 @@ budget:
           tokens_out: null,
           cost_usd: 8,
           failed: true
+        },
+      {
+          at: 2026-07-24T16:14:00.272Z,
+          role: implementer,
+          task: 04-workstation-agent,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
+        },
+      {
+          at: 2026-07-24T16:14:00.272Z,
+          role: implementer,
+          task: 05-wiring,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:
@@ -508,8 +530,8 @@ tasks:
     { id: 01-seam-extend, status: review-approved, review_rounds: 2 },
     { id: 02-remote-dispatcher, status: review-approved, review_rounds: 3 },
     { id: 03-runner-api, status: review-approved, review_rounds: 2 },
-    { id: 04-workstation-agent, status: pending, review_rounds: 0 },
-    { id: 05-wiring, status: pending, review_rounds: 0 },
+    { id: 04-workstation-agent, status: dispatched, review_rounds: 0 },
+    { id: 05-wiring, status: dispatched, review_rounds: 0 },
     { id: 06-live-smoke, status: pending, review_rounds: 0 }
   ]
 escalations:

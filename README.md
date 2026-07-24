@@ -32,21 +32,29 @@ pair-programming to multi-agent development.
 ## The one idea
 
 Agents never share a conversation; they share **typed artifacts in git**. A role
-consumes files, produces files, and a human approves at four gates (spec, plan,
-change, release). Because roles are contracts over files, any agent can be replaced
-mid-run, models swap via a one-file registry edit, and new runtimes attach by writing
-a thin adapter — which is how the cross-vendor requirement and "flexibility over
-customizability" are both satisfied by the same mechanism.
+consumes files, produces files, and a human approves at up to four gates (spec, plan,
+change, release — how many depends on the run's profile). Because roles are contracts
+over files, any agent can be replaced mid-run, models swap via a one-file registry
+edit, and new runtimes attach by writing a thin adapter — which is how the
+cross-vendor requirement and "flexibility over customizability" are both satisfied by
+the same mechanism.
 
 ## Status
 
-v0.2 — design exercised end-to-end by the wordfreq run (`runs/wordfreq/`, G0→G3 with
-two adversarial-review cycles and independent verification); retro findings folded
-back into roles, contracts, and both adapters. The gate frontend (web, CLI, server)
-and the v1 orchestrator are implemented in `frontend/`; autonomy stays gated on the
-DESIGN.md §7 promotion criterion. Next: finish the v1 trust ladder's exit evidence
-(shadow-agreement runs, live cross-vendor dispatch), then the integration workflow
-(docs/INTEGRATION.md) and a first tagged release.
+v0.2 — the design has been exercised end-to-end by three human-orchestrated G0→G3
+runs (`runs/wordfreq/`, `runs/mdtoc/`, `runs/dupefind/`, each with adversarial review
+cycles and independent verification — the shadow-agreement evidence for the v1 trust
+ladder), and since then by orchestrator-driven runs against this repository itself;
+retro findings fold back into roles, contracts, and all three adapters. Runs now
+declare a **profile** — `patch | standard | full` ([DESIGN.md](docs/DESIGN.md) §4.1)
+— that scales which roles run and which gates exist to the size of the change, so a
+bug fix no longer pays for the full ceremony. The gate frontend (web, CLI, server)
+and the v1 orchestrator are implemented in `frontend/` and run as one co-located unit
+(`agentic up`) over a single clone — one authority per deployment
+([TOPOLOGY.md](docs/TOPOLOGY.md)); a single-user hosting recipe lives in
+[`deploy/`](deploy/). Autonomy stays gated on the DESIGN.md §7 promotion criterion.
+Next: live cross-vendor dispatch, then the integration workflow
+([INTEGRATION.md](docs/INTEGRATION.md)) and a first tagged release.
 
 ## License
 

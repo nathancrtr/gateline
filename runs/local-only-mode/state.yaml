@@ -12,7 +12,7 @@ intake:
   staged_by: "Nathan Carter"
 budget:
   cost_limit_usd: 50
-  cost_spent_usd: 61.38
+  cost_spent_usd: 62.34
   ledger:
     [
       {
@@ -305,9 +305,9 @@ budget:
           round: 2,
           adapter: claude-code,
           model: anthropic/claude-sonnet-5,
-          tokens_in: null,
-          tokens_out: null,
-          cost_usd: null
+          tokens_in: 6,
+          tokens_out: 1953,
+          cost_usd: 0.96375235
         }
     ]
 gates:
@@ -340,7 +340,7 @@ tasks:
         review_rounds: 1
       },
     { id: 05-remoteless-test-coverage, status: review-approved, review_rounds: 1 },
-    { id: 06-docs-topology, status: dispatched, review_rounds: 1 }
+    { id: 06-docs-topology, status: in-review, review_rounds: 1 }
   ]
 escalations:
   [

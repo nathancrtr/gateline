@@ -62,6 +62,12 @@ export interface RunSource {
   stateHistory(ref: RunRef): Promise<StateCommit[]>
   /** Most recent commit touching any of the given run-relative paths. */
   lastTouched(ref: RunRef, paths: string[]): Promise<CommitInfo | null>
+  /**
+   * Most recent commit touching anything in the run directory except the
+   * given run-relative paths — the delta guard (#188): state.yaml alone
+   * moving (bookkeeping, a resolution note) is not "something landed".
+   */
+  lastTouchedExcept(ref: RunRef, excludePaths: string[]): Promise<CommitInfo | null>
   identity(): Promise<Identity | null>
   /**
    * Commits on the run branch that origin does not yet have — unpushed

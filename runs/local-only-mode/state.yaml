@@ -240,6 +240,39 @@ budget:
           tokens_in: 8,
           tokens_out: 1391,
           cost_usd: 1.4425302999999996
+        },
+      {
+          at: 2026-07-24T00:19:35.907Z,
+          role: reviewer,
+          task: 03-cli-wiring,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
+        },
+      {
+          at: 2026-07-24T00:19:35.907Z,
+          role: reviewer,
+          task: 04-server-orchestrator-wiring,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
+        },
+      {
+          at: 2026-07-24T00:19:35.907Z,
+          role: reviewer,
+          task: 05-remoteless-test-coverage,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:

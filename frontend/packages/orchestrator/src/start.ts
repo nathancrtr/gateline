@@ -128,23 +128,27 @@ export async function assembleOrchestrator(
     }
     return messages
   }
-  // Engine and scheduler share one dispatcher, so sweeps meter through the same seam (§6).
-  // The headless adapters above are still loaded either way — cheap, and it
-  // keeps the manifest-staleness probe live even under remote dispatch — but
-  // when `runner.enabled` the engine's actual dispatch route is the
-  // RemoteDispatcher alone (scope point 3): a configuration-time either/or,
-  // not a per-role route through RoutingDispatcher (which needs a manifest
-  // per adapter to resolve a vendor — the remote dispatcher has none).
-  const remote = opts.runner?.enabled ? new RemoteDispatcher() : undefined
-  const dispatcher =
-    remote ??
-    (adapters.length === 1 && !registry
+  // The scheduler always dispatches through the local headless/routing seam
+  // (F1, review-05.md): its jobs (`schedule.ts:328`) never carry `slug`/
+  // `branch`, which `RemoteDispatcher.dispatch()` requires (it throws
+  // otherwise) — and even if they did, `makeRunnerCallback` below sources
+  // pending intents solely from the *engine's* `inFlightDetail()`, so a
+  // scheduler-parked promise would never surface to a workstation and would
+  // only ever die at `sweepTimeoutMs`. Only the engine's dispatch route
+  // switches to remote when `runner.enabled` (scope point 3); sweep billing
+  // stays on the local path regardless — consistent with the brief's
+  // "peer, not a replacement". Threading `slug`/`branch` through the
+  // scheduler to make scheduled sweeps remote-dispatchable too is outside
+  // this task's surface (an escalation, not a quiet widening here).
+  const localDispatcher =
+    adapters.length === 1 && !registry
       ? adapters[0]!.dispatcher
-      : new RoutingDispatcher(adapters, registry ?? { profiles: {}, bindings: {}, pricing: {}, estimates: {} }, log))
+      : new RoutingDispatcher(adapters, registry ?? { profiles: {}, bindings: {}, pricing: {}, estimates: {} }, log)
+  const remote = opts.runner?.enabled ? new RemoteDispatcher() : undefined
   const common = {
     repoDir: opts.repoDir,
     identity: BOT_IDENTITY,
-    dispatcher,
+    dispatcher: localDispatcher,
     registry,
     frameworkPrefix: opts.frameworkPrefix,
     push: opts.push,
@@ -163,11 +167,13 @@ export async function assembleOrchestrator(
   }
   const engine = new Engine({
     ...common,
+    dispatcher: remote ?? localDispatcher,
     spendLimitUsd: opts.spendLimitUsd ?? null,
     requireBudget: opts.requireBudget,
     budgetEnforcement: opts.budgetEnforcement,
     roleTimeoutMs: opts.roleTimeoutSeconds !== undefined ? opts.roleTimeoutSeconds * 1000 : undefined,
   })
+  // Scheduler stays on `common` — i.e. always the local dispatcher, never remote.
   const scheduler = new Scheduler(common)
   const runnerCallback = remote ? makeRunnerCallback(engine, remote) : undefined
   return { engine, scheduler, manifestStaleProbe, runnerCallback }

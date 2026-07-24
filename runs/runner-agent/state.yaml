@@ -565,6 +565,10 @@ escalations:
         from_role: orchestrator,
         reason: no cost_limit_usd set — this orchestrator requires a per-run budget cap
           before dispatch (--require-budget),
-        resolved: false
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-24T16:13:39.509Z,
+        resolution: accidentally started agentic service without
+          `--no-budget--enforcement` option -- restarted and resolving
       }
   ]

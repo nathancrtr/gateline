@@ -207,6 +207,39 @@ budget:
           tokens_in: 10,
           tokens_out: 2590,
           cost_usd: 2.4865125
+        },
+      {
+          at: 2026-07-24T00:01:06.871Z,
+          role: implementer,
+          task: 03-cli-wiring,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
+        },
+      {
+          at: 2026-07-24T00:01:06.871Z,
+          role: implementer,
+          task: 04-server-orchestrator-wiring,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
+        },
+      {
+          at: 2026-07-24T00:01:06.871Z,
+          role: implementer,
+          task: 05-remoteless-test-coverage,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:
@@ -232,9 +265,9 @@ tasks:
   [
     { id: 01-core-mode-resolution, status: review-approved, review_rounds: 2 },
     { id: 02-egress-guard-seams, status: review-approved, review_rounds: 1 },
-    { id: 03-cli-wiring, status: pending, review_rounds: 0 },
-    { id: 04-server-orchestrator-wiring, status: pending, review_rounds: 0 },
-    { id: 05-remoteless-test-coverage, status: pending, review_rounds: 0 },
+    { id: 03-cli-wiring, status: dispatched, review_rounds: 0 },
+    { id: 04-server-orchestrator-wiring, status: dispatched, review_rounds: 0 },
+    { id: 05-remoteless-test-coverage, status: dispatched, review_rounds: 0 },
     { id: 06-docs-topology, status: pending, review_rounds: 0 }
   ]
 escalations:

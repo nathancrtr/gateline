@@ -281,3 +281,47 @@ notes: |
   monorepo, every package) — 469 passed, 1 skipped (pre-existing live-smoke
   opt-in), 0 failures, 47 test files — the accurate full-suite count F13 asked
   for, superseding both round 1's and round 2's partial-suite numbers.
+
+  2026-07-24 (implementer, independent re-verification): the orchestrator's
+  automated pipeline re-armed a fresh round-3 implementer dispatch after the
+  round-3 commit (6cb9f16) had already landed by hand under the escalation
+  resolution, without knowledge that the fix was already in place. Rather than
+  redo the work, re-verified it from a cold read of the current source (not
+  the notes above) plus a from-scratch `npm install` + full suite run:
+
+  - F8: confirmed `getHead(ws)` (workspace.ts:39-41) is called in
+    `executeIntent` (agent.ts:304) immediately after `createWorkspace` and
+    before `loadManifest`/`run` — i.e. before the harness executes.
+    `harvestAndPush` (workspace.ts:89-144) takes that `base` as a required
+    parameter, sweeps uncommitted pathspecs, and pushes whenever
+    `HEAD != base`, so a harness that commits its own work is no longer
+    silently dropped.
+  - F9: confirmed `foldHarvestBranch` (orchestrator/src/workspace.ts:156-219)
+    moved the `push origin --delete` (line 217) out of the `finally` block
+    (lines 209-213) to run only `if (result.ok)` — a conflict or CAS
+    exhaustion no longer deletes the origin harvest branch. Confirmed the new
+    assertion at `harvest-fold.test.ts:104`
+    (`expect(git(bare, ['rev-parse', 'refs/heads/run/toy--harvest/a-1'])).toBeTruthy()`)
+    inside the conflict-path test.
+  - F10: confirmed `harvestAndPush`'s sweep (workspace.ts:103-109) calls
+    `git add -A -- <pathspec>` once per pathspec inside its own try/catch,
+    not one combined call.
+  - F11: confirmed the push loop (workspace.ts:134-143) retries once before
+    throwing.
+  - F2: confirmed the R8 grep loop (`test/agent.test.ts:593`) now iterates
+    `['agent.ts', 'main.ts', 'workspace.ts']`.
+  - F12: confirmed `runs/runner-agent/plan.md:190-193` now has a full
+    `### ADR-8` Decisions entry (Choice/Rejected/Consequences), not just the
+    amendment-header comment round 2 left behind.
+  - Boundary: `git show --name-only 6cb9f16` touches only files already
+    inside this task's declared (ADR-8-widened) `file_contact_surface`, plus
+    this task's own YAML notes and `plan.md` (the G1-authorized writer for
+    that ADR entry) — no collision with any other task's surface.
+
+  Fresh test run (clean `frontend/node_modules` via `npm install`, then
+  `npm run typecheck` and `npm test` from this working tree, no code
+  changes made this round): typecheck clean; `npm test` — 47 test files,
+  469 passed, 1 skipped (pre-existing live-smoke opt-in), 0 failures —
+  reproducing the round-3 commit's own reported count exactly. No code
+  changes were necessary this round; F8/F9/F10/F11/F2/F12 are genuinely
+  fixed as landed in 6cb9f16.

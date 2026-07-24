@@ -1,7 +1,7 @@
 run: runner-agent
 branch: run/runner-agent
-phase: implement # staged — not yet armed; `agentic arm runner-agent` starts the run
-paused_reason: null
+phase: paused # staged — not yet armed; `agentic arm runner-agent` starts the run
+paused_reason: budget-exhausted
 profile: full # patch | standard | full
 intake:
   # source-agnostic staging provenance; free-form path: nulls + client_key
@@ -559,5 +559,12 @@ escalations:
           dispatch correlation keyed by slug|role|task|round at dispatch time,
           FIFO linking retired, F2-F4 folded in; orchestrator package 154 passed
           + typecheck clean. Dispatch re-review round 3 against this delta."
+      },
+    {
+        at: 2026-07-24T16:11:14.238Z,
+        from_role: orchestrator,
+        reason: no cost_limit_usd set — this orchestrator requires a per-run budget cap
+          before dispatch (--require-budget),
+        resolved: false
       }
   ]

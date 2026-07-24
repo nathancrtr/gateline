@@ -680,6 +680,16 @@ escalations:
         from_role: orchestrator,
         reason: "implementer (04-workstation-agent) failed twice: harness timed out
           after 90min wall clock — process group killed (SIGKILL)",
-        resolved: false
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-24T23:44:06.762Z,
+        resolution: "Fixed directly (round 3, 6cb9f16), after the live pipeline's own
+          auto-dispatched implementer round 3 hung/timed out twice trying to
+          address the same review-04.md round-2 findings. F8 (blocking, base
+          captured before harness runs so committed work is no longer dropped)
+          and F9 (major, origin harvest branch only deleted after a landed fold)
+          are the real fixes; F10/F11/F2/F12 (minor) also addressed. Full npm
+          test: 469 passed, 1 skipped, 0 failures. Ready for reviewer re-review
+          (round 3) against this delta."
       }
   ]

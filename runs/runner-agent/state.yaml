@@ -413,6 +413,17 @@ budget:
           tokens_in: 10,
           tokens_out: 2841,
           cost_usd: 3.424253
+        },
+      {
+          at: 2026-07-24T01:45:31.960Z,
+          role: implementer,
+          task: 03-runner-api,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:
@@ -439,7 +450,7 @@ tasks:
   [
     { id: 01-seam-extend, status: review-approved, review_rounds: 2 },
     { id: 02-remote-dispatcher, status: review-approved, review_rounds: 3 },
-    { id: 03-runner-api, status: pending, review_rounds: 0 },
+    { id: 03-runner-api, status: dispatched, review_rounds: 0 },
     { id: 04-workstation-agent, status: pending, review_rounds: 0 },
     { id: 05-wiring, status: pending, review_rounds: 0 },
     { id: 06-live-smoke, status: pending, review_rounds: 0 }

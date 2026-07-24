@@ -100,3 +100,72 @@ implementer's round-1 `notes:` block to
 `runs/local-only-mode/tasks/06-docs-topology.yaml` — standard run-record
 bookkeeping, not a surface violation. No code, `roles/`, or `contracts/`
 changes (R8 intact on this diff).
+
+## Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** commit b68018f (branch `run/local-only-mode`)
+
+### Prior findings
+
+- **F1 — resolved.** Rewritten tier 4 (`docs/TOPOLOGY.md:186-194`) now
+  separates the two decisions exactly as the code does: auto-detect sets
+  *local-only* only (config.ts:111 `localOnly = !originExists`;
+  start.ts:72), and the push default follows rule 3's per-tier split
+  (config.ts:116 `push = cliTier ? await originExists() : false`;
+  start.ts:73 `push = localOnly ? false : opts.push`, falsy when `--push`
+  is unset). The round-1 mutant — a config-entry operator with an origin
+  and no `push:` key expecting push mode — now reads the correct answer
+  ("config-file entries and the standalone binary default `push` to
+  `false` even with an origin present"). Tier 4 no longer contradicts the
+  poller paragraph (TOPOLOGY.md:203-207); the `#149` cite matches
+  config.ts:66-74.
+- **F2 — resolved.** The intro (`docs/TOPOLOGY.md:165-173`) now says
+  `agentic up` and per-source config resolve through `resolveMode` via
+  `loadSources`, and that the binary never calls `loadSources` —
+  `assembleOrchestrator` repeats the conflict check and auto-detect
+  itself. Verified: zero `loadSources` references under
+  `frontend/packages/orchestrator/src/` outside start.ts comments;
+  `loadSources` callers are cli/main.ts:64,782 and server/main.ts:54; the
+  binary's flags are `--push`/`--local-only` (orchestrator/main.ts:40-43).
+  The round-1 mutant (grep for the binary's `loadSources` call site finds
+  nothing) no longer survives.
+- **F3 — n/a, correctly left alone.** `docs/DEPLOY.md:210` unchanged, as
+  round 1 concluded it should be (pre-existing, outside the one-line
+  DEPLOY.md cap, no requirement violated); the discovery note for the
+  maintainer stands in the task file.
+
+### New findings
+
+None.
+
+## Coverage (round 2)
+
+I re-verified every rewritten claim against the code and re-checked the untouched remainder of §3.6 and the four acceptance tests; everything is clean.
+
+- Tier 4 vs code ✓ — both halves of the rewrite match `resolveMode`
+  (config.ts:107-116) and the binary path (start.ts:69-73); "tiers below
+  hold for both" holds for the binary's tier-1 conflict, tier-2
+  designator, tier-3 explicit push, and tier-4 auto-detect.
+- Intro vs code ✓ — two call sites, one table, as stated (F2 above).
+- §3.6 internal consistency ✓ — the `--no-push` alias paragraph, poller
+  paragraph, guarantees, markers, and hosted-boundary paragraph are
+  untouched by this diff and now agree with tier 4 instead of
+  contradicting it.
+- AC5.1 ✓ — §3.1 untouched in round 2; the round-1 verification stands.
+- AC5.2 ✓ — re-ran the sweep: the only "sync provider" hit in `docs/` is
+  §3.1's own negation; the new tier-4 push claims are accurate, no new
+  contradictions.
+- AC6.1 ✓ — the tiers now state the resolution exactly as implemented;
+  alias, guarantees, and markers unchanged from the round-1-verified text.
+- AC6.2 ✓ — boundary paragraph and the one-line DEPLOY.md cross-reference
+  unchanged.
+
+## Boundary check (round 2)
+
+Commit b68018f touches `docs/TOPOLOGY.md` (in surface) and appends the
+implementer's round-2 `notes:` block to
+`runs/local-only-mode/tasks/06-docs-topology.yaml` — run-record
+bookkeeping, consistent with round 1's treatment. No other files; no code,
+`roles/`, or `contracts/` changes.

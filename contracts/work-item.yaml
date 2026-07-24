@@ -15,6 +15,10 @@ scope: |
 file_contact_surface:     # files this task will create or modify — the
   - src/example/thing.py  # Orchestrator parallelizes tasks with disjoint surfaces
   - tests/test_thing.py
+                          # Post-G1, this list changes only via an architect
+                          # amendment (a dated ADR in plan.md, referenced by the
+                          # widening commit — roles/architect.md "Amendment mode")
+                          # or the gate human (WALKTHROUGH.md, surface-widening).
 
 acceptance_tests:         # how the Implementer knows they're done;
   - AC1.1                 # reference spec criteria and/or add task-specific ones

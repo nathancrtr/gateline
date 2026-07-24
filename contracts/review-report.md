@@ -4,6 +4,13 @@
      All sections required. Findings ranked most-severe first.
      BUDGET: one line + failure scenario per finding — no narrative. Reference
      the spec and diff (requirement numbers, file:line); never re-quote them.
+     ESCALATE SCOPE: escalate covers a plan/decomposition defect even when the
+     diff under review is itself approvable — including one that only
+     threatens a not-yet-dispatched task (its fix lives outside every
+     remaining task's file_contact_surface). Verdict carries both signals at
+     once: approve this diff, escalate the run. Say so plainly; a defect
+     folded into a low-severity finding or a Coverage-section aside has no
+     power to pause dispatch.
      READABILITY (normative — human-facing section: Coverage). The G2 approver
      reads it to trust the review; a breach is bounced like a malformed
      finding, with the rule cited. (a) Open with one plain-words sentence

@@ -6,6 +6,7 @@ import type { Document } from 'yaml'
 import {
   BURDENS,
   deriveResumePhase,
+  DISPOSITIONS,
   gateUndecided,
   phaseAfterGate,
   PHASES,
@@ -13,6 +14,7 @@ import {
   PROFILE_PHASES,
   STAGED_REASON,
   type Burden,
+  type Disposition,
   type GateId,
   type Phase,
   type RunState,
@@ -30,6 +32,12 @@ export interface DecisionInput {
   /** Required for approve — captured in the act of deciding (principle 3). */
   burden?: Burden
   escalationIndex?: number
+  /**
+   * resolve-escalation: an optional machine-actionable route for the engine's
+   * D17 rule (ORCHESTRATOR.md §4.2) — absent leaves today's guarded-re-review
+   * default unchanged.
+   */
+  disposition?: Disposition
   /** approve: also move phase forward (the v0 human is the orchestrator). Default true. */
   advancePhase?: boolean
   /**
@@ -131,6 +139,8 @@ export function planDecision(state: RunState, input: DecisionInput, who: Identit
       if (state.escalations[i]!.resolved) throw new DecisionError(`escalation #${i} is already resolved`)
       const resolution = input.notes?.trim()
       if (!resolution) throw new DecisionError('resolving an escalation requires a disposition note')
+      if (input.disposition !== undefined && !DISPOSITIONS.includes(input.disposition))
+        throw new DecisionError(`disposition must be one of: ${DISPOSITIONS.join(' | ')}`)
       const at = nowIso()
       return {
         mutate: (doc: Document) => {
@@ -138,9 +148,10 @@ export function planDecision(state: RunState, input: DecisionInput, who: Identit
           doc.setIn(['escalations', i, 'resolved_by'], who.name)
           doc.setIn(['escalations', i, 'resolved_at'], at)
           doc.setIn(['escalations', i, 'resolution'], resolution)
+          if (input.disposition) doc.setIn(['escalations', i, 'disposition'], input.disposition)
         },
-        message: `state(${slug}): escalation #${i} resolved by ${who.name}`,
-        summary: `Resolve escalation #${i}`,
+        message: `state(${slug}): escalation #${i} resolved by ${who.name}${input.disposition ? ` [disposition: ${input.disposition}]` : ''}`,
+        summary: `Resolve escalation #${i}${input.disposition ? ` (disposition: ${input.disposition})` : ''}`,
       }
     }
     case 'pause': {

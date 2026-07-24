@@ -27,6 +27,7 @@ import {
   validateArtifact,
   type Burden,
   type DecisionAction,
+  type Disposition,
   type GateId,
   type Phase,
   type Profile,
@@ -350,6 +351,7 @@ export function createApp(deps: AppDeps): Hono {
       notes?: string
       burden?: Burden
       escalationIndex?: number
+      disposition?: Disposition
       pauseReason?: string
       resumePhase?: Phase
       hold?: boolean

@@ -3,7 +3,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { Git, planDecision, parseRunState, DecisionError, type RunRef } from '../src/index.ts'
+import { Git, planDecision, parseRunState, DecisionError, type Disposition, type RunRef } from '../src/index.ts'
 import { dropFixture, makeFixture, type FixtureContext } from './fixture.helper.ts'
 
 let ctx: FixtureContext
@@ -152,7 +152,81 @@ describe('decision legality (planDecision)', () => {
       resolved: true,
       resolved_by: 'Fixture Operator',
       resolution: 'sample committed as fixtures/sample.txt',
+      disposition: null,
     })
+  })
+
+  it('resolve-escalation with no disposition leaves the field unset — absent means the engine default (#189)', async () => {
+    const ref = await refFor('escalated')
+    const { state } = await ctx.source.readState(ref)
+    const planned = planDecision(state!, { action: 'resolve-escalation', escalationIndex: 0, notes: 'no route named' }, who)
+    expect(planned.message).not.toMatch(/disposition/)
+    expect(planned.summary).not.toMatch(/disposition/)
+  })
+
+  it('resolve-escalation records a disposition, mentions it in the commit message and summary (#189)', async () => {
+    const ref = await refFor('escalated')
+    const { state } = await ctx.source.readState(ref)
+    const planned = planDecision(
+      state!,
+      { action: 'resolve-escalation', escalationIndex: 0, notes: 'condition addressed on the branch', disposition: 're-review' },
+      who,
+    )
+    expect(planned.message).toContain('[disposition: re-review]')
+    expect(planned.summary).toContain('disposition: re-review')
+    await ctx.source.writeState(ref, planned.mutate, planned.message)
+    const after = await ctx.source.readState(ref)
+    expect(after.state!.escalations[0]).toMatchObject({
+      resolved: true,
+      resolved_by: 'Fixture Operator',
+      resolution: 'condition addressed on the branch',
+      disposition: 're-review',
+    })
+  })
+
+  it('resolve-escalation accepts return-to-implement as the other disposition', async () => {
+    const ref = await refFor('escalated')
+    const { state } = await ctx.source.readState(ref)
+    const planned = planDecision(
+      state!,
+      { action: 'resolve-escalation', escalationIndex: 0, notes: 'send back to the implementer', disposition: 'return-to-implement' },
+      who,
+    )
+    await ctx.source.writeState(ref, planned.mutate, planned.message)
+    const after = await ctx.source.readState(ref)
+    expect(after.state!.escalations[0]!.disposition).toBe('return-to-implement')
+  })
+
+  it('resolve-escalation accepts re-plan as a third disposition (#190)', async () => {
+    const ref = await refFor('escalated')
+    const { state } = await ctx.source.readState(ref)
+    const planned = planDecision(
+      state!,
+      { action: 'resolve-escalation', escalationIndex: 0, notes: 'decomposition defect — send to the architect', disposition: 're-plan' },
+      who,
+    )
+    expect(planned.message).toContain('[disposition: re-plan]')
+    expect(planned.summary).toContain('disposition: re-plan')
+    await ctx.source.writeState(ref, planned.mutate, planned.message)
+    const after = await ctx.source.readState(ref)
+    expect(after.state!.escalations[0]).toMatchObject({
+      resolved: true,
+      resolved_by: 'Fixture Operator',
+      resolution: 'decomposition defect — send to the architect',
+      disposition: 're-plan',
+    })
+  })
+
+  it('resolve-escalation rejects a junk disposition', async () => {
+    const ref = await refFor('escalated')
+    const { state } = await ctx.source.readState(ref)
+    expect(() =>
+      planDecision(
+        state!,
+        { action: 'resolve-escalation', escalationIndex: 0, notes: 'x', disposition: 'do-a-barrel-roll' as Disposition },
+        who,
+      ),
+    ).toThrow(/disposition must be one of/)
   })
 
   it('approve with hold signs the gate and pauses the run in the same commit', async () => {

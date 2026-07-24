@@ -56,3 +56,69 @@ notes: |
   The coexistence test (AC9.1) is verified by running the existing test suite — the
   default configuration (`runner` not enabled) produces a HeadlessDispatcher as before.
   No existing test needs modification.
+
+  Implementer (round 1) response:
+  - start.ts: added `runner?: { enabled: boolean }` to OrchestratorOptions; when true,
+    `assembleOrchestrator` builds a `RemoteDispatcher` and uses it directly as the
+    engine's dispatcher (not wrapped in RoutingDispatcher — RoutingDispatcher's vendor
+    routing needs a HeadlessManifest per adapter, which RemoteDispatcher has none of;
+    the task's own wording offered "wrap ... or expose it directly" as alternatives, and
+    scope point 3 describes a configuration-time either/or, not per-role routing). The
+    headless adapters are still loaded unconditionally either way (unchanged diff there),
+    per the task's "alongside" wording. Exposed a new exported `makeRunnerCallback(engine,
+    remote)` that adapts RemoteDispatcher's `pendingIntents(openEntries)` to the
+    zero-argument shape @agentic/server's RunnerCallback expects — `openEntries` is
+    `engine.inFlightDetail()` (already keyed slug|role|task|round, already synchronous),
+    so no ledger read is needed in the adapter itself. `assembleOrchestrator`'s return and
+    `OrchestratorHandle` both carry a new optional `runnerCallback?: RunnerCallback` field
+    (a locally-defined, structurally-mirrored `RunnerCallback` type — start.ts does not
+    import from @agentic/server, preserving the no-edge convention runner-api.ts documents
+    in the other direction).
+  - main.ts: part 2 was already fully wired by task 03 as briefed — verified against the
+    scope's three requirements (runnerCallback option, RUNNER_TOKEN read, both passed to
+    buildRunnerApi/createApp) and found nothing missing. Only change: re-exported
+    `buildRunnerApi`/`RunnerCallback` from runner-api.ts, needed so wiring.test.ts (a
+    cross-package test, orchestrator -> @agentic/server) can exercise the real
+    buildRunnerApi/createApp instead of a hand-rolled substitute, without adding a new
+    subpath export to server's package.json (main.ts's `./main` export was already public).
+  - Deviation from the literal file_contact_surface: added `@agentic/server: "*"` as an
+    orchestrator devDependency (package.json + the resulting package-lock.json delta) so
+    the cross-package test import resolves correctly per npm workspace convention — the
+    dispatch prompt explicitly asked me to "check how other tests/files in this monorepo
+    cross-import packages, e.g. package.json workspace deps" for this exact scenario, which
+    I read as authorizing this narrow, test-only addition. All 4 touched/added files besides
+    package.json are within the declared surface.
+  - wiring.test.ts: two describe blocks. First exercises the full relay end to end through
+    the *real* runner API (buildRunnerApi + createApp, hono's in-process app.request() as
+    the "mock HTTP server") — dispatch() -> GET intents -> POST claim -> POST report -> the
+    parked promise resolves -> engine.drain() -> the ledger-closing commit lands with the
+    reported cost/tokens; plus a failure-path variant proving one retry, no escalation.
+    Second block proves R7's lease semantics need no new mechanism: (a) staleMs:0 with a
+    still-pending remote dispatch is NOT aged (this.jobs gates sweepStale), proven with a
+    second tick; (b)+(c) combined in one test mirroring hardening.test.ts's crash-recovery
+    drill (engine1 dispatches then is abandoned before ever resolving — a 24h roleTimeoutMs
+    keeps RemoteDispatcher's own internal timer from firing within any test run, since
+    engine1 is never ticked/drained again) — a fresh engine2 with staleMs:0 ages the orphan,
+    re-dispatches, and the real runner API resolves the retry to a single successful close,
+    `phase` staying at spec (no escalation). Found and fixed one genuine race while writing
+    these: `launch()` (engine.ts) registers the job in `this.jobs`/`jobMeta` synchronously,
+    but only *calls* `dispatcher.dispatch()` (and so populates RemoteDispatcher's pending-call
+    map) after its checkout setup (`ensureRunCheckout`, real git-worktree I/O) resolves — a
+    poll issued the instant `engine.tick()` returns can race that setup. Added a small
+    `pollIntents()` retry helper in the test (a real workstation polling on an interval would
+    never notice this) rather than touching engine.ts, which is outside this task's surface
+    and scope point 3 says its dispatch call site is unchanged.
+
+  Test results: `npx vitest run packages/orchestrator packages/server` — 21 files, 215
+  passed, 1 skipped (live-smoke, pre-existing skip) — includes the full pre-existing
+  orchestrator suite (engine, hardening, hosted, router, schedule, shadow-*, etc.) passing
+  unmodified (AC9.1) plus the new wiring.test.ts (4/4). `npx tsc -p tsconfig.json` clean.
+  Full monorepo `npm test` (all packages concurrently) showed timeouts in this sandbox
+  under load — a different, unrelated set of tests failed on each of two full runs (e.g.
+  core/pr-ensure, core/stage-run, core/divergence, cli/upgrade — none of which touch this
+  task's files), all "Test timed out"/"Hook timed out" at near-identical multi-minute wall
+  clocks, and one run's log showed an unrelated background `git fetch`/fast-forward
+  ("Updating ...  moved.txt") interleaved with the test output — external contention in
+  this shared sandbox, not a regression. Re-ran `packages/core` and `packages/cli` alone:
+  both 100% pass (174/174, 32/32), confirming the exact tests that "failed" under full
+  concurrent load pass cleanly in isolation.

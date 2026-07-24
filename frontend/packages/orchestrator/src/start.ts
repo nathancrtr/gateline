@@ -7,10 +7,42 @@ import { CodeTreeMonitor, Git, LocalGitSource, resolveCodeRepo, type CodeTreeSta
 import { Engine, type InFlightJob } from './engine.ts'
 import { headlessManifestPath, loadHeadlessManifest } from './manifest.ts'
 import { loadRegistry } from './registry.ts'
+import { RemoteDispatcher, type PendingIntent } from './runner-dispatcher.ts'
 import { RoutingDispatcher } from './router.ts'
 import { Scheduler } from './schedule.ts'
-import { HeadlessDispatcher } from './seam.ts'
+import { HeadlessDispatcher, type DispatchOutcome } from './seam.ts'
 import { runLoop, type RunLoop } from './triggers.ts'
+
+/**
+ * The zero-argument shape @agentic/server's own `RunnerCallback` expects
+ * (runner-api.ts) — mirrored structurally here rather than imported, so this
+ * package carries no edge to `@agentic/server` (the same no-edge convention
+ * runner-api.ts documents in the other direction, toward this package).
+ * Structurally assignable to `@agentic/server`'s `RunnerCallback` — a caller
+ * assembling both (main.ts) passes a value of this shape straight into
+ * `ServeOptions.runnerCallback`.
+ */
+export interface RunnerCallback {
+  pendingIntents(): PendingIntent[]
+  resolveOutcome(key: string, outcome: DispatchOutcome): boolean
+}
+
+/**
+ * Adapts `RemoteDispatcher`'s ledger-aware `pendingIntents(openEntries)` to
+ * the zero-argument shape above. `openEntries` is exactly the engine's own
+ * in-flight job list (`inFlightDetail()`): already keyed identically to a
+ * ledger entry (`slug|role|task|round`, engine.ts's private `jobKey`) and
+ * already synchronous (an in-memory map), so this needs no ledger read of
+ * its own — R7's lease semantics fall out of `this.jobs` already gating
+ * `sweepStale` (engine.ts), not a mechanism added here.
+ */
+export function makeRunnerCallback(engine: Engine, remote: RemoteDispatcher): RunnerCallback {
+  return {
+    pendingIntents: () =>
+      remote.pendingIntents(engine.inFlightDetail().map(({ slug, role, task, round }) => ({ slug, role, task, round }))),
+    resolveOutcome: (key, outcome) => remote.resolveOutcome(key, outcome),
+  }
+}
 
 /** One identity per orchestrator install (resolved question 4). */
 export const BOT_IDENTITY: Identity = {
@@ -39,6 +71,16 @@ export interface OrchestratorOptions {
   /** Wall clock per dispatched role before its process group is killed (default 30 min). */
   roleTimeoutSeconds?: number
   heartbeatSeconds?: number
+  /**
+   * Opt into remote dispatch (run "runner-agent", R6/R9): the engine's
+   * dispatcher becomes a `RemoteDispatcher` instead of the local
+   * `HeadlessDispatcher`(s) — dispatch requests park as promises a
+   * workstation agent claims and reports over HTTP (runner-dispatcher.ts,
+   * the server's runner-api.ts) rather than spawning a harness in this
+   * process. A configuration choice, not a routing decision: unset or
+   * false dispatches exactly as before (AC9.1).
+   */
+  runner?: { enabled: boolean }
   log?: (line: string) => void
   /**
    * Self-supersede (#141): fired exactly once, after the confirming
@@ -53,7 +95,13 @@ export interface OrchestratorOptions {
 
 export async function assembleOrchestrator(
   opts: OrchestratorOptions,
-): Promise<{ engine: Engine; scheduler: Scheduler; manifestStaleProbe: () => Promise<string[]> }> {
+): Promise<{
+  engine: Engine
+  scheduler: Scheduler
+  manifestStaleProbe: () => Promise<string[]>
+  /** Present iff `opts.runner?.enabled` — see `RunnerCallback` above. */
+  runnerCallback?: RunnerCallback
+}> {
   const log = opts.log ?? (() => {})
   const git = new Git(opts.repoDir)
   const registry = await loadRegistry(git, await git.defaultBranch(), opts.frameworkPrefix)
@@ -81,10 +129,18 @@ export async function assembleOrchestrator(
     return messages
   }
   // Engine and scheduler share one dispatcher, so sweeps meter through the same seam (§6).
+  // The headless adapters above are still loaded either way — cheap, and it
+  // keeps the manifest-staleness probe live even under remote dispatch — but
+  // when `runner.enabled` the engine's actual dispatch route is the
+  // RemoteDispatcher alone (scope point 3): a configuration-time either/or,
+  // not a per-role route through RoutingDispatcher (which needs a manifest
+  // per adapter to resolve a vendor — the remote dispatcher has none).
+  const remote = opts.runner?.enabled ? new RemoteDispatcher() : undefined
   const dispatcher =
-    adapters.length === 1 && !registry
+    remote ??
+    (adapters.length === 1 && !registry
       ? adapters[0]!.dispatcher
-      : new RoutingDispatcher(adapters, registry ?? { profiles: {}, bindings: {}, pricing: {}, estimates: {} }, log)
+      : new RoutingDispatcher(adapters, registry ?? { profiles: {}, bindings: {}, pricing: {}, estimates: {} }, log))
   const common = {
     repoDir: opts.repoDir,
     identity: BOT_IDENTITY,
@@ -113,7 +169,8 @@ export async function assembleOrchestrator(
     roleTimeoutMs: opts.roleTimeoutSeconds !== undefined ? opts.roleTimeoutSeconds * 1000 : undefined,
   })
   const scheduler = new Scheduler(common)
-  return { engine, scheduler, manifestStaleProbe }
+  const runnerCallback = remote ? makeRunnerCallback(engine, remote) : undefined
+  return { engine, scheduler, manifestStaleProbe, runnerCallback }
 }
 
 export interface OrchestratorHandle {
@@ -124,11 +181,17 @@ export interface OrchestratorHandle {
   inFlightDetail(): InFlightJob[]
   /** SIGKILL live harness groups; closing commits still land (#150). */
   abortInFlight(): number
+  /**
+   * Present iff `opts.runner?.enabled` — pass straight through to the
+   * server's `ServeOptions.runnerCallback` (main.ts) to arm the runner
+   * agent's poll/claim/report routes over this same engine.
+   */
+  runnerCallback?: RunnerCallback
 }
 
 /** Resident orchestrator over an existing clone, in-process. */
 export async function startOrchestrator(opts: OrchestratorOptions): Promise<OrchestratorHandle> {
-  const { engine, scheduler, manifestStaleProbe } = await assembleOrchestrator(opts)
+  const { engine, scheduler, manifestStaleProbe, runnerCallback } = await assembleOrchestrator(opts)
   // Self-supersede (#141): the code tree is *this module's own* checkout —
   // resolved from our own import.meta.url, not from opts.repoDir (the run
   // source, which may live in a different checkout under a host-repo setup).
@@ -147,5 +210,6 @@ export async function startOrchestrator(opts: OrchestratorOptions): Promise<Orch
     stop: () => loop.stop(),
     inFlightDetail: () => engine.inFlightDetail(),
     abortInFlight: () => engine.abortInFlight(),
+    runnerCallback,
   }
 }

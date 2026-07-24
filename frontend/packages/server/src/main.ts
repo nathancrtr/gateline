@@ -13,6 +13,15 @@ import { buildRunnerApi, type RunnerCallback } from './runner-api.ts'
 import { watchRepoRefs } from './watch.ts'
 import { buildWebhook } from './webhook.ts'
 
+// Re-exported for cross-package tests (run "runner-agent", task 05's
+// wiring.test.ts, orchestrator package): the only consumer of the runner-api
+// surface outside this package is a test that exercises the real
+// buildRunnerApi/createApp over a stubbed RemoteDispatcher-shaped callback,
+// never production orchestrator code — src/start.ts mirrors `RunnerCallback`
+// structurally rather than importing it, preserving the no-edge convention
+// runner-api.ts documents in the other direction.
+export { buildRunnerApi, type RunnerCallback } from './runner-api.ts'
+
 export interface ServeOptions {
   port?: number
   host?: string

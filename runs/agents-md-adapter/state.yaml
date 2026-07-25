@@ -106,8 +106,13 @@ gates:
   G2: { approved: false, by: null, at: null, notes: null }
   G3: { approved: false, by: null, at: null, notes: null }
 
-tasks: # mirrors tasks/*.yaml status; the ONLY home of review_rounds
-  - { id: 01-renderer-single-file-mode, status: review-approved, review_rounds: 1 }
+tasks:
+  # mirrors tasks/*.yaml status; the ONLY home of review_rounds
+  - {
+      id: 01-renderer-single-file-mode,
+      status: review-approved,
+      review_rounds: 1
+    }
   - { id: 02-agents-md-manifest-and-output, status: in-review, review_rounds: 1 }
 
 escalations:
@@ -125,15 +130,21 @@ escalations:
   - {
       at: 2026-07-14T00:42:07Z,
       from_role: reviewer,
-      reason: "review-02 F1 (blocking, plan-traced): spec AC6.1's vendor grep
-        fails on the committed AGENTS.md — roles/historian.md's body references
-        the literal path .claude/agents/ and is included byte-verbatim per
-        ADR-3. Unfixable inside the task surface (roles/ frozen by R1/AC1.2;
-        body transforms barred by ADR-3). Plan Risk 3's 'roles are already
+      reason: "review-02 F1 (blocking, plan-traced): spec AC6.1's vendor grep fails on
+        the committed AGENTS.md — roles/historian.md's body references the
+        literal path .claude/agents/ and is included byte-verbatim per ADR-3.
+        Unfixable inside the task surface (roles/ frozen by R1/AC1.2; body
+        transforms barred by ADR-3). Plan Risk 3's 'roles are already
         vendor-clean' premise is false. Human decision needed: (a) amend spec
         AC6.1 to scope the grep to adapter-authored content, (b) reword
-        roles/historian.md on main as its own framework change (P2 hygiene)
-        and rebase the run, or (c) record a G2 waiver. F3/F4 (preamble) are
+        roles/historian.md on main as its own framework change (P2 hygiene) and
+        rebase the run, or (c) record a G2 waiver. F3/F4 (preamble) are
         in-surface round-2 fixes held pending this decision.",
-      resolved: false
+      resolved: true,
+      resolved_by: Nathan Carter,
+      resolved_at: 2026-07-25T05:07:14.861Z,
+      resolution: "Superseded: the AGENTS.md-dialect rendering capability this run set out
+        to build already shipped on main via a different path (#116 AGENTS.md
+        split, #137 opencode adapter, #187 AGENTS.md refresh). Closing this run
+        rather than resolving the AC6.1 grep-scope question in place."
     }

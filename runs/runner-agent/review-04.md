@@ -117,3 +117,56 @@ I checked the whole round-2 commit against the spec and plan; the fold and engin
 ## Boundary check
 
 Everything `af372de` touches is inside the ADR-8-widened surface (orchestrator seam/harvest/workspace/engine/index/manifest + tests, runner-agent src + tests, runner-api.ts) or the run record (task YAML notes; the plan.md amendment was authored by the G1 human under the escalation resolution, which is that file's legitimate writer). Task 05's surface is untouched by this commit. Round-1 F7's two out-of-surface files were not touched this round and still await G2 ratification.
+
+---
+
+# Round 3
+
+**Verdict:** approve
+**Round:** 3 of 3
+**Diff reviewed:** `6cb9f16` (the round-3 fix; run/runner-agent). `476413c` also inspected — task-YAML notes only, no production change, its claims verified below rather than trusted.
+
+## Round-1/2 findings status
+
+- **F8 — genuinely resolved.** `base` is now captured immediately after `createWorkspace`, before the harness runs (`agent.ts:304`), and `harvestAndPush` takes it as a parameter, sweeping uncommitted leftovers and pushing whenever `HEAD != base` (`workspace.ts:89-144`). The round-2 surviving mutant is dead: a committing harness is exercised twice against real git — end-to-end through `executeIntent` with no harvest/getHead overrides (`test/agent.test.ts:306`, asserts the committed file is on the origin harvest branch) and at the `harvestAndPush` unit level (`test/workspace.test.ts:140`). The fold's `rebase --onto <runTip> <base>` replays the full `base..HEAD` range correctly by construction; the residual multi-commit test gap is F16.
+- **F9 — genuinely resolved.** The origin `push --delete` moved out of `finally` to fire only on `result.ok` (`orchestrator/src/workspace.ts:217`); the conflict test now asserts the origin harvest branch survives a failed fold (`harvest-fold.test.ts:101-104`). The CAS-exhaustion path is not separately tested but exits through the same `result.ok === false` guard — same code path, checked clean. Residual durability window is F17.
+- **F10 — genuinely resolved.** One `git add -A -- <pathspec>` per pathspec, each failure caught independently (`workspace.ts:103-109`); the mixed matched/unmatched test (`test/workspace.test.ts:118`) proves the matched file survives an unmatched sibling and reaches origin. The catch is broader than the exit-128 case it targets — residual is F15.
+- **F11 — resolved in code, unverified by test.** The one-bounded-retry loop exists (`workspace.ts:134-143`) and is safe to re-enter (re-pushing the same `head` OID to the same fresh, timestamp-unique branch is a no-op if attempt 1 actually landed; a divergent ref would be rejected, correctly throwing). But no test forces a first-push failure — see F14.
+- **F2 — genuinely resolved.** `main.ts` is now in the R8 harness/vendor grep loop (`test/agent.test.ts:593`, also :540 and :553); the suite passing proves `main.ts` currently greps clean.
+- **F12 — genuinely resolved.** A real `### ADR-8` entry now exists in the Decisions section (`plan.md:190-193`) with Choice/Rejected/Consequences in the house style, and it accurately records both round-2 corrections.
+- **F13 — resolved, independently confirmed.** This review ran the suite itself (round 2's ask): `npm test` in `frontend/` → **469 passed, 1 skipped, 0 failures, 47 files passed + 1 skipped** — exactly the count `6cb9f16` and `476413c` report. `npm run typecheck` clean. The task notes' explanation (445 vs 259 were full-suite vs three-package subsets) is consistent with those numbers.
+- **F3, F4, F5, F6 — still open, untouched by this round,** all minor and pre-existing; the task notes' "Not changed" list records them accurately. F6's family gains a documented sibling (ADR-8 Consequences names the abandoned-harvest-branch hygiene gap) but no mechanism.
+- **F7 — stands for G2 ratification.** Neither `frontend/tsconfig.json` nor the round-1 `package-lock.json` delta was touched this round.
+
+## Findings
+
+### F14 — minor — the F11 push retry has zero test coverage: the code is present but the suite cannot tell it exists
+- **Where:** `frontend/packages/runner-agent/src/workspace.ts:134-143`; no test in `test/workspace.test.ts` or `test/agent.test.ts` injects a first-push failure (grep for retry/attempt in the package's tests is empty).
+- **Failure scenario:** surviving mutant — delete the retry loop and restore the single `git push`; all 469 tests still pass. The behavior round-2 F11 asked for is unpinned and can regress silently.
+
+### F15 — minor, PLAUSIBLE — the per-pathspec `git add` catch swallows *every* failure, not just the unmatched-pathspec exit 128 it targets
+- **Where:** `frontend/packages/runner-agent/src/workspace.ts:106-108`.
+- **Failure scenario:** a crashed harness git process leaves `.git/index.lock` → every `git add` fails with "index.lock exists", all swallowed as "matched nothing" → `staged` empty → if the harness committed nothing, `head === base` → `pushed: false` → workspace removed with the role's uncommitted output still in it — the F1/F8 silent-loss outcome through a third door. PLAUSIBLE: requires a harness that dies mid-git yet exits 0 with valid usage JSON. Distinguishing exit 128 pathspec errors from other failures would close it.
+
+### F16 — minor — no test covers a harness that both commits AND leaves uncommitted harvest-scoped files, and no fold test replays a multi-commit `base..HEAD` range
+- **Where:** `test/workspace.test.ts:118-172` (each test is commit-only or uncommitted-only), `test/agent.test.ts:306` (commit-only), `harvest-fold.test.ts:37-51` (`pushHarvest` always builds a single-commit harvest).
+- **Failure scenario:** surviving mutant — change `harvestAndPush` to skip the sweep when `HEAD` already moved past `base` (i.e. harvest only the harness's own commits): the uncommitted-only tests still pass (HEAD hasn't moved when they run the sweep), the committing-harness tests still pass (nothing uncommitted to lose), yet a real harness that commits its report and leaves a fixup dirty loses the fixup silently. The production code handles the mixed case correctly today (verified by reading the sequence: sweep-commit → `head != base` → push); the suite just can't defend it.
+
+### F17 — minor, PLAUSIBLE — the origin harvest branch is deleted after the fold lands *locally* but before the run branch reaches origin
+- **Where:** `orchestrator/src/workspace.ts:217` (delete on `result.ok`, immediately after the local CAS) vs `engine.ts:517` (`pushBranch` runs after `foldHarvestBranch` returns; on push failure, `engine.ts:650-660` keeps commits local and just logs).
+- **Failure scenario:** fold CASes the local run ref → origin harvest branch deleted → `pushBranch` fails (or the host dies before it runs) → the folded work's only copy is the control plane's local `repoDir` until a later accepted push. Not silent loss — the local blessed checkout is persistent and the next accepted push carries it — but durability now hinges on that one filesystem where round 2's design kept an origin-side copy until the fold was on origin. Fix, if wanted: delete the origin harvest branch after a successful `pushBranch`, or leave it for the existing hygiene sweep gap (ADR-8 Consequences) to own.
+
+## Coverage
+
+I checked the whole of `6cb9f16` against the spec, plan (including the new ADR-8), and both prior rounds; the two real bugs are genuinely fixed with real-git tests, and everything new I could attack yields only minor test-gap or hygiene findings.
+
+- F8 fix mechanics ✓ — capture ordering verified in source (`getHead` after `createWorkspace`/baseOid checkout, before the try that runs the harness); the detached-HEAD case from a pinned `baseOid` checkout is safe (rev-parse, commit-on-detached, and `head:refs/heads/<branch>` push all work detached); `pushed: false` short-circuit is correct for the truly-unchanged case; the `HarvestResult.base` relayed to the fold equals the pre-harness pin.
+- Retry idempotence ✓ — the retried push targets a fresh unique branch name with the same OID, so a phantom first-attempt success is a no-op and a divergent ref correctly throws rather than force-pushing.
+- Fold restructure ✓ — behavior inside the IIFE is byte-equivalent to round 2's loop (same CAS retry bounds, same conflict abort/message, same worktree/local-branch/fetchRef cleanup in `finally`); only the origin-delete moved, and it stays best-effort (`.catch`) so a delete failure can't fail a landed fold.
+- Test integrity ✓ — the committing-harness `executeIntent` test uses the real `createWorkspace`/`harvestAndPush`/`getHead` (only the manifest is stubbed, per the task scope); the updated mocks now assert `base` threads through the seam (`agent.test.ts:179-183`); no assertions were weakened anywhere in the diff.
+- Independent verification ✓ — full suite and typecheck run by this review, not taken from the notes: 469 passed / 1 skipped / 0 failures, typecheck clean, matching both round-3 commits' claims.
+- `476413c` ✓ — touches only the task YAML; its narrative matches what the code actually shows.
+
+## Boundary check
+
+Everything `6cb9f16` touches is inside the ADR-8-widened surface (orchestrator `workspace.ts` + its fold test, runner-agent src + tests) or the run record (`plan.md`'s ADR-8 entry — written by the G1 human under the escalation resolution, that file's legitimate author; task YAML notes). `476413c` touches the task YAML only. Task 05's and 06's surfaces are untouched. F7's two out-of-surface files remain the only outstanding boundary items, unchanged since round 1.

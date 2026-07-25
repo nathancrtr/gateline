@@ -109,4 +109,28 @@ describe('ensureDraftPr', () => {
     expect(result.status).toBe('skipped')
     expect(result.note).toContain('command not found')
   })
+
+  it('local-only mode short-circuits before any git or gh work, even on the leak-shape repo (origin exists, branch already pushed)', async () => {
+    git(['remote', 'add', 'origin', 'https://github.com/acme/widgets.git'])
+    pushBranch('run/toy')
+    const exec = vi.fn(async () => {
+      throw new Error('gh should not be invoked')
+    })
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec, localOnly: true })
+
+    expect(result).toEqual({ status: 'skipped', note: 'local-only mode — draft-PR ensure suppressed' })
+    expect(exec).not.toHaveBeenCalled()
+  })
+
+  it('local-only wins even before the origin check, on a remoteless dir', async () => {
+    const exec = vi.fn(async () => {
+      throw new Error('gh should not be invoked')
+    })
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec, localOnly: true })
+
+    expect(result).toEqual({ status: 'skipped', note: 'local-only mode — draft-PR ensure suppressed' })
+    expect(exec).not.toHaveBeenCalled()
+  })
 })

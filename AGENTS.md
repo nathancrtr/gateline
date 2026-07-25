@@ -28,17 +28,26 @@ Then, by area:
   (plan: [`docs/FRONTEND-PLAN.md`](docs/FRONTEND-PLAN.md))
 * [`docs/INTEGRATION.md`](docs/INTEGRATION.md) — importing the framework into a host
   repo (plan: [`docs/INTEGRATION-PLAN.md`](docs/INTEGRATION-PLAN.md))
+* [`docs/TOPOLOGY.md`](docs/TOPOLOGY.md) — control-plane topology: one authority per
+  deployment, origin as the linearization point, and how to trial unmerged changes
+  without disturbing the blessed checkout
 * [`docs/DEPLOY.md`](docs/DEPLOY.md) — hosting the frontend (and, opt-in, the
   orchestrator) as a single-user instance; read its security model first
 
-Status: v0.2 — the design has been exercised end-to-end by three full G0→G3 runs
-(`runs/wordfreq/`, `runs/mdtoc/`, `runs/dupefind/` — the shadow-agreement evidence
-for the v1 trust ladder); retro findings feed back into roles, contracts, and
-adapters. The gate frontend and v1 orchestrator are implemented; hosted deployment
-is documented, with orchestrator dispatch as an opt-in second process under hard
-spend/push ceilings. Integration tooling v0 (`scripts/integrate.py`) ships
-`init|validate|fork`. Autonomy remains gated on the DESIGN.md §7 promotion
-criterion.
+Status: v0.2 — the design has been exercised end-to-end by three human-orchestrated
+G0→G3 runs (`runs/wordfreq/`, `runs/mdtoc/`, `runs/dupefind/` — the
+shadow-agreement evidence for the v1 trust ladder), and since then by
+orchestrator-driven runs against the framework itself (`runs/creation-seam/`,
+`runs/web-staging/`, `runs/fleetview-design/`); retro findings feed back into roles,
+contracts, and adapters. Runs declare a **profile** — `patch | standard | full`
+(DESIGN.md §4.1) — scaling which roles run and which gates exist to the size of the
+change; a run whose `state.yaml` carries no `profile:` is `full`. Three runner
+adapters are built: `claude-code`, `copilot-cli`, and `opencode` (the any-provider
+one). The gate frontend (FleetView) and the v1 orchestrator are implemented and
+co-located by design — `agentic up` runs both over a single clone, which is the
+blessed topology; the hosted recipe under `deploy/` remains a documented self-host
+option. Integration tooling v0 (`scripts/integrate.py`) ships `init|validate|fork`.
+Autonomy remains gated on the DESIGN.md §7 promotion criterion.
 
 ## Invariants — check before editing
 
@@ -64,8 +73,27 @@ criterion.
 * **A new portable core file must be added to `scripts/copy-manifest.json`**, or
   releases never offer it to host repos. `python3 scripts/integrate.py validate`
   re-proves the static integration invariants.
-* **Contracts specify required sections and concision budgets.** An artifact missing
-  a required section is malformed — consuming agents bounce it, never guess.
+* **Contracts specify required sections, concision budgets, and normative grammar.**
+  An artifact missing a required section is malformed — consuming agents bounce it,
+  never guess. Two rule families are equally normative and equally bounceable: the
+  **ID/heading grammar** tooling parses (`### R<n> — <name>`, criteria beginning
+  `AC<n>.<m> — `) and the **READABILITY rules** on human-facing sections (plain-words
+  opening sentence, one idea per paragraph, lists instead of semicolon chains, name
+  before cite). Breaches are bounced with the rule cited.
+* **Run profiles are fixed sets, not knobs.** There is no per-run role or gate
+  toggle; if a profile doesn't fit, pick the next heavier one. Profile upgrades are
+  one-way and human-decided (a human edits `profile:` and resumes — the reconciler
+  derives the backfill); downgrading mid-run is forbidden, and an engine that
+  observes a profile lighter than the gates already decided escalates.
+* **One authority per deployment, and the blessed checkout stays on the default
+  branch** (TOPOLOGY.md §3.1, §3.5). Never point a second writable clone's engine at
+  the same runs, and never move the checkout the global `agentic` resolves to onto a
+  branch — an engine there would put unreviewed code in charge of live, metered
+  dispatch. The code-tree monitor enforces this: a checkout that leaves the default
+  branch, goes dirty, or moves by anything but a fast-forward pauses dispatch until
+  it is clean and back on the default branch (a clean fast-forward instead exits the
+  engine `75` to be restarted on the new code). Trial an unmerged frontend change
+  from that branch's own worktree with `ui`, never `up`.
 * **Completed runs are historical records, and `run/*` branches are test
   fixtures.** Do not retro-edit artifacts under `runs/<slug>/` for a finished run —
   fold new lessons into roles, contracts, or docs — and do not delete or rewrite
@@ -74,16 +102,17 @@ criterion.
 * **The orchestrator never writes `gates.*`.** Gate entries and the human decision
   grammar (`G<N> approved by <name>`) are reserved for named humans; the
   orchestrator commits under its own bot identity and verbs
-  (`dispatched | bounced | advanced | escalated | paused | metered`). Anything
-  touching `state.yaml` follows the co-writer contract: compare-and-swap ref
-  updates, comment-preserving YAML, ISO-8601 timestamps.
+  (`dispatched | bounced | advanced | escalated | paused | metered | harvested`).
+  Anything touching `state.yaml` follows the co-writer contract: compare-and-swap
+  ref updates, comment-preserving YAML, ISO-8601 timestamps.
 * **Never run a live orchestrator `tick`/`watch` against this repository as a
   test.** It dispatches real, metered agents onto live `run/*` branches. Verify
   with the test suites, `tick --dry-run`, or `shadow` replays of finished runs.
-* **Instance-specific deploy config stays uncommitted.** `fly.toml` is gitignored
-  by design (copy `deploy/fly.example.toml`; see DEPLOY.md) — never commit it.
-  `orchestrator.yaml` is the opposite case: committed project policy (sweep
-  schedules), read by the orchestrator at the default-branch tip.
+* **Instance-specific config and secrets stay uncommitted.** `fly.toml` (copy
+  `deploy/fly.example.toml`; see DEPLOY.md) and `.env` (local provider API keys) are
+  gitignored by design — never commit either. `orchestrator.yaml` is the opposite
+  case: committed project policy (sweep schedules), read by the orchestrator at the
+  default-branch tip.
 
 ## Commands
 
@@ -92,10 +121,22 @@ criterion.
 * Run the frontend/orchestrator tests: `npm test` in `frontend/` (typecheck:
   `npm run typecheck`; e2e: `npm run build && npx playwright test`; needs
   `npm install` once, Node ≥ 24)
-* Try unmerged frontend changes: from that branch's worktree, `npm run build`
-  then `node packages/cli/src/main.ts ui --demo` (or `--repo <path>`) on a side
-  port — never check the branch out in the blessed main checkout, and never
-  `up` from a trial tree (TOPOLOGY.md §3.5)
+* Drive the local instance with the `agentic` CLI (`frontend/packages/cli`, run from
+  source — `node packages/cli/src/main.ts <cmd>` in any tree *is* that tree's
+  `agentic`):
+  * inspect — `status`, `inbox`, `show <slug> [artifact]`
+  * decide — `approve`, `decline`, `resolve-escalation`, `pause`, `resume`, `sync`
+  * create a run — `new` stages `runs/<slug>/` on its branch; `arm <slug>` starts it
+  * serve — `up [--repo <path>]` (FleetView + engine over one clone, the blessed
+    topology), `ui` (viewer only), `upgrade` (pull + rebuild the web dist, then let
+    the running engine self-supersede)
+* Verify the orchestrator without dispatching: `agentic-orchestrator tick --dry-run`
+  or `shadow <slug>` (replay a finished run); `watch` and `sweep <role>` are live
+* Try unmerged frontend changes: from that branch's worktree, `npm install &&
+  npm run build` then `node packages/cli/src/main.ts ui --demo` (or `--repo <path>`)
+  on a side port — never check the branch out in the blessed main checkout, and never
+  `up` from a trial tree (TOPOLOGY.md §3.5). Web-only changes can use
+  `npm run dev -w @agentic/web` instead
 * Run the tests for pipeline-run output: `pytest apps/<app>` — one app per
   invocation (`wordfreq`, `mdtoc`, `dupefind`); the apps' identically named test
   modules collide when pytest collects `apps/` in one pass
@@ -111,15 +152,25 @@ criterion.
 * Pipeline runs live in `runs/<slug>/` on branch `run/<slug>`; artifacts are committed
   as they are produced. Gate approvals in a run's `state.yaml` are written only by the
   named human approver — agents never self-approve a gate.
+* A run is created in two steps: `agentic new` stages the record (branch,
+  `intent-brief.md`, `state.yaml`) for human review, and `arm` is what makes it
+  dispatchable — a staged run is inert, and arming is also what ensures its draft
+  PR. The profile is chosen in the intent brief and recorded as
+  `profile:` at init; from then on `state.yaml` is authoritative, and `gates:` carries
+  exactly that profile's gates (a gate that doesn't exist is absent, never
+  auto-approved).
 * Historian sweeps are gate-less mini-runs (`runs/historian-<date>/`, no
   `state.yaml`); merging the sweep branch is the approval, and its `sweep.yaml` on
   the default branch is what makes the next sweep's interval derivable.
 * Route framework fixes by kind: agent misbehavior → the role spec (`roles/*.md`,
   then re-render); a malformed or ambiguous handoff → the contract (`contracts/*`);
   a model or vendor change → `registry/models.yaml`; orchestrator behavior →
-  `frontend/packages/orchestrator` (design: ORCHESTRATOR.md); integration workflow →
-  `scripts/integrate.py` + the copy manifest (design: INTEGRATION.md); hosting →
-  `deploy/` (recipe: DEPLOY.md); sweep scheduling → `orchestrator.yaml`.
+  `frontend/packages/orchestrator` (design: ORCHESTRATOR.md); what a human sees or
+  clicks → `frontend/packages/{core,server,web,cli}` (design: FRONTEND.md; `core` is
+  layered record → sources → view-model, and derivation stays a pure function of
+  committed state); integration workflow → `scripts/integrate.py` + the copy manifest
+  (design: INTEGRATION.md); deployment posture → TOPOLOGY.md; hosting → `deploy/`
+  (recipe: DEPLOY.md); sweep scheduling → `orchestrator.yaml`.
 * Do not add AI-attribution trailers (e.g. `Co-Authored-By: Claude ...`) to commits.
 
 ---

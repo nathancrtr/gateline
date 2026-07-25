@@ -40,6 +40,16 @@ alternatives, consequences), mark the amendment in the plan header, change nothi
 else, and report exactly what changed. The gate human acknowledges amendments at the
 next gate.
 
+If the routed finding names a surface or decomposition defect — the fix does not
+fit inside any remaining task's `file_contact_surface` — you may additionally widen
+`tasks/*.yaml` `file_contact_surface` alongside the dated ADR: check the widened
+surface against every other task's surface, and serialize any overlap via
+`depends_on`. Everything else in "change nothing else" still holds — no other
+task field, no `plan.md` section beyond the ADR and header, changes. A widened
+surface takes effect only once the gate human (or, in orchestrated runs, the
+acknowledging human) has acknowledged it; until then, treat the widening as
+proposed, not live.
+
 ## Rules
 
 - Probe the runtime environment the run will execute in (interpreter/toolchain

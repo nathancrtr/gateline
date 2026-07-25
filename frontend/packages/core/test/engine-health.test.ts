@@ -54,6 +54,7 @@ describe('engine health (#100)', () => {
     expect(read?.commit).toBeUndefined()
     expect(read?.codeHead).toBeUndefined()
     expect(read?.codeState).toBeUndefined()
+    expect(read?.codeReason).toBeUndefined()
   })
 
   it('round-trips the #141 drift fields', async () => {
@@ -61,6 +62,16 @@ describe('engine health (#100)', () => {
     const h = health({ commit: 'a'.repeat(40), codeHead: 'b'.repeat(40), codeState: 'superseded-pending' })
     await writeEngineHealth(dir, h)
     expect(await readEngineHealth(dir)).toEqual(h)
+
+    // A paused heartbeat also carries the monitor's cause verbatim (#185).
+    const paused = health({
+      commit: 'a'.repeat(40),
+      codeHead: 'b'.repeat(40),
+      codeState: 'paused',
+      codeReason: "checkout is on branch 'run/toy', not the default branch (main)",
+    })
+    await writeEngineHealth(dir, paused)
+    expect(await readEngineHealth(dir)).toEqual(paused)
   })
 
   it('staleness allows two missed heartbeats plus grace, no more', () => {

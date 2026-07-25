@@ -54,6 +54,19 @@ export async function planSync(source: RunSource, provider: PrProvider): Promise
   return plan
 }
 
+/**
+ * Local-only guard in front of `planSync`: reads `source.localOnly` and, when
+ * set, returns `'local-only'` without ever calling `providerFactory` — the
+ * `gh`-backed `GhCliProvider` is never constructed (AC2.3), let alone invoked.
+ */
+export async function planSyncForSource(
+  source: RunSource,
+  providerFactory: () => PrProvider,
+): Promise<SyncPlanEntry[] | 'local-only'> {
+  if ((source as { localOnly?: boolean }).localOnly === true) return 'local-only'
+  return planSync(source, providerFactory())
+}
+
 export async function applySync(source: RunSource, entries: SyncPlanEntry[]): Promise<SyncResult[]> {
   const results: SyncResult[] = []
   const refs = await source.listRuns()

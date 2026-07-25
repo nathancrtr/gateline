@@ -102,6 +102,11 @@ describe('CodeTreeMonitor (#141)', () => {
     const status = await monitor.check()
     expect(status.state).toBe('paused')
     expect(status.reason).toBeTruthy()
+    // The reason is human-facing at every consumer (console log, drift chip),
+    // so it abbreviates both oids rather than spending ~100 chars on them.
+    expect(status.reason).toContain(monitor.startHead.slice(0, 7))
+    expect(status.reason).toContain(status.codeHead.slice(0, 7))
+    expect(status.reason).not.toMatch(/[0-9a-f]{40}/)
   })
 
   it('pauses on a detached HEAD', async () => {

@@ -164,7 +164,7 @@ describe('the autonomous loop, one vendor (M2)', () => {
         const botCommits = commits.filter((line) => line.startsWith(`${BOT.name}|`))
         expect(botCommits.length).toBeGreaterThanOrEqual(20) // 10 dispatched + 10 metered (dispatch sets may share a commit)
         expect(botCommits.some((line) => /G[0-3] (approved|declined)/.test(line))).toBe(false)
-        expect(botCommits.every((line) => /\|state\(toy\): (dispatched|bounced|advanced|escalated|paused|metered)/.test(line))).toBe(true)
+        expect(botCommits.every((line) => /\|state\(toy\): (dispatched|bounced|advanced|escalated|paused|metered|harvested)/.test(line))).toBe(true)
 
         // The state file's contract comments survived every machine edit.
         const finalState = execFileSync('git', ['-C', dir, 'show', 'run/toy:runs/toy/state.yaml'], { encoding: 'utf8' })

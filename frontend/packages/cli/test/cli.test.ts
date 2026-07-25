@@ -3,6 +3,7 @@
 import { execFile, execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { createConnection } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -10,7 +11,7 @@ import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { generateFixtureRepo, type FixtureRepo } from '@agentic/fixtures'
 import { LocalGitSource } from '@agentic/core'
-import { draftBriefMarkdown, runInteractiveNew, type InteractiveNewIO } from '../src/main.ts'
+import { draftBriefMarkdown, resolveUpMode, runInteractiveNew, type InteractiveNewIO } from '../src/main.ts'
 
 const exec = promisify(execFile)
 const cliPath = resolve(dirname(fileURLToPath(import.meta.url)), '../src/main.ts')
@@ -172,10 +173,11 @@ describe('agentic CLI', () => {
     expect(code).toBe(0)
     expect(stdout).toMatch(/armed/)
     // The ensureDraftPr call site (F1): the fixture repo has no origin, so
-    // this exact skip note is the observable proof the call happened at all —
-    // a mutant that drops the `console.log(note.note)` print leaves this
-    // text out of stdout.
-    expect(stdout).toContain('no remote.origin.url configured — nothing to open a PR against')
+    // resolveSources auto-detects local-only (AC1.1) and armRun's localOnly
+    // read short-circuits ensureDraftPr before its own "no remote" check —
+    // this exact skip note is the observable proof both that the call
+    // happened at all and that AC2.2's arm-site suppression is wired.
+    expect(stdout).toContain('local-only mode — draft-PR ensure suppressed')
 
     const source = new LocalGitSource('fixture', fixture.dir)
     const ref = (await source.listRuns()).find((r) => r.slug === 'arm-standard')!
@@ -277,7 +279,8 @@ describe('agentic CLI', () => {
       const { code, stdout } = await runIn(scratch, ['arm', 'hand-authored'])
       expect(code).toBe(0)
       expect(stdout).toMatch(/armed/)
-      expect(stdout).toContain('no remote.origin.url configured — nothing to open a PR against')
+      // scratch has no origin either — same AC1.1 auto-detect, same AC2.2 note.
+      expect(stdout).toContain('local-only mode — draft-PR ensure suppressed')
 
       const source = new LocalGitSource('scratch', scratch)
       const ref = (await source.listRuns()).find((r) => r.slug === 'hand-authored')!
@@ -337,6 +340,95 @@ describe('agentic CLI', () => {
       await rm(scratch, { recursive: true, force: true })
       await rm(briefDir, { recursive: true, force: true })
     }
+  })
+})
+
+describe('agentic sync — local-only short-circuit (R3)', () => {
+  it('against a remoteless source resolves local-only, prints the literal line, exits 0, and never throws (AC3.1)', async () => {
+    // fixture.dir carries no origin remote — resolveSources auto-detects
+    // local-only (AC1.1); today's uncaught `gh pr list` rejection (the
+    // regression case) would otherwise propagate out of `planSync` here.
+    const { code, stdout } = await run(['sync'])
+    expect(code).toBe(0)
+    expect(stdout).toContain('local-only: nothing to sync')
+  })
+
+  it('--live makes zero state writes to any run branch and still exits 0 (AC3.2)', async () => {
+    const before = execFileSync('git', ['-C', fixture.dir, 'rev-parse', 'run/g2-pending'], { encoding: 'utf8' }).trim()
+    const { code, stdout } = await run(['sync', '--live'])
+    expect(code).toBe(0)
+    expect(stdout).toContain('local-only: nothing to sync')
+    const after = execFileSync('git', ['-C', fixture.dir, 'rev-parse', 'run/g2-pending'], { encoding: 'utf8' }).trim()
+    expect(after).toBe(before)
+  })
+})
+
+describe('agentic up — startup conflict (AC4.1)', () => {
+  it('--local-only --push --no-open exits non-zero, names the conflict, and never listens on the port', async () => {
+    const port = 48173
+    const { code, stderr } = await runIn(fixture.dir, ['up', '--local-only', '--push', '--no-open', '--port', String(port)], { expectFail: true })
+    expect(code).not.toBe(0)
+    expect(stderr).toMatch(/local-only and push are both explicitly requested/)
+    // Nothing started listening: a connection attempt is refused, not accepted.
+    await new Promise<void>((resolvePromise, rejectPromise) => {
+      const socket = createConnection({ port, host: '127.0.0.1' })
+      socket.once('connect', () => {
+        socket.destroy()
+        rejectPromise(new Error(`something is listening on ${port}`))
+      })
+      socket.once('error', () => resolvePromise())
+    })
+  })
+})
+
+describe('resolveUpMode — the five startup markers (AC4.2, AC1.1, AC1.2)', () => {
+  it('explicit --push, resolved pushing → "pushing to origin (--push)"', () => {
+    expect(resolveUpMode({ pushExplicit: true, push: true, localOnly: false }, false)).toEqual({
+      enginePush: true,
+      localOnly: false,
+      marker: 'pushing to origin (--push)',
+    })
+  })
+
+  it('no explicit flag, resolved pushing (origin exists) → "pushing to origin (origin auto-detected)"', () => {
+    expect(resolveUpMode({ pushExplicit: false, push: false, localOnly: false }, false)).toEqual({
+      enginePush: true,
+      localOnly: false,
+      marker: 'pushing to origin (origin auto-detected)',
+    })
+  })
+
+  it('explicit --local-only → "local-only (--local-only)"', () => {
+    expect(resolveUpMode({ pushExplicit: false, push: false, localOnly: true }, true)).toEqual({
+      enginePush: false,
+      localOnly: true,
+      marker: 'local-only (--local-only)',
+    })
+  })
+
+  it('explicit --no-push (ADR-1 alias) → "local-only (--no-push)"', () => {
+    expect(resolveUpMode({ pushExplicit: true, push: false, localOnly: false }, true)).toEqual({
+      enginePush: false,
+      localOnly: true,
+      marker: 'local-only (--no-push)',
+    })
+  })
+
+  it('no explicit flag, resolved local-only (no origin remote) → "local-only (no origin remote)" (AC1.1)', () => {
+    expect(resolveUpMode({ pushExplicit: false, push: false, localOnly: false }, true)).toEqual({
+      enginePush: false,
+      localOnly: true,
+      marker: 'local-only (no origin remote)',
+    })
+  })
+
+  it('explicit --local-only overrides an auto-detected origin exactly as --no-push does today (AC1.2)', () => {
+    // sourceLocalOnly=true stands in for loadSources already having forced
+    // local-only despite a live origin, because --local-only was explicit —
+    // resolveUpMode never re-derives that precedence, only names it.
+    const result = resolveUpMode({ pushExplicit: false, push: false, localOnly: true }, true)
+    expect(result.enginePush).toBe(false)
+    expect(result.marker).toBe('local-only (--local-only)')
   })
 })
 

@@ -5,8 +5,17 @@
 // remaining divergence is visible instead of silent.
 import { execFileSync } from 'node:child_process'
 import { rmSync } from 'node:fs'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { loadSources, LocalGitSource, planDecision, summarizeRun, type RunRef } from '../src/index.ts'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  ensureDraftPr,
+  loadSources,
+  LocalGitSource,
+  planDecision,
+  planSyncForSource,
+  summarizeRun,
+  type PrProvider,
+  type RunRef,
+} from '../src/index.ts'
 import { dropFixture, makeFixture, type FixtureContext } from './fixture.helper.ts'
 
 let ctx: FixtureContext
@@ -207,5 +216,69 @@ describe('stale local branch (#99)', () => {
     expect(parent).toBe(newTip)
     const wtHead = execFileSync('git', ['-C', wt, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim()
     expect(wtHead).toBe(result.commit) // the checkout advanced with the write — no silent desync
+  })
+})
+
+// --- local-only as a first-class mode: named-mode resolution and the two closed egress leaks ---
+
+describe('local-only names the mode, not just infers it (AC1.1, AC1.2)', () => {
+  it('a remoteless loadSources source auto-detects local-only (trigger unchanged); adding an origin flips it off', async () => {
+    const { sources } = await loadSources({ repoOverrides: [ctx.repo.dir] })
+    const source = sources[0] as LocalGitSource
+    expect(source.localOnly).toBe(true)
+
+    addOrigin(ctx.repo.dir)
+    const { sources: withOrigin } = await loadSources({ repoOverrides: [ctx.repo.dir] })
+    expect((withOrigin[0] as LocalGitSource).localOnly).toBe(false)
+  })
+
+  it('an explicit localOnly designator overrides auto-detect on a live origin: the decision writes, origin stays untouched', async () => {
+    const bare = addOrigin(ctx.repo.dir)
+    const { sources } = await loadSources({ repoOverrides: [ctx.repo.dir], localOnly: true })
+    const source = sources[0]!
+    const ref = await refFor(source, 'g0-pending')
+    const before = originTip(bare, ref.branch)
+
+    const { state } = await source.readState(ref)
+    const planned = planDecision(state!, { action: 'approve', gate: 'G0', burden: 'confirmation' }, { name: 'Op', email: 'op@example.test' })
+    const result = await source.writeState(ref, planned.mutate, planned.message)
+
+    expect(result.ok).toBe(true)
+    expect(originTip(bare, ref.branch)).toBe(before) // ceiling honored under the named mode, not just push:false
+  })
+})
+
+describe('local-only closes the PR-ensure leak (AC2.2)', () => {
+  it('suppresses ensureDraftPr even when origin exists and the branch was already pushed before local-only was requested', async () => {
+    addOrigin(ctx.repo.dir)
+    const ref = await refFor(ctx.source, 'g0-pending')
+    // Simulate the brief's leak shape: the branch reached origin before this
+    // run went local-only (pr-ensure.test.ts's own pattern for "pushed").
+    const sha = execFileSync('git', ['-C', ctx.repo.dir, 'rev-parse', ref.branch], { encoding: 'utf8' }).trim()
+    execFileSync('git', ['-C', ctx.repo.dir, 'update-ref', `refs/remotes/origin/${ref.branch}`, sha])
+
+    const exec = vi.fn(async () => {
+      throw new Error('gh should not be invoked under local-only')
+    })
+
+    const result = await ensureDraftPr(ctx.repo.dir, ref.branch, ref.slug, { localOnly: true, exec })
+
+    expect(result.status).toBe('skipped')
+    expect(result.note).toMatch(/local-only/i)
+    expect(exec).not.toHaveBeenCalled()
+  })
+})
+
+describe('local-only closes the PR-approval sync leak (AC2.3)', () => {
+  it('planSyncForSource resolves a remoteless loadSources source to local-only without ever invoking the provider factory', async () => {
+    const { sources } = await loadSources({ repoOverrides: [ctx.repo.dir] })
+    const source = sources[0]!
+    expect((source as LocalGitSource).localOnly).toBe(true)
+
+    const factory = vi.fn((): PrProvider => ({ approval: async () => null }))
+    const result = await planSyncForSource(source, factory)
+
+    expect(result).toBe('local-only')
+    expect(factory).not.toHaveBeenCalled()
   })
 })

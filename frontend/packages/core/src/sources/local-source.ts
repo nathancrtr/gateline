@@ -19,7 +19,22 @@ export class LocalGitSource implements RunSource {
   readonly dir: string
   readonly git: Git
   readonly templates: ContractTemplates
-  private readonly options: { push?: boolean; identity?: Identity; fetchIntervalSeconds?: number; frameworkPrefix?: string }
+  /**
+   * True when this source is running in local-only mode — no push, no origin
+   * fetch. A plain own field rather than a prototype accessor: `sync.ts`'s
+   * `planSyncForSource` test (task 02) stubs a source via
+   * `Object.assign(Object.create(getPrototypeOf(real)), real, { localOnly: true })`,
+   * which throws against a getter-only prototype accessor (no setter) but
+   * assigns cleanly onto a plain own data property.
+   */
+  readonly localOnly: boolean
+  private readonly options: {
+    push?: boolean
+    localOnly?: boolean
+    identity?: Identity
+    fetchIntervalSeconds?: number
+    frameworkPrefix?: string
+  }
   /**
    * Resolved core-layer roots, cached for the life of this source and
    * shared with any other consumer resolving paths against this same repo
@@ -35,15 +50,28 @@ export class LocalGitSource implements RunSource {
    *
    * `options.frameworkPrefix` overrides the default `.agentic` probe location
    * for a host integrated with a custom `integrate.py --prefix` (#94).
+   *
+   * `options.localOnly` forces push off (belt-and-braces — `loadSources`
+   * already resolves `push: false` under local-only) and is what
+   * `syncFromRemote` reads to skip fetching origin entirely. Direct
+   * construction without this option behaves exactly as before it existed:
+   * no source-level auto-detect.
    */
   constructor(
     id: string,
     dir: string,
-    options: { push?: boolean; identity?: Identity; fetchIntervalSeconds?: number; frameworkPrefix?: string } = {},
+    options: {
+      push?: boolean
+      localOnly?: boolean
+      identity?: Identity
+      fetchIntervalSeconds?: number
+      frameworkPrefix?: string
+    } = {},
   ) {
     this.id = id
     this.dir = dir
-    this.options = options
+    this.localOnly = options.localOnly === true
+    this.options = this.localOnly ? { ...options, push: false } : options
     this.git = new Git(dir)
     const git = this.git
     this.frameworkRoots = memoizedFrameworkRoots(git, options.frameworkPrefix)
@@ -74,8 +102,13 @@ export class LocalGitSource implements RunSource {
    * holding an unpushed decision commit is never clobbered — the decision's
    * own push reconciles it. New remote branches are not materialized locally;
    * writeState does that lazily on the first decision.
+   *
+   * Local-only mode (AC2.4) short-circuits before any git invocation — the
+   * one guard covering both the engine's heartbeat sync and the server's
+   * interval sync.
    */
   async syncFromRemote(): Promise<void> {
+    if (this.localOnly) return
     await this.git.run(['fetch', '--prune', 'origin'])
     // Prefix patterns (no glob): `*` in for-each-ref doesn't cross `/`, and
     // run branches live at refs/heads/run/<slug>.
@@ -214,6 +247,15 @@ export class LocalGitSource implements RunSource {
     return this.git.lastTouched(
       ref.ref,
       paths.map((p) => `${runDir}/${p}`),
+    )
+  }
+
+  async lastTouchedExcept(ref: RunRef, excludePaths: string[]): Promise<CommitInfo | null> {
+    const runDir = await this.runDir(ref.slug)
+    return this.git.lastTouchedExcept(
+      ref.ref,
+      runDir,
+      excludePaths.map((p) => `${runDir}/${p}`),
     )
   }
 

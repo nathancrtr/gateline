@@ -36,8 +36,9 @@ export async function ensureDraftPr(
   dir: string,
   branch: string,
   slug: string,
-  opts?: { exec?: ExecLike },
+  opts?: { exec?: ExecLike; localOnly?: boolean },
 ): Promise<EnsurePrResult> {
+  if (opts?.localOnly) return { status: 'skipped', note: 'local-only mode — draft-PR ensure suppressed' }
   try {
     const exec = opts?.exec ?? defaultExec
     const git = new Git(dir)

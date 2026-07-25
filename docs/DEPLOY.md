@@ -14,6 +14,10 @@ plain Docker: any host that can run a container with a persistent volume
 works. Everything instance-specific stays in environment variables and an
 uncommitted `fly.toml`.
 
+This recipe clones from `REPO_URL` and legitimately requires a remote (push
+decisions, the GitHub webhook); it is out of scope for the **local-only**
+topology described in [TOPOLOGY.md](TOPOLOGY.md) §3.6.
+
 ## Security model — read this first
 
 FleetView has **no authentication of its own**. Anyone who can reach the port

@@ -114,7 +114,10 @@ export class CodeTreeMonitor {
       return this.pause(codeHead, `checkout is on branch '${branch}', not the default branch (${defaultBranch})`)
     }
     if (!(await this.git.isAncestor(this._startHead, codeHead))) {
-      return this.pause(codeHead, `HEAD moved from ${this._startHead} to ${codeHead}, which is not a fast-forward`)
+      return this.pause(
+        codeHead,
+        `HEAD moved from ${this._startHead.slice(0, 7)} to ${codeHead.slice(0, 7)}, which is not a fast-forward`,
+      )
     }
 
     // Clean fast-forward of the default branch: debounce before declaring

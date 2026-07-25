@@ -215,9 +215,12 @@ the pilot plan §6. *Purpose:* generate the evidence that says which frictions a
 Two small tools, both repo-resident:
 1. `agentic` CLI: `status` (render runs' state), `approve G1 --notes …` /
    `decline` / `resolve-escalation` — writes the `state.yaml` entry with name (from
-   git config), timestamp, and prompted correction-category, then commits. Kills the
-   hand-editing error class and makes principle 3 real. Also the natural home for the
-   PR-approval → `state.yaml` sync (§2).
+   git config), timestamp, and prompted correction-category, then commits;
+   `resolve-escalation` also takes an optional `--disposition` naming a
+   machine-actionable route (`re-review` | `return-to-implement` | `re-plan`,
+   ORCHESTRATOR.md §4.2) the v1 orchestrator acts on. Kills the hand-editing error class and makes
+   principle 3 real. Also the natural home for the PR-approval → `state.yaml` sync
+   (§2).
 2. A static dashboard: CI renders `runs/*/state.yaml` (across the repos that carry
    the framework) into a static site — portfolio table, per-run detail, inbox-ordered
    "needs a human" list with ages. Read-only; decisions still happen via PR review or

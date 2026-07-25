@@ -136,7 +136,8 @@ implementation time (one test per row, like the frontend's); its shape:
 | Task diff ready, `review_rounds` < 3 | Dispatch Reviewer (P5-constrained, §5.3) |
 | Review requests changes, rounds < 3 | Dispatch Implementer, round n+1 |
 | Round cap hit, or two bounces of the same artifact | Escalate; pause the run |
-| Review verdict `escalate` | Escalate; pause. Resolving the escalation *after* the verdict landed dispatches a re-review round — the fresh verdict supersedes the standing `escalate` |
+| Review verdict `escalate` | Escalate; pause. Resolving the escalation *after* the verdict landed routes by the LATEST matching resolution's optional `disposition` (issues #189, #190): `re-review` dispatches the re-review round immediately — an explicit human override of the #188 zero-delta guard; `return-to-implement` sends the task back to the implementer with the review report, or on to a verify round if the implementer already responded (whose-turn logic keyed off the resolution's timestamp, mirroring the request-changes row above); `re-plan` sends the finding to the architect's amendment mode (see the next row); no disposition named falls back to the legacy behavior — a re-review round only once a real commit (anything other than `state.yaml`) has also landed newer than the verdict, else rest naming the fix that still needs to land (issue #188) |
+| Disposition `re-plan` | Dispatch the architect in amendment mode, carrying the review report path and the resolution note (rule D22) — an architect already in flight rests instead, same as any other in-flight producer. Once the amendment lands (`plan.md` or a `tasks/*.yaml` touched newer than the resolution), the engine raises a *fresh* escalation naming `task <id>` and pauses for human acknowledgment (rule D23, issue #190) rather than acting on the widened surface unattended — the architect proposes, the human still disposes. That acknowledgment escalation's own resolution (typically `return-to-implement`) is just another resolution matching the same `task <id>` text, so the LATEST-matching-resolution rule above picks it up and routes through the ordinary machinery unchanged |
 | Implementer dispatch fails | Return the task to `pending` for its one retry; a second failure marks the task `failed` (nothing reads it as in-flight), escalates, and pauses. Resolving the escalation *after* the last failed attempt returns the task to `pending` — a fresh round supersedes the failure (issue #147) |
 | Budget pre-flight fails (§6) | Pause `budget-exhausted`; escalate |
 
@@ -163,8 +164,39 @@ only once that edit lands — a resolution alone re-escalates, which is the engi
 nagging, not a bug. The `escalate` verdict is the exception: it stands in an
 append-only review report no one may amend, so there the resolution itself is the
 input — the engine reads its timestamp and answers with a re-review round rather
-than a repeat escalation (issue #142). A twice-failed implementer task is the
-same shape: the failed ledger entries are append-only facts, so the resolution's
+than a repeat escalation (issue #142). But a resolution is only ever a `state.yaml`
+edit, and marking one resolved costs nothing to type truthfully or not — so the
+engine also requires a real commit under the run directory, excluding `state.yaml`
+itself, newer than the escalate verdict before it will spend a re-review round:
+resolved with no such commit rests, naming the fix that still needs to land rather
+than burning one of the capped rounds against a byte-identical range (issue #188).
+That guard is the *default* absent an instruction otherwise — a human resolving
+the escalation may instead name a `disposition` (issue #189), a machine-actionable
+route captured in the same resolve decision as the free-text note: `re-review`
+tells the engine the condition is addressed and to verify now, bypassing the
+guard as an explicit override (the human's judgment stands in for the commit
+check); `return-to-implement` routes the task back to the implementer with the
+review report first — or straight to a verify round, if the implementer already
+responded since the resolution landed — mirroring the request-changes
+turn-taking but keyed off the resolution's timestamp rather than the review's;
+`re-plan` names a surface or decomposition defect no task's `file_contact_surface`
+can absorb (issue #190) and sends it to the architect instead — dispatched in
+amendment mode with the review report path and the resolution note (rule D22),
+same in-flight/budget-gated dispatch path as any other producer. The architect
+may widen a task's `file_contact_surface` in amendment mode (roles/architect.md),
+but the widening does not take effect silently: once it lands (`plan.md` or a
+`tasks/*.yaml` touched newer than the resolution), the engine raises a *fresh*
+escalation naming `task <id>` and pauses (rule D23) rather than resuming
+unattended — the agent proposes, the named human still disposes. Resolving that
+acknowledgment escalation (typically `return-to-implement`) is, to the engine,
+just one more resolution whose reason happens to match the same `task <id>`
+text, so the "latest matching resolution" rule immediately above composes
+correctly without any special case: it becomes the new latest match and routes
+through the ordinary `return-to-implement`/`re-review` machinery unchanged.
+When more than one resolution matches (a human may acknowledge, then later
+resolve with a disposition), only the latest one's disposition governs. A
+twice-failed implementer task is the same shape as the disposition-less
+default: the failed ledger entries are append-only facts, so the resolution's
 timestamp is the input — resolved after the last failure, the task returns to
 `pending` for a fresh round (issue #147).
 
@@ -182,27 +214,38 @@ additions specific to a machine writer:
   decisions distinguishable at a glance.
 - **Reserved grammar.** Commit messages follow the frontend's structured form —
   `state(<slug>): <verb> …` — with the orchestrator using its own verbs
-  (`dispatched`, `bounced`, `advanced`, `escalated`, `paused`, `metered`) and never
-  the human decision grammar (`G2 approved by <name> …`), which the metrics reader
-  treats as authoritative for decisions.
+  (`dispatched`, `bounced`, `advanced`, `escalated`, `paused`, `metered`,
+  `harvested`) and never the human decision grammar (`G2 approved by <name> …`),
+  which the metrics reader treats as authoritative for decisions.
 
-Both writers carry their commits to origin themselves. The engine pushes with each
-bookkeeping commit (`--push`, #103), and zero-config frontend sources push human
-decisions in the same write whenever the repo has an origin (#149) — a decision
-that only landed locally would otherwise wait on the engine's next commit to reach
+When the resolved deployment mode pushes at all, both writers carry their
+commits to origin themselves. The engine pushes with each bookkeeping commit
+(`--push`, #103), and zero-config frontend sources push human decisions in the
+same write whenever the repo has an origin (#149) — a decision that only
+landed locally would otherwise wait on the engine's next commit to reach
 origin, and an engine at rest never commits, so the viewer and origin consumers
 would silently see different runs. Any residual divergence is surfaced, not
 hidden: run summaries carry an ahead-of-origin commit count, shown as an
-"unpushed" badge in FleetView.
+"unpushed" badge in FleetView. Under the **local-only** topology
+(docs/TOPOLOGY.md §3.6) neither writer pushes, and origin is never fetched
+either — both writers still commit locally, exactly as above, but the
+push/fetch half of this section does not apply.
 
 ### 4.4 Dispatch protocol: commit-then-launch
 
 1. Derive a dispatch → **commit the intent first** (task/phase status →
    `dispatched`, ledger entry opened) via CAS.
 2. On CAS success, launch the job.
-3. On completion, the agent's artifacts are already on the run branch (agents commit
-   their own work, as today); the orchestrator commits the closing bookkeeping —
-   status, rounds, spend.
+3. On completion, the agent's artifacts are on the run branch: a shell-ful role
+   (implementer, reviewer, verifier, ops) commits its own work; a shell-less role
+   (analyst, architect — no adapter maps their capabilities to a git-capable tool,
+   #182) never attempts to, and the engine harvest-commits the run-scoped
+   working-tree diff for it instead, under the bot identity and the `harvested`
+   verb — the same harvest also runs as a defense-in-depth backstop for any
+   non-isolated role that simply didn't commit. This happens before the checkout
+   is force-removed once the run's last in-flight job settles, which is what
+   rescues the artifacts from that teardown. The orchestrator then commits the
+   closing bookkeeping — status, rounds, spend.
 
 The CAS on step 1 is the duplicate-dispatch guard: two orchestrator instances, or a
 tick racing its own heartbeat, serialize on the ref update — the loser re-reads,
@@ -544,9 +587,11 @@ restart" is the only steady state left to describe).
   progress reads `superseded-pending` once rather than firing early on a
   half-updated tree.
 - **`paused` is deliberate idling, not a silent hang.** The heartbeat keeps
-  writing while paused (`codeState: 'paused'`), and FleetView's drift chip
-  renders it as a distinct, stronger-tone pill beside the engine outage
-  banner — a paused engine reads differently from a dead one.
+  writing while paused (`codeState: 'paused'`, plus `codeReason` carrying the
+  monitor's specific cause), and FleetView's drift chip renders that reason —
+  which branch, which conflict — rather than a generic message, as a distinct,
+  stronger-tone pill beside the engine outage banner; a paused engine reads
+  differently from a dead one, and points at the actual fix.
 
 **What stays human-owned.** The engine never calls `git pull`; the update
 input is always an operator action (a manual pull, or `agentic upgrade`).

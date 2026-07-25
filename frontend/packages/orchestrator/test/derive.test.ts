@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { PROFILES, STAGED_REASON, type GateEntry, type RunState, type Validation } from '@agentic/core'
 import { deriveAction, DEFAULT_ESTIMATE_USD } from '../src/derive.ts'
 import type { LedgerEntry, RunObservation, TaskFileInfo } from '../src/observe.ts'
+import type { ReviewInfo } from '../src/review-report.ts'
 
 const gate = (over: Partial<GateEntry> = {}): GateEntry => ({ approved: false, by: null, at: null, notes: null, burden: null, ...over })
 
@@ -32,6 +33,7 @@ const obs = (over: Partial<RunObservation> = {}): RunObservation => ({
   validations: {},
   reviews: [],
   lastTouched: {},
+  lastNonStateCommit: null,
   declineEvents: {},
   bounceCounts: {},
   ledger: [],
@@ -99,7 +101,9 @@ describe('the derivation table, one rule per row', () => {
   })
 
   it('D3 — unresolved escalation rests', () => {
-    const s = state({ escalations: [{ at: null, from_role: 'verifier', reason: 'x', resolved: false, resolved_by: null, resolved_at: null, resolution: null }] })
+    const s = state({
+      escalations: [{ at: null, from_role: 'verifier', reason: 'x', resolved: false, resolved_by: null, resolved_at: null, resolution: null, disposition: null }],
+    })
     expect(deriveAction(obs({ state: s }))).toMatchObject({ kind: 'rest', rule: 'D3' })
   })
 
@@ -326,6 +330,7 @@ describe('the derivation table, one rule per row', () => {
           resolved_by: 'op',
           resolved_at: '1970-01-01T00:05:00.000Z', // epoch 300 < lastTouched 500
           resolution: 'stale resolution from an earlier round',
+          disposition: null,
         },
       ],
     })
@@ -339,7 +344,7 @@ describe('the derivation table, one rule per row', () => {
     expect(a).toMatchObject({ kind: 'escalate', rule: 'D17', pause: 'escalation' })
   })
 
-  it('D17 — a resolution newer than the escalate verdict dispatches the re-review round instead of re-escalating', () => {
+  it('D17 — a resolution newer than the escalate verdict, with a code commit landed since, dispatches the re-review round instead of re-escalating', () => {
     // The fleetview-design regression: resolve+resume re-escalated identically
     // every tick because the escalate verdict stands in an append-only artifact.
     const s = state({
@@ -354,6 +359,7 @@ describe('the derivation table, one rule per row', () => {
           resolved_by: 'op',
           resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600 > lastTouched 500
           resolution: 'condition repaired on the branch',
+          disposition: null,
         },
       ],
     })
@@ -362,10 +368,446 @@ describe('the derivation table, one rule per row', () => {
         state: s,
         taskFiles: new Map([taskFile('01-a')]),
         reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+        lastNonStateCommit: 700, // a real commit landed after the verdict
       }),
     )
     expect(a).toMatchObject({ kind: 'dispatch', rule: 'D13' })
     expect(a.kind === 'dispatch' && a.dispatches[0]).toMatchObject({ role: 'reviewer', task: '01-a', round: 2 })
+  })
+
+  it('D17 — a resolution newer than the escalate verdict but no commit has landed since rests instead of dispatching (#188 zero-delta guard)', () => {
+    // The runner-agent regression: nothing checked that anything actually
+    // changed in the tree, so a resolve+resume with no fix on the branch burned
+    // a capped review round against a byte-identical range.
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600 > lastTouched 500
+          resolution: 'acknowledged, but nothing landed yet',
+          disposition: null,
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+        lastNonStateCommit: null, // no non-state.yaml commit at all
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'rest', rule: 'D17' })
+    expect((a as { why: string }).why).toMatch(/nothing has landed since the verdict/)
+  })
+
+  it('D17 — a plan.md-only commit after the verdict counts as a landed delta (docs-side remedies count, #188)', () => {
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600 > lastTouched 500
+          resolution: 'plan corrected to match the intended surface',
+          disposition: null,
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+        lastNonStateCommit: 700, // e.g. a plan.md or tasks/ edit landed after the verdict
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'dispatch', rule: 'D13' })
+    expect(a.kind === 'dispatch' && a.dispatches[0]).toMatchObject({ role: 'reviewer', task: '01-a', round: 2 })
+  })
+
+  it('D17 — a state.yaml-only commit after the verdict never counts as a landed delta (#188)', () => {
+    // lastNonStateCommit is derived excluding state.yaml, so a resolution
+    // commit that only edits state.yaml (marking the escalation resolved)
+    // must not, by itself, look newer than the verdict — this observation
+    // shape (older-than-verdict, as lastTouched excludes state.yaml history
+    // entirely) is what a real repo produces in that case.
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600 > lastTouched 500
+          resolution: 'acknowledged only',
+          disposition: null,
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+        lastNonStateCommit: 300, // stale: predates the escalate verdict itself
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'rest', rule: 'D17' })
+  })
+
+  it('D17 — disposition re-review dispatches immediately, bypassing the #188 zero-delta guard (#189)', () => {
+    // The human's disposition choice IS the judgment the guard exists to
+    // stand in for when no one has looked — no non-state.yaml commit at all,
+    // yet the re-review still dispatches.
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600 > lastTouched 500
+          resolution: 'condition confirmed addressed; verify now',
+          disposition: 're-review',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+        lastNonStateCommit: null, // no commit has landed at all — the guard would normally rest
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'dispatch', rule: 'D13' })
+    expect(a.kind === 'dispatch' && a.dispatches[0]).toMatchObject({ role: 'reviewer', task: '01-a', round: 2 })
+  })
+
+  it('D17 — disposition return-to-implement with no implementer response yet dispatches the implementer with the review report (#189)', () => {
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600
+          resolution: 'send back to the implementer first',
+          disposition: 'return-to-implement',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+        lastTouched: { 'tasks/01-a.yaml': 400 }, // predates the resolution — not yet responded
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'dispatch', rule: 'D11' })
+    expect(a.kind === 'dispatch' && a.dispatches[0]).toMatchObject({
+      role: 'implementer',
+      task: '01-a',
+      round: 2,
+      bounce: { kind: 'review', report: 'review-01.md' },
+    })
+  })
+
+  it('D17 — disposition return-to-implement with a task-file touch newer than the resolution dispatches the verify round (#189)', () => {
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600
+          resolution: 'send back to the implementer first',
+          disposition: 'return-to-implement',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+        lastTouched: { 'tasks/01-a.yaml': 700 }, // newer than the resolution — implementer responded
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'dispatch', rule: 'D13' })
+    expect(a.kind === 'dispatch' && a.dispatches[0]).toMatchObject({ role: 'reviewer', task: '01-a', round: 2 })
+  })
+
+  it('D17 — with two matching resolutions, the LATEST resolution disposition governs the routing (#189)', () => {
+    // An earlier acknowledgment-only resolution (no disposition, so the
+    // legacy guarded path) is superseded by a later resolution that names a
+    // disposition — the later resolution is what actually unblocks the run.
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600 — earlier acknowledgment
+          resolution: 'acknowledged only, no disposition yet',
+          disposition: null,
+        },
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:15:00.000Z', // epoch 900 — the later, governing resolution
+          resolution: 'condition confirmed addressed; verify now',
+          disposition: 're-review',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+        lastNonStateCommit: null, // the legacy guard on the first resolution would rest; the later re-review disposition overrides it
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'dispatch', rule: 'D13' })
+    expect(a.kind === 'dispatch' && a.dispatches[0]).toMatchObject({ role: 'reviewer', task: '01-a', round: 2 })
+  })
+
+  it('D22 — disposition re-plan with no amendment landed yet dispatches the architect in amendment mode (#190)', () => {
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600
+          resolution: 'this is a decomposition defect — send to the architect',
+          disposition: 're-plan',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+        lastTouched: {}, // neither plan.md nor the task file has moved since the resolution
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'dispatch', rule: 'D22' })
+    expect(a.kind === 'dispatch' && a.dispatches[0]).toMatchObject({
+      role: 'architect',
+      task: null,
+      round: null,
+      bounce: { kind: 'amendment', report: 'review-01.md', note: 'this is a decomposition defect — send to the architect', task: '01-a' },
+    })
+  })
+
+  it('D12 — disposition re-plan with an architect already dispatched rests instead of double-dispatching (#190)', () => {
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z',
+          resolution: 'send to the architect',
+          disposition: 're-plan',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+        openDispatches: [{ role: 'architect', task: null, at: '2026-01-01T00:00:00.000Z' }],
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'rest', rule: 'D12' })
+  })
+
+  it('D23 — disposition re-plan with plan.md touched newer than the resolution raises a fresh acknowledgment escalation (#190)', () => {
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600
+          resolution: 'send to the architect',
+          disposition: 're-plan',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+        lastTouched: { 'plan.md': 700 }, // newer than the resolution — the amendment landed
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'escalate', rule: 'D23', pause: 'escalation' })
+    expect((a as { reason: string }).reason).toMatch(/task 01-a/)
+  })
+
+  it('D23 — a tasks/*.yaml touch (not just plan.md) newer than the resolution also counts as the amendment landing (#190)', () => {
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [
+        {
+          at: null,
+          from_role: 'orchestrator',
+          reason: 'reviewer escalated task 01-a — see review-01.md',
+          resolved: true,
+          resolved_by: 'op',
+          resolved_at: '1970-01-01T00:10:00.000Z',
+          resolution: 'widen the surface',
+          disposition: 're-plan',
+        },
+      ],
+    })
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+        lastTouched: { 'tasks/01-a.yaml': 700 }, // the task file itself was widened
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'escalate', rule: 'D23', pause: 'escalation' })
+  })
+
+  it('end-to-end: escalate → resolve(re-plan) → architect dispatch → amendment lands → ack escalation → resolve(return-to-implement) → implementer dispatch (#190)', () => {
+    const baseState = {
+      phase: 'implement' as const,
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+    }
+    const review: ReviewInfo = { path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }
+    const taskFiles = new Map([taskFile('01-a')])
+
+    // 1. Reviewer escalate verdict, unresolved — escalate and pause.
+    const step1 = deriveAction(obs({ state: state(baseState), taskFiles, reviews: [review] }))
+    expect(step1).toMatchObject({ kind: 'escalate', rule: 'D17', pause: 'escalation' })
+
+    // 2. Human resolves with disposition re-plan — dispatch the architect in amendment mode.
+    const rePlanResolution = {
+      at: null,
+      from_role: 'orchestrator',
+      reason: 'reviewer escalated task 01-a — see review-01.md',
+      resolved: true,
+      resolved_by: 'op',
+      resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600
+      resolution: 'decomposition defect — send to the architect',
+      disposition: 're-plan' as const,
+    }
+    const step2 = deriveAction(
+      obs({ state: state({ ...baseState, escalations: [rePlanResolution] }), taskFiles, reviews: [review] }),
+    )
+    expect(step2).toMatchObject({ kind: 'dispatch', rule: 'D22' })
+    expect(step2.kind === 'dispatch' && step2.dispatches[0]).toMatchObject({
+      role: 'architect',
+      bounce: { kind: 'amendment', report: 'review-01.md', task: '01-a' },
+    })
+
+    // 3. Architect dispatch in flight — rest (D12 shape).
+    const step3 = deriveAction(
+      obs({
+        state: state({ ...baseState, escalations: [rePlanResolution] }),
+        taskFiles,
+        reviews: [review],
+        openDispatches: [{ role: 'architect', task: null, at: '2026-01-01T00:00:00.000Z' }],
+      }),
+    )
+    expect(step3).toMatchObject({ kind: 'rest', rule: 'D12' })
+
+    // 4. Amendment lands (plan.md widened past the resolution) — raise a fresh escalation, pause.
+    const step4 = deriveAction(
+      obs({
+        state: state({ ...baseState, escalations: [rePlanResolution] }),
+        taskFiles,
+        reviews: [review],
+        lastTouched: { 'plan.md': 700 },
+      }),
+    )
+    expect(step4).toMatchObject({ kind: 'escalate', rule: 'D23', pause: 'escalation' })
+    const ackReason = (step4 as { reason: string }).reason
+    expect(ackReason).toMatch(/task 01-a/)
+
+    // 5. Human acknowledges with return-to-implement — the LATEST matching
+    //    resolution now governs, routing through #189's machinery unchanged.
+    const ackResolution = {
+      at: null,
+      from_role: 'orchestrator',
+      reason: ackReason,
+      resolved: true,
+      resolved_by: 'op',
+      resolved_at: '1970-01-01T00:13:20.000Z', // epoch 800 — after the re-plan resolution
+      resolution: 'amendment acknowledged — return to the implementer',
+      disposition: 'return-to-implement' as const,
+    }
+    const step5 = deriveAction(
+      obs({
+        state: state({ ...baseState, escalations: [rePlanResolution, ackResolution] }),
+        taskFiles,
+        reviews: [review],
+        lastTouched: { 'plan.md': 700 }, // the amendment stays landed; no implementer response yet
+      }),
+    )
+    expect(step5).toMatchObject({ kind: 'dispatch', rule: 'D11' })
+    expect(step5.kind === 'dispatch' && step5.dispatches[0]).toMatchObject({
+      role: 'implementer',
+      task: '01-a',
+      round: 2,
+      bounce: { kind: 'review', report: 'review-01.md' },
+    })
   })
 
   it('D20 — a failed task whose naming escalation resolved after the last failure returns to pending', () => {
@@ -383,6 +825,7 @@ describe('the derivation table, one rule per row', () => {
           resolved_by: 'op',
           resolved_at: '1970-01-01T00:10:00.000Z', // after the 00:05 failure below
           resolution: 'outage over — retry',
+          disposition: null,
         },
       ],
     })
@@ -411,6 +854,7 @@ describe('the derivation table, one rule per row', () => {
           resolved_by: 'op',
           resolved_at: '1970-01-01T00:04:00.000Z', // before the 00:05 failure below
           resolution: 'unblocked',
+          disposition: null,
         },
       ],
     })
@@ -437,6 +881,7 @@ describe('the derivation table, one rule per row', () => {
           resolved_by: 'op',
           resolved_at: '1970-01-01T00:10:00.000Z',
           resolution: 'unblocked',
+          disposition: null,
         },
       ],
     })

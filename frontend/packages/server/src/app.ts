@@ -28,6 +28,7 @@ import {
   validateArtifact,
   type Burden,
   type DecisionAction,
+  type Disposition,
   type GateId,
   type Phase,
   type Profile,
@@ -169,6 +170,7 @@ export function createApp(deps: AppDeps): Hono {
         commit?: string
         codeHead?: string
         codeState?: 'fresh' | 'superseded-pending' | 'paused'
+        codeReason?: string
       } | null
     > = {}
     for (const s of deps.sources) {
@@ -184,6 +186,7 @@ export function createApp(deps: AppDeps): Hono {
             commit: health.commit,
             codeHead: health.codeHead,
             codeState: health.codeState,
+            codeReason: health.codeReason,
           }
         : null
     }
@@ -407,6 +410,7 @@ export function createApp(deps: AppDeps): Hono {
       notes?: string
       burden?: Burden
       escalationIndex?: number
+      disposition?: Disposition
       pauseReason?: string
       resumePhase?: Phase
       hold?: boolean

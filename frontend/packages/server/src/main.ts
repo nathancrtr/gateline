@@ -40,6 +40,12 @@ export interface ServeOptions {
    * Absent → the runner-agent routes do not exist regardless of RUNNER_TOKEN.
    */
   runnerCallback?: RunnerCallback
+  /**
+   * Explicit local-only designator (mirrors `push`'s two explicit tiers) —
+   * forwarded to `loadSources`, which resolves it onto the existing `push`
+   * precedence chain (auto-detect included) rather than a second mechanism.
+   */
+  localOnly?: boolean
 }
 
 const MIME: Record<string, string> = {
@@ -62,7 +68,7 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
     repoOverrides = [fixture.dir]
   }
 
-  const { sources, configPath, warnings } = await loadSources({ repoOverrides, push: opts.push })
+  const { sources, configPath, warnings } = await loadSources({ repoOverrides, push: opts.push, localOnly: opts.localOnly })
   for (const w of warnings) console.warn(`warning: ${w}`)
   if (sources.length === 0) {
     throw new Error('no run sources — run inside a repository, pass --repo <path>, or create ~/.config/agentic/config.yaml')
@@ -90,8 +96,14 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
   // the ref watcher above turns that into an SSE change signal.
   const syncTimers: NodeJS.Timeout[] = []
   for (const source of sources) {
-    const s = source as { id: string; fetchIntervalSeconds?: number; syncFromRemote?: () => Promise<void> }
+    const s = source as { id: string; fetchIntervalSeconds?: number; syncFromRemote?: () => Promise<void>; localOnly?: boolean }
     if (!s.fetchIntervalSeconds || !s.syncFromRemote) continue
+    // LocalGitSource.syncFromRemote self-guards under local-only (AC2.4) — this
+    // skip is honesty in the log, not the safety mechanism.
+    if (s.localOnly) {
+      console.log(`local-only: not syncing ${s.id} from origin`)
+      continue
+    }
     let inFlight = false
     const sync = async () => {
       if (inFlight) return

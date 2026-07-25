@@ -1,0 +1,83 @@
+id: 02-state-contract-resolution
+title: Contract-aware state parsing and validation in @agentic/core (parse boundary)
+requirements: [R3, R4]
+
+scope: |
+  FIRST: run `npm install` (if needed) and `npm test` plus `npm run typecheck`
+  in frontend/ and confirm green before any edit (plan Risks; Node >= 24).
+
+  Implement the parse boundary per plan "Interface contracts":
+
+  1. New file frontend/packages/core/src/record/state-contract.ts:
+     `StateContract` union, `SDLC_STATE_CONTRACT`, pure
+     `deriveStateContract(stateTemplate, coreTemplate)`, and async
+     `resolveStateContract(templates)`. Classification table is normative:
+     SDLC iff the state.yaml template parses to an object with all of
+     top-level `branch`, `budget`, `tasks`; otherwise generic derived from that
+     template (gateIds = keys of its `gates` mapping, requiredKeys = its
+     top-level keys, branchRequired = has `branch`); if state.yaml is absent,
+     derive generic from state-core.yaml the same way; if both are absent or
+     unparseable, SDLC.
+
+  2. record/schema.ts: add `GenericRunState` and the optional
+     `generic?: GenericRunState | null` field on `StateParseResult`; give
+     `parseRunState` an optional second parameter defaulting to
+     SDLC_STATE_CONTRACT. The SDLC path must be byte-identical to today —
+     do NOT alter runStateSchema, RunState, PHASES, PROFILE_GATES, or any
+     existing export's behavior (AC3.1, AC3.2, AC5.1: readiness.test.ts,
+     profiles.test.ts, real-repo.test.ts must pass with zero expected-value
+     edits). Generic path: run required; branch required only when
+     branchRequired; phase/paused_reason optional scalars -> string|null;
+     gates a required mapping validated per-entry with the existing
+     gateEntrySchema; escalations optional -> []; passthrough unknowns;
+     gateOrder = declared gateIds (contract order) then undeclared ids present
+     in the file; same error-message formatting as the SDLC path.
+
+  3. record/validate.ts: replace the presence-only state.yaml branch (AC4.3).
+     Add `BUILTIN_STATE_KEYS = [run, branch, phase, paused_reason, budget,
+     gates, tasks, escalations]`. Required keys come from the repo's
+     contracts/state.yaml template top-level keys, else contracts/state-core.yaml,
+     else BUILTIN_STATE_KEYS with the existing "no contracts/ in repo" note —
+     mirror the work-item.yaml branch exactly (unparseable template note,
+     not-valid-YAML content handling).
+
+  4. Re-export the new names through src/record/index.ts and src/index.ts.
+
+  5. New test file frontend/packages/core/test/state-contract.test.ts:
+     - classification: this repo's post-split contracts/state.yaml -> sdlc;
+       a core-only template (use the fixture contract YAML from the plan,
+       gates intake/publish) -> generic with the expected descriptor; absent/
+       garbage -> sdlc.
+     - parseRunState with a generic contract accepts a state file using gates
+       {intake, publish} and no branch (error: null, generic non-null,
+       state null); rejects a file missing `run` or with a non-mapping gates.
+     - parseRunState default path: unchanged for a full SDLC document.
+     - validateArtifact('state.yaml', ...): resolves required keys from this
+       repo's own template via a stub ContractTemplates; sweep: for every
+       runs/*/state.yaml in this repository, validation is ok (plan Risks —
+       audited eight-key set).
+
+  Do not touch local-source.ts, readiness.ts, portfolio.ts (task 03), any
+  package outside frontend/packages/core (AC6.1), or existing test files.
+
+file_contact_surface:
+  - frontend/packages/core/src/record/state-contract.ts
+  - frontend/packages/core/src/record/schema.ts
+  - frontend/packages/core/src/record/validate.ts
+  - frontend/packages/core/src/record/index.ts
+  - frontend/packages/core/src/index.ts
+  - frontend/packages/core/test/state-contract.test.ts
+
+acceptance_tests:
+  - AC3.1
+  - AC3.2
+  - AC4.3
+  - "npm test in frontend/ passes with zero failing tests and zero expected-value edits to readiness.test.ts, profiles.test.ts, real-repo.test.ts (AC5.1 precondition)"
+  - "npm run typecheck in frontend/ passes with no edits outside frontend/packages/core"
+  - "new state-contract.test.ts covers: classification table rows, generic accept/reject, default-path stability, required-keys sweep over runs/*/state.yaml"
+
+depends_on: [01-contracts-split]
+
+status: pending
+
+notes: |

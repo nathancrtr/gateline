@@ -1,0 +1,73 @@
+id: 03-generic-read-path
+title: Thread the resolved state contract through LocalGitSource and the view-model
+requirements: [R3, R4, R5]
+
+scope: |
+  Wire task 02's parse boundary into the read path, per plan "Interface
+  contracts" and ADR-4:
+
+  1. sources/local-source.ts: memoize `resolveStateContract(this.templates)`
+     once per source (same stance as frameworkRoots) and pass the resolved
+     contract to parseRunState in both readState and stateHistory. No
+     RunSource interface change (the optional `generic` field rides the
+     existing StateParseResult).
+
+  2. view-model/readiness.ts: in deriveReadiness, when state is null but the
+     read's `generic` is non-null, return `{ items: [], validations }` — a
+     well-formed generic run is not malformed and produces no decision cards
+     (spec out-of-scope: no decision UI for non-SDLC gates). Every other path
+     byte-identical.
+
+  3. view-model/portfolio.ts: widen RunSummary.gates to
+     `GateLedgerMap = Record<GateId, GateLedgerCell> & Record<string, GateLedgerCell | undefined>`
+     (GateId access stays statically defined so cli/web typecheck unchanged —
+     plan ADR-3/ADR-4). SDLC branch: populate exactly G0..G3 as today (AC5.1,
+     AC5.2). New generic branch (state null, generic non-null): phase =
+     generic.phase ?? '—'; pausedReason = generic.paused_reason; malformed =
+     null; profile = 'full' (typed filler, comment it per ADR-6 consequence);
+     gates = one cell per generic.gateOrder entry under its declared name and
+     NOTHING ELSE (no synthesized G0–G3 — AC4.2); tasks zeros; escalationsOpen
+     from generic.escalations; budget nulls. emptyLedger()/malformed path
+     unchanged.
+
+  4. New test file frontend/packages/core/test/generic-host.test.ts building a
+     temp fixture repo (git init; commit contracts/state.yaml = the plan's
+     core-instance fixture with gates {intake, publish}; a run directory
+     runs/demo/ with a state.yaml using phase: intake, those two gates, an
+     empty escalations list, no branch key — committed on the default branch
+     or a run branch, either is fine as long as listRuns discovers it).
+     Assert:
+     - readState: error null, state null, generic non-null (AC4.1);
+     - summarizeRun: phase 'intake', malformed null,
+       Object.keys(summary.gates) deep-equals ['intake', 'publish'] (AC4.2);
+     - deriveReadiness: zero items;
+     - validateArtifact('state.yaml', ...) with the fixture source's templates:
+       ok true (AC4.3);
+     - regression guard: for this repository itself, summarizeRun(wordfreq)
+       still reports phase 'done' and gate keys exactly G0..G3 (AC5.2's
+       fixture-equivalent; real-repo.test.ts stays the authoritative check and
+       must pass unedited).
+
+  Run the full `npm test` and `npm run typecheck` in frontend/ — all packages
+  (cli, web, server, orchestrator) must pass with zero edits outside
+  frontend/packages/core (AC5.1, AC6.1). Do not edit existing test files.
+
+file_contact_surface:
+  - frontend/packages/core/src/sources/local-source.ts
+  - frontend/packages/core/src/view-model/readiness.ts
+  - frontend/packages/core/src/view-model/portfolio.ts
+  - frontend/packages/core/test/generic-host.test.ts
+
+acceptance_tests:
+  - AC4.1
+  - AC4.2
+  - AC5.1
+  - AC5.2
+  - AC3.1
+  - "npm test and npm run typecheck in frontend/ pass across all workspace packages with no diff outside frontend/packages/core"
+
+depends_on: [02-state-contract-resolution]
+
+status: pending
+
+notes: |

@@ -1,0 +1,57 @@
+id: 04-docs-landed
+title: Update INTEGRATION.md and DESIGN.md to describe the split as landed
+requirements: [R7]
+
+scope: |
+  Update the two framework docs so the split reads as landed, not pending.
+  The contract layout being documented (plan ADR-1): contracts/state-core.yaml
+  is the generic core (run identity, host-named gates, escalations, pause);
+  contracts/state.yaml is the SDLC extension and remains a complete template;
+  the frontend resolves state shape from the target repo's own contract.
+
+  docs/INTEGRATION.md (AC7.1) — every current mention treats the split as a
+  future/"active run"; update each:
+  - §3 (~line 152-158, "Vendored trees are not the only channel"): the
+    compiled-in run-state schema boundary is fixed — state now validates
+    against the host's own contracts/state.yaml (core, or SDLC extension),
+    landed in run state-contract-split-2.
+  - §4 (~line 238-249, fork-and-record worst case): the upstream fix has
+    landed (name the two files); non-SDLC hosts instantiate the core instead
+    of forking. Keep the historical narrative of integration #2's fork intact
+    (it is a record of what happened).
+  - §5 (~line 363-372, frontend read check): remove the "Precondition: the
+    state-contract split" sentence or rewrite it to point at this run as done;
+    note the residual limitation from plan ADR-6 honestly (core read paths and
+    the API generalize; the cli/web gate-glyph cells still assume SDLC ids
+    pending a follow-up).
+  - §9 risk table (~line 455): the mitigation is no longer "active run" —
+    mark landed.
+  - §11 sequencing note (~line 488) and §3 (~line 134-137): the split no
+    longer blocks tagging; note the one release-prep item this run deferred:
+    adding contracts/state-core.yaml to scripts/copy-manifest.json (ADR-6).
+  Verify: `grep -n "state-contract split" docs/INTEGRATION.md` shows no
+  future-tense/pending description.
+
+  docs/DESIGN.md (AC7.2) — §5 artifact-contract table (~line 201): update the
+  state.yaml row to reflect the core/extension split, or add an explicit note
+  that the row's scope is the SDLC extension (state-core.yaml carries the
+  generic core). Keep the table's one-line format.
+
+  Touch only these two files (AC6.1). No non-SDLC vocabulary or examples
+  (R6). Write in the docs' existing voice; keep edits minimal and local.
+
+file_contact_surface:
+  - docs/INTEGRATION.md
+  - docs/DESIGN.md
+
+acceptance_tests:
+  - AC7.1
+  - AC7.2
+  - "grep -n 'state-contract split' docs/INTEGRATION.md shows no pending/future-tense description"
+  - "git diff touches only docs/INTEGRATION.md and docs/DESIGN.md"
+
+depends_on: []
+
+status: pending
+
+notes: |

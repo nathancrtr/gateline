@@ -1,0 +1,69 @@
+id: 01-contracts-split
+title: Author contracts/state-core.yaml and rewrite contracts/state.yaml as the SDLC extension
+requirements: [R1, R2, R6]
+
+scope: |
+  Create contracts/state-core.yaml: the generic core state contract. Required
+  fields exactly (AC1.1): run identity (`run:`), a `gates:` mapping keyed by
+  host-declared names (document the entry shape {approved, by, at, notes,
+  burden} and the rules: entries written only by the named human approver,
+  absent entry = undecided never approved, `at` ISO-8601, burden vocabulary
+  confirmation | light-correction | heavy-correction), an append-only
+  `escalations:` list ({at, from_role, reason, resolved}), and the pause signal
+  `paused_reason:` (null = running; a host-declared reason string = paused).
+  Include the optional commented-out `intake:` block (it is core: today's
+  contract already calls it tracker-vocabulary-free). Restate the writer and
+  provenance header (human decision grammar, orchestrator bot verbs) in
+  gate-name-free form, e.g. "state(<slug>): <gate> approved by <name>". End
+  with a pointer: the SDLC extension lives in contracts/state.yaml.
+
+  HARD constraints on the core document (AC1.2, AC6.2): the literal strings
+  G0, G1, G2, G3, "run/<slug>", and "budget:" must not appear anywhere in it —
+  including comments. Note "runs/<slug>/state.yaml" is safe (does not contain
+  "run/<slug>"). No gate name, ticket system, or business vocabulary; every
+  example stays within run identity, gates, escalations, pause. Do not include
+  phase, branch, budget, tasks, or profile keys or examples — mention only that
+  extensions may add fields.
+
+  Rewrite contracts/state.yaml in place as the SDLC extension (AC2.1): keep it
+  a complete example instance. Header declares it the SDLC extension of
+  contracts/state-core.yaml (core fields' normative rules live there; restating
+  them here is allowed and nothing may be dropped — AC2.2 diffs the pre-split
+  file against the union of the two documents). It must declare: the
+  branch: run/<slug> convention, the seven-value phase ladder, the gate set
+  exactly G0, G1, G2, G3 with the profile-gates rule, the tasks mirror with its
+  status vocabulary and review_rounds note, the budget block with the ledger
+  rules, and the paused_reason vocabulary (budget-exhausted | round-cap |
+  escalation | gate-declined | staged). Keep every existing comment, writer
+  rule, and provenance note (moving generic ones to the core is fine only if
+  they remain present or referenced here).
+
+  ONE MECHANICAL CHANGE with downstream meaning (plan ADR-5): the template's
+  concrete top-level keys become the frontend's required-key set, so they must
+  be exactly: run, branch, phase, paused_reason, budget, gates, tasks,
+  escalations. Convert the `profile:` line to a commented-out optional key
+  (like `intake:`), keeping its full explanatory comment. Do not add any other
+  concrete top-level key.
+
+  Touch nothing outside these two files. Do not edit any runs/*/state.yaml
+  (AC3.3) and do not touch scripts/copy-manifest.json (plan ADR-6 defers it).
+
+file_contact_surface:
+  - contracts/state-core.yaml
+  - contracts/state.yaml
+
+acceptance_tests:
+  - AC1.1
+  - AC1.2
+  - AC2.1
+  - AC2.2
+  - AC6.2
+  - "grep -E 'G0|G1|G2|G3|run/<slug>|budget:' contracts/state-core.yaml returns no matches (exit 1)"
+  - "python3 -c \"import yaml\" is NOT assumed — but both files must parse with the npm 'yaml' package; verify keys: state-core.yaml top-level = [run, paused_reason, gates, escalations]; state.yaml top-level = [run, branch, phase, paused_reason, budget, gates, tasks, escalations]"
+  - "manual diff review: every field, writer rule, and provenance note of the pre-split contracts/state.yaml appears in the union of the two documents"
+
+depends_on: []
+
+status: pending
+
+notes: |

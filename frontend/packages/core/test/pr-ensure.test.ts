@@ -212,6 +212,17 @@ describe('ensureDraftPr descriptions', () => {
     expect(exec.mock.calls.some(([, args]) => args.includes('edit'))).toBe(false)
   })
 
+  it('adopts a PR still wearing the pre-#202 one-line body', async () => {
+    pushRunBranch('run/toy', TOY_RUN)
+    const exec = ghStub({ number: 42, title: 'run/toy', body: 'Draft PR for `run/toy` — see `runs/toy/` for the run record.', state: 'OPEN' })
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
+
+    expect(result.note).toContain('refreshed from intent-brief.md')
+    const [, args] = exec.mock.calls.find(([, a]) => a.includes('edit'))!
+    expect(argOf(args, '--title')).toBe('Toy exporter is unusable at scale')
+  })
+
   it('issues no edit when the description is already current', async () => {
     pushRunBranch('run/toy', TOY_RUN)
     const first = ghStub(null)

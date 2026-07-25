@@ -135,6 +135,15 @@ describe('isGeneratedBody', () => {
     expect(isGeneratedBody(null)).toBe(false)
     expect(isGeneratedBody(undefined)).toBe(false)
   })
+
+  it('adopts the pre-#202 one-liner, so PRs opened before the upgrade are not stuck', () => {
+    expect(isGeneratedBody('Draft PR for `run/toy` — see `runs/toy/` for the run record.')).toBe(true)
+    expect(isGeneratedBody('Draft PR for `run/toy` — see `.agentic/runs/toy/` for the run record.\n')).toBe(true)
+  })
+
+  it('does not mistake a human body that merely opens with the old wording', () => {
+    expect(isGeneratedBody('Draft PR for `run/toy` — see `runs/toy/` for the run record.\n\n## Summary\nThen a human added this.')).toBe(false)
+  })
 })
 
 describe('sectionBody', () => {

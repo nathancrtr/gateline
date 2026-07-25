@@ -12,6 +12,14 @@ import { PROFILE_GATES, type Profile } from '../record/schema.ts'
 /** Present in every generated body; its absence means a human owns the text. */
 export const GENERATED_MARKER = '<!-- agentic:draft-pr -->'
 
+/**
+ * The pre-#202 body, which carried no marker because there was nothing to
+ * refresh. It was framework-generated all the same, so a PR still wearing it
+ * is adopted on the next ensure — otherwise every PR opened before the upgrade
+ * keeps its slug title forever, which is the exact defect #202 set out to fix.
+ */
+const LEGACY_BODY = /^Draft PR for `run\/[^`]+` — see `[^`]+` for the run record\.\s*$/
+
 /** Per-section cap in the body — a PR description summarizes, the record holds the whole. */
 const MAX_SECTION_CHARS = 700
 
@@ -33,9 +41,11 @@ export interface RunDescription {
   from: 'spec.md' | 'intent-brief.md' | 'slug'
 }
 
-/** True for a body the framework generated and may still refresh. */
+/** True for a body the framework generated and may still refresh — this
+ * version's marked body, or the pre-#202 one-liner it replaced. */
 export function isGeneratedBody(body: string | null | undefined): boolean {
-  return typeof body === 'string' && body.includes(GENERATED_MARKER)
+  if (typeof body !== 'string') return false
+  return body.includes(GENERATED_MARKER) || LEGACY_BODY.test(body.trim())
 }
 
 /** Strips HTML comments (contract guidance lives in them) and trims. */

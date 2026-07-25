@@ -754,6 +754,13 @@ program
   .option('--local-only', 'no push, no gh/GitHub calls, no origin fetch — everything about this run stays in this clone')
   .option('--heartbeat <seconds>', 'engine heartbeat interval', '180')
   .option('--role-timeout <seconds>', 'wall clock per dispatched role before its process group is killed (default 1800)', parseFloat)
+  .addHelpText(
+    'after',
+    '\nEngine only, no server or browser: the orchestrator has its own binary —\n' +
+      '  agentic-orchestrator watch   resident engine (this command minus FleetView)\n' +
+      '  agentic-orchestrator tick    one reconcile pass, --dry-run to preview\n' +
+      'See frontend/packages/cli/README.md, "Headless / no browser".',
+  )
   .action(
     async (
       flags: {

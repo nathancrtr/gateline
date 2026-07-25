@@ -1,7 +1,10 @@
 # Agentic Development System — Design
 
-**Status:** v0.2 — exercised end-to-end by the wordfreq run (`runs/wordfreq/`); the
-gate frontend and the v1 orchestrator it describes in §7 are implemented (`frontend/`)
+**Status:** v0.2 — the design has been exercised end-to-end by three human-orchestrated
+G0→G3 runs (`runs/wordfreq/`, `runs/mdtoc/`, `runs/dupefind/` — the shadow-agreement
+evidence for the v1 trust ladder), and since then by orchestrator-driven runs against
+this repository itself (`runs/creation-seam/`, `runs/web-staging/`, `runs/fleetview-design/`);
+the gate frontend and the v1 orchestrator it describes in §7 are implemented (`frontend/`)
 **Audience:** senior engineers moving from single-stream AI pair-programming to multi-agent, semi-autonomous development
 
 ---

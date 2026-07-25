@@ -1,9 +1,10 @@
 run: escalation-visibility-2
 branch: run/escalation-visibility-2
-phase: paused             # staged — not yet armed; `agentic arm escalation-visibility-2` starts the run
-paused_reason: staged
-profile: standard        # patch | standard | full
-intake:                   # source-agnostic staging provenance; free-form path: nulls + client_key
+phase: spec # staged — not yet armed; `agentic arm escalation-visibility-2` starts the run
+paused_reason: null
+profile: standard # patch | standard | full
+intake:
+  # source-agnostic staging provenance; free-form path: nulls + client_key
   source: null
   ref: null
   url: null
@@ -13,7 +14,8 @@ budget:
   cost_limit_usd: 50
   cost_spent_usd: 0
   ledger: []
-gates:                    # exactly PROFILE_GATES[standard] — no others
+gates:
+  # exactly PROFILE_GATES[standard] — no others
   G0: { approved: false, by: null, at: null, notes: null }
   G1: { approved: false, by: null, at: null, notes: null }
   G2: { approved: false, by: null, at: null, notes: null }

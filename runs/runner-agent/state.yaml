@@ -603,6 +603,17 @@ budget:
           tokens_in: 18,
           tokens_out: 3196,
           cost_usd: 4.087800199999998
+        },
+      {
+          at: 2026-07-25T00:21:59.454Z,
+          role: reviewer,
+          task: 06-live-smoke,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:

@@ -5,11 +5,11 @@ import { api, formatAge } from '../api.ts'
 import { BudgetMeter, GateLedger, PhaseChip } from '../components/chips.tsx'
 import { PageStatus } from './inbox.tsx'
 
-// Instrument-grid rhythm: tight cells, mono uppercase inset heads (candidate-b
-// portfolio.html .grid thead th).
-const TH = 'border-b border-line bg-inset px-3 py-2.5 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] whitespace-nowrap text-muted'
-const TD = 'px-3 py-2'
-const NUM = 'px-3 py-2 text-right font-mono text-xs tabular-nums'
+// Candidate A header: sans, medium weight, tight letter-spacing.
+const TH =
+  'text-left font-sans font-medium text-[11px] tracking-[0.1em] uppercase text-muted px-3 py-3.5 border-b border-line whitespace-nowrap'
+const TD = 'px-3 py-[14px]'
+const NUM = 'px-3 py-[14px] text-right font-mono text-[12.5px] tabular-nums text-[#4d4742]'
 
 export function PortfolioPage() {
   const { data, isLoading, error } = useQuery({ queryKey: ['runs'], queryFn: api.runs })
@@ -17,9 +17,9 @@ export function PortfolioPage() {
   if (isLoading) {
     return (
       <div>
-        <div className="overflow-hidden rounded-[5px] border border-line bg-surface">
+        <div className="overflow-hidden rounded-lg border border-line bg-inset p-[6px]">
           {[130, 110, 150].map((w, i) => (
-            <div key={i} className="flex items-center gap-4 border-b border-line px-3 py-2.5 last:border-b-0">
+            <div key={i} className="flex items-center gap-4 border-b border-line px-3 py-[14px] last:border-b-0">
               <span className="skel h-[14px]" style={{ width: w }} />
               <span className="skel h-[14px] w-[60px]" />
               <span className="skel h-[22px] w-[120px]" />
@@ -36,78 +36,141 @@ export function PortfolioPage() {
 
   return (
     <div>
-      <header className="mb-[22px] flex items-end gap-4 border-b border-line pb-[14px]">
-        <h1 className="font-mono text-xl font-semibold uppercase tracking-[0.14em]">Portfolio</h1>
-        <span className="ml-auto text-xs text-muted">{runs.length} runs</span>
-        <Link
-          to="/portfolio/new"
-          title="Stages a run record on a new run/<slug> branch. Nothing dispatches, nothing is spent."
-          className="rounded-full border border-line bg-inset px-4 py-[7px] text-sm font-semibold text-muted transition-all hover:border-accent hover:text-ink"
-        >
-          + New run
-        </Link>
-      </header>
-      {runs.length === 0 ? (
-        <div className="rounded-[5px] border border-line bg-surface px-4 py-[34px] text-center">
-          <span aria-hidden="true" className="mb-3 block font-mono text-lg tracking-[0.2em] text-accent">
-            [ ]
-          </span>
-          <p className="text-[15px] font-semibold">No runs found.</p>
-          <p className="mx-auto mt-1.5 max-w-xs text-xs leading-relaxed text-muted">
-            No <code className="font-mono">runs/&lt;slug&gt;</code> directories on any tracked source yet. Stage the
-            first one here — or point Gate at a repo that has runs.
-          </p>
-          <div className="mt-4">
-            <Link
-              to="/portfolio/new"
-              className="inline-block rounded-full border border-accent bg-accent px-4 py-[7px] text-sm font-semibold text-on-solid shadow-[0_0_12px_var(--glow)] hover:opacity-90"
-            >
-              Stage the first run
-            </Link>
+      <div className="font-mono text-[12px] uppercase tracking-[0.14em] text-accent-deep mb-[10px]">
+        All runs · all sources
+      </div>
+      <div className="flex items-baseline gap-[18px] flex-wrap">
+        <h1 className="font-sans text-[50px] font-semibold leading-[1.04] tracking-[-0.02em] text-ink">
+          Portfolio
+        </h1>
+        <div className="ml-auto flex gap-[28px] items-baseline">
+          <div className="flex flex-col items-end">
+            <span className="font-sans font-medium text-[34px] text-ink leading-none tracking-[-0.02em] tabular-nums">
+              {runs.length}
+            </span>
+            <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-muted">
+              runs
+            </span>
           </div>
-          <p className="mt-2 font-mono text-[11px] text-faint">
-            creates run/&lt;slug&gt; and its genesis commit — nothing dispatches until you arm it
+          <Link
+            to="/portfolio/new"
+            className="inline-flex items-center gap-2 font-sans text-[13.5px] font-semibold px-4 py-[9px] rounded-sm bg-accent text-white border border-[#8a3a1e] shadow-[var(--shadow-soft)] hover:bg-[#8e3d20] self-center"
+          >
+            <span className="font-normal text-[16px] leading-none">+</span>{' '}
+            New run
+          </Link>
+        </div>
+      </div>
+      <p className="mt-3 max-w-[62ch] text-[15px] leading-[1.6] text-[#4d4742]">
+        The gate ledger is the heart of the portfolio: each run's progress
+        through its phase gates, recomputed live from its branch. Scan calmly;
+        open a run when one calls for your attention.
+      </p>
+
+      {/* Gate cell legend */}
+      <div className="flex gap-[18px] items-center mt-[14px] flex-wrap text-[12px] text-muted">
+        <span className="flex items-center gap-[6px]">
+          <span className="inline-block h-[14px] w-[14px] rounded-[4px] border border-ok-line bg-ok-bg" />
+          approved ✓
+        </span>
+        <span className="flex items-center gap-[6px]">
+          <span className="inline-block h-[14px] w-[14px] rounded-[4px] border border-bad-line bg-bad-bg" />
+          declined ✕
+        </span>
+        <span className="flex items-center gap-[6px]">
+          <span className="inline-block h-[14px] w-[14px] rounded-[4px] border border-dashed border-pend-line bg-pend-bg" />
+          pending ·
+        </span>
+        <span className="flex items-center gap-[6px]">
+          <span className="inline-block h-[14px] w-[14px] rounded-[4px] border border-dashed border-bad-line bg-bad-bg" />
+          bounced
+        </span>
+        <span className="flex items-center gap-[6px]">
+          <span className="inline-block h-[14px] w-[14px] rounded-[4px] border border-dashed border-line-cool bg-transparent" />
+          gate absent
+        </span>
+      </div>
+
+      {runs.length === 0 ? (
+        <div className="mt-[30px] rounded-lg border border-dashed border-line-cool bg-surface px-[60px] py-[60px] text-center">
+          <span className="flex justify-center mb-3.5" aria-hidden="true">
+            <span className="gate-sigil text-accent">
+            <svg viewBox="0 0 24 24" width="44" height="44">
+              <rect x="3.5" y="3" width="2.6" height="18" rx="1.3" fill="currentColor" />
+              <rect x="17.9" y="3" width="2.6" height="18" rx="1.3" fill="currentColor" />
+              <rect x="3.5" y="8.6" width="17" height="2.2" rx="1.1" fill="currentColor" />
+            </svg>
+          </span>
+          </span>
+          <h3 className="font-sans font-semibold text-[32px] tracking-[-0.02em] mt-[14px] mb-2 text-ink">
+            No runs staged yet.
+          </h3>
+          <p className="text-muted max-w-[48ch] mx-auto mb-[18px] text-[15px]">
+            The pipeline is empty — no branches under{' '}
+            <code className="font-mono">run/</code>. Stage the first run and the
+            agents will begin at the spec gate.
           </p>
+          <Link
+            to="/portfolio/new"
+            className="inline-flex items-center gap-2 font-sans text-[13.5px] font-semibold px-4 py-[9px] rounded-sm bg-accent text-white border border-[#8a3a1e] shadow-[var(--shadow-soft)] hover:bg-[#8e3d20]"
+          >
+            <span className="font-normal text-[16px] leading-none">+</span>{' '}
+            Stage the first run
+          </Link>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-[5px] border border-line bg-surface">
-          <table className="w-full min-w-[820px] border-collapse text-[13px]">
+        <div className="overflow-x-auto rounded-lg border border-line bg-inset p-[6px] mt-[30px]">
+          <table className="w-full min-w-[820px] border-separate border-spacing-0 text-[13.5px]">
             <thead>
               <tr>
-                <th className={`${TH} text-left`}>Run</th>
-                <th className={`${TH} text-left`}>Phase</th>
-                <th className={`${TH} text-left`}>Gates</th>
+                <th className={TH}>Run</th>
+                <th className={TH}>Phase</th>
+                <th className={TH}>Gates</th>
                 <th className={`${TH} text-right`}>Tasks</th>
                 <th className={`${TH} text-right`}>Rounds</th>
-                <th className={`${TH} text-left`}>Budget</th>
+                <th className={TH}>Budget</th>
                 <th className={`${TH} text-right`}>Updated</th>
-                <th className={`${TH} text-right`}>Needs</th>
+                <th className={`${TH} text-right`}>Needs you</th>
               </tr>
             </thead>
             <tbody>
               {runs.map((run) => (
-                <tr key={`${run.source}/${run.slug}`} className="border-b border-line last:border-b-0 hover:bg-raised">
-                  <td className={TD}>
-                    <Link to={`/runs/${run.source}/${run.slug}`} className="font-semibold text-accent hover:underline">
+                <tr
+                  key={`${run.source}/${run.slug}`}
+                  className={`border-b border-line last:border-b-0 transition-colors hover:bg-[#fbf8f3] ${
+                    run.malformed ? 'bg-[#fbf3ed]' : ''
+                  }`}
+                >
+                  <td className={`${TD} min-w-[200px]`}>
+                    <Link
+                      to={`/runs/${run.source}/${run.slug}`}
+                      className="font-mono text-[13.5px] font-medium text-ink hover:underline"
+                    >
                       {run.slug}
                     </Link>
-                    <span className="ml-2 font-mono text-[11px] text-faint">{run.source}</span>
+                    <div className="font-mono text-[11.5px] text-muted mt-[2px]">
+                      {run.source}
+                    </div>
+                    {run.malformed && (
+                      <div className="font-mono text-[11.5px] text-bad mt-[3px] before:content-['✕_']">
+                        {run.malformed}
+                      </div>
+                    )}
                     {run.aheadOfOrigin != null && run.aheadOfOrigin > 0 && (run.behindOrigin ?? 0) > 0 ? (
                       <span
-                        className="ml-2 rounded-full bg-bad-soft px-1.5 py-[3px] font-mono text-[11px] font-semibold tabular-nums text-bad"
+                        className="mt-1 inline-flex font-mono text-[11.5px] font-semibold px-[7px] py-[2px] rounded-sm border border-bad-line bg-bad-bg text-bad"
                         title={`${run.ref} has diverged from origin: ${run.aheadOfOrigin} local-only commit(s), ${run.behindOrigin} on origin only — reconcile the branch (#99)`}
                       >
                         ↑{run.aheadOfOrigin}↓{run.behindOrigin}
                       </span>
                     ) : run.aheadOfOrigin != null && run.aheadOfOrigin > 0 ? (
                       <span
-                        className="ml-2 rounded-full bg-warn-soft px-1.5 py-[3px] font-mono text-[11px] font-semibold tabular-nums text-warn"
+                        className="mt-1 inline-flex font-mono text-[11.5px] font-semibold px-[7px] py-[2px] rounded-sm border border-warn-line bg-warn-bg text-warn"
                         title={`${run.aheadOfOrigin} commit(s) on ${run.ref} not yet pushed — origin consumers see an older run`}
                       >
                         ↑{run.aheadOfOrigin}
                       </span>
                     ) : null}
-                    {run.malformed && <p className="mt-[3px] text-[11.5px] text-bad">{run.malformed}</p>}
                   </td>
                   <td className={TD}>
                     <PhaseChip phase={run.phase} pausedReason={run.pausedReason} />
@@ -115,25 +178,42 @@ export function PortfolioPage() {
                   <td className={TD}>
                     <GateLedger gates={run.gates} profile={run.profile} />
                   </td>
-                  <td className={NUM}>{run.tasks.total ? `${run.tasks.done}/${run.tasks.total}` : '—'}</td>
-                  <td className={`${NUM} ${run.tasks.maxRounds >= 3 ? 'font-semibold text-bad' : ''}`}>
+                  <td className={NUM}>
+                    {run.tasks.total ? (
+                      <>
+                        <span className="text-ink">{run.tasks.done}</span>
+                        /{run.tasks.total}
+                      </>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                  <td
+                    className={`${NUM} ${
+                      run.tasks.maxRounds >= 3 ? 'font-semibold text-bad' : 'text-muted'
+                    }`}
+                  >
                     {run.tasks.total ? run.tasks.maxRounds : '—'}
                   </td>
                   <td className={TD}>
                     <BudgetMeter limit={run.budget.limit} spent={run.budget.spent} />
                   </td>
-                  <td className={`${NUM} text-muted`}>{formatAge(run.updatedAt, now)}</td>
-                  <td className="px-3 py-2 text-right">
+                  <td className={`${NUM} text-muted text-[12.5px]`}>
+                    {formatAge(run.updatedAt, now)}
+                  </td>
+                  <td className="px-3 py-[14px] text-right">
                     {run.needsHuman > 0 ? (
-                      <span
-                        className="inline-flex min-w-[22px] justify-center rounded-full bg-accent px-2 py-[3px] font-mono text-[11px] font-bold tabular-nums text-on-solid shadow-[0_0_8px_var(--glow)]"
-                      >
+                      <span className="inline-flex items-center gap-[6px] font-sans text-[12px] font-bold px-[9px] py-[4px] rounded-full bg-accent text-white border border-[#8a3a1e] tabular-nums">
                         {run.needsHuman}
                       </span>
                     ) : run.escalationsOpen > 0 ? (
-                      <span className="font-mono text-[11px] font-semibold text-bad">{run.escalationsOpen} esc</span>
+                      <span className="font-mono text-[11px] font-semibold text-bad">
+                        {run.escalationsOpen} esc
+                      </span>
                     ) : (
-                      <span className="text-faint">—</span>
+                      <span className="inline-flex items-center gap-[6px] font-sans text-[12px] font-medium px-[9px] py-[4px] rounded-full bg-transparent text-faint border border-dashed border-line-cool tabular-nums">
+                        —
+                      </span>
                     )}
                   </td>
                 </tr>

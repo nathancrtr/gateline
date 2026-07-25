@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<!--
+  Candidate A · Portfolio
+  Recommended theme: WARM LIGHT (paper). Single theme.
+  Type roles: Inter (UI/body/headers — all chrome) · JetBrains Mono (slugs, numbers tokens via tabular-nums). Newsreader serif is reserved for the run-detail reading body only.
+  Gate ledger is the centerpiece. Tinted status chips throughout (Primer). Radius ladder 4/6/8/12.
+-->
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<title>Gate — Portfolio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ground:#faf7f1; --surface:#ffffff; --surface-2:#f4efe6; --surface-3:#efe9de;
+    --ink:#24201c; --ink-2:#4d4742; --muted:#7a726a; --faint:#756b61;
+    --line:#e7e0d3; --line-cool:#d8d2c8;
+    --accent:#a04423; --accent-tint:#f5e9e0; --accent-ink:#7a3318;
+    --ok-bg:#eaf3e6; --ok-ink:#256b3a; --ok-line:#cfe3c6;
+    --bad-bg:#fbe9e6; --bad-ink:#a02822; --bad-line:#f0cdc6;
+    --warn-bg:#fbf1dd; --warn-ink:#8a5a12; --warn-line:#ecd9a8;
+    --info-bg:#eaf0f5; --info-ink:#2f5d7a; --info-line:#cfe0ec;
+    --pend-bg:#f0ede7; --pend-ink:#6b6259; --pend-line:#d8d2c8;
+    --shadow-soft: 0 1px 2px #24201c0a;
+    --shadow-lift: 0 0 0 1px #e7e0d3aa, 0 1px 2px #24201c0a, 0 8px 22px -6px #24201c1a;
+    --r-xs:4px; --r-sm:6px; --r-md:8px; --r-lg:12px; --r-xl:16px;
+    --font-ui:"Inter", system-ui, sans-serif;
+    --font-mono:"JetBrains Mono", ui-monospace, monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--ground);color:var(--ink);font-family:var(--font-ui);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+  a{color:inherit;text-decoration:none;}
+
+  /* chrome */
+  .topbar{display:flex;align-items:center;gap:14px;padding:18px 40px 16px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#fbf8f3, var(--ground));}
+  .sigil{display:inline-flex;color:var(--accent);}
+  .wordmark{font-family:var(--font-ui);font-weight:600;font-size:22px;letter-spacing:-0.01em;}
+  .topnav{display:flex;gap:2px;margin-left:28px;}
+  .topnav a{padding:6px 12px;border-radius:var(--r-sm);font-size:14px;color:var(--ink-2);font-weight:500;}
+  .topnav a.on{background:var(--accent-tint);color:var(--accent-ink);}
+  .topnav a:hover{background:var(--surface-2);}
+  .topright{margin-left:auto;display:flex;align-items:center;gap:16px;}
+  .topright .who{font-size:13px;color:var(--muted);}
+  .topright .who b{color:var(--ink-2);font-weight:600;}
+
+  .btn-primary{
+    display:inline-flex;align-items:center;gap:8px;
+    font-family:var(--font-ui);font-size:13.5px;font-weight:600;
+    padding:9px 16px;border-radius:var(--r-sm);
+    background:var(--accent);color:#fff;
+    border:1px solid #8a3a1e;box-shadow:var(--shadow-soft);
+    cursor:pointer;
+  }
+  .btn-primary:hover{background:#8e3d20;}
+  .btn-primary .plus{font-weight:400;font-size:16px;line-height:1;}
+
+  .wrap{max-width:1280px;margin:0 auto;padding:40px 40px 64px;}
+  .kicker{font-family:var(--font-mono);font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:var(--accent-ink);}
+  .head{display:flex;align-items:baseline;gap:18px;margin-top:10px;flex-wrap:wrap;}
+  .head h1{margin:0;font-family:var(--font-ui);font-weight:600;font-size:50px;line-height:1.04;letter-spacing:-0.02em;}
+  .head .meta{margin-left:auto;display:flex;gap:28px;align-items:baseline;}
+  .head .stat{display:flex;flex-direction:column;align-items:flex-end;}
+  .head .stat .n{font-family:var(--font-ui);font-weight:500;font-size:34px;color:var(--ink);letter-spacing:-0.02em;font-variant-numeric:tabular-nums;}
+  .head .stat .l{font-family:var(--font-mono);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);}
+  .sub{margin-top:12px;max-width:62ch;color:var(--ink-2);font-size:15px;line-height:1.6;}
+
+  /* table on tinted ground (not a hard-bordered card) */
+  .ledger{
+    margin-top:30px;
+    background:var(--surface-2);
+    border-radius:var(--r-lg);
+    padding:6px;
+    border:1px solid var(--line);
+  }
+  table{width:100%;border-collapse:separate;border-spacing:0;font-size:13.5px;}
+  thead th{
+    text-align:left;font-weight:500;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;
+    color:var(--muted);padding:14px 12px;border-bottom:1px solid var(--line);
+    position:sticky;top:0;background:transparent;
+  }
+  thead th.num,td.num{text-align:right;font-variant-numeric:tabular-nums;}
+  tbody td{padding:14px 12px;border-bottom:1px solid var(--line);vertical-align:middle;}
+  tbody tr:last-child td{border-bottom:none;}
+  tbody tr{transition:background .12s ease;}
+  tbody tr:hover{background:#fbf8f3;}
+  tbody tr.stale-row td{background:#fbf3ed;} /* malformed row tint */
+
+  /* slug + source cell */
+  .slugcell{min-width:200px;}
+  .slugcell .slug{font-family:var(--font-mono);font-size:13.5px;color:var(--ink);font-weight:500;}
+  .slugcell .src{font-size:11.5px;color:var(--muted);margin-top:2px;font-family:var(--font-mono);}
+  .slugcell .mal-note{font-size:11.5px;color:var(--bad-ink);margin-top:3px;font-family:var(--font-mono);}
+  .slugcell .mal-note::before{content:"✕ ";}
+
+  /* phase chip */
+  .phase{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:4px 10px;border-radius:var(--r-md);border:1px solid var(--line-cool);}
+  .phase .mark{width:9px;height:9px;border-radius:999px;background:currentColor;opacity:.9;}
+  .phase.spec{background:#f3eee5;color:#6f5a3a;border-color:#e2d6bd;}
+  .phase.plan{background:#eef0f5;color:#4a5170;border-color:#d6dbe8;}
+  .phase.implement{background:var(--accent-tint);color:var(--accent-ink);border-color:#e9d3c4;}
+  .phase.integrate{background:#eaf0f5;color:#2f5d7a;border-color:#cfe0ec;}
+  .phase.release{background:#efe9f5;color:#5a3a7a;border-color:#dccfea;}
+  .phase.done{background:var(--ok-bg);color:var(--ok-ink);border-color:var(--ok-line);}
+  .phase.done .mark{background:transparent;border:1.5px solid currentColor;}
+  .phase.paused{background:var(--warn-bg);color:var(--warn-ink);border-color:var(--warn-line);}
+  .phase.paused .mark{background:transparent;border:1.5px solid currentColor;border-radius:2px;}
+  .phase.staged{background:transparent;color:#6f5a3a;border:1px dashed #c9bfa9;}
+  .phase.staged .mark{background:transparent;border:1.5px solid currentColor;}
+
+  /* gate ledger cells */
+  .gates{display:flex;gap:5px;}
+  .gate{
+    width:34px;height:34px;border-radius:var(--r-sm);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-family:var(--font-mono);font-size:10px;line-height:1;
+    border:1px solid var(--line-cool);background:var(--surface);
+    color:var(--muted);position:relative;
+  }
+  .gate .id{font-size:9px;font-weight:600;letter-spacing:0.04em;opacity:.8;}
+  .gate .gl{font-size:14px;font-weight:600;}
+  .gate.approved{background:var(--ok-bg);color:var(--ok-ink);border-color:var(--ok-line);}
+  .gate.declined{background:var(--bad-bg);color:var(--bad-ink);border-color:var(--bad-line);}
+  .gate.pending{background:var(--pend-bg);color:var(--pend-ink);border-color:var(--pend-line);border-style:dashed;}
+  .gate.bounced{background:var(--bad-bg);color:var(--bad-ink);border-style:dashed;text-decoration:line-through;}
+
+  /* tasks */
+  .tasks{font-family:var(--font-mono);font-size:12.5px;color:var(--ink-2);font-variant-numeric:tabular-nums;}
+  .tasks .done{color:var(--ink);}
+  .rounds{font-family:var(--font-mono);font-size:12px;color:var(--muted);}
+  .rounds.capped{color:var(--bad-ink);font-weight:600;}
+
+  /* budget meter */
+  .budget{display:flex;flex-direction:column;gap:4px;min-width:110px;}
+  .budget .bar{height:5px;border-radius:999px;background:var(--surface-3);overflow:hidden;border:1px solid var(--line);}
+  .budget .bar .fill{height:100%;background:var(--accent);border-radius:999px;}
+  .budget .bar .fill.ok{background:#6f8f5a;}
+  .budget .bar .fill.bad{background:var(--bad-ink);}
+  .budget .lbl{font-family:var(--font-mono);font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums;}
+  .budget .lbl.over{color:var(--bad-ink);font-weight:600;}
+  .budget .lbl.unmet{color:var(--faint);font-style:italic;}
+
+  /* age */
+  .age{font-family:var(--font-mono);font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;}
+  .age.urgent{color:var(--warn-ink);font-weight:600;}
+  .age.stale{color:var(--bad-ink);font-weight:700;}
+
+  /* needs-human pill (the one element with a touch of emphasis) */
+  .needs{
+    display:inline-flex;align-items:center;gap:6px;
+    font-family:var(--font-ui);font-size:12px;font-weight:700;
+    padding:4px 9px;border-radius:999px;
+    background:var(--accent);color:#fff;border:1px solid #8a3a1e;
+    font-variant-numeric:tabular-nums;
+  }
+  .needs.zero{background:transparent;color:var(--faint);border:1px dashed var(--line-cool);font-weight:500;}
+
+  /* divergence pill */
+  .div{display:inline-flex;font-family:var(--font-mono);font-size:11.5px;padding:2px 7px;border-radius:var(--r-sm);border:1px solid;}
+  .div.ahead{background:var(--warn-bg);color:var(--warn-ink);border-color:var(--warn-line);}
+  .div.diverged{background:var(--bad-bg);color:var(--bad-ink);border-color:var(--bad-line);}
+  .div.clean{background:transparent;color:var(--faint);border-color:transparent;}
+
+  /* empty sketch */
+  .section-rule{margin:56px 0 22px;display:flex;align-items:center;gap:14px;}
+  .section-rule .lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);}
+  .section-rule .line{height:1px;flex:1;background:var(--line);}
+  .empty-sketch{
+    border:1px dashed var(--line-cool);border-radius:var(--r-lg);background:var(--surface);
+    padding:60px 40px;text-align:center;
+  }
+  .empty-sketch .sigil-big{color:var(--accent);margin:0 auto;}
+  .empty-sketch h3{font-family:var(--font-ui);font-weight:600;font-size:32px;margin:14px 0 8px;letter-spacing:-0.02em;}
+  .empty-sketch p{color:var(--muted);max-width:48ch;margin:0 auto 18px;font-size:15px;}
+  .foot{max-width:1280px;margin:0 auto;padding:0 40px 60px;color:var(--faint);font-size:12.5px;}
+
+  .legend{display:flex;gap:18px;align-items:center;margin-top:14px;flex-wrap:wrap;font-size:12px;color:var(--muted);}
+  .legend .lg{display:flex;align-items:center;gap:6px;}
+  .legend .swatch{width:14px;height:14px;border-radius:4px;border:1px solid var(--line-cool);}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <span class="sigil" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3.5" y="3" width="2.6" height="18" rx="1.3" fill="currentColor"/><rect x="17.9" y="3" width="2.6" height="18" rx="1.3" fill="currentColor"/><rect x="3.5" y="8.6" width="17" height="2.2" rx="1.1" fill="currentColor"/></svg>
+  </span>
+  <span class="wordmark">Gate</span>
+  <nav class="topnav">
+    <a href="inbox.html">Inbox</a>
+    <a class="on" href="#">Portfolio</a>
+    <a href="new-run.html">New run</a>
+    <a href="run-detail.html">Run</a>
+  </nav>
+  <div class="topright">
+    <a class="btn-primary" href="new-run.html"><span class="plus">+</span> New run</a>
+    <span class="who">Signed in as <b>Nathan Carter</b></span>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="kicker">All runs · all sources</div>
+  <div class="head">
+    <h1>Portfolio</h1>
+    <div class="meta">
+      <div class="stat"><span class="n">10</span><span class="l">runs</span></div>
+      <div class="stat"><span class="n">3</span><span class="l">need you</span></div>
+      <div class="stat"><span class="n">$94</span><span class="l">spent this week</span></div>
+    </div>
+  </div>
+  <p class="sub">The gate ledger is the heart of the portfolio: each run's progress through its phase gates, recomputed live from its branch. Scan calmly; open a run when one calls for your attention.</p>
+
+  <div class="legend">
+    <span class="lg"><span class="swatch" style="background:var(--ok-bg);border-color:var(--ok-line);"></span> approved ✓</span>
+    <span class="lg"><span class="swatch" style="background:var(--bad-bg);border-color:var(--bad-line);"></span> declined ✕</span>
+    <span class="lg"><span class="swatch" style="background:var(--pend-bg);border-color:var(--pend-line);border-style:dashed;"></span> pending ·</span>
+    <span class="lg"><span class="swatch" style="background:var(--bad-bg);border-color:var(--bad-line);border-style:dashed;"></span> bounced</span>
+    <span class="lg"><span class="swatch" style="background:transparent;border-style:dashed;"></span> gate absent (profile)</span>
+  </div>
+
+  <section class="ledger">
+    <table>
+      <thead>
+        <tr>
+          <th>Run</th>
+          <th>Phase</th>
+          <th>Gates</th>
+          <th class="num">Tasks</th>
+          <th class="num">Rounds</th>
+          <th>Budget</th>
+          <th>Updated</th>
+          <th class="num">Needs you</th>
+          <th>Ref</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <!-- done / merged, full profile -->
+        <tr>
+          <td class="slugcell"><div class="slug">done-rotator</div><div class="src">agentic-sandbox · run/done-rotator</div></td>
+          <td><span class="phase done"><span class="mark"></span>done</span></td>
+          <td>
+            <div class="gates">
+              <span class="gate approved" title="G0 approved · Nathan Carter · 2026-07-15"><span class="id">G0</span><span class="gl">✓</span></span>
+              <span class="gate approved" title="G1 approved · 2026-07-16"><span class="id">G1</span><span class="gl">✓</span></span>
+              <span class="gate approved" title="G2 approved · 2026-07-18"><span class="id">G2</span><span class="gl">✓</span></span>
+              <span class="gate approved" title="G3 approved · 2026-07-20"><span class="id">G3</span><span class="gl">✓</span></span>
+            </div>
+          </td>
+          <td class="num tasks"><span class="done">6</span>/6</td>
+          <td class="num rounds">2</td>
+          <td><div class="budget"><div class="bar"><div class="fill ok" style="width:16%"></div></div><div class="lbl">$4 / $25</div></div></td>
+          <td><span class="age">4d</span></td>
+          <td class="num"><span class="needs zero">—</span></td>
+          <td><span class="div clean">↑0</span></td>
+        </tr>
+
+        <!-- release phase, G3 pending, full -->
+        <tr>
+          <td class="slugcell"><div class="slug">release-deploy</div><div class="src">agentic-sandbox</div></td>
+          <td><span class="phase release"><span class="mark"></span>release</span></td>
+          <td>
+            <div class="gates">
+              <span class="gate approved"><span class="id">G0</span><span class="gl">✓</span></span>
+              <span class="gate approved"><span class="id">G1</span><span class="gl">✓</span></span>
+              <span class="gate approved"><span class="id">G2</span><span class="gl">✓</span></span>
+              <span class="gate pending" title="G3 pending — release gate"><span class="id">G3</span><span class="gl">·</span></span>
+            </div>
+          </td>
+          <td class="num tasks"><span class="done">9</span>/9</td>
+          <td class="num rounds">1</td>
+          <td><div class="budget"><div class="bar"><div class="fill" style="width:45%"></div></div><div class="lbl">$18 / $40</div></div></td>
+          <td><span class="age">6h</span></td>
+          <td class="num"><span class="needs">1</span></td>
+          <td><span class="div ahead">↑2</span></td>
+        </tr>
+
+        <!-- implement, G2 pending, standard — the headline run -->
+        <tr>
+          <td class="slugcell"><div class="slug">g2-pending</div><div class="src">agentic-sandbox · run/g2-pending</div></td>
+          <td><span class="phase implement"><span class="mark"></span>implement</span></td>
+          <td>
+            <div class="gates">
+              <span class="gate approved"><span class="id">G0</span><span class="gl">✓</span></span>
+              <span class="gate approved"><span class="id">G1</span><span class="gl">✓</span></span>
+              <span class="gate pending" title="G2 pending — approve implementation"><span class="id">G2</span><span class="gl">·</span></span>
+            </div>
+          </td>
+          <td class="num tasks"><span class="done">2</span>/2</td>
+          <td class="num rounds">1</td>
+          <td><div class="budget"><div class="bar"><div class="fill" style="width:44%"></div></div><div class="lbl">$11 / $25</div></div></td>
+          <td><span class="age urgent">2d</span></td>
+          <td class="num"><span class="needs">1</span></td>
+          <td><span class="div ahead">↑1</span></td>
+        </tr>
+
+        <!-- plan, G1 pending, standard -->
+        <tr>
+          <td class="slugcell"><div class="slug">g1-pending</div><div class="src">agentic-sandbox</div></td>
+          <td><span class="phase plan"><span class="mark"></span>plan</span></td>
+          <td>
+            <div class="gates">
+              <span class="gate approved"><span class="id">G0</span><span class="gl">✓</span></span>
+              <span class="gate pending"><span class="id">G1</span><span class="gl">·</span></span>
+              <span class="gate pending"><span class="id">G2</span><span class="gl">·</span></span>
+            </div>
+          </td>
+          <td class="num tasks"><span class="done">0</span>/—</td>
+          <td class="num rounds">—</td>
+          <td><div class="budget"><div class="bar"><div class="fill" style="width:24%"></div></div><div class="lbl">$6 / $25</div></div></td>
+          <td><span class="age">1d</span></td>
+          <td class="num"><span class="needs">1</span></td>
+          <td><span class="div ahead">↑1</span></td>
+        </tr>
+
+        <!-- spec, G0 pending, standard -->
+        <tr>
+          <td class="slugcell"><div class="slug">g0-pending</div><div class="src">agentic-sandbox</div></td>
+          <td><span class="phase spec"><span class="mark"></span>spec</span></td>
+          <td>
+            <div class="gates">
+              <span class="gate pending"><span class="id">G0</span><span class="gl">·</span></span>
+              <span class="gate pending"><span class="id">G1</span><span class="gl">·</span></span>
+              <span class="gate pending"><span class="id">G2</span><span class="gl">·</span></span>
+            </div>
+          </td>
+          <td class="num tasks"><span class="done">0</span>/—</td>
+          <td class="num rounds">—</td>
+          <td><div class="budget"><div class="bar"><div class="fill" style="width:8%"></div></div><div class="lbl">$2 / $25</div></div></td>
+          <td><span class="age">5h</span></td>
+          <td class="num"><span class="needs">1</span></td>
+          <td><span class="div ahead">↑1</span></td>
+        </tr>
+
+        <!-- paused, budget exhausted -->
+        <tr>
+          <td class="slugcell"><div class="slug">paused-budget</div><div class="src">agentic-sandbox</div></td>
+          <td><span class="phase paused"><span class="mark"></span>paused</span></td>
+          <td>
+            <div class="gates">
+              <span class="gate approved"><span class="id">G0</span><span class="gl">✓</span></span>
+              <span class="gate approved"><span class="id">G1</span><span class="gl">✓</span></span>
+              <span class="gate pending"><span class="id">G2</span><span class="gl">·</span></span>
+            </div>
+          </td>
+          <td class="num tasks"><span class="done">3</span>/5</td>
+          <td class="num rounds">1</td>
+          <td><div class="budget"><div class="bar"><div class="fill bad" style="width:100%"></div></div><div class="lbl over">$25 / $25 · spent</div></div></td>
+          <td><span class="age urgent">5d</span></td>
+          <td class="num"><span class="needs">1</span></td>
+          <td><span class="div ahead">↑3</span></td>
+        </tr>
+
+        <!-- escalated -->
+        <tr>
+          <td class="slugcell"><div class="slug">escalated</div><div class="src">agentic-sandbox</div></td>
+          <td><span class="phase implement"><span class="mark"></span>implement</span></td>
+          <td>
+            <div class="gates">
+              <span class="gate approved"><span class="id">G0</span><span class="gl">✓</span></span>
+              <span class="gate approved"><span class="id">G1</span><span class="gl">✓</span></span>
+              <span class="gate pending"><span class="id">G2</span><span class="gl">·</span></span>
+            </div>
+          </td>
+          <td class="num tasks"><span class="done">4</span>/6</td>
+          <td class="num rounds">2</td>
+          <td><div class="budget"><div class="bar"><div class="fill" style="width:56%"></div></div><div class="lbl">$14 / $25</div></div></td>
+          <td><span class="age urgent">4d</span></td>
+          <td class="num"><span class="needs">1</span></td>
+          <td><span class="div diverged">↑2↓1</span></td>
+        </tr>
+
+        <!-- round-cap -->
+        <tr>
+          <td class="slugcell"><div class="slug">round-cap</div><div class="src">agentic-sandbox</div></td>
+          <td><span class="phase paused"><span class="mark"></span>paused</span></td>
+          <td>
+            <div class="gates">
+              <span class="gate approved"><span class="id">G0</span><span class="gl">✓</span></span>
+              <span class="gate approved"><span class="id">G1</span><span class="gl">✓</span></span>
+              <span class="gate pending"><span class="id">G2</span><span class="gl">·</span></span>
+            </div>
+          </td>
+          <td class="num tasks"><span class="done">1</span>/2</td>
+          <td class="num rounds capped">3</td>
+          <td><div class="budget"><div class="bar"><div class="fill" style="width:48%"></div></div><div class="lbl">$12 / $25</div></div></td>
+          <td><span class="age urgent">3d</span></td>
+          <td class="num"><span class="needs">1</span></td>
+          <td><span class="div ahead">↑1</span></td>
+        </tr>
+
+        <!-- patch profile -->
+        <tr>
+          <td class="slugcell"><div class="slug">patch-g2-pending</div><div class="src">agentic-sandbox · profile patch</div></td>
+          <td><span class="phase implement"><span class="mark"></span>implement</span></td>
+          <td>
+            <div class="gates">
+              <span class="gate approved"><span class="id">G1</span><span class="gl">✓</span></span>
+              <span class="gate pending"><span class="id">G2</span><span class="gl">·</span></span>
+            </div>
+          </td>
+          <td class="num tasks"><span class="done">1</span>/1</td>
+          <td class="num rounds">1</td>
+          <td><div class="budget"><div class="bar"><div class="fill" style="width:53%"></div></div><div class="lbl">$8 / $15</div></div></td>
+          <td><span class="age">1d</span></td>
+          <td class="num"><span class="needs">1</span></td>
+          <td><span class="div ahead">↑1</span></td>
+        </tr>
+
+        <!-- malformed / bounced spec -->
+        <tr class="stale-row">
+          <td class="slugcell"><div class="slug">malformed-spec</div><div class="src">agentic-sandbox</div><div class="mal-note">spec packet fails contract — missing Context, Out of scope</div></td>
+          <td><span class="phase paused"><span class="mark"></span>paused</span></td>
+          <td>
+            <div class="gates">
+              <span class="gate bounced" title="G0 bounced"><span class="id">G0</span><span class="gl">✕</span></span>
+              <span class="gate pending"><span class="id">G1</span><span class="gl">·</span></span>
+              <span class="gate pending"><span class="id">G2</span><span class="gl">·</span></span>
+            </div>
+          </td>
+          <td class="num tasks"><span class="done">0</span>/—</td>
+          <td class="num rounds">—</td>
+          <td><div class="budget"><div class="bar"><div class="fill" style="width:12%"></div></div><div class="lbl">$3 / $25</div></div></td>
+          <td><span class="age stale">3d</span></td>
+          <td class="num"><span class="needs">1</span></td>
+          <td><span class="div diverged">↑1↓0</span></td>
+        </tr>
+
+      </tbody>
+    </table>
+  </section>
+
+  <!-- empty sketch -->
+  <div class="section-rule"><span class="lbl">Sketch · empty state</span><span class="line"></span></div>
+  <div class="empty-sketch">
+    <span class="sigil sigil-big" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="44" height="44"><rect x="3.5" y="3" width="2.6" height="18" rx="1.3" fill="currentColor"/><rect x="17.9" y="3" width="2.6" height="18" rx="1.3" fill="currentColor"/><rect x="3.5" y="8.6" width="17" height="2.2" rx="1.1" fill="currentColor"/></svg>
+    </span>
+    <h3>No runs staged yet.</h3>
+    <p>The pipeline is empty — no branches under <span style="font-family:var(--font-mono);">run/</span>. Stage the first run and the agents will begin at the spec gate.</p>
+    <a class="btn-primary" href="new-run.html"><span class="plus">+</span> Stage the first run</a>
+  </div>
+
+</main>
+
+<footer class="foot">Gate renders git · recomputed from each run's branch · no cache, no event stream.</footer>
+
+</body>
+</html>

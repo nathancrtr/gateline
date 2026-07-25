@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+<!--
+  Candidate A · Run Detail
+  Recommended theme: WARM LIGHT (paper). Single theme.
+  Type roles: Inter (UI/headers/chrome — slug title, section kickers) · Newsreader (text serif — artifact body, the reading surface ONLY) · JetBrains Mono (paths, ids, state, code).
+  Reading surface = centerpiece: measure cap 76ch, leading 1.68, serif body, generous padding. Stakes-varied wrappers (A1): passive task board flat; NeedsYou card accent-rail + tinted ground + soft elevation; artifact body = a page, not a card.
+  Serif is reserved for the artifact reading body only; all chrome/headers are clean Inter sans.
+-->
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<title>Gate — g2-pending · log rotator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400;1,6..72,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ground:#faf7f1; --surface:#ffffff; --surface-2:#f4efe6; --surface-3:#efe9de;
+    --ink:#24201c; --ink-2:#4d4742; --muted:#7a726a; --faint:#756b61;
+    --line:#e7e0d3; --line-cool:#d8d2c8;
+    --accent:#a04423; --accent-tint:#f5e9e0; --accent-ink:#7a3318;
+    --ok-bg:#eaf3e6; --ok-ink:#256b3a; --ok-line:#cfe3c6;
+    --bad-bg:#fbe9e6; --bad-ink:#a02822; --bad-line:#f0cdc6;
+    --warn-bg:#fbf1dd; --warn-ink:#8a5a12; --warn-line:#ecd9a8;
+    --info-bg:#eaf0f5; --info-ink:#2f5d7a; --info-line:#cfe0ec;
+    --pend-bg:#f0ede7; --pend-ink:#6b6259; --pend-line:#d8d2c8;
+    --reading-bg:#fdfbf6;     /* slightly warmer paper for the reading surface */
+    --shadow-soft: 0 1px 2px #24201c0a;
+    --shadow-lift: 0 0 0 1px #e7e0d3aa, 0 1px 2px #24201c0a, 0 10px 28px -8px #24201c1f;
+    --r-xs:4px; --r-sm:6px; --r-md:8px; --r-lg:12px; --r-xl:16px;
+    --font-read:"Newsreader", Georgia, serif;
+    --font-ui:"Inter", system-ui, sans-serif;
+    --font-mono:"JetBrains Mono", ui-monospace, monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{background:var(--ground);color:var(--ink);font-family:var(--font-ui);font-size:14.5px;line-height:1.55;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;}
+  a{color:inherit;text-decoration:none;}
+  code,pre{font-family:var(--font-mono);}
+
+  .topbar{display:flex;align-items:center;gap:14px;padding:18px 40px 16px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#fbf8f3, var(--ground));}
+  .sigil{display:inline-flex;color:var(--accent);}
+  .wordmark{font-family:var(--font-ui);font-weight:600;font-size:22px;letter-spacing:-0.01em;}
+  .topnav{display:flex;gap:2px;margin-left:28px;}
+  .topnav a{padding:6px 12px;border-radius:var(--r-sm);font-size:14px;color:var(--ink-2);font-weight:500;}
+  .topnav a.on{background:var(--accent-tint);color:var(--accent-ink);}
+  .topnav a:hover{background:var(--surface-2);}
+  .topright{margin-left:auto;font-size:13px;color:var(--muted);}
+  .topright b{color:var(--ink-2);font-weight:600;}
+  .crumb{font-family:var(--font-mono);font-size:12.5px;color:var(--muted);}
+  .crumb a:hover{color:var(--accent-ink);}
+  .crumb .sep{margin:0 6px;color:var(--faint);}
+
+  .wrap{max-width:1320px;margin:0 auto;padding:32px 40px 80px;}
+
+  /* ============ RUN HEADER ============ */
+  .runhead{display:grid;grid-template-columns:1fr 300px;gap:40px;align-items:start;padding-bottom:28px;border-bottom:1px solid var(--line);}
+  .runhead .lhs .kicker{font-family:var(--font-mono);font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:var(--accent-ink);}
+  .runhead h1{margin:8px 0 6px;font-family:var(--font-ui);font-weight:600;font-size:46px;line-height:1.06;letter-spacing:-0.02em;}
+  .runhead h1 .sub{font-family:var(--font-ui);font-weight:400;font-size:24px;color:var(--muted);margin-left:10px;letter-spacing:-0.005em;}
+  .runhead .genesis{font-family:var(--font-mono);font-size:12.5px;color:var(--muted);margin-top:6px;line-height:1.6;}
+  .runhead .genesis b{color:var(--ink-2);font-weight:500;}
+
+  /* phase chip + gate ledger inline */
+  .badges{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:18px;}
+  .phase{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;padding:5px 11px;border-radius:var(--r-md);border:1px solid;}
+  .phase .mark{width:9px;height:9px;border-radius:999px;background:currentColor;opacity:.9;}
+  .phase.implement{background:var(--accent-tint);color:var(--accent-ink);border-color:#e9d3c4;}
+  .gates{display:flex;gap:6px;}
+  .gate{width:38px;height:38px;border-radius:var(--r-sm);display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid var(--line-cool);background:var(--surface);color:var(--muted);}
+  .gate .id{font-family:var(--font-mono);font-size:9.5px;font-weight:600;opacity:.85;}
+  .gate .gl{font-size:16px;font-weight:600;line-height:1;}
+  .gate.approved{background:var(--ok-bg);color:var(--ok-ink);border-color:var(--ok-line);}
+  .gate.declined{background:var(--bad-bg);color:var(--bad-ink);border-color:var(--bad-line);}
+  .gate.pending{background:var(--pend-bg);color:var(--pend-ink);border-color:var(--pend-line);border-style:dashed;}
+  .gate.static-ring{box-shadow:0 0 0 2px var(--accent-tint);}
+
+  /* metadata rail (Raycast) */
+  .metarail{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-md);padding:6px 14px;box-shadow:var(--shadow-soft);font-size:13px;}
+  .metarail .rlbl{font-family:var(--font-mono);font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);padding:10px 0 6px;}
+  .metarail .rlbl:first-child{padding-top:8px;}
+  .metarail .kv{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:7px 0;border-top:1px solid var(--line);}
+  .metarail .kv .k{color:var(--muted);font-size:12.5px;}
+  .metarail .kv .v{color:var(--ink);font-size:12.5px;font-family:var(--font-mono);font-variant-numeric:tabular-nums;text-align:right;}
+  .metarail .kv .v.ok{color:var(--ok-ink);}
+  .metarail .kv .v.bad{color:var(--bad-ink);}
+  .metarail .kv .v.warn{color:var(--warn-ink);}
+  .budget-mini{display:flex;flex-direction:column;align-items:flex-end;gap:3px;}
+  .budget-mini .bar{width:90px;height:5px;border-radius:999px;background:var(--surface-3);overflow:hidden;}
+  .budget-mini .bar .fill{height:100%;background:var(--accent);border-radius:999px;}
+
+  /* ============ NEEDS YOU CARD (stakes-varied) ============ */
+  .needsyou{
+    margin-top:28px;display:grid;grid-template-columns:4px 1fr;align-items:stretch;
+    border-radius:var(--r-lg);overflow:hidden;background:var(--accent-tint);
+    box-shadow:var(--shadow-lift);border:1px solid #e9d3c4;
+  }
+  .needsyou .rail{width:4px;background:var(--accent);}
+  .needsyou .inner{padding:22px 26px 22px 28px;}
+  .needsyou .tag{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-mono);font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--accent-ink);background:#fff;border:1px solid #e9d3c4;padding:3px 9px;border-radius:var(--r-xs);}
+  .needsyou .tag .dot{width:7px;height:7px;border-radius:999px;background:var(--accent);}
+  .needsyou h2{margin:10px 0 16px;font-family:var(--font-ui);font-weight:600;font-size:26px;letter-spacing:-0.015em;color:var(--ink);}
+  .needsyou .five{display:grid;grid-template-columns:repeat(2,1fr);gap:14px 30px;max-width:76ch;}
+  .needsyou .blk{padding:0;}
+  .needsyou .blk .lab{font-family:var(--font-mono);font-size:10.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent-ink);margin-bottom:5px;}
+  .needsyou .blk .tx{font-size:14.5px;color:var(--ink-2);line-height:1.55;}
+  .needsyou .blk .tx code{font-size:13px;background:rgba(160,68,35,.08);padding:1px 5px;border-radius:var(--r-xs);color:var(--accent-ink);}
+  .needsyou .blk.full{grid-column:1 / -1;}
+  .needsyou .actions{display:flex;align-items:center;gap:12px;margin-top:20px;}
+  .btn-approve{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-ui);font-size:14px;font-weight:600;padding:10px 18px;border-radius:var(--r-sm);background:var(--accent);color:#fff;border:1px solid #8a3a1e;box-shadow:var(--shadow-soft);cursor:pointer;}
+  .btn-approve:hover{background:#8e3d20;}
+  .btn-decline{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-ui);font-size:14px;font-weight:600;padding:10px 18px;border-radius:var(--r-sm);background:#fff;color:var(--bad-ink);border:1px solid var(--bad-line);cursor:pointer;}
+  .btn-decline:hover{background:var(--bad-bg);}
+  .needsyou .burden{margin-left:auto;font-size:12.5px;color:var(--muted);}
+  .needsyou .burden .pill{font-family:var(--font-mono);font-size:11px;color:var(--accent-ink);background:#fff;border:1px solid #e9d3c4;padding:2px 7px;border-radius:var(--r-xs);margin-left:6px;}
+
+  /* ============ TASK BOARD (passive, flat) ============ */
+  .taskboard{margin-top:26px;}
+  .taskboard .tbhd{font-family:var(--font-mono);font-size:11px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;}
+  .tasks-row{display:flex;gap:10px;flex-wrap:wrap;}
+  .task{
+    display:flex;align-items:center;gap:10px;padding:8px 12px;
+    border:1px solid var(--line);border-radius:var(--r-md);background:var(--surface);
+    font-size:13px;box-shadow:var(--shadow-soft);
+  }
+  .task .tid{font-family:var(--font-mono);font-size:12.5px;color:var(--ink);font-weight:500;}
+  .task .st{font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:var(--r-xs);border:1px solid;}
+  .task .st.review-approved{background:var(--ok-bg);color:var(--ok-ink);border-color:var(--ok-line);}
+  .task .rr{font-family:var(--font-mono);font-size:11.5px;color:var(--muted);}
+
+  /* ============ TABS + ARTIFACT LAYOUT ============ */
+  .tabbar{margin-top:36px;display:flex;gap:2px;border-bottom:1px solid var(--line);}
+  .tab{padding:10px 16px;font-size:13.5px;font-weight:500;color:var(--muted);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;}
+  .tab.on{color:var(--ink);border-bottom-color:var(--accent);font-weight:600;}
+  .tab:hover{color:var(--ink);}
+  .tab .cnt{font-family:var(--font-mono);font-size:11px;color:var(--faint);margin-left:6px;}
+
+  .arts{display:grid;grid-template-columns:280px 1fr;gap:0;margin-top:0;border-bottom:1px solid var(--line);}
+
+  /* sidebar — quiet file list */
+  .artside{border-right:1px solid var(--line);background:var(--surface);padding:18px 0;}
+  .artside .slbl{font-family:var(--font-mono);font-size:10.5px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);padding:0 18px 10px;}
+  .filelist .f{display:flex;align-items:center;gap:10px;padding:9px 18px;cursor:pointer;border-left:2px solid transparent;}
+  .filelist .f:hover{background:var(--surface-2);}
+  .filelist .f.sel{background:var(--accent-tint);border-left-color:var(--accent);}
+  .filelist .f .vg{width:16px;font-size:13px;text-align:center;flex:none;}
+  .filelist .f .vg.ok{color:var(--ok-ink);}
+  .filelist .f .vg.bad{color:var(--bad-ink);}
+  .filelist .f .nm{font-family:var(--font-mono);font-size:12.5px;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;}
+  .filelist .f.sel .nm{color:var(--accent-ink);font-weight:600;}
+  .artside .failbanner{margin:14px 18px;padding:10px 12px;font-size:12px;background:var(--bad-bg);color:var(--bad-ink);border:1px solid var(--bad-line);border-radius:var(--r-sm);}
+
+  /* ============ READING SURFACE ============ */
+  .artifact{
+    background:var(--reading-bg);
+    padding:40px 56px 56px;
+    max-width:none;
+    position:relative;
+  }
+  .artifact .measure{max-width:76ch;margin:0 auto;}
+  .artifact .topline{display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:11.5px;color:var(--muted);padding-bottom:18px;border-bottom:1px solid var(--line);margin-bottom:30px;}
+  .artifact .topline .path{color:var(--ink-2);}
+  .artifact .topline .val{margin-left:auto;color:var(--ok-ink);font-weight:600;}
+  .artifact .topline .val .g{margin-right:5px;}
+
+  .doc{font-family:var(--font-read);font-size:16.5px;line-height:1.68;color:var(--ink);max-width:76ch;}
+  .doc h1{font-family:var(--font-ui);font-weight:600;font-size:38px;line-height:1.12;letter-spacing:-0.02em;margin:0 0 8px;color:var(--ink);}
+  .doc .lead{font-family:var(--font-read);font-style:italic;font-size:18px;line-height:1.55;color:var(--ink-2);margin:6px 0 30px;}
+  .doc h2{font-family:var(--font-ui);font-weight:600;font-size:24px;letter-spacing:-0.01em;margin:42px 0 14px;color:var(--ink);line-height:1.2;}
+  .doc h3{font-family:var(--font-ui);font-weight:600;font-size:16px;letter-spacing:0.005em;margin:26px 0 10px;color:var(--ink);}
+  .doc p{margin:0 0 16px;}
+  .doc strong{font-weight:600;color:var(--ink);}
+  .doc em{font-style:italic;}
+  .doc a{color:var(--accent-ink);text-decoration:underline;text-underline-offset:2px;}
+  .doc ul,.doc ol{margin:0 0 16px;padding-left:1.4em;}
+  .doc li{margin:0 0 6px;}
+  .doc li.task{list-style:none;margin-left:0;padding-left:28px;display:flex;align-items:baseline;gap:9px;}
+  .doc li.task .box{flex:none;box-sizing:border-box;width:15px;height:15px;border:1.5px solid var(--ink-2);border-radius:3px;position:relative;align-self:flex-start;margin-top:4px;}
+  .doc li.task.done .box{background:var(--ok-ink);border-color:var(--ok-ink);}
+  .doc li.task.done .box::after{content:"✓";color:#fff;font-size:10px;font-weight:700;line-height:1;position:absolute;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;}
+  .doc li.task.done .txt{color:var(--muted);}
+  .doc code{font-family:var(--font-mono);font-size:0.86em;background:#f1ece2;padding:1px 5px;border-radius:var(--r-xs);color:var(--accent-ink);}
+  .doc pre{font-family:var(--font-mono);font-size:13px;line-height:1.55;background:#f3eee5;border:1px solid var(--line);border-radius:var(--r-md);padding:14px 16px;overflow-x:auto;margin:0 0 18px;color:var(--ink);}
+  .doc pre .k{color:var(--accent-ink);}
+  .doc pre .s{color:#4a5170;}
+  .doc pre .c{color:var(--faint);}
+  .doc blockquote{margin:0 0 18px;padding:6px 0 6px 18px;border-left:3px solid var(--accent);color:var(--ink-2);font-style:italic;font-family:var(--font-read);font-size:16.5px;line-height:1.6;}
+  .doc blockquote .cite{display:block;margin-top:6px;font-style:normal;font-family:var(--font-ui);font-size:12.5px;color:var(--muted);}
+  .doc table{border-collapse:collapse;width:100%;margin:0 0 18px;font-size:14px;font-family:var(--font-ui);}
+  .doc th,.doc td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);}
+  .doc th{font-weight:600;font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--line-cool);}
+  .doc td{color:var(--ink-2);}
+  .doc td .mono{font-family:var(--font-mono);font-size:13px;color:var(--ink);}
+  .doc hr{border:none;border-top:1px solid var(--line);margin:30px 0;}
+  .doc .assumption{background:#fbf3ed;border-left:3px solid var(--warn-ink);padding:10px 14px;border-radius:0 var(--r-sm) var(--r-sm) 0;margin:0 0 18px;}
+  .doc .assumption b{color:var(--warn-ink);font-weight:700;font-family:var(--font-ui);font-size:13px;letter-spacing:0.04em;}
+
+  .foot{max-width:1320px;margin:0 auto;padding:24px 40px 60px;color:var(--faint);font-size:12.5px;}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <span class="sigil" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3.5" y="3" width="2.6" height="18" rx="1.3" fill="currentColor"/><rect x="17.9" y="3" width="2.6" height="18" rx="1.3" fill="currentColor"/><rect x="3.5" y="8.6" width="17" height="2.2" rx="1.1" fill="currentColor"/></svg>
+  </span>
+  <span class="wordmark">Gate</span>
+  <nav class="topnav">
+    <a href="inbox.html">Inbox</a>
+    <a href="portfolio.html">Portfolio</a>
+    <a href="new-run.html">New run</a>
+    <a class="on" href="#">Run</a>
+  </nav>
+  <div class="topright"><span class="who">Signed in as <b>Nathan Carter</b></span></div>
+</header>
+
+<main class="wrap">
+
+  <div class="crumb"><a href="portfolio.html">Portfolio</a><span class="sep">/</span><a href="#">agentic-sandbox</a><span class="sep">/</span>run/g2-pending</div>
+
+  <!-- ============ RUN HEADER ============ -->
+  <section class="runhead">
+    <div class="lhs">
+      <div class="kicker">implement phase · standard profile · needs you</div>
+      <h1>g2-pending<span class="sub">— log rotator</span></h1>
+      <div class="genesis">
+        staged by <b>Nathan Carter</b> · Jul 02, 2026 · from <b>linear-issue</b> · ENG-421 · branch <span style="font-family:var(--font-mono);">run/g2-pending</span>
+      </div>
+
+      <div class="badges">
+        <span class="phase implement"><span class="mark"></span>implement</span>
+        <span class="gates" aria-label="Gate ledger">
+          <span class="gate approved" title="G0 approved · Nathan Carter · 2026-07-03"><span class="id">G0</span><span class="gl">✓</span></span>
+          <span class="gate approved" title="G1 approved · Nathan Carter · 2026-07-08"><span class="id">G1</span><span class="gl">✓</span></span>
+          <span class="gate pending static-ring" title="G2 pending — waiting on you"><span class="id">G2</span><span class="gl">·</span></span>
+        </span>
+      </div>
+    </div>
+
+    <!-- metadata rail -->
+    <aside class="metarail">
+      <div class="rlbl">Run metadata</div>
+      <div class="kv"><span class="k">Phase</span><span class="v">implement</span></div>
+      <div class="kv"><span class="k">Profile</span><span class="v">standard</span></div>
+      <div class="kv"><span class="k">Gates</span><span class="v ok">G0✓ G1✓</span><span class="v warn" style="margin-left:6px;">G2·</span></div>
+      <div class="kv"><span class="k">Tasks</span><span class="v">2 / 2</span></div>
+      <div class="kv"><span class="k">Max rounds</span><span class="v">2</span></div>
+      <div class="kv"><span class="k">Budget</span><span class="v"><span class="budget-mini"><span class="bar"><span class="fill" style="width:44%;"></span></span><span>$11 / $25</span></span></span></div>
+      <div class="kv"><span class="k">Divergence</span><span class="v warn">↑1</span></div>
+      <div class="kv"><span class="k">Needs you</span><span class="v bad">1</span></div>
+      <div class="kv"><span class="k">Updated</span><span class="v">2d ago</span></div>
+    </aside>
+  </section>
+
+  <!-- ============ NEEDS YOU CARD ============ -->
+  <section class="needsyou" aria-label="Decision required: G2">
+    <div class="rail" aria-hidden="true"></div>
+    <div class="inner">
+      <span class="tag"><span class="dot"></span>Needs you · G2</span>
+      <h2>Approve the implementation for release</h2>
+      <div class="five">
+        <div class="blk"><div class="lab">What</div><div class="tx">Approve the <em>log rotator</em> implementation to proceed from <code>implement</code> to <code>integrate</code>.</div></div>
+        <div class="blk"><div class="lab">Why</div><div class="tx">AC1.1 and AC2.1 are verified in <code>verification-report.md</code>; the implementation matches the spec on the sampled cases.</div></div>
+        <div class="blk"><div class="lab">What changes</div><div class="tx"><code>src/core.py</code> (rotation logic) and <code>src/errors.py</code> (new <code>RotationError</code>). 312 insertions, 18 deletions.</div></div>
+        <div class="blk"><div class="lab">How verified</div><div class="tx">See <code>verification-report.md</code> — 24/24 acceptance checks pass; edge cases for size threshold and rename collisions covered.</div></div>
+        <div class="blk full"><div class="lab">How to undo</div><div class="tx">Revert the run branch (<code>git revert &lt;g2-commit&gt;</code> on <code>run/g2-pending</code>). The integrate phase will not begin until you approve; declining returns the run to <code>implement</code> for re-work.</div></div>
+      </div>
+      <div class="actions">
+        <button class="btn-approve" type="button">Approve G2 →</button>
+        <button class="btn-decline" type="button">Decline</button>
+        <span class="burden">burden<span class="pill">confirmation</span></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TASK BOARD (passive, flat) ============ -->
+  <section class="taskboard">
+    <div class="tbhd">Task board · 2 tasks · 2 review-approved</div>
+    <div class="tasks-row">
+      <div class="task"><span class="tid">01-core</span><span class="st review-approved">✓ review-approved</span><span class="rr">⟲1</span></div>
+      <div class="task"><span class="tid">02-errors</span><span class="st review-approved">✓ review-approved</span><span class="rr">⟲2</span></div>
+    </div>
+  </section>
+
+  <!-- ============ TABS ============ -->
+  <nav class="tabbar">
+    <button class="tab on" data-tab="artifacts">Artifacts <span class="cnt">4</span></button>
+    <button class="tab" data-tab="diff">Diff <span class="cnt">+312 −18</span></button>
+    <button class="tab" data-tab="history">History <span class="cnt">8</span></button>
+  </nav>
+
+  <!-- ============ ARTIFACTS ============ -->
+  <section class="arts">
+    <aside class="artside">
+      <div class="slbl">Artifacts · runs/g2-pending/</div>
+      <div class="filelist" id="filelist">
+        <div class="f" data-file="intent-brief"><span class="vg ok">✓</span><span class="nm">intent-brief.md</span></div>
+        <div class="f sel" data-file="spec"><span class="vg ok">✓</span><span class="nm">spec.md</span></div>
+        <div class="f" data-file="plan"><span class="vg ok">✓</span><span class="nm">plan.md</span></div>
+        <div class="f" data-file="verification"><span class="vg ok">✓</span><span class="nm">verification-report.md</span></div>
+      </div>
+      <div class="failbanner" style="display:none;" id="failbanner">Fails its spec contract — missing: Context</div>
+    </aside>
+
+    <article class="artifact" id="artifact-pane">
+      <div class="measure">
+      <div class="topline">
+        <span class="path">runs/g2-pending/spec.md</span>
+        <span style="margin-left:8px;color:var(--faint);">· 184 lines · committed Jul 03</span>
+        <span class="val"><span class="g">✓</span>passes spec contract</span>
+      </div>
+
+      <div class="doc">
+        <h1>Specification: log rotator</h1>
+        <p class="lead">A small, dependency-free log rotation module for the shared utilities package — sized to behave well under our real production load and to fail loudly on the edge cases we have actually hit.</p>
+
+        <h2>Context</h2>
+        <p>The shared <code>utils.py</code> writes log lines to a single rolling file. Today the file grows without bound; on a busy box it reaches several gigabytes before an operator notices. We have a cron job that <em>compresses</em> old logs nightly, but it does not <em>rotate</em> them, and it cannot truncate a file a running process holds open.</p>
+        <p>Two incidents this quarter trace to this: a disk filled on the ingest host, and a downstream parser choked on a half-written line that crossed a gigabyte boundary. Both would have been avoided by rotating at a sensible size and writing a fresh handle.</p>
+        <p>This spec covers the rotation behavior only — not compression, not shipping, not retention policy. Those live in their own modules and their own gates.</p>
+
+        <h2>Requirements</h2>
+
+        <h3>R1 — Rotate by size</h3>
+        <ul>
+          <li class="task"><span class="box"></span><span class="txt">AC1.1 — When the active log file exceeds the configured <code>maxBytes</code>, the module closes the current handle, renames it with a numeric suffix, and opens a fresh file at the original path.</span></li>
+          <li class="task"><span class="box"></span><span class="txt">AC1.2 — Rotation is atomic from the writer's perspective: no log line is lost or duplicated across the rename.</span></li>
+          <li class="task done"><span class="box"></span><span class="txt">AC1.3 — <code>maxBytes</code> defaults to 10&nbsp;MiB and must be configurable to any value ≥ 1&nbsp;KiB.</span></li>
+        </ul>
+
+        <h3>R2 — Bound the backlog</h3>
+        <ul>
+          <li class="task"><span class="box"></span><span class="txt">AC2.1 — The module keeps at most <code>backupCount</code> rotated files; older rotated files are unlinked. When <code>backupCount</code> is zero, rotated files are deleted immediately.</span></li>
+          <li class="task"><span class="box"></span><span class="txt">AC2.2 — A rotation that would exceed <code>backupCount</code> unlinks the oldest file first, then renames. Ordering is preserved under concurrent rotations.</span></li>
+        </ul>
+
+        <h2>Assumptions</h2>
+        <div class="assumption">
+          <b>ASSUMPTION:</b> the log path lives on a local filesystem with POSIX rename semantics. Network mounts and object stores are explicitly out of scope; a later run may add a sink abstraction.
+        </div>
+
+        <blockquote>
+          The point of a rotator is not to be clever — it is to fail predictably. If two rotations race and we lose a file, the operator should be able to say exactly which one and why.
+          <span class="cite">— from the ENG-421 thread, linear-issue</span>
+        </blockquote>
+
+        <h2>Behavior sketch</h2>
+<pre><span class="c"># rotate(path, max_bytes=10*1024*1024, backup_count=5)</span>
+<span class="k">def</span> <span class="k">rotate</span>(path, max_bytes, backup_count):
+    <span class="k">if</span> path.stat().st_size &lt; max_bytes:
+        <span class="k">return</span>            <span class="c"># nothing to do</span>
+    <span class="k">for</span> i <span class="k">in</span> <span class="k">range</span>(backup_count, 0, -1):
+        src, dst = path.with_suffix(f<span class="s">".{i-1}"</span>), path.with_suffix(f<span class="s">".{i}"</span>)
+        <span class="k">if</span> src.exists(): src.rename(dst)
+    path.rename(path.with_suffix(<span class="s">".0"</span>))
+    path.touch()</pre>
+
+        <h2>Rename ordering</h2>
+        <table>
+          <thead><tr><th>step</th><th>source</th><th>target</th><th>notes</th></tr></thead>
+          <tbody>
+            <tr><td>1</td><td><span class="mono">app.log.4</span></td><td>— (unlink)</td><td>only when <code>backupCount</code> reached</td></tr>
+            <tr><td>2</td><td><span class="mono">app.log.3</span></td><td><span class="mono">app.log.4</span></td><td>rename, oldest first</td></tr>
+            <tr><td>3</td><td><span class="mono">app.log.0</span></td><td><span class="mono">app.log.1</span></td><td>the just-closed file</td></tr>
+            <tr><td>4</td><td><span class="mono">app.log</span></td><td><span class="mono">app.log.0</span></td><td>rename the active path</td></tr>
+            <tr><td>5</td><td>—</td><td><span class="mono">app.log</span></td><td>touch a fresh handle</td></tr>
+          </tbody>
+        </table>
+
+        <h2>Out of scope</h2>
+        <ul>
+          <li>Compression of rotated files (separate module, separate gate).</li>
+          <li>Shipping logs to a remote sink; this run writes to the local filesystem only.</li>
+          <li>Retention policy beyond <code>backupCount</code>; age-based expiry is a later concern.</li>
+          <li>Async or threaded rotation; the writer calls <code>rotate()</code> synchronously.</li>
+        </ul>
+
+        <hr>
+        <p style="font-size:13.5px;color:var(--muted);font-family:var(--font-ui);">Spec authored by the <em>spec</em> agent · committed at G0 · approved by Nathan Carter · 2026-07-03.</p>
+      </div>
+      </div>
+    </article>
+  </section>
+
+</main>
+
+<footer class="foot">Gate renders git · this view recomputed from <span style="font-family:var(--font-mono);">run/g2-pending</span> at <span style="font-family:var(--font-mono);">runs/g2-pending/</span> · no cache.</footer>
+
+<script>
+  /* minimal tab + file switching for the prototype */
+  document.querySelectorAll('.filelist .f').forEach(function(f){
+    f.addEventListener('click', function(){
+      document.querySelectorAll('.filelist .f').forEach(function(x){x.classList.remove('sel');});
+      f.classList.add('sel');
+    });
+  });
+  document.querySelectorAll('.tabbar .tab').forEach(function(t){
+    t.addEventListener('click', function(){
+      document.querySelectorAll('.tabbar .tab').forEach(function(x){x.classList.remove('on');});
+      t.classList.add('on');
+    });
+  });
+</script>
+</body>
+</html>

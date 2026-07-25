@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gate · New Run</title>
+  <!-- Recommended theme: Warm light editorial -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:ital,wght@0,400..700;1,400..700&family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --gate-ink: #1f2328;
+      --gate-muted: #4e5660;
+      --gate-subtle: #7a838d;
+      --gate-line: #d1d9e0;
+      --gate-warm: #ece7df;
+      --gate-ground: #faf8f5;
+      --gate-surface: #ffffff;
+      --gate-tint: #f4f1ec;
+      --gate-accent: #b35a36;
+      --gate-accent-text: #ffffff;
+      --gate-accent-tint: #f9e9e1;
+      --gate-accent-emphasis: #8c4322;
+      --gate-ok: #1a7f37;
+      --gate-ok-tint: #e1f5e6;
+      --gate-warn: #8a5a00;
+      --gate-warn-tint: #fff5d6;
+      --gate-bad: #ac1b18;
+      --gate-bad-tint: #ffebe9;
+      --gate-info: #255ab2;
+      --gate-info-tint: #e7f0ff;
+      --gate-neutral: #5c646d;
+      --gate-neutral-tint: #f0f2f5;
+      --font-display: "Newsreader", Georgia, serif;
+      --font-ui: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --radius-sm: 6px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--gate-ground);
+      color: var(--gate-ink);
+      font-family: var(--font-ui);
+      font-size: 15px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+    /* Type roles */
+    .t-display {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-weight: 300;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+    }
+    .t-hero { font-size: 2.75rem; }
+    .t-title { font-size: 1.75rem; }
+    .t-section {
+      font-family: var(--font-ui);
+      font-size: 0.9375rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      line-height: 1.3;
+    }
+    .t-body { font-size: 0.9375rem; line-height: 1.65; }
+    .t-small { font-size: 0.8125rem; line-height: 1.45; }
+    .t-mono { font-family: var(--font-mono); font-size: 0.8125rem; line-height: 1.45; }
+    .t-label {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--gate-muted);
+    }
+    .t-editorial {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-weight: 400;
+    }
+    /* Chrome */
+    .gate-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 32px;
+      background: rgba(255,255,255,0.92);
+      border-bottom: 1px solid var(--gate-line);
+      backdrop-filter: blur(6px);
+    }
+    .brand {
+      display: inline-flex; align-items: center; gap: 10px;
+      text-decoration: none; color: var(--gate-ink);
+    }
+    .brand-mark { width: 28px; height: 28px; flex: none; }
+    .brand-word {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: 1.5rem;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+    }
+    .gate-nav { display: flex; gap: 6px; }
+    .gate-nav a {
+      display: block;
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      color: var(--gate-muted);
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 550;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .gate-nav a:hover { background: var(--gate-tint); color: var(--gate-ink); }
+    .gate-nav a.is-active { background: var(--gate-warm); color: var(--gate-ink); }
+    .gate-user { font-size: 0.8125rem; color: var(--gate-muted); }
+    /* Shell */
+    .gate-shell { max-width: 1280px; margin: 0 auto; padding: 32px; }
+    .page-header {
+      display: flex; justify-content: space-between; align-items: flex-end;
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+    .page-header h1 { margin: 6px 0 0; }
+    .eyebrow { margin: 0; color: var(--gate-subtle); font-size: 0.8125rem; }
+    .state-switcher {
+      display: flex; gap: 6px;
+      padding: 4px;
+      background: var(--gate-tint);
+      border: 1px solid var(--gate-warm);
+      border-radius: var(--radius-md);
+    }
+    .state-switcher button {
+      border: none; background: transparent;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-ui);
+      font-size: 0.8125rem;
+      font-weight: 550;
+      color: var(--gate-muted);
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .state-switcher button:hover { background: rgba(255,255,255,0.7); color: var(--gate-ink); }
+    .state-switcher button.is-active { background: var(--gate-surface); color: var(--gate-ink); box-shadow: 0 1px 2px rgba(31,35,40,0.06); }
+    /* Layout */
+    .newrun-layout {
+      display: grid;
+      grid-template-columns: 1fr 420px;
+      gap: 32px;
+      align-items: start;
+    }
+    .form-col { min-width: 0; }
+    .preview-col {
+      position: sticky; top: 84px;
+      background: var(--gate-tint);
+      border: 1px solid var(--gate-warm);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      background-image: radial-gradient(rgba(179,90,54,0.06) 1px, transparent 1px);
+      background-size: 22px 22px;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .gate-nav a, .state-switcher button { transition: none; }
+    }
+    /* Forms */
+    .field { margin-bottom: 22px; }
+    .field-label {
+      display: block;
+      margin-bottom: 7px;
+      font-size: 0.8125rem;
+      font-weight: 650;
+      color: var(--gate-ink);
+    }
+    .field-hint {
+      display: block;
+      margin-top: 6px;
+      font-size: 0.75rem;
+      color: var(--gate-subtle);
+    }
+    input[type="text"], input[type="number"], textarea, select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--gate-line);
+      border-radius: var(--radius-sm);
+      background: var(--gate-surface);
+      color: var(--gate-ink);
+      font-family: var(--font-ui);
+      font-size: 0.9375rem;
+      line-height: 1.5;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    input[type="text"]:focus, input[type="number"]:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: var(--gate-accent);
+      box-shadow: 0 0 0 3px rgba(179,90,54,0.12);
+    }
+    input.mono, textarea.mono { font-family: var(--font-mono); }
+    .input-error {
+      border-color: var(--gate-bad) !important;
+      background: var(--gate-bad-tint) !important;
+    }
+    .error-msg {
+      display: flex; align-items: center; gap: 5px;
+      margin-top: 6px;
+      color: var(--gate-bad);
+      font-size: 0.8125rem;
+      font-weight: 600;
+    }
+    .slug-hint {
+      display: inline-flex; align-items: center; gap: 6px;
+      margin-top: 6px;
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      background: var(--gate-neutral-tint);
+      color: var(--gate-muted);
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+    }
+    .profile-row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .profile-option {
+      flex: 1; min-width: 140px; max-width: 200px;
+      padding: 12px 14px;
+      border: 1px solid var(--gate-line);
+      border-radius: var(--radius-md);
+      background: var(--gate-surface);
+      cursor: pointer;
+      text-align: left;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+    }
+    .profile-option:hover { border-color: var(--gate-subtle); }
+    .profile-option.selected {
+      border-color: var(--gate-accent);
+      background: var(--gate-accent-tint);
+      box-shadow: 0 0 0 1px var(--gate-accent);
+    }
+    .profile-option .gates { margin-top: 4px; display: flex; gap: 4px; }
+    .profile-option .gates span {
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: var(--gate-neutral-tint);
+      color: var(--gate-muted);
+      font-family: var(--font-mono);
+      font-size: 0.6875rem;
+      font-weight: 600;
+    }
+    .profile-option.selected .gates span { background: rgba(255,255,255,0.6); color: var(--gate-accent-emphasis); }
+    .section-card {
+      margin-bottom: 16px;
+      border: 1px solid var(--gate-line);
+      border-radius: var(--radius-md);
+      background: var(--gate-surface);
+      overflow: hidden;
+    }
+    .section-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 14px;
+      background: var(--gate-tint);
+      border-bottom: 1px solid var(--gate-line);
+    }
+    .section-heading {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: 1rem;
+      font-weight: 400;
+      margin: 0;
+      color: var(--gate-ink);
+    }
+    .section-status {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 0.75rem;
+      font-weight: 650;
+      color: var(--gate-muted);
+    }
+    .section-card textarea {
+      border: none; border-radius: 0;
+      min-height: 86px;
+      resize: vertical;
+      padding: 14px;
+    }
+    .section-card textarea:focus { box-shadow: inset 0 0 0 2px rgba(179,90,54,0.1); }
+    /* Provenance */
+    .provenance-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .recorded-as {
+      margin-top: 4px;
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      background: var(--gate-tint);
+      color: var(--gate-muted);
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+    }
+    /* Buttons */
+    .button {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 18px;
+      border-radius: 999px;
+      font-size: 0.9375rem;
+      font-weight: 650;
+      text-decoration: none;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: transform 0.08s ease, box-shadow 0.15s ease;
+    }
+    .button-primary { background: var(--gate-accent); color: var(--gate-accent-text); border-color: var(--gate-accent); }
+    .button-primary:hover { background: var(--gate-accent-emphasis); border-color: var(--gate-accent-emphasis); }
+    .button-subtle { background: var(--gate-surface); color: var(--gate-muted); border-color: var(--gate-line); }
+    .button:active { transform: translateY(1px); }
+    /* Preview */
+    .preview-header {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--gate-subtle);
+      margin-bottom: 10px;
+    }
+    .preview-branch {
+      display: inline-flex; align-items: center; gap: 8px;
+      margin-bottom: 22px;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      background: var(--gate-surface);
+      border: 1px solid var(--gate-line);
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      color: var(--gate-ink);
+    }
+    .branch-icon { color: var(--gate-accent); font-weight: 700; }
+    /* Genesis commit chip */
+    .genesis-chip {
+      display: flex; gap: 14px;
+      padding: 18px;
+      border-radius: var(--radius-md);
+      background: var(--gate-surface);
+      border: 1px solid var(--gate-line);
+      box-shadow: 0 0 0 1px rgba(209,217,224,0.35), 0 6px 12px -3px rgba(37,41,46,0.04), 0 6px 18px 0 rgba(37,41,46,0.08);
+      margin-bottom: 24px;
+    }
+    .genesis-dot {
+      width: 12px; height: 12px; flex: none;
+      border-radius: 50%;
+      margin-top: 6px;
+      background: var(--gate-accent);
+      box-shadow: 0 0 0 3px rgba(179,90,54,0.12);
+    }
+    .genesis-dot.hollow {
+      background: var(--gate-surface);
+      border: 1.5px solid var(--gate-accent);
+      box-shadow: none;
+    }
+    .genesis-message {
+      margin: 0 0 6px;
+      font-size: 1.375rem;
+      line-height: 1.25;
+      color: var(--gate-ink);
+    }
+    .genesis-message .client-key {
+      font-family: var(--font-mono);
+      font-style: normal;
+      font-size: 0.875rem;
+      color: var(--gate-subtle);
+    }
+    .genesis-meta {
+      margin: 0;
+      color: var(--gate-muted);
+      font-size: 0.8125rem;
+    }
+    /* File tree */
+    .file-tree { list-style: none; padding: 0; margin: 0; }
+    .file-tree > li { margin-bottom: 12px; }
+    .file-block {
+      padding: 10px 12px;
+      border-radius: var(--radius-sm);
+      background: var(--gate-surface);
+      border: 1px solid var(--gate-line);
+    }
+    .file-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .file-path { font-family: var(--font-mono); font-size: 0.8125rem; color: var(--gate-ink); }
+    .file-tag {
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--gate-ok-tint);
+      color: var(--gate-ok);
+      font-size: 0.6875rem;
+      font-weight: 700;
+      border: 1px solid rgba(26,127,55,0.18);
+    }
+    .sections-count {
+      margin-left: 8px;
+      font-family: var(--font-ui);
+      font-size: 0.75rem;
+      color: var(--gate-subtle);
+      font-weight: 600;
+    }
+    .file-checklist {
+      list-style: none;
+      padding: 10px 0 0 4px;
+      margin: 8px 0 0;
+      border-top: 1px dashed var(--gate-line);
+    }
+    .file-checklist li {
+      display: flex; align-items: center; gap: 8px;
+      padding: 3px 0;
+      font-size: 0.8125rem;
+      color: var(--gate-muted);
+    }
+    .file-checklist li.done { color: var(--gate-ok); }
+    .file-checklist li .check { font-family: var(--font-mono); font-size: 0.75rem; width: 16px; }
+    details { margin-top: 18px; }
+    details summary {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      background: var(--gate-surface);
+      border: 1px solid var(--gate-line);
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      color: var(--gate-muted);
+      cursor: pointer;
+      list-style: none;
+    }
+    details summary::-webkit-details-marker { display: none; }
+    details[open] summary { margin-bottom: 10px; }
+    .state-pre {
+      padding: 14px;
+      border-radius: var(--radius-sm);
+      background: var(--gate-surface);
+      border: 1px solid var(--gate-line);
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      line-height: 1.55;
+      color: var(--gate-ink);
+      overflow: auto;
+      white-space: pre;
+    }
+    .preview-note {
+      margin-top: 20px;
+      font-size: 0.8125rem;
+      color: var(--gate-muted);
+      line-height: 1.55;
+    }
+    .preview-note code {
+      font-family: var(--font-mono);
+      background: var(--gate-surface);
+      padding: 1px 4px;
+      border-radius: 4px;
+      border: 1px solid var(--gate-line);
+    }
+    /* Flash */
+    .flash {
+      display: flex; gap: 12px; align-items: flex-start;
+      padding: 14px 16px;
+      border-radius: var(--radius-md);
+      margin-bottom: 24px;
+      border: 1px solid transparent;
+    }
+    .flash-ok { background: var(--gate-ok-tint); color: var(--gate-ok); border-color: rgba(26,127,55,0.18); }
+    .flash-icon { font-size: 1.1rem; flex: none; margin-top: 1px; }
+    .flash-title { font-weight: 650; margin: 0 0 4px; }
+    .flash-body { margin: 0; font-size: 0.875rem; }
+    .flash-body code {
+      font-family: var(--font-mono);
+      background: rgba(255,255,255,0.5);
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+    /* View logic */
+    body[data-runstate="partial"] .view-partial { display: grid; }
+    body[data-runstate="partial"] .view-empty { display: none; }
+    body[data-runstate="partial"] .view-validation { display: none; }
+    body[data-runstate="partial"] .view-success { display: none; }
+    body[data-runstate="empty"] .view-partial { display: none; }
+    body[data-runstate="empty"] .view-empty { display: grid; }
+    body[data-runstate="empty"] .view-validation { display: none; }
+    body[data-runstate="empty"] .view-success { display: none; }
+    body[data-runstate="validation"] .view-partial { display: none; }
+    body[data-runstate="validation"] .view-empty { display: none; }
+    body[data-runstate="validation"] .view-validation { display: grid; }
+    body[data-runstate="validation"] .view-success { display: none; }
+    body[data-runstate="success"] .view-partial { display: none; }
+    body[data-runstate="success"] .view-empty { display: none; }
+    body[data-runstate="success"] .view-validation { display: none; }
+    body[data-runstate="success"] .view-success { display: grid; }
+    body[data-runstate="success"] .flash { display: flex; }
+    .flash { display: none; }
+    /* Focus */
+    a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--gate-accent); outline-offset: 2px; }
+  </style>
+</head>
+<body data-runstate="partial">
+  <header class="gate-topbar">
+    <a class="brand" href="inbox.html">
+      <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+        <defs>
+          <linearGradient id="brandGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#b35a36"/>
+            <stop offset="100%" stop-color="#d9a58b"/>
+          </linearGradient>
+        </defs>
+        <path d="M3 21V10a9 9 0 0 1 18 0v11" fill="none" stroke="url(#brandGradient)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="brand-word">Gate</span>
+    </a>
+    <nav class="gate-nav" aria-label="Primary">
+      <a href="inbox.html">Inbox</a>
+      <a href="portfolio.html">Portfolio</a>
+      <a href="new-run.html" class="is-active">New run</a>
+    </nav>
+    <div class="gate-user">Nathan Carter</div>
+  </header>
+
+  <main class="gate-shell">
+    <div class="page-header">
+      <div>
+        <p class="eyebrow">Author an intent</p>
+        <h1 class="t-display t-hero">New run</h1>
+      </div>
+      <div class="state-switcher" role="tablist" aria-label="Form state">
+        <button class="is-active" onclick="document.body.setAttribute('data-runstate','partial')" role="tab" aria-selected="true">Partially filled</button>
+        <button onclick="document.body.setAttribute('data-runstate','empty')" role="tab" aria-selected="false">Empty</button>
+        <button onclick="document.body.setAttribute('data-runstate','validation')" role="tab" aria-selected="false">Validation error</button>
+        <button onclick="document.body.setAttribute('data-runstate','success')" role="tab" aria-selected="false">Success</button>
+      </div>
+    </div>
+
+    <div class="flash flash-ok view-success" role="status" aria-live="polite">
+      <span class="flash-icon" aria-hidden="true">✓</span>
+      <div>
+        <p class="flash-title">Run staged</p>
+        <p class="flash-body">Committed <code>f4a8c2…</code> to branch <code>run/csv-importer</code>. Nothing runs yet — arm it when you’re ready.</p>
+      </div>
+    </div>
+
+    <div class="newrun-layout view-partial" data-run="partial">
+      <form class="form-col" aria-label="Stage a new run">
+        <div class="field">
+          <label class="field-label" for="source">Source</label>
+          <input id="source" type="text" value="agentic-sandbox" readonly>
+          <span class="field-hint">Only one source is configured.</span>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="title">Title</label>
+          <input id="title" type="text" value="CSV importer">
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="slug">Slug</label>
+          <input id="slug" type="text" class="mono" value="csv-importer">
+          <span class="slug-hint">→ run/<span id="slugHint">csv-importer</span></span>
+          <span class="field-hint">Lowercase, numbers, and hyphens only.</span>
+        </div>
+
+        <div class="field" role="radiogroup" aria-label="Profile">
+          <span class="field-label">Profile</span>
+          <div class="profile-row">
+            <button type="button" class="profile-option" aria-pressed="false">
+              <span class="t-section">patch</span>
+              <div class="gates"><span>G1</span><span>G2</span></div>
+            </button>
+            <button type="button" class="profile-option selected" aria-pressed="true">
+              <span class="t-section">standard</span>
+              <div class="gates"><span>G0</span><span>G1</span><span>G2</span></div>
+            </button>
+            <button type="button" class="profile-option" aria-pressed="false">
+              <span class="t-section">full</span>
+              <div class="gates"><span>G0</span><span>G1</span><span>G2</span><span>G3</span></div>
+            </button>
+          </div>
+        </div>
+
+        <div class="field" style="max-width:200px;">
+          <label class="field-label" for="budget">Budget (USD)</label>
+          <input id="budget" type="number" value="25" min="0">
+          <span class="field-hint">Leave blank for unmetered.</span>
+        </div>
+
+        <div class="field">
+          <span class="field-label">Intent brief</span>
+          <div class="section-card">
+            <div class="section-header">
+              <h3 class="section-heading">Problem</h3>
+              <span class="section-status"><span class="check" aria-hidden="true">✓</span> filled</span>
+            </div>
+            <textarea aria-label="Problem section">Teams currently import CSVs through ad-hoc scripts that fail quietly on malformed rows and do not report lineage.</textarea>
+          </div>
+          <div class="section-card">
+            <div class="section-header">
+              <h3 class="section-heading">Motivation</h3>
+              <span class="section-status"><span class="check" aria-hidden="true">✓</span> filled</span>
+            </div>
+            <textarea aria-label="Motivation section">Centralizing this in a small service will remove a common source of data corruption and make rollback explicit.</textarea>
+          </div>
+          <div class="section-card">
+            <div class="section-header">
+              <h3 class="section-heading">Constraints</h3>
+              <span class="section-status"><span class="check" aria-hidden="true">·</span> required section</span>
+            </div>
+            <textarea aria-label="Constraints section" placeholder="What must the agent respect while solving this?"></textarea>
+          </div>
+          <div class="section-card">
+            <div class="section-header">
+              <h3 class="section-heading">Out of scope</h3>
+              <span class="section-status"><span class="check" aria-hidden="true">·</span> required section</span>
+            </div>
+            <textarea aria-label="Out of scope section" placeholder="What should the agent deliberately not do?"></textarea>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="field-label">Provenance</span>
+          <div class="provenance-row">
+            <input type="text" value="linear-issue" placeholder="Source">
+            <input type="text" value="ENG-421" placeholder="Ref">
+            <input type="text" placeholder="URL">
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label">Recorded as</label>
+          <div class="recorded-as">Nathan Carter &lt;nathan@e14s.example&gt;</div>
+        </div>
+
+        <div style="display:flex;gap:12px;margin-top:8px;">
+          <button type="button" class="button button-primary">Stage run</button>
+          <button type="button" class="button button-subtle">Save draft</button>
+        </div>
+      </form>
+
+      <aside class="preview-col" aria-label="Live state.yaml preview">
+        <div class="preview-header">The record this stages · live preview</div>
+        <div class="preview-branch"><span class="branch-icon">⌥</span> run/csv-importer</div>
+
+        <div class="genesis-chip">
+          <span class="genesis-dot" aria-hidden="true"></span>
+          <div>
+            <p class="genesis-message t-editorial">state(csv-importer): staged by Nathan Carter <span class="client-key">[client-key: a1b2c3d4-e5f6-7890-abcd-ef1234567890]</span></p>
+            <p class="genesis-meta">Nathan Carter &lt;nathan@e14s.example&gt; — author &amp; committer</p>
+          </div>
+        </div>
+
+        <ul class="file-tree">
+          <li>
+            <div class="file-block">
+              <div class="file-row">
+                <span class="file-path">runs/csv-importer/state.yaml</span>
+                <span class="file-tag">new</span>
+              </div>
+            </div>
+          </li>
+          <li>
+            <div class="file-block">
+              <div class="file-row">
+                <span class="file-path">runs/csv-importer/intent-brief.md</span>
+                <span class="file-tag">new</span>
+                <span class="sections-count">2 of 4 sections filled</span>
+              </div>
+              <ul class="file-checklist">
+                <li class="done"><span class="check">✓</span> Problem</li>
+                <li class="done"><span class="check">✓</span> Motivation</li>
+                <li><span class="check">·</span> Constraints</li>
+                <li><span class="check">·</span> Out of scope</li>
+              </ul>
+            </div>
+          </li>
+          <li>
+            <div class="file-block">
+              <div class="file-row">
+                <span class="file-path">runs/csv-importer/tasks/01-csv-importer.yaml</span>
+                <span class="file-tag">new</span>
+              </div>
+            </div>
+          </li>
+        </ul>
+
+        <details>
+          <summary>state.yaml · 18 lines</summary>
+          <pre class="state-pre">slug: csv-importer
+source: agentic-sandbox
+phase: staged
+profile: standard
+title: CSV importer
+budget:
+  limit: 25
+  spent: 0
+tasks: []
+gates:
+  G0: {approved: false, decided: false}
+  G1: {approved: false, decided: false}
+  G2: {approved: false, decided: false}
+intake:
+  source: linear-issue
+  ref: ENG-421
+  url: null
+clientKey: a1b2c3d4-e5f6-...</pre>
+        </details>
+
+        <p class="preview-note">Staging commits this record. Nothing else happens. No agent dispatches, no budget meters — the run rests at <code>staged</code> until you arm it.</p>
+      </aside>
+    </div>
+
+    <div class="newrun-layout view-empty" data-run="empty">
+      <form class="form-col" aria-label="Stage a new run">
+        <div class="field">
+          <label class="field-label" for="source-empty">Source</label>
+          <input id="source-empty" type="text" value="agentic-sandbox" readonly>
+        </div>
+        <div class="field">
+          <label class="field-label" for="title-empty">Title</label>
+          <input id="title-empty" type="text" placeholder="What is this run for?">
+        </div>
+        <div class="field">
+          <label class="field-label" for="slug-empty">Slug</label>
+          <input id="slug-empty" type="text" class="mono" placeholder="auto-suggested">
+          <span class="slug-hint">→ run/<span id="slugHintEmpty">—</span></span>
+        </div>
+        <div class="field">
+          <span class="field-label">Profile</span>
+          <div class="profile-row">
+            <button type="button" class="profile-option" aria-pressed="false"><span class="t-section">patch</span><div class="gates"><span>G1</span><span>G2</span></div></button>
+            <button type="button" class="profile-option" aria-pressed="false"><span class="t-section">standard</span><div class="gates"><span>G0</span><span>G1</span><span>G2</span></div></button>
+            <button type="button" class="profile-option" aria-pressed="false"><span class="t-section">full</span><div class="gates"><span>G0</span><span>G1</span><span>G2</span><span>G3</span></div></button>
+          </div>
+        </div>
+        <div class="field" style="max-width:200px;">
+          <label class="field-label" for="budget-empty">Budget (USD)</label>
+          <input id="budget-empty" type="number" placeholder="Unmetered">
+        </div>
+        <div class="field">
+          <span class="field-label">Intent brief</span>
+          <div class="section-card">
+            <div class="section-header"><h3 class="section-heading">Problem</h3><span class="section-status"><span class="check">·</span> required section</span></div>
+            <textarea placeholder="Describe the problem…"></textarea>
+          </div>
+          <div class="section-card">
+            <div class="section-header"><h3 class="section-heading">Motivation</h3><span class="section-status"><span class="check">·</span> required section</span></div>
+            <textarea placeholder="Why does it matter?"></textarea>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">Recorded as</label>
+          <div class="recorded-as">Nathan Carter &lt;nathan@e14s.example&gt;</div>
+        </div>
+      </form>
+
+      <aside class="preview-col" aria-label="Live preview placeholder">
+        <div class="preview-header">The record this stages · live preview</div>
+        <div class="preview-branch"><span class="branch-icon">⌥</span> run/—</div>
+        <div class="genesis-chip">
+          <span class="genesis-dot hollow" aria-hidden="true"></span>
+          <div>
+            <p class="genesis-message t-editorial" style="color:var(--gate-subtle);">state(run): staged by Nathan Carter <span class="client-key">[client-key: —]</span></p>
+            <p class="genesis-meta">Fill the intent brief to stage the genesis commit.</p>
+          </div>
+        </div>
+        <ul class="file-tree">
+          <li>
+            <div class="file-block">
+              <div class="file-row">
+                <span class="file-path" style="color:var(--gate-subtle);">runs/—/state.yaml</span>
+                <span class="file-tag" style="background:var(--gate-neutral-tint);color:var(--gate-muted);border-color:transparent;">—</span>
+              </div>
+            </div>
+          </li>
+        </ul>
+      </aside>
+    </div>
+
+    <div class="newrun-layout view-validation" data-run="validation">
+      <form class="form-col" aria-label="Stage a new run">
+        <div class="field">
+          <label class="field-label" for="source-err">Source</label>
+          <input id="source-err" type="text" value="agentic-sandbox" readonly>
+        </div>
+        <div class="field">
+          <label class="field-label" for="title-err">Title</label>
+          <input id="title-err" type="text" value="CSV importer">
+        </div>
+        <div class="field">
+          <label class="field-label" for="slug-err">Slug</label>
+          <input id="slug-err" type="text" class="mono input-error" value="CSV Importer!">
+          <span class="error-msg" aria-live="assertive">⚠ Slug must be lowercase letters, numbers, and hyphens only.</span>
+        </div>
+        <div class="field">
+          <span class="field-label">Profile</span>
+          <div class="profile-row">
+            <button type="button" class="profile-option" aria-pressed="false"><span class="t-section">patch</span><div class="gates"><span>G1</span><span>G2</span></div></button>
+            <button type="button" class="profile-option selected" aria-pressed="true"><span class="t-section">standard</span><div class="gates"><span>G0</span><span>G1</span><span>G2</span></div></button>
+            <button type="button" class="profile-option" aria-pressed="false"><span class="t-section">full</span><div class="gates"><span>G0</span><span>G1</span><span>G2</span><span>G3</span></div></button>
+          </div>
+        </div>
+        <div class="field" style="max-width:200px;">
+          <label class="field-label" for="budget-err">Budget (USD)</label>
+          <input id="budget-err" type="number" value="25">
+        </div>
+        <div class="field">
+          <span class="field-label">Recorded as</label>
+          <div class="recorded-as">Nathan Carter &lt;nathan@e14s.example&gt;</div>
+        </div>
+        <div style="display:flex;gap:12px;margin-top:8px;">
+          <button type="button" class="button button-primary" disabled style="opacity:.6;cursor:not-allowed;">Stage run</button>
+          <button type="button" class="button button-subtle">Save draft</button>
+        </div>
+      </form>
+
+      <aside class="preview-col" aria-label="Live preview, validation error">
+        <div class="preview-header">The record this stages · live preview</div>
+        <div class="preview-branch"><span class="branch-icon">⌥</span> run/CSV Importer!</div>
+        <div class="genesis-chip" style="border-color:var(--gate-bad);background:var(--gate-bad-tint);">
+          <span class="genesis-dot hollow" style="border-color:var(--gate-bad);" aria-hidden="true"></span>
+          <div>
+            <p class="genesis-message t-editorial" style="color:var(--gate-bad);">state(—): cannot stage</p>
+            <p class="genesis-meta">Fix the slug to preview the commit.</p>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <script>
+    /* State switcher only; form fields are static prototypes. */
+  </script>
+</body>
+</html>
+

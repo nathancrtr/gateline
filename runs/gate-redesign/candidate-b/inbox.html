@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gate · Inbox</title>
+  <!-- Recommended theme: Warm light editorial -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:ital,wght@0,400..700;1,400..700&family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --gate-ink: #1f2328;
+      --gate-muted: #4e5660;
+      --gate-subtle: #7a838d;
+      --gate-line: #d1d9e0;
+      --gate-warm: #ece7df;
+      --gate-ground: #faf8f5;
+      --gate-surface: #ffffff;
+      --gate-tint: #f4f1ec;
+      --gate-accent: #b35a36;
+      --gate-accent-text: #ffffff;
+      --gate-accent-tint: #f9e9e1;
+      --gate-accent-emphasis: #8c4322;
+      --gate-ok: #1a7f37;
+      --gate-ok-tint: #e1f5e6;
+      --gate-warn: #8a5a00;
+      --gate-warn-tint: #fff5d6;
+      --gate-bad: #ac1b18;
+      --gate-bad-tint: #ffebe9;
+      --gate-info: #255ab2;
+      --gate-info-tint: #e7f0ff;
+      --gate-neutral: #5c646d;
+      --gate-neutral-tint: #f0f2f5;
+      --font-display: "Newsreader", Georgia, serif;
+      --font-ui: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --radius-sm: 6px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--gate-ground);
+      color: var(--gate-ink);
+      font-family: var(--font-ui);
+      font-size: 15px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+    /* Type roles */
+    .t-display {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-weight: 300;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+    }
+    .t-title { font-size: 2rem; }
+    .t-section {
+      font-family: var(--font-ui);
+      font-size: 0.9375rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      line-height: 1.3;
+    }
+    .t-body { font-size: 0.9375rem; line-height: 1.65; }
+    .t-small { font-size: 0.8125rem; line-height: 1.45; }
+    .t-mono { font-family: var(--font-mono); font-size: 0.8125rem; line-height: 1.45; }
+    .t-label {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--gate-muted);
+    }
+    /* Chrome */
+    .gate-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 32px;
+      background: rgba(255,255,255,0.92);
+      border-bottom: 1px solid var(--gate-line);
+      backdrop-filter: blur(6px);
+    }
+    .brand {
+      display: inline-flex; align-items: center; gap: 10px;
+      text-decoration: none; color: var(--gate-ink);
+    }
+    .brand-mark { width: 28px; height: 28px; flex: none; }
+    .brand-word {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: 1.5rem;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+    }
+    .gate-nav { display: flex; gap: 6px; }
+    .gate-nav a {
+      display: block;
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      color: var(--gate-muted);
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 550;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .gate-nav a:hover { background: var(--gate-tint); color: var(--gate-ink); }
+    .gate-nav a.is-active { background: var(--gate-warm); color: var(--gate-ink); }
+    .gate-user { font-size: 0.8125rem; color: var(--gate-muted); }
+    /* Shell */
+    .gate-shell { max-width: 1280px; margin: 0 auto; padding: 32px; }
+    .page-header {
+      display: flex; justify-content: space-between; align-items: flex-end;
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+    .page-header h1 { margin: 4px 0 0; }
+    .eyebrow { margin: 0; color: var(--gate-subtle); font-size: 0.8125rem; }
+    .count-pill {
+      display: inline-block;
+      vertical-align: middle;
+      margin-left: 10px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--gate-accent-tint);
+      color: var(--gate-accent-emphasis);
+      font-family: var(--font-ui);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    /* State switcher */
+    .state-switcher {
+      display: flex; gap: 6px;
+      padding: 4px;
+      background: var(--gate-tint);
+      border: 1px solid var(--gate-warm);
+      border-radius: var(--radius-md);
+    }
+    .state-switcher button {
+      border: none; background: transparent;
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-ui);
+      font-size: 0.8125rem;
+      font-weight: 550;
+      color: var(--gate-muted);
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .state-switcher button:hover { background: rgba(255,255,255,0.7); color: var(--gate-ink); }
+    .state-switcher button.is-active { background: var(--gate-surface); color: var(--gate-ink); box-shadow: 0 1px 2px rgba(31,35,40,0.06); }
+    /* Inbox list */
+    .inbox-list { list-style: none; padding: 0; margin: 0; }
+    .inbox-row {
+      position: relative;
+      margin-bottom: 12px;
+      border-radius: var(--radius-md);
+      background: var(--gate-surface);
+      border: 1px solid var(--gate-line);
+      overflow: hidden;
+      transition: box-shadow 0.15s ease, transform 0.08s ease;
+    }
+    .inbox-row::before {
+      content: "";
+      position: absolute; top: 0; left: 0; bottom: 0;
+      width: 3px;
+      background: var(--kind-color, var(--gate-line));
+    }
+    .inbox-row:hover { box-shadow: 0 1px 3px rgba(31,35,40,0.04), 0 6px 14px rgba(31,35,40,0.06); }
+    .inbox-row.bounced { opacity: 0.92; }
+    .row-link {
+      display: grid;
+      grid-template-columns: auto 1fr auto auto;
+      align-items: center;
+      gap: 18px;
+      padding: 18px 22px 18px 24px;
+      min-height: 68px;
+      text-decoration: none; color: inherit;
+    }
+    .row-main { min-width: 0; }
+    .row-title-line { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+    .row-title { font-weight: 600; color: var(--gate-ink); }
+    .row-meta { font-size: 0.8125rem; color: var(--gate-subtle); white-space: nowrap; }
+    .row-detail {
+      margin: 5px 0 0;
+      color: var(--gate-muted);
+      font-size: 0.875rem;
+      line-height: 1.55;
+      max-width: 78ch;
+    }
+    .row-detail .bounce-note {
+      color: var(--gate-bad);
+      font-weight: 600;
+    }
+    .row-detail .problems {
+      color: var(--gate-subtle);
+      font-size: 0.75rem;
+    }
+    .row-packets { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; max-width: 160px; }
+    .packet {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--gate-neutral-tint);
+      color: var(--gate-muted);
+      font-family: var(--font-mono);
+      font-size: 0.6875rem;
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    /* Chips */
+    .chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 650;
+      border: 1px solid transparent;
+      white-space: nowrap;
+      flex: none;
+    }
+    .chip-gate { background: var(--gate-ok-tint); color: var(--gate-ok); border-color: rgba(26,127,55,0.18); }
+    .chip-escalation { background: var(--gate-warn-tint); color: var(--gate-warn); border-color: rgba(138,90,0,0.18); }
+    .chip-round { background: var(--gate-warn-tint); color: var(--gate-warn); border-color: rgba(138,90,0,0.18); }
+    .chip-paused { background: var(--gate-info-tint); color: var(--gate-info); border-color: rgba(37,90,178,0.18); }
+    .chip-staged { background: var(--gate-surface); color: var(--gate-neutral); border-color: var(--gate-line); }
+    .chip-staged .ring {
+      width: 7px; height: 7px; border: 1.5px solid currentColor; border-radius: 50%; flex: none;
+    }
+    .chip-malformed { background: var(--gate-bad-tint); color: var(--gate-bad); border-color: rgba(172,27,24,0.18); }
+    .chip-bounced {
+      background: var(--gate-surface);
+      color: var(--gate-bad);
+      border-style: dashed;
+      border-color: rgba(172,27,24,0.35);
+      text-decoration: line-through;
+      text-decoration-thickness: 1.5px;
+    }
+    /* Age badge */
+    .age {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 650;
+      border: 1px solid transparent;
+      flex: none;
+    }
+    .age-normal { background: var(--gate-neutral-tint); color: var(--gate-muted); border-color: rgba(94,100,109,0.12); }
+    .age-old { background: var(--gate-warn-tint); color: var(--gate-warn); border-color: rgba(138,90,0,0.18); font-weight: 700; }
+    .age-old svg { width: 12px; height: 12px; fill: currentColor; }
+    .age-new { background: var(--gate-ok-tint); color: var(--gate-ok); border-color: rgba(26,127,55,0.18); }
+    /* Kinds */
+    .kind-gate { --kind-color: var(--gate-ok); }
+    .kind-escalation { --kind-color: var(--gate-warn); }
+    .kind-round { --kind-color: var(--gate-warn); }
+    .kind-paused { --kind-color: var(--gate-info); }
+    .kind-staged { --kind-color: var(--gate-neutral); }
+    .kind-malformed { --kind-color: var(--gate-bad); }
+    /* Empty state */
+    .inbox-empty {
+      display: none;
+      text-align: center;
+      padding: 100px 32px;
+      border: 1px dashed var(--gate-line);
+      border-radius: var(--radius-lg);
+      background: var(--gate-surface);
+    }
+    .empty-mark {
+      width: 64px; height: 64px; margin: 0 auto 20px;
+    }
+    .empty-title { margin: 0 0 8px; font-size: 2.25rem; }
+    .empty-body { margin: 0; color: var(--gate-muted); max-width: 48ch; margin-inline: auto; }
+    /* Loading skeleton */
+    .inbox-loading { display: none; }
+    .skeleton-row {
+      margin-bottom: 12px;
+      height: 76px;
+      border-radius: var(--radius-md);
+      background: linear-gradient(90deg, var(--gate-warm) 0%, #fff 50%, var(--gate-warm) 100%);
+      background-size: 200% 100%;
+      border: 1px solid var(--gate-line);
+      animation: shimmer 1.6s infinite;
+    }
+    @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    @media (prefers-reduced-motion: reduce) {
+      .skeleton-row { animation: none; background: var(--gate-warm); }
+    }
+    /* View logic */
+    body[data-inbox="populated"] .view-populated { display: block; }
+    body[data-inbox="populated"] .view-empty { display: none; }
+    body[data-inbox="populated"] .view-loading { display: none; }
+    body[data-inbox="empty"] .view-populated { display: none; }
+    body[data-inbox="empty"] .view-empty { display: block; }
+    body[data-inbox="empty"] .view-loading { display: none; }
+    body[data-inbox="loading"] .view-populated { display: none; }
+    body[data-inbox="loading"] .view-empty { display: none; }
+    body[data-inbox="loading"] .view-loading { display: block; }
+    /* Focus */
+    a:focus-visible, button:focus-visible { outline: 2px solid var(--gate-accent); outline-offset: 2px; }
+  </style>
+</head>
+<body data-inbox="populated">
+  <header class="gate-topbar">
+    <a class="brand" href="inbox.html">
+      <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+        <defs>
+          <linearGradient id="brandGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#b35a36"/>
+            <stop offset="100%" stop-color="#d9a58b"/>
+          </linearGradient>
+        </defs>
+        <path d="M3 21V10a9 9 0 0 1 18 0v11" fill="none" stroke="url(#brandGradient)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="brand-word">Gate</span>
+    </a>
+    <nav class="gate-nav" aria-label="Primary">
+      <a href="inbox.html" class="is-active">Inbox</a>
+      <a href="portfolio.html">Portfolio</a>
+      <a href="new-run.html">New run</a>
+    </nav>
+    <div class="gate-user">Nathan Carter</div>
+  </header>
+
+  <main class="gate-shell">
+    <div class="page-header">
+      <div>
+        <p class="eyebrow">Your queue</p>
+        <h1 class="t-display t-title">Inbox <span class="count-pill" aria-label="8 pending items">8</span></h1>
+      </div>
+      <div class="state-switcher" role="tablist" aria-label="Inbox state">
+        <button class="is-active" onclick="document.body.setAttribute('data-inbox','populated')" role="tab" aria-selected="true">Populated</button>
+        <button onclick="document.body.setAttribute('data-inbox','empty')" role="tab" aria-selected="false">Empty</button>
+        <button onclick="document.body.setAttribute('data-inbox','loading')" role="tab" aria-selected="false">Loading</button>
+      </div>
+    </div>
+
+    <ol class="inbox-list view-populated" aria-label="Pending decisions, oldest first">
+      <li class="inbox-row kind-malformed">
+        <a class="row-link" href="run-detail.html">
+          <span class="chip chip-malformed" aria-label="Malformed">malformed</span>
+          <div class="row-main">
+            <div class="row-title-line">
+              <span class="row-title">Spec contract is incomplete</span>
+              <span class="row-meta">malformed-spec · agentic-sandbox</span>
+            </div>
+            <p class="row-detail">
+              The spec artifact fails its contract.
+              <span class="problems">Missing: Context, Requirements.</span>
+            </p>
+          </div>
+          <div class="row-packets"><span class="packet">spec.md</span></div>
+          <span class="age age-old"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 6v6l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>7d</span>
+        </a>
+      </li>
+
+      <li class="inbox-row kind-paused">
+        <a class="row-link" href="run-detail.html">
+          <span class="chip chip-paused" aria-label="Paused">⏸ paused</span>
+          <div class="row-main">
+            <div class="row-title-line">
+              <span class="row-title">Budget exhausted</span>
+              <span class="row-meta">paused-budget · agentic-sandbox</span>
+            </div>
+            <p class="row-detail">Run paused until the spending limit is raised or the meter is reset.</p>
+          </div>
+          <div class="row-packets"><span class="packet">state.yaml</span></div>
+          <span class="age age-old"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 6v6l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>6d</span>
+        </a>
+      </li>
+
+      <li class="inbox-row kind-round">
+        <a class="row-link" href="run-detail.html">
+          <span class="chip chip-round" aria-label="Round cap">↻ round-cap</span>
+          <div class="row-main">
+            <div class="row-title-line">
+              <span class="row-title">Review round cap reached</span>
+              <span class="row-meta">round-cap · agentic-sandbox</span>
+            </div>
+            <p class="row-detail">Three review rounds, all request-changes. A human must reset or redirect.</p>
+          </div>
+          <div class="row-packets"><span class="packet">plan.md</span><span class="packet">reviews/</span></div>
+          <span class="age age-old"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 6v6l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>5d</span>
+        </a>
+      </li>
+
+      <li class="inbox-row kind-escalation">
+        <a class="row-link" href="run-detail.html">
+          <span class="chip chip-escalation" aria-label="Escalation">⚡ escalation</span>
+          <div class="row-main">
+            <div class="row-title-line">
+              <span class="row-title">Acceptance criterion is unverifiable</span>
+              <span class="row-meta">escalated · agentic-sandbox</span>
+            </div>
+            <p class="row-detail">AC2.1 unverifiable: sample input referenced by the spec does not exist in the repo.</p>
+          </div>
+          <div class="row-packets"><span class="packet">spec.md</span><span class="packet">escalation-1.md</span></div>
+          <span class="age age-old"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 6v6l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>4d</span>
+        </a>
+      </li>
+
+      <li class="inbox-row kind-gate">
+        <a class="row-link" href="run-detail.html">
+          <span class="chip chip-gate" aria-label="Gate G0 pending">G0</span>
+          <div class="row-main">
+            <div class="row-title-line">
+              <span class="row-title">Approve the problem statement</span>
+              <span class="row-meta">g0-pending · agentic-sandbox</span>
+            </div>
+            <p class="row-detail">Accept the intent brief and confirm the spec phase can begin.</p>
+          </div>
+          <div class="row-packets"><span class="packet">intent-brief.md</span><span class="packet">spec.md</span></div>
+          <span class="age age-old"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 6v6l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>3d</span>
+        </a>
+      </li>
+
+      <li class="inbox-row kind-gate bounced">
+        <a class="row-link" href="run-detail.html">
+          <span class="chip chip-bounced" aria-label="Bounced gate G2">G2</span>
+          <div class="row-main">
+            <div class="row-title-line">
+              <span class="row-title">Implementation gate bounced</span>
+              <span class="row-meta">bounced-g2 · agentic-sandbox</span>
+            </div>
+            <p class="row-detail">
+              <span class="bounce-note">Bounced — packet fails its contract; no approval is offered.</span>
+              <span class="problems">Missing: verification-report.md; malformed state.yaml.</span>
+            </p>
+          </div>
+          <div class="row-packets"><span class="packet">state.yaml</span></div>
+          <span class="age age-normal">2d</span>
+        </a>
+      </li>
+
+      <li class="inbox-row kind-gate">
+        <a class="row-link" href="run-detail.html">
+          <span class="chip chip-gate" aria-label="Gate G2 pending">G2</span>
+          <div class="row-main">
+            <div class="row-title-line">
+              <span class="row-title">Approve the implementation for release</span>
+              <span class="row-meta">g2-pending · agentic-sandbox</span>
+            </div>
+            <p class="row-detail">Implementation verified by report; G2 is the final gate before integration.</p>
+          </div>
+          <div class="row-packets"><span class="packet">verification-report.md</span><span class="packet">src/core.py</span></div>
+          <span class="age age-normal">1d</span>
+        </a>
+      </li>
+
+      <li class="inbox-row kind-staged">
+        <a class="row-link" href="run-detail.html">
+          <span class="chip chip-staged" aria-label="Staged"><span class="ring" aria-hidden="true"></span>staged</span>
+          <div class="row-main">
+            <div class="row-title-line">
+              <span class="row-title">New run staged and waiting to arm</span>
+              <span class="row-meta">staged-run · agentic-sandbox</span>
+            </div>
+            <p class="row-detail">A run has been staged; authorizing it will dispatch the first agent.</p>
+          </div>
+          <div class="row-packets"><span class="packet">state.yaml</span></div>
+          <span class="age age-new">12m</span>
+        </a>
+      </li>
+    </ol>
+
+    <section class="inbox-empty view-empty" aria-label="Inbox zero">
+      <svg class="empty-mark" viewBox="0 0 24 24" aria-hidden="true">
+        <defs>
+          <linearGradient id="emptyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#d9a58b"/>
+            <stop offset="100%" stop-color="#b35a36"/>
+          </linearGradient>
+        </defs>
+        <path d="M3 21V10a9 9 0 0 1 18 0v11" fill="none" stroke="url(#emptyGrad)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <h2 class="t-display empty-title">Inbox zero.</h2>
+      <p class="t-body empty-body">Nothing needs you right now. When agents pause at a gate, ask for help, or get stuck, they’ll appear here.</p>
+    </section>
+
+    <section class="inbox-loading view-loading" aria-label="Loading inbox">
+      <div class="skeleton-row" aria-hidden="true"></div>
+      <div class="skeleton-row" aria-hidden="true"></div>
+      <div class="skeleton-row" aria-hidden="true"></div>
+      <div class="skeleton-row" aria-hidden="true"></div>
+    </section>
+  </main>
+
+  <script>
+    /* Minimal view switcher. Default is the populated, oldest-first queue. */
+  </script>
+</body>
+</html>
+

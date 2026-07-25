@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gate · g2-pending</title>
+  <!-- Recommended theme: Warm light editorial -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:ital,wght@0,400..700;1,400..700&family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --gate-ink: #1f2328;
+      --gate-muted: #4e5660;
+      --gate-subtle: #7a838d;
+      --gate-line: #d1d9e0;
+      --gate-warm: #ece7df;
+      --gate-ground: #faf8f5;
+      --gate-surface: #ffffff;
+      --gate-tint: #f4f1ec;
+      --gate-accent: #b35a36;
+      --gate-accent-text: #ffffff;
+      --gate-accent-tint: #f9e9e1;
+      --gate-accent-emphasis: #8c4322;
+      --gate-ok: #1a7f37;
+      --gate-ok-tint: #e1f5e6;
+      --gate-warn: #8a5a00;
+      --gate-warn-tint: #fff5d6;
+      --gate-bad: #ac1b18;
+      --gate-bad-tint: #ffebe9;
+      --gate-info: #255ab2;
+      --gate-info-tint: #e7f0ff;
+      --gate-neutral: #5c646d;
+      --gate-neutral-tint: #f0f2f5;
+      --font-display: "Newsreader", Georgia, serif;
+      --font-ui: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --radius-sm: 6px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--gate-ground);
+      color: var(--gate-ink);
+      font-family: var(--font-ui);
+      font-size: 15px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+    /* Type roles */
+    .t-display {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-weight: 300;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+    }
+    .t-title { font-size: 2rem; }
+    .t-section {
+      font-family: var(--font-ui);
+      font-size: 0.9375rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      line-height: 1.3;
+    }
+    .t-body { font-size: 0.9375rem; line-height: 1.65; }
+    .t-small { font-size: 0.8125rem; line-height: 1.45; }
+    .t-mono { font-family: var(--font-mono); font-size: 0.8125rem; line-height: 1.45; }
+    .t-label {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--gate-muted);
+    }
+    /* Chrome */
+    .gate-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 32px;
+      background: rgba(255,255,255,0.92);
+      border-bottom: 1px solid var(--gate-line);
+      backdrop-filter: blur(6px);
+    }
+    .brand {
+      display: inline-flex; align-items: center; gap: 10px;
+      text-decoration: none; color: var(--gate-ink);
+    }
+    .brand-mark { width: 28px; height: 28px; flex: none; }
+    .brand-word {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: 1.5rem;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+    }
+    .gate-nav { display: flex; gap: 6px; }
+    .gate-nav a {
+      display: block;
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      color: var(--gate-muted);
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 550;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .gate-nav a:hover { background: var(--gate-tint); color: var(--gate-ink); }
+    .gate-nav a.is-active { background: var(--gate-warm); color: var(--gate-ink); }
+    .gate-user { font-size: 0.8125rem; color: var(--gate-muted); }
+    /* Shell */
+    .gate-shell { max-width: 1320px; margin: 0 auto; padding: 32px; }
+    /* Run header */
+    .run-header {
+      display: flex; justify-content: space-between; align-items: flex-start; gap: 32px;
+      margin-bottom: 28px;
+    }
+    .run-title .t-label { margin-bottom: 6px; }
+    .run-title h1 { margin: 0; }
+    .source-line {
+      margin: 8px 0 0;
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      color: var(--gate-subtle);
+    }
+    .run-summary { flex: 1; max-width: 760px; }
+    .metadata-rail {
+      display: flex; flex-wrap: wrap; gap: 22px;
+      padding: 16px 18px;
+      background: var(--gate-surface);
+      border: 1px solid var(--gate-line);
+      border-radius: var(--radius-md);
+    }
+    .rail-item { display: flex; flex-direction: column; gap: 5px; }
+    .rail-label { font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gate-subtle); }
+    .rail-value { font-size: 0.875rem; color: var(--gate-ink); font-weight: 500; }
+    /* Chips */
+    .chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 650;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+    .chip-implement { background: var(--gate-warn-tint); color: var(--gate-warn); border-color: rgba(138,90,0,0.18); }
+    /* Gate ledger */
+    .gate-ledger { display: inline-flex; gap: 5px; }
+    .gate-cell {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 3px 7px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      border: 1px solid transparent;
+      cursor: help;
+    }
+    .gate-cell.approved { background: var(--gate-ok-tint); color: var(--gate-ok); border-color: rgba(26,127,55,0.18); }
+    .gate-cell.pending { background: transparent; color: var(--gate-subtle); border-style: dashed; border-color: var(--gate-line); }
+    .budget-label { font-family: var(--font-mono); font-size: 0.8125rem; color: var(--gate-ink); }
+    /* Needs you card */
+    .needs-you-card {
+      position: relative;
+      margin-bottom: 28px;
+      padding: 28px;
+      border-radius: var(--radius-md);
+      background: linear-gradient(180deg, #fff 0%, #fffaf7 100%);
+      border: 1px solid var(--gate-line);
+      border-left: 3px solid var(--gate-accent);
+      box-shadow: 0 0 0 1px rgba(209,217,224,0.35), 0 6px 12px -3px rgba(37,41,46,0.04), 0 6px 18px 0 rgba(37,41,46,0.08);
+    }
+    .needs-you-card::before {
+      content: "";
+      position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+      background: linear-gradient(180deg, #b35a36, #d9a58b);
+      border-top-left-radius: var(--radius-md);
+      border-bottom-left-radius: var(--radius-md);
+    }
+    .card-header {
+      display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+      margin-bottom: 18px;
+    }
+    .card-title {
+      display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap;
+    }
+    .card-title h2 { margin: 0; font-size: 1.375rem; }
+    .card-burden {
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--gate-accent-tint);
+      color: var(--gate-accent-emphasis);
+      font-size: 0.6875rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .card-field-list { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 32px; }
+    .card-field {
+      display: flex; flex-direction: column; gap: 4px;
+      max-width: 68ch;
+    }
+    .card-field.full-width { grid-column: 1 / -1; }
+    .card-field dt { font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gate-subtle); }
+    .card-field dd { margin: 0; font-size: 0.9375rem; color: var(--gate-ink); line-height: 1.55; }
+    .card-field dd code {
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      background: var(--gate-tint);
+      padding: 1px 4px;
+      border-radius: 4px;
+      border: 1px solid var(--gate-line);
+    }
+    .card-actions {
+      display: flex; gap: 12px;
+      margin-top: 24px;
+    }
+    .button {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 18px;
+      border-radius: 999px;
+      font-size: 0.9375rem;
+      font-weight: 650;
+      text-decoration: none;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: transform 0.08s ease, box-shadow 0.15s ease;
+    }
+    .button-primary { background: var(--gate-accent); color: var(--gate-accent-text); border-color: var(--gate-accent); }
+    .button-primary:hover { background: var(--gate-accent-emphasis); border-color: var(--gate-accent-emphasis); }
+    .button-outline-bad { background: var(--gate-surface); color: var(--gate-bad); border-color: rgba(172,27,24,0.25); }
+    .button-outline-bad:hover { background: var(--gate-bad-tint); }
+    .button:active { transform: translateY(1px); }
+    @media (prefers-reduced-motion: reduce) { .button, .gate-nav a { transition: none; } .button:active { transform: none; } }
+    /* Task board */
+    .task-board-label { margin: 0 0 10px; }
+    .task-board {
+      display: flex; flex-wrap: wrap; gap: 10px;
+      padding: 16px;
+      background: var(--gate-surface);
+      border: 1px solid var(--gate-line);
+      border-radius: var(--radius-md);
+      margin-bottom: 28px;
+    }
+    .task-chip {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: var(--gate-ok-tint);
+      border: 1px solid rgba(26,127,55,0.18);
+      color: var(--gate-ok);
+    }
+    .task-chip .task-status {
+      text-transform: lowercase;
+      font-size: 0.8125rem;
+      font-weight: 650;
+    }
+    .task-chip .task-rounds {
+      font-family: var(--font-mono);
+      font-size: 0.6875rem;
+      padding: 1px 5px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.55);
+    }
+    .task-chip.approved { background: var(--gate-ok-tint); color: var(--gate-ok); border-color: rgba(26,127,55,0.18); }
+    /* Tabs */
+    .tab-bar {
+      display: flex; gap: 4px;
+      border-bottom: 1px solid var(--gate-line);
+      margin-bottom: 0;
+    }
+    .tab {
+      padding: 10px 16px;
+      border: none;
+      background: transparent;
+      color: var(--gate-muted);
+      font-family: var(--font-ui);
+      font-size: 0.875rem;
+      font-weight: 600;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: color 0.15s ease;
+    }
+    .tab:hover { color: var(--gate-ink); }
+    .tab.active { color: var(--gate-accent); border-bottom-color: var(--gate-accent); }
+    /* Artifact workspace */
+    .artifact-workspace {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 0;
+      border: 1px solid var(--gate-line);
+      border-top: none;
+      border-radius: 0 0 var(--radius-md) var(--radius-md);
+      background: var(--gate-surface);
+      overflow: hidden;
+      min-height: 680px;
+    }
+    .artifact-sidebar {
+      padding: 18px 14px;
+      background: var(--gate-tint);
+      border-right: 1px solid var(--gate-line);
+      overflow: auto;
+    }
+    .file-list { list-style: none; padding: 0; margin: 0; }
+    .file-list li { margin-bottom: 4px; }
+    .file-list button {
+      width: 100%; text-align: left;
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 8px 10px;
+      border: none; background: transparent;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-family: var(--font-mono);
+      font-size: 0.8125rem;
+      color: var(--gate-muted);
+      transition: background 0.12s ease;
+    }
+    .file-list button:hover { background: rgba(255,255,255,0.7); color: var(--gate-ink); }
+    .file-list button.active {
+      background: var(--gate-accent-tint);
+      color: var(--gate-accent-emphasis);
+      font-weight: 600;
+    }
+    .validation-glyph { font-size: 0.875rem; }
+    .validation-glyph.ok { color: var(--gate-ok); }
+    .validation-glyph.bad { color: var(--gate-bad); }
+    .file-list .file-meta {
+      display: block;
+      margin-top: 2px;
+      font-size: 0.6875rem;
+      color: var(--gate-subtle);
+    }
+    .artifact-pane {
+      padding: 40px;
+      overflow: auto;
+    }
+    /* Artifact body — the reading surface */
+    .artifact-body {
+      max-width: 76ch;
+      margin: 0 auto;
+      font-family: var(--font-display);
+      font-style: normal;
+      font-size: 16px;
+      line-height: 1.7;
+      color: var(--gate-ink);
+    }
+    .artifact-body h1 {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-weight: 300;
+      font-size: 2.25rem;
+      line-height: 1.1;
+      margin: 0 0 24px;
+      letter-spacing: -0.02em;
+    }
+    .artifact-body h1::after {
+      content: "";
+      display: block;
+      width: 64px; height: 3px;
+      margin-top: 18px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #b35a36, #d9a58b);
+    }
+    .artifact-body h2 {
+      font-family: var(--font-ui);
+      font-weight: 550;
+      font-size: 1.25rem;
+      margin: 36px 0 14px;
+      letter-spacing: -0.01em;
+      color: var(--gate-ink);
+    }
+    .artifact-body h3 {
+      font-family: var(--font-ui);
+      font-weight: 600;
+      font-size: 1.05rem;
+      margin: 26px 0 10px;
+      color: var(--gate-ink);
+    }
+    .artifact-body p { margin: 0 0 16px; }
+    .artifact-body ul, .artifact-body ol { padding-left: 24px; margin: 0 0 18px; }
+    .artifact-body li { margin-bottom: 7px; }
+    .artifact-body li > code, .artifact-body p > code {
+      font-family: var(--font-mono);
+      font-size: 0.84375rem;
+      background: var(--gate-tint);
+      padding: 2px 5px;
+      border-radius: 4px;
+      border: 1px solid var(--gate-line);
+    }
+    .artifact-body pre {
+      background: #f8f6f2;
+      border: 1px solid var(--gate-line);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      overflow: auto;
+      margin: 0 0 20px;
+    }
+    .artifact-body pre code {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      line-height: 1.55;
+      background: transparent;
+      border: none;
+      padding: 0;
+      color: var(--gate-ink);
+    }
+    .artifact-body blockquote {
+      margin: 0 0 20px;
+      padding: 14px 18px;
+      border-left: 3px solid var(--gate-accent);
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      background: var(--gate-tint);
+      font-style: italic;
+      color: var(--gate-muted);
+    }
+    .artifact-body blockquote p:last-child { margin-bottom: 0; }
+    .artifact-body table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0 0 22px;
+      font-size: 0.9375rem;
+    }
+    .artifact-body th, .artifact-body td {
+      padding: 10px 12px;
+      border: 1px solid var(--gate-line);
+      text-align: left;
+      vertical-align: top;
+    }
+    .artifact-body th {
+      background: var(--gate-tint);
+      font-weight: 600;
+      font-family: var(--font-ui);
+    }
+    .artifact-body tr:nth-child(even) { background: rgba(244,241,236,0.4); }
+    .artifact-body strong { font-weight: 700; color: var(--gate-ink); }
+    /* Tab view logic */
+    body[data-tab="artifacts"] .tab-artifacts { display: block; }
+    body[data-tab="artifacts"] .tab-diff { display: none; }
+    body[data-tab="artifacts"] .tab-history { display: none; }
+    body[data-tab="diff"] .tab-artifacts { display: none; }
+    body[data-tab="diff"] .tab-diff { display: block; }
+    body[data-tab="diff"] .tab-history { display: none; }
+    body[data-tab="history"] .tab-artifacts { display: none; }
+    body[data-tab="history"] .tab-diff { display: none; }
+    body[data-tab="history"] .tab-history { display: block; }
+    .empty-tab {
+      padding: 80px 32px;
+      text-align: center;
+      color: var(--gate-muted);
+    }
+    /* Focus */
+    a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--gate-accent); outline-offset: 2px; }
+  </style>
+</head>
+<body data-tab="artifacts">
+  <header class="gate-topbar">
+    <a class="brand" href="inbox.html">
+      <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+        <defs>
+          <linearGradient id="brandGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#b35a36"/>
+            <stop offset="100%" stop-color="#d9a58b"/>
+          </linearGradient>
+        </defs>
+        <path d="M3 21V10a9 9 0 0 1 18 0v11" fill="none" stroke="url(#brandGradient)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="brand-word">Gate</span>
+    </a>
+    <nav class="gate-nav" aria-label="Primary">
+      <a href="inbox.html">Inbox</a>
+      <a href="portfolio.html">Portfolio</a>
+      <a href="new-run.html">New run</a>
+    </nav>
+    <div class="gate-user">Nathan Carter</div>
+  </header>
+
+  <main class="gate-shell">
+    <header class="run-header">
+      <div class="run-title">
+        <p class="t-label">Run</p>
+        <h1 class="t-display t-title">g2-pending</h1>
+        <p class="source-line">agentic-sandbox · run/g2-pending</p>
+      </div>
+      <div class="run-summary">
+        <div class="metadata-rail">
+          <div class="rail-item"><span class="rail-label">Phase</span><span class="chip chip-implement">implement</span></div>
+          <div class="rail-item"><span class="rail-label">Profile</span><span class="rail-value">standard</span></div>
+          <div class="rail-item"><span class="rail-label">Gates</span>
+            <div class="gate-ledger" aria-label="Gate ledger">
+              <span class="gate-cell approved" title="G0 approved by operator · 2026-07-02">G0✓</span>
+              <span class="gate-cell approved" title="G1 approved by operator · 2026-07-03">G1✓</span>
+              <span class="gate-cell pending" title="G2 pending">G2·</span>
+            </div>
+          </div>
+          <div class="rail-item"><span class="rail-label">Budget</span><span class="budget-label">$0/$25</span></div>
+          <div class="rail-item"><span class="rail-label">Updated</span><span class="t-mono" style="color:var(--gate-muted);">1d ago</span></div>
+          <div class="rail-item"><span class="rail-label">Genesis</span><span class="t-mono" style="color:var(--gate-muted);">Jul 02 · linear-issue · ENG-421</span></div>
+        </div>
+      </div>
+    </header>
+
+    <section class="needs-you-card" aria-labelledby="needs-you-title">
+      <div class="card-header">
+        <div class="card-title">
+          <h2 id="needs-you-title">G2 implementation gate</h2>
+          <span class="card-burden">confirmation</span>
+        </div>
+      </div>
+      <dl class="card-field-list">
+        <div class="card-field">
+          <dt>What</dt>
+          <dd>Approve the implementation for release.</dd>
+        </div>
+        <div class="card-field">
+          <dt>Why</dt>
+          <dd>AC1.1 and AC2.1 are verified against the test suite.</dd>
+        </div>
+        <div class="card-field full-width">
+          <dt>What changes</dt>
+          <dd><code>src/core.py</code>, <code>src/errors.py</code>, and unit tests in <code>tests/core_test.py</code>.</dd>
+        </div>
+        <div class="card-field">
+          <dt>How verified</dt>
+          <dd><code>verification-report.md</code> was generated by the verification agent and is attached.</dd>
+        </div>
+        <div class="card-field">
+          <dt>How to undo</dt>
+          <dd>Revert the run branch <code>run/g2-pending</code> or decline the gate.</dd>
+        </div>
+      </dl>
+      <div class="card-actions">
+        <button class="button button-primary">Approve G2</button>
+        <button class="button button-outline-bad">Decline G2</button>
+      </div>
+    </section>
+
+    <section aria-label="Task board">
+      <p class="t-label task-board-label">Tasks</p>
+      <div class="task-board">
+        <div class="task-chip approved">
+          <span class="task-status">01-core</span>
+          <span>review-approved</span>
+          <span class="task-rounds" aria-label="1 review round">⟲1</span>
+        </div>
+        <div class="task-chip approved">
+          <span class="task-status">02-errors</span>
+          <span>review-approved</span>
+          <span class="task-rounds" aria-label="2 review rounds">⟲2</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="tab-bar" role="tablist" aria-label="Run detail tabs">
+      <button class="tab active" onclick="document.body.setAttribute('data-tab','artifacts')" role="tab" aria-selected="true" id="tab-artifacts">Artifacts</button>
+      <button class="tab" onclick="document.body.setAttribute('data-tab','diff')" role="tab" aria-selected="false" id="tab-diff">Diff</button>
+      <button class="tab" onclick="document.body.setAttribute('data-tab','history')" role="tab" aria-selected="false" id="tab-history">History</button>
+    </div>
+
+    <section class="artifact-workspace tab-artifacts" aria-labelledby="tab-artifacts">
+      <aside class="artifact-sidebar">
+        <ul class="file-list" aria-label="Artifact files">
+          <li><button type="button"><span class="file-name">intent-brief.md</span><span class="validation-glyph ok" aria-label="Valid">✓</span></button></li>
+          <li><button type="button" class="active"><span class="file-name">spec.md</span><span class="validation-glyph ok" aria-label="Valid">✓</span></button></li>
+          <li><button type="button"><span class="file-name">plan.md</span><span class="validation-glyph ok" aria-label="Valid">✓</span></button></li>
+          <li><button type="button"><span class="file-name">verification-report.md</span><span class="validation-glyph ok" aria-label="Valid">✓</span></button></li>
+        </ul>
+      </aside>
+      <article class="artifact-pane">
+        <div class="artifact-body">
+          <h1>Specification: log rotator</h1>
+
+          <h2>Context</h2>
+          <p>The service currently writes diagnostic logs to a single directory without bounds. On long-running hosts this has twice filled the disk and caused the host orchestrator to evict healthy pods. We need a small, auditable behavior that rotates logs by age and total size while preserving the existing log format so downstream log shipping keeps working.</p>
+          <p>The rotation should be explicit and reversible: no background threads, no magic filenames, and no reliance on host tooling such as <code>logrotate</code>. The agent must implement the rotation as pure Python in <code>src/core.py</code> so it can be unit-tested.</p>
+          <blockquote>
+            <p>Operational note: the on-call runbook should never again require SSHing into a host to delete <code>*.log</code> files by hand.</p>
+          </blockquote>
+
+          <h2>Requirements</h2>
+
+          <h3>R1 — Rotate by age</h3>
+          <p>When a log file reaches 24 hours of age it must be closed, renamed with an ISO-8601 suffix, and a new log file opened. The rename target must sort lexicographically so a simple directory listing reveals order.</p>
+          <ul>
+            <li><input type="checkbox" disabled> AC1.1 — A file older than 24h is rotated before the next write.</li>
+            <li><input type="checkbox" disabled> AC1.2 — The rotated name is <code>{base}-{timestamp}.log</code> with UTC timestamp.</li>
+          </ul>
+
+          <h3>R2 — Enforce a total size cap</h3>
+          <p>The directory must never exceed the configured cap across all <code>*.log</code> files. Oldest archives are deleted first, with each deletion logged through the same structured logger that produced the rotated file.</p>
+          <pre><code>def enforce_cap(directory: Path, cap_bytes: int) -> None:
+    """Remove oldest archives until total size is at or below cap_bytes."""
+    archives = sorted(directory.glob("*.log"), key=lambda p: p.stat().st_mtime)
+    while sum(a.stat().st_size for a in archives) &gt; cap_bytes and archives:
+        oldest = archives.pop(0)
+        logger.info("Pruning old archive", path=str(oldest))
+        oldest.unlink()</code></pre>
+          <ul>
+            <li><input type="checkbox" disabled> AC2.1 — Cap exceeded by one byte triggers at least one prune.</li>
+            <li><input type="checkbox" disabled> AC2.2 — The active log is never deleted to make space.</li>
+          </ul>
+
+          <h2>Assumptions</h2>
+          <p><strong>ASSUMPTION:</strong> The host filesystem supports atomic <code>rename</code> within the log directory, and the process holds an exclusive lock on the active log during rotation.</p>
+
+          <h2>Out of scope</h2>
+          <ul>
+            <li>Compression of archived logs.</li>
+            <li>Remote shipping of archived logs to S3 or another store.</li>
+            <li>Log tailing, search, or indexing.</li>
+            <li>Windows-specific path handling beyond standard <code>pathlib</code>.</li>
+          </ul>
+
+          <h2>Settings</h2>
+          <table>
+            <thead>
+              <tr><th>Key</th><th>Type</th><th>Default</th><th>Description</th></tr>
+            </thead>
+            <tbody>
+              <tr><td><code>LOG_DIR</code></td><td>Path</td><td><code>/var/log/app</code></td><td>Directory for active and rotated logs.</td></tr>
+              <tr><td><code>LOG_MAX_BYTES</code></td><td>int</td><td><code>1_000_000_000</code></td><td>Total cap across archived logs, in bytes.</td></tr>
+              <tr><td><code>LOG_MAX_AGE_HOURS</code></td><td>int</td><td><code>24</code></td><td>Age at which the active log is rotated.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+    </section>
+
+    <section class="artifact-workspace tab-diff" aria-labelledby="tab-diff">
+      <aside class="artifact-sidebar"><p class="t-small" style="color:var(--gate-subtle);padding:18px 14px;">Select a diff range from the history tab.</p></aside>
+      <div class="artifact-pane empty-tab">
+        <p class="t-body">Diff view is not available for the prototype. The active branch would be compared against <code>origin/main</code>.</p>
+      </div>
+    </section>
+
+    <section class="artifact-workspace tab-history" aria-labelledby="tab-history">
+      <aside class="artifact-sidebar"></aside>
+      <div class="artifact-pane empty-tab">
+        <p class="t-body">History for this run is not included in the prototype.</p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // Minimal tab switcher. Keyboard navigation is not advertised in the UI.
+    function setRunTab(tab) {
+      document.body.setAttribute('data-tab', tab);
+      document.querySelectorAll('.tab-bar .tab').forEach(t => t.classList.remove('active'));
+      document.getElementById('tab-' + tab).classList.add('active');
+    }
+    document.querySelectorAll('.tab-bar .tab').forEach(btn => {
+      btn.addEventListener('click', () => setRunTab(btn.id.replace('tab-','')));
+    });
+  </script>
+</body>
+</html>
+

@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<!-- Theme: Warm light — the reading screen. Artifact body is the centerpiece: serif reading surface,
+     measure-capped ~76ch, leading 1.65. Primary type: Playfair Display italic (hero slug).
+     Secondary: Inter (UI), Source Serif 4 (artifact prose), JetBrains Mono (code). Direction C. -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gate — g2-pending · log rotator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,700&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&family=Playfair+Display:ital,wght@0,700;1,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400&display=swap" rel="stylesheet">
+<style>
+/* ── Design tokens ── */
+:root {
+  --ground: #faf8f5;
+  --surface: #fffdf9;
+  --surface-elevated: #ffffff;
+  --surface-tint: #f3f0eb;
+  --surface-tint-blue: #f4f7fb;
+  --line: #e8e3dc;
+  --line-subtle: #f0ebe4;
+  --text-primary: #1b1f24;
+  --text-secondary: #59636e;
+  --text-tertiary: #8b949e;
+  --text-inverse: #ffffff;
+
+  --accent: #2563eb;
+  --accent-bg: #eff6ff;
+  --accent-text: #1d4ed8;
+  --accent-border: #93bbfd;
+
+  --ok-bg: #dafbe1;
+  --ok-text: #1a7f37;
+  --ok-border: #8ddb9a;
+
+  --warn-bg: #fff1c0;
+  --warn-text: #946a00;
+  --warn-border: #e6c54a;
+
+  --bad-bg: #ffebe9;
+  --bad-text: #cf222e;
+  --bad-border: #f7999f;
+
+  --purple-bg: #fbefff;
+  --purple-text: #8250df;
+  --purple-border: #c297ff;
+
+  --info-bg: #ddf4ff;
+  --info-text: #0969da;
+
+  --font-hero: 'Playfair Display', Georgia, serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-reading: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --shadow-elevated: 0 0 0 1px rgba(29,27,24,0.06), 0 4px 12px -2px rgba(29,27,24,0.04), 0 8px 20px 0 rgba(29,27,24,0.08);
+  --shadow-decision: 0 0 0 1px rgba(29,27,24,0.08), 0 6px 16px -3px rgba(29,27,24,0.06), 0 10px 24px 0 rgba(29,27,24,0.10);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+body {
+  font-family: var(--font-body);
+  background: var(--ground);
+  color: var(--text-primary);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* ── Layout ── */
+.app-shell { max-width: 1024px; margin: 0 auto; padding: 40px 40px 80px; }
+
+/* ── Header ── */
+.run-header {
+  margin-bottom: 28px;
+}
+.run-slug-hero {
+  font-family: var(--font-hero);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 2rem;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+.run-source-line {
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  color: var(--text-tertiary);
+}
+
+/* Phase chip */
+.phase-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-weight: 500;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+.phase-implement {
+  background: var(--accent-bg);
+  color: var(--accent-text);
+  border: 1px solid var(--accent-border);
+}
+.phase-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+}
+.phase-implement .phase-dot { background: var(--accent-text); }
+
+/* Metadata rail (Raycast pattern — key/value docked at header bottom) */
+.metadata-rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding: 14px 20px;
+  background: var(--surface-tint);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-md);
+  margin-top: 16px;
+}
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.meta-label {
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+}
+.meta-value {
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.meta-value.mono {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+/* Gate cells in metadata rail */
+.gate-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 38px;
+  height: 24px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.6875rem;
+  line-height: 1;
+}
+.gate-cell + .gate-cell { margin-left: 4px; }
+.gate-approved {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+  border: 1px solid var(--ok-border);
+}
+.gate-pending {
+  background: transparent;
+  color: var(--text-tertiary);
+  border: 1px dashed var(--line);
+}
+.gate-glyph { font-size: 0.75rem; line-height: 1; }
+
+/* Divergence pill */
+.divergence-pill {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+.divergence-ahead {
+  background: var(--warn-bg);
+  color: var(--warn-text);
+  border: 1px solid var(--warn-border);
+}
+
+/* Budget meter */
+.budget-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.budget-bar-track {
+  width: 36px;
+  height: 4px;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.budget-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+}
+.budget-text {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+/* ── NeedsYouCard (decision-critical, A1 stakes-varied: accent rail + tinted ground + elevation) ── */
+.decision-card {
+  background: var(--surface-elevated);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  box-shadow: var(--shadow-decision);
+  padding: 28px 32px;
+  margin-bottom: 28px;
+}
+.decision-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.decision-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.75rem;
+  background: var(--accent-bg);
+  color: var(--accent-text);
+  border: 1px solid var(--accent-border);
+}
+.decision-title {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+.decision-burden {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+.decision-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px 24px;
+  margin-bottom: 20px;
+}
+.decision-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.decision-field.full { grid-column: 1 / -1; }
+.decision-field-label {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+}
+.decision-field-value {
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: var(--text-primary);
+  max-width: 52ch;
+}
+.decision-field-value code {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  background: var(--surface-tint);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--text-secondary);
+}
+
+.decision-actions {
+  display: flex;
+  gap: 12px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line-subtle);
+}
+.btn-approve {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 22px;
+  background: var(--ok-text);
+  color: var(--text-inverse);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.875rem;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.btn-approve:hover { background: #116329; }
+.btn-decline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 22px;
+  background: var(--surface-elevated);
+  color: var(--bad-text);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.875rem;
+  border: 1px solid var(--bad-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.btn-decline:hover { background: var(--bad-bg); }
+
+/* ── Task board ── */
+.task-board {
+  margin-bottom: 28px;
+}
+.section-label {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  margin-bottom: 10px;
+}
+.task-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+  background: var(--surface);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-sm);
+  margin-bottom: 4px;
+}
+.task-id {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+.task-status {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 2px 10px;
+  border-radius: 999px;
+}
+.task-status.review-approved {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+  border: 1px solid var(--ok-border);
+}
+.task-rounds {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--text-tertiary);
+}
+.task-rounds.capped {
+  color: var(--bad-text);
+  font-weight: 500;
+}
+
+/* ── Tabs ── */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid var(--line);
+  margin-bottom: 0;
+}
+.tab-btn {
+  padding: 10px 20px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.875rem;
+  color: var(--text-tertiary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.tab-btn:hover { color: var(--text-primary); }
+.tab-btn.active {
+  color: var(--accent-text);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+/* ── Tab panels ── */
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── Artifacts layout ── */
+.artifacts-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 0;
+  min-height: 600px;
+}
+.artifact-sidebar {
+  background: var(--surface);
+  border-right: 1px solid var(--line-subtle);
+  border-bottom: 1px solid var(--line-subtle);
+  padding: 12px 0;
+  border-radius: var(--radius-md) 0 0 0;
+}
+.artifact-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.1s ease;
+  border-left: 3px solid transparent;
+}
+.artifact-sidebar-item:hover { background: var(--surface-tint); }
+.artifact-sidebar-item.active {
+  background: var(--accent-bg);
+  color: var(--accent-text);
+  border-left-color: var(--accent);
+  font-weight: 500;
+}
+.validation-glyph {
+  font-size: 0.6875rem;
+  width: 14px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.validation-glyph.ok { color: var(--ok-text); }
+.validation-glyph.fail { color: var(--bad-text); }
+
+/* ── Artifact content pane — THE READING SURFACE ── */
+.artifact-pane {
+  background: var(--surface-elevated);
+  border: 1px solid var(--line);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  padding: 40px 48px;
+  overflow-y: auto;
+}
+.artifact-body {
+  font-family: var(--font-reading);
+  font-size: 1rem;
+  line-height: 1.65;
+  color: var(--text-primary);
+  max-width: 76ch;
+  margin: 0 auto;
+}
+.artifact-body h1 {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 1.625rem;
+  line-height: 1.25;
+  color: var(--text-primary);
+  margin: 0 0 24px 0;
+  letter-spacing: -0.015em;
+}
+.artifact-body h2 {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 1.25rem;
+  line-height: 1.3;
+  color: var(--text-primary);
+  margin: 36px 0 12px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--line-subtle);
+}
+.artifact-body h3 {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 1.0625rem;
+  line-height: 1.35;
+  color: var(--text-primary);
+  margin: 28px 0 8px 0;
+}
+.artifact-body p {
+  margin: 0 0 14px 0;
+}
+.artifact-body strong {
+  font-weight: 600;
+}
+.artifact-body code {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  background: var(--surface-tint);
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.artifact-body pre {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  background: #f6f4f2;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-sm);
+  padding: 16px 20px;
+  overflow-x: auto;
+  margin: 16px 0;
+  color: var(--text-primary);
+}
+.artifact-body pre code {
+  background: none;
+  padding: 0;
+  font-size: inherit;
+  white-space: pre;
+  border-radius: 0;
+}
+.artifact-body blockquote {
+  margin: 16px 0;
+  padding: 12px 20px;
+  border-left: 4px solid var(--accent-border);
+  background: var(--accent-bg);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-style: italic;
+  color: var(--text-secondary);
+}
+.artifact-body blockquote p { margin: 0; }
+.artifact-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+.artifact-body th {
+  text-align: left;
+  padding: 8px 12px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  background: var(--surface-tint);
+  border-bottom: 1px solid var(--line);
+}
+.artifact-body td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line-subtle);
+  color: var(--text-primary);
+}
+.artifact-body ul, .artifact-body ol {
+  margin: 12px 0;
+  padding-left: 24px;
+}
+.artifact-body li {
+  margin-bottom: 6px;
+}
+.artifact-body li > ul, .artifact-body li > ol { margin-top: 6px; }
+.artifact-body hr {
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 32px 0;
+}
+.artifact-body a {
+  color: var(--accent-text);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.artifact-body em { font-style: italic; }
+
+/* Contract fail banner */
+.contract-banner {
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  color: var(--bad-text);
+  background: var(--bad-bg);
+  border: 1px solid var(--bad-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  margin-bottom: 20px;
+  font-weight: 500;
+}
+.contract-banner code {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+
+/* ── Diff & History panels ── */
+.diff-pane, .history-pane {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 40px;
+  text-align: center;
+  color: var(--text-tertiary);
+}
+.diff-pane .icon-placeholder, .history-pane .icon-placeholder {
+  font-size: 2rem;
+  margin-bottom: 12px;
+  opacity: 0.4;
+}
+.placeholder-title {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.placeholder-body {
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  color: var(--text-tertiary);
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}
+.history-table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.6875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--line);
+}
+.history-table td {
+  padding: 8px 12px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--line-subtle);
+}
+.history-oid { color: var(--text-tertiary); }
+
+/* ── Genesis line ── */
+.genesis-line {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+}
+
+/* Responsive light touch for reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- ═══ Header ═══ -->
+  <div class="run-header">
+    <h1 class="run-slug-hero">g2-pending</h1>
+    <p class="run-source-line" style="margin-bottom:12px;">e14s/g2-pending · log rotator</p>
+
+    <!-- Metadata rail -->
+    <div class="metadata-rail">
+      <div class="meta-item">
+        <span class="meta-label">Phase</span>
+        <span class="phase-chip phase-implement"><span class="phase-dot"></span>implement</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Profile</span>
+        <span class="meta-value">standard</span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Gates</span>
+        <span class="meta-value">
+          <span class="gate-cell gate-approved" title="G0 approved by operator · 2026-07-16"><span class="gate-glyph">✓</span>G0</span>
+          <span class="gate-cell gate-approved" title="G1 approved by operator · 2026-07-18"><span class="gate-glyph">✓</span>G1</span>
+          <span class="gate-cell gate-pending" title="G2 pending — needs your review"><span class="gate-glyph">·</span>G2</span>
+        </span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Budget</span>
+        <span class="meta-value">
+          <div class="budget-inline">
+            <div class="budget-bar-track"><div class="budget-bar-fill" style="width:0%"></div></div>
+            <span class="budget-text">$0/$25</span>
+          </div>
+        </span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Divergence</span>
+        <span class="meta-value"><span class="divergence-pill divergence-ahead">↑3</span></span>
+      </div>
+      <div class="meta-item">
+        <span class="meta-label">Genesis</span>
+        <span class="genesis-line">staged by Nathan Carter · Jul 02 · from linear-issue · ENG-421</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ NeedsYouCard: G2 pending ═══ -->
+  <div class="decision-card">
+    <div class="decision-card-header">
+      <span class="decision-badge">· G2 pending</span>
+      <span class="decision-title">Approve the implementation for release</span>
+      <span class="decision-burden">confirmation</span>
+    </div>
+
+    <div class="decision-grid">
+      <div class="decision-field">
+        <span class="decision-field-label">What</span>
+        <span class="decision-field-value">Approve the implementation for release. The agent has completed all implementation tasks and verification reports show passing results.</span>
+      </div>
+      <div class="decision-field">
+        <span class="decision-field-label">Why</span>
+        <span class="decision-field-value">Acceptance criteria AC1.1 and AC2.1 have been verified against the spec. The implementation matches the approved plan.</span>
+      </div>
+      <div class="decision-field">
+        <span class="decision-field-label">What changes</span>
+        <span class="decision-field-value"><code>src/core.py</code> + <code>src/errors.py</code></span>
+      </div>
+      <div class="decision-field">
+        <span class="decision-field-label">How verified</span>
+        <span class="decision-field-value"><code>verification-report.md</code></span>
+      </div>
+      <div class="decision-field full">
+        <span class="decision-field-label">How to undo</span>
+        <span class="decision-field-value">Revert the run branch. No migrations are applied — the change is a pure code addition.</span>
+      </div>
+    </div>
+
+    <div class="decision-actions">
+      <button class="btn-approve">✓ Approve</button>
+      <button class="btn-decline">✕ Decline</button>
+    </div>
+  </div>
+
+  <!-- ═══ Task board ═══ -->
+  <div class="task-board">
+    <div class="section-label">Tasks</div>
+    <div class="task-row">
+      <span class="task-id">01-core</span>
+      <span class="task-status review-approved">review-approved</span>
+      <span class="task-rounds">⟲1</span>
+    </div>
+    <div class="task-row">
+      <span class="task-id">02-errors</span>
+      <span class="task-status review-approved">review-approved</span>
+      <span class="task-rounds">⟲2</span>
+    </div>
+  </div>
+
+  <!-- ═══ Tabs ═══ -->
+  <div class="tab-bar" role="tablist">
+    <button class="tab-btn active" role="tab" data-tab="artifacts">Artifacts</button>
+    <button class="tab-btn" role="tab" data-tab="diff">Diff</button>
+    <button class="tab-btn" role="tab" data-tab="history">History</button>
+  </div>
+
+  <!-- Tab: Artifacts -->
+  <div class="tab-panel active" id="tab-artifacts" role="tabpanel">
+    <div class="artifacts-layout">
+      <div class="artifact-sidebar">
+        <div class="artifact-sidebar-item active" data-artifact="spec">
+          <span class="validation-glyph ok">✓</span> spec.md
+        </div>
+        <div class="artifact-sidebar-item" data-artifact="plan">
+          <span class="validation-glyph ok">✓</span> plan.md
+        </div>
+        <div class="artifact-sidebar-item" data-artifact="intent">
+          <span class="validation-glyph ok">✓</span> intent-brief.md
+        </div>
+        <div class="artifact-sidebar-item" data-artifact="verification">
+          <span class="validation-glyph fail">✕</span> verification-report.md
+        </div>
+      </div>
+
+      <div class="artifact-pane">
+        <div class="contract-banner" style="display:none;">
+          Fails its <code>spec</code> contract — missing: <strong>Context, Out of scope</strong>
+        </div>
+        <article class="artifact-body">
+          <h1>Specification: log rotator</h1>
+
+          <h2>Context</h2>
+          <p>The log rotator is a long-running daemon responsible for compressing and archiving application log files. It currently operates on a fixed 24-hour rotation window, which is insufficient for high-throughput services that can generate hundreds of megabytes of logs per hour. This specification defines a <strong>size-triggered rotation policy</strong> with configurable thresholds and retention windows.</p>
+          <p>The existing implementation uses a single-threaded gzip pipeline that blocks the main event loop during compression of large files. This becomes a bottleneck when multiple log streams exceed their size threshold simultaneously.</p>
+
+          <h2>Requirements</h2>
+
+          <h3>R1 — Size-triggered rotation</h3>
+          <ul>
+            <li>◻ AC1.1 — When a log file exceeds its configured <code>max_size_bytes</code> threshold, the rotator initiates a compression pass within 30 seconds of the threshold being crossed.</li>
+            <li>◻ AC1.2 — The original log file is replaced with a symlink to the compressed archive, preserving existing <code>tail -f</code> readers.</li>
+            <li>◻ AC1.3 — Rotation events emit a structured JSON log line to the system journal containing: file path, original size, compressed size, start time, and duration.</li>
+          </ul>
+
+          <h3>R2 — Concurrent compression</h3>
+          <ul>
+            <li>◻ AC2.1 — The rotator spawns compression workers in a thread pool sized to <code>min(os.cpu_count(), max_workers)</code>. A sample input of 50 log files across 8 cores completes all compressions within 120 seconds.</li>
+            <li>◻ AC2.2 — Worker panics are caught at the pool boundary and logged without bringing down the main rotator process.</li>
+            <li>◻ AC2.3 — A <code>--dry-run</code> flag outputs which files <em>would</em> be rotated without modifying the filesystem.</li>
+          </ul>
+
+          <h2>Assumptions</h2>
+          <p><strong>ASSUMPTION:</strong> The filesystem supports atomic symlink creation. If the deployment target uses a filesystem without symlink support (e.g., certain FUSE mounts), the rotator falls back to a copy-and-rename strategy with a corresponding warning.</p>
+          <p><strong>ASSUMPTION:</strong> Log files are written exclusively by a single writer process. Concurrent writes during compression are out of scope for this version.</p>
+
+          <h2>Data model</h2>
+          <p>The rotator configuration is read from a YAML file at <code>/etc/log-rotator/config.yaml</code> with the following structure:</p>
+
+<pre><code># log-rotator configuration
+source: /var/log/app
+patterns:
+  - "*.log"
+  - "access*.log"
+max_size_bytes: 104857600  # 100 MB
+retention_days: 30
+max_workers: 4
+compression: zstd</code></pre>
+
+          <h2>Compression performance characteristics</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Algorithm</th>
+                <th>Ratio</th>
+                <th>Speed</th>
+                <th>Memory</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>gzip</td>
+                <td>6.2:1</td>
+                <td>baseline</td>
+                <td>~8 MB</td>
+              </tr>
+              <tr>
+                <td>zstd</td>
+                <td>8.1:1</td>
+                <td>2.3× faster</td>
+                <td>~12 MB</td>
+              </tr>
+              <tr>
+                <td>lz4</td>
+                <td>4.5:1</td>
+                <td>5.1× faster</td>
+                <td>~4 MB</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <blockquote>
+            <p>Zstd at compression level 3 offers the best trade-off for our workload: 2.3× the throughput of gzip with 30% better compression. Memory overhead of 12 MB per worker is acceptable given our 512 MB per-container budget.</p>
+          </blockquote>
+
+          <h2>Out of scope</h2>
+          <ul>
+            <li>Remote log shipping (handled by a separate <code>log-shipper</code> service)</li>
+            <li>Encryption-at-rest for compressed archives</li>
+            <li>Automatic cleanup of archives older than the retention window (deferred to v2)</li>
+            <li>Integration with log aggregation platforms (Datadog, Splunk)</li>
+          </ul>
+
+          <hr>
+
+          <h2>Approval record</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Gate</th>
+                <th>Status</th>
+                <th>By</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>G0</td>
+                <td>✓ Approved</td>
+                <td>operator</td>
+                <td>2026-07-16</td>
+              </tr>
+              <tr>
+                <td>G1</td>
+                <td>✓ Approved</td>
+                <td>operator</td>
+                <td>2026-07-18</td>
+              </tr>
+              <tr>
+                <td>G2</td>
+                <td>· Pending</td>
+                <td>—</td>
+                <td>—</td>
+              </tr>
+            </tbody>
+          </table>
+        </article>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab: Diff -->
+  <div class="tab-panel" id="tab-diff" role="tabpanel">
+    <div class="diff-pane">
+      <div class="icon-placeholder">⟷</div>
+      <p class="placeholder-title">Unified diff not generated</p>
+      <p class="placeholder-body">Diffs are rendered at gate-decision time. Approve or decline G2 to see the implementation diff against origin/main.</p>
+    </div>
+  </div>
+
+  <!-- Tab: History -->
+  <div class="tab-panel" id="tab-history" role="tabpanel">
+    <div class="history-pane" style="text-align:left;padding:24px;">
+      <p class="placeholder-title" style="text-align:center;">Commit history</p>
+      <table class="history-table">
+        <thead>
+          <tr><th>OID</th><th>Author</th><th>Subject</th><th>Phase</th><th>Time</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="history-oid">d4e5f6a</td><td>agent</td><td>implement: complete core + errors modules</td><td>implement</td><td>2026-07-19</td>
+          </tr>
+          <tr>
+            <td class="history-oid">c3d4e5f</td><td>operator</td><td>gate(G1): approve plan</td><td>plan</td><td>2026-07-18</td>
+          </tr>
+          <tr>
+            <td class="history-oid">b2c3d4e</td><td>agent</td><td>plan: implementation plan for log rotator</td><td>plan</td><td>2026-07-17</td>
+          </tr>
+          <tr>
+            <td class="history-oid">a1b2c3d</td><td>operator</td><td>gate(G0): approve spec</td><td>spec</td><td>2026-07-16</td>
+          </tr>
+          <tr>
+            <td class="history-oid">9a0b1c2</td><td>agent</td><td>spec: initial specification for log rotator</td><td>spec</td><td>2026-07-15</td>
+          </tr>
+          <tr>
+            <td class="history-oid">8f9a0b1</td><td>Nathan Carter</td><td>state(g2-pending): staged by Nathan Carter</td><td>staged</td><td>2026-07-02</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Minimal inline JS for tab switching and artifact sidebar -->
+<script>
+(function(){
+  /* Tab switching */
+  var tabs = document.querySelectorAll('.tab-btn[data-tab]');
+  var panels = document.querySelectorAll('.tab-panel');
+  tabs.forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var target = this.getAttribute('data-tab');
+      tabs.forEach(function(t){ t.classList.remove('active'); });
+      panels.forEach(function(p){ p.classList.remove('active'); });
+      this.classList.add('active');
+      var panel = document.getElementById('tab-' + target);
+      if(panel) panel.classList.add('active');
+    });
+  });
+
+  /* Artifact sidebar switching */
+  var items = document.querySelectorAll('.artifact-sidebar-item[data-artifact]');
+  items.forEach(function(item){
+    item.addEventListener('click', function(){
+      items.forEach(function(i){ i.classList.remove('active'); });
+      this.classList.add('active');
+      /* In a real app this would swap the artifact content.
+         For the prototype, the spec.md content is the primary render. */
+    });
+  });
+})();
+</script>
+
+</body>
+</html>

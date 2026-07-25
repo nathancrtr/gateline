@@ -13,7 +13,20 @@ intake:
 budget:
   cost_limit_usd: 50
   cost_spent_usd: 0
-  ledger: []
+  ledger:
+    [
+      {
+          at: 2026-07-25T20:42:13.126Z,
+          role: analyst,
+          task: null,
+          round: null,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
+        }
+    ]
 gates:
   # exactly PROFILE_GATES[standard] — no others
   G0: { approved: false, by: null, at: null, notes: null }

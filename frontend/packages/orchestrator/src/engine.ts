@@ -9,11 +9,12 @@ import { ensureDraftPr, Git, LocalGitSource, type Identity, type RunRef, type Wr
 import type { Document } from 'yaml'
 import { hasShell, loadRoleCapabilities } from './capabilities.ts'
 import { deriveAction, DEFAULT_ESTIMATE_USD, type Bookkeeping, type DerivedAction, type DispatchIntent } from './derive.ts'
+import { harvestPathspecs } from './harvest.ts'
 import { observeRun, parseLedger, type RunObservation } from './observe.ts'
 import { promptBody } from './prompts.ts'
 import { resolveModel, type Registry } from './registry.ts'
 import type { Dispatcher, DispatchOutcome } from './seam.ts'
-import { ensureRunCheckout, ensureTaskCheckout, foldTaskBranch, removeRunCheckout, type TaskCheckout } from './workspace.ts'
+import { ensureRunCheckout, ensureTaskCheckout, foldHarvestBranch, foldTaskBranch, removeRunCheckout, type TaskCheckout } from './workspace.ts'
 
 export interface EngineConfig {
   repoDir: string
@@ -488,24 +489,38 @@ export class Engine {
   private launch(ref: RunRef, obs: RunObservation, intent: DispatchIntent, openedAt: string): void {
     const key = jobKey(ref.slug, intent.role, intent.task, intent.round)
     this.jobMeta.set(key, { slug: ref.slug, role: intent.role, task: intent.task, round: intent.round, startedAt: Date.now() })
-    // Implementers get per-task isolation (§5.3): a private branch and
-    // worktree off the run tip, folded back serially on success — parallel
-    // implementers never observe each other's mid-flight state.
-    const isolate = intent.role === 'implementer' && intent.task !== null
+    // A dispatcher with managesOwnWorkspace (the remote runner, run
+    // "runner-agent" ADR-3) creates and harvests its own checkout — the
+    // engine creates no local checkout for it and folds a harvest branch in
+    // place of the local per-task fold. Implementers otherwise get per-task
+    // isolation (§5.3): a private branch and worktree off the run tip,
+    // folded back serially on success — parallel implementers never observe
+    // each other's mid-flight state.
+    const managesOwnWorkspace = this.cfg.dispatcher.managesOwnWorkspace === true
+    const isolate = !managesOwnWorkspace && intent.role === 'implementer' && intent.task !== null
     const job = (async () => {
       let outcome: DispatchOutcome
       try {
-        const checkout = isolate
-          ? await ensureTaskCheckout(this.cfg.repoDir, ref.branch, intent.task!)
-          : { path: await ensureRunCheckout(this.cfg.repoDir, ref.branch), branch: ref.branch }
+        const checkout = managesOwnWorkspace
+          ? null
+          : isolate
+            ? await ensureTaskCheckout(this.cfg.repoDir, ref.branch, intent.task!)
+            : { path: await ensureRunCheckout(this.cfg.repoDir, ref.branch), branch: ref.branch }
         const taskPath = intent.task ? (obs.taskFiles.get(intent.task)?.path ?? null) : null
         const { runs: runsRoot } = await this.source.frameworkRoots()
         const caps = await this.capabilities()
         outcome = await this.cfg.dispatcher.dispatch({
-          cwd: checkout.path,
+          // managesOwnWorkspace dispatchers never read cwd (they check out
+          // their own workspace on the workstation) — repoDir is a harmless
+          // placeholder to satisfy the required field.
+          cwd: checkout?.path ?? this.cfg.repoDir,
           role: intent.role,
           body: promptBody(ref.slug, intent, taskPath, runsRoot, obs.state?.profile ?? 'full', hasShell(caps, intent.role)),
           timeoutMs: this.cfg.roleTimeoutMs ?? DEFAULT_ROLE_TIMEOUT_MS,
+          slug: ref.slug,
+          branch: ref.branch,
+          task: intent.task,
+          round: intent.round,
         })
         if (isolate) {
           const fold = await this.withLock(ref.slug, () => foldTaskBranch(this.cfg.repoDir, ref.branch, checkout as TaskCheckout))
@@ -515,7 +530,18 @@ export class Engine {
           // The fold moves the run ref outside writeState; push it explicitly
           // so agent work reaches origin even if the closing commit fails.
           if (fold.ok) await this.pushBranch(ref.branch)
-        } else if (outcome.ok) {
+        } else if (managesOwnWorkspace && outcome.harvest) {
+          // The remote runner's own harvest-then-dispose (run "runner-agent"
+          // ADR-3/ADR-4): the worker already committed and pushed its
+          // harvest branch, so folding it — not a local harvest-commit,
+          // there is no local checkout to harvest from — is what lands it.
+          const harvest = outcome.harvest
+          const fold = await this.withLock(ref.slug, () => foldHarvestBranch(this.cfg.repoDir, ref.branch, harvest))
+          if (outcome.ok && !fold.ok) {
+            outcome = { ok: false, costUsd: outcome.costUsd, tokensIn: outcome.tokensIn, tokensOut: outcome.tokensOut, error: fold.message, fatal: fold.conflict }
+          }
+          if (fold.ok) await this.pushBranch(ref.branch)
+        } else if (checkout && outcome.ok) {
           // Harvest-commit (#182): a shell-less role (analyst, architect) has
           // no way to commit its own artifacts, and even a shell-ful role may
           // simply not have (the harvest is a defense-in-depth backstop for
@@ -525,6 +551,9 @@ export class Engine {
           // worktree-fallback state writes — and, crucially, before
           // `removeRunCheckout` force-removes this checkout in `finally`
           // below: this is what rescues the work from that force-remove.
+          // Guarded on `checkout` (never null here — only managesOwnWorkspace
+          // leaves it null, and that branch is handled above): a
+          // managesOwnWorkspace dispatcher has no local checkout to harvest.
           const harvest = await this.withLock(ref.slug, () => this.harvest(ref, checkout.path, runsRoot, intent))
           if (!harvest.ok) {
             outcome = { ok: false, costUsd: outcome.costUsd, tokensIn: outcome.tokensIn, tokensOut: outcome.tokensOut, error: harvest.error }
@@ -542,7 +571,9 @@ export class Engine {
         this.jobMeta.delete(key)
         // Last job out releases the run's checkout, so subsequent state
         // writes go through plumbing + CAS instead of the worktree fallback.
-        if (![...this.jobs.keys()].some((k) => k.startsWith(`${ref.slug}|`))) {
+        // Nothing to release for a managesOwnWorkspace dispatcher — it never
+        // had a local checkout to begin with.
+        if (!managesOwnWorkspace && ![...this.jobs.keys()].some((k) => k.startsWith(`${ref.slug}|`))) {
           await removeRunCheckout(this.cfg.repoDir, ref.branch)
         }
         this.onSettled?.()
@@ -660,11 +691,15 @@ export class Engine {
    * leave its artifacts uncommitted — the only path for a shell-less role,
    * and possible for a shell-ful one too. Scoped to this role's own outputs
    * (`harvestPathspecs`) so a peer sharing the run checkout is never swept
-   * into a torn commit. `git status` first: `git add` errors on a pathspec
-   * matching nothing, and the normal case (a shell-ful role already
-   * committed) must be a clean no-op. Bot-identity commit via `-c`, since
-   * this is a real working-tree commit (`git add` + `git commit`), not the
-   * plumbing path `LocalGitSource` uses for state.yaml.
+   * into a torn commit. `git status` first: the normal case (a shell-ful
+   * role already committed) must be a clean no-op. Each pathspec is `git
+   * add`ed independently (run "runner-agent" review-04.md round-2 F10): a
+   * single combined `git add -A -- a b` is all-or-nothing, so one pathspec
+   * matching nothing (e.g. architect's `tasks/` before any task file
+   * exists) would silently drop a pathspec that did match alongside it.
+   * Bot-identity commit via `-c`, since this is a real working-tree commit
+   * (`git add` + `git commit`), not the plumbing path `LocalGitSource` uses
+   * for state.yaml.
    */
   private async harvest(
     ref: RunRef,
@@ -677,7 +712,13 @@ export class Engine {
     try {
       const status = await git.run(['status', '--porcelain', '--', ...pathspecs])
       if (!status.trim()) return { ok: true } // nothing uncommitted in scope — the normal case for a shell-ful role
-      await git.run(['add', '-A', '--', ...pathspecs])
+      for (const pathspec of pathspecs) {
+        try {
+          await git.run(['add', '-A', '--', pathspec])
+        } catch {
+          /* pathspec matched nothing — not an error, nothing to add for it */
+        }
+      }
       const what = `${intent.role}${intent.task ? `(${intent.task}${intent.round ? ` r${intent.round}` : ''})` : ''}`
       await git.run([
         '-c',
@@ -722,27 +763,6 @@ export class Engine {
 
 function jobKey(slug: string, role: string, task: string | null, round: number | null): string {
   return `${slug}|${role}|${task ?? ''}|${round ?? ''}`
-}
-
-/** This role's own outputs under the run dir — the harvest's scope, never a peer's mid-flight file. */
-function harvestPathspecs(runsRoot: string, slug: string, role: string, task: string | null): string[] {
-  const runDir = `${runsRoot}/${slug}`
-  switch (role) {
-    case 'analyst':
-      return [`${runDir}/spec.md`]
-    case 'architect':
-      return [`${runDir}/plan.md`, `${runDir}/tasks/`]
-    case 'reviewer': {
-      const nn = task ? /^\d+/.exec(task)?.[0] : null
-      return [`${runDir}/${nn ? `review-${nn}*.md` : 'review-*.md'}`]
-    }
-    case 'verifier':
-      return [`${runDir}/verification-report.md`]
-    case 'ops':
-      return [`${runDir}/release-plan.md`]
-    default:
-      return [`${runDir}/`]
-  }
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100

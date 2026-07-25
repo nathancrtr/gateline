@@ -1,0 +1,46 @@
+id: 01-seam-extend
+title: Extend DispatchRequest with run identity fields
+requirements: [R2]
+
+scope: |
+  Add optional `slug` and `branch` fields to the `DispatchRequest` interface in
+  `seam.ts`. Update the engine's `launch()` method to pass `ref.slug` and
+  `ref.branch` through these new fields. HeadlessDispatcher ignores them — no
+  changes to its code. The engine already has these values in scope; this task
+  only threads them through.
+
+file_contact_surface:
+  - frontend/packages/orchestrator/src/seam.ts
+  - frontend/packages/orchestrator/src/engine.ts
+  - frontend/packages/orchestrator/test/seam.test.ts
+
+acceptance_tests:
+  - AC2.1
+  - "Existing seam.test.ts tests pass unmodified (HeadlessDispatcher ignores new optional fields)"
+  - "A new test verifies launch() passes slug and branch in the DispatchRequest"
+
+depends_on: []
+
+status: pending
+
+notes: |
+  Round 2 (implementer): addressed review-01.md finding F1 (empty diff, task not
+  attempted in round 1) by fixing it in code — this round lands the actual
+  implementation on the run branch:
+    - seam.ts: added optional `slug` and `branch` fields to `DispatchRequest`
+      (HeadlessDispatcher untouched, as scoped).
+    - engine.ts: `launch()` now passes `ref.slug` and `ref.branch` in the
+      dispatch call.
+    - test/seam.test.ts: added a new test ("the engine threads run identity
+      through the seam (R2)") that drives a real `Engine` + `FakeDispatcher`
+      over a toy repo and asserts the captured `DispatchRequest` carries
+      `slug: 'toy'` and `branch: 'run/toy'`. It imports test scaffolding from
+      `test/engine.helper.ts` (unmodified) and `removeRunCheckout` from
+      `src/workspace.ts` (unmodified) — neither file was edited, only
+      imported, so the file-contact surface for code changes stays the three
+      declared files.
+  No findings were rebutted; F1 was the only finding and it is fixed.
+  Verified: `npx vitest run packages/orchestrator/test/seam.test.ts` — 12/12
+  pass (including the new test); `npx vitest run
+  packages/orchestrator/test/engine.test.ts` — 11/11 pass (no regression);
+  `npm run typecheck` — clean.

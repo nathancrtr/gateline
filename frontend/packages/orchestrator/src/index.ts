@@ -1,5 +1,6 @@
 export * from './derive.ts'
 export * from './engine.ts'
+export * from './harvest.ts'
 export * from './manifest.ts'
 export * from './observe.ts'
 export * from './prompts.ts'

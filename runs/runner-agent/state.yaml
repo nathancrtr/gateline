@@ -1,0 +1,768 @@
+run: runner-agent
+branch: run/runner-agent
+phase: release # staged — not yet armed; `agentic arm runner-agent` starts the run
+paused_reason: null
+profile: full # patch | standard | full
+intake:
+  # source-agnostic staging provenance; free-form path: nulls + client_key
+  source: null
+  ref: null
+  url: null
+  client_key: "9dff0c9d-ee01-4f04-b209-5ff9606b6079"
+  staged_by: "Nathan Carter"
+budget:
+  cost_limit_usd: null
+  cost_spent_usd: 111.81
+  ledger:
+    [
+      {
+          at: 2026-07-23T02:10:03.062Z,
+          role: analyst,
+          task: null,
+          round: null,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 8,
+          tokens_out: 1481,
+          cost_usd: 1.2873665999999997
+        },
+      {
+          at: 2026-07-23T05:39:03.668Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: 5,
+          failed: true
+        },
+      {
+          at: 2026-07-23T05:39:32.262Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: 5,
+          failed: true
+        },
+      {
+          at: 2026-07-23T05:56:38.130Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 2431,
+          tokens_out: 118,
+          cost_usd: 0.0061081359000000005
+        },
+      {
+          at: 2026-07-23T05:57:29.902Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 1623,
+          tokens_out: 365,
+          cost_usd: 0.0049174323
+        },
+      {
+          at: 2026-07-23T05:57:54.946Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 7273,
+          tokens_out: 239,
+          cost_usd: 0.0165907278
+        },
+      {
+          at: 2026-07-23T05:59:09.716Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 5730,
+          tokens_out: 220,
+          cost_usd: 0.0155586536
+        },
+      {
+          at: 2026-07-23T05:59:59.797Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 3580,
+          tokens_out: 806,
+          cost_usd: 0.011340781700000002
+        },
+      {
+          at: 2026-07-23T06:01:24.516Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 2200,
+          tokens_out: 554,
+          cost_usd: 0.0071024229000000005
+        },
+      {
+          at: 2026-07-23T06:02:20.066Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 8395,
+          tokens_out: 851,
+          cost_usd: 0.0241497385
+        },
+      {
+          at: 2026-07-23T13:58:00.989Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 7656,
+          tokens_out: 340,
+          cost_usd: 0.0106278308
+        },
+      {
+          at: 2026-07-23T13:58:54.111Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 1776,
+          tokens_out: 442,
+          cost_usd: 0.010136552
+        },
+      {
+          at: 2026-07-23T14:00:12.153Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 18818,
+          tokens_out: 1003,
+          cost_usd: 0.027949510400000002
+        },
+      {
+          at: 2026-07-23T14:02:32.812Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 7614,
+          tokens_out: 711,
+          cost_usd: 0.015013541599999998
+        },
+      {
+          at: 2026-07-23T14:03:51.454Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 25307,
+          tokens_out: 1372,
+          cost_usd: 0.035463264599999995
+        },
+      {
+          at: 2026-07-23T14:06:06.380Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 20146,
+          tokens_out: 1236,
+          cost_usd: 0.0299148968
+        },
+      {
+          at: 2026-07-23T14:07:52.655Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 2877,
+          tokens_out: 831,
+          cost_usd: 0.010350913
+        },
+      {
+          at: 2026-07-23T14:09:04.726Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 24770,
+          tokens_out: 1348,
+          cost_usd: 0.0360855556
+        },
+      {
+          at: 2026-07-23T14:11:18.872Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 18120,
+          tokens_out: 1263,
+          cost_usd: 0.0300959228
+        },
+      {
+          at: 2026-07-23T14:13:45.322Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 11513,
+          tokens_out: 997,
+          cost_usd: 0.0192519682
+        },
+      {
+          at: 2026-07-23T14:15:54.829Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 30362,
+          tokens_out: 1358,
+          cost_usd: 0.0413732324
+        },
+      {
+          at: 2026-07-23T14:17:59.958Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 7549,
+          tokens_out: 1007,
+          cost_usd: 0.017380100600000004
+        },
+      {
+          at: 2026-07-23T14:19:18.997Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 81515,
+          tokens_out: 696,
+          cost_usd: 0.077070181,
+          failed: true
+        },
+      {
+          at: 2026-07-23T17:41:19.234Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 25235,
+          tokens_out: 1470,
+          cost_usd: 0.06435957608
+        },
+      {
+          at: 2026-07-23T17:45:33.937Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 13116,
+          tokens_out: 1695,
+          cost_usd: 0.0367782872
+        },
+      {
+          at: 2026-07-23T18:03:07.436Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 290018,
+          tokens_out: 6589,
+          cost_usd: 0.5763275296000001
+        },
+      {
+          at: 2026-07-23T19:23:05.721Z,
+          role: implementer,
+          task: 01-seam-extend,
+          round: 1,
+          adapter: opencode,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 156708,
+          tokens_out: 4971,
+          cost_usd: 0.078851638
+        },
+      {
+          at: 2026-07-23T22:07:04.468Z,
+          role: reviewer,
+          task: 01-seam-extend,
+          round: 1,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 310359,
+          tokens_out: 1838,
+          cost_usd: 0.32653882799999995
+        },
+      {
+          at: 2026-07-23T22:13:26.627Z,
+          role: reviewer,
+          task: 01-seam-extend,
+          round: 1,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 102308,
+          tokens_out: 1818,
+          cost_usd: 0.261003564
+        },
+      {
+          at: 2026-07-23T22:29:57.313Z,
+          role: reviewer,
+          task: 01-seam-extend,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 21,
+          tokens_out: 5340,
+          cost_usd: 1.5030940000000002
+        },
+      {
+          at: 2026-07-23T22:33:45.493Z,
+          role: implementer,
+          task: 01-seam-extend,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 6,
+          tokens_out: 1758,
+          cost_usd: 1.40502
+        },
+      {
+          at: 2026-07-23T22:40:54.578Z,
+          role: reviewer,
+          task: 01-seam-extend,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 10,
+          tokens_out: 2063,
+          cost_usd: 2.187366
+        },
+      {
+          at: 2026-07-23T22:47:40.818Z,
+          role: implementer,
+          task: 02-remote-dispatcher,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 10,
+          tokens_out: 2315,
+          cost_usd: 2.3365041000000004
+        },
+      {
+          at: 2026-07-23T23:46:57.414Z,
+          role: reviewer,
+          task: 02-remote-dispatcher,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 12,
+          tokens_out: 3644,
+          cost_usd: 3.2271704999999997
+        },
+      {
+          at: 2026-07-24T00:22:26.323Z,
+          role: reviewer,
+          task: 02-remote-dispatcher,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 2535,
+          tokens_out: 5657,
+          cost_usd: 2.153795
+        },
+      {
+          at: 2026-07-24T01:34:41.554Z,
+          role: reviewer,
+          task: 02-remote-dispatcher,
+          round: 3,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 10,
+          tokens_out: 2841,
+          cost_usd: 3.424253
+        },
+      {
+          at: 2026-07-24T01:45:31.960Z,
+          role: implementer,
+          task: 03-runner-api,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 8,
+          tokens_out: 1835,
+          cost_usd: 2.8831324
+        },
+      {
+          at: 2026-07-24T02:04:35.799Z,
+          role: reviewer,
+          task: 03-runner-api,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 10,
+          tokens_out: 2685,
+          cost_usd: 3.1522655000000004
+        },
+      {
+          at: 2026-07-24T02:12:28.833Z,
+          role: implementer,
+          task: 03-runner-api,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 8,
+          tokens_out: 3644,
+          cost_usd: 2.320180750000001
+        },
+      {
+          at: 2026-07-24T02:22:10.412Z,
+          role: reviewer,
+          task: 03-runner-api,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 10,
+          tokens_out: 2226,
+          cost_usd: 2.9651015000000003
+        },
+      {
+          at: 2026-07-24T02:28:57.940Z,
+          role: implementer,
+          task: 04-workstation-agent,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: 8,
+          failed: true
+        },
+      {
+          at: 2026-07-24T02:28:57.940Z,
+          role: implementer,
+          task: 05-wiring,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: 8,
+          failed: true
+        },
+      {
+          at: 2026-07-24T16:14:00.272Z,
+          role: implementer,
+          task: 04-workstation-agent,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 16,
+          tokens_out: 1669,
+          cost_usd: 5.146032600000002
+        },
+      {
+          at: 2026-07-24T16:14:00.272Z,
+          role: implementer,
+          task: 05-wiring,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 20,
+          tokens_out: 2535,
+          cost_usd: 7.281469949999999
+        },
+      {
+          at: 2026-07-24T16:49:17.815Z,
+          role: reviewer,
+          task: 04-workstation-agent,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 14,
+          tokens_out: 2747,
+          cost_usd: 3.5633915
+        },
+      {
+          at: 2026-07-24T19:57:47.442Z,
+          role: reviewer,
+          task: 04-workstation-agent,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 18,
+          tokens_out: 2036,
+          cost_usd: 4.573762299999999
+        },
+      {
+          at: 2026-07-24T19:57:47.442Z,
+          role: reviewer,
+          task: 05-wiring,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 22,
+          tokens_out: 2435,
+          cost_usd: 4.647779300000001
+        },
+      {
+          at: 2026-07-24T20:07:12.314Z,
+          role: implementer,
+          task: 05-wiring,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 26,
+          tokens_out: 3931,
+          cost_usd: 1.9650337999999992
+        },
+      {
+          at: 2026-07-24T20:08:17.678Z,
+          role: implementer,
+          task: 04-workstation-agent,
+          round: 3,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: 8,
+          failed: true
+        },
+      {
+          at: 2026-07-24T20:18:49.451Z,
+          role: reviewer,
+          task: 05-wiring,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 36,
+          tokens_out: 11031,
+          cost_usd: 2.4669315000000003
+        },
+      {
+          at: 2026-07-24T23:46:55.581Z,
+          role: implementer,
+          task: 04-workstation-agent,
+          round: 3,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 18,
+          tokens_out: 9104,
+          cost_usd: 1.2242912499999998
+        },
+      {
+          at: 2026-07-24T23:56:02.820Z,
+          role: reviewer,
+          task: 04-workstation-agent,
+          round: 3,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 22,
+          tokens_out: 4880,
+          cost_usd: 2.6260024
+        },
+      {
+          at: 2026-07-25T00:05:02.560Z,
+          role: implementer,
+          task: 06-live-smoke,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 18,
+          tokens_out: 3196,
+          cost_usd: 4.087800199999998
+        },
+      {
+          at: 2026-07-25T00:21:59.454Z,
+          role: reviewer,
+          task: 06-live-smoke,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 14,
+          tokens_out: 2568,
+          cost_usd: 3.280096199999999
+        },
+      {
+          at: 2026-07-25T00:31:22.229Z,
+          role: verifier,
+          task: null,
+          round: null,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 16,
+          tokens_out: 2213,
+          cost_usd: 2.9115063499999985
+        },
+      {
+          at: 2026-07-25T01:47:27.004Z,
+          role: ops,
+          task: null,
+          round: null,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 14,
+          tokens_out: 2193,
+          cost_usd: 3.4006598
+        }
+    ]
+gates:
+  # exactly PROFILE_GATES[full] — no others
+  G0:
+    {
+      approved: true,
+      by: Nathan Carter,
+      at: 2026-07-23T05:38:47.337Z,
+      notes: null,
+      burden: confirmation
+    }
+  G1:
+    {
+      approved: true,
+      by: Nathan Carter,
+      at: 2026-07-23T19:22:10.058Z,
+      notes: "Architect made an obvious mistake (see: ADR-3 Rejected).",
+      burden: heavy-correction
+    }
+  G2:
+    {
+      approved: true,
+      by: Nathan Carter,
+      at: 2026-07-25T01:46:45.738Z,
+      notes: null,
+      burden: confirmation
+    }
+  G3: { approved: false, by: null, at: null, notes: null }
+tasks:
+  [
+    { id: 01-seam-extend, status: review-approved, review_rounds: 2 },
+    { id: 02-remote-dispatcher, status: review-approved, review_rounds: 3 },
+    { id: 03-runner-api, status: review-approved, review_rounds: 2 },
+    { id: 04-workstation-agent, status: review-approved, review_rounds: 3 },
+    { id: 05-wiring, status: review-approved, review_rounds: 2 },
+    { id: 06-live-smoke, status: review-approved, review_rounds: 1 }
+  ]
+escalations:
+  [
+    {
+        at: 2026-07-23T05:39:37.955Z,
+        from_role: orchestrator,
+        reason: "architect failed twice: Command failed (exit 1): opencode run for run
+          `runs/runner-agent`. When your work is complete, commit it on the
+          current…",
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-23T05:56:08.785Z,
+        resolution: fixed env issue
+      },
+    {
+        at: 2026-07-23T14:20:37.814Z,
+        from_role: orchestrator,
+        reason: "architect failed twice: dispatch aborted by the operator during drain —
+          process group killed (SIGKILL); the task is freed for a retry",
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-23T17:33:52.713Z,
+        resolution: architect tried to write its commit without shell tool access and
+          got stuck in a loop (#183)
+      },
+    {
+        at: 2026-07-23T23:58:21.361Z,
+        from_role: orchestrator,
+        reason: reviewer escalated task 02-remote-dispatcher — see review-02.md,
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-24T00:21:31.275Z,
+        resolution: "Resolution: the architect must update the plan to include
+          `seam.ts/engine.ts` in the file surface somewhere so that the
+          `02-remote-dispatcher` review's blocking finding can be fixed by an
+          implementer"
+      },
+    {
+        at: 2026-07-24T00:29:32.028Z,
+        from_role: orchestrator,
+        reason: reviewer escalated task 02-remote-dispatcher — see review-02.md,
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-24T01:34:21.840Z,
+        resolution: "ADR-7 amendment (820c21e) and implementer round 3 (2a143d2) landed:
+          dispatch correlation keyed by slug|role|task|round at dispatch time,
+          FIFO linking retired, F2-F4 folded in; orchestrator package 154 passed
+          + typecheck clean. Dispatch re-review round 3 against this delta."
+      },
+    {
+        at: 2026-07-24T16:11:14.238Z,
+        from_role: orchestrator,
+        reason: no cost_limit_usd set — this orchestrator requires a per-run budget cap
+          before dispatch (--require-budget),
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-24T16:13:39.509Z,
+        resolution: accidentally started agentic service without
+          `--no-budget--enforcement` option -- restarted and resolving
+      },
+    {
+        at: 2026-07-24T16:57:52.028Z,
+        from_role: orchestrator,
+        reason: reviewer escalated task 04-workstation-agent — see review-04.md,
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-24T19:54:54.865Z,
+        resolution: "Fixed directly (round 2, af372de): implemented harvest-then-dispose
+          per plan.md ADR-3/ADR-8 across seam.ts (DispatchOutcome.harvest), new
+          harvest.ts (harvestPathspecs), workspace.ts (foldHarvestBranch),
+          engine.ts (launch()'s managesOwnWorkspace branch), runner-api.ts, and
+          the runner-agent package. Task 04's file-contact surface widened
+          accordingly. 259 tests pass, typecheck clean. Ready for reviewer
+          re-review (round 2) against this delta."
+      },
+    {
+        at: 2026-07-24T21:43:30.362Z,
+        from_role: orchestrator,
+        reason: "implementer (04-workstation-agent) failed twice: harness timed out
+          after 90min wall clock — process group killed (SIGKILL)",
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-24T23:44:06.762Z,
+        resolution: "Fixed directly (round 3, 6cb9f16), after the live pipeline's own
+          auto-dispatched implementer round 3 hung/timed out twice trying to
+          address the same review-04.md round-2 findings. F8 (blocking, base
+          captured before harness runs so committed work is no longer dropped)
+          and F9 (major, origin harvest branch only deleted after a landed fold)
+          are the real fixes; F10/F11/F2/F12 (minor) also addressed. Full npm
+          test: 469 passed, 1 skipped, 0 failures. Ready for reviewer re-review
+          (round 3) against this delta."
+      }
+  ]

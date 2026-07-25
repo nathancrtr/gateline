@@ -16,6 +16,7 @@
     "yaml": "^2.8.0"
   },
   "devDependencies": {
-    "@agentic/fixtures": "*"
+    "@agentic/fixtures": "*",
+    "@agentic/server": "*"
   }
 }

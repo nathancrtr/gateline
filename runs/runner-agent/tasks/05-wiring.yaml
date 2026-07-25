@@ -1,0 +1,236 @@
+id: 05-wiring
+title: Wire RemoteDispatcher into engine and server; coexistence with HeadlessDispatcher
+requirements: [R1, R7, R9]
+
+scope: |
+  Wire the `RemoteDispatcher` into the orchestrator assembly and connect it to the server:
+  1. In `start.ts`'s `assembleOrchestrator()`:
+     - Accept new options: `runner?: { enabled: boolean }`
+     - When `runner.enabled` is true, create a `RemoteDispatcher` alongside the
+       `HeadlessDispatcher`(s)
+     - Wrap in a `RoutingDispatcher` if needed, or expose it directly
+     - Expose the `RunnerCallback` from `RemoteDispatcher` on the returned handle
+       (new optional field `runnerCallback?: RunnerCallback`)
+  2. In `main.ts`'s `startServer()`:
+     - Accept new option `runnerCallback?: RunnerCallback`
+     - Read `RUNNER_TOKEN` from the environment
+     - Pass both to `buildRunnerApi()` (task 03) and inject into `createApp()`
+  3. Configuration: the dispatcher selection (Headless vs. Remote) is a configuration
+     choice — when `runner.enabled` is true, the engine dispatches via `RemoteDispatcher`;
+     when false or not set, it dispatches via `HeadlessDispatcher` exactly as before.
+     The engine's dispatch call site (`launch()`) is unchanged — it calls
+     `this.cfg.dispatcher.dispatch(req)` regardless.
+  4. Verify coexistence (AC9.1, AC9.2):
+     - The existing orchestrator test suite passes unmodified when runner is disabled
+     - A new integration test in `wiring.test.ts` verifies the end-to-end callback chain:
+       RemoteDispatcher.dispatch() → server receives report → Promise resolves →
+       closeDispatch completes
+     - The test uses a mock HTTP server (no real workstation) — injects the report
+       directly through the server's runner API handler
+  5. For R7 (lease semantics): the engine's existing `sweepStale` already checks
+     `this.jobs.has(key)` — the `RemoteDispatcher.dispatch()` Promise is stored there just
+     like `HeadlessDispatcher`'s. No new lease mechanism is needed. Verify:
+     - An open ledger entry with an active remote dispatch (Promise pending) is NOT aged out
+     - A stale entry with no live remote dispatch IS aged out by the heartbeat
+     - A killed workstation (dispatcher Promise never resolves) converges: the entry is
+       aged out, re-dispatched, and the next tick handles it correctly
+
+file_contact_surface:
+  - frontend/packages/orchestrator/src/start.ts
+  - frontend/packages/orchestrator/src/runner-dispatcher.ts
+  - frontend/packages/server/src/main.ts
+  - frontend/packages/orchestrator/test/wiring.test.ts
+
+acceptance_tests:
+  - AC7.1
+  - AC7.2
+  - AC9.1
+  - AC9.2
+  - "npm test in frontend/ passes for both existing engine tests and new wiring.test.ts"
+
+depends_on: [02-remote-dispatcher, 03-runner-api]
+
+status: pending
+
+notes: |
+  The coexistence test (AC9.1) is verified by running the existing test suite — the
+  default configuration (`runner` not enabled) produces a HeadlessDispatcher as before.
+  No existing test needs modification.
+
+  Implementer (round 1) response:
+  - start.ts: added `runner?: { enabled: boolean }` to OrchestratorOptions; when true,
+    `assembleOrchestrator` builds a `RemoteDispatcher` and uses it directly as the
+    engine's dispatcher (not wrapped in RoutingDispatcher — RoutingDispatcher's vendor
+    routing needs a HeadlessManifest per adapter, which RemoteDispatcher has none of;
+    the task's own wording offered "wrap ... or expose it directly" as alternatives, and
+    scope point 3 describes a configuration-time either/or, not per-role routing). The
+    headless adapters are still loaded unconditionally either way (unchanged diff there),
+    per the task's "alongside" wording. Exposed a new exported `makeRunnerCallback(engine,
+    remote)` that adapts RemoteDispatcher's `pendingIntents(openEntries)` to the
+    zero-argument shape @agentic/server's RunnerCallback expects — `openEntries` is
+    `engine.inFlightDetail()` (already keyed slug|role|task|round, already synchronous),
+    so no ledger read is needed in the adapter itself. `assembleOrchestrator`'s return and
+    `OrchestratorHandle` both carry a new optional `runnerCallback?: RunnerCallback` field
+    (a locally-defined, structurally-mirrored `RunnerCallback` type — start.ts does not
+    import from @agentic/server, preserving the no-edge convention runner-api.ts documents
+    in the other direction).
+  - main.ts: part 2 was already fully wired by task 03 as briefed — verified against the
+    scope's three requirements (runnerCallback option, RUNNER_TOKEN read, both passed to
+    buildRunnerApi/createApp) and found nothing missing. Only change: re-exported
+    `buildRunnerApi`/`RunnerCallback` from runner-api.ts, needed so wiring.test.ts (a
+    cross-package test, orchestrator -> @agentic/server) can exercise the real
+    buildRunnerApi/createApp instead of a hand-rolled substitute, without adding a new
+    subpath export to server's package.json (main.ts's `./main` export was already public).
+  - Deviation from the literal file_contact_surface: added `@agentic/server: "*"` as an
+    orchestrator devDependency (package.json + the resulting package-lock.json delta) so
+    the cross-package test import resolves correctly per npm workspace convention — the
+    dispatch prompt explicitly asked me to "check how other tests/files in this monorepo
+    cross-import packages, e.g. package.json workspace deps" for this exact scenario, which
+    I read as authorizing this narrow, test-only addition. All 4 touched/added files besides
+    package.json are within the declared surface.
+  - wiring.test.ts: two describe blocks. First exercises the full relay end to end through
+    the *real* runner API (buildRunnerApi + createApp, hono's in-process app.request() as
+    the "mock HTTP server") — dispatch() -> GET intents -> POST claim -> POST report -> the
+    parked promise resolves -> engine.drain() -> the ledger-closing commit lands with the
+    reported cost/tokens; plus a failure-path variant proving one retry, no escalation.
+    Second block proves R7's lease semantics need no new mechanism: (a) staleMs:0 with a
+    still-pending remote dispatch is NOT aged (this.jobs gates sweepStale), proven with a
+    second tick; (b)+(c) combined in one test mirroring hardening.test.ts's crash-recovery
+    drill (engine1 dispatches then is abandoned before ever resolving — a 24h roleTimeoutMs
+    keeps RemoteDispatcher's own internal timer from firing within any test run, since
+    engine1 is never ticked/drained again) — a fresh engine2 with staleMs:0 ages the orphan,
+    re-dispatches, and the real runner API resolves the retry to a single successful close,
+    `phase` staying at spec (no escalation). Found and fixed one genuine race while writing
+    these: `launch()` (engine.ts) registers the job in `this.jobs`/`jobMeta` synchronously,
+    but only *calls* `dispatcher.dispatch()` (and so populates RemoteDispatcher's pending-call
+    map) after its checkout setup (`ensureRunCheckout`, real git-worktree I/O) resolves — a
+    poll issued the instant `engine.tick()` returns can race that setup. Added a small
+    `pollIntents()` retry helper in the test (a real workstation polling on an interval would
+    never notice this) rather than touching engine.ts, which is outside this task's surface
+    and scope point 3 says its dispatch call site is unchanged.
+
+  Test results: `npx vitest run packages/orchestrator packages/server` — 21 files, 215
+  passed, 1 skipped (live-smoke, pre-existing skip) — includes the full pre-existing
+  orchestrator suite (engine, hardening, hosted, router, schedule, shadow-*, etc.) passing
+  unmodified (AC9.1) plus the new wiring.test.ts (4/4). `npx tsc -p tsconfig.json` clean.
+  Full monorepo `npm test` (all packages concurrently) showed timeouts in this sandbox
+  under load — a different, unrelated set of tests failed on each of two full runs (e.g.
+  core/pr-ensure, core/stage-run, core/divergence, cli/upgrade — none of which touch this
+  task's files), all "Test timed out"/"Hook timed out" at near-identical multi-minute wall
+  clocks, and one run's log showed an unrelated background `git fetch`/fast-forward
+  ("Updating ...  moved.txt") interleaved with the test output — external contention in
+  this shared sandbox, not a regression. Re-ran `packages/core` and `packages/cli` alone:
+  both 100% pass (174/174, 32/32), confirming the exact tests that "failed" under full
+  concurrent load pass cleanly in isolation.
+
+  Implementer (round 2) response — addressing runs/runner-agent/review-05.md:
+
+  - F1 (major, fixed): start.ts's `assembleOrchestrator` no longer hands the
+    RemoteDispatcher to the Scheduler. Renamed the old `dispatcher` local to
+    `localDispatcher` (the headless-single-adapter-or-RoutingDispatcher choice,
+    computed unconditionally, exactly as before minus the `remote ??` prefix) and
+    built `common` (which both the Scheduler and the Engine spread) around
+    `localDispatcher` only. The Engine's own config now overrides with
+    `dispatcher: remote ?? localDispatcher` in its own object literal
+    (`new Engine({ ...common, dispatcher: remote ?? localDispatcher, ... })`), so
+    only the engine's dispatch route switches to remote when `runner.enabled`;
+    `new Scheduler(common)` is now unreachable from the RemoteDispatcher entirely,
+    matching the review's resolution direction exactly. Left a comment at the site
+    recording the failure mode (scheduler jobs carry no slug/branch;
+    `RemoteDispatcher.dispatch()` throws on that; `makeRunnerCallback` sources
+    intents only from `engine.inFlightDetail()` so a scheduler-parked promise
+    could never surface to a workstation regardless) and explicitly noting that
+    threading slug/branch through the scheduler to make sweeps remote-dispatchable
+    is out of this task's surface — an escalation, not something attempted here.
+    Did not add a new integration-level regression test exercising
+    `assembleOrchestrator` + `Scheduler.tick()` together under `runner.enabled`:
+    doing so needs a real `.agentic/adapters/<name>/manifest.json` on the toy repo
+    (`assembleOrchestrator` calls `loadHeadlessManifest` unconditionally, which
+    `makeToyRepo`'s bare git-init fixture does not carry, and none of this task's
+    other test files load a manifest from a toy fixture either — only from the
+    real monorepo root, e.g. router.test.ts/live-smoke.test.ts), which reads as
+    scaffolding beyond this round's fix; verified instead by (a) re-reading the
+    edited start.ts function end to end, (b) the untouched `common`/`Scheduler`
+    plumbing being identical to round 1 apart from which dispatcher object feeds
+    it, and (c) the full orchestrator+server suite (including schedule.test.ts's
+    three Scheduler end-to-end tests, unaffected since `runner` defaults
+    unset/false there) passing unmodified below.
+  - F2 (minor, rebutted — kept as-is): left `orchestrator/package.json`'s
+    `@agentic/server` devDependency and the resulting `package-lock.json` delta in
+    place; did not touch either this round. Reasoning: the task's own scope point
+    4 requires the new test to inject reports "directly through the server's
+    runner API handler" — i.e. the *real* `buildRunnerApi`/`createApp`, not a
+    hand-rolled stand-in — and this monorepo's only existing convention for a
+    package consuming another package's source (checked again this round: no test
+    anywhere imports a sibling package's `src/*.ts` via a bare relative path,
+    e.g. `../../server/src/...`; every cross-package consumer — `cli` depending
+    on both `server` and `orchestrator`, `server` depending on `core` — declares
+    the edge in `package.json`) is exactly what round 1 did. There is no cycle
+    (`@agentic/server` has no dependency, direct or transitive, on
+    `@agentic/orchestrator`) and the edge is devDependency-only (test-time, not
+    shipped). The review itself assessed this as "no cycle"/"low-risk" and left
+    fixing-vs-rebutting to implementer judgment; given eliminating it would mean
+    either violating scope point 4 (stub out the real handler) or introducing a
+    workspace-import pattern this repo does not otherwise use anywhere, rebutting
+    reads as the better outcome. G2 should ratify or reject this specific
+    surface deviation explicitly, per the review's ask.
+  - F3 (minor, PLAUSIBLE — acknowledged, not implemented): arm-time `baseOid`
+    capture is out of round-2 scope. Confirmed by re-reading the two files that
+    would need to carry it: `seam.ts`'s `DispatchRequest` (engine.ts:490's
+    `dispatcher.dispatch({...})` call site) has no `baseOid` field today, and the
+    engine is the only thing that knows the exact commit a dispatch was armed at
+    — both `seam.ts` and `engine.ts` are outside this task's declared
+    `file_contact_surface` (only `runner-dispatcher.ts` is in-surface on the
+    dispatcher side, and it never touches the repo by design, per its own doc
+    comment). Implementing this properly needs a decomposition-level decision
+    (does `DispatchRequest` grow a `baseOid` field the engine populates at
+    `launch()`, threaded through to `RemoteDispatcher.dispatch()`'s `PendingCall`
+    and surfaced via `pendingIntents()`?) that this task was never scoped to make
+    — review-03.md F5 flagged the assignment as task 05's in a doc comment, but
+    `05-wiring.yaml`'s scope (points 1-5 above) never actually names it, so
+    treating it as this round's silent scope expansion would risk exactly the
+    "quiet widening" the review warns against elsewhere. Flagging explicitly for
+    G2 to assign (either to this task in a round 3, to a new task, or to accept
+    the documented poll-time best-effort behavior as sufficient for this run) —
+    not fixed this round.
+  - F4 (minor, rebutted/acknowledged): agreed the literal AC7.1 wording ("aged
+    out within the configured staleMs window by the heartbeat") only demonstrates
+    as written across an engine restart (the second wiring.test.ts R7 test, a
+    fresh engine2) and not within one continuously-running engine, where
+    `RemoteDispatcher`'s own `roleTimeoutMs` timer would settle the promise (as
+    a rejection) before `sweepStale`'s `staleMs` window would otherwise have
+    aged it. This matches the task's own scope point 5's framing (a killed
+    workstation converges via re-dispatch on the next tick — proven — not
+    literally "aged out by the heartbeat" within a single process) and the
+    round-1 notes' description of the R7 test pair. Did not touch engine.ts (out
+    of surface, and scope point 3 explicitly says the engine's dispatch call
+    site — and by extension its aging mechanism — is unchanged). No test or
+    production code change for this finding; recorded here so G2 reconciles the
+    AC text against what round 1 + round 2 actually demonstrate rather than
+    reading it as literally proven.
+  - Also fixed the misattributed comment on `wiring.test.ts`'s `pollIntents`
+    helper the review flagged as a non-numbered observation: it previously
+    attributed the async gap being retried around to "checkout I/O"
+    (`ensureRunCheckout`/`ensureTaskCheckout`), but a `managesOwnWorkspace`
+    dispatcher (RemoteDispatcher is one) skips checkout entirely — the actual
+    await between `this.jobs`/`jobMeta` registration and `dispatcher.dispatch()`
+    being called is `this.source.frameworkRoots()` (engine.ts:489). Corrected the
+    comment to name that call instead; no behavior change (the retry logic itself
+    was already correct, only its explanation was wrong).
+
+  Files touched this round: `frontend/packages/orchestrator/src/start.ts` (F1),
+  `frontend/packages/orchestrator/test/wiring.test.ts` (comment fix only) — both
+  inside the declared `file_contact_surface`. No other files changed;
+  `orchestrator/package.json`/`package-lock.json` from round 1 are untouched
+  (see F2 rebuttal above).
+
+  Test results (round 2): `npx vitest run packages/orchestrator packages/server`
+  from `frontend/` — 24 test files (23 passed, 1 skipped — live-smoke, pre-existing
+  opt-in skip), 226 passed / 1 skipped / 227 total, ~165s wall clock. Includes the
+  full pre-existing orchestrator suite (engine, hardening, hosted, hosted schedule,
+  router, prefix-layout, seam, push, sync, shutdown, harvest, harvest-fold, all
+  three shadow replays) passing unmodified, `schedule.test.ts`'s three
+  Scheduler-end-to-end tests (unaffected — `runner` unset there, so `common` is
+  identical to before the F1 change) passing, and the new `wiring.test.ts` (4/4,
+  including both R7 lease-semantics tests). `npx tsc -p tsconfig.json` — clean, no
+  errors.

@@ -6,6 +6,11 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { resolveFrameworkRootsFromDisk } from '@agentic/core'
 
+// Re-exported so a working-tree-only consumer (runner-agent/src/agent.ts,
+// which never imports @agentic/core directly) can resolve its own clone's
+// runsRoot for harvestPathspecs without a new package dependency.
+export { resolveFrameworkRootsFromDisk }
+
 export type UsageFormat = 'json-stdout' | 'static-estimate' | 'ndjson-sum'
 
 export interface HeadlessManifest {

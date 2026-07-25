@@ -1,0 +1,85 @@
+id: 06-live-smoke
+title: Live smoke test — one real round-trip through the runner-agent path
+requirements: [R10]
+
+scope: |
+  Create an opt-in live smoke test `frontend/packages/orchestrator/test/live-smoke-runner.test.ts`,
+  analogous to the existing `live-smoke.test.ts` for `HeadlessDispatcher`. It:
+  1. Is skipped by default; enabled by `ORCH_LIVE_SMOKE_RUNNER=1`
+  2. Arms a real dispatch intent through a minimal engine setup with `RemoteDispatcher`
+  3. Runs the workstation agent as a child process (pointing at the same local server)
+  4. Waits for the workstation to claim, execute (a cheap prompt: "Reply with exactly the
+     word: pong"), and report
+  5. Asserts `ok: true`, `costUsd > 0`, `tokensIn > 0`, `tokensOut > 0`
+
+  The test uses the same adapter the existing live smoke uses (claude-code), and the same
+  neutral prompt. It spawns the server and agent as child processes, exercises the full
+  callback chain, and verifies the ledger entry is closed with real usage.
+
+file_contact_surface:
+  - frontend/packages/orchestrator/test/live-smoke-runner.test.ts
+
+acceptance_tests:
+  - AC10.1
+  - "When run manually with ORCH_LIVE_SMOKE_RUNNER=1, reports ok: true with costUsd, tokensIn, tokensOut all populated and greater than zero"
+
+depends_on: [04-workstation-agent, 05-wiring]
+
+status: pending
+
+notes: |
+  This test costs real money — it dispatches a real harness CLI invocation. It is
+  skipped in CI and only run manually. The test timeout should be generous (300s)
+  to account for harness startup and model latency.
+
+  Implementer round 1 (deviations/discoveries, all confined to the one file in
+  file_contact_surface):
+
+  - Arming the intent goes through a real `Engine.tick()` (not a hand-crafted
+    `RemoteDispatcher.dispatch()` call) over a real toy repo (`engine.helper.ts`'s
+    `makeToyRepo`) with a real bare "origin" (mirrors harvest-fold.test.ts's own
+    `addOrigin` helper, duplicated locally since this file's contact surface is
+    only itself) — this exercises the actual dispatch-decision path, not just the
+    dispatcher, and lets `engine.drain()` prove the ledger-closing bookkeeping
+    lands (the scope's "verifies the ledger entry is closed with real usage").
+  - `engine.tick()`'s own `promptBody()` generates a real, role-specific prompt
+    (analyst/spec.md framing) that cannot be substituted with the literal
+    "Reply with exactly the word: pong" from the call site. To keep the real,
+    paid harness invocation cheap and predictable (matching the scope's neutral
+    prompt requirement) regardless of what body the engine generates, the toy
+    repo's own `adapters/claude-code/manifest.json` (read from the real
+    `adapters/claude-code/manifest.json` at the repo root, then mutated) hardcodes
+    `headless.dispatch_prompt` to the literal neutral prompt with no `{role}`/
+    `{body}` placeholders left in it — so `buildCommand`'s substitution has
+    nothing to substitute against, and the harness always receives exactly that
+    literal string regardless of which role/body the engine's real dispatch
+    decision produced. Same trick in spirit as live-smoke.test.ts's own
+    `dispatchPrompt: '{body}'` override, adapted to a path where the body itself
+    isn't caller-supplied.
+  - Because the neutral prompt never writes `runs/toy/spec.md`, the harvest step
+    (`harvestPathspecs` → nothing to sweep) legitimately produces no harvest
+    branch — `executeIntent` already treats that as `pushed: false`, not a
+    failure (existing behavior, unmodified) — so the assertions only cover
+    `ok`/`costUsd`/`tokensIn`/`tokensOut`/ledger-closed, not a harvested file.
+  - The real HTTP listener the workstation child process polls is a small local
+    `node:http` adapter over `createApp(...).fetch`, not `@hono/node-server`:
+    `@hono/node-server` is not a declared dependency of `@agentic/orchestrator`
+    (only reachable today via hoisting through the `@agentic/server`
+    devDependency), and this task's file_contact_surface is only the test file
+    itself, so adding a real dependency to `package.json` was out of reach.
+    `hono`'s *types* are already relied on transitively the same way
+    (wiring.test.ts's `app.request(...)` needs them to typecheck) — this is not
+    a new class of reliance, just extended to a real listening socket, and the
+    adapter needed is ~15 lines of stdlib `node:http` + the global Fetch API.
+    Flagging for the reviewer/architect in case `@hono/node-server` should
+    become an explicit devDependency of the orchestrator package instead.
+  - `RemoteDispatcher`'s reported outcome is captured directly (decorating
+    `start.ts`'s own `makeRunnerCallback` rather than reimplementing it) so the
+    test can assert on the exact `DispatchOutcome` (`ok`/`costUsd`/`tokensIn`/
+    `tokensOut`) live-smoke.test.ts asserts on, in addition to the ledger entry
+    `Engine.closeDispatch` lands.
+  - Validated by: `npx tsc -p frontend/tsconfig.json` (clean), and
+    `npx vitest run` in `frontend/` (full suite: 47 files / 469 tests passed, 2
+    skipped — this file and live-smoke.test.ts, both skipped by default as
+    designed). Never run with `ORCH_LIVE_SMOKE_RUNNER=1` per the dispatch
+    instructions (real spend).

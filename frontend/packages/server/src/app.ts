@@ -2,7 +2,8 @@
 // its own sanctioned core seam (ADR-2): decisions over
 // planDecision/writeState, staging over planRunScaffold/stageRun. No route
 // here composes a sources/git.ts primitive directly (AC1.1).
-import { Hono } from 'hono'
+import { timingSafeEqual } from 'node:crypto'
+import { Hono, type Context } from 'hono'
 import {
   buildEvidenceRollup,
   buildLexicon,
@@ -35,6 +36,7 @@ import {
   type RunSource,
 } from '@agentic/core'
 import { GenerationCache } from './cache.ts'
+import type { DispatchOutcome, RunnerApi } from './runner-api.ts'
 import { verifySignature, type WebhookConfig } from './webhook.ts'
 
 export interface AppDeps {
@@ -44,6 +46,8 @@ export interface AppDeps {
   subscribe?: (send: (event: string) => void) => () => void
   /** GitHub webhook intake; absent → the route does not exist. */
   webhook?: WebhookConfig
+  /** Runner-agent poll/claim/report surface (R6); absent → the routes do not exist. */
+  runnerApi?: RunnerApi
 }
 
 export function createApp(deps: AppDeps): Hono {
@@ -72,6 +76,61 @@ export function createApp(deps: AppDeps): Hono {
       } catch (e) {
         return c.json({ error: (e as Error).message }, 500)
       }
+    })
+  }
+
+  // Runner-agent surface (R6): every route is service-token authenticated,
+  // matching the webhook's config-gated existence — absent the token (or a
+  // callback to serve it), the routes above never mount at all.
+  if (deps.runnerApi) {
+    const runner = deps.runnerApi
+    // Constant-time, matching webhook.ts's own convention (verifySignature) —
+    // a naive `===` compare leaks token-prefix timing to anyone who can reach
+    // the port (review-03.md F4).
+    const authorized = (c: Context): boolean => {
+      const header = c.req.header('authorization') ?? ''
+      const presented = header.startsWith('Bearer ') ? header.slice('Bearer '.length) : undefined
+      if (!presented) return false
+      const a = Buffer.from(presented)
+      const b = Buffer.from(runner.token)
+      return a.length === b.length && timingSafeEqual(a, b)
+    }
+
+    app.get('/api/runner/intents', async (c) => {
+      if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401)
+      // repoUrl rides the same response (review-03.md F6): task 04's
+      // workstation agent clones from this rather than requiring
+      // `--repo-url` on every invocation; null when unconfigured/
+      // unresolvable, in which case the agent's `--repo-url` flag is the
+      // documented fallback.
+      const [intents, repoUrl] = await Promise.all([runner.listIntents(), runner.repoUrl()])
+      return c.json({ intents, repoUrl })
+    })
+
+    app.post('/api/runner/claim', async (c) => {
+      if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401)
+      let body: { key?: string }
+      try {
+        body = await c.req.json()
+      } catch {
+        return c.json({ error: 'invalid JSON body' }, 400)
+      }
+      if (!body.key) return c.json({ error: 'key is required' }, 400)
+      const claimed = runner.claim(body.key)
+      return c.json(claimed ? { claimed: true } : { claimed: false, reason: 'already-claimed' })
+    })
+
+    app.post('/api/runner/report', async (c) => {
+      if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401)
+      let body: { key?: string; outcome?: DispatchOutcome }
+      try {
+        body = await c.req.json()
+      } catch {
+        return c.json({ error: 'invalid JSON body' }, 400)
+      }
+      if (!body.key || !body.outcome) return c.json({ error: 'key and outcome are required' }, 400)
+      const resolved = runner.report(body.key, body.outcome)
+      return c.json({ resolved })
     })
   }
 

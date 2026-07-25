@@ -5,8 +5,11 @@
 // minutes late, labeled only "Command failed: claude -p …").
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
+import { Engine } from '../src/engine.ts'
 import type { HeadlessManifest } from '../src/manifest.ts'
 import { HeadlessDispatcher } from '../src/seam.ts'
+import { removeRunCheckout } from '../src/workspace.ts'
+import { agentCommit, FakeDispatcher, humanDecide, makeToyRepo, PLAN, SPEC, taskYaml, TEST_REGISTRY } from './engine.helper.ts'
 
 const shManifest = (script: string): HeadlessManifest => ({
   adapter: 'toy-sh',
@@ -133,6 +136,81 @@ describe('usage_report format ndjson-sum (opencode: one step_finish event per ag
     expect(outcome.ok).toBe(false)
     expect(outcome.error).toBe('harness produced no parseable JSON output')
   })
+})
+
+describe('the engine threads run identity through the seam (R2)', () => {
+  const BOT = { name: 'agentic-orchestrator', email: 'orchestrator@agentic.invalid' }
+
+  it("launch() passes the run's slug and branch in the DispatchRequest", async () => {
+    const { dir, clock } = makeToyRepo()
+    const dispatcher = new FakeDispatcher((req) => {
+      if (req.role === 'analyst') agentCommit(req.cwd, clock, { 'runs/toy/spec.md': SPEC }, 'toy: spec')
+      return {}
+    })
+    const engine = new Engine({ repoDir: dir, identity: BOT, dispatcher, registry: TEST_REGISTRY, staleMs: 10 * 60 * 1000 })
+    try {
+      await engine.tick()
+      await engine.drain()
+      expect(dispatcher.calls.length).toBeGreaterThan(0)
+      const call = dispatcher.calls[0]!
+      expect(call.slug).toBe('toy')
+      expect(call.branch).toBe('run/toy')
+    } finally {
+      await removeRunCheckout(dir, 'run/toy')
+    }
+  })
+
+  it(
+    "launch() also threads the dispatch intent's task and round (ADR-7), so a remote dispatcher can key on them",
+    { timeout: 60_000 },
+    async () => {
+      const { dir, clock } = makeToyRepo()
+      const dispatcher = new FakeDispatcher((req) => {
+        if (req.role === 'analyst') agentCommit(req.cwd, clock, { 'runs/toy/spec.md': SPEC }, 'toy: spec')
+        if (req.role === 'architect')
+          agentCommit(
+            req.cwd,
+            clock,
+            { 'runs/toy/plan.md': PLAN, 'runs/toy/tasks/01-core.yaml': taskYaml('01-core', 'src/core.py') },
+            'toy: plan and task breakdown',
+          )
+        if (req.role === 'implementer') agentCommit(req.cwd, clock, { 'src/core.py': '# core\n' }, 'toy: task 01-core round 1')
+        return {}
+      })
+      const engine = new Engine({ repoDir: dir, identity: BOT, dispatcher, registry: TEST_REGISTRY, staleMs: 10 * 60 * 1000 })
+      try {
+        // One tick+drain per phase step (not the fixed-point `reconcile` loop —
+        // this run never scripts a reviewer, so driving to a full rest state
+        // would spin re-dispatching it); each step only needs the one dispatch
+        // it produces at that phase.
+        await engine.tick()
+        await engine.drain() // dispatches analyst -> commits spec.md
+        await humanDecide(dir, { action: 'approve', gate: 'G0', burden: 'confirmation' })
+        await engine.tick()
+        await engine.drain() // dispatches architect -> commits plan.md + task 01-core
+        await humanDecide(dir, { action: 'approve', gate: 'G1', burden: 'confirmation' })
+        // Advancing into 'implement' and seeding the first implementer dispatch can take
+        // more than one tick; stop as soon as it's dispatched rather than looping to a
+        // full rest state — this run never scripts a reviewer, so a fixed-point loop
+        // would spin re-dispatching it once the implementer's commit lands.
+        for (let i = 0; i < 10 && !dispatcher.calls.some((c) => c.role === 'implementer'); i++) {
+          await engine.tick()
+          await engine.drain()
+        }
+
+        // The dispatches that carry no task/round (analyst, architect) thread nulls;
+        // the task-scoped implementer dispatch threads its real task and round 1.
+        const analystCall = dispatcher.calls.find((c) => c.role === 'analyst')!
+        expect(analystCall.task).toBeNull()
+        expect(analystCall.round).toBeNull()
+        const implementerCall = dispatcher.calls.find((c) => c.role === 'implementer')!
+        expect(implementerCall.task).toBe('01-core')
+        expect(implementerCall.round).toBe(1)
+      } finally {
+        await removeRunCheckout(dir, 'run/toy')
+      }
+    },
+  )
 })
 
 describe('operator force-drain (#150)', () => {

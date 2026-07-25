@@ -12,6 +12,16 @@ export interface DispatchRequest {
   /** Run-specific prompt body; the adapter's template wraps it. */
   body: string
   timeoutMs: number
+  /** Run identity (optional): the engine always sets these; HeadlessDispatcher ignores them. */
+  slug?: string
+  branch?: string
+  /** Task/round identity (optional, task-scoped roles only): the engine always sets these
+   *  from the dispatch intent (null for non-task-scoped roles); HeadlessDispatcher ignores
+   *  them. RemoteDispatcher (runner-dispatcher.ts) keys its pending map directly from these
+   *  fields, so a parallel same-role dispatch (e.g. two implementers on distinct tasks)
+   *  correlates on the request itself rather than on dispatch or poll order (ADR-7). */
+  task?: string | null
+  round?: number | null
 }
 
 export interface DispatchOutcome {
@@ -23,10 +33,22 @@ export interface DispatchOutcome {
   error: string | null
   /** Retrying cannot help (e.g. a fold conflict = plan defect): escalate now. */
   fatal?: boolean
+  /** Present when the dispatcher harvested the agent's work to a branch the
+   *  engine folds (the remote runner, run "runner-agent" ADR-3/ADR-4). `base`
+   *  is the commit the harvest branch was committed on top of (the dispatch's
+   *  pinned base OID) — what the fold rebases onto the run tip. Null/unset
+   *  for the local headless dispatcher, which leaves working-tree changes for
+   *  the engine's own local checkout to carry directly on the run branch. */
+  harvest?: { branch: string; base: string } | null
 }
 
 export interface Dispatcher {
   readonly adapter: string
+  /** True when this dispatcher creates its own workspace and harvests its own work (the
+   *  remote runner). The engine then creates no local checkout and, on a harvest handoff,
+   *  folds the harvested branch instead of running its own local harvest(). Unset for
+   *  HeadlessDispatcher (local checkout, local harvest). */
+  readonly managesOwnWorkspace?: boolean
   /** The adapter that would run this role (routing dispatchers differ per role). */
   adapterFor?(role: string): string
   dispatch(req: DispatchRequest): Promise<DispatchOutcome>

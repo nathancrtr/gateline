@@ -3,8 +3,8 @@
 
 run: agents-md-adapter
 branch: run/agents-md-adapter
-phase: implement # spec | plan | implement | integrate | release | done | paused
-paused_reason: null # set when phase=paused: budget-exhausted | round-cap | escalation | gate-declined
+phase: paused # spec | plan | implement | integrate | release | done | paused
+paused_reason: gate-declined # set when phase=paused: budget-exhausted | round-cap | escalation | gate-declined
 
 budget:
   cost_limit_usd: 50 # exhaustion pauses the run; it never silently degrades
@@ -103,7 +103,14 @@ gates:
       notes: null,
       burden: confirmation
     }
-  G2: { approved: false, by: null, at: null, notes: null }
+  G2:
+    {
+      approved: false,
+      by: Nathan Carter,
+      at: 2026-07-25T05:07:27.388Z,
+      notes: "Superseded by #116/#137/#187 already on main; the AGENTS.md adapter
+        capability this run targeted shipped a different way. Closing."
+    }
   G3: { approved: false, by: null, at: null, notes: null }
 
 tasks:
@@ -143,8 +150,8 @@ escalations:
       resolved: true,
       resolved_by: Nathan Carter,
       resolved_at: 2026-07-25T05:07:14.861Z,
-      resolution: "Superseded: the AGENTS.md-dialect rendering capability this run set out
-        to build already shipped on main via a different path (#116 AGENTS.md
-        split, #137 opencode adapter, #187 AGENTS.md refresh). Closing this run
-        rather than resolving the AC6.1 grep-scope question in place."
+      resolution: "Superseded: the AGENTS.md-dialect rendering capability this run set
+        out to build already shipped on main via a different path (#116
+        AGENTS.md split, #137 opencode adapter, #187 AGENTS.md refresh). Closing
+        this run rather than resolving the AC6.1 grep-scope question in place."
     }

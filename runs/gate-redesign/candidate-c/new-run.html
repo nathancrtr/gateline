@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<!-- Theme: Warm light — editorial form with italic serif hero (Stripe pattern) and live state.yaml preview.
+     Primary type: Playfair Display italic (hero). Secondary: Inter (body/UI). Mono: JetBrains Mono.
+     Direction C (editorial) + Direction B (tinted chips, structured preview, blueprint motif on preview surface). -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gate — New Run</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,700&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
+<style>
+/* ── Design tokens ── */
+:root {
+  --ground: #faf8f5;
+  --surface: #fffdf9;
+  --surface-elevated: #ffffff;
+  --surface-tint: #f3f0eb;
+  --surface-tint-blue: #f4f7fb;
+  --line: #e8e3dc;
+  --line-subtle: #f0ebe4;
+  --text-primary: #1b1f24;
+  --text-secondary: #59636e;
+  --text-tertiary: #8b949e;
+  --text-inverse: #ffffff;
+
+  --accent: #2563eb;
+  --accent-bg: #eff6ff;
+  --accent-text: #1d4ed8;
+  --accent-border: #93bbfd;
+
+  --ok-bg: #dafbe1;
+  --ok-text: #1a7f37;
+  --ok-border: #8ddb9a;
+
+  --warn-bg: #fff1c0;
+  --warn-text: #946a00;
+  --warn-border: #e6c54a;
+
+  --bad-bg: #ffebe9;
+  --bad-text: #cf222e;
+  --bad-border: #f7999f;
+
+  --purple-bg: #fbefff;
+  --purple-text: #8250df;
+
+  --font-hero: 'Playfair Display', Georgia, serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --shadow-elevated: 0 0 0 1px rgba(29,27,24,0.06), 0 4px 12px -2px rgba(29,27,24,0.04), 0 8px 20px 0 rgba(29,27,24,0.08);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+body {
+  font-family: var(--font-body);
+  background: var(--ground);
+  color: var(--text-primary);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* ── Layout ── */
+.app-shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 48px 40px 80px;
+}
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 440px;
+  gap: 40px;
+  align-items: start;
+}
+
+/* ── Typography ── */
+.hero-heading {
+  font-family: var(--font-hero);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 2.5rem;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  color: var(--text-primary);
+}
+.section-heading {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.label-text {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+.caption-text {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+.mono-text {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* ── Form section ── */
+.form-section { display: flex; flex-direction: column; gap: 28px; }
+
+/* Field group */
+.field-group { display: flex; flex-direction: column; gap: 6px; }
+.field-group label { font-weight: 500; font-size: 0.8125rem; color: var(--text-primary); }
+.field-group .field-hint {
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
+/* Inputs — inset well, radius-sm */
+.form-input, .form-select, .form-textarea {
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  padding: 10px 14px;
+  background: var(--surface-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.form-input:focus, .form-select:focus, .form-textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+.form-input.mono { font-family: var(--font-mono); font-size: 0.875rem; }
+.form-textarea { resize: vertical; min-height: 80px; }
+.form-select { appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238b949e' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+
+/* Slug row */
+.slug-row { display: flex; align-items: center; gap: 8px; }
+.slug-hint {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+/* Profile buttons */
+.profile-group { display: flex; gap: 0; }
+.profile-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 12px;
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--surface-elevated);
+  border: 1px solid var(--line);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.profile-btn:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.profile-btn:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.profile-btn + .profile-btn { border-left: none; }
+.profile-btn:hover { border-color: var(--accent-border); background: var(--accent-bg); }
+.profile-btn.selected {
+  background: var(--accent-bg);
+  color: var(--accent-text);
+  border-color: var(--accent-border);
+  font-weight: 600;
+}
+.profile-gates {
+  display: flex;
+  gap: 3px;
+}
+.profile-gate-pill {
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  font-weight: 500;
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--text-tertiary);
+  border: 1px dashed var(--line);
+  line-height: 1.4;
+}
+
+/* Intent brief sections */
+.brief-section {
+  background: var(--surface);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-md);
+  padding: 0;
+  overflow: hidden;
+}
+.brief-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--surface-tint);
+  border-bottom: 1px solid var(--line-subtle);
+}
+.brief-header h3 {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+}
+.brief-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.brief-status .required-label {
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+}
+.brief-indicator {
+  font-size: 0.75rem;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+.brief-indicator.filled {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+}
+.brief-indicator.empty {
+  background: var(--surface-tint);
+  color: var(--text-tertiary);
+  border: 1px dashed var(--line);
+}
+.brief-section textarea {
+  border: none;
+  border-radius: 0;
+  width: 100%;
+  padding: 14px 16px;
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  resize: vertical;
+  min-height: 72px;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+}
+
+/* Provenance fields */
+.provenance-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+
+/* Recorded as */
+.recorded-as {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  padding: 10px 14px;
+  background: var(--surface-tint);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.recorded-as::before {
+  content: 'recorded as';
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+}
+
+/* Primary button */
+.primary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 28px;
+  background: var(--accent);
+  color: var(--text-inverse);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s ease;
+  align-self: flex-start;
+}
+.primary-btn:hover { background: #1d4ed8; }
+
+/* ── Validation error ── */
+.field-error {
+  font-size: 0.75rem;
+  color: var(--bad-text);
+  margin-top: 4px;
+  font-weight: 500;
+}
+.form-input.error { border-color: var(--bad-border); }
+
+/* ── Right column: Record Preview ── */
+.preview-panel {
+  position: sticky;
+  top: 24px;
+  background: var(--surface-tint);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 28px 24px 24px;
+  box-shadow: var(--shadow-elevated);
+}
+/* Subtle blueprint grid motif on the preview background */
+.preview-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+  background-image:
+    linear-gradient(rgba(29,27,24,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(29,27,24,0.025) 1px, transparent 1px);
+  background-size: 20px 20px;
+  pointer-events: none;
+  z-index: 0;
+}
+.preview-panel > * { position: relative; z-index: 1; }
+
+.preview-label {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.6875rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 16px;
+}
+
+/* Branch line */
+.branch-line {
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  color: var(--text-tertiary);
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.branch-line strong {
+  color: var(--accent-text);
+  font-weight: 500;
+}
+
+/* Genesis commit chip — the HERO element */
+.genesis-chip {
+  background: var(--surface-elevated);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px -2px rgba(29,27,24,0.06);
+}
+.genesis-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.status-dot.ready { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-bg); }
+.status-dot.pending { background: var(--line); border: 2px solid var(--text-tertiary); }
+.genesis-label {
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+}
+.genesis-message {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+.genesis-author {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-subtle);
+}
+
+/* File tree */
+.file-tree { margin-bottom: 16px; }
+.file-tree-title {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+.file-tree-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-primary);
+  border-radius: 4px;
+}
+.file-tree-item:hover { background: var(--surface-elevated); }
+.file-badge {
+  font-family: var(--font-body);
+  font-size: 0.625rem;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--ok-bg);
+  color: var(--ok-text);
+  white-space: nowrap;
+}
+.file-counter {
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  color: var(--text-tertiary);
+  margin-left: auto;
+}
+.section-checklist {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+  padding-left: 24px;
+}
+.checklist-item {
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  color: var(--text-tertiary);
+}
+.checklist-item.done { color: var(--ok-text); }
+
+/* Collapsible state.yaml */
+.state-yaml-details {
+  margin-bottom: 16px;
+}
+.state-yaml-details summary {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 6px 0;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.state-yaml-details summary::before {
+  content: '▸';
+  font-size: 0.625rem;
+  color: var(--text-tertiary);
+  transition: transform 0.15s ease;
+}
+.state-yaml-details[open] summary::before { transform: rotate(90deg); }
+.state-yaml-content {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  background: var(--surface-elevated);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  white-space: pre;
+  overflow-x: auto;
+  margin-top: 6px;
+}
+.state-yaml-summary-text {
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  color: var(--text-tertiary);
+}
+
+/* Closing note */
+.preview-note {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+  font-style: italic;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+/* ── Success flash ── */
+.flash-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 20px;
+  border-radius: var(--radius-md);
+  margin-top: 24px;
+}
+.flash-success {
+  background: var(--ok-bg);
+  border: 1px solid var(--ok-border);
+  color: var(--ok-text);
+}
+.flash-error {
+  background: var(--bad-bg);
+  border: 1px solid var(--bad-border);
+  color: var(--bad-text);
+}
+.flash-banner .flash-glyph { font-size: 1.125rem; flex-shrink: 0; }
+.flash-body { font-size: 0.875rem; line-height: 1.5; }
+.flash-body strong { font-weight: 600; }
+.flash-body code {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  background: rgba(0,0,0,0.06);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+
+/* Divider */
+.state-divider {
+  margin: 64px 0 40px;
+  border: none;
+  border-top: 1px solid var(--line);
+}
+.state-label {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  text-align: center;
+  margin: -10px auto 32px;
+  background: var(--ground);
+  display: table;
+  padding: 0 16px;
+}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- ═══ Primary state: Partially filled form + live preview ═══ -->
+  <h1 class="hero-heading" style="margin-bottom:28px;">New run</h1>
+
+  <div class="two-col">
+
+    <!-- Left: Form -->
+    <div class="form-section">
+
+      <!-- Source -->
+      <div class="field-group">
+        <label>Source</label>
+        <select class="form-select">
+          <option selected>agentic-sandbox</option>
+        </select>
+      </div>
+
+      <!-- Title -->
+      <div class="field-group">
+        <label for="run-title">Title</label>
+        <input id="run-title" class="form-input" type="text" value="CSV importer" placeholder="What should this run accomplish?">
+      </div>
+
+      <!-- Slug -->
+      <div class="field-group">
+        <label for="run-slug">Slug</label>
+        <div class="slug-row">
+          <input id="run-slug" class="form-input mono" type="text" value="csv-importer" placeholder="auto-suggested-from-title">
+          <span class="slug-hint">→ run/csv-importer</span>
+        </div>
+      </div>
+
+      <!-- Profile -->
+      <div class="field-group">
+        <label>Profile</label>
+        <div class="profile-group">
+          <button class="profile-btn">
+            <strong>patch</strong>
+            <span class="profile-gates">
+              <span class="profile-gate-pill">G1</span>
+              <span class="profile-gate-pill">G2</span>
+            </span>
+          </button>
+          <button class="profile-btn selected">
+            <strong>standard</strong>
+            <span class="profile-gates">
+              <span class="profile-gate-pill">G0</span>
+              <span class="profile-gate-pill">G1</span>
+              <span class="profile-gate-pill">G2</span>
+            </span>
+          </button>
+          <button class="profile-btn">
+            <strong>full</strong>
+            <span class="profile-gates">
+              <span class="profile-gate-pill">G0</span>
+              <span class="profile-gate-pill">G1</span>
+              <span class="profile-gate-pill">G2</span>
+              <span class="profile-gate-pill">G3</span>
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Budget -->
+      <div class="field-group">
+        <label for="run-budget">Budget (USD)</label>
+        <input id="run-budget" class="form-input" type="number" value="25" placeholder="Leave blank for unmetered" style="max-width:180px;">
+        <span class="field-hint">Leave blank for unmetered</span>
+      </div>
+
+      <!-- Intent brief — Problem (filled) -->
+      <div class="brief-section">
+        <div class="brief-header">
+          <h3>## Problem</h3>
+          <span class="brief-status">
+            <span class="required-label">required</span>
+            <span class="brief-indicator filled">✓</span>
+          </span>
+        </div>
+        <textarea placeholder="Describe the problem this run addresses...">Users cannot import CSV files larger than 10MB without the application freezing. The current streaming parser drops rows silently on malformed input with no error reporting.</textarea>
+      </div>
+
+      <!-- Intent brief — Motivation (filled) -->
+      <div class="brief-section">
+        <div class="brief-header">
+          <h3>## Motivation</h3>
+          <span class="brief-status">
+            <span class="required-label">required</span>
+            <span class="brief-indicator filled">✓</span>
+          </span>
+        </div>
+        <textarea placeholder="Why does this matter?">CSV import is the primary onboarding path for enterprise customers. Three accounts churned last quarter citing import failures as the reason.</textarea>
+      </div>
+
+      <!-- Intent brief — Constraints (empty) -->
+      <div class="brief-section">
+        <div class="brief-header">
+          <h3>## Constraints</h3>
+          <span class="brief-status">
+            <span class="required-label">required</span>
+            <span class="brief-indicator empty">·</span>
+          </span>
+        </div>
+        <textarea placeholder="Known constraints the solution must respect..."></textarea>
+      </div>
+
+      <!-- Intent brief — Out of scope (empty) -->
+      <div class="brief-section">
+        <div class="brief-header">
+          <h3>## Out of scope</h3>
+          <span class="brief-status">
+            <span class="required-label">required</span>
+            <span class="brief-indicator empty">·</span>
+          </span>
+        </div>
+        <textarea placeholder="Explicitly out-of-scope items..."></textarea>
+      </div>
+
+      <!-- Provenance -->
+      <div class="field-group">
+        <label>Provenance <span class="field-hint">(optional)</span></label>
+        <div class="provenance-row">
+          <div class="field-group">
+            <label style="font-weight:400;font-size:0.75rem;color:var(--text-tertiary);">Source</label>
+            <input class="form-input" type="text" value="linear-issue" placeholder="e.g. linear">
+          </div>
+          <div class="field-group">
+            <label style="font-weight:400;font-size:0.75rem;color:var(--text-tertiary);">Ref</label>
+            <input class="form-input" type="text" value="ENG-421" placeholder="e.g. ENG-421">
+          </div>
+          <div class="field-group">
+            <label style="font-weight:400;font-size:0.75rem;color:var(--text-tertiary);">URL</label>
+            <input class="form-input" type="text" value="" placeholder="https://...">
+          </div>
+        </div>
+      </div>
+
+      <!-- Recorded as -->
+      <div class="field-group">
+        <label>Recorded as</label>
+        <div class="recorded-as">Nathan Carter &lt;nathan@e14s.example&gt;</div>
+      </div>
+
+      <!-- Stage button -->
+      <button class="primary-btn">Stage run</button>
+    </div>
+
+    <!-- Right: Live preview -->
+    <aside class="preview-panel">
+      <p class="preview-label">The record this stages · live preview</p>
+
+      <div class="branch-line">
+        new branch <strong>run/csv-importer</strong>
+      </div>
+
+      <!-- Genesis commit chip -->
+      <div class="genesis-chip">
+        <div class="genesis-status">
+          <span class="status-dot ready"></span>
+          <span class="genesis-label">ready to stage</span>
+        </div>
+        <div class="genesis-message">
+          state(csv-importer): staged by Nathan Carter [client-key: a3f7c8d2-9e1b-4a5c-8f3d-7b2e6a1c9d4f]
+        </div>
+        <div class="genesis-author">
+          Nathan Carter &lt;nathan@e14s.example&gt; — author &amp; committer
+        </div>
+      </div>
+
+      <!-- File tree -->
+      <div class="file-tree">
+        <div class="file-tree-title">Files staged</div>
+        <div class="file-tree-item">
+          📄 runs/csv-importer/state.yaml
+          <span class="file-badge">new</span>
+        </div>
+        <div class="file-tree-item">
+          📄 runs/csv-importer/intent-brief.md
+          <span class="file-badge">new</span>
+          <span class="file-counter">2 of 4</span>
+        </div>
+        <div class="section-checklist">
+          <span class="checklist-item done">✓ Problem</span>
+          <span class="checklist-item done">✓ Motivation</span>
+          <span class="checklist-item">· Constraints</span>
+          <span class="checklist-item">· Out of scope</span>
+        </div>
+      </div>
+
+      <!-- Collapsible state.yaml -->
+      <details class="state-yaml-details">
+        <summary>state.yaml <span class="state-yaml-summary-text">(34 lines)</span></summary>
+        <div class="state-yaml-content">slug: csv-importer
+title: CSV importer
+profile: standard
+budget:
+  limit: 25
+  spent: 0
+provenance:
+  source: linear-issue
+  ref: ENG-421
+  url: null
+gates:
+  G0: { approved: false, decided: false }
+  G1: { approved: false, decided: false }
+  G2: { approved: false, decided: false }
+tasks: []
+escalations: []
+phase: staged
+pausedReason: staged
+createdAt: 2026-07-24T14:32:00Z
+updatedAt: 2026-07-24T14:32:00Z
+recordedBy:
+  name: Nathan Carter
+  email: nathan@e14s.example
+clientKey: a3f7c8d2-9e1b-4a5c-8f3d-7b2e6a1c9d4f</div>
+      </details>
+
+      <p class="preview-note">Staging commits this record. Nothing else happens. No agent dispatches, no budget meters — the run rests at <strong>staged</strong> until you arm it.</p>
+    </aside>
+  </div>
+
+  <!-- ═══ Alternative states ═══ -->
+  <hr class="state-divider">
+  <p class="state-label">Alternative states</p>
+
+  <!-- Empty form (sketch) -->
+  <div style="margin-bottom:40px;">
+    <h2 class="hero-heading" style="font-size:1.5rem;margin-bottom:16px;">New run (empty)</h2>
+    <div class="two-col">
+      <div class="form-section">
+        <div class="field-group"><label>Source</label><select class="form-select"><option selected>agentic-sandbox</option></select></div>
+        <div class="field-group"><label>Title</label><input class="form-input" type="text" placeholder="What should this run accomplish?"></div>
+        <div class="field-group">
+          <label>Slug</label>
+          <div class="slug-row"><input class="form-input mono" type="text" placeholder="auto-suggested-from-title"><span class="slug-hint">→ run/—</span></div>
+        </div>
+        <div class="field-group">
+          <label>Profile</label>
+          <div class="profile-group">
+            <button class="profile-btn"><strong>patch</strong><span class="profile-gates"><span class="profile-gate-pill">G1</span><span class="profile-gate-pill">G2</span></span></button>
+            <button class="profile-btn selected"><strong>standard</strong><span class="profile-gates"><span class="profile-gate-pill">G0</span><span class="profile-gate-pill">G1</span><span class="profile-gate-pill">G2</span></span></button>
+            <button class="profile-btn"><strong>full</strong><span class="profile-gates"><span class="profile-gate-pill">G0</span><span class="profile-gate-pill">G1</span><span class="profile-gate-pill">G2</span><span class="profile-gate-pill">G3</span></span></button>
+          </div>
+        </div>
+        <div class="field-group"><label>Budget (USD)</label><input class="form-input" type="number" placeholder="Leave blank for unmetered" style="max-width:180px;"></div>
+        <div class="brief-section"><div class="brief-header"><h3>## Problem</h3><span class="brief-status"><span class="required-label">required</span><span class="brief-indicator empty">·</span></span></div><textarea placeholder="Describe the problem this run addresses..."></textarea></div>
+        <div class="brief-section"><div class="brief-header"><h3>## Motivation</h3><span class="brief-status"><span class="required-label">required</span><span class="brief-indicator empty">·</span></span></div><textarea placeholder="Why does this matter?"></textarea></div>
+        <div class="brief-section"><div class="brief-header"><h3>## Constraints</h3><span class="brief-status"><span class="required-label">required</span><span class="brief-indicator empty">·</span></span></div><textarea placeholder="Known constraints..."></textarea></div>
+        <div class="brief-section"><div class="brief-header"><h3>## Out of scope</h3><span class="brief-status"><span class="required-label">required</span><span class="brief-indicator empty">·</span></span></div><textarea placeholder="Explicitly out-of-scope..."></textarea></div>
+        <div class="field-group"><label>Recorded as</label><div class="recorded-as">Nathan Carter &lt;nathan@e14s.example&gt;</div></div>
+        <button class="primary-btn">Stage run</button>
+      </div>
+      <aside class="preview-panel">
+        <p class="preview-label">The record this stages · live preview</p>
+        <div class="branch-line">new branch <strong>run/—</strong></div>
+        <div class="genesis-chip">
+          <div class="genesis-status"><span class="status-dot pending"></span><span class="genesis-label">waiting for input</span></div>
+          <div class="genesis-message" style="color:var(--text-tertiary);">Fill in the run details to preview the commit…</div>
+        </div>
+        <p class="preview-note">Staging commits this record. Nothing else happens.</p>
+      </aside>
+    </div>
+  </div>
+
+  <!-- Validation error (sketch — invalid slug) -->
+  <div style="margin-bottom:40px;">
+    <h2 class="hero-heading" style="font-size:1.5rem;margin-bottom:16px;">New run (validation error)</h2>
+    <div class="two-col">
+      <div class="form-section">
+        <div class="field-group">
+          <label for="bad-slug">Slug</label>
+          <div class="slug-row">
+            <input id="bad-slug" class="form-input mono error" type="text" value="CSV Importer!">
+            <span class="slug-hint">→ run/CSV Importer!</span>
+          </div>
+          <span class="field-error">Slug must match ^[a-z0-9][a-z0-9-]*$ — lowercase, digits, and hyphens only; must start with a letter or digit.</span>
+        </div>
+        <div class="field-group"><label>Title</label><input class="form-input" type="text" value="CSV Importer"></div>
+        <button class="primary-btn" style="opacity:0.5;cursor:not-allowed;">Stage run</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Submission success flash -->
+  <div style="margin-bottom:40px;">
+    <h2 class="hero-heading" style="font-size:1.5rem;margin-bottom:16px;">New run (submitted)</h2>
+    <div class="flash-banner flash-success">
+      <span class="flash-glyph">✓</span>
+      <div class="flash-body">
+        <strong>Run staged successfully.</strong> Committed as <code>a3f7c8d2</code> on branch <code>run/csv-importer</code>.
+        <a href="#" style="color:var(--ok-text);font-weight:600;text-decoration:underline;">Open run →</a>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

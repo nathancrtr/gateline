@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+<!--
+  Candidate A · Inbox
+  Recommended theme: WARM LIGHT (paper). Single theme, committed.
+  Type roles: Inter (UI/body/headers — all chrome) · JetBrains Mono (paths, slugs, code). Newsreader serif is reserved for the run-detail reading body only.
+  Signature motif: gate-sigil mark (two posts + crossbar) + blueprint-grid reserved for the New Run preview.
+-->
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1280">
+<title>Gate — Inbox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    /* warm light paper palette */
+    --ground:#faf7f1;          /* warm paper ground */
+    --surface:#ffffff;
+    --surface-2:#f4efe6;        /* tinted warm ground */
+    --surface-3:#efe9de;       /* deeper tint */
+    --ink:#24201c;             /* warm near-black, never pure */
+    --ink-2:#4d4742;
+    --muted:#7a726a;
+    --faint:#756b61;           /* darkened to clear WCAG AA small text on paper ground */
+    --line:#e7e0d3;            /* warm hairline */
+    --line-cool:#d8d2c8;       /* cool-ish border for chips */
+    --accent:#a04423;          /* deep terracotta brand */
+    --accent-tint:#f5e9e0;
+    --accent-ink:#7a3318;
+
+    /* status tinted chips (GitHub Primer pattern, never solid filled) */
+    --ok-bg:#eaf3e6; --ok-ink:#256b3a; --ok-line:#cfe3c6;
+    --bad-bg:#fbe9e6; --bad-ink:#a02822; --bad-line:#f0cdc6;
+    --warn-bg:#fbf1dd; --warn-ink:#8a5a12; --warn-line:#ecd9a8;
+    --pend-bg:#f0ede7; --pend-ink:#6b6259; --pend-line:#d8d2c8;
+    --info-bg:#eaf0f5; --info-ink:#2f5d7a; --info-line:#cfe0ec;
+
+    --shadow-lift: 0 0 0 1px #e7e0d3aa, 0 1px 2px #24201c0a, 0 8px 22px -6px #24201c1a;
+    --shadow-soft: 0 1px 2px #24201c0a;
+
+    --r-xs:4px; --r-sm:6px; --r-md:8px; --r-lg:12px; --r-xl:16px;
+    --maxw:1080px;
+
+    --font-ui:"Inter", system-ui, -apple-system, sans-serif;
+    --font-mono:"JetBrains Mono", ui-monospace, monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--ground);
+    color:var(--ink);
+    font-family:var(--font-ui);
+    font-size:15px;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+  a{color:inherit;text-decoration:none;}
+
+  /* ---- chrome ---- */
+  .topbar{
+    display:flex;align-items:center;gap:14px;
+    padding:18px 40px 16px;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,#fbf8f3, var(--ground));
+  }
+  .sigil{display:inline-flex;color:var(--accent);}
+  .wordmark{
+    font-family:var(--font-ui);font-weight:600;
+    font-size:22px;letter-spacing:-0.01em;color:var(--ink);
+  }
+  .wordmark .amp{color:var(--accent);}
+  .topnav{display:flex;gap:2px;margin-left:28px;}
+  .topnav a{
+    padding:6px 12px;border-radius:var(--r-sm);font-size:14px;color:var(--ink-2);
+    font-weight:500;
+  }
+  .topnav a.on{background:var(--accent-tint);color:var(--accent-ink);}
+  .topnav a:hover{background:var(--surface-2);}
+  .topright{margin-left:auto;display:flex;align-items:center;gap:16px;}
+  .topright .who{font-size:13px;color:var(--muted);}
+  .topright .who b{color:var(--ink-2);font-weight:600;}
+
+  /* ---- page head ---- */
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:48px 40px 64px;}
+  .kicker{
+    font-family:var(--font-mono);font-size:12px;letter-spacing:0.14em;
+    text-transform:uppercase;color:var(--accent-ink);
+  }
+  .head{display:flex;align-items:baseline;gap:18px;margin-top:10px;flex-wrap:wrap;}
+  .head h1{
+    margin:0;font-family:var(--font-ui);font-weight:600;
+    font-size:54px;line-height:1.04;letter-spacing:-0.02em;color:var(--ink);
+  }
+  .head .num{
+    font-family:var(--font-ui);font-weight:500;font-size:54px;line-height:1;
+    color:var(--accent);font-variant-numeric:tabular-nums;letter-spacing:-0.02em;
+  }
+  .head .num sup{
+    font-family:var(--font-ui);font-size:13px;font-weight:500;color:var(--muted);
+    margin-left:8px;letter-spacing:0.02em;vertical-align:super;
+  }
+  .sub{
+    margin-top:14px;max-width:62ch;color:var(--ink-2);font-size:15.5px;line-height:1.6;
+  }
+
+  /* ---- filter tabs (kind groups, default flat queue) ---- */
+  .tabs{display:flex;gap:6px;margin-top:30px;flex-wrap:wrap;align-items:center;}
+  .tab{
+    font-size:13px;font-weight:500;color:var(--ink-2);
+    padding:7px 12px;border-radius:999px;border:1px solid transparent;
+    background:transparent;cursor:pointer;
+  }
+  .tab.on{background:var(--surface);border-color:var(--line-cool);color:var(--ink);box-shadow:var(--shadow-soft);}
+  .tab .c{font-family:var(--font-mono);font-size:11px;color:var(--muted);margin-left:6px;}
+  .tabs .sep{width:1px;height:18px;background:var(--line);margin:0 6px;}
+
+  /* ---- queue ---- */
+  .queue{
+    margin-top:24px;border:1px solid var(--line);border-radius:var(--r-lg);
+    background:var(--surface);overflow:hidden;
+  }
+  .row{
+    display:grid;
+    grid-template-columns: 4px 132px 1fr 92px 120px;
+    align-items:stretch;
+    border-top:1px solid var(--line);
+    background:var(--surface);
+    transition:background .14s ease;
+  }
+  .row:first-child{border-top:none;}
+  .row:hover{background:#fbf9f4;}
+  .row .rail{width:4px;align-self:stretch;}
+  .row .body{padding:18px 20px 18px 22px;display:flex;flex-direction:column;gap:6px;min-width:0;}
+  .row .meta-col{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px;border-left:1px solid var(--line);}
+  .row .age-col{display:flex;align-items:center;justify-content:flex-end;padding-right:22px;border-left:1px solid var(--line);}
+
+  .row .title-line{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;}
+  .row .title{font-size:16px;font-weight:600;color:var(--ink);letter-spacing:-0.005em;}
+  .row .slug{font-family:var(--font-mono);font-size:12.5px;color:var(--muted);}
+  .row .detail{font-size:14.5px;color:var(--ink-2);max-width:78ch;line-height:1.55;}
+
+  /* ---- chips ---- */
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;
+    font-size:12px;font-weight:600;letter-spacing:0.01em;
+    padding:4px 10px;border-radius:var(--r-md);
+    border:1px solid var(--line-cool);
+    background:var(--surface-2);color:var(--ink-2);
+    white-space:nowrap;
+  }
+  .chip .g{font-size:13px;line-height:1;}
+  .chip.ok{background:var(--ok-bg);color:var(--ok-ink);border-color:var(--ok-line);}
+  .chip.bad{background:var(--bad-bg);color:var(--bad-ink);border-color:var(--bad-line);}
+  .chip.warn{background:var(--warn-bg);color:var(--warn-ink);border-color:var(--warn-line);}
+  .chip.info{background:var(--info-bg);color:var(--info-ink);border-color:var(--info-line);}
+  .chip.pend{background:var(--pend-bg);color:var(--pend-ink);border-color:var(--pend-line);}
+  .chip.accent{background:var(--accent-tint);color:var(--accent-ink);border-color:#e9d3c4;}
+  .chip.outline{background:transparent;color:var(--ink-2);border-style:dashed;}
+  .chip.staged{background:#f3eee5;color:#6f5a3a;border:1px solid #e2d6bd;}
+  .chip .mark{display:inline-block;width:10px;height:10px;border-radius:999px;background:currentColor;opacity:.85;}
+  .chip.staged .mark,.chip.outline .mark{background:transparent;border:1.5px solid currentColor;}
+  .chip.bounced{text-decoration:line-through;text-decoration-color:var(--bad-ink);border-style:dashed;background:var(--bad-bg);color:var(--bad-ink);}
+
+  .kindcol{display:flex;align-items:flex-start;justify-content:center;padding-top:20px;flex-direction:column;gap:6px;align-items:center;}
+  .kindcol .kind-chip{display:flex;flex-direction:column;align-items:center;gap:6px;}
+  .kindcol .gates{display:flex;gap:4px;}
+  .kindcol .gate-mini{
+    font-family:var(--font-mono);font-size:11px;font-weight:600;
+    width:26px;height:26px;border-radius:var(--r-sm);
+    display:flex;align-items:center;justify-content:center;
+    border:1px solid var(--line-cool);background:var(--surface);
+    color:var(--muted);
+  }
+
+  /* ---- age badge ---- */
+  .age{font-family:var(--font-mono);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;}
+  .age.urgent{color:var(--warn-ink);font-weight:600;}
+  .age.stale{color:var(--bad-ink);font-weight:700;}
+  .age .glyph{margin-right:2px;}
+
+  /* ---- problems list (malformed / bounced) ---- */
+  .problems{margin-top:4px;display:flex;flex-direction:column;gap:3px;}
+  .problems li{font-family:var(--font-mono);font-size:12px;color:var(--bad-ink);list-style:none;}
+  .problems li::before{content:"✕  ";color:var(--bad-ink);}
+
+  .rail.malformed{background:var(--bad-ink);}
+  .rail.paused{background:var(--warn-ink);}
+  .rail.escalation{background:var(--info-ink);}
+  .rail.round-cap{background:#946014;}
+  .rail.gate-bad{background:var(--bad-ink);background-image:repeating-linear-gradient(180deg,var(--bad-ink) 0 4px,transparent 4px 8px);}
+  .rail.gate{background:var(--accent);}
+  .rail.staged{background:transparent;border-left:2px dashed #c9bfa9;margin-left:2px;}
+
+  .packet{margin-top:6px;font-family:var(--font-mono);font-size:11.5px;color:var(--faint);}
+  .packet .p{margin-right:10px;}
+
+  /* ---- bounce banner inside row ---- */
+  .bounce{
+    margin-top:8px;font-size:13px;color:var(--bad-ink);
+    background:var(--bad-bg);border:1px solid var(--bad-line);
+    border-radius:var(--r-sm);padding:7px 10px;max-width:78ch;
+    display:flex;gap:8px;align-items:center;
+  }
+  .bounce b{font-weight:600;}
+
+  /* ---- needs-you emphasis marker (the one accent on a gate row) ---- */
+  .you-dot{width:7px;height:7px;border-radius:999px;background:var(--accent);display:inline-block;margin-right:7px;vertical-align:middle;}
+
+  /* ---- footer / sketches ---- */
+  .section-rule{margin:64px 0 22px;display:flex;align-items:center;gap:14px;}
+  .section-rule .lbl{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);}
+  .section-rule .line{height:1px;flex:1;background:var(--line);}
+
+  .sketch-card{
+    border:1px dashed var(--line-cool);border-radius:var(--r-lg);
+    background:repeating-linear-gradient(135deg,#fbf8f3 0 12px,#f7f2e9 12px 24px);
+    padding:36px;text-align:center;color:var(--muted);
+  }
+  .sketch-card .tag{font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--accent-ink);margin-bottom:10px;}
+  .sketch-card h3{font-family:var(--font-ui);font-weight:600;font-size:28px;margin:6px 0;color:var(--ink);letter-spacing:-0.01em;}
+  .sketch-card p{margin:4px 0;font-size:14px;}
+  .sketch-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px;}
+
+  /* inbox zero empty state */
+  .empty{padding:80px 40px;text-align:center;}
+  .empty .sigil-big{color:var(--accent);opacity:.85;margin:0 auto;}
+  .empty h2{font-family:var(--font-ui);font-weight:600;font-size:46px;margin:14px 0 8px;letter-spacing:-0.02em;}
+  .empty p{color:var(--muted);max-width:46ch;margin:0 auto;font-size:15px;}
+
+  /* loading skeleton */
+  .skeleton .row{background:var(--surface);}
+  .sk-line{height:12px;border-radius:6px;background:linear-gradient(90deg,#efe9de,#f6f1e7,#efe9de);background-size:200% 100%;animation:shimmer 1.6s ease-in-out infinite;}
+  .sk-line.short{width:40%;}
+  .sk-line.mid{width:64%;}
+  .sk-line.long{width:90%;}
+  @keyframes shimmer{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
+  @media (prefers-reduced-motion: reduce){
+    .sk-line{animation:none;background:#efe9de;}
+  }
+
+  .foot{max-width:var(--maxw);margin:0 auto;padding:0 40px 80px;color:var(--faint);font-size:12.5px;}
+  .foot a{color:var(--muted);}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <span class="sigil" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="22" height="22"><rect x="3.5" y="3" width="2.6" height="18" rx="1.3" fill="currentColor"/><rect x="17.9" y="3" width="2.6" height="18" rx="1.3" fill="currentColor"/><rect x="3.5" y="8.6" width="17" height="2.2" rx="1.1" fill="currentColor"/></svg>
+  </span>
+  <span class="wordmark">Gate</span>
+  <nav class="topnav">
+    <a class="on" href="#">Inbox</a>
+    <a href="portfolio.html">Portfolio</a>
+    <a href="new-run.html">New run</a>
+    <a href="run-detail.html">Run</a>
+  </nav>
+  <div class="topright">
+    <span class="who">Signed in as <b>Nathan Carter</b> · <span style="font-family:var(--font-mono);font-size:12px;color:var(--faint)">agentic-sandbox</span></span>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="kicker">Pending human decisions · oldest first</div>
+  <div class="head">
+    <h1>Inbox</h1>
+    <span class="num">7<sup>waiting</sup></span>
+  </div>
+  <p class="sub">A reading-queue across every run on the agent pipeline. Scan for what needs you; open the run to read the artifact and decide. Nothing here expires, and nothing is racing.</p>
+
+  <!-- kind tabs (flat queue is default; tabs are an added Sentry-style grouping) -->
+  <div class="tabs">
+    <button class="tab on">All <span class="c">7</span></button>
+    <span class="sep"></span>
+    <button class="tab">Gate <span class="c">2</span></button>
+    <button class="tab">Escalation <span class="c">1</span></button>
+    <button class="tab">Round-cap <span class="c">1</span></button>
+    <button class="tab">Paused <span class="c">1</span></button>
+    <button class="tab">Staged <span class="c">1</span></button>
+    <button class="tab">Malformed <span class="c">1</span></button>
+  </div>
+
+  <section class="queue" aria-label="Inbox queue">
+
+    <!-- 1. malformed (oldest) -->
+    <article class="row">
+      <div class="rail malformed"></div>
+      <div class="kindcol">
+        <span class="chip bad" title="malformed"><span class="g">⚠</span>malformed</span>
+      </div>
+      <div class="body">
+        <div class="title-line">
+          <span class="title">State unreadable — state.yaml fails to parse</span>
+          <span class="slug">bad-state</span>
+        </div>
+        <p class="detail">state.yaml could not be read by the server; the run is held until the file is repaired or the run is closed.</p>
+        <ul class="problems">
+          <li>YAML parse error at line 14 — unexpected indentation under <code>tasks:</code></li>
+          <li>missing top-level key <code>gates</code></li>
+        </ul>
+        <div class="packet"><span class="p">runs/bad-state/state.yaml</span></div>
+      </div>
+      <div class="meta-col"></div>
+      <div class="age-col"><span class="age stale">7d</span></div>
+    </article>
+
+    <!-- 2. paused (budget exhausted) -->
+    <article class="row">
+      <div class="rail paused"></div>
+      <div class="kindcol">
+        <span class="chip warn" title="paused"><span class="mark"></span>paused</span>
+      </div>
+      <div class="body">
+        <div class="title-line">
+          <span class="title">Paused — budget exhausted</span>
+          <span class="slug">paused-budget</span>
+        </div>
+        <p class="detail">Run paused at its $25 cost limit during <em>implement</em>. The agent will not continue until you raise the budget or close the run.</p>
+        <div class="packet"><span class="p">runs/paused-budget/state.yaml</span></div>
+      </div>
+      <div class="meta-col"></div>
+      <div class="age-col"><span class="age urgent">5d</span></div>
+    </article>
+
+    <!-- 3. escalation -->
+    <article class="row">
+      <div class="rail escalation"></div>
+      <div class="kindcol">
+        <span class="chip info" title="escalation"><span class="g">⚑</span>escalation</span>
+      </div>
+      <div class="body">
+        <div class="title-line">
+          <span class="title">AC2.1 unverifiable — sample input missing from repo</span>
+          <span class="slug">escalated</span>
+        </div>
+        <p class="detail">The spec references <code>fixtures/sample-input.csv</code> for AC2.1, but the file is absent. The agent cannot self-resolve and has escalated.</p>
+        <div class="packet"><span class="p">runs/escalated/spec.md</span><span class="p">escalations/0.md</span></div>
+      </div>
+      <div class="meta-col"></div>
+      <div class="age-col"><span class="age urgent">4d</span></div>
+    </article>
+
+    <!-- 4. round-cap -->
+    <article class="row">
+      <div class="rail round-cap"></div>
+      <div class="kindcol">
+        <span class="chip warn" title="round-cap"><span class="g">⟲3</span>round-cap</span>
+      </div>
+      <div class="body">
+        <div class="title-line">
+          <span class="title">Review rounds capped at 3 — all request-changes</span>
+          <span class="slug">round-cap</span>
+        </div>
+        <p class="detail">Task <code>02-errors</code> requested changes on three consecutive review rounds. A human must break the loop or accept the residual.</p>
+        <div class="packet"><span class="p">runs/round-cap/tasks/02-errors.yaml</span></div>
+      </div>
+      <div class="meta-col"></div>
+      <div class="age-col"><span class="age urgent">3d</span></div>
+    </article>
+
+    <!-- 5. gate BOUNCED (R3) — no approve affordance -->
+    <article class="row">
+      <div class="rail gate-bad"></div>
+      <div class="kindcol">
+        <span class="chip bounced" title="G0 bounced — packet fails its contract">G0&nbsp;bounced</span>
+      </div>
+      <div class="body">
+        <div class="title-line">
+          <span class="title">G0 — approve the specification</span>
+          <span class="slug">malformed-spec</span>
+        </div>
+        <p class="detail">The spec gate packet is presented, but the artifact fails its contract before review can begin.</p>
+        <div class="bounce">
+          <b>Bounced</b> — packet fails its contract; no approval is offered.
+        </div>
+        <ul class="problems">
+          <li>spec.md missing required sections: <code>Context</code>, <code>Out of scope</code></li>
+        </ul>
+        <div class="packet"><span class="p">runs/malformed-spec/spec.md</span></div>
+      </div>
+      <div class="meta-col"></div>
+      <div class="age-col"><span class="age urgent">3d</span></div>
+    </article>
+
+    <!-- 6. gate pending (the one "needs you") -->
+    <article class="row">
+      <div class="rail gate"></div>
+      <div class="kindcol">
+        <span class="chip accent" title="G2 pending — needs you"><span class="you-dot"></span>G2 · pending</span>
+      </div>
+      <div class="body">
+        <div class="title-line">
+          <span class="title"><span class="you-dot" aria-hidden="true"></span>Approve the implementation for release</span>
+          <span class="slug">g2-pending</span>
+        </div>
+        <p class="detail">Implementation complete for <em>log rotator</em>; AC1.1 and AC2.1 verified in <code>verification-report.md</code>. Approve to proceed to <em>integrate</em>.</p>
+        <div class="packet"><span class="p">runs/g2-pending/plan.md</span><span class="p">runs/g2-pending/verification-report.md</span></div>
+      </div>
+      <div class="meta-col"></div>
+      <div class="age-col"><span class="age">2d</span></div>
+    </article>
+
+    <!-- 7. staged (rest state) -->
+    <article class="row">
+      <div class="rail staged"></div>
+      <div class="kindcol">
+        <span class="chip staged" title="staged — rest state"><span class="mark"></span>staged</span>
+      </div>
+      <div class="body">
+        <div class="title-line">
+          <span class="title">Staged — awaiting arm</span>
+          <span class="slug">csv-importer</span>
+        </div>
+        <p class="detail">Run staged by Nathan Carter an hour ago; resting at <em>staged</em>. No agent has dispatched. Arm it when ready to begin the <em>spec</em> phase.</p>
+        <div class="packet"><span class="p">runs/csv-importer/state.yaml</span><span class="p">runs/csv-importer/intent-brief.md</span></div>
+      </div>
+      <div class="meta-col"></div>
+      <div class="age-col"><span class="age">12m</span></div>
+    </article>
+
+  </section>
+
+  <!-- ============ sketches: empty + loading ============ -->
+  <div class="section-rule"><span class="lbl">Sketches · alternate states</span><span class="line"></span></div>
+
+  <div class="sketch-grid">
+
+    <!-- empty state -->
+    <div class="sketch-card" style="padding:0;background:var(--surface);border-style:solid;">
+      <div class="empty">
+        <span class="sigil sigil-big" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="44" height="44"><rect x="3.5" y="3" width="2.6" height="18" rx="1.3" fill="currentColor"/><rect x="17.9" y="3" width="2.6" height="18" rx="1.3" fill="currentColor"/><rect x="3.5" y="8.6" width="17" height="2.2" rx="1.1" fill="currentColor"/></svg>
+        </span>
+        <h2>Inbox zero.</h2>
+        <p>Nothing is waiting on you. The agents are reading, writing, and reviewing on their own. Come back when a gate clears, or open the portfolio to look in on a run at your leisure.</p>
+      </div>
+      <div class="tag" style="padding:0 0 22px;">Empty state</div>
+    </div>
+
+    <!-- loading state -->
+    <div class="sketch-card" style="padding:24px;background:var(--surface);border-style:solid;">
+      <div class="tag">Loading · skeleton</div>
+      <div class="skeleton" style="margin-top:14px;border:1px solid var(--line);border-radius:var(--r-lg);overflow:hidden;">
+        <div class="row" style="border-top:none;">
+          <div style="width:4px;background:var(--line);"></div>
+          <div style="width:132px;padding:18px;display:flex;align-items:flex-start;"><div class="sk-line mid" style="height:22px;width:80px;"></div></div>
+          <div style="padding:18px 22px;display:flex;flex-direction:column;gap:10px;">
+            <div class="sk-line long"></div>
+            <div class="sk-line mid"></div>
+          </div>
+          <div style="width:92px;border-left:1px solid var(--line);"></div>
+          <div style="width:120px;border-left:1px solid var(--line);padding:18px;display:flex;justify-content:flex-end;"><div class="sk-line short"></div></div>
+        </div>
+        <div class="row" style="border-top:none;">
+          <div style="width:4px;background:var(--line);"></div>
+          <div style="width:132px;padding:18px;display:flex;align-items:flex-start;"><div class="sk-line mid" style="height:22px;width:80px;"></div></div>
+          <div style="padding:18px 22px;display:flex;flex-direction:column;gap:10px;">
+            <div class="sk-line long"></div>
+            <div class="sk-line mid"></div>
+          </div>
+          <div style="width:92px;border-left:1px solid var(--line);"></div>
+          <div style="width:120px;border-left:1px solid var(--line);padding:18px;display:flex;justify-content:flex-end;"><div class="sk-line short"></div></div>
+        </div>
+        <div class="row" style="border-top:none;">
+          <div style="width:4px;background:var(--line);"></div>
+          <div style="width:132px;padding:18px;display:flex;align-items:flex-start;"><div class="sk-line mid" style="height:22px;width:80px;"></div></div>
+          <div style="padding:18px 22px;display:flex;flex-direction:column;gap:10px;">
+            <div class="sk-line long"></div>
+            <div class="sk-line mid"></div>
+          </div>
+          <div style="width:92px;border-left:1px solid var(--line);"></div>
+          <div style="width:120px;border-left:1px solid var(--line);padding:18px;display:flex;justify-content:flex-end;"><div class="sk-line short"></div></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+</main>
+
+<footer class="foot">
+  Gate renders git. Every row above is recomputed from a run's branch — no cache, no event stream. · <a href="#">about the pipeline</a>
+</footer>
+
+</body>
+</html>

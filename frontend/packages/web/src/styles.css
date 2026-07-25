@@ -1,48 +1,97 @@
 @import 'tailwindcss';
 
-/* Design tokens — Signal Deck: cool, dark-native, one accent-as-signal.
+/* Design tokens — Candidate A: warm light paper. Dark slot retains the
+   prior cold-dark palette (interim; warm-dark is a future iteration).
    light-dark() + color-scheme gives both themes from a single declaration;
-   the OS preference decides. Dark is the identity theme (plan ADR-1/C1). */
+   the OS preference decides. New light-only tokens (accent-tint, reading-bg,
+   status bg/line variants, radius/shadow, font-read) are plain literals —
+   they resolve the same in both modes, which is acceptable for the interim. */
 @theme {
-  --color-ground: light-dark(#eef2f5, #0a0e11);
+  --color-ground: light-dark(#faf7f1, #0a0e11);
   --color-surface: light-dark(#ffffff, #111820);
-  --color-inset: light-dark(#f3f6f8, #0d141a);
-  --color-raised: light-dark(#e4ebef, #18222b);
-  --color-ink: light-dark(#10202a, #dbe7ec);
-  --color-muted: light-dark(#4c5d67, #8ba1ac);
-  --color-faint: light-dark(#8598a2, #566771);
-  --color-line: light-dark(#d3dde3, #223039);
-  --color-accent: light-dark(#0b6f89, #45c8ec);
-  --color-accent-deep: light-dark(#075365, #8adcf5);
-  --color-ok: light-dark(#157a4a, #4ec98d);
-  --color-warn: light-dark(#8a6410, #e0b24e);
-  --color-bad: light-dark(#b23b28, #ff7f63);
-  --color-on-solid: light-dark(#ffffff, #06121a);
-  --color-accent-soft: light-dark(rgba(11, 111, 137, .12), rgba(69, 200, 236, .14));
-  --color-ok-soft: light-dark(rgba(21, 122, 74, .13), rgba(78, 201, 141, .15));
-  --color-warn-soft: light-dark(rgba(138, 100, 16, .13), rgba(224, 178, 78, .15));
-  --color-bad-soft: light-dark(rgba(178, 59, 40, .12), rgba(255, 127, 99, .16));
+  --color-inset: light-dark(#f4efe6, #0d141a);
+  --color-raised: light-dark(#efe9de, #18222b);
+  --color-ink: light-dark(#24201c, #dbe7ec);
+  --color-muted: light-dark(#7a726a, #8ba1ac);
+  --color-faint: light-dark(#756b61, #566771);
+  --color-line: light-dark(#e7e0d3, #223039);
+  --color-line-cool: light-dark(#d8d2c8, #223039);
+  --color-accent: light-dark(#a04423, #45c8ec);
+  --color-accent-deep: light-dark(#7a3318, #8adcf5);
+  --color-accent-tint: #f5e9e0;
 
-  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+  --color-reading-bg: #fdfbf6;
+
+  /* Status inks (used by chips/badges text). Light = Candidate A ink values. */
+  --color-ok: light-dark(#256b3a, #4ec98d);
+  --color-warn: light-dark(#8a5a12, #e0b24e);
+  --color-bad: light-dark(#a02822, #ff7f63);
+  --color-info: light-dark(#2f5d7a, #45c8ec);
+  --color-on-solid: light-dark(#ffffff, #06121a);
+
+  /* Status tinted-chip surfaces (Primer pattern). Light-only literals. */
+  --color-ok-bg: #eaf3e6;   --color-ok-line: #cfe3c6;
+  --color-bad-bg: #fbe9e6;  --color-bad-line: #f0cdc6;
+  --color-warn-bg: #fbf1dd; --color-warn-line: #ecd9a8;
+  --color-info-bg: #eaf0f5; --color-info-line: #cfe0ec;
+  --color-pend-bg: #f0ede7; --color-pend-line: #d8d2c8;
+
+  /* Soft variants kept for backward-compat with existing -soft consumers
+     (e.g. bg-accent-soft, bg-bad-soft). Map to Candidate A tints. */
+  --color-accent-soft: light-dark(rgba(160, 68, 35, .10), rgba(69, 200, 236, .14));
+  --color-ok-soft: light-dark(rgba(37, 107, 58, .10), rgba(78, 201, 141, .15));
+  --color-warn-soft: light-dark(rgba(138, 90, 18, .10), rgba(224, 178, 78, .15));
+  --color-bad-soft: light-dark(rgba(160, 40, 34, .10), rgba(255, 127, 99, .16));
+
+  /* Radius ladder (Candidate A). Exposes rounded-xs..rounded-xl as Tailwind
+     utilities. Overrides Tailwind's default rounded-md (6px) to 8px globally
+     — Candidate A's intent. The 2px delta will not break layout. */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Fonts. Inter replaces system-ui sans; JetBrains Mono stays; Newsreader
+     added for the reading surface only. */
+  --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-read: "Newsreader", Georgia, "Times New Roman", serif;
 }
 
 :root {
   color-scheme: light dark;
 
-  /* Signal bloom + burden ramp — plain custom properties (not @theme
-     tokens) because they carry light-dark()/rgba into shadows and
-     gradients, which Tailwind's arbitrary-value utilities choke on
-     (plan Risk 6). Consumers reach these via var(--…), never inline. */
-  --glow: light-dark(rgba(11, 111, 137, .30), rgba(69, 200, 236, .40));
-  --ramp-1: light-dark(#cfe8e2, #2a5c52);
-  --ramp-2: light-dark(#3f9e8c, #4a9c8a);
-  --ramp-3: light-dark(#0b6f61, #8fdccb);
-  --unrecorded: light-dark(#d9dedb, #3a423e);
+  /* Layered shadows (Candidate A). Plain custom properties — they carry
+     multi-layer shadow syntax that Tailwind arbitrary-value utilities
+     choke on. Consumers reach these via var(--…), never inline. */
+  --shadow-soft: 0 1px 2px rgba(36, 32, 28, 0.04);
+  --shadow-lift: 0 0 0 1px rgba(231, 224, 211, 0.67), 0 1px 2px rgba(36, 32, 28, 0.04), 0 8px 22px -6px rgba(36, 32, 28, 0.10);
+
+  /* Static accent ring (replaces the pulsing glow ring on NeedsYou cards).
+     A plain 2px tinted ring — no animation. */
+  --static-ring: 0 0 0 2px var(--color-accent-tint);
+
+  /* Burden ramp + unrecorded — kept for metrics.tsx (NOT redesigned in this
+     port). Values warmed to sit on paper ground; the ramp shape is
+     preserved (lightness-monotonic, CVD-safe ordering is unchanged in
+     hue-relative terms). Re-validate CVD ΔE if exact AA is required. */
+  --ramp-1: light-dark(#e6c9a8, #2a5c52);
+  --ramp-2: light-dark(#b88a4a, #4a9c8a);
+  --ramp-3: light-dark(#7a3318, #8fdccb);
+  --unrecorded: light-dark(#d9d3c7, #3a423e);
+
+  /* Legacy glow kept as a no-op alias so any stray var(--glow) reference
+     resolves without breaking. New code MUST NOT use --glow; use
+     --static-ring or --shadow-lift instead. */
+  --glow: light-dark(rgba(160, 68, 35, 0), rgba(69, 200, 236, 0));
 }
 
 body {
   @apply bg-ground text-ink font-sans antialiased;
+  font-size: 15px;
+  line-height: 1.55;
+  text-rendering: optimizeLegibility;
 }
 
 /* Focus is always visible; the accent does that job everywhere. */
@@ -52,42 +101,32 @@ body {
   border-radius: 2px;
 }
 
-/* Motion as functional signal (candidate B thesis) — the only animation
-   definitions allowed anywhere in the app (plan ADR-6). Consumers apply
-   these class names only; a task needing a new one escalates rather than
-   adding local @keyframes. */
-@keyframes pulse {
-  0%, 100% { box-shadow: 0 0 6px var(--glow); }
-  50% { box-shadow: 0 0 15px var(--glow), 0 0 4px var(--glow); }
-}
-@keyframes pulsepanel {
-  0%, 100% { box-shadow: 0 0 0 1px var(--color-accent-soft), 0 0 14px var(--glow); }
-  50% { box-shadow: 0 0 0 1px var(--color-accent-soft), 0 0 28px var(--glow); }
-}
+/* Motion as functional signal — the only animation definitions allowed
+   anywhere in the app. Consumers apply these class names only; a task
+   needing a new one escalates rather than adding local @keyframes.
+   Candidate A removed pulsing; .pulse-glow and .pulse-panel are gone.
+   Only .skel shimmer (sweep) remains. */
 @keyframes sweep {
   0% { background-position: 180% 0; }
   100% { background-position: -80% 0; }
 }
 
-.pulse-glow {
-  animation: pulse 2.4s ease-in-out infinite;
+/* Static accent ring — replaces the former .pulse-panel. A plain 2px tinted
+   ring + soft lift shadow; no animation. Bounced items keep the bad-soft
+   ring instead (see run.tsx NeedsYouCard). */
+.static-ring {
+  box-shadow: var(--static-ring), var(--shadow-lift);
 }
-.pulse-panel {
-  box-shadow: 0 0 0 1px var(--color-accent-soft), 0 0 18px var(--glow);
-  animation: pulsepanel 2.8s ease-in-out infinite;
-}
+
 .skel {
-  border-radius: 4px;
-  background: linear-gradient(100deg, var(--color-inset) 30%, var(--color-raised) 50%, var(--color-inset) 70%);
+  border-radius: var(--radius-xs);
+  background: linear-gradient(100deg, #efe9de 30%, #f6f1e7 50%, #efe9de 70%);
   background-size: 220% 100%;
-  animation: sweep 1.5s linear infinite;
+  animation: sweep 1.6s ease-in-out infinite;
 }
 
 /* Reduced motion: animation stops outright (a 0.01ms infinite animation is
-   still a running animation, plan ADR-6) — every animated base style above
-   is designed to stay meaningful when static: .pulse-panel keeps its
-   static glow ring, .skel reads as a static inset block, the pulsing
-   count pill stays a solid accent pill. */
+   still a running animation). .skel reads as a static inset block. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation: none !important;
@@ -95,57 +134,124 @@ body {
   }
 }
 
-/* Rendered markdown (artifacts). Reading, not operating: Signal Deck's
-   reading voice — sans body/headings, measure capped at 76ch, mono
-   evidence chips/blocks, small (3-4px) radii — per the candidate-b
-   run-artifacts.html .artbody region and design-candidate.md's
-   look-and-feel spec. */
+/* Rendered markdown (artifacts) — Candidate A reading surface.
+   Newsreader serif body, Inter sans headings, 76ch measure, 1.68 leading,
+   warm code tints. Serif is reserved for this surface only. */
 .prose-artifact {
-  @apply text-[14px] leading-[1.6] max-w-[76ch];
+  font-family: var(--font-read);
+  font-size: 16.5px;
+  line-height: 1.68;
+  color: var(--color-ink);
+  max-width: 76ch;
 }
 .prose-artifact h1 {
-  @apply text-[18px] font-semibold mt-2 mb-3.5 text-balance;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 38px;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  margin: 0 0 8px;
+  color: var(--color-ink);
 }
 .prose-artifact h2 {
-  @apply text-[14px] font-semibold mt-6 mb-2 pb-1 border-b border-line;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 24px;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  margin: 42px 0 14px;
+  color: var(--color-ink);
+  border: none;
+  padding: 0;
 }
 .prose-artifact h3 {
-  @apply text-[13px] font-semibold mt-5 mb-1.5;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: 0.005em;
+  margin: 26px 0 10px;
+  color: var(--color-ink);
 }
-.prose-artifact p {
-  @apply my-2.5;
+.prose-artifact p { margin: 0 0 16px; }
+.prose-artifact strong { font-weight: 600; color: var(--color-ink); }
+.prose-artifact em { font-style: italic; }
+.prose-artifact a {
+  color: var(--color-accent-deep);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 .prose-artifact ul, .prose-artifact ol {
-  @apply my-2.5 pl-6;
+  margin: 0 0 16px;
+  padding-left: 1.4em;
 }
 .prose-artifact ul { list-style: disc; }
 .prose-artifact ol { list-style: decimal; }
-.prose-artifact li { @apply my-1; }
+.prose-artifact li { margin: 0 0 6px; }
 .prose-artifact li::marker { color: var(--color-faint); }
 .prose-artifact code {
-  @apply font-mono text-[12.5px] px-1.5 py-0.5 rounded-[3px] bg-raised;
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  background: #f1ece2;
+  padding: 1px 5px;
+  border-radius: var(--radius-xs);
+  color: var(--color-accent-deep);
 }
 .prose-artifact pre {
-  @apply font-mono text-[12px] leading-[20px] p-3.5 my-3 rounded-[4px] bg-inset overflow-x-auto;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  background: #f3eee5;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  margin: 0 0 18px;
+  overflow-x: auto;
+  color: var(--color-ink);
 }
-.prose-artifact pre code { @apply p-0 bg-transparent; }
+.prose-artifact pre code {
+  padding: 0;
+  background: transparent;
+  color: var(--color-ink);
+  font-size: 13px;
+}
 .prose-artifact table {
-  @apply my-3 text-sm border-collapse;
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0 0 18px;
+  font-size: 14px;
+  font-family: var(--font-sans);
 }
 .prose-artifact th {
-  @apply text-left font-semibold border-b border-line px-3 py-1.5 text-[11px] uppercase tracking-wide text-muted;
+  text-align: left;
+  padding: 8px 12px;
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  border-bottom: 1px solid var(--color-line-cool);
 }
 .prose-artifact td {
-  @apply border-b border-line px-3 py-1.5 align-top;
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-line);
+  color: var(--color-muted);
+  vertical-align: top;
 }
 .prose-artifact blockquote {
-  @apply border-l-2 border-line pl-4 my-3 text-muted;
-}
-.prose-artifact a {
-  @apply text-accent underline underline-offset-2;
+  margin: 0 0 18px;
+  padding: 6px 0 6px 18px;
+  border-left: 3px solid var(--color-accent);
+  color: var(--color-muted);
+  font-style: italic;
+  font-family: var(--font-read);
+  font-size: 16.5px;
+  line-height: 1.6;
 }
 .prose-artifact hr {
-  @apply border-line my-6;
+  border: none;
+  border-top: 1px solid var(--color-line);
+  margin: 30px 0;
 }
 .prose-artifact input[type='checkbox'] {
   accent-color: var(--color-accent);
@@ -155,10 +261,11 @@ body {
   scroll-margin-top: 12px;
 }
 
-/* Run-lexicon references (#163). A cited R/AC/ADR id resolves where it
+/* Run-lexicon references. A cited R/AC/ADR id resolves where it
    stands: dotted accent underline; hover or keyboard focus opens a card
    quoting the definition verbatim from the run's own spec/plan. Unresolved
-   ids take the warn voice — a dangling reference is reviewer signal. */
+   ids take the warn voice — a dangling reference is reviewer signal.
+   Colors updated to the new warm palette; structure preserved. */
 .lex-ref {
   @apply relative font-mono text-[0.94em] text-accent;
   text-decoration: underline dotted;
@@ -170,7 +277,7 @@ body {
 }
 .lex-card {
   @apply invisible absolute left-0 top-full z-40 mt-1 flex w-[26rem] max-w-[80vw] flex-col gap-1.5 rounded-[5px] border border-line bg-surface px-3 py-2.5 text-left font-sans text-xs font-normal normal-case tracking-normal text-ink;
-  box-shadow: 0 6px 24px light-dark(rgba(16, 32, 42, 0.18), rgba(0, 0, 0, 0.5));
+  box-shadow: var(--shadow-lift);
   white-space: normal;
 }
 .lex-ref:hover > .lex-card,
@@ -223,4 +330,44 @@ body {
 }
 .lex-cited ul {
   @apply mt-2 flex flex-col gap-1;
+}
+
+/* Gate sigil — the two-posts-and-crossbar mark. Used in the sidebar
+   wordmark, the inbox empty state, and the portfolio empty state. Color
+   inherits from currentColor (set text-accent on the parent). */
+.gate-sigil {
+  display: inline-flex;
+  color: var(--color-accent);
+}
+
+/* Blueprint grid — the New Run preview's signature surface. A faint 26px
+   grid on the warm paper, multiply-blended so it reads as a page proof,
+   not a debug log. Applied to the preview body only. */
+.blueprint-grid {
+  background-color: var(--color-surface);
+  background-image:
+    linear-gradient(rgba(231, 224, 211, 0.33) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(231, 224, 211, 0.33) 1px, transparent 1px);
+  background-size: 100% 26px, 26px 26px;
+  background-position: 0 0, 0 0;
+}
+
+/* Form input well — Candidate A's inset treatment (used by new-run form
+   inputs). Replaces the repeated border/bg/shadow class strings on every
+   input/select/textarea. */
+.input-well {
+  border: 1px solid var(--color-line-cool);
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  box-shadow: inset 0 1px 2px rgba(36, 32, 28, 0.03);
+  transition: border-color .14s, box-shadow .14s;
+}
+.input-well:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px var(--color-accent-tint);
+}
+.input-well.err {
+  border-color: var(--color-bad);
+  background: var(--color-bad-bg);
 }

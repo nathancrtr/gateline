@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gate · Portfolio</title>
+  <!-- Recommended theme: Warm light editorial -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:ital,wght@0,400..700;1,400..700&family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --gate-ink: #1f2328;
+      --gate-muted: #4e5660;
+      --gate-subtle: #7a838d;
+      --gate-line: #d1d9e0;
+      --gate-warm: #ece7df;
+      --gate-ground: #faf8f5;
+      --gate-surface: #ffffff;
+      --gate-tint: #f4f1ec;
+      --gate-accent: #b35a36;
+      --gate-accent-text: #ffffff;
+      --gate-accent-tint: #f9e9e1;
+      --gate-accent-emphasis: #8c4322;
+      --gate-ok: #1a7f37;
+      --gate-ok-tint: #e1f5e6;
+      --gate-warn: #8a5a00;
+      --gate-warn-tint: #fff5d6;
+      --gate-bad: #ac1b18;
+      --gate-bad-tint: #ffebe9;
+      --gate-info: #255ab2;
+      --gate-info-tint: #e7f0ff;
+      --gate-neutral: #5c646d;
+      --gate-neutral-tint: #f0f2f5;
+      --font-display: "Newsreader", Georgia, serif;
+      --font-ui: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --radius-sm: 6px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--gate-ground);
+      color: var(--gate-ink);
+      font-family: var(--font-ui);
+      font-size: 15px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+    /* Type roles */
+    .t-display {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-weight: 300;
+      letter-spacing: -0.03em;
+      line-height: 1.05;
+    }
+    .t-title { font-size: 2rem; }
+    .t-section {
+      font-family: var(--font-ui);
+      font-size: 0.9375rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      line-height: 1.3;
+    }
+    .t-body { font-size: 0.9375rem; line-height: 1.65; }
+    .t-small { font-size: 0.8125rem; line-height: 1.45; }
+    .t-mono { font-family: var(--font-mono); font-size: 0.8125rem; line-height: 1.45; }
+    .t-label {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--gate-muted);
+    }
+    /* Chrome */
+    .gate-topbar {
+      position: sticky; top: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 32px;
+      background: rgba(255,255,255,0.92);
+      border-bottom: 1px solid var(--gate-line);
+      backdrop-filter: blur(6px);
+    }
+    .brand {
+      display: inline-flex; align-items: center; gap: 10px;
+      text-decoration: none; color: var(--gate-ink);
+    }
+    .brand-mark { width: 28px; height: 28px; flex: none; }
+    .brand-word {
+      font-family: var(--font-display);
+      font-style: italic;
+      font-size: 1.5rem;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+    }
+    .gate-nav { display: flex; gap: 6px; }
+    .gate-nav a {
+      display: block;
+      padding: 8px 14px;
+      border-radius: var(--radius-sm);
+      color: var(--gate-muted);
+      text-decoration: none;
+      font-size: 0.875rem;
+      font-weight: 550;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .gate-nav a:hover { background: var(--gate-tint); color: var(--gate-ink); }
+    .gate-nav a.is-active { background: var(--gate-warm); color: var(--gate-ink); }
+    .gate-user { font-size: 0.8125rem; color: var(--gate-muted); }
+    /* Shell */
+    .gate-shell { max-width: 1300px; margin: 0 auto; padding: 32px; }
+    .page-header {
+      display: flex; justify-content: space-between; align-items: flex-end;
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+    .page-header h1 { margin: 4px 0 0; }
+    .eyebrow { margin: 0; color: var(--gate-subtle); font-size: 0.8125rem; }
+    .count-pill {
+      display: inline-block;
+      vertical-align: middle;
+      margin-left: 10px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--gate-neutral-tint);
+      color: var(--gate-neutral);
+      font-family: var(--font-ui);
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .button {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 9px 16px;
+      border-radius: 999px;
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-decoration: none;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: transform 0.08s ease, box-shadow 0.15s ease;
+    }
+    .button-primary { background: var(--gate-accent); color: var(--gate-accent-text); border-color: var(--gate-accent); }
+    .button-primary:hover { background: var(--gate-accent-emphasis); border-color: var(--gate-accent-emphasis); }
+    .button:active { transform: translateY(1px); }
+    @media (prefers-reduced-motion: reduce) { .button { transition: none; } .button:active { transform: none; } }
+    /* Table */
+    .portfolio-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: var(--gate-surface);
+      border: 1px solid var(--gate-line);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+    .portfolio-table th, .portfolio-table td {
+      padding: 14px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--gate-line);
+      vertical-align: middle;
+    }
+    .portfolio-table th {
+      background: var(--gate-tint);
+      font-size: 0.6875rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--gate-muted);
+    }
+    .portfolio-table tbody tr:last-child td { border-bottom: none; }
+    .portfolio-table tbody tr:hover { background: rgba(255,255,255,0.6); }
+    /* Run cell */
+    .run-cell .slug {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      color: var(--gate-ink);
+      text-decoration: none;
+      display: inline-block;
+    }
+    .run-cell .slug:hover { text-decoration: underline; }
+    .run-cell .source {
+      display: block;
+      margin-top: 2px;
+      font-size: 0.75rem;
+      color: var(--gate-subtle);
+    }
+    .run-cell .malformed-note {
+      margin-top: 4px;
+      font-size: 0.75rem;
+      color: var(--gate-bad);
+    }
+    .divergence {
+      display: inline-flex;
+      align-items: center;
+      margin-left: 6px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: var(--gate-warn-tint);
+      color: var(--gate-warn);
+      font-family: var(--font-mono);
+      font-size: 0.6875rem;
+      font-weight: 600;
+      border: 1px solid rgba(138,90,0,0.18);
+    }
+    /* Phase chip */
+    .chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 650;
+      border: 1px solid transparent;
+      white-space: nowrap;
+    }
+    .chip-spec { background: var(--gate-neutral-tint); color: var(--gate-neutral); border-color: rgba(94,100,109,0.12); }
+    .chip-plan { background: var(--gate-info-tint); color: var(--gate-info); border-color: rgba(37,90,178,0.18); }
+    .chip-implement { background: var(--gate-warn-tint); color: var(--gate-warn); border-color: rgba(138,90,0,0.18); }
+    .chip-integrate { background: var(--gate-warn-tint); color: var(--gate-warn); border-color: rgba(138,90,0,0.18); }
+    .chip-release { background: var(--gate-accent-tint); color: var(--gate-accent-emphasis); border-color: rgba(179,90,54,0.18); }
+    .chip-done { background: var(--gate-ok-tint); color: var(--gate-ok); border-color: rgba(26,127,55,0.18); }
+    .chip-paused { background: var(--gate-info-tint); color: var(--gate-info); border-color: rgba(37,90,178,0.18); }
+    /* Gate ledger */
+    .gate-ledger { display: inline-flex; gap: 5px; }
+    .gate-cell {
+      display: inline-flex; align-items: center; gap: 3px;
+      padding: 3px 7px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      border: 1px solid transparent;
+      cursor: help;
+    }
+    .gate-cell.approved { background: var(--gate-ok-tint); color: var(--gate-ok); border-color: rgba(26,127,55,0.18); }
+    .gate-cell.declined { background: var(--gate-bad-tint); color: var(--gate-bad); border-color: rgba(172,27,24,0.18); }
+    .gate-cell.pending {
+      background: transparent;
+      color: var(--gate-subtle);
+      border-style: dashed;
+      border-color: var(--gate-line);
+    }
+    /* Numbers */
+    .tabular { font-variant-numeric: tabular-nums; }
+    .tasks { color: var(--gate-muted); font-size: 0.875rem; }
+    .tasks .done { font-weight: 650; color: var(--gate-ink); }
+    .rounds {
+      display: inline-block;
+      margin-left: 4px;
+      padding: 1px 5px;
+      border-radius: 999px;
+      background: var(--gate-neutral-tint);
+      color: var(--gate-muted);
+      font-family: var(--font-mono);
+      font-size: 0.6875rem;
+    }
+    .rounds.capped { background: var(--gate-bad-tint); color: var(--gate-bad); }
+    /* Budget meter */
+    .budget-meter { display: inline-flex; align-items: center; gap: 10px; }
+    .budget-track {
+      width: 72px; height: 5px;
+      background: var(--gate-line);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .budget-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: var(--gate-ok);
+    }
+    .budget-fill.over { background: var(--gate-bad); }
+    .budget-label {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--gate-muted);
+      white-space: nowrap;
+    }
+    .budget-label.over { color: var(--gate-bad); font-weight: 600; }
+    .unmetered { color: var(--gate-subtle); font-size: 0.8125rem; }
+    .over-glyph { margin-left: 4px; font-size: 0.75rem; }
+    /* Needs human */
+    .needs-human {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-width: 22px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--gate-accent-tint);
+      color: var(--gate-accent-emphasis);
+      font-size: 0.75rem;
+      font-weight: 700;
+      border: 1px solid rgba(179,90,54,0.18);
+    }
+    .needs-human.zero { background: transparent; color: var(--gate-subtle); border-color: transparent; }
+    /* Empty portfolio */
+    .portfolio-empty {
+      display: none;
+      text-align: center;
+      padding: 96px 32px;
+      border: 1px dashed var(--gate-line);
+      border-radius: var(--radius-lg);
+      background: var(--gate-surface);
+    }
+    .empty-mark {
+      width: 64px; height: 64px; margin: 0 auto 20px;
+    }
+    .empty-title { margin: 0 0 8px; font-size: 2.25rem; }
+    .empty-body { margin: 0 0 22px; color: var(--gate-muted); max-width: 48ch; margin-inline: auto; }
+    /* View logic */
+    body[data-portfolio="populated"] .portfolio-table { display: table; }
+    body[data-portfolio="populated"] .portfolio-empty { display: none; }
+    body[data-portfolio="empty"] .portfolio-table { display: none; }
+    body[data-portfolio="empty"] .portfolio-empty { display: block; }
+    /* Focus */
+    a:focus-visible, button:focus-visible { outline: 2px solid var(--gate-accent); outline-offset: 2px; }
+  </style>
+</head>
+<body data-portfolio="populated">
+  <header class="gate-topbar">
+    <a class="brand" href="inbox.html">
+      <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+        <defs>
+          <linearGradient id="brandGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#b35a36"/>
+            <stop offset="100%" stop-color="#d9a58b"/>
+          </linearGradient>
+        </defs>
+        <path d="M3 21V10a9 9 0 0 1 18 0v11" fill="none" stroke="url(#brandGradient)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="brand-word">Gate</span>
+    </a>
+    <nav class="gate-nav" aria-label="Primary">
+      <a href="inbox.html">Inbox</a>
+      <a href="portfolio.html" class="is-active">Portfolio</a>
+      <a href="new-run.html">New run</a>
+    </nav>
+    <div class="gate-user">Nathan Carter</div>
+  </header>
+
+  <main class="gate-shell">
+    <div class="page-header">
+      <div>
+        <p class="eyebrow">All runs</p>
+        <h1 class="t-display t-title">Portfolio <span class="count-pill" aria-label="10 runs">10</span></h1>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center;">
+        <button class="button button-primary" onclick="document.body.setAttribute('data-portfolio', 'populated')">+ New run</button>
+      </div>
+    </div>
+
+    <table class="portfolio-table" role="table" aria-label="Run portfolio">
+      <thead>
+        <tr>
+          <th scope="col">Run</th>
+          <th scope="col">Phase</th>
+          <th scope="col">Gates</th>
+          <th scope="col" style="text-align:center">Tasks</th>
+          <th scope="col">Budget</th>
+          <th scope="col" style="text-align:center">Updated</th>
+          <th scope="col" style="text-align:center">Needs you</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="run-cell">
+            <a class="slug" href="run-detail.html">g3-pending</a>
+            <span class="divergence" title="2 unpushed, 1 behind origin">↑2↓1</span>
+            <span class="source">agentic-sandbox · run/g3-pending · full</span>
+          </td>
+          <td><span class="chip chip-release">release</span></td>
+          <td>
+            <div class="gate-ledger" aria-label="Gate ledger">
+              <span class="gate-cell approved" title="G0 approved by operator · 2026-07-20">G0✓</span>
+              <span class="gate-cell approved" title="G1 approved by operator · 2026-07-21">G1✓</span>
+              <span class="gate-cell approved" title="G2 approved by operator · 2026-07-23">G2✓</span>
+              <span class="gate-cell pending" title="G3 pending">G3·</span>
+            </div>
+          </td>
+          <td style="text-align:center"><span class="tasks"><span class="done">8</span>/8</span><span class="rounds">max 4</span></td>
+          <td>
+            <div class="budget-meter">
+              <div class="budget-track"><div class="budget-fill" style="width:78%"></div></div>
+              <span class="budget-label">$19/$25</span>
+            </div>
+          </td>
+          <td style="text-align:center"><span class="t-mono">2h</span></td>
+          <td style="text-align:center"><span class="needs-human zero">—</span></td>
+        </tr>
+
+        <tr>
+          <td class="run-cell">
+            <a class="slug" href="run-detail.html">g2-pending</a>
+            <span class="source">agentic-sandbox · run/g2-pending · standard</span>
+          </td>
+          <td><span class="chip chip-implement">implement</span></td>
+          <td>
+            <div class="gate-ledger" aria-label="Gate ledger">
+              <span class="gate-cell approved" title="G0 approved by operator · 2026-07-02">G0✓</span>
+              <span class="gate-cell approved" title="G1 approved by operator · 2026-07-03">G1✓</span>
+              <span class="gate-cell pending" title="G2 pending">G2·</span>
+            </div>
+          </td>
+          <td style="text-align:center"><span class="tasks"><span class="done">2</span>/2</span><span class="rounds">max 3</span></td>
+          <td>
+            <div class="budget-meter">
+              <div class="budget-track"><div class="budget-fill" style="width:2%"></div></div>
+              <span class="budget-label">$0/$25</span>
+            </div>
+          </td>
+          <td style="text-align:center"><span class="t-mono">1d</span></td>
+          <td style="text-align:center"><span class="needs-human">1</span></td>
+        </tr>
+
+        <tr>
+          <td class="run-cell">
+            <a class="slug" href="run-detail.html">g1-pending</a>
+            <span class="divergence" title="1 unpushed">↑1</span>
+            <span class="source">agentic-sandbox · run/g1-pending · standard</span>
+          </td>
+          <td><span class="chip chip-plan">plan</span></td>
+          <td>
+            <div class="gate-ledger" aria-label="Gate ledger">
+              <span class="gate-cell approved" title="G0 approved by operator · 2026-07-20">G0✓</span>
+              <span class="gate-cell pending" title="G1 pending">G1·</span>
+              <span class="gate-cell pending" title="G2 pending">G2·</span>
+            </div>
+          </td>
+          <td style="text-align:center"><span class="tasks"><span class="done">1</span>/4</span><span class="rounds">max 3</span></td>
+          <td>
+            <div class="budget-meter">
+              <div class="budget-track"><div class="budget-fill" style="width:45%"></div></div>
+              <span class="budget-label">$11/$25</span>
+            </div>
+          </td>
+          <td style="text-align:center"><span class="t-mono">2d</span></td>
+          <td style="text-align:center"><span class="needs-human">1</span></td>
+        </tr>
+
+        <tr>
+          <td class="run-cell">
+            <a class="slug" href="run-detail.html">g0-pending</a>
+            <span class="source">agentic-sandbox · run/g0-pending · standard</span>
+          </td>
+          <td><span class="chip chip-spec">spec</span></td>
+          <td>
+            <div class="gate-ledger" aria-label="Gate ledger">
+              <span class="gate-cell pending" title="G0 pending">G0·</span>
+              <span class="gate-cell pending" title="G1 pending">G1·</span>
+              <span class="gate-cell pending" title="G2 pending">G2·</span>
+            </div>
+          </td>
+          <td style="text-align:center"><span class="tasks"><span class="done">0</span>/1</span><span class="rounds">max 3</span></td>
+          <td>
+            <div class="budget-meter">
+              <div class="budget-track"><div class="budget-fill" style="width:5%"></div></div>
+              <span class="budget-label">$1/$20</span>
+            </div>
+          </td>
+          <td style="text-align:center"><span class="t-mono">3d</span></td>
+          <td style="text-align:center"><span class="needs-human">1</span></td>
+        </tr>
+
+        <tr>
+          <td class="run-cell">
+            <a class="slug" href="run-detail.html">csv-merge</a>
+            <span class="source">agentic-sandbox · run/csv-merge · full</span>
+          </td>
+          <td><span class="chip chip-done">done</span></td>
+          <td>
+            <div class="gate-ledger" aria-label="Gate ledger">
+              <span class="gate-cell approved">G0✓</span>
+              <span class="gate-cell approved">G1✓</span>
+              <span class="gate-cell approved">G2✓</span>
+              <span class="gate-cell approved">G3✓</span>
+            </div>
+          </td>
+          <td style="text-align:center"><span class="tasks"><span class="done">6</span>/6</span><span class="rounds">max 4</span></td>
+          <td>
+            <div class="budget-meter">
+              <div class="budget-track"><div class="budget-fill" style="width:60%"></div></div>
+              <span class="budget-label">$30/$50</span>
+            </div>
+          </td>
+          <td style="text-align:center"><span class="t-mono">4d</span></td>
+          <td style="text-align:center"><span class="needs-human zero">—</span></td>
+        </tr>
+
+        <tr>
+          <td class="run-cell">
+            <a class="slug" href="run-detail.html">paused-budget</a>
+            <span class="source">agentic-sandbox · run/paused-budget · standard</span>
+          </td>
+          <td><span class="chip chip-paused">paused</span></td>
+          <td>
+            <div class="gate-ledger" aria-label="Gate ledger">
+              <span class="gate-cell approved">G0✓</span>
+              <span class="gate-cell approved">G1✓</span>
+              <span class="gate-cell pending">G2·</span>
+            </div>
+          </td>
+          <td style="text-align:center"><span class="tasks"><span class="done">3</span>/5</span><span class="rounds">max 3</span></td>
+          <td>
+            <div class="budget-meter">
+              <div class="budget-track"><div class="budget-fill over" style="width:106%"></div></div>
+              <span class="budget-label over">$26/$25<span class="over-glyph">⚠</span></span>
+            </div>
+          </td>
+          <td style="text-align:center"><span class="t-mono">5d</span></td>
+          <td style="text-align:center"><span class="needs-human zero">—</span></td>
+        </tr>
+
+        <tr>
+          <td class="run-cell">
+            <a class="slug" href="run-detail.html">escalated</a>
+            <span class="source">agentic-sandbox · run/escalated · full</span>
+          </td>
+          <td><span class="chip chip-implement">implement</span></td>
+          <td>
+            <div class="gate-ledger" aria-label="Gate ledger">
+              <span class="gate-cell approved">G0✓</span>
+              <span class="gate-cell approved">G1✓</span>
+              <span class="gate-cell pending">G2·</span>
+              <span class="gate-cell pending">G3·</span>
+            </div>
+          </td>
+          <td style="text-align:center"><span class="tasks"><span class="done">1</span>/6</span><span class="rounds">max 4</span></td>
+          <td>
+            <div class="budget-meter">
+              <div class="budget-track"><div class="budget-fill" style="width:32%"></div></div>
+              <span class="budget-label">$16/$50</span>
+            </div>
+          </td>
+          <td style="text-align:center"><span class="t-mono">5d</span></td>
+          <td style="text-align:center"><span class="needs-human">1</span></td>
+        </tr>
+
+        <tr>
+          <td class="run-cell">
+            <a class="slug" href="run-detail.html">round-cap</a>
+            <span class="source">agentic-sandbox · run/round-cap · full</span>
+          </td>
+          <td><span class="chip chip-implement">implement</span></td>
+          <td>
+            <div class="gate-ledger" aria-label="Gate ledger">
+              <span class="gate-cell approved">G0✓</span>
+              <span class="gate-cell approved">G1✓</span>
+              <span class="gate-cell pending">G2·</span>
+              <span class="gate-cell pending">G3·</span>
+            </div>
+          </td>
+          <td style="text-align:center"><span class="tasks"><span class="done">0</span>/4</span><span class="rounds capped">max 3 · ⟲3</span></td>
+          <td>
+            <div class="budget-meter">
+              <div class="budget-track"><div class="budget-fill" style="width:28%"></div></div>
+              <span class="budget-label">$14/$50</span>
+            </div>
+          </td>
+          <td style="text-align:center"><span class="t-mono">6d</span></td>
+          <td style="text-align:center"><span class="needs-human">2</span></td>
+        </tr>
+
+        <tr>
+          <td class="run-cell">
+            <a class="slug" href="run-detail.html">patch-g1-pending</a>
+            <span class="source">agentic-sandbox · run/patch-g1-pending · patch</span>
+          </td>
+          <td><span class="chip chip-plan">plan</span></td>
+          <td>
+            <div class="gate-ledger" aria-label="Gate ledger">
+              <span class="gate-cell pending">G1·</span>
+              <span class="gate-cell pending">G2·</span>
+            </div>
+          </td>
+          <td style="text-align:center"><span class="tasks"><span class="done">0</span>/2</span><span class="rounds">max 3</span></td>
+          <td><span class="unmetered">no budget</span></td>
+          <td style="text-align:center"><span class="t-mono">6d</span></td>
+          <td style="text-align:center"><span class="needs-human">1</span></td>
+        </tr>
+
+        <tr>
+          <td class="run-cell">
+            <a class="slug" href="run-detail.html">malformed-spec</a>
+            <span class="divergence" title="1 behind origin">↓1</span>
+            <span class="source">agentic-sandbox · run/malformed-spec · standard</span>
+            <span class="malformed-note">Malformed: spec.md contract incomplete</span>
+          </td>
+          <td><span class="chip chip-spec">spec</span></td>
+          <td>
+            <div class="gate-ledger" aria-label="Gate ledger">
+              <span class="gate-cell pending">G0·</span>
+              <span class="gate-cell pending">G1·</span>
+              <span class="gate-cell pending">G2·</span>
+            </div>
+          </td>
+          <td style="text-align:center"><span class="tasks"><span class="done">0</span>/1</span><span class="rounds">max 3</span></td>
+          <td>
+            <div class="budget-meter">
+              <div class="budget-track"><div class="budget-fill" style="width:4%"></div></div>
+              <span class="budget-label">$1/$25</span>
+            </div>
+          </td>
+          <td style="text-align:center"><span class="t-mono">7d</span></td>
+          <td style="text-align:center"><span class="needs-human">1</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <section class="portfolio-empty" aria-label="No runs found">
+      <svg class="empty-mark" viewBox="0 0 24 24" aria-hidden="true">
+        <defs>
+          <linearGradient id="emptyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#d9a58b"/>
+            <stop offset="100%" stop-color="#b35a36"/>
+          </linearGradient>
+        </defs>
+        <path d="M3 21V10a9 9 0 0 1 18 0v11" fill="none" stroke="url(#emptyGrad)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <h2 class="t-display empty-title">No runs yet.</h2>
+      <p class="t-body empty-body">Stage the first run and the agent pipeline will begin leaving things for you to review.</p>
+      <a class="button button-primary" href="new-run.html">Stage the first run</a>
+    </section>
+  </main>
+</body>
+</html>
+

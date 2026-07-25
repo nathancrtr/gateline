@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<!-- Theme: Warm light — editorial portfolio overview with gate ledger centerpiece.
+     Primary type: Playfair Display italic (hero). Secondary: Inter (body/UI). Mono: JetBrains Mono.
+     Direction C (editorial) + Direction B (tinted status chips, cool near-black, structured metadata). -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gate — Portfolio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,700&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
+<style>
+/* ── Design tokens (shared across screens) ── */
+:root {
+  --ground: #faf8f5;
+  --surface: #fffdf9;
+  --surface-elevated: #ffffff;
+  --surface-tint: #f3f0eb;
+  --surface-tint-blue: #f4f7fb;
+  --line: #e8e3dc;
+  --line-subtle: #f0ebe4;
+  --text-primary: #1b1f24;
+  --text-secondary: #59636e;
+  --text-tertiary: #8b949e;
+  --text-inverse: #ffffff;
+
+  --accent: #2563eb;
+  --accent-bg: #eff6ff;
+  --accent-text: #1d4ed8;
+  --accent-border: #93bbfd;
+
+  --ok-bg: #dafbe1;
+  --ok-text: #1a7f37;
+  --ok-border: #8ddb9a;
+
+  --warn-bg: #fff1c0;
+  --warn-text: #946a00;
+  --warn-border: #e6c54a;
+
+  --bad-bg: #ffebe9;
+  --bad-text: #cf222e;
+  --bad-border: #f7999f;
+
+  --purple-bg: #fbefff;
+  --purple-text: #8250df;
+  --purple-border: #c297ff;
+
+  --info-bg: #ddf4ff;
+  --info-text: #0969da;
+  --info-border: #80ccff;
+
+  --pink-bg: #ffeff7;
+  --pink-text: #bf3989;
+
+  --font-hero: 'Playfair Display', Georgia, serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  --shadow-elevated: 0 0 0 1px rgba(29,27,24,0.06), 0 4px 12px -2px rgba(29,27,24,0.04), 0 8px 20px 0 rgba(29,27,24,0.08);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+body {
+  font-family: var(--font-body);
+  background: var(--ground);
+  color: var(--text-primary);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* ── Layout ── */
+.app-shell { max-width: 1200px; margin: 0 auto; padding: 48px 40px 80px; }
+
+/* ── Typography ── */
+.hero-heading {
+  font-family: var(--font-hero);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 2.25rem;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+.display-number {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 2.5rem;
+  line-height: 1.1;
+  font-feature-settings: 'tnum';
+  color: var(--text-primary);
+}
+
+/* ── Page header ── */
+.page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.page-header-left { display: flex; align-items: flex-end; gap: 16px; }
+.page-header-left .display-number {
+  font-size: 2.5rem;
+  line-height: 1;
+  padding-bottom: 4px;
+}
+.page-subtitle {
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  color: var(--text-tertiary);
+  margin-bottom: 24px;
+}
+
+.primary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  background: var(--accent);
+  color: var(--text-inverse);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.875rem;
+  line-height: 1.4;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s ease;
+  white-space: nowrap;
+}
+.primary-btn:hover { background: #1d4ed8; }
+
+/* ── Portfolio table (passive — flat, no elevation, A1) ── */
+.table-wrapper {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.portfolio-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-feature-settings: 'tnum';
+}
+.portfolio-table th {
+  text-align: left;
+  padding: 10px 14px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  background: var(--surface-tint);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.portfolio-table td {
+  padding: 14px 14px;
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--line-subtle);
+  vertical-align: middle;
+}
+.portfolio-table tr:last-child td { border-bottom: none; }
+.portfolio-table tr:hover td { background: #fefdf9; }
+
+/* Slug col */
+.slug-col {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.8125rem;
+  color: var(--text-primary);
+}
+.slug-source {
+  display: block;
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 0.6875rem;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+.malformed-note {
+  font-family: var(--font-body);
+  font-size: 0.6875rem;
+  color: var(--bad-text);
+  font-style: italic;
+  display: block;
+  margin-top: 2px;
+}
+
+/* Phase chip */
+.phase-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-weight: 500;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.phase-spec    { background: var(--info-bg);    color: var(--info-text);    border: 1px solid var(--info-border); }
+.phase-plan    { background: var(--purple-bg);  color: var(--purple-text);  border: 1px solid var(--purple-border); }
+.phase-implement { background: var(--accent-bg);  color: var(--accent-text);  border: 1px solid var(--accent-border); }
+.phase-integrate { background: #fff8ee;          color: #b35900;             border: 1px solid #f0c68a; }
+.phase-release { background: #f0fff4;            color: #116329;             border: 1px solid #8ddb9a; }
+.phase-done    { background: var(--ok-bg);       color: var(--ok-text);       border: 1px solid var(--ok-border); }
+.phase-paused  { background: var(--surface-tint); color: var(--text-tertiary); border: 1px solid var(--line); }
+.phase-chip .phase-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.phase-spec .phase-dot    { background: var(--info-text); }
+.phase-plan .phase-dot    { background: var(--purple-text); }
+.phase-implement .phase-dot { background: var(--accent-text); }
+.phase-integrate .phase-dot { background: #b35900; }
+.phase-release .phase-dot { background: var(--ok-text); }
+.phase-done .phase-dot    { background: var(--ok-text); }
+.phase-paused .phase-dot  { background: var(--text-tertiary); }
+
+/* Gate ledger */
+.gate-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 40px;
+  height: 26px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.6875rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.gate-cell + .gate-cell { margin-left: 4px; }
+.gate-approved {
+  background: var(--ok-bg);
+  color: var(--ok-text);
+  border: 1px solid var(--ok-border);
+}
+.gate-declined {
+  background: var(--bad-bg);
+  color: var(--bad-text);
+  border: 1px solid var(--bad-border);
+}
+.gate-pending {
+  background: transparent;
+  color: var(--text-tertiary);
+  border: 1px dashed var(--line);
+}
+.gate-cell .gate-glyph {
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+/* Tasks column */
+.task-count {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+.task-count .done { color: var(--ok-text); font-weight: 500; }
+
+/* Budget meter */
+.budget-meter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 80px;
+}
+.budget-bar-track {
+  flex: 1;
+  height: 4px;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+  max-width: 48px;
+}
+.budget-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.2s ease;
+}
+.budget-bar-fill.over {
+  background: var(--bad-text);
+}
+.budget-label {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.budget-label.over {
+  color: var(--bad-text);
+  font-weight: 500;
+}
+.budget-unmetered {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--text-tertiary);
+  font-style: italic;
+}
+
+/* Needs human badge */
+.needs-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent-bg);
+  color: var(--accent-text);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+.needs-badge.large {
+  background: #fff1e6;
+  color: #b35900;
+}
+
+/* Updated age */
+.age-text {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+/* ── Empty state ── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 40px;
+  text-align: center;
+  gap: 20px;
+  border: 2px dashed var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-tint);
+}
+.empty-mark {
+  width: 48px;
+  height: 48px;
+  opacity: 0.45;
+  margin-bottom: 4px;
+}
+.empty-mark svg { width: 100%; height: 100%; }
+.empty-heading {
+  font-family: var(--font-hero);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 1.5rem;
+  color: var(--text-primary);
+}
+.empty-body {
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  color: var(--text-tertiary);
+  max-width: 42ch;
+}
+
+/* Divider */
+.state-divider {
+  margin: 64px 0 40px;
+  border: none;
+  border-top: 1px solid var(--line);
+}
+.state-label {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  text-align: center;
+  margin: -10px auto 32px;
+  background: var(--ground);
+  display: table;
+  padding: 0 16px;
+}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- ═══ Header ═══ -->
+  <div class="page-header">
+    <div class="page-header-left">
+      <h1 class="hero-heading">Portfolio</h1>
+      <span class="display-number">10</span>
+    </div>
+    <a href="#" class="primary-btn">+ New run</a>
+  </div>
+  <p class="page-subtitle">All runs across sources, ordered by last activity</p>
+
+  <!-- ═══ Populated state — 10 runs across all phases & profiles ═══ -->
+  <div class="table-wrapper">
+    <table class="portfolio-table">
+      <thead>
+        <tr>
+          <th>Run</th>
+          <th>Phase</th>
+          <th>Gates</th>
+          <th>Tasks</th>
+          <th>Budget</th>
+          <th>Updated</th>
+          <th>Needs you</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <!-- 1. done — all gates ✓, merged -->
+        <tr>
+          <td>
+            <span class="slug-col">data-pipeline</span>
+            <span class="slug-source">e14s · standard</span>
+          </td>
+          <td><span class="phase-chip phase-done"><span class="phase-dot"></span>done</span></td>
+          <td>
+            <span class="gate-cell gate-approved" title="G0 approved by operator · 2026-07-01"><span class="gate-glyph">✓</span>G0</span>
+            <span class="gate-cell gate-approved" title="G1 approved by operator · 2026-07-03"><span class="gate-glyph">✓</span>G1</span>
+            <span class="gate-cell gate-approved" title="G2 approved by operator · 2026-07-08"><span class="gate-glyph">✓</span>G2</span>
+            <span class="gate-cell gate-approved" title="G3 approved by operator · 2026-07-12"><span class="gate-glyph">✓</span>G3</span>
+          </td>
+          <td><span class="task-count"><span class="done">6</span>/6</span></td>
+          <td>
+            <div class="budget-meter">
+              <div class="budget-bar-track"><div class="budget-bar-fill" style="width:76%"></div></div>
+              <span class="budget-label">$38/$50</span>
+            </div>
+          </td>
+          <td><span class="age-text">2d</span></td>
+          <td><span class="needs-badge">0</span></td>
+        </tr>
+
+        <!-- 2. release phase, G3 pending — g3-pending -->
+        <tr>
+          <td>
+            <span class="slug-col">g3-pending</span>
+            <span class="slug-source">e14s · full</span>
+          </td>
+          <td><span class="phase-chip phase-release"><span class="phase-dot"></span>release</span></td>
+          <td>
+            <span class="gate-cell gate-approved" title="G0 approved by operator · 2026-07-08"><span class="gate-glyph">✓</span>G0</span>
+            <span class="gate-cell gate-approved" title="G1 approved by operator · 2026-07-10"><span class="gate-glyph">✓</span>G1</span>
+            <span class="gate-cell gate-approved" title="G2 approved by operator · 2026-07-15"><span class="gate-glyph">✓</span>G2</span>
+            <span class="gate-cell gate-pending" title="G3 pending"><span class="gate-glyph">·</span>G3</span>
+          </td>
+          <td><span class="task-count"><span class="done">5</span>/5</span></td>
+          <td>
+            <div class="budget-meter">
+              <div class="budget-bar-track"><div class="budget-bar-fill" style="width:68%"></div></div>
+              <span class="budget-label">$34/$50</span>
+            </div>
+          </td>
+          <td><span class="age-text">6h</span></td>
+          <td><span class="needs-badge">1</span></td>
+        </tr>
+
+        <!-- 3. implement phase, G2 pending — g2-pending (log rotator) -->
+        <tr>
+          <td>
+            <span class="slug-col">g2-pending</span>
+            <span class="slug-source">e14s · standard</span>
+          </td>
+          <td><span class="phase-chip phase-implement"><span class="phase-dot"></span>implement</span></td>
+          <td>
+            <span class="gate-cell gate-approved" title="G0 approved by operator · 2026-07-16"><span class="gate-glyph">✓</span>G0</span>
+            <span class="gate-cell gate-approved" title="G1 approved by operator · 2026-07-18"><span class="gate-glyph">✓</span>G1</span>
+            <span class="gate-cell gate-pending" title="G2 pending — needs your review"><span class="gate-glyph">·</span>G2</span>
+          </td>
+          <td><span class="task-count"><span class="done">2</span>/2</span></td>
+          <td>
+            <div class="budget-meter">
+              <div class="budget-bar-track"><div class="budget-bar-fill" style="width:0%"></div></div>
+              <span class="budget-label">$0/$25</span>
+            </div>
+          </td>
+          <td><span class="age-text">12h</span></td>
+          <td><span class="needs-badge large">1</span></td>
+        </tr>
+
+        <!-- 4. plan phase, G1 pending — g1-pending -->
+        <tr>
+          <td>
+            <span class="slug-col">g1-pending</span>
+            <span class="slug-source">e14s · standard</span>
+          </td>
+          <td><span class="phase-chip phase-plan"><span class="phase-dot"></span>plan</span></td>
+          <td>
+            <span class="gate-cell gate-approved" title="G0 approved by operator · 2026-07-17"><span class="gate-glyph">✓</span>G0</span>
+            <span class="gate-cell gate-pending" title="G1 pending — needs your review"><span class="gate-glyph">·</span>G1</span>
+            <span class="gate-cell gate-pending" title="G2 pending"><span class="gate-glyph">·</span>G2</span>
+          </td>
+          <td><span class="task-count"><span class="done">0</span>/3</span></td>
+          <td>
+            <div class="budget-meter">
+              <div class="budget-bar-track"><div class="budget-bar-fill" style="width:8%"></div></div>
+              <span class="budget-label">$4/$50</span>
+            </div>
+          </td>
+          <td><span class="age-text">1d</span></td>
+          <td><span class="needs-badge">1</span></td>
+        </tr>
+
+        <!-- 5. spec phase, G0 pending — g0-pending -->
+        <tr>
+          <td>
+            <span class="slug-col">g0-pending</span>
+            <span class="slug-source">e14s · standard</span>
+          </td>
+          <td><span class="phase-chip phase-spec"><span class="phase-dot"></span>spec</span></td>
+          <td>
+            <span class="gate-cell gate-pending" title="G0 pending — needs your review"><span class="gate-glyph">·</span>G0</span>
+            <span class="gate-cell gate-pending" title="G1 pending"><span class="gate-glyph">·</span>G1</span>
+            <span class="gate-cell gate-pending" title="G2 pending"><span class="gate-glyph">·</span>G2</span>
+          </td>
+          <td><span class="task-count"><span class="done">0</span>/2</span></td>
+          <td>
+            <div class="budget-meter">
+              <div class="budget-bar-track"><div class="budget-bar-fill" style="width:4%"></div></div>
+              <span class="budget-label">$2/$50</span>
+            </div>
+          </td>
+          <td><span class="age-text">2d</span></td>
+          <td><span class="needs-badge">1</span></td>
+        </tr>
+
+        <!-- 6. paused — budget exhausted -->
+        <tr>
+          <td>
+            <span class="slug-col">paused-budget</span>
+            <span class="slug-source">e14s · standard</span>
+          </td>
+          <td><span class="phase-chip phase-paused"><span class="phase-dot"></span>paused</span></td>
+          <td>
+            <span class="gate-cell gate-approved" title="G0 approved by operator"><span class="gate-glyph">✓</span>G0</span>
+            <span class="gate-cell gate-pending" title="G1 pending"><span class="gate-glyph">·</span>G1</span>
+            <span class="gate-cell gate-pending" title="G2 pending"><span class="gate-glyph">·</span>G2</span>
+          </td>
+          <td><span class="task-count"><span class="done">1</span>/3</span></td>
+          <td>
+            <div class="budget-meter">
+              <div class="budget-bar-track"><div class="budget-bar-fill over" style="width:100%"></div></div>
+              <span class="budget-label over">$25/$25</span>
+            </div>
+          </td>
+          <td><span class="age-text">4d</span></td>
+          <td><span class="needs-badge">0</span></td>
+        </tr>
+
+        <!-- 7. escalated — needs attention -->
+        <tr>
+          <td>
+            <span class="slug-col">escalated</span>
+            <span class="slug-source">e14s · standard</span>
+          </td>
+          <td><span class="phase-chip phase-implement"><span class="phase-dot"></span>implement</span></td>
+          <td>
+            <span class="gate-cell gate-approved" title="G0 approved by operator"><span class="gate-glyph">✓</span>G0</span>
+            <span class="gate-cell gate-approved" title="G1 approved by operator"><span class="gate-glyph">✓</span>G1</span>
+            <span class="gate-cell gate-pending" title="G2 pending — escalated"><span class="gate-glyph">·</span>G2</span>
+          </td>
+          <td><span class="task-count"><span class="done">2</span>/3</span></td>
+          <td>
+            <div class="budget-meter">
+              <div class="budget-bar-track"><div class="budget-bar-fill" style="width:36%"></div></div>
+              <span class="budget-label">$9/$25</span>
+            </div>
+          </td>
+          <td><span class="age-text">3d</span></td>
+          <td><span class="needs-badge large">2</span></td>
+        </tr>
+
+        <!-- 8. round-cap — at review limit -->
+        <tr>
+          <td>
+            <span class="slug-col">round-cap</span>
+            <span class="slug-source">e14s · standard</span>
+          </td>
+          <td><span class="phase-chip phase-implement"><span class="phase-dot"></span>implement</span></td>
+          <td>
+            <span class="gate-cell gate-approved" title="G0 approved"><span class="gate-glyph">✓</span>G0</span>
+            <span class="gate-cell gate-approved" title="G1 approved"><span class="gate-glyph">✓</span>G1</span>
+            <span class="gate-cell gate-pending" title="G2 pending — round cap"><span class="gate-glyph">·</span>G2</span>
+          </td>
+          <td><span class="task-count"><span class="done">2</span>/2 · ⟲3</span></td>
+          <td>
+            <div class="budget-meter">
+              <div class="budget-bar-track"><div class="budget-bar-fill" style="width:44%"></div></div>
+              <span class="budget-label">$11/$25</span>
+            </div>
+          </td>
+          <td><span class="age-text">2d</span></td>
+          <td><span class="needs-badge large">1</span></td>
+        </tr>
+
+        <!-- 9. patch profile -->
+        <tr>
+          <td>
+            <span class="slug-col">patch-g2-pending</span>
+            <span class="slug-source">e14s · patch</span>
+          </td>
+          <td><span class="phase-chip phase-implement"><span class="phase-dot"></span>implement</span></td>
+          <td>
+            <span class="gate-cell gate-approved" title="G1 approved"><span class="gate-glyph">✓</span>G1</span>
+            <span class="gate-cell gate-pending" title="G2 pending"><span class="gate-glyph">·</span>G2</span>
+          </td>
+          <td><span class="task-count"><span class="done">1</span>/1</span></td>
+          <td>
+            <span class="budget-unmetered">unmetered</span>
+          </td>
+          <td><span class="age-text">1d</span></td>
+          <td><span class="needs-badge">1</span></td>
+        </tr>
+
+        <!-- 10. malformed -->
+        <tr>
+          <td>
+            <span class="slug-col">malformed-spec</span>
+            <span class="slug-source">e14s · standard</span>
+            <span class="malformed-note">spec contract invalid</span>
+          </td>
+          <td><span class="phase-chip phase-spec"><span class="phase-dot"></span>spec</span></td>
+          <td>
+            <span class="gate-cell gate-declined" title="G0 declined — malformed"><span class="gate-glyph">✕</span>G0</span>
+            <span class="gate-cell gate-pending" title="G1 pending"><span class="gate-glyph">·</span>G1</span>
+            <span class="gate-cell gate-pending" title="G2 pending"><span class="gate-glyph">·</span>G2</span>
+          </td>
+          <td><span class="task-count"><span class="done">0</span>/0</span></td>
+          <td>
+            <span class="budget-unmetered">$0/$50</span>
+          </td>
+          <td><span class="age-text">7d</span></td>
+          <td><span class="needs-badge">0</span></td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ═══ Alternative state: Empty ═══ -->
+  <hr class="state-divider">
+  <p class="state-label">Empty state</p>
+
+  <div class="empty-state">
+    <div class="empty-mark">
+      <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="24" y="2" width="31" height="31" rx="3.5" transform="rotate(45 24 2)" stroke="currentColor" stroke-width="1.5" fill="none"/>
+        <line x1="24" y1="16" x2="24" y2="26" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="19" y1="21" x2="29" y2="21" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <h2 class="empty-heading">No runs yet</h2>
+    <p class="empty-body">Stage the first run to see it here. Gate watches your repository for runs and renders their state — no database required.</p>
+    <a href="#" class="primary-btn">+ New run</a>
+  </div>
+
+</div>
+</body>
+</html>

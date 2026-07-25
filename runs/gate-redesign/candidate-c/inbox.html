@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<!-- Theme: Warm light — creamy ground, editorial typography, comfortable reading-first.
+     Primary type role: Playfair Display italic (hero). Secondary: Inter (body/UI).
+     Mono: JetBrains Mono. Direction C (editorial) + Direction B (status-chip techniques). -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gate — Inbox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400;0,14..32,500;0,14..32,600;0,14..32,700;1,14..32,700&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&family=Playfair+Display:ital,wght@0,700;1,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap" rel="stylesheet">
+<style>
+/* ── Design tokens ── */
+:root {
+  --ground: #faf8f5;
+  --surface: #fffdf9;
+  --surface-elevated: #ffffff;
+  --surface-tint: #f3f0eb;
+  --surface-tint-blue: #f4f7fb;
+  --line: #e8e3dc;
+  --line-subtle: #f0ebe4;
+  --text-primary: #1b1f24;
+  --text-secondary: #59636e;
+  --text-tertiary: #8b949e;
+  --text-inverse: #ffffff;
+
+  --accent: #2563eb;
+  --accent-bg: #eff6ff;
+  --accent-text: #1d4ed8;
+  --accent-border: #93bbfd;
+
+  --ok-bg: #dafbe1;
+  --ok-text: #1a7f37;
+  --ok-border: #8ddb9a;
+
+  --warn-bg: #fff1c0;
+  --warn-text: #946a00;
+  --warn-border: #e6c54a;
+
+  --bad-bg: #ffebe9;
+  --bad-text: #cf222e;
+  --bad-border: #f7999f;
+
+  --purple-bg: #fbefff;
+  --purple-text: #8250df;
+  --purple-border: #c297ff;
+
+  --info-bg: #ddf4ff;
+  --info-text: #0969da;
+  --info-border: #80ccff;
+
+  --pink-bg: #ffeff7;
+  --pink-text: #bf3989;
+
+  /* Type roles */
+  --font-hero: 'Playfair Display', Georgia, serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-reading: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace;
+
+  /* Radius ladder (Geist 6/12/16) */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+
+  /* Shadow — ring + soft drop (GitHub Primer) */
+  --shadow-elevated: 0 0 0 1px rgba(29,27,24,0.06), 0 4px 12px -2px rgba(29,27,24,0.04), 0 8px 20px 0 rgba(29,27,24,0.08);
+  --shadow-hover: 0 0 0 1px rgba(29,27,24,0.08), 0 6px 16px -3px rgba(29,27,24,0.06), 0 10px 24px 0 rgba(29,27,24,0.10);
+
+  --measure-wide: 72ch;
+  --measure-reading: 76ch;
+
+  /* Density */
+  --space-scan-row: 16px 20px;
+  --space-flow: 24px;
+}
+
+/* ── Reset & base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+body {
+  font-family: var(--font-body);
+  background: var(--ground);
+  color: var(--text-primary);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* ── Layout ── */
+.app-shell {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 48px 40px 80px;
+}
+
+/* ── Typography ── */
+.hero-heading {
+  font-family: var(--font-hero);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 2.25rem;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+.display-number {
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 2.5rem;
+  line-height: 1.1;
+  font-feature-settings: 'tnum';
+  color: var(--text-primary);
+}
+.section-heading {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.body-text {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+.label-text {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+.caption-text {
+  font-family: var(--font-body);
+  font-weight: 400;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--text-tertiary);
+}
+.mono-text {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* ── Page header ── */
+.page-header {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+.page-header .hero-heading { flex-shrink: 0; }
+.page-header .display-number {
+  font-size: 2.5rem;
+  line-height: 1;
+  padding-bottom: 4px;
+}
+.page-subtitle {
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  color: var(--text-tertiary);
+  margin-bottom: 32px;
+}
+
+/* ── Inbox list ── */
+.inbox-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+.inbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  padding: 0;
+  position: relative;
+}
+.inbox-row + .inbox-row { margin-top: 2px; }
+
+/* Left-edge status rail (Sentry pattern) */
+.rail-gate { --rail-color: var(--accent); }
+.rail-escalation { --rail-color: #bf3989; }
+.rail-round-cap { --rail-color: #b35900; }
+.rail-paused { --rail-color: var(--text-tertiary); }
+.rail-staged { --rail-color: #59636e55; }
+.rail-malformed { --rail-color: var(--bad-text); }
+.rail-bad { --rail-color: var(--bad-text); }
+
+.inbox-rail {
+  width: 3px;
+  min-height: 100%;
+  align-self: stretch;
+  background: var(--rail-color, var(--line));
+  border-radius: 3px 0 0 3px;
+  flex-shrink: 0;
+}
+
+.inbox-card {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 18px 24px;
+  background: var(--surface);
+  border: 1px solid var(--line-subtle);
+  border-left: none;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  cursor: pointer;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+  text-decoration: none;
+  color: inherit;
+}
+.inbox-card:hover {
+  background: var(--surface-elevated);
+  box-shadow: var(--shadow-hover);
+  z-index: 1;
+  position: relative;
+}
+
+/* Kind chip */
+.kind-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  white-space: nowrap;
+  flex-shrink: 0;
+  min-width: 68px;
+  justify-content: center;
+}
+.kind-gate {
+  background: var(--accent-bg);
+  color: var(--accent-text);
+  border: 1px solid var(--accent-border);
+}
+.kind-gate-bounced {
+  background: var(--bad-bg);
+  color: var(--bad-text);
+  border: 1px dashed var(--bad-border);
+  text-decoration: line-through;
+}
+.kind-escalation {
+  background: var(--pink-bg);
+  color: var(--pink-text);
+  border: 1px solid #f0c6e5;
+}
+.kind-round-cap {
+  background: #fff8ee;
+  color: #b35900;
+  border: 1px solid #f0c68a;
+}
+.kind-paused {
+  background: var(--surface-tint);
+  color: var(--text-tertiary);
+  border: 1px solid var(--line);
+}
+.kind-staged {
+  background: transparent;
+  color: var(--text-tertiary);
+  border: 1px dashed var(--line);
+}
+.kind-malformed {
+  background: var(--bad-bg);
+  color: var(--bad-text);
+  border: 1px solid var(--bad-border);
+}
+
+/* Row body */
+.inbox-body { flex: 1; min-width: 0; }
+.inbox-title-row { display: flex; align-items: center; gap: 10px; margin-bottom: 2px; }
+.inbox-title {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+.inbox-gate-label {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 0.6875rem;
+  color: var(--text-tertiary);
+  background: var(--surface-tint);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+}
+.inbox-detail {
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  max-width: var(--measure-wide);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inbox-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+.inbox-source {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--text-tertiary);
+}
+.inbox-packet {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--text-tertiary);
+  background: var(--surface-tint);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+/* Right side: age */
+.inbox-age {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.8125rem;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+  min-width: 44px;
+  justify-content: flex-end;
+}
+.inbox-age.urgent {
+  color: var(--warn-text);
+  font-weight: 600;
+}
+.inbox-age.critical {
+  color: var(--bad-text);
+  font-weight: 700;
+}
+.age-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+/* Bounce message */
+.bounce-note {
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--bad-text);
+  font-style: italic;
+  margin-top: 6px;
+  padding: 8px 12px;
+  background: var(--bad-bg);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid var(--bad-border);
+}
+
+/* ── Empty state ── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 40px;
+  text-align: center;
+  gap: 16px;
+  border: 2px dashed var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-tint);
+  margin-top: 8px;
+}
+.empty-mark {
+  width: 48px;
+  height: 48px;
+  opacity: 0.5;
+  margin-bottom: 4px;
+}
+.empty-mark svg { width: 100%; height: 100%; }
+.empty-heading {
+  font-family: var(--font-hero);
+  font-style: italic;
+  font-weight: 700;
+  font-size: 1.5rem;
+  color: var(--text-primary);
+}
+.empty-body {
+  font-family: var(--font-body);
+  font-size: 0.9375rem;
+  color: var(--text-tertiary);
+  max-width: 42ch;
+}
+
+/* ── Loading skeleton ── */
+.skeleton-list { list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.skeleton-row {
+  display: flex; align-items: center; gap: 20px;
+  padding: 18px 24px;
+  background: var(--surface);
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-md);
+}
+.skeleton-block {
+  background: var(--line);
+  border-radius: 4px;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.7; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-block { animation: none; opacity: 0.5; }
+}
+
+/* ── Diamond mark (signature motif) ── */
+.diamond-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+}
+.diamond-mark svg {
+  width: 100%;
+  height: 100%;
+  opacity: 0.35;
+}
+
+/* ── Section divider ── */
+.state-divider {
+  margin: 64px 0 40px;
+  border: none;
+  border-top: 1px solid var(--line);
+}
+.state-label {
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  text-align: center;
+  margin: -10px auto 32px;
+  background: var(--ground);
+  display: table;
+  padding: 0 16px;
+}
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- ═══ Header ═══ -->
+  <div class="page-header">
+    <h1 class="hero-heading">Inbox</h1>
+    <span class="display-number">8</span>
+  </div>
+  <p class="page-subtitle">Pending decisions across all runs, oldest first</p>
+
+  <!-- ═══ Populated state — 8 items, all 6 kinds ═══ -->
+  <ul class="inbox-list" id="inbox-populated">
+
+    <!-- 1. malformed — oldest (7d) -->
+    <li class="inbox-row rail-malformed">
+      <span class="inbox-rail" aria-hidden="true"></span>
+      <a class="inbox-card" href="#">
+        <span class="kind-chip kind-malformed">◈ malformed</span>
+        <span class="inbox-body">
+          <div class="inbox-title-row">
+            <span class="inbox-title">State file unreadable</span>
+          </div>
+          <span class="inbox-detail">runs/bad-state/state.yaml failed to parse — YAML syntax error at line 14</span>
+          <div class="inbox-meta">
+            <span class="inbox-source">e14s/bad-state</span>
+            <span class="inbox-packet">state.yaml</span>
+          </div>
+        </span>
+        <span class="inbox-age critical"><span class="age-dot"></span>7d</span>
+      </a>
+    </li>
+
+    <!-- 2. staged (5d) -->
+    <li class="inbox-row rail-staged">
+      <span class="inbox-rail" aria-hidden="true"></span>
+      <a class="inbox-card" href="#">
+        <span class="kind-chip kind-staged">○ staged</span>
+        <span class="inbox-body">
+          <div class="inbox-title-row">
+            <span class="inbox-title">CSV importer awaits arming</span>
+          </div>
+          <span class="inbox-detail">Run staged but not yet armed — resting at staged until you activate it</span>
+          <div class="inbox-meta">
+            <span class="inbox-source">agentic-sandbox/csv-importer</span>
+            <span class="inbox-packet">intent-brief.md</span>
+          </div>
+        </span>
+        <span class="inbox-age"><span class="age-dot"></span>5d</span>
+      </a>
+    </li>
+
+    <!-- 3. paused — budget exhausted (4d) -->
+    <li class="inbox-row rail-paused">
+      <span class="inbox-rail" aria-hidden="true"></span>
+      <a class="inbox-card" href="#">
+        <span class="kind-chip kind-paused">⏸ paused</span>
+        <span class="inbox-body">
+          <div class="inbox-title-row">
+            <span class="inbox-title">Budget exhausted on deploy-toolkit</span>
+          </div>
+          <span class="inbox-detail">Run paused at plan phase — spent $25 of $25 limit. Increase budget or archive the run.</span>
+          <div class="inbox-meta">
+            <span class="inbox-source">e14s/deploy-toolkit</span>
+            <span class="inbox-packet">budget-exhausted</span>
+          </div>
+        </span>
+        <span class="inbox-age urgent"><span class="age-dot"></span>4d</span>
+      </a>
+    </li>
+
+    <!-- 4. escalation (3d) -->
+    <li class="inbox-row rail-escalation">
+      <span class="inbox-rail" aria-hidden="true"></span>
+      <a class="inbox-card" href="#">
+        <span class="kind-chip kind-escalation">↗ escalation</span>
+        <span class="inbox-body">
+          <div class="inbox-title-row">
+            <span class="inbox-title">AC2.1 verification blocked on log-rotator</span>
+          </div>
+          <span class="inbox-detail">AC2.1 unverifiable: sample input referenced by the spec does not exist in the repository</span>
+          <div class="inbox-meta">
+            <span class="inbox-source">e14s/log-rotator</span>
+            <span class="inbox-packet">verification-report.md</span>
+          </div>
+        </span>
+        <span class="inbox-age urgent"><span class="age-dot"></span>3d</span>
+      </a>
+    </li>
+
+    <!-- 5. round-cap (2d) -->
+    <li class="inbox-row rail-round-cap">
+      <span class="inbox-rail" aria-hidden="true"></span>
+      <a class="inbox-card" href="#">
+        <span class="kind-chip kind-round-cap">⟲ round-cap</span>
+        <span class="inbox-body">
+          <div class="inbox-title-row">
+            <span class="inbox-title">Review round cap reached on api-refactor</span>
+          </div>
+          <span class="inbox-detail">3 review rounds completed (all request-changes) — max rounds exhausted. Human decision required.</span>
+          <div class="inbox-meta">
+            <span class="inbox-source">e14s/api-refactor</span>
+            <span class="inbox-packet">tasks/03-router.yaml</span>
+          </div>
+        </span>
+        <span class="inbox-age"><span class="age-dot"></span>2d</span>
+      </a>
+    </li>
+
+    <!-- 6. gate BOUNCED (R3) — 1d, reviewable=false -->
+    <li class="inbox-row rail-bad">
+      <span class="inbox-rail" aria-hidden="true"></span>
+      <a class="inbox-card" href="#">
+        <span class="kind-chip kind-gate-bounced">✕ G2 <s>gate</s></span>
+        <span class="inbox-body">
+          <div class="inbox-title-row">
+            <span class="inbox-title">G2 implementation review on search-indexer</span>
+            <span class="inbox-gate-label">G2</span>
+          </div>
+          <span class="inbox-detail">Implementation approval for the search-indexer run</span>
+          <div class="bounce-note">Bounced — packet fails its contract; no approval is offered.</div>
+          <div class="inbox-meta">
+            <span class="inbox-source">e14s/search-indexer</span>
+            <span class="inbox-packet">spec.md, plan.md</span>
+          </div>
+        </span>
+        <span class="inbox-age"><span class="age-dot"></span>1d</span>
+      </a>
+    </li>
+
+    <!-- 7. gate — G0, reviewable (12h) -->
+    <li class="inbox-row rail-gate">
+      <span class="inbox-rail" aria-hidden="true"></span>
+      <a class="inbox-card" href="#">
+        <span class="kind-chip kind-gate">· G0 gate</span>
+        <span class="inbox-body">
+          <div class="inbox-title-row">
+            <span class="inbox-title">Spec approval for smart-cache</span>
+            <span class="inbox-gate-label">G0</span>
+          </div>
+          <span class="inbox-detail">Review the specification before the agent proceeds to planning</span>
+          <div class="inbox-meta">
+            <span class="inbox-source">e14s/smart-cache</span>
+            <span class="inbox-packet">spec.md, intent-brief.md</span>
+          </div>
+        </span>
+        <span class="inbox-age"><span class="age-dot"></span>12h</span>
+      </a>
+    </li>
+
+    <!-- 8. gate — G1, reviewable (5h) -->
+    <li class="inbox-row rail-gate">
+      <span class="inbox-rail" aria-hidden="true"></span>
+      <a class="inbox-card" href="#">
+        <span class="kind-chip kind-gate">· G1 gate</span>
+        <span class="inbox-body">
+          <div class="inbox-title-row">
+            <span class="inbox-title">Plan approval for event-bus</span>
+            <span class="inbox-gate-label">G1</span>
+          </div>
+          <span class="inbox-detail">Review the implementation plan (light-correction burden)</span>
+          <div class="inbox-meta">
+            <span class="inbox-source">e14s/event-bus</span>
+            <span class="inbox-packet">plan.md</span>
+          </div>
+        </span>
+        <span class="inbox-age"><span class="age-dot"></span>5h</span>
+      </a>
+    </li>
+
+  </ul>
+
+  <!-- ═══ Alternative states ═══ -->
+  <hr class="state-divider">
+  <p class="state-label">Alternative states</p>
+
+  <!-- Empty state: "Inbox zero." -->
+  <div class="empty-state">
+    <div class="diamond-mark">
+      <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="20" y="2" width="25.5" height="25.5" rx="3" transform="rotate(45 20 2)" stroke="currentColor" stroke-width="1.5" fill="none"/>
+        <circle cx="20" cy="20" r="3" fill="currentColor"/>
+      </svg>
+    </div>
+    <h2 class="empty-heading">Inbox zero.</h2>
+    <p class="empty-body">No pending decisions across any run. Every gate is cleared, every escalation resolved, every round closed. Gate is at rest.</p>
+  </div>
+
+  <hr class="state-divider">
+  <p class="state-label">Loading skeleton</p>
+
+  <!-- Loading skeleton — 5 rows -->
+  <ul class="skeleton-list">
+    <li class="skeleton-row">
+      <span class="skeleton-block" style="width:78px;height:22px;border-radius:999px;"></span>
+      <span style="flex:1;display:flex;flex-direction:column;gap:6px;">
+        <span class="skeleton-block" style="width:60%;height:15px;"></span>
+        <span class="skeleton-block" style="width:85%;height:13px;"></span>
+      </span>
+      <span class="skeleton-block" style="width:36px;height:14px;"></span>
+    </li>
+    <li class="skeleton-row">
+      <span class="skeleton-block" style="width:72px;height:22px;border-radius:999px;"></span>
+      <span style="flex:1;display:flex;flex-direction:column;gap:6px;">
+        <span class="skeleton-block" style="width:45%;height:15px;"></span>
+        <span class="skeleton-block" style="width:70%;height:13px;"></span>
+      </span>
+      <span class="skeleton-block" style="width:36px;height:14px;"></span>
+    </li>
+    <li class="skeleton-row">
+      <span class="skeleton-block" style="width:82px;height:22px;border-radius:999px;"></span>
+      <span style="flex:1;display:flex;flex-direction:column;gap:6px;">
+        <span class="skeleton-block" style="width:55%;height:15px;"></span>
+        <span class="skeleton-block" style="width:75%;height:13px;"></span>
+      </span>
+      <span class="skeleton-block" style="width:36px;height:14px;"></span>
+    </li>
+    <li class="skeleton-row">
+      <span class="skeleton-block" style="width:68px;height:22px;border-radius:999px;"></span>
+      <span style="flex:1;display:flex;flex-direction:column;gap:6px;">
+        <span class="skeleton-block" style="width:50%;height:15px;"></span>
+        <span class="skeleton-block" style="width:65%;height:13px;"></span>
+      </span>
+      <span class="skeleton-block" style="width:36px;height:14px;"></span>
+    </li>
+    <li class="skeleton-row">
+      <span class="skeleton-block" style="width:76px;height:22px;border-radius:999px;"></span>
+      <span style="flex:1;display:flex;flex-direction:column;gap:6px;">
+        <span class="skeleton-block" style="width:40%;height:15px;"></span>
+        <span class="skeleton-block" style="width:80%;height:13px;"></span>
+      </span>
+      <span class="skeleton-block" style="width:36px;height:14px;"></span>
+    </li>
+  </ul>
+
+</div>
+</body>
+</html>

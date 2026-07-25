@@ -1,0 +1,71 @@
+id: 01-core-recovery
+title: Best-effort escalation recovery in the parser and the core view-models
+requirements: [R1, R2, R3]
+
+scope: |
+  In frontend/packages/core, implement the parser recovery and wire it through
+  the two view-model derivations, exactly per plan.md "Interface contracts".
+
+  1. schema.ts: extend StateParseResult with the optional
+     `bestEffortEscalations?: Escalation[]` field. In parseRunState's
+     schema-failure branch (not the YAML-failure branch), attempt recovery: the
+     parsed YAML must be a non-null object, its raw `escalations` key must be
+     present, and `z.array(escalationSchema)` must accept the whole array;
+     otherwise omit the key entirely. Never repair or drop individual entries.
+     The error message composition is untouched.
+  2. portfolio.ts: in summarizeRun's `!state` branch, set escalationsOpen to
+     the count of recovered entries with resolved === false (0 when the field
+     is absent). Everything else in that branch stays as-is; needsHuman keeps
+     counting items.
+  3. readiness.ts: in deriveReadiness's `!state` branch, after the existing
+     malformed item, push one InboxItem per open recovered escalation with the
+     exact field values given in the plan (kind 'escalation', reviewable false,
+     escalationIndex null, title/detail/since matching the valid path's
+     expressions). InboxItem's shape and InboxKind are NOT changed.
+
+  Tests go in a NEW file, frontend/packages/core/test/escalation-recovery.test.ts
+  (do not touch readiness.test.ts — another task edits it):
+  - AC1.1/AC1.3/AC1.4 at the parseRunState level with inline YAML strings: an
+    out-of-enum phase with a well-formed escalations array recovers the list
+    while state stays null and error keeps the schema-violation message; a
+    malformed entry (resolved as a string, or missing reason) recovers
+    nothing; extra violations in tasks/gates still recover only escalations.
+    Also cover: absent escalations key recovers nothing, and a valid document
+    never carries the field.
+  - AC1.2: parse the exact bad-state YAML literal from
+    frontend/fixtures/src/index.ts (copy the string) and assert the result
+    deep-equals { state: null, error: <existing message> } with no
+    bestEffortEscalations key ('bestEffortEscalations' in result === false).
+  - AC2.3 and the R3 items, end to end through git: use makeFixture from
+    fixture.helper.ts, add a test-local schema-invalid run with well-formed
+    escalations via the addPausedRun idiom in readiness.test.ts (git branch +
+    hand-written state.yaml, N=2 open + 1 resolved), then assert
+    buildPortfolio's RunSummary has escalationsOpen === 2, and deriveReadiness
+    returns the malformed item first followed by two escalation items with
+    reviewable false, escalationIndex null, and the from_role/reason in
+    title/detail. Do NOT add this run to the shared fixtures generator — task
+    02 adds a separate shared one.
+
+  Environment: Node >= 24; run `npm install` once in frontend/, and confirm
+  `npx vitest run` is green before and after.
+
+file_contact_surface:
+  - frontend/packages/core/src/record/schema.ts
+  - frontend/packages/core/src/view-model/portfolio.ts
+  - frontend/packages/core/src/view-model/readiness.ts
+  - frontend/packages/core/test/escalation-recovery.test.ts
+
+acceptance_tests:
+  - AC1.1
+  - AC1.2
+  - AC1.3
+  - AC1.4
+  - AC2.3
+  - "cd frontend && npx vitest run packages/core passes"
+  - "cd frontend && npm run typecheck passes"
+
+depends_on: []
+
+status: pending
+
+notes: |

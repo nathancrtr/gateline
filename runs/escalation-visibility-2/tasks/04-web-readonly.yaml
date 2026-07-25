@@ -1,0 +1,56 @@
+id: 04-web-readonly
+title: DecidePanel offers no Resolve on non-reviewable escalations; e2e proves the read-only card
+requirements: [R3, R4]
+
+scope: |
+  Close the control gap the spec's Context names: DecidePanel currently renders
+  Resolve for any kind 'escalation' item without checking reviewable
+  (frontend/packages/web/src/components/decide.tsx). Per plan ADR-3:
+
+  1. decide.tsx:
+     - keyboard handler 'a': require `item.reviewable` before entering resolve
+       mode for escalation items.
+     - idle-mode Resolve button branch: require `item.kind === 'escalation'
+       && item.reviewable`.
+     - new idle-mode branch for `item.kind === 'escalation' && !item.reviewable`:
+       a static paragraph styled like the existing bounced-gate message (the
+       `item.kind === 'gate' && !item.reviewable` branch), text: "Read-only —
+       recovered from malformed run state. Fix state.yaml to act on it; no
+       resolution is offered here." It must render no button and no
+       data-decide attribute.
+     No other component changes: itemHref, KindChip, run.tsx, and api.ts stay
+     untouched (recovered items already flow through them; the plan documents
+     why).
+  2. e2e: add a test to frontend/e2e/smoke.spec.ts, following the existing
+     malformed-spec idiom there (which asserts
+     `[data-decide="approve"]` has count 0 on a bounced card), navigating to
+     /runs/<sourceId()>/esc-recovered and asserting:
+     - the malformed-run-state banner is visible (existing behavior),
+     - two escalation cards render, each showing the from_role in its title
+       and the reason text (R3's run-detail half),
+     - `[data-decide="resolve"]` has count 0 across the page (AC4.1),
+     - a schema-valid run's escalation keeps its Resolve button: on
+       /runs/<sourceId()>/escalated, `[data-decide="resolve"]` has count 1
+       (regression guard for the reviewable gating).
+
+  Environment: Node >= 24; e2e needs `npm run build` in frontend/ first, then
+  `npx playwright test`. If Playwright browsers cannot be installed in your
+  environment, run vitest + typecheck locally, state in notes that the e2e
+  criterion is deferred to frontend-ci, and do not claim AC4.1 verified
+  locally (plan Risks, third bullet).
+
+file_contact_surface:
+  - frontend/packages/web/src/components/decide.tsx
+  - frontend/e2e/smoke.spec.ts
+
+acceptance_tests:
+  - AC4.1
+  - "e2e: two recovered escalation cards on the esc-recovered run page show role and reason with zero resolve controls"
+  - "e2e: the schema-valid escalated run still shows exactly one resolve control"
+  - "cd frontend && npm run typecheck passes; npm run build && npx playwright test passes (locally or in frontend-ci per plan Risks)"
+
+depends_on: [01-core-recovery, 02-fixture-run]
+
+status: pending
+
+notes: |

@@ -1,0 +1,55 @@
+id: 03-server-surface
+title: Run-detail recoveredEscalations payload field and the server-level acceptance tests
+requirements: [R2, R3, R4]
+
+scope: |
+  In frontend/packages/server, expose the recovered entries on the run-detail
+  route and prove R2/R4 at the HTTP layer, per plan ADR-5.
+
+  1. src/app.ts, GET /api/runs/:src/:slug only: destructure
+     `bestEffortEscalations` from the existing `source.readState(ref)` call
+     inside the cached payload builder, and spread-conditionally add
+     `recoveredEscalations`: the entries with resolved === false, in list
+     order, projected to { at, from_role, reason }. The key must be ABSENT
+     (not null) when the parser recovered nothing, so responses for every
+     existing fixture — including bad-state — are byte-identical (AC1.2's
+     rider). POST /api/decisions and all other routes are untouched.
+  2. Tests in a NEW file, frontend/packages/server/test/escalation-recovery.test.ts
+     (do not touch app.test.ts — task 02 edits it). Use the app.test.ts idiom:
+     generateFixtureRepo + LocalGitSource + createApp, against the shared
+     esc-recovered fixture (2 open, 1 resolved escalation):
+     - AC2.1: GET /api/runs → the esc-recovered entry has escalationsOpen === 2
+       and a non-null malformed message.
+     - AC2.2: GET /api/runs/fixture/esc-recovered → summary.escalationsOpen === 2.
+     - AC3.2: same response → recoveredEscalations has exactly 2 entries, each
+       with from_role, reason, and at fields matching the fixture's open
+       entries; the resolved entry is absent.
+     - AC1.2 rider: GET /api/runs/fixture/bad-state → no recoveredEscalations
+       key in the response body.
+     - AC4.2: POST /api/decisions against esc-recovered returns the existing
+       malformed-state refusal (status 409, error mentioning malformed) for
+       each of action resolve-escalation (escalationIndex 0, notes), approve
+       (gate G2, burden confirmation), and decline (gate G2, notes).
+     - R4 item shape: the run-detail items[] contains the malformed item plus
+       2 kind 'escalation' items with reviewable false and escalationIndex null.
+
+  Environment: Node >= 24; `npm install` once in frontend/;
+  `npx vitest run packages/server` green, and the full `npx vitest run` green.
+
+file_contact_surface:
+  - frontend/packages/server/src/app.ts
+  - frontend/packages/server/test/escalation-recovery.test.ts
+
+acceptance_tests:
+  - AC2.1
+  - AC2.2
+  - AC3.2
+  - AC4.2
+  - "GET /api/runs/fixture/bad-state carries no recoveredEscalations key"
+  - "cd frontend && npx vitest run passes"
+
+depends_on: [01-core-recovery, 02-fixture-run]
+
+status: pending
+
+notes: |

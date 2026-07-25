@@ -1,0 +1,45 @@
+id: 05-cli-inbox
+title: CLI inbox line names role and reason for recovered escalations
+requirements: [R3]
+
+scope: |
+  In frontend/packages/cli/src/main.ts, extend printItem per plan
+  "Interface contracts > CLI": when an item has kind 'escalation' and
+  reviewable false, append ` — ${item.detail}` to the single printed line, so
+  the line names both the from_role (already in the title, "Escalation from
+  <role>") and the reason (the detail) (AC3.1). Output for every other item —
+  reviewable escalations, gates, malformed, paused, staged, round-cap, and the
+  BOUNCED problem lines — is byte-identical to today. No new flags, columns,
+  or formats (spec Out of scope). `agentic status` needs no change: recovered
+  items already raise its needs column via needsHuman (plan ADR-3).
+
+  Test in frontend/packages/cli/test/cli.test.ts, alongside the existing
+  "inbox lists items oldest-first" test and using its run() harness against
+  the shared fixture:
+  - `agentic inbox` output contains one line per open recovered escalation of
+    the esc-recovered fixture run (2 lines), each starting with the
+    'escalation' kind column and containing 'esc-recovered', the from_role
+    (implementer / verifier), and that escalation's reason text after ' — '.
+  - The existing malformed-run-state line for esc-recovered is also present
+    (kind column 'malformed'), and lines[0] still names 'escalated' (ordering
+    guard).
+  - The schema-valid escalated run's line is unchanged (no ' — ' reason
+    suffix).
+
+  Environment: Node >= 24; `npm install` once in frontend/;
+  `npx vitest run packages/cli` green, and the full `npx vitest run` green.
+
+file_contact_surface:
+  - frontend/packages/cli/src/main.ts
+  - frontend/packages/cli/test/cli.test.ts
+
+acceptance_tests:
+  - AC3.1
+  - "reviewable escalation lines are unchanged (no reason suffix)"
+  - "cd frontend && npx vitest run passes"
+
+depends_on: [01-core-recovery, 02-fixture-run]
+
+status: pending
+
+notes: |

@@ -1,0 +1,60 @@
+id: 02-fixture-run
+title: Shared esc-recovered fixture run plus the count-sensitive assertion updates
+requirements: [R1]
+
+scope: |
+  Add one run to the shared fixture generator (frontend/fixtures/src/index.ts)
+  and move the three assertions that count or enumerate fixture runs, per plan
+  ADR-4 and "Interface contracts > Shared fixture". No production code changes.
+
+  1. New branchRuns entry, slug `esc-recovered`, age 1 (youngest — ordering
+     assertions depend on the 7-day-old `escalated` run staying first). Files:
+     intent-brief.md via brief(...), spec.md via spec(...), and a hand-written
+     state.yaml template literal (the stateYaml helper cannot emit an invalid
+     phase). The state.yaml must be valid YAML with:
+     - run/branch keys matching the slug; `phase: verifying` (out of enum —
+       the single unrelated schema violation); paused_reason: null
+     - a well-formed budget block and gates block (G0/G1 approved by operator,
+       G2/G3 undecided) and `tasks: []`
+     - escalations: exactly 2 entries with resolved: false (from_role:
+       implementer, from_role: verifier, distinct reasons) and 1 entry with
+       resolved: true (plus resolved_by/resolved_at/resolution); every `at`
+       computed from the generator's `now` as
+       new Date((now - 1 * DAY) * 1000).toISOString() — the `escalated` run's
+       idiom (see its escalation at now - 7 * DAY).
+  2. frontend/packages/core/test/readiness.test.ts: add 'esc-recovered' to the
+     sorted slug list in the "finds every fixture run" test. Touch nothing
+     else in that file.
+  3. frontend/packages/server/test/app.test.ts: bump
+     `expect(body.runs).toHaveLength(12)` to 13. Touch nothing else.
+  4. frontend/packages/orchestrator/test/fixture.test.ts: add
+     `expect(bySlug['esc-recovered']).toMatchObject({ kind: 'rest', rule: 'D0' })`
+     next to the bad-state assertion — pinning that the engine treats the run
+     as malformed rest and never dispatches on recovered escalations.
+
+  This task is data + assertions only, so it does not depend on task 01: before
+  01 lands the run simply reads as a malformed run with zero escalations, and
+  every updated assertion already holds.
+
+  Environment: Node >= 24; `npm install` once in frontend/; the full
+  `npx vitest run` (core, server, orchestrator, cli suites) must be green —
+  the fixture is shared, so any suite failing to the new run is this task's
+  defect. In particular, `escalated` must still lead the inbox in
+  packages/cli/test/cli.test.ts and packages/server/test/app.test.ts.
+
+file_contact_surface:
+  - frontend/fixtures/src/index.ts
+  - frontend/packages/core/test/readiness.test.ts
+  - frontend/packages/server/test/app.test.ts
+  - frontend/packages/orchestrator/test/fixture.test.ts
+
+acceptance_tests:
+  - "AC1.1's fixture shape exists: the esc-recovered run's state.yaml parses as YAML, fails the contract schema only on phase, and carries 2 open + 1 resolved well-formed escalations"
+  - "cd frontend && npx vitest run passes (all workspaces), including the new D0 rest assertion for esc-recovered"
+  - "inbox-ordering assertions still hold: escalated ranks first in the CLI and server inbox tests"
+
+depends_on: []
+
+status: pending
+
+notes: |

@@ -1,0 +1,171 @@
+id: 01-core-mode-resolution
+title: Resolve local-only onto the push chain in loadSources and LocalGitSource, with the named conflict error and the fetch guard
+requirements: [R1, R2, R4]
+
+scope: |
+  Implement the plan's normative mode-resolution table in
+  frontend/packages/core/src/view-model/config.ts and carry the resolved flag on
+  frontend/packages/core/src/sources/local-source.ts.
+
+  config.ts:
+  - Add `local_only: z.boolean().optional()` to the source entry schema and drop
+    the `.default(false)` from `push` (apply `?? false` inside resolution instead,
+    so explicit `push: false` stays distinguishable from unset — AC1.3 behavior
+    identical).
+  - Define and export `class LocalOnlyPushConflictError extends Error` with
+    `name = 'LocalOnlyPushConflictError'` and a message naming both conflicting
+    settings and the source they were found on. It is star-exported via the
+    existing view-model index — do not edit any index file.
+  - `loadSources` gains `localOnly?: boolean` in opts. Apply the plan's table to
+    every path (repoOverrides, config entries, fallbackToCwd): conflict → throw;
+    localOnly per rules 2a–2d (the CLI-only rule: opts.push === false implies
+    localOnly at this tier, per ADR-1); push per rule 3. Config entries now need
+    the origin probe (`pushWhenOriginExists`) for auto-detect — one extra
+    `git config` read per source. Warn (existing warnings array) when a source
+    resolves local-only but sets `fetch_interval` ("fetch_interval ignored —
+    local-only").
+  - Pass the resolved `localOnly` into every LocalGitSource constructed here.
+
+  local-source.ts:
+  - Options gain `localOnly?: boolean`; add `get localOnly(): boolean`. The
+    constructor treats `localOnly: true` as forcing push off (belt-and-braces —
+    loadSources already resolves push=false).
+  - `syncFromRemote()` returns immediately, before any git invocation, when
+    `this.localOnly` (AC2.4's mechanism for both the engine heartbeat and the
+    server interval sync). Direct construction without the option is unchanged.
+
+  Tests:
+  - frontend/packages/core/test/config.test.ts: table cases — remoteless
+    zero-config resolves localOnly=true (AC1.1 trigger unchanged); explicit
+    opts.localOnly on an origin repo gives push=false (AC1.2 core half);
+    opts.push=false implies localOnly at the CLI tier; config `push: false` with
+    origin stays localOnly=false (ADR-2 poller case); config `local_only: true`
+    + `push: true` and opts localOnly+push both throw LocalOnlyPushConflictError
+    (AC4.1 core half); config remoteless entry auto-detects localOnly; existing
+    push-precedence cases untouched (AC1.3).
+  - frontend/packages/core/test/fetch-sync.test.ts: a LocalGitSource built with
+    `localOnly: true` over the clone fixture — `vi.spyOn(source.git, 'run')`
+    records zero invocations from `syncFromRemote()` (not a caught failure).
+
+  Do not touch pr-ensure.ts, sync.ts, or divergence.test.ts (other tasks own them).
+
+file_contact_surface:
+  - frontend/packages/core/src/view-model/config.ts
+  - frontend/packages/core/src/sources/local-source.ts
+  - frontend/packages/core/test/config.test.ts
+  - frontend/packages/core/test/fetch-sync.test.ts
+
+acceptance_tests:
+  - AC1.1
+  - AC1.3
+  - AC4.1 (loadSources half — throw on conflict, both tiers)
+  - AC2.4 (guard mechanism — zero fetch via the git-run spy)
+  - "npm test in frontend/ passes in full (AC7.2 baseline kept green)"
+
+depends_on: []
+
+status: pending
+
+notes: |
+  Implementer (round 1): implemented as scoped, no deviations.
+  - config.ts: added `local_only` to the schema, dropped `.default(false)` from
+    `push`, added `LocalOnlyPushConflictError` (name set in the constructor),
+    and a shared `resolveMode()` helper implementing the plan's table exactly
+    (rule 1 conflict throw; rule 2 localOnly precedence with the CLI-only
+    push:false-implies-localOnly branch; rule 3 push default split by tier).
+    `memoizedOriginExists()` caches the one extra `pushWhenOriginExists` read
+    per source so rules 2d/3 share it. Config entries warn
+    `source <id>: fetch_interval ignored — local-only` when they resolve
+    local-only with `fetch_interval` set. `fallbackToCwd` gained a `localOnly`
+    parameter threaded from `loadSources`'s new opt. Every LocalGitSource
+    construction site passes the resolved `localOnly` through.
+  - local-source.ts: options gained `localOnly?: boolean`, a `get localOnly()`
+    getter, the constructor forces `push: false` into `this.options` when
+    `localOnly` is set (belt-and-braces per the plan), and `syncFromRemote()`
+    returns before any git invocation when `this.localOnly`.
+  - config.test.ts: added a `local-only mode resolution` describe covering
+    AC1.1 (remoteless auto-detect), AC1.2 (explicit opts.localOnly forces push
+    off, verified via `pushFailed` absence against a real-but-unreachable
+    origin — no public `push` getter exists so this mirrors
+    divergence.test.ts's existing observation pattern), the CLI-only
+    push:false-implies-localOnly rule, the config-tier ADR-2 poller case
+    (push:false + origin stays localOnly:false), config-tier auto-detect,
+    both conflict-throw tiers (AC4.1), the AC1.3 push-precedence regression
+    (explicit push:true still overrides auto-detect even with no origin at
+    all), and the fetch_interval-ignored warning. Uses its own
+    beforeEach/afterEach fixture (not the file's shared `ctx`) so mutating a
+    fixture's remotes never bleeds into the pre-existing #83 tests in the
+    same file.
+  - fetch-sync.test.ts: added a `syncFromRemote under local-only (AC2.4)`
+    describe: a `LocalGitSource` built with `{ localOnly: true }` over the
+    existing clone fixture, `vi.spyOn(source.git, 'run')` asserted never
+    called by `syncFromRemote()`.
+  - Verified: `npm run typecheck` clean; `npm test` in frontend/ — 379 passed,
+    1 skipped (live-smoke, expected), 0 failed, across all 41 test files
+    including the existing hosted-push-path suites (divergence.test.ts,
+    pr-ensure.test.ts, sync.test.ts) and the shadow-replay suites.
+
+  Implementer (round 2): addressed review-02.md findings F1, F2, F3 — all fixed
+  in frontend/packages/core/test/config.test.ts, no rebuttals.
+  - F1 (blocking, AC1.2 non-discriminating): `addOrigin` now returns the bare
+    origin's path, and a new `originTip(bare, branch)` helper (mirroring
+    divergence.test.ts's own discriminator) reads the ref's tip in the bare
+    repo directly, instead of relying on `pushFailed` absence against a
+    reachable origin (which is silent whether push was suppressed or
+    succeeded). The AC1.2 test now captures `before = originTip(...)` prior to
+    the decision and asserts the tip is unchanged after, in addition to the
+    pre-existing `pushFailed` check. Verified empirically: reintroducing the
+    described mutant (deleting rule 3's `if (localOnly) push = false` in
+    config.ts and the constructor's push-off force in local-source.ts) now
+    fails this test (origin tip changes), then reverted cleanly.
+  - F2 (major, config-tier push default unpinned): added a new case, "AC1.3: a
+    config entry with an origin and no push key stays push:false (existing
+    default)" — a config entry with a real origin and no `push:` key, verifying
+    `localOnly === false` (origin exists) and, via the same `originTip`
+    discriminator, that a decision through it never reaches the origin (the
+    config-tier default is push:false, unlike the CLI tier's origin
+    auto-detect). Verified empirically: reintroducing the described mutant
+    (`else push = await originExists()`, dropping the config-tier `false`
+    branch) fails this new test, then reverted cleanly.
+  - F3 (minor, ADR-2 poller test's vacuous assertion): replaced the
+    non-discriminating `expect(result.pushFailed).toBeUndefined()` with the
+    same before/after `originTip` comparison, so the assertion actually pins
+    "push:false ceiling honored" rather than passing regardless of whether a
+    push occurred.
+  - F1/F2/F3 themselves needed no production-code change — review's own
+    Coverage section already confirmed `resolveMode` and the two
+    mode-resolution sites are faithful to the plan's table; all three were
+    test-side gaps.
+  - Deviation (discovered running the full suite, as AC7.2 requires, not just
+    this task's three test files): `local-source.ts`'s `get localOnly()`
+    accessor — reviewed and approved in review-02 — collided with a sibling
+    task's test. Task 02 (egress-guard-seams, already merged onto this branch
+    ahead of this task's round 1, per `git log`) built a fake local-only
+    source in sync.test.ts via `Object.assign(Object.create(getPrototypeOf(
+    ctx.source)), ctx.source, { localOnly: true })`; assigning into an object
+    whose prototype carries a getter-only accessor throws
+    `TypeError: Cannot set property localOnly ... which has only a getter` in
+    strict-mode ESM. `sync.test.ts`/`sync.ts` are out of this task's file
+    contact surface (task 02 owns them, per this task's own scope note: "Do
+    not touch pr-ensure.ts, sync.ts, or divergence.test.ts"), so the fix had
+    to land on this task's side: `localOnly` is now a plain `readonly` own
+    field assigned once in the constructor (`this.localOnly = options.localOnly
+    === true`) instead of a prototype accessor — same name, same read-only
+    boolean contract for every existing caller (`.localOnly` reads identically
+    everywhere in config.ts, fetch-sync.test.ts, config.test.ts), but an own
+    data property assigns cleanly under `Object.assign` instead of hitting a
+    missing setter. No behavior change for any real construction path; the
+    `fetchIntervalSeconds` getter (pre-existing, unrelated) is untouched. This
+    is a genuine deviation from the round-1 scope's literal "add `get
+    localOnly(): boolean`" wording, made because AC7.2 ("npm test passes in
+    full") is this task's own acceptance test and reproducibly failed without
+    it — not a reinterpretation of the mode-resolution table itself, which is
+    unchanged.
+  - Verified: `npm run typecheck` clean (no errors). Focused run of
+    config.test.ts + fetch-sync.test.ts + divergence.test.ts + sync.test.ts +
+    pr-ensure.test.ts: 41/41 passed. Full `npm test` in frontend/ (rerun twice
+    to rule out a shared-machine contention artifact — the first full run
+    showed two unrelated timeouts, in cli.test.ts and engine.test.ts, that
+    vanished when nothing else was contending for the CPU; both files are
+    outside this task's surface and untouched by this diff): 40 files passed,
+    1 skipped (live-smoke, expected), 389 tests passed, 1 skipped, 0 failed.

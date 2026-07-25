@@ -11,7 +11,13 @@ import type { RunSource } from '../sources/source.ts'
 const sourceEntrySchema = z.object({
   name: z.string().optional(),
   path: z.string(),
-  push: z.boolean().optional().default(false),
+  // No zod default: unset must stay distinguishable from explicit `false` so
+  // the mode-resolution table (below) can tell "no opinion" from "no-push
+  // ceiling" — resolveMode applies `?? false` itself where the table calls
+  // for that default.
+  push: z.boolean().optional(),
+  /** Explicit local-only designator, mirroring `push`'s two explicit tiers (ADR-1/ADR-2). */
+  local_only: z.boolean().optional(),
   /** Seconds between `git fetch`es of origin; unset = never poll. */
   fetch_interval: z.number().positive().optional(),
   /**
@@ -30,6 +36,21 @@ export interface LoadedConfig {
   /** Where the config was read from, or null when defaulted. */
   configPath: string | null
   warnings: string[]
+}
+
+/**
+ * Thrown by `loadSources` when a source requests local-only and an explicit
+ * push in the same breath (plan mode-resolution table, rule 1) — at either
+ * tier: `--local-only --push` on the CLI, or `local_only: true` with
+ * `push: true` on a config entry. Caught by every `loadSources` caller
+ * (`up`, `resolveSources`, `startServer` — ADR-5) as a startup refusal, never
+ * silently resolved one way or the other.
+ */
+export class LocalOnlyPushConflictError extends Error {
+  constructor(source: string) {
+    super(`source ${source}: local-only and push are both explicitly requested — they conflict (local-only forces push off); pick one`)
+    this.name = 'LocalOnlyPushConflictError'
+  }
 }
 
 export function defaultConfigPath(): string {
@@ -54,6 +75,49 @@ async function pushWhenOriginExists(top: string): Promise<boolean> {
   return (await new Git(top).configGet('remote.origin.url')) !== null
 }
 
+/** Caches one `git config` read per source: `resolveMode` may consult origin-exists twice (rules 2d and 3). */
+function memoizedOriginExists(top: string): () => Promise<boolean> {
+  let cached: Promise<boolean> | null = null
+  return () => cached ?? (cached = pushWhenOriginExists(top))
+}
+
+/**
+ * The plan's normative mode-resolution table, implemented once and shared by
+ * every source path (repoOverrides, config entries, fallbackToCwd):
+ *
+ * 1. Explicit local-only `true` AND explicit push `true` → conflict.
+ * 2. `localOnly` := the explicit designator, if set; else `false` when push
+ *    is explicitly `true`; else `true` when push is explicitly `false` **at
+ *    the CLI tier only** (ADR-1); else `!originExists` (auto-detect, applies
+ *    to config-tier sources too — ADR-2).
+ * 3. `push` := `false` when `localOnly`; else the explicit push setting if
+ *    any; else `originExists` for zero-config (CLI-tier) sources / `false`
+ *    for config-file entries (existing defaults — AC1.3 regression surface).
+ */
+async function resolveMode(args: {
+  source: string
+  explicitLocalOnly?: boolean
+  explicitPush?: boolean
+  cliTier: boolean
+  originExists: () => Promise<boolean>
+}): Promise<{ push: boolean; localOnly: boolean }> {
+  const { source, explicitLocalOnly, explicitPush, cliTier, originExists } = args
+  if (explicitLocalOnly === true && explicitPush === true) throw new LocalOnlyPushConflictError(source)
+
+  let localOnly: boolean
+  if (explicitLocalOnly !== undefined) localOnly = explicitLocalOnly
+  else if (explicitPush === true) localOnly = false
+  else if (explicitPush === false && cliTier) localOnly = true
+  else localOnly = !(await originExists())
+
+  let push: boolean
+  if (localOnly) push = false
+  else if (explicitPush !== undefined) push = explicitPush
+  else push = cliTier ? await originExists() : false
+
+  return { push, localOnly }
+}
+
 /**
  * Resolve sources in precedence order: explicit --repo paths, then the config
  * file, then the cwd's repository.
@@ -65,13 +129,16 @@ export async function loadSources(opts: {
   /**
    * Overrides the origin-exists push auto-detection for zero-config sources
    * — `false` honors an operator's explicit no-push ceiling (`agentic up
-   * --no-push`). Config-file sources always keep their own `push` entry.
+   * --no-push`), which at this CLI tier also implies local-only (ADR-1)
+   * unless `localOnly` says otherwise. Config-file sources always keep their
+   * own `push`/`local_only` entries.
    */
   push?: boolean
+  /** Explicit local-only designator for zero-config (CLI-tier) sources — `agentic up --local-only`. */
+  localOnly?: boolean
 }): Promise<LoadedConfig> {
   const warnings: string[] = []
   const cwd = opts.cwd ?? process.cwd()
-  const pushFor = async (top: string) => opts.push ?? (await pushWhenOriginExists(top))
 
   if (opts.repoOverrides?.length) {
     const sources: RunSource[] = []
@@ -82,7 +149,15 @@ export async function loadSources(opts: {
         warnings.push(`--repo ${raw}: not a git repository, skipped`)
         continue
       }
-      sources.push(new LocalGitSource(slugForPath(top), top, { push: await pushFor(top) }))
+      const id = slugForPath(top)
+      const { push, localOnly } = await resolveMode({
+        source: id,
+        explicitLocalOnly: opts.localOnly,
+        explicitPush: opts.push,
+        cliTier: true,
+        originExists: memoizedOriginExists(top),
+      })
+      sources.push(new LocalGitSource(id, top, { push, localOnly }))
     }
     return { sources, configPath: null, warnings }
   }
@@ -95,7 +170,7 @@ export async function loadSources(opts: {
       parsed = configSchema.parse(parseYaml(text))
     } catch (e) {
       warnings.push(`config at ${configPath} is invalid (${(e as Error).message}); falling back to current repo`)
-      return fallbackToCwd(cwd, warnings, opts.push)
+      return fallbackToCwd(cwd, warnings, opts.push, opts.localOnly)
     }
     const sources: RunSource[] = []
     const seen = new Set<string>()
@@ -109,9 +184,20 @@ export async function loadSources(opts: {
       let id = entry.name ?? slugForPath(top)
       while (seen.has(id)) id = `${id}-2`
       seen.add(id)
+      const { push, localOnly } = await resolveMode({
+        source: id,
+        explicitLocalOnly: entry.local_only,
+        explicitPush: entry.push,
+        cliTier: false,
+        originExists: memoizedOriginExists(top),
+      })
+      if (localOnly && entry.fetch_interval !== undefined) {
+        warnings.push(`source ${id}: fetch_interval ignored — local-only`)
+      }
       sources.push(
         new LocalGitSource(id, path, {
-          push: entry.push,
+          push,
+          localOnly,
           fetchIntervalSeconds: entry.fetch_interval,
           frameworkPrefix: entry.agentic_prefix,
         }),
@@ -119,19 +205,27 @@ export async function loadSources(opts: {
     }
     if (sources.length === 0) {
       warnings.push(`config at ${configPath} yielded no usable sources; falling back to current repo`)
-      return fallbackToCwd(cwd, warnings, opts.push)
+      return fallbackToCwd(cwd, warnings, opts.push, opts.localOnly)
     }
     return { sources, configPath, warnings }
   }
 
-  return fallbackToCwd(cwd, warnings, opts.push)
+  return fallbackToCwd(cwd, warnings, opts.push, opts.localOnly)
 }
 
-async function fallbackToCwd(cwd: string, warnings: string[], push?: boolean): Promise<LoadedConfig> {
+async function fallbackToCwd(cwd: string, warnings: string[], push?: boolean, localOnly?: boolean): Promise<LoadedConfig> {
   const top = await repoToplevel(cwd)
   if (top !== null) {
+    const id = slugForPath(top)
+    const resolved = await resolveMode({
+      source: id,
+      explicitLocalOnly: localOnly,
+      explicitPush: push,
+      cliTier: true,
+      originExists: memoizedOriginExists(top),
+    })
     return {
-      sources: [new LocalGitSource(slugForPath(top), top, { push: push ?? (await pushWhenOriginExists(top)) })],
+      sources: [new LocalGitSource(id, top, { push: resolved.push, localOnly: resolved.localOnly })],
       configPath: null,
       warnings,
     }

@@ -32,6 +32,12 @@ export interface EngineConfig {
   /** Push every orchestrator commit to origin (hosted mode): the machine is disposable, origin is not. */
   push?: boolean
   /**
+   * Local-only mode (mirrors the core resolution table, AC2.2/AC2.4): forces
+   * the engine's LocalGitSource to skip origin fetch on heartbeat sync, and
+   * suppresses the first-dispatch draft-PR ensure.
+   */
+  localOnly?: boolean
+  /**
    * Host-wide ceiling (hosted mode): refuse new dispatches when projected
    * spend across every active run exceeds this, escalating like DB does.
    * Per-run cost_limit_usd still applies; this bounds their sum.
@@ -101,6 +107,7 @@ export class Engine {
     this.source = new LocalGitSource('orchestrator', cfg.repoDir, {
       identity: cfg.identity,
       push: cfg.push,
+      localOnly: cfg.localOnly,
       frameworkPrefix: cfg.frameworkPrefix,
     })
   }
@@ -468,7 +475,7 @@ export class Engine {
         // touches the tick outcome.
         if (!ensuredDraftPrs.has(ref.slug)) {
           ensuredDraftPrs.add(ref.slug)
-          const ensured = await ensureDraftPr(this.cfg.repoDir, ref.branch, ref.slug)
+          const ensured = await ensureDraftPr(this.cfg.repoDir, ref.branch, ref.slug, { localOnly: this.cfg.localOnly })
           this.log(`${ref.slug}: draft PR ensure — ${ensured.status}: ${ensured.note}`)
         }
 

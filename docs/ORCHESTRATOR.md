@@ -218,14 +218,18 @@ additions specific to a machine writer:
   `harvested`) and never the human decision grammar (`G2 approved by <name> …`),
   which the metrics reader treats as authoritative for decisions.
 
-Both writers carry their commits to origin themselves. The engine pushes with each
-bookkeeping commit (`--push`, #103), and zero-config frontend sources push human
-decisions in the same write whenever the repo has an origin (#149) — a decision
-that only landed locally would otherwise wait on the engine's next commit to reach
+When the resolved deployment mode pushes at all, both writers carry their
+commits to origin themselves. The engine pushes with each bookkeeping commit
+(`--push`, #103), and zero-config frontend sources push human decisions in the
+same write whenever the repo has an origin (#149) — a decision that only
+landed locally would otherwise wait on the engine's next commit to reach
 origin, and an engine at rest never commits, so the viewer and origin consumers
 would silently see different runs. Any residual divergence is surfaced, not
 hidden: run summaries carry an ahead-of-origin commit count, shown as an
-"unpushed" badge in FleetView.
+"unpushed" badge in FleetView. Under the **local-only** topology
+(docs/TOPOLOGY.md §3.6) neither writer pushes, and origin is never fetched
+either — both writers still commit locally, exactly as above, but the
+push/fetch half of this section does not apply.
 
 ### 4.4 Dispatch protocol: commit-then-launch
 

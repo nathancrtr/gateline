@@ -20,6 +20,7 @@ import {
   extractSections,
   formatDuration,
   loadSources,
+  LocalOnlyPushConflictError,
   missingSections,
   planDecision,
   planRunScaffold,
@@ -59,7 +60,17 @@ interface Resolved {
 
 async function resolveSources(): Promise<Resolved> {
   const opts = program.opts<{ repo: string[] }>()
-  const { sources, warnings } = await loadSources({ repoOverrides: opts.repo.length ? opts.repo : undefined })
+  let sources: RunSource[]
+  let warnings: string[]
+  try {
+    ;({ sources, warnings } = await loadSources({ repoOverrides: opts.repo.length ? opts.repo : undefined }))
+  } catch (e) {
+    if (e instanceof LocalOnlyPushConflictError) {
+      console.error(e.message)
+      process.exit(1)
+    }
+    throw e
+  }
   for (const w of warnings) console.error(`warning: ${w}`)
   if (sources.length === 0) {
     console.error('no run sources — run inside a repository, pass --repo <path>, or create ~/.config/agentic/config.yaml')
@@ -628,7 +639,8 @@ export async function armRun(slug: string, flags: { source?: string }): Promise<
   if (code !== null) return code
   const dir = (source as { dir?: string }).dir
   if (dir) {
-    const note = await ensureDraftPr(dir, ref.branch, slug)
+    const localOnly = (source as { localOnly?: boolean }).localOnly
+    const note = await ensureDraftPr(dir, ref.branch, slug, { localOnly })
     console.log(note.note)
   }
   return 0
@@ -651,14 +663,26 @@ program
   .option('--source <id>', 'only this source')
   .option('--live', 'apply the plan (default: print it)')
   .action(async (flags: { source?: string; live?: boolean }) => {
-    const { planSync, applySync, GhCliProvider } = await import('@agentic/core')
+    const { planSyncForSource, applySync, GhCliProvider } = await import('@agentic/core')
     const { sources } = await resolveSources()
     let any = false
+    // A local-only source already prints its own line below; the trailing
+    // generic "nothing to sync" would otherwise contradict it (scope note:
+    // "keep output non-contradictory") — suppressed only when every
+    // considered source resolved local-only.
+    let anyConsidered = false
+    let allLocalOnly = true
     for (const source of sources) {
       if (flags.source && source.id !== flags.source) continue
       const dir = (source as { dir?: string }).dir
       if (!dir) continue
-      const plan = await planSync(source, new GhCliProvider(dir))
+      anyConsidered = true
+      const plan = await planSyncForSource(source, () => new GhCliProvider(dir))
+      if (plan === 'local-only') {
+        console.log('local-only: nothing to sync')
+        continue
+      }
+      allLocalOnly = false
       if (plan.length === 0) continue
       any = true
       if (!flags.live) {
@@ -671,11 +695,42 @@ program
         }
       }
     }
-    if (!any) console.log('nothing to sync — no undecided G2 with an approved PR review')
+    if (anyConsidered && allLocalOnly) {
+      // Every considered source already printed its own local-only line.
+    } else if (!any) console.log('nothing to sync — no undecided G2 with an approved PR review')
     else if (!flags.live) console.log('\ndry-run; pass --live to record')
   })
 
 // --- ui ----------------------------------------------------------------------
+
+/**
+ * Pure resolution of `up`'s startup marker and the push value the engine
+ * should use, from the CLI flags (as read via commander's
+ * `getOptionValueSource`, plan risk #1) and the source's already-resolved
+ * `localOnly` (the one true precedence chain lives in `loadSources` —
+ * `resolveUpMode` never re-derives it, only names why it came out the way it
+ * did, AC4.2). `enginePush` is `false` whenever `localOnly` is, else the
+ * explicit push setting if any, else `true` — equivalent to the source's own
+ * resolved `push` in every row of the plan's mode-resolution table.
+ */
+export function resolveUpMode(
+  flags: { pushExplicit: boolean; push: boolean; localOnly: boolean },
+  sourceLocalOnly: boolean,
+): { enginePush: boolean; localOnly: boolean; marker: string } {
+  const localOnly = sourceLocalOnly
+  const enginePush = localOnly ? false : flags.pushExplicit ? flags.push : true
+  let marker: string
+  if (localOnly) {
+    marker = flags.localOnly
+      ? 'local-only (--local-only)'
+      : flags.pushExplicit && !flags.push
+        ? 'local-only (--no-push)'
+        : 'local-only (no origin remote)'
+  } else {
+    marker = flags.pushExplicit && flags.push ? 'pushing to origin (--push)' : 'pushing to origin (origin auto-detected)'
+  }
+  return { enginePush, localOnly, marker }
+}
 
 program
   .command('up')
@@ -694,21 +749,27 @@ program
     '--no-budget-enforcement',
     'meter spend but never pause on it: no per-run cap requirement, no cap pauses (for flat-rate-billed harnesses, #109)',
   )
-  .option('--no-push', 'keep orchestrator commits local (default pushes: origin is the record)')
+  .option('--push', 'push every orchestrator/decision commit to origin (default: auto-detect from origin presence)')
+  .option('--no-push', 'keep orchestrator commits local, and stop fetching/gh-calling origin too — an alias for --local-only')
+  .option('--local-only', 'no push, no gh/GitHub calls, no origin fetch — everything about this run stays in this clone')
   .option('--heartbeat <seconds>', 'engine heartbeat interval', '180')
   .option('--role-timeout <seconds>', 'wall clock per dispatched role before its process group is killed (default 1800)', parseFloat)
   .action(
-    async (flags: {
-      port: string
-      host: string
-      open?: boolean
-      adapter: string[]
-      spendLimitUsd?: number
-      budgetEnforcement?: boolean
-      push?: boolean
-      heartbeat: string
-      roleTimeout?: number
-    }) => {
+    async (
+      flags: {
+        port: string
+        host: string
+        open?: boolean
+        adapter: string[]
+        spendLimitUsd?: number
+        budgetEnforcement?: boolean
+        push?: boolean
+        localOnly?: boolean
+        heartbeat: string
+        roleTimeout?: number
+      },
+      cmd: Command,
+    ) => {
       const opts = program.opts<{ repo: string[] }>()
       // One engine per `up`: dispatching needs exactly one writable clone.
       // The server may aggregate several sources; the engine takes the one
@@ -718,6 +779,40 @@ program
         process.exit(1)
       }
       const repoDir = opts.repo[0] ?? process.cwd()
+
+      // Explicitness, not just the resolved boolean: auto-detect and an
+      // explicit `--push`/`--no-push` must be distinguishable for both the
+      // conflict check and the marker (commander ^14 — plan risk #1).
+      const pushExplicit = cmd.getOptionValueSource('push') === 'cli'
+
+      // Resolve before starting anything (AC4.1): a `--local-only --push`
+      // conflict must exit 1 with no server and no engine started.
+      let sources: RunSource[]
+      let warnings: string[]
+      try {
+        ;({ sources, warnings } = await loadSources({
+          repoOverrides: [repoDir],
+          push: pushExplicit ? flags.push : undefined,
+          localOnly: flags.localOnly || undefined,
+        }))
+      } catch (e) {
+        if (e instanceof LocalOnlyPushConflictError) {
+          console.error(e.message)
+          process.exit(1)
+        }
+        throw e
+      }
+      for (const w of warnings) console.error(`warning: ${w}`)
+      const source = sources[0]
+      if (!source) {
+        console.error(`${repoDir} is not a git repository — \`up\` needs one writable clone (pass --repo)`)
+        process.exit(1)
+      }
+      const { enginePush, localOnly, marker } = resolveUpMode(
+        { pushExplicit, push: flags.push === true, localOnly: flags.localOnly === true },
+        (source as { localOnly?: boolean }).localOnly === true,
+      )
+
       const { startServer } = await import('@agentic/server/main')
       const { stagedShutdown, startOrchestrator } = await import('@agentic/orchestrator')
       const server = await startServer({
@@ -725,9 +820,10 @@ program
         host: flags.host,
         open: flags.open !== false,
         repoOverrides: [repoDir],
-        // --no-push is a hard ceiling: it silences the frontend's human-write
-        // pushes too, not just the engine's (#149).
-        push: flags.push !== false ? undefined : false,
+        // The resolved pair, not the raw flags (ADR-7): `up` is the one
+        // conflict gate, so the server never re-derives (or re-throws) it.
+        push: enginePush,
+        localOnly,
       })
       // `orchestrator` and the supersede callback below both close over
       // `stop`, but `stop` needs `orchestrator` to drain it — same
@@ -752,7 +848,8 @@ program
       orchestrator = await startOrchestrator({
         repoDir,
         adapters: flags.adapter,
-        push: flags.push !== false,
+        push: enginePush,
+        localOnly,
         // Hosted hard line unless the operator opts out (#109): with
         // enforcement off, requiring a per-run cap would be requiring a
         // number nothing reads.
@@ -769,7 +866,7 @@ program
           void stop(SUPERSEDE_EXIT_CODE)
         },
       })
-      console.log(`engine watching ${repoDir} (heartbeat ${flags.heartbeat}s${flags.push !== false ? ', pushing to origin' : ', local-only'}) — ^C to stop`)
+      console.log(`engine watching ${repoDir} (heartbeat ${flags.heartbeat}s, ${marker}) — ^C to stop`)
       const onSignal = stagedShutdown({
         inFlight: () => orchestrator?.inFlightDetail() ?? [],
         drain,

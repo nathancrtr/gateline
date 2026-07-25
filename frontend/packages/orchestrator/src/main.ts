@@ -38,6 +38,10 @@ program
   // Hosted mode (ORCHESTRATOR.md §2 first deployment): the machine is
   // disposable, origin is the record; unattended dispatch needs hard ceilings.
   .option('--push', 'push every orchestrator commit to origin (hosted mode)')
+  .option(
+    '--local-only',
+    'no push, no gh/GitHub API calls, no origin fetch (conflicts with --push); unset auto-detects off a missing origin remote',
+  )
   .option('--spend-limit-usd <usd>', 'refuse new dispatches when projected spend across all active runs exceeds this', parseFloat)
   .option('--require-budget', 'refuse dispatch on any run missing budget.cost_limit_usd')
   .option(
@@ -69,6 +73,7 @@ async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler:
   const names = program.opts<{ adapter: string[] }>().adapter
   const hosted = program.opts<{
     push?: boolean
+    localOnly?: boolean
     spendLimitUsd?: number
     requireBudget?: boolean
     budgetEnforcement?: boolean
@@ -79,6 +84,7 @@ async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler:
     adapters: names,
     frameworkPrefix: opened.frameworkPrefix,
     push: hosted.push,
+    localOnly: hosted.localOnly,
     spendLimitUsd: hosted.spendLimitUsd ?? null,
     requireBudget: hosted.requireBudget,
     budgetEnforcement: hosted.budgetEnforcement,

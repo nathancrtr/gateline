@@ -1,0 +1,434 @@
+run: local-only-mode
+branch: run/local-only-mode
+phase: done # staged — not yet armed; `agentic arm local-only-mode` starts the run
+paused_reason: null
+profile: standard # patch | standard | full
+intake:
+  # source-agnostic staging provenance; free-form path: nulls + client_key
+  source: null
+  ref: null
+  url: null
+  client_key: null
+  staged_by: "Nathan Carter"
+budget:
+  cost_limit_usd: 50
+  cost_spent_usd: 67.76
+  ledger:
+    [
+      {
+          at: 2026-07-23T02:02:05.963Z,
+          role: analyst,
+          task: null,
+          round: null,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 8,
+          tokens_out: 1546,
+          cost_usd: 1.77240555
+        },
+      {
+          at: 2026-07-23T04:25:25.856Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 8,
+          tokens_out: 1641,
+          cost_usd: 6.285173999999999
+        },
+      {
+          at: 2026-07-23T05:17:25.266Z,
+          role: implementer,
+          task: 01-core-mode-resolution,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 10,
+          tokens_out: 2771,
+          cost_usd: 2.730730049999999
+        },
+      {
+          at: 2026-07-23T05:17:25.266Z,
+          role: implementer,
+          task: 02-egress-guard-seams,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 8,
+          tokens_out: 1584,
+          cost_usd: 1.1791861500000005
+        },
+      {
+          at: 2026-07-23T05:23:41.937Z,
+          role: reviewer,
+          task: 02-egress-guard-seams,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 1778,
+          tokens_out: 4365,
+          cost_usd: 2.106442
+        },
+      {
+          at: 2026-07-23T05:36:48.589Z,
+          role: reviewer,
+          task: 01-core-mode-resolution,
+          round: 1,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: 4,
+          failed: true
+        },
+      {
+          at: 2026-07-23T05:37:13.222Z,
+          role: reviewer,
+          task: 01-core-mode-resolution,
+          round: 1,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: 4,
+          failed: true
+        },
+      {
+          at: 2026-07-23T05:56:08.984Z,
+          role: reviewer,
+          task: 01-core-mode-resolution,
+          round: 1,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 36442,
+          tokens_out: 1086,
+          cost_usd: 0.05204484,
+          failed: true
+        },
+      {
+          at: 2026-07-23T14:05:36.595Z,
+          role: reviewer,
+          task: 01-core-mode-resolution,
+          round: 1,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 142111,
+          tokens_out: 806,
+          cost_usd: 0.147940524,
+          failed: true
+        },
+      {
+          at: 2026-07-23T17:33:22.204Z,
+          role: reviewer,
+          task: 01-core-mode-resolution,
+          round: 1,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 431946,
+          tokens_out: 3421,
+          cost_usd: 0.468569664
+        },
+      {
+          at: 2026-07-23T17:43:58.496Z,
+          role: reviewer,
+          task: 01-core-mode-resolution,
+          round: 1,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 215592,
+          tokens_out: 1281,
+          cost_usd: 0.23293684799999997,
+          failed: true
+        },
+      {
+          at: 2026-07-23T18:03:00.847Z,
+          role: reviewer,
+          task: 01-core-mode-resolution,
+          round: 1,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 264811,
+          tokens_out: 1857,
+          cost_usd: 0.401549652,
+          failed: true
+        },
+      {
+          at: 2026-07-23T18:55:39.844Z,
+          role: reviewer,
+          task: 01-core-mode-resolution,
+          round: 1,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 446156,
+          tokens_out: 4636,
+          cost_usd: 0.567446832
+        },
+      {
+          at: 2026-07-23T22:07:00.117Z,
+          role: reviewer,
+          task: 01-core-mode-resolution,
+          round: 1,
+          adapter: opencode,
+          model: anthropic/claude-fable-5,
+          tokens_in: 246066,
+          tokens_out: 1438,
+          cost_usd: 0.3685000319999999
+        },
+      {
+          at: 2026-07-23T22:29:51.208Z,
+          role: reviewer,
+          task: 01-core-mode-resolution,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 14,
+          tokens_out: 3602,
+          cost_usd: 2.9215990000000005
+        },
+      {
+          at: 2026-07-23T22:38:23.589Z,
+          role: implementer,
+          task: 01-core-mode-resolution,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 6,
+          tokens_out: 2263,
+          cost_usd: 3.696497650000001
+        },
+      {
+          at: 2026-07-23T23:49:43.645Z,
+          role: reviewer,
+          task: 01-core-mode-resolution,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 10,
+          tokens_out: 2590,
+          cost_usd: 2.4865125
+        },
+      {
+          at: 2026-07-24T00:01:06.871Z,
+          role: implementer,
+          task: 03-cli-wiring,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 8,
+          tokens_out: 1727,
+          cost_usd: 4.52690055
+        },
+      {
+          at: 2026-07-24T00:01:06.871Z,
+          role: implementer,
+          task: 04-server-orchestrator-wiring,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 8,
+          tokens_out: 1733,
+          cost_usd: 3.6876116499999996
+        },
+      {
+          at: 2026-07-24T00:01:06.871Z,
+          role: implementer,
+          task: 05-remoteless-test-coverage,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 8,
+          tokens_out: 1391,
+          cost_usd: 1.4425302999999996
+        },
+      {
+          at: 2026-07-24T00:19:35.907Z,
+          role: reviewer,
+          task: 03-cli-wiring,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: 4,
+          failed: true
+        },
+      {
+          at: 2026-07-24T00:19:35.907Z,
+          role: reviewer,
+          task: 04-server-orchestrator-wiring,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 19,
+          tokens_out: 6026,
+          cost_usd: 4.493525
+        },
+      {
+          at: 2026-07-24T00:19:35.907Z,
+          role: reviewer,
+          task: 05-remoteless-test-coverage,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: 4,
+          failed: true
+        },
+      {
+          at: 2026-07-24T01:48:28.095Z,
+          role: implementer,
+          task: 06-docs-topology,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 12,
+          tokens_out: 2814,
+          cost_usd: 2.65641045
+        },
+      {
+          at: 2026-07-24T01:59:40.068Z,
+          role: reviewer,
+          task: 06-docs-topology,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 10,
+          tokens_out: 3320,
+          cost_usd: 3.1506014999999996
+        },
+      {
+          at: 2026-07-24T02:05:57.566Z,
+          role: implementer,
+          task: 06-docs-topology,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 6,
+          tokens_out: 1953,
+          cost_usd: 0.96375235
+        },
+      {
+          at: 2026-07-24T02:08:51.865Z,
+          role: reviewer,
+          task: 06-docs-topology,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 10,
+          tokens_out: 2874,
+          cost_usd: 2.0274455000000002
+        },
+      {
+          at: 2026-07-24T02:13:16.046Z,
+          role: verifier,
+          task: null,
+          round: null,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 10,
+          tokens_out: 2071,
+          cost_usd: 3.3894807999999994
+        }
+    ]
+gates:
+  # exactly PROFILE_GATES[standard] — no others
+  G0:
+    {
+      approved: true,
+      by: Nathan Carter,
+      at: 2026-07-23T04:25:05.788Z,
+      notes: null,
+      burden: confirmation
+    }
+  G1:
+    {
+      approved: true,
+      by: Nathan Carter,
+      at: 2026-07-23T05:16:36.630Z,
+      notes: null,
+      burden: confirmation
+    }
+  G2:
+    {
+      approved: true,
+      by: Nathan Carter,
+      at: 2026-07-25T01:46:57.302Z,
+      notes: null,
+      burden: confirmation
+    }
+tasks:
+  [
+    { id: 01-core-mode-resolution, status: review-approved, review_rounds: 2 },
+    { id: 02-egress-guard-seams, status: review-approved, review_rounds: 1 },
+    { id: 03-cli-wiring, status: review-approved, review_rounds: 1 },
+    {
+        id: 04-server-orchestrator-wiring,
+        status: review-approved,
+        review_rounds: 1
+      },
+    { id: 05-remoteless-test-coverage, status: review-approved, review_rounds: 1 },
+    { id: 06-docs-topology, status: review-approved, review_rounds: 2 }
+  ]
+escalations:
+  [
+    {
+        at: 2026-07-23T05:37:18.011Z,
+        from_role: orchestrator,
+        reason: "reviewer (01-core-mode-resolution) failed twice: Command failed (exit
+          1): opencode run on task
+          `runs/local-only-mode/tasks/01-core-mode-resolution.yaml`, reviewing
+          the …",
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-23T05:55:44.935Z,
+        resolution: fixed env issue
+      },
+    {
+        at: 2026-07-23T06:03:42.142Z,
+        from_role: orchestrator,
+        reason: "reviewer (01-core-mode-resolution) failed twice: dispatch aborted by
+          the operator during drain — process group killed (SIGKILL); the task
+          is freed for a retry",
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-23T14:05:12.164Z,
+        resolution: "Ctrl-c'd? Resolving and resuming, will keep an eye on this"
+      },
+    {
+        at: 2026-07-23T14:20:37.794Z,
+        from_role: orchestrator,
+        reason: "reviewer (01-core-mode-resolution) failed twice: dispatch aborted by
+          the operator during drain — process group killed (SIGKILL); the task
+          is freed for a retry",
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-23T17:32:47.318Z,
+        resolution: Got caught in a loop from the architect trying to write its commit
+          without shell tool access and failing (#183). Retrying.
+      },
+    {
+        at: 2026-07-23T18:02:09.740Z,
+        from_role: orchestrator,
+        reason: "reviewer (01-core-mode-resolution) failed twice: dispatch aborted by
+          the operator during drain — process group killed (SIGKILL); the task
+          is freed for a retry",
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-23T18:02:49.358Z,
+        resolution: manually killed - resuming
+      },
+    {
+        at: 2026-07-23T18:34:31.848Z,
+        from_role: orchestrator,
+        reason: "reviewer (01-core-mode-resolution) failed twice: Command failed
+          (SIGTERM): opencode run on task
+          `runs/local-only-mode/tasks/01-core-mode-resolution.yaml`, reviewing
+          the…",
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-23T18:55:15.675Z,
+        resolution: a commit ended up on `main` and broke things - cleaned up
+      }
+  ]

@@ -1,0 +1,72 @@
+id: 05-remoteless-test-coverage
+title: divergence.test.ts gains the named-mode cases — the PR-ensure leak short-circuit and the remoteless sync short-circuit
+requirements: [R1, R2, R3, R7]
+
+scope: |
+  Append new describes to frontend/packages/core/test/divergence.test.ts ONLY —
+  do not reflow or edit the existing cases (the spec pins them by line range:
+  72-114 and 134-211 must stay green and recognizable). Reuse the file's
+  addOrigin/originTip/refFor helpers.
+
+  New coverage (AC7.1):
+  - Named mode via auto-detect: loadSources over the remoteless fixture yields a
+    source whose `localOnly` flag is true; with an origin added it is false
+    (AC1.1 — the mode is nameable, not merely inferable from push).
+  - Explicit designator on a live origin: loadSources with `localOnly: true` on
+    an origin-backed fixture — a decision write succeeds and origin's tip is
+    unchanged (AC1.2, AC2.1 — the named-mode extension of the existing
+    push:false ceiling case).
+  - PR-ensure short-circuit, the brief's leak shape: origin exists AND the run
+    branch has a remote-tracking ref (simulate the prior push with
+    `git update-ref refs/remotes/origin/<branch> <sha>`, as pr-ensure.test.ts
+    does); `ensureDraftPr(dir, branch, slug, { localOnly: true, exec: spy })`
+    returns skipped with a note and the spy saw zero gh invocations (AC2.2).
+  - Sync short-circuit, remoteless: the loadSources-resolved local-only source
+    through `planSyncForSource(source, factorySpy)` returns 'local-only' with
+    the factory never invoked — the seam behind AC3.1's no-throw guarantee
+    (AC2.3 evidence at core level).
+
+  Then run the full suite: `npm test` in frontend/ — AC7.2 is this task's exit
+  criterion as much as the new cases are.
+
+file_contact_surface:
+  - frontend/packages/core/test/divergence.test.ts
+
+acceptance_tests:
+  - AC7.1
+  - AC7.2
+  - AC1.1
+  - AC2.1
+  - "existing describes in divergence.test.ts unmodified (append-only diff)"
+
+depends_on: [01-core-mode-resolution, 02-egress-guard-seams]
+
+status: pending
+
+notes: |
+  Implementer round 1: appended four new describes to divergence.test.ts, after
+  the existing `stale local branch (#99)` block — no existing case reflowed or
+  edited (only the import block grew, to pull in `ensureDraftPr`,
+  `planSyncForSource`, `PrProvider`, and `vi`).
+    - 'local-only names the mode, not just infers it (AC1.1, AC1.2)': auto-detect
+      flips true→false when an origin is added; an explicit `localOnly: true` via
+      loadSources on a live-origin fixture still writes the decision with origin's
+      tip unchanged.
+    - 'local-only closes the PR-ensure leak (AC2.2)': origin added, then the run
+      branch's remote-tracking ref is planted directly via `git update-ref` (the
+      brief's leak shape: pushed before local-only was requested, mirroring
+      pr-ensure.test.ts's own `pushBranch` pattern) — `ensureDraftPr(..., {
+      localOnly: true, exec })` returns skipped with a local-only note and the
+      exec spy is never called.
+    - 'local-only closes the PR-approval sync leak (AC2.3)': the loadSources-
+      resolved remoteless source (localOnly already true from auto-detect) run
+      through `planSyncForSource` with a `vi.fn` factory returns 'local-only' and
+      the factory is never invoked.
+  All core APIs consumed here (`loadSources({ localOnly })`, `LocalGitSource
+  .localOnly`, `ensureDraftPr(..., { localOnly })`, `planSyncForSource`) already
+  existed from tasks 01/02 — no discoveries or deviations, no file outside the
+  declared surface touched.
+  Test results: `npx vitest run divergence` — 14/14 passed (10 pre-existing +
+  4 new). Full `npm test` in frontend/ — 393 passed, 1 skipped (pre-existing
+  live-smoke skip), 0 failed, 40/41 test files passed. `npm run typecheck` —
+  clean, no errors.

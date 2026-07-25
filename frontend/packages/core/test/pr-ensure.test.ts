@@ -237,14 +237,59 @@ describe('ensureDraftPr descriptions', () => {
     expect(exec.mock.calls.some(([, args]) => args.includes('edit'))).toBe(false)
   })
 
-  it('leaves a merged or closed PR alone', async () => {
+  it('opens a replacement when the only PR is merged — a run outliving its PR keeps a review surface (#207)', async () => {
     pushRunBranch('run/toy', TOY_RUN)
     const exec = ghStub({ number: 42, title: 'run/toy', body: `${GENERATED_MARKER}\n\nstale`, state: 'MERGED' })
 
     const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
 
-    expect(result.note).toContain('merged')
+    expect(result.status).toBe('created')
+    expect(result.note).toContain('replaces #42, which is merged')
     expect(exec.mock.calls.some(([, args]) => args.includes('edit'))).toBe(false)
+    const [, args] = exec.mock.calls.find(([, a]) => a.includes('create'))!
+    expect(argOf(args, '--title')).toBe('Toy exporter is unusable at scale')
+  })
+
+  it('opens a replacement when the only PR is closed', async () => {
+    pushRunBranch('run/toy', TOY_RUN)
+    const exec = ghStub({ number: 42, title: 'run/toy', body: 'closed by hand', state: 'CLOSED' })
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
+
+    expect(result.status).toBe('created')
+    expect(result.note).toContain('replaces #42, which is closed')
+  })
+
+  it('prefers the open PR when a dead one is also listed, and creates nothing', async () => {
+    pushRunBranch('run/toy', TOY_RUN)
+    const exec = vi.fn(async (_cmd: string, args: string[]) => {
+      if (args.includes('list'))
+        return JSON.stringify([
+          { number: 43, title: 'run/toy', body: 'Draft PR for `run/toy` — see `runs/toy/` for the run record.', state: 'MERGED' },
+          { number: 44, title: 'run/toy', body: `${GENERATED_MARKER}\n\nstale`, state: 'OPEN' },
+        ])
+      if (args.includes('edit')) return ''
+      throw new Error(`unexpected gh invocation: ${args.join(' ')}`)
+    })
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
+
+    expect(result.status).toBe('exists')
+    expect(result.note).toContain('#44')
+    expect(exec.mock.calls.some(([, args]) => args.includes('create'))).toBe(false)
+  })
+
+  it('does not open a second replacement once one exists, because the new PR is open', async () => {
+    pushRunBranch('run/toy', TOY_RUN)
+    const first = ghStub({ number: 42, title: 'run/toy', body: `${GENERATED_MARKER}\n\nstale`, state: 'MERGED' })
+    await ensureDraftPr(dir, 'run/toy', 'toy', { exec: first })
+    const [, createArgs] = first.mock.calls.find(([, a]) => a.includes('create'))!
+    const exec = ghStub({ number: 45, title: argOf(createArgs, '--title')!, body: argOf(createArgs, '--body')!, state: 'OPEN' })
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
+
+    expect(result.status).toBe('exists')
+    expect(exec.mock.calls.some(([, args]) => args.includes('create'))).toBe(false)
   })
 
   it('reports a failed refresh in the note without throwing (AC8.2 holds for the edit path)', async () => {

@@ -69,12 +69,24 @@ const DEFAULT_ROLE_TIMEOUT_MS = 30 * 60 * 1000
 const DEFAULT_STALE_MS = 5 * 60 * 1000
 
 /**
- * Slugs whose draft PR has already been ensured this process (ADR-5, R8):
- * `ensureDraftPr` is idempotent regardless, so this memo exists only to skip
- * the `gh` round-trip on every subsequent dispatching tick — a fresh process
- * (restart) re-ensures once, which is harmless (list-then-create).
+ * Run branch tip at the last draft-PR ensure, per slug (ADR-5, R8).
+ *
+ * Keyed on the tip rather than the slug alone (#208), because the ensure has
+ * two jobs now: open the PR when it is missing, and keep the generated
+ * description current as artifacts land (#202). A slug-only memo served the
+ * first and starved the second — a description was written once per process
+ * and then frozen until restart.
+ *
+ * What this costs, stated plainly: the ensure site sits after a write that
+ * always moves the branch, so in practice every *dispatching* tick re-ensures
+ * — one `gh pr list` per dispatch, against a dispatch that is already spending
+ * real money on a role. Idle and resting ticks cost nothing, because the
+ * ensure lives inside the dispatch branch and never runs on them. Text that
+ * would be identical still issues no `gh pr edit`, so a re-ensure is a read,
+ * not churn on the PR timeline. The memo still collapses repeat executions
+ * derived from one observed tip, such as a re-derive after a lost CAS.
  */
-const ensuredDraftPrs = new Set<string>()
+const ensuredDraftPrs = new Map<string, string>()
 
 /** One in-flight dispatch, as reported to the operator during drain (#150). */
 export interface InFlightJob {
@@ -471,11 +483,15 @@ export class Engine {
         // Draft-PR ensure (#118, ADR-5, R8): the first dispatch a fresh
         // process observes for this run is as good a "first arm/dispatch"
         // moment as any to guarantee a reviewable PR exists, regardless of
-        // how the branch was made (hand, CLI, or a future driver). Never
-        // fatal — ensureDraftPr itself never throws, and its result never
-        // touches the tick outcome.
-        if (!ensuredDraftPrs.has(ref.slug)) {
-          ensuredDraftPrs.add(ref.slug)
+        // how the branch was made (hand, CLI, or a future driver), and every
+        // later dispatch against a moved branch is when its description can
+        // catch up with the artifacts (#202, #208). `tip` is the pre-write
+        // tip this derivation observed, so a run that has committed anything
+        // since the last ensure re-ensures exactly once. Never fatal —
+        // ensureDraftPr itself never throws, and its result never touches the
+        // tick outcome.
+        if (ensuredDraftPrs.get(ref.slug) !== tip) {
+          ensuredDraftPrs.set(ref.slug, tip)
           const ensured = await ensureDraftPr(this.cfg.repoDir, ref.branch, ref.slug, { localOnly: this.cfg.localOnly })
           this.log(`${ref.slug}: draft PR ensure — ${ensured.status}: ${ensured.note}`)
         }

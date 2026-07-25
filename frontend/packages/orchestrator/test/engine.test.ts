@@ -401,12 +401,12 @@ describe('the autonomous loop, one vendor (M2)', () => {
     }
   })
 
-  it('ensures a draft PR at most once per slug per process; a skipped ensure never affects the tick outcome (#118, AC8.1 engine half, AC8.2)', async () => {
-    // engine.ts memoizes ensureDraftPr in a module-level, per-process Set
-    // keyed by slug (ADR-5). Every other test in this file also dispatches
-    // for slug `toy` against the same statically-imported Engine module, so
-    // a fresh module instance is the only way to observe a genuinely
-    // first-ever ensure attempt here, independent of test order.
+  it('ensures a draft PR once per observed branch tip, re-ensuring after the run commits; a skipped ensure never affects the tick outcome (#118, AC8.1 engine half, AC8.2, #208)', async () => {
+    // engine.ts memoizes ensureDraftPr in a module-level, per-process Map
+    // keyed by slug -> branch tip (ADR-5, #208). Every other test in this file
+    // also dispatches for slug `toy` against the same statically-imported
+    // Engine module, so a fresh module instance is the only way to observe a
+    // genuinely first-ever ensure attempt here, independent of test order.
     vi.resetModules()
     const { Engine: FreshEngine } = await import('../src/engine.ts')
     const { dir, clock } = makeToyRepo()
@@ -434,13 +434,23 @@ describe('the autonomous loop, one vendor (M2)', () => {
       expect(state!.gates.G0.by).toBeNull()
 
       // Second dispatching tick for the same slug (the architect, once G0 is
-      // approved): the memo means no second `gh` round-trip is attempted —
-      // and the run still converges normally regardless.
+      // approved). The branch has moved since the last ensure — spec.md
+      // landed and the gate was signed — so the description gets a chance to
+      // catch up with the artifacts (#208). Before that fix a slug-keyed memo
+      // froze the description here for the life of the process.
       await humanDecide(dir, { action: 'approve', gate: 'G0', burden: 'confirmation' })
       await reconcile(engine)
       state = (await new LocalGitSource('check', dir).readState(toyRef(dir))).state
       expect(state!.phase).toBe('plan') // unaffected by the ensure: architect ran, resting at G1
-      expect(ensureLines()).toHaveLength(1) // memoized: attempted exactly once across two dispatching ticks
+      expect(ensureLines()).toHaveLength(2)
+      expect(ensureLines()[1]).toMatch(/skipped/) // still the no-remote path: never fatal
+
+      // Resting ticks do not ensure at all — the call lives inside the
+      // dispatch branch, so an idle run costs no `gh` round-trip no matter
+      // how many times it is reconciled.
+      await engine.tick()
+      await engine.tick()
+      expect(ensureLines()).toHaveLength(2)
     } finally {
       await removeRunCheckout(dir, 'run/toy')
     }

@@ -5,8 +5,15 @@
 // no remote, an unpushed branch, or any `gh` failure (missing binary,
 // unauthed, network) all degrade to `skipped` with the reason in `note`
 // (AC8.2) rather than surfacing an error to the caller.
+//
+// The title and body come from the run's own artifacts (#202, pr-description.ts)
+// rather than the branch name, and are refreshed as better artifacts land —
+// until a human edits the body, which hands the description over for good.
 import { execFile } from 'node:child_process'
+import { parseRunState, PROFILES, type Profile } from '../record/schema.ts'
+import { resolveFrameworkRoots } from './framework-roots.ts'
 import { Git } from './git.ts'
+import { describeRun, isGeneratedBody, type RunDescription } from './pr-description.ts'
 
 export interface EnsurePrResult {
   status: 'created' | 'exists' | 'skipped'
@@ -26,11 +33,79 @@ const defaultExec: ExecLike = (cmd, args, opts) =>
   })
 
 /**
+ * Reads the run's artifacts off `rev` and builds the PR title/body from them
+ * (#202). Every read is best-effort: a missing run directory, an unparseable
+ * state.yaml, or a malformed artifact degrades to a thinner description — at
+ * worst today's `run/<slug>` title — and never to a failure.
+ */
+/** The run's profile, read leniently: a state.yaml too broken to validate
+ * still names its profile, and a description is no place to lose that. */
+function readProfile(raw: string | null): Profile | null {
+  if (raw === null) return null
+  const validated = parseRunState(raw).state?.profile
+  if (validated) return validated
+  const m = /^profile:\s*([a-z]+)/m.exec(raw)
+  return m && (PROFILES as readonly string[]).includes(m[1]!) ? (m[1] as Profile) : null
+}
+
+async function describeFromBranch(git: Git, rev: string, slug: string): Promise<RunDescription> {
+  let runDir = `runs/${slug}`
+  let profile: Profile | null = null
+  let brief: string | null = null
+  let spec: string | null = null
+  try {
+    const roots = await resolveFrameworkRoots(git, rev)
+    runDir = `${roots.runs}/${slug}`
+    profile = readProfile(await git.show(rev, `${runDir}/state.yaml`))
+    brief = await git.show(rev, `${runDir}/intent-brief.md`)
+    spec = await git.show(rev, `${runDir}/spec.md`)
+  } catch {
+    // Fall through with whatever was read before the failure.
+  }
+  return describeRun({ slug, runDir, profile, brief, spec })
+}
+
+interface ListedPr {
+  number: number
+  title: string
+  body: string
+  state: string
+}
+
+/**
+ * Refreshes an existing PR's title/body when the framework still owns them
+ * (AC: the `<!-- agentic:draft-pr -->` marker is present) and the newest
+ * artifacts would produce different text. A human-edited body, a closed or
+ * merged PR, and an already-current description are all left alone.
+ */
+async function refreshPr(
+  exec: ExecLike,
+  dir: string,
+  pr: ListedPr,
+  desc: RunDescription,
+): Promise<string> {
+  if (!isGeneratedBody(pr.body)) return 'description is human-authored — left untouched'
+  if (pr.state !== 'OPEN') return `PR is ${pr.state.toLowerCase()} — description left untouched`
+  if (pr.title === desc.title && pr.body === desc.body) return `description already current (from ${desc.from})`
+  try {
+    await exec('gh', ['pr', 'edit', String(pr.number), '--title', desc.title, '--body', desc.body], {
+      cwd: dir,
+      maxBuffer: 16 * 1024 * 1024,
+    })
+  } catch (e) {
+    return `description refresh failed: ${e instanceof Error ? e.message : String(e)}`
+  }
+  return `description refreshed from ${desc.from}`
+}
+
+/**
  * Ensures a draft PR exists for `branch` (the run `slug`'s branch), opening
- * one if none exists yet. Steps: no `remote.origin.url` configured ->
+ * one if none exists yet, and keeps its description current while the
+ * framework still owns it. Steps: no `remote.origin.url` configured ->
  * skipped; `branch` isn't on origin yet -> skipped ("branch not pushed");
- * `gh pr list --head <branch> --state all --limit 1 --json number` finds any
- * PR (any state) -> exists; else `gh pr create --draft ...` -> created.
+ * `gh pr list --head <branch> --state all --limit 1` finds any PR (any state)
+ * -> exists, refreshing its generated title/body (#202) if the run's artifacts
+ * have moved on; else `gh pr create --draft ...` -> created.
  */
 export async function ensureDraftPr(
   dir: string,
@@ -51,34 +126,41 @@ export async function ensureDraftPr(
 
     let listOut: string
     try {
-      listOut = await exec('gh', ['pr', 'list', '--head', branch, '--state', 'all', '--limit', '1', '--json', 'number'], {
-        cwd: dir,
-        maxBuffer: 16 * 1024 * 1024,
-      })
+      listOut = await exec(
+        'gh',
+        ['pr', 'list', '--head', branch, '--state', 'all', '--limit', '1', '--json', 'number,title,body,state'],
+        { cwd: dir, maxBuffer: 16 * 1024 * 1024 },
+      )
     } catch (e) {
       return { status: 'skipped', note: `gh pr list failed: ${e instanceof Error ? e.message : String(e)}` }
     }
 
-    let prs: { number: number }[]
+    let prs: ListedPr[]
     try {
-      prs = JSON.parse(listOut) as { number: number }[]
+      prs = JSON.parse(listOut) as ListedPr[]
     } catch (e) {
       return { status: 'skipped', note: `gh pr list returned unparseable output: ${e instanceof Error ? e.message : String(e)}` }
     }
-    if (prs.length > 0) return { status: 'exists', note: `PR #${prs[0]!.number} already exists for ${branch}` }
+
+    const desc = await describeFromBranch(git, `refs/remotes/origin/${branch}`, slug)
+
+    if (prs.length > 0) {
+      const pr = prs[0]!
+      const refreshed = await refreshPr(exec, dir, pr, desc)
+      return { status: 'exists', note: `PR #${pr.number} already exists for ${branch} — ${refreshed}` }
+    }
 
     const base = await git.defaultBranch()
-    const body = `Draft PR for \`run/${slug}\` — see \`runs/${slug}/\` for the run record.`
     try {
       await exec(
         'gh',
-        ['pr', 'create', '--draft', '--head', branch, '--base', base, '--title', `run/${slug}`, '--body', body],
+        ['pr', 'create', '--draft', '--head', branch, '--base', base, '--title', desc.title, '--body', desc.body],
         { cwd: dir, maxBuffer: 16 * 1024 * 1024 },
       )
     } catch (e) {
       return { status: 'skipped', note: `gh pr create failed: ${e instanceof Error ? e.message : String(e)}` }
     }
-    return { status: 'created', note: `opened a draft PR for ${branch} against ${base}` }
+    return { status: 'created', note: `opened a draft PR for ${branch} against ${base} (described from ${desc.from})` }
   } catch (e) {
     // Belt-and-braces: this function must never throw (AC8.2).
     return { status: 'skipped', note: `unexpected error ensuring PR: ${e instanceof Error ? e.message : String(e)}` }

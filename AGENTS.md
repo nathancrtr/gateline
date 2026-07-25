@@ -155,7 +155,10 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
 * A run is created in two steps: `agentic new` stages the record (branch,
   `intent-brief.md`, `state.yaml`) for human review, and `arm` is what makes it
   dispatchable — a staged run is inert, and arming is also what ensures its draft
-  PR. The profile is chosen in the intent brief and recorded as
+  PR. That PR's title and description are generated from the run's own artifacts
+  (the intent brief, then the spec once it lands) and refresh as the run
+  progresses — until a human edits the body, which hands the description to them
+  for good. The profile is chosen in the intent brief and recorded as
   `profile:` at init; from then on `state.yaml` is authoritative, and `gates:` carries
   exactly that profile's gates (a gate that doesn't exist is absent, never
   auto-approved).

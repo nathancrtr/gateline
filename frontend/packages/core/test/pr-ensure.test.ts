@@ -2,11 +2,11 @@
 // exercised through the injected exec seam — no real `gh` is ever shelled
 // out to (CI has no authed `gh`).
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ensureDraftPr } from '../src/index.ts'
+import { ensureDraftPr, GENERATED_MARKER } from '../src/index.ts'
 
 let dir: string
 
@@ -20,6 +20,24 @@ function pushBranch(branch: string): void {
   const sha = git(['rev-parse', branch]).trim()
   git(['update-ref', `refs/remotes/origin/${branch}`, sha])
 }
+
+/** Same, but with a run record committed on the branch — what the description is read from. */
+function pushRunBranch(branch: string, files: Record<string, string>): void {
+  git(['checkout', '-q', '-b', branch])
+  for (const [path, content] of Object.entries(files)) {
+    mkdirSync(join(dir, dirname(path)), { recursive: true })
+    writeFileSync(join(dir, path), content)
+  }
+  git(['add', '-A'])
+  git(['commit', '-q', '-m', `state(${branch}): staged`])
+  const sha = git(['rev-parse', branch]).trim()
+  git(['update-ref', `refs/remotes/origin/${branch}`, sha])
+  git(['checkout', '-q', 'main'])
+}
+
+const TOY_STATE = 'run: toy\nbranch: run/toy\nphase: spec\nprofile: standard\ngates:\n  G0: { approved: false, by: null, at: null, notes: null }\ntasks: []\nescalations: []\n'
+const TOY_BRIEF = '# Intent Brief: Toy exporter is unusable at scale\n\n## Problem\nExporting by hand is slow.\n\n## Motivation\nSaves an afternoon.\n\n## Constraints\nOffline.\n\n## Out of scope\nImporting.\n'
+const TOY_RUN = { 'runs/toy/state.yaml': TOY_STATE, 'runs/toy/intent-brief.md': TOY_BRIEF }
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'agentic-pr-ensure-'))
@@ -60,7 +78,7 @@ describe('ensureDraftPr', () => {
     git(['remote', 'add', 'origin', 'https://github.com/acme/widgets.git'])
     pushBranch('run/toy')
     const exec = vi.fn(async (_cmd: string, args: string[]) => {
-      if (args.includes('list')) return JSON.stringify([{ number: 42 }])
+      if (args.includes('list')) return JSON.stringify([{ number: 42, title: 'run/toy', body: 'hand written', state: 'OPEN' }])
       throw new Error(`unexpected gh invocation: ${args.join(' ')}`)
     })
 
@@ -132,5 +150,115 @@ describe('ensureDraftPr', () => {
 
     expect(result).toEqual({ status: 'skipped', note: 'local-only mode — draft-PR ensure suppressed' })
     expect(exec).not.toHaveBeenCalled()
+  })
+})
+
+/** #202: the description is read off the run branch and refreshed while the framework still owns it. */
+describe('ensureDraftPr descriptions', () => {
+  beforeEach(() => {
+    git(['remote', 'add', 'origin', 'https://github.com/acme/widgets.git'])
+  })
+
+  /** Returns [exec, calls-of-`gh pr <verb>`]. `listed` is the PR `gh pr list` reports, if any. */
+  function ghStub(listed: object | null) {
+    return vi.fn(async (_cmd: string, args: string[]) => {
+      if (args.includes('list')) return JSON.stringify(listed ? [listed] : [])
+      if (args.includes('create')) return 'https://github.com/acme/widgets/pull/9\n'
+      if (args.includes('edit')) return ''
+      throw new Error(`unexpected gh invocation: ${args.join(' ')}`)
+    })
+  }
+
+  const argOf = (args: string[], flag: string): string | undefined => args[args.indexOf(flag) + 1]
+
+  it('titles a new PR from the run branch intent brief instead of the slug', async () => {
+    pushRunBranch('run/toy', TOY_RUN)
+    const exec = ghStub(null)
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
+
+    expect(result.status).toBe('created')
+    expect(result.note).toContain('intent-brief.md')
+    const [, args] = exec.mock.calls.find(([, a]) => a.includes('create'))!
+    expect(argOf(args, '--title')).toBe('Toy exporter is unusable at scale')
+    const body = argOf(args, '--body')!
+    expect(body).toContain(GENERATED_MARKER)
+    expect(body).toContain('Exporting by hand is slow.')
+    expect(body).toContain('profile `standard`')
+  })
+
+  it('refreshes a generated description once the spec lands', async () => {
+    pushRunBranch('run/toy', { ...TOY_RUN, 'runs/toy/spec.md': '# Specification: Streaming toy export\n\n## Context\nThe exporter buffers everything.\n\n### R1 — Stream rows\n' })
+    const exec = ghStub({ number: 42, title: 'run/toy', body: `${GENERATED_MARKER}\n\nstale`, state: 'OPEN' })
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
+
+    expect(result.status).toBe('exists')
+    expect(result.note).toContain('refreshed from spec.md')
+    const [, args] = exec.mock.calls.find(([, a]) => a.includes('edit'))!
+    expect(args).toContain('42')
+    expect(argOf(args, '--title')).toBe('Streaming toy export')
+    expect(argOf(args, '--body')).toContain('- R1 — Stream rows')
+  })
+
+  it('never edits a description a human has taken over', async () => {
+    pushRunBranch('run/toy', TOY_RUN)
+    const exec = ghStub({ number: 42, title: 'Hand-written title', body: '## Summary\nA human wrote this.', state: 'OPEN' })
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
+
+    expect(result.status).toBe('exists')
+    expect(result.note).toContain('human-authored')
+    expect(exec.mock.calls.some(([, args]) => args.includes('edit'))).toBe(false)
+  })
+
+  it('issues no edit when the description is already current', async () => {
+    pushRunBranch('run/toy', TOY_RUN)
+    const first = ghStub(null)
+    await ensureDraftPr(dir, 'run/toy', 'toy', { exec: first })
+    const [, createArgs] = first.mock.calls.find(([, a]) => a.includes('create'))!
+    const current = { number: 42, title: argOf(createArgs, '--title')!, body: argOf(createArgs, '--body')!, state: 'OPEN' }
+    const exec = ghStub(current)
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
+
+    expect(result.note).toContain('already current')
+    expect(exec.mock.calls.some(([, args]) => args.includes('edit'))).toBe(false)
+  })
+
+  it('leaves a merged or closed PR alone', async () => {
+    pushRunBranch('run/toy', TOY_RUN)
+    const exec = ghStub({ number: 42, title: 'run/toy', body: `${GENERATED_MARKER}\n\nstale`, state: 'MERGED' })
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
+
+    expect(result.note).toContain('merged')
+    expect(exec.mock.calls.some(([, args]) => args.includes('edit'))).toBe(false)
+  })
+
+  it('reports a failed refresh in the note without throwing (AC8.2 holds for the edit path)', async () => {
+    pushRunBranch('run/toy', TOY_RUN)
+    const exec = vi.fn(async (_cmd: string, args: string[]) => {
+      if (args.includes('list')) return JSON.stringify([{ number: 42, title: 'run/toy', body: `${GENERATED_MARKER}\n\nstale`, state: 'OPEN' }])
+      throw new Error('gh: could not edit pull request')
+    })
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
+
+    expect(result.status).toBe('exists')
+    expect(result.note).toContain('refresh failed')
+    expect(result.note).toContain('could not edit')
+  })
+
+  it('falls back to the slug title when the branch carries no readable run record', async () => {
+    pushBranch('run/toy')
+    const exec = ghStub(null)
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
+
+    expect(result.status).toBe('created')
+    const [, args] = exec.mock.calls.find(([, a]) => a.includes('create'))!
+    expect(argOf(args, '--title')).toBe('run/toy')
+    expect(argOf(args, '--body')).toContain('runs/toy/')
   })
 })

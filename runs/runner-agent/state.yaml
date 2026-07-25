@@ -1,6 +1,6 @@
 run: runner-agent
 branch: run/runner-agent
-phase: release # staged — not yet armed; `agentic arm runner-agent` starts the run
+phase: done # staged — not yet armed; `agentic arm runner-agent` starts the run
 paused_reason: null
 profile: full # patch | standard | full
 intake:
@@ -664,7 +664,14 @@ gates:
       notes: null,
       burden: confirmation
     }
-  G3: { approved: false, by: null, at: null, notes: null }
+  G3:
+    {
+      approved: true,
+      by: Nathan Carter,
+      at: 2026-07-25T02:45:00.316Z,
+      notes: null,
+      burden: confirmation
+    }
 tasks:
   [
     { id: 01-seam-extend, status: review-approved, review_rounds: 2 },

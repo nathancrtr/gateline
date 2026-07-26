@@ -84,6 +84,17 @@ budget:
           tokens_in: 12,
           tokens_out: 3471,
           cost_usd: 1.5355675000000002
+        },
+      {
+          at: 2026-07-26T23:17:23.111Z,
+          role: implementer,
+          task: 01-core-logic,
+          round: 3,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ] # appended by the v1 orchestrator's dispatch seam
 
@@ -110,7 +121,7 @@ gates:
 
 tasks:
   [
-    { id: 01-core-logic, status: in-review, review_rounds: 2 },
+    { id: 01-core-logic, status: dispatched, review_rounds: 2 },
     { id: 02-cli-shell, status: pending, review_rounds: 0 },
     { id: 03-unit-tests, status: pending, review_rounds: 0 },
     { id: 04-cli-tests, status: pending, review_rounds: 0 }

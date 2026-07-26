@@ -69,6 +69,17 @@ budget:
           tokens_in: null,
           tokens_out: null,
           cost_usd: null
+        },
+      {
+          at: 2026-07-26T21:40:25.648Z,
+          role: reviewer,
+          task: 01-contracts-split,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:

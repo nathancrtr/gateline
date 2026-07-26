@@ -117,6 +117,6 @@ tasks:
     { id: 01-contracts-split, status: review-approved, review_rounds: 1 },
     { id: 02-state-contract-resolution, status: dispatched, review_rounds: 0 },
     { id: 03-generic-read-path, status: pending, review_rounds: 0 },
-    { id: 04-docs-landed, status: in-review, review_rounds: 0 }
+    { id: 04-docs-landed, status: in-review, review_rounds: 1 }
   ]
 escalations: []

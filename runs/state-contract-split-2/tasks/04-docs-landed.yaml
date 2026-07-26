@@ -55,3 +55,51 @@ depends_on: []
 status: pending
 
 notes: |
+  Round 2 — response to review-02.md findings:
+
+  F1 (major, docs/INTEGRATION.md:497-498) — FIXED. Verified against
+  scripts/integrate.py directly: the file contains zero occurrences of the
+  string "state" in its ~482 lines, so it performs no state-file checks of
+  any kind, not even presence-only ones. The §11 sequencing note's claim
+  that "`validate`'s state checks ... already read the split schema" was
+  false. Rewrote the sentence to attribute split-schema reading to the
+  frontend read check only, and added an explicit sentence stating that
+  `validate` does not parse state-file contents at all and that a
+  state-shape check there remains future tooling this run did not build.
+
+  F2 (major, frontend-behavior landed-voice claims depend on tasks 02/03) —
+  NO PROSE CHANGE. Checked branch state directly: `git log` and both task
+  files' `status:` fields show 02-state-contract-resolution and
+  03-generic-read-path still have zero landed commits (status: pending,
+  scope work not started). So the frontend-behavior prose this task wrote
+  (state validates against the host's own contract; core-only hosts parse
+  cleanly; the §9 mitigation marked landed) is not yet true against the
+  actual frontend code — `parseRunState` is still compiled-SDLC-only and
+  `validate.ts`'s state branch is still presence-only until 02/03 land.
+  The review itself frames this correctly as a task-graph/merge-ordering
+  matter, not a prose defect: this task's scope (dispatched round 1) was to
+  document the split as landed per the plan's contract-layout description,
+  it declares depends_on: [], and the prose is exactly what would be true
+  once 02/03 merge alongside it. Rewriting the prose to hedge on 02/03's
+  landing would fight the task's own scope and produce a doc that's wrong
+  in the other direction the moment 02/03 do land. The real fix is a
+  dependency edge (04 depends_on [02, 03]) or an atomic-merge guarantee,
+  which is a task-graph/G2 decision outside this task's file_contact_surface
+  (docs/INTEGRATION.md, docs/DESIGN.md only) and outside what an
+  implementer round can unilaterally decide. Flagging this explicitly so
+  the overclaim window is a named, accepted risk for the orchestrator/G2 to
+  resolve via sequencing, not a silent one.
+
+  F3 (minor, docs/INTEGRATION.md:373-374) — FIXED. Added the qualifier the
+  reviewer requested: the sentence now says hosts "whose contract declares
+  only the generic core shape" parse cleanly, and adds a parenthetical
+  naming the unfixed case per ADR-2's stated consequence — an SDLC-derived
+  host that merely renames a gate still gets the compiled G0-G3 schema and
+  still bounces.
+
+  Re-ran acceptance checks: the grep for "state-contract split" in
+  docs/INTEGRATION.md still shows no pending/future-tense description, and
+  `git diff --name-only` touches only docs/INTEGRATION.md and this task file.
+  docs/DESIGN.md needed no round-2 change — its AC7.2 row from round 1 was
+  reviewed clean and none of the three findings touch it. Both files remain
+  inside the declared file_contact_surface.

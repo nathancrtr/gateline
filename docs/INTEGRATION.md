@@ -370,11 +370,13 @@ teammate runs it too:
   bounces. `validate` (stdlib Python) prints the command; it does not run a Node
   toolchain it doesn't ship. The state-contract split (`runs/state-contract-split-2/`)
   has landed, so the check's pass criterion now applies to both SDLC-shaped hosts
-  and hosts that declare only the generic core — a host with instance gate
-  vocabulary parses cleanly instead of bouncing by design. One residual
-  limitation, named for a follow-up at G1 (ADR-6): the core read path and the
-  HTTP API generalize, but the cli and web gate-glyph cells still assume the
-  SDLC gate ids and can throw on a purely non-SDLC host's gate column. This one
+  and hosts whose contract declares only the generic core shape — those hosts
+  parse cleanly instead of bouncing by design. (An SDLC-derived host that merely
+  renames a gate still gets the compiled G0–G3 schema and still bounces — ADR-2's
+  stated consequence.) One residual limitation, named for a follow-up at G1
+  (ADR-6): the core read path and the HTTP API generalize, but the cli and web
+  gate-glyph cells still assume the SDLC gate ids and can throw on a purely
+  non-SDLC host's gate column. This one
   command exercises the full read path (discovery, state parse, contract
   validation) end-to-end, and it is exactly the check that caught the
   state-schema boundary at integration #2.
@@ -494,9 +496,10 @@ runs *before* the environment probe has fixed anything.
 ## 11. Build phasing
 
 Sequencing note: the state-contract split (§4) has landed
-(`runs/state-contract-split-2/`) and no longer blocks the first tag — `validate`'s
-state checks and the frontend read check already read the split schema. One
-deferred item from that run remains a release-prep task before the tag: adding
+(`runs/state-contract-split-2/`) and no longer blocks the first tag — the
+frontend read check already reads the split schema. `validate` itself does not
+parse state-file contents at all (§5); a state-shape check there stays future
+tooling, not something this run built. One deferred item from that run remains a release-prep task before the tag: adding
 `contracts/state-core.yaml` to the lock's copy manifest,
 `scripts/copy-manifest.json` (ADR-6).
 

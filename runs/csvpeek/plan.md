@@ -14,6 +14,16 @@
 > Approach section's "Binding environment finding" paragraph or the first two
 > Risks bullets — those are superseded. Nothing else in this plan changed.
 
+> **AMENDED 2026-07-26 (post-G1, second amendment).** ADR-11 (end of
+> Decisions) resolves review-01.md finding F1: `detect_delimiter` now
+> validates the sniffed delimiter against `csv.reader` and falls back to
+> `','` when the reader rejects it. This amends the `detect_delimiter`
+> docstring in "Interface contracts" and supersedes two sentences of ADR-4
+> (annotated in place); the prior wording is quoted in ADR-11. ADR-7 is
+> unchanged — its "core functions stay exception-free" consequence is
+> restored by this fix. `parse_csv` and all other contracts are unchanged;
+> no task file changed. Nothing else in this plan changed.
+
 ## Approach
 
 Greenfield deliverable at `apps/csvpeek/`, following the `apps/<slug>/` convention
@@ -69,10 +79,17 @@ exactly '' after CSV parsing (spec Assumptions)."""
 
 TOP_N: int  # = 5 — the bound on reported common values per column (AC7.2)
 
+# Docstring below amended by ADR-11 (2026-07-26); the prior wording is quoted
+# in ADR-11.
 def detect_delimiter(text: str) -> str:
     """Delimiter of the CSV in `text`, via csv.Sniffer().sniff(text).delimiter
-    over the whole text. Returns ',' when text is empty or Sniffer raises
-    csv.Error (R4 + spec fallback assumption). Never raises."""
+    over the whole text, validated against csv.reader. Returns ',' when text
+    is empty, when Sniffer raises csv.Error, or when the sniffed delimiter is
+    rejected by csv.reader — validation is the probe
+    csv.reader([], delimiter=<sniffed>) with TypeError/ValueError treated as
+    rejection (ADR-11; R4 + spec fallback assumption). Guarantee: the
+    returned delimiter is always accepted by csv.reader construction on the
+    running interpreter. Never raises."""
 
 def parse_csv(text: str) -> tuple[list[str], list[list[str]]]:
     """(header, data_rows). Records come from csv.reader over
@@ -230,6 +247,9 @@ Column: <name>
 ### ADR-4: Parse with `csv.reader` over `StringIO`; Sniffer on the whole text with comma fallback; ragged normalization isolated in `column_values`
 - **Choice:** `detect_delimiter` = `csv.Sniffer().sniff(text)` over the entire
   file text, `','` on `csv.Error` or empty input (R4 + spec assumption).
+  *[Superseded in part by ADR-11 (2026-07-26): a sniffed delimiter that
+  `csv.reader` rejects is a third fallback-to-`','` case; see the amended
+  `detect_delimiter` docstring in "Interface contracts".]*
   `parse_csv` = `csv.reader(io.StringIO(text, newline=''), delimiter=...)`;
   first record is the header (spec header assumption). Ragged handling (pad
   short rows with `''`, ignore extras) lives only in `column_values`.
@@ -244,7 +264,10 @@ Column: <name>
   containing a newline counts once (correct, not line-count). Duplicate header
   names yield separate column blocks. On files where Sniffer guesses a
   delimiter the ACs don't cover, behavior follows Sniffer as-is — the spec
-  puts anything beyond stock `csv.Sniffer` out of scope.
+  puts anything beyond stock `csv.Sniffer` out of scope. *[Superseded in part
+  by ADR-11 (2026-07-26): "follows Sniffer as-is" holds only when `csv.reader`
+  accepts the sniffed delimiter; when it rejects it, `detect_delimiter`
+  falls back to `','`.]*
 
 ### ADR-5: Type inference = `int()`/`float()` parseability over non-blank values; empty column → `string`
 - **Choice:** A value is integer-parseable iff `int(value)` succeeds,
@@ -385,6 +408,96 @@ Column: <name>
   runs pytest per-directory and does not report repo-root collection failure
   as a csvpeek defect. The gate human acknowledges this amendment at the next
   gate (G2); items to weigh are listed in the amendment header note.
+
+### ADR-11 (amendment, 2026-07-26): `detect_delimiter` validates the sniffed delimiter against `csv.reader`; a rejected delimiter falls back to `','`
+- **Context:** Post-G1 amendment answering **review-01.md finding F1**
+  (blocking; a plan defect, not an implementer error — task 01 implemented
+  ADR-4's pinned recipe exactly). On the PATH interpreter this run verifiably
+  executes on (Python 3.14.6, ADR-10), `csv.reader` rejects a dialect whose
+  delimiter equals the default quotechar: `csv.reader(..., delimiter='"')`
+  raises `ValueError: bad delimiter or quotechar value` at reader
+  construction. `csv.Sniffer().sniff()` can return exactly such a delimiter —
+  reproduced by the Reviewer with file contents `'"'` and `'"""'`, where
+  sniff returns `'"'` without raising `csv.Error`, so ADR-4's fallback never
+  fires and `parse_csv` raises `ValueError` on a valid, readable file. That
+  contradicts ADR-7's "core functions stay exception-free" consequence,
+  `main()`'s "never raises for anticipated errors", the spec's
+  Sniffer-fallback assumption in spirit (degrade to comma, don't block), and
+  the apps convention "never a traceback" (spec Context). The escalation was
+  resolved by the gate human with direction to handle this in
+  `detect_delimiter` — treat a sniffed delimiter that `csv.reader` rejects as
+  the fallback case.
+- **Decision:** `detect_delimiter` gains a third fallback-to-`','` case, and
+  its contract gains a guarantee. Pinned mechanism (binding; the Implementer
+  has no discretion here):
+  1. `text == ''` → return `','` (unchanged).
+  2. `csv.Sniffer().sniff(text)` raising `csv.Error` → return `','`
+     (unchanged).
+  3. Otherwise, **validate** the sniffed delimiter by probing reader
+     construction: `csv.reader([], delimiter=<sniffed>)` inside
+     `try/except (TypeError, ValueError)`. If the probe raises, the delimiter
+     is **rejected** → return `','`. If it does not raise, return the sniffed
+     delimiter. (The probe's empty-list iterable is never iterated; csv
+     dialect validation happens at construction. `ValueError` is the observed
+     3.14.6 rejection for `delimiter == quotechar`; `TypeError` is csv's
+     rejection for non-1-char delimiters — caught for robustness even though
+     Sniffer's `delimiter` attribute is always a 1-char string.)
+  - The rejection criterion is therefore exactly: *the running interpreter's
+    `csv.reader` refuses to construct a reader with that delimiter and
+    otherwise-default dialect parameters*. No hardcoded character list.
+  - Guarantee (now part of the interface contract): `detect_delimiter`'s
+    return value is always accepted by `csv.reader` construction on the
+    running interpreter, and the function never raises. Consequently
+    `parse_csv` — unchanged — can no longer raise `ValueError` from its
+    `csv.reader(...)` call's delimiter.
+  - Superseded wording, for the record (interface contract, `detect_delimiter`
+    docstring, now replaced in place): "Delimiter of the CSV in `text`, via
+    csv.Sniffer().sniff(text).delimiter over the whole text. Returns ',' when
+    text is empty or Sniffer raises csv.Error (R4 + spec fallback assumption).
+    Never raises." ADR-4's choice sentence and its "behavior follows Sniffer
+    as-is" consequence are annotated in place as superseded in part.
+- **Rejected:**
+  - *`parse_csv` catches `ValueError` from `csv.reader` construction and
+    re-parses with `','`* (the Reviewer's other floated option) — fixes one
+    call site's symptom, not the defect: `detect_delimiter` is independently
+    part of the pinned public interface (task 03's `delimiter`-named tests
+    call it directly per AC11.2), and under this option it would keep
+    returning a delimiter that `csv.reader` refuses — a contract whose output
+    is unusable for its sole documented purpose. It also lets
+    `detect_delimiter`'s report and `parse_csv`'s actual parse disagree. The
+    gate human's resolution pointed at `detect_delimiter`, and that is the
+    right layer: one fix, every caller inherits it.
+  - *A static criterion — fall back iff the sniffed delimiter is `'"'` (the
+    default quotechar)* — hardcodes today's one known-failing value.
+    csv's dialect validation is interpreter-version-dependent (3.9.6 accepts
+    `delimiter='"'`; 3.14.6 rejects it) and may reject other values in other
+    versions; the probe defers to the running interpreter's own rules, which
+    is precisely the resolution's criterion ("a sniffed delimiter that
+    csv.reader rejects").
+  - *Adding `ValueError` to `main()`'s ADR-7 catch (stderr + exit 1)* —
+    turns a valid, readable file into an error exit, contradicting the spec's
+    degrade-to-comma fallback assumption (fall back, don't block), and merely
+    relocates the ADR-7 violation instead of restoring the exception-free
+    core.
+- **Consequences:** ADR-7's "core functions stay exception-free" consequence
+  is restored; no change to `parse_csv`, `main()`, error handling, the report
+  format, or any other contract. The fix lands entirely in
+  `apps/csvpeek/csvpeek.py` — task 01's sole `file_contact_surface` entry —
+  so **no task file changes**; the next implementation round for
+  01-core-logic applies this ADR plus review-01.md F1. Behavior on the
+  pathological inputs is interpreter-relative by design: under 3.14.6,
+  `detect_delimiter('"')` returns `','` (probe rejects `'"'`); under 3.9.6 it
+  may return `'"'` (the probe accepts what that interpreter accepts) — on
+  *both*, nothing raises, preserving ADR-10's dual-interpreter target;
+  byte-exact tests run under a single interpreter (`sys.executable`, task 04).
+  Regression evidence for the next review round (run from `apps/csvpeek/`,
+  PATH interpreter): `python3 -c 'import csvpeek as c; c.parse_csv("\"");
+  c.parse_csv("\"\"\""); print("ok")'` exits 0 printing `ok` with no
+  traceback, and `python3 -c 'import csv, csvpeek as c;
+  csv.reader([], delimiter=c.detect_delimiter("\""))'` exits 0 (the guarantee
+  holds). Task 03's `delimiter` tests should exercise the amended contract as
+  written (its existing scope already binds it to the plan's interface
+  contract). The gate human acknowledges this amendment at the next gate.
 
 ## Requirement → task mapping
 

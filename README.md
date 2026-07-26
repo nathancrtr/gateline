@@ -1,6 +1,6 @@
-# Agentic Development System
+# gateline
 
-A design + runnable skeleton for a team of SDLC agents: roles defined as portable
+**gateline** is a design + runnable skeleton for a team of SDLC agents: roles defined as portable
 contracts, models and runtimes attached as swappable bindings, humans approving at
 phase gates. Built for a team of senior engineers moving from single-conversation AI
 pair-programming to multi-agent development.

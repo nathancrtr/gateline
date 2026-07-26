@@ -1,4 +1,4 @@
-# Agentic Software Development: Sandbox
+# gateline
 
 Guidance for coding agents (and humans) working on this repository. It is
 runner-neutral on purpose — the same portability principle the framework itself is
@@ -15,6 +15,15 @@ server over `@agentic/core`) and the v1 orchestrator
 (`frontend/packages/orchestrator`), with a hosted single-user deployment recipe
 under `deploy/`. Application code under `apps/` is the output of pipeline runs, kept
 as evidence — not software being maintained for its own sake.
+
+**Names.** The framework and this repository are **gateline**; the web UI is
+**Gatehouse**. Two earlier names are retired and must not be reintroduced:
+*FleetView* (never a decided name) and *ADS* / *Agentic Development System*. Both
+still appear inside `runs/` — those are historical records and stay as written.
+Lowercase `gate` remains the domain term for a pipeline approval point, and is
+unrelated to the UI's name. Renaming the git repository, the `.agentic/` vendored
+prefix, and the `agentic` / `@agentic/*` command and package names is a separate,
+still-pending step — leave them as they are.
 
 Read [`docs/DESIGN.md`](docs/DESIGN.md) before changing the framework: it defines the
 principles (P1–P6), roles, gates, and failure modes that changes are judged against.

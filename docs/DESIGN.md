@@ -1,4 +1,4 @@
-# Agentic Development System — Design
+# gateline — Design
 
 **Status:** v0.2 — exercised end-to-end by the wordfreq run (`runs/wordfreq/`); the
 gate frontend and the v1 orchestrator it describes in §7 are implemented (`frontend/`)

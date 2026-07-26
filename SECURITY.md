@@ -11,7 +11,7 @@ Please do not open public issues for suspected vulnerabilities.
 
 ## Scope
 
-The security-relevant surfaces of ADS are:
+The security-relevant surfaces of gateline are:
 
 - **`scripts/integrate.py` and `scripts/render-agents.py`** — these run on
   operator machines against operator repos. Anything that could make them
@@ -29,9 +29,9 @@ The security-relevant surfaces of ADS are:
 Pre-1.0: fixes land on `main` only. Once tagged releases exist, this policy
 will name the supported tags.
 
-## What ADS does not do
+## What gateline does not do
 
-ADS ships no hosted service, collects no telemetry, and makes no network
+gateline ships no hosted service, collects no telemetry, and makes no network
 calls of its own — the tooling reads and writes your repository, and the
 agents you dispatch use whatever runtime and credentials you already have.
 Your model vendors' security posture is governed by your agreements with

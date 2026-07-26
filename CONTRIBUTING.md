@@ -1,10 +1,10 @@
 # Contributing
 
-Thanks for your interest in ADS. Here is the honest state of things.
+Thanks for your interest in gateline. Here is the honest state of things.
 
 ## Code contributions: not yet
 
-ADS is currently **maintainer-authored by policy**, not by accident. Settling a
+gateline is currently **maintainer-authored by policy**, not by accident. Settling a
 contribution policy (CLA or DCO) is a deliberate prerequisite to accepting
 outside code, because it preserves licensing options that matter for the
 project's long-term health. Until that lands, pull requests from outside the

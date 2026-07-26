@@ -12,7 +12,7 @@ intake:
   staged_by: "Nathan Carter"
 budget:
   cost_limit_usd: 50
-  cost_spent_usd: 36.55
+  cost_spent_usd: 37.87
   ledger:
     [
       {
@@ -176,9 +176,9 @@ budget:
           round: 2,
           adapter: claude-code,
           model: anthropic/claude-sonnet-5,
-          tokens_in: null,
-          tokens_out: null,
-          cost_usd: null
+          tokens_in: 6,
+          tokens_out: 1828,
+          cost_usd: 1.3204658999999999
         }
     ]
 gates:
@@ -208,7 +208,7 @@ tasks:
         status: review-approved,
         review_rounds: 2
       },
-    { id: 03-generic-read-path, status: dispatched, review_rounds: 1 },
+    { id: 03-generic-read-path, status: in-review, review_rounds: 1 },
     { id: 04-docs-landed, status: review-approved, review_rounds: 2 }
   ]
 escalations: []

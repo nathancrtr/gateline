@@ -1,7 +1,7 @@
 run: csvpeek
 branch: run/csvpeek
-phase: implement # spec | plan | implement | integrate | release | done | paused
-paused_reason: null
+phase: paused # spec | plan | implement | integrate | release | done | paused
+paused_reason: escalation
 
 budget:
   cost_limit_usd: 30
@@ -117,5 +117,12 @@ escalations:
         resolution: See F1 - detect_delimiter should probably treat a sniffed delimiter
           that csv.reader rejects,
         disposition: re-plan
+      },
+    {
+        at: 2026-07-26T22:17:32.983Z,
+        from_role: orchestrator,
+        reason: "task 01-core-logic: architect amendment landed for the re-plan
+          disposition — acknowledge to proceed (see plan.md's dated ADR)",
+        resolved: false
       }
   ]

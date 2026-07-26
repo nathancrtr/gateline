@@ -68,6 +68,58 @@ acceptance_tests:
 
 depends_on: [02-state-contract-resolution]
 
-status: pending
+status: in-review
 
 notes: |
+  Round 1 (implementer): built as scoped.
+  - local-source.ts: `stateContract` memoizes `resolveStateContract(this.templates)`
+    once per source (same closure-cache stance as `frameworkRoots`), threaded
+    into `parseRunState` in both `readState` and `stateHistory`. Gave `readState`
+    an explicit `Promise<StateParseResult & { raw: string | null }>` return
+    annotation (previously inferred) so its two branches unify to one type —
+    needed for the new test file, which holds a `LocalGitSource` directly
+    rather than the `RunSource` interface (view-model call sites were already
+    fine since they type through the interface).
+  - readiness.ts: `deriveReadiness` now destructures `generic` off the read
+    and returns `{ items: [], validations }` before building the malformed
+    item, when `state` is null but `generic` is non-null. Every other path
+    byte-identical (confirmed by readiness.test.ts passing unedited).
+  - portfolio.ts: added `GateLedgerMap = Record<GateId, GateLedgerCell> &
+    Record<string, GateLedgerCell | undefined>`, widened `RunSummary.gates`
+    to it. `summarizeRun` gained a `!state && generic` branch ahead of the
+    existing `!state` (malformed) branch: phase `generic.phase ?? '—'`,
+    pausedReason from `generic.paused_reason`, malformed null, profile `'full'`
+    (commented as ADR-6 typed filler), gates built from `generic.gateOrder`
+    only (a declared gate absent from the file gets an explicit undecided
+    cell via a small `UNDECIDED_CELL` helper — `undecidedGate()` in schema.ts
+    is private, so this is a local equivalent), tasks zeros, escalationsOpen
+    from unresolved `generic.escalations`, budget nulls. Cast to `GateLedgerMap`
+    at that one construction site (plan's "typed filler" allowance) since a
+    plain `Record<string, GateLedgerCell>` doesn't structurally satisfy the
+    `Record<GateId, GateLedgerCell>` half without one. `emptyLedger()` and the
+    plain-malformed branch are untouched.
+  - New test/generic-host.test.ts: builds a throwaway git repo (raw
+    `execFileSync('git', …)`, same idiom as code-tree.test.ts, not
+    `@agentic/fixtures`' `generateFixtureRepo` — that generator produces an
+    SDLC-shaped repo, not a core-only one) with contracts/state.yaml as the
+    plan's core-instance fixture (gates {intake, publish}, no
+    branch/budget/tasks) and runs/demo/state.yaml on the default branch using
+    those two gates. Asserts AC4.1 (readState: error null, generic non-null),
+    AC4.2 (summarizeRun: phase 'intake', malformed null, gate keys exactly
+    ['intake','publish']), deriveReadiness zero items, and AC4.3
+    (validateArtifact ok true against the fixture source's own templates).
+    Also carries the AC5.2 regression guard against this repository's own
+    wordfreq run (phase 'done', gate keys exactly G0..G3) as an extra
+    belt-and-suspenders check alongside the untouched real-repo.test.ts.
+  - Verification: `npm run typecheck` in frontend/ passes clean across both
+    tsconfig projects (root + web) with zero errors. `npm test` in frontend/:
+    45 passed | 1 skipped test files, 419 passed | 1 skipped tests, 0
+    failures — includes readiness.test.ts, profiles.test.ts,
+    real-repo.test.ts, state-contract.test.ts and the new
+    generic-host.test.ts all green. `npm install` was needed first (fresh
+    checkout, no node_modules) and touched frontend/package-lock.json with
+    only platform-metadata (libc tags, a `peer` flag) noise; reverted that
+    file with `git checkout --` since it carries no real dependency change
+    and sits outside this task's file_contact_surface — `git status`
+    confirms the working tree now diffs only the four declared files.
+  - No deviations from the plan's interface contracts; no escalations.

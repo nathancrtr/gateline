@@ -71,9 +71,13 @@ export function pendingGate(state: RunState): GateId | null {
 export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<RunReadiness> {
   const items: InboxItem[] = []
   const validations: Record<string, Validation> = {}
-  const { state, error } = await source.readState(ref)
+  const { state, error, generic } = await source.readState(ref)
 
   if (!state) {
+    // A well-formed generic run (record/state-contract.ts) is not malformed —
+    // it just has no G0–G3-shaped decision to surface (out-of-scope: no
+    // decision UI for non-SDLC gates, spec R5).
+    if (generic) return { items, validations }
     const touched = await source.lastTouched(ref, ['state.yaml'])
     return {
       items: [

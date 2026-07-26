@@ -6,8 +6,9 @@ import { join } from 'node:path'
 import { parseDocument } from 'yaml'
 import { Git, type CommitInfo } from './git.ts'
 import { memoizedFrameworkRoots, type FrameworkRoots } from './framework-roots.ts'
-import { parseRunState, STAGED_REASON } from '../record/schema.ts'
+import { parseRunState, STAGED_REASON, type StateParseResult } from '../record/schema.ts'
 import { readIntake, type RunScaffold } from '../record/scaffold.ts'
+import { resolveStateContract, type StateContract } from '../record/state-contract.ts'
 import type { ContractTemplates } from '../record/validate.ts'
 import type { Identity, RunRef, RunSource, StageOutcome, StateCommit, StateDocMutation, WriteResult } from './source.ts'
 
@@ -26,6 +27,13 @@ export class LocalGitSource implements RunSource {
    * (the orchestrator's Engine, #95) so the layout is probed once.
    */
   readonly frameworkRoots: () => Promise<FrameworkRoots>
+
+  /**
+   * The resolved state contract (record/state-contract.ts), cached for the
+   * life of this source — same stance as `frameworkRoots`: a repo's contract
+   * doesn't change mid-process, so every read shares one resolution.
+   */
+  private readonly stateContract: () => Promise<StateContract>
 
   /**
    * `options.identity` pins the author of every write from this source —
@@ -54,6 +62,12 @@ export class LocalGitSource implements RunSource {
         const { contracts } = await roots()
         return git.show(defaultBranch, `${contracts}/${name}`)
       },
+    }
+    const templates = this.templates
+    let cachedContract: Promise<StateContract> | null = null
+    this.stateContract = () => {
+      if (!cachedContract) cachedContract = resolveStateContract(templates)
+      return cachedContract
     }
   }
 
@@ -175,10 +189,11 @@ export class LocalGitSource implements RunSource {
     return result.sort((a, b) => a.slug.localeCompare(b.slug))
   }
 
-  async readState(ref: RunRef) {
+  async readState(ref: RunRef): Promise<StateParseResult & { raw: string | null }> {
     const raw = await this.git.show(ref.ref, `${await this.runDir(ref.slug)}/state.yaml`)
     if (raw === null) return { raw, state: null, error: 'state.yaml missing' }
-    return { raw, ...parseRunState(raw) }
+    const contract = await this.stateContract()
+    return { raw, ...parseRunState(raw, contract) }
   }
 
   async listArtifacts(ref: RunRef): Promise<string[]> {
@@ -201,10 +216,11 @@ export class LocalGitSource implements RunSource {
   async stateHistory(ref: RunRef): Promise<StateCommit[]> {
     const path = `${await this.runDir(ref.slug)}/state.yaml`
     const commits = await this.git.log(ref.ref, [path])
+    const contract = await this.stateContract()
     const result: StateCommit[] = []
     for (const c of commits) {
       const raw = await this.git.show(c.oid, path)
-      result.push({ ...c, state: raw === null ? null : parseRunState(raw).state })
+      result.push({ ...c, state: raw === null ? null : parseRunState(raw, contract).state })
     }
     return result
   }

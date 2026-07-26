@@ -115,7 +115,7 @@ gates:
 tasks:
   [
     { id: 01-core-recovery, status: dispatched, review_rounds: 1 },
-    { id: 02-fixture-run, status: in-review, review_rounds: 0 },
+    { id: 02-fixture-run, status: in-review, review_rounds: 1 },
     { id: 03-server-surface, status: pending, review_rounds: 0 },
     { id: 04-web-readonly, status: pending, review_rounds: 0 },
     { id: 05-cli-inbox, status: pending, review_rounds: 0 }

@@ -91,6 +91,17 @@ budget:
           tokens_in: null,
           tokens_out: null,
           cost_usd: null
+        },
+      {
+          at: 2026-07-26T21:46:53.694Z,
+          role: implementer,
+          task: 04-docs-landed,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:
@@ -117,6 +128,6 @@ tasks:
     { id: 01-contracts-split, status: review-approved, review_rounds: 1 },
     { id: 02-state-contract-resolution, status: dispatched, review_rounds: 0 },
     { id: 03-generic-read-path, status: pending, review_rounds: 0 },
-    { id: 04-docs-landed, status: in-review, review_rounds: 1 }
+    { id: 04-docs-landed, status: dispatched, review_rounds: 1 }
   ]
 escalations: []

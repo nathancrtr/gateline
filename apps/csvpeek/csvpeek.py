@@ -138,7 +138,7 @@ def format_report(header: list[str], rows: list[list[str]]) -> str:
 def main(argv: Optional[Sequence[str]] = None) -> int:
     """Full CLI. argv excludes the program name (None -> sys.argv[1:]).
     Returns the process exit code; never raises for anticipated errors (R9)."""
-    parser = argparse.ArgumentParser(prog="csvpeek.py")
+    parser = argparse.ArgumentParser(prog="csvpeek.py", add_help=False)
     parser.add_argument("file")
     args = parser.parse_args(argv)
 

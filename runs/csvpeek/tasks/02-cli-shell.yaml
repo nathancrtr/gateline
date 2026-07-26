@@ -54,6 +54,13 @@ acceptance_tests:
 
 depends_on: [01-core-logic]
 
-status: pending
+status: in-review
 
-notes: ""
+notes: |
+  Round 2 (review-02.md, verdict request-changes) response:
+  - F1 (major, argparse default -h/--help): fixed — added add_help=False to the
+    ArgumentParser construction at csvpeek.py:141, matching the
+    apps/dupefind/dupefind.py:105 precedent the reviewer cited. Verified
+    `python3 csvpeek.py --help` and `-h` now exit 2 with argparse's own
+    "error: the following arguments are required: file" on stderr and zero
+    bytes on stdout (no help text, no traceback).

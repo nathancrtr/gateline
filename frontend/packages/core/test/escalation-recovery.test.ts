@@ -59,7 +59,7 @@ escalations:
     ])
   })
 
-  it('AC1.3: a malformed escalation entry (resolved as a string) recovers nothing, even though the rest is well-formed', () => {
+  it('AC1.3: a malformed escalation entry (resolved as a string) recovers nothing, even though a well-formed sibling entry sits right beside it', () => {
     const yaml = `
 run: test-run
 branch: run/test-run
@@ -70,6 +70,10 @@ gates:
   G2: {approved: false}
 tasks: []
 escalations:
+  - at: '2026-07-01T00:00:00Z'
+    from_role: implementer
+    reason: a well-formed sibling entry
+    resolved: false
   - reason: something broke
     resolved: "false"
 `
@@ -78,7 +82,7 @@ escalations:
     expect('bestEffortEscalations' in result).toBe(false)
   })
 
-  it('AC1.3: a malformed escalation entry (missing reason) recovers nothing, even though the rest is well-formed', () => {
+  it('AC1.3: a malformed escalation entry (missing reason) recovers nothing, even though a well-formed sibling entry sits right beside it', () => {
     const yaml = `
 run: test-run
 branch: run/test-run
@@ -89,6 +93,10 @@ gates:
   G2: {approved: false}
 tasks: []
 escalations:
+  - at: '2026-07-01T00:00:00Z'
+    from_role: implementer
+    reason: a well-formed sibling entry
+    resolved: false
   - resolved: false
 `
     const result = parseRunState(yaml)
@@ -171,8 +179,9 @@ escalations:
 // --- AC2.3 / R3 end to end: a test-local schema-invalid run reached through
 // git, buildPortfolio, and deriveReadiness — not the shared fixture generator
 // (task 02 owns the shared `esc-recovered` run).
+const DAY = 86_400
+
 function addSchemaInvalidRun(dir: string, slug: string, now: number): void {
-  const DAY = 86_400
   const git = (args: string[]) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' })
   git(['checkout', '-q', '-b', `run/${slug}`, 'main'])
   const runDir = join(dir, 'runs', slug)
@@ -199,7 +208,6 @@ tasks:
 
 escalations:
   - at: '${at(1)}'
-    from_role: implementer
     reason: 'Requirement R2 is ambiguous about rounding'
     resolved: false
   - at: '${at(2)}'
@@ -249,11 +257,15 @@ describe('view-model derivations over a recovered escalation list (AC2.3, R3)', 
         reviewable: false,
         escalationIndex: null,
         packet: ['state.yaml'],
+        problems: [],
       })
     }
-    expect(escalationItems[0]!.title).toContain('implementer')
+    // First entry omits from_role entirely — pins the `?? 'unknown role'` fallback.
+    expect(escalationItems[0]!.title).toBe('Escalation from unknown role')
     expect(escalationItems[0]!.detail).toBe('Requirement R2 is ambiguous about rounding')
-    expect(escalationItems[1]!.title).toContain('verifier')
+    expect(escalationItems[0]!.since).toBe(ctx.repo.now - 1 * DAY)
+    expect(escalationItems[1]!.title).toBe('Escalation from verifier')
     expect(escalationItems[1]!.detail).toBe('AC3.1 sample data is missing from the repo')
+    expect(escalationItems[1]!.since).toBe(ctx.repo.now - 2 * DAY)
   })
 })

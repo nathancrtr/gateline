@@ -66,7 +66,7 @@ acceptance_tests:
 
 depends_on: []
 
-status: pending
+status: in-review
 
 notes: |
   Implementer r1: implemented as scoped. schema.ts recovery checks raw is a
@@ -84,3 +84,46 @@ notes: |
   @agentic/fixtures generator, matching the task's scope note. `npx vitest
   run` (full suite, all packages): 403 passed, 1 skipped, 0 failed. `npm run
   typecheck`: clean.
+
+  Implementer r2 (round 2, addressing review-01.md): all three findings are
+  test-binding gaps only — no production code changed; schema.ts,
+  portfolio.ts, and readiness.ts diffs against the r1 commit are empty.
+
+  F1 (blocking, fixed): both AC1.3 cases in escalation-recovery.test.ts now
+  give the malformed entry a well-formed sibling ({at, from_role: implementer,
+  reason: 'a well-formed sibling entry', resolved: false} placed before the
+  malformed one), still asserting `'bestEffortEscalations' in result ===
+  false`. Verified by hand-applying the reviewer's per-entry-salvage mutant to
+  schema.ts (whole-list `z.array(escalationSchema).safeParse` replaced with a
+  map+filter salvage that keeps valid entries and drops bad ones): both AC1.3
+  tests now fail (`expected true to be false`) where they previously passed.
+  Mutant reverted; `git diff` on schema.ts is empty.
+
+  F2 (major, fixed): the AC2.3 deriveReadiness test now asserts exact epoch
+  seconds for both open recovered items' `since` (`ctx.repo.now - 1 * DAY` and
+  `ctx.repo.now - 2 * DAY`, matching the fixture's `at(1)`/`at(2)` helper; DAY
+  hoisted to module scope so the assertion and the fixture builder share one
+  constant). Verified by hand-applying the reviewer's `since: null` mutant to
+  readiness.ts:100: the since assertion fails (`expected null to be
+  1785016700`). Mutant reverted; `git diff` on readiness.ts is empty.
+
+  F3 (minor, fixed, folded into the F2 edit): the AC2.3 fixture's first
+  escalation entry now omits `from_role` entirely (schema permits it), and the
+  assertions switched from `toContain` to exact `toBe('Escalation from unknown
+  role')` / `toBe('Escalation from verifier')` — pinning both the fallback
+  string and the real value. `problems: []` is now asserted explicitly in the
+  per-item loop rather than left to toMatchObject's default skip. Verified by
+  hand-applying both mutants together (drop the `?? 'unknown role'` fallback;
+  set `problems: [error ?? 'state.yaml unreadable']`): the test fails on the
+  `problems` mismatch (spurious contract-violation string where `[]` was
+  expected). Mutant reverted; `git diff` on readiness.ts is empty.
+
+  Verification after all three fixes: `cd frontend && npx vitest run`
+  (full suite) — 403 passed, 1 skipped, 0 failed (44 files passed, 1 skipped,
+  45 total), identical pass count to r1. `npm run typecheck` — clean (both
+  tsconfig.json and packages/web/tsconfig.json). Confirmed via `git diff
+  --stat` that only frontend/packages/core/test/escalation-recovery.test.ts
+  changed in the working tree; schema.ts, portfolio.ts, and readiness.ts are
+  byte-identical to the r1 commit (an incidental package-lock.json rewrite
+  from a local `npm install` was reverted with `git checkout --` since it's
+  outside the file_contact_surface and unrelated to this round's edits).

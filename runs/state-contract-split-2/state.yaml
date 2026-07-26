@@ -157,6 +157,17 @@ budget:
           tokens_in: 15,
           tokens_out: 4338,
           cost_usd: 2.256399799999999
+        },
+      {
+          at: 2026-07-26T22:38:31.069Z,
+          role: reviewer,
+          task: 03-generic-read-path,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:

@@ -4,6 +4,16 @@
      Gate: G1. All sections required. Accompanied by tasks/*.yaml.
      BUDGET: reference spec requirements by number, never re-quote them. -->
 
+> **AMENDED 2026-07-26 (post-G1).** ADR-10 (end of Decisions) supersedes ADR-2
+> in full and voids ADR-3's premise: `python3` and `pytest` **are present and
+> verified** on this host — provisioning is not a precondition and never was
+> one here. ADR-10 also retires the withdrawn M2 motivation, confirms the
+> four-task cut stands for this run (with the disjoint-surface alternative
+> recorded for future runs), and records a pre-existing repo-root pytest
+> collection condition for the Verifier. Read ADR-10 before relying on the
+> Approach section's "Binding environment finding" paragraph or the first two
+> Risks bullets — those are superseded. Nothing else in this plan changed.
+
 ## Approach
 
 Greenfield deliverable at `apps/csvpeek/`, following the `apps/<slug>/` convention
@@ -297,6 +307,84 @@ Column: <name>
 - **Consequences:** Tasks 01 and 02 intentionally share
   `apps/csvpeek/csvpeek.py`, serialized via `depends_on`; no other surfaces
   overlap. Two test files exist solely so 03 and 04 never collide.
+
+### ADR-10 (amendment, 2026-07-26): Environment finding corrected; interpreter pin re-grounded; motivation and task cut re-based after the G1 decline note
+- **Context:** Post-G1 amendment. Three things changed after this plan was
+  written. (1) The environment finding in ADR-2 is **false on the host this
+  run actually executes on**: it described a different execution environment
+  (a `node:24-slim` container). Verified on this host today (macOS 26.3,
+  arm64): `python3` on PATH is Homebrew `/opt/homebrew/bin/python3`, Python
+  3.14.6, with pytest 9.1.1 available via `python3 -m pytest`; a second
+  interpreter `/usr/bin/python3` is Python 3.9.6 **without** pytest; the
+  sibling suites pass per-directory (`apps/wordfreq` 27, `apps/mdtoc` 36,
+  `apps/dupefind` 38). Corroborated in-run: task 01's implementation is
+  committed and its acceptance tests executed and passed on this machine.
+  (2) The gate owner's G1 decline note retired the M2 toy-run motivation, and
+  it is settled — later runs (mdtoc, dupefind) already exercised
+  orchestrator-driven G0–G3 dispatch. (3) G1 was subsequently approved on
+  this plan and implementation began, which bounds what this amendment may
+  change.
+- **Choice:**
+  1. **Supersede ADR-2 entirely.** No provisioning precondition exists or is
+     needed; no gate decision hinges on arranging Python. The Approach
+     section's "Binding environment finding" paragraph and the first two
+     Risks bullets are superseded by this ADR. The Reviewer of task 01 must
+     not treat "environment unprovisioned" as a live plan premise — the code
+     under review demonstrably ran here.
+  2. **Keep ADR-3's 3.9-safe pins, on new grounds.** ADR-3's premise ("the
+     interpreter does not exist yet, so its version cannot be confirmed") is
+     void; the pin is now a *verified* choice, not a hedge. The plan targets:
+     code that runs under both verified interpreters — `/usr/bin/python3`
+     (3.9.6) and PATH `python3` (3.14.6) — with tests executed by whichever
+     `python3` is on PATH (today: 3.14.6, the only one with pytest);
+     `test_cli.py` invokes the script via `sys.executable`, so tests and CLI
+     always use the same interpreter. All ADR-3 spelling rules and the
+     dual-path stdlib check stand unchanged; task 01's committed code already
+     complies, as do `apps/mdtoc` and `apps/dupefind` (their ADR-8).
+  3. **Re-base the motivation.** csvpeek stands on its own merits: a small,
+     genuinely useful stdlib CLI in the established `apps/<slug>/` family,
+     built to the G0-approved spec. No remaining decision in this plan rests
+     on the M2 rationale; where prior text leaned on it (part of ADR-9's
+     framing), this ADR is the corrected basis.
+  4. **The four-task cut stands as-is for this run.** ADR-9's topology (01
+     and 02 sharing `csvpeek.py`, serialized by `depends_on`) was partly
+     justified by the now-withdrawn rationale, and the repo has since
+     converged on a better cut — three tasks with fully disjoint file-contact
+     surfaces (mdtoc ADR-7, dupefind ADR-7, now convention). It is retained
+     here **for timing, not on merit**: task 01 is committed and in review,
+     tasks 02–04 are seeded in `state.yaml`, and re-cutting mid-implementation
+     would cost more than the topology is worth. Future runs should inherit
+     the three-task disjoint-surface convention, not this run's shape.
+  5. **Known pre-existing condition (for the Verifier):** `python3 -m pytest
+     apps` from the repo root fails at collection because `apps/*/test_core.py`
+     and `apps/*/test_cli.py` share basenames with no `__init__.py`.
+     Per-directory runs all pass, which is why `CLAUDE.md` documents
+     per-directory invocation and why AC11.1 runs pytest from the
+     deliverable's directory. `apps/csvpeek/` uses the same file names and so
+     extends this condition; that is the established convention, **not new
+     breakage**. Verification command: `cd apps/csvpeek && python3 -m pytest`.
+- **Rejected:**
+  - *Re-cutting to the three-task disjoint-surface topology now* — right on
+    merit, wrong in time: it would orphan a committed, in-review task and the
+    seeded task list in `state.yaml` for zero product benefit. Rejected for
+    timing only; recorded so the next run inherits the better convention.
+  - *Relaxing to 3.14-era spellings (PEP 604 unions, unconditional
+    `sys.stdlib_module_names`)* since PATH `python3` is 3.14.6 — it would
+    fork the remaining tasks' style from the already-committed task 01 core
+    and from the sibling apps, and would break under `/usr/bin/python3`
+    (3.9.6), a real interpreter users on this host plausibly invoke.
+  - *Renaming csvpeek's test files to unique basenames* to make repo-root
+    collection work — diverges from all three sibling apps to fix a condition
+    the repo has already accepted and documented; a repo-wide fix (e.g.
+    `__init__.py` files or a root pytest config) is framework surface,
+    outside this run's write scope.
+- **Consequences:** Tasks 02–04 proceed with no environment precondition and
+  unchanged interface contracts, spelling rules, and task files. The 3.9-safe
+  pin is binding and verified; ADR-3's dual-path stdlib check will take its
+  `sys.stdlib_module_names` branch under the PATH interpreter. The Verifier
+  runs pytest per-directory and does not report repo-root collection failure
+  as a csvpeek defect. The gate human acknowledges this amendment at the next
+  gate (G2); items to weigh are listed in the amendment header note.
 
 ## Requirement → task mapping
 

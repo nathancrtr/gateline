@@ -69,3 +69,18 @@ depends_on: []
 status: pending
 
 notes: |
+  Implementer r1: implemented as scoped. schema.ts recovery checks raw is a
+  non-null object, reads the raw `escalations` key, and validates it whole
+  with z.array(escalationSchema); portfolio.ts and readiness.ts consume
+  `bestEffortEscalations` exactly per the plan's interface contracts (no
+  changes to InboxItem/InboxKind, no source.ts changes needed — the existing
+  `{ raw, ...parseRunState(raw) }` spread in local-source.ts already carries
+  the new optional field for free). Test file
+  frontend/packages/core/test/escalation-recovery.test.ts covers AC1.1-1.4
+  with inline YAML (using profile: patch to isolate each test to exactly the
+  intended violation), AC1.2 with the bad-state YAML literal copied verbatim,
+  and AC2.3/R3 end-to-end via a test-local git-branch run (the addPausedRun
+  idiom) with N=2 open + 1 resolved escalations — not added to the shared
+  @agentic/fixtures generator, matching the task's scope note. `npx vitest
+  run` (full suite, all packages): 403 passed, 1 skipped, 0 failed. `npm run
+  typecheck`: clean.

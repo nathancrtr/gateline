@@ -157,6 +157,15 @@ export interface StateParseResult {
   state: RunState | null
   /** Human-readable reason the state file is malformed, or null when it parsed. */
   error: string | null
+  /**
+   * R1 best-effort read: present if and only if (a) the YAML parsed to a
+   * non-null object, (b) runStateSchema validation failed, and (c) the raw
+   * `escalations` key is present and z.array(escalationSchema) accepts it
+   * whole. Value = the parsed entries (schema transforms applied), unfiltered.
+   * Never present when `state` is non-null, and never present on a YAML
+   * parse failure (AC1.2). No partial salvage: one bad entry → absent (AC1.3).
+   */
+  bestEffortEscalations?: Escalation[]
 }
 
 export function parseRunState(text: string): StateParseResult {
@@ -172,7 +181,13 @@ export function parseRunState(text: string): StateParseResult {
       .slice(0, 5)
       .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
       .join('; ')
-    return { state: null, error: `state.yaml does not match the contract: ${issues}` }
+    const error = `state.yaml does not match the contract: ${issues}`
+    if (raw === null || typeof raw !== 'object') return { state: null, error }
+    const escalationsRaw = (raw as Record<string, unknown>).escalations
+    if (escalationsRaw === undefined) return { state: null, error }
+    const recovered = z.array(escalationSchema).safeParse(escalationsRaw)
+    if (!recovered.success) return { state: null, error }
+    return { state: null, error, bestEffortEscalations: recovered.data }
   }
   return { state: result.data, error: null }
 }

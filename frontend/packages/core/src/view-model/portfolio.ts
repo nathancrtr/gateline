@@ -49,7 +49,7 @@ export async function summarizeRun(
   source: RunSource,
   ref: RunRef,
 ): Promise<{ summary: RunSummary; items: InboxItem[] }> {
-  const { state, error } = await source.readState(ref)
+  const { state, error, bestEffortEscalations } = await source.readState(ref)
   const { items } = await deriveReadiness(source, ref)
   const touched = await source.lastTouched(ref, [''])
   const aheadOfOrigin = (await source.aheadOfOrigin?.(ref)) ?? null
@@ -68,7 +68,7 @@ export async function summarizeRun(
         profile: 'full',
         gates: emptyLedger(),
         tasks: { total: 0, done: 0, maxRounds: 0 },
-        escalationsOpen: 0,
+        escalationsOpen: (bestEffortEscalations ?? []).filter((e) => !e.resolved).length,
         budget: { limit: null, spent: null },
         updatedAt: touched?.time ?? null,
         needsHuman: items.length,

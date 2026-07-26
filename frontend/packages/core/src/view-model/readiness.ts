@@ -71,26 +71,40 @@ export function pendingGate(state: RunState): GateId | null {
 export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<RunReadiness> {
   const items: InboxItem[] = []
   const validations: Record<string, Validation> = {}
-  const { state, error } = await source.readState(ref)
+  const { state, error, bestEffortEscalations } = await source.readState(ref)
 
   if (!state) {
     const touched = await source.lastTouched(ref, ['state.yaml'])
+    const malformedItem: InboxItem = {
+      kind: 'malformed',
+      gate: null,
+      source: ref.source,
+      slug: ref.slug,
+      title: 'Malformed run state',
+      detail: error ?? 'state.yaml unreadable',
+      since: touched?.time ?? null,
+      reviewable: false,
+      problems: [error ?? 'state.yaml unreadable'],
+      packet: ['state.yaml'],
+      escalationIndex: null,
+    }
+    const recoveredItems: InboxItem[] = (bestEffortEscalations ?? [])
+      .filter((esc) => !esc.resolved)
+      .map((esc) => ({
+        kind: 'escalation',
+        gate: null,
+        source: ref.source,
+        slug: ref.slug,
+        title: `Escalation from ${esc.from_role ?? 'unknown role'}`,
+        detail: esc.reason,
+        since: esc.at ? Math.floor(Date.parse(esc.at) / 1000) || null : null,
+        reviewable: false,
+        problems: [],
+        packet: ['state.yaml'],
+        escalationIndex: null,
+      }))
     return {
-      items: [
-        {
-          kind: 'malformed',
-          gate: null,
-          source: ref.source,
-          slug: ref.slug,
-          title: 'Malformed run state',
-          detail: error ?? 'state.yaml unreadable',
-          since: touched?.time ?? null,
-          reviewable: false,
-          problems: [error ?? 'state.yaml unreadable'],
-          packet: ['state.yaml'],
-          escalationIndex: null,
-        },
-      ],
+      items: [malformedItem, ...recoveredItems],
       validations,
     }
   }

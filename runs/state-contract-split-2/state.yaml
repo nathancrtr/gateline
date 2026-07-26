@@ -146,6 +146,17 @@ budget:
           tokens_in: 12,
           tokens_out: 2960,
           cost_usd: 2.3851905
+        },
+      {
+          at: 2026-07-26T22:29:25.217Z,
+          role: implementer,
+          task: 03-generic-read-path,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:
@@ -175,7 +186,7 @@ tasks:
         status: review-approved,
         review_rounds: 2
       },
-    { id: 03-generic-read-path, status: pending, review_rounds: 0 },
+    { id: 03-generic-read-path, status: dispatched, review_rounds: 0 },
     { id: 04-docs-landed, status: review-approved, review_rounds: 2 }
   ]
 escalations: []

@@ -129,7 +129,7 @@ export function App() {
               <rect x="3.5" y="8.6" width="17" height="2.2" rx="1.1" fill="currentColor" />
             </svg>
           </span>
-          <span className="font-sans text-[15px] font-semibold leading-none tracking-[-0.01em] text-ink">Gate</span>
+          <span className="font-sans text-[15px] font-semibold leading-none tracking-[-0.01em] text-ink">Gatehouse</span>
           <p className="mt-1.5 text-[10.5px] leading-[1.35] text-faint">pipeline decisions</p>
         </div>
         <nav className="flex flex-col gap-0.5">
@@ -154,7 +154,7 @@ export function App() {
               <rect x="3.5" y="8.6" width="17" height="2.2" rx="1.1" fill="currentColor" />
             </svg>
           </span>
-          <span className="font-sans text-[15px] font-semibold leading-none tracking-[-0.01em] text-ink">Gate</span>
+          <span className="font-sans text-[15px] font-semibold leading-none tracking-[-0.01em] text-ink">Gatehouse</span>
         </span>
         <NavItem to="/" label="Inbox" badge={needs} end />
         <NavItem to="/portfolio" label="Portfolio" />

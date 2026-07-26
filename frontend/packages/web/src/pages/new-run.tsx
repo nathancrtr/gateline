@@ -278,7 +278,7 @@ export function NewRunPage() {
               <p className="font-semibold">Refused — no resolvable identity.</p>
               <p className="mt-1.5 font-mono text-xs text-muted">{outcome.message}</p>
               <p className="mt-1.5 text-muted">
-                This is deployment configuration, not a form problem — no field here can cure it, and Gate will not guess or ask
+                This is deployment configuration, not a form problem — no field here can cure it, and Gatehouse will not guess or ask
                 you to type a name. Your draft is intact.
               </p>
             </Flash>
@@ -332,7 +332,7 @@ export function NewRunPage() {
                 ))}
               </select>
               <p className="mt-1 text-[11.5px] text-faint">
-                Multiple sources are configured, so Gate asks which repo carries the record. It selects among Gate's own
+                Multiple sources are configured, so Gatehouse asks which repo carries the record. It selects among Gatehouse's own
                 sources — never an external system.
               </p>
             </div>
@@ -473,7 +473,7 @@ export function NewRunPage() {
               )
             })}
             <p className="mt-1 text-[12px] text-muted font-mono">
-              Section headings come from the source's contract template — they are fixed chrome, not content. Gate never
+              Section headings come from the source's contract template — they are fixed chrome, not content. Gatehouse never
               writes a word of the brief.
             </p>
           </div>
@@ -523,7 +523,7 @@ export function NewRunPage() {
             </div>
             <p className="mt-1.5 text-[12px] text-muted font-mono">
               Recorded verbatim into the genesis commit's <code>intake:</code> block. Nothing here is
-              fetched, previewed, or checked — a URL is a string you vouch for, not an object Gate retrieves.
+              fetched, previewed, or checked — a URL is a string you vouch for, not an object Gatehouse retrieves.
             </p>
           </div>
 

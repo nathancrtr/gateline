@@ -82,7 +82,7 @@ export async function summarizeRun(
         // consequence) — cli/web's PROFILE_GATES filtering is SDLC-only and
         // stays out of this run's diff.
         profile: 'full',
-        gates: Object.fromEntries(generic.gateOrder.map((id) => [id, generic.gates[id] ? cell(generic.gates[id]!) : UNDECIDED_CELL])) as GateLedgerMap,
+        gates: Object.fromEntries(generic.gateOrder.map((id) => [id, generic.gates[id] ? cell(generic.gates[id]!) : { ...UNDECIDED_CELL }])) as GateLedgerMap,
         tasks: { total: 0, done: 0, maxRounds: 0 },
         escalationsOpen: generic.escalations.filter((e) => !e.resolved).length,
         budget: { limit: null, spent: null },

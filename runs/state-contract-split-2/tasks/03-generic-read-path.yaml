@@ -123,3 +123,64 @@ notes: |
     and sits outside this task's file_contact_surface — `git status`
     confirms the working tree now diffs only the four declared files.
   - No deviations from the plan's interface contracts; no escalations.
+
+  Round 2 (implementer): addressed review-04's three findings, all in the
+  file_contact_surface (test/generic-host.test.ts and
+  src/view-model/portfolio.ts).
+  - F1 (blocking, fixed): added a kill-fixture describe block to
+    generic-host.test.ts, per the reviewer's suggested case. The fixture
+    contract (contracts/state.yaml) declares three gates in order
+    intake/review/publish; the run file (runs/demo/state.yaml) lists only
+    two of them, out of that order (publish before intake), omitting
+    `review` entirely. Assertions: `Object.keys(summary.gates)` deep-equals
+    `['intake', 'review', 'publish']` (contract order, not file order — kills
+    the `Object.keys(generic.gates)` mutant, which would yield `['publish',
+    'intake']` and drop `review`), `summary.gates.review` deep-equals the
+    undecided shape `{ approved: false, decided: false, by: null, at: null
+    }` (kills the unguarded `cell(generic.gates[id]!)` mutant, which throws
+    reading `.approved` of `undefined` for the absent gate), and
+    `summary.gates.publish`/`summary.gates.intake` assert the present-gate
+    values are unaffected. I proved both kills by hand: patched
+    `portfolio.ts` to each mutant in turn, reran the new test, watched it
+    fail with the predicted error (`AssertionError: expected [ 'publish',
+    'intake' ] to deeply equal [ 'intake', 'review', 'publish' ]` for (a),
+    `TypeError: Cannot read properties of undefined (reading 'approved')` at
+    `cell` for (b)), then restored the correct source before moving on —
+    confirmed the fix is back to identical-to-round-1 via `diff` against a
+    pre-edit backup.
+  - F2 (minor, fixed): extended the same kill fixture rather than adding a
+    second one, per the reviewer's suggestion. The run file has no `phase`
+    key (asserts `summary.phase === '—'`, killing the `?? 'unknown'`
+    mutant — proved: patching to `'unknown'` fails with `expected 'unknown'
+    to be '—'`), a non-null `paused_reason: "waiting on legal"` (asserts
+    `summary.pausedReason === 'waiting on legal'`, killing the `pausedReason:
+    null` mutant — proved: patching to `null` fails with `expected null to
+    be 'waiting on legal'`), and two escalations, one resolved and one not
+    (asserts `summary.escalationsOpen === 1`, killing the no-filter
+    `generic.escalations.length` mutant — proved: patching to drop the
+    filter fails with `expected 2 to be 1`). All three fields are asserted
+    in the one test case the reviewer asked for.
+  - F3 (minor, fixed): changed the absent-gate fallback from the shared
+    `UNDECIDED_CELL` constant to `{ ...UNDECIDED_CELL }` — a fresh object
+    literal per cell, matching the file's own `emptyLedger()` idiom exactly
+    (which clones a local `const c` per key rather than reusing one
+    instance). Added a second kill-fixture test,
+    "the absent-gate cell is a fresh object per summary, not one shared
+    mutable instance", asserting `first.gates.review` and
+    `second.gates.review` from two independent `summarizeRun` calls are
+    `not.toBe` each other (reference inequality) — this also happens to
+    re-kill the same unguarded-`cell()` mutant from F1 (accessing `.review`
+    on `undefined` throws before the `not.toBe` assertion runs), so F1 and
+    F3 are cross-checked by the same new test.
+  - Verification: `npm install` was needed again (fresh checkout state
+    inherited from round 1's dispatch, no node_modules) — reverted the
+    resulting `frontend/package-lock.json` churn with `git checkout --`
+    exactly as round 1 did; `git status` now diffs only
+    `src/view-model/portfolio.ts` and `test/generic-host.test.ts`. `npm test`
+    in frontend/: 45 passed | 1 skipped test files, 421 passed | 1 skipped
+    tests, 0 failures (two more tests than round 1's 419, from the new kill
+    fixture's two cases). `npm run typecheck` in frontend/: clean, both
+    tsconfig projects (root + web), zero errors.
+  - No further deviations; no escalations. All three findings addressed by
+    fix (none rebutted — F3's PLAUSIBLE-only rationale was reasonable but
+    the one-token fix is cheaper than a rebuttal).

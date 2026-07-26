@@ -250,7 +250,7 @@ export function createApp(deps: AppDeps): Hono {
     const { source, ref } = found
     const key = `run:${ref.source}:${ref.slug}`
     const payload = await cache.get(key, async () => {
-      const [{ summary, items }, { state, error, raw }, readiness, artifacts, history] = await Promise.all([
+      const [{ summary, items }, { state, error, raw, bestEffortEscalations }, readiness, artifacts, history] = await Promise.all([
         summarizeRun(source, ref),
         source.readState(ref),
         deriveReadiness(source, ref),
@@ -272,6 +272,15 @@ export function createApp(deps: AppDeps): Hono {
           subject: h.subject,
           phase: h.state?.phase ?? null,
         })),
+        // R3/AC3.2: present only when the parser recovered a best-effort
+        // list (ADR-5) — absent, not null, so bad-state's payload stays
+        // byte-identical (AC1.2's rider). Open entries only, list order,
+        // projected to the fields the brief names.
+        ...(bestEffortEscalations && {
+          recoveredEscalations: bestEffortEscalations
+            .filter((e) => !e.resolved)
+            .map((e) => ({ at: e.at, from_role: e.from_role, reason: e.reason })),
+        }),
       }
     })
     return c.json({ ...payload, now: Math.floor(Date.now() / 1000) })

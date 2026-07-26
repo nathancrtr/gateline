@@ -53,3 +53,26 @@ depends_on: [01-core-recovery, 02-fixture-run]
 status: pending
 
 notes: |
+  Implementer round 1: implemented as specified, no deviations from the plan.
+  app.ts's GET /api/runs/:src/:slug now destructures bestEffortEscalations
+  from source.readState(ref) and spread-conditionally adds
+  recoveredEscalations (open entries only, {at, from_role, reason}, list
+  order) — absent (not spread) when bestEffortEscalations is undefined.
+  POST /api/decisions and every other route left untouched.
+
+  New test file frontend/packages/server/test/escalation-recovery.test.ts
+  covers AC2.1, AC2.2, AC3.2, the AC1.2 rider (bad-state has no
+  recoveredEscalations key), AC4.2 (resolve-escalation/approve/decline all
+  409 against esc-recovered), and the R4 item-shape check (2 non-reviewable
+  escalation items with escalationIndex null alongside the malformed item).
+
+  Verification: `cd frontend && npx vitest run packages/server` → 3 files,
+  43 tests, all green (webhook.test.ts 9, app.test.ts 26, the new
+  escalation-recovery.test.ts 8). Full `npx vitest run` → 46 files, 412
+  tests, 410 passed / 1 skipped / 1 failed:
+  packages/orchestrator/test/router.test.ts's single test timed out at 60s
+  under full-suite parallel load. Re-ran that file in isolation immediately
+  after and it passed in 7s (6/6 tests green) — a resource-contention flake
+  unrelated to this task's file_contact_surface (app.ts, the new server
+  test file), not a regression from this change.
+

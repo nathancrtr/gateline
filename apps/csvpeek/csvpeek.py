@@ -8,9 +8,12 @@ Blank rule: a field is blank iff it is exactly '' after CSV parsing (no
 whitespace trimming).
 """
 
+import argparse
 import csv
 import io
+import sys
 from collections import Counter
+from typing import Optional, Sequence
 
 TOP_N = 5
 
@@ -130,3 +133,26 @@ def format_report(header: list[str], rows: list[list[str]]) -> str:
             common_str = "(none)"
         lines.append(f"  Common: {common_str}")
     return "".join(line + "\n" for line in lines)
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    """Full CLI. argv excludes the program name (None -> sys.argv[1:]).
+    Returns the process exit code; never raises for anticipated errors (R9)."""
+    parser = argparse.ArgumentParser(prog="csvpeek.py")
+    parser.add_argument("file")
+    args = parser.parse_args(argv)
+
+    try:
+        with open(args.file, encoding="utf-8", newline="") as f:
+            text = f.read()
+    except (OSError, UnicodeDecodeError) as e:
+        print(f"csvpeek.py: error: {e}", file=sys.stderr)
+        return 1
+
+    header, rows = parse_csv(text)
+    sys.stdout.write(format_report(header, rows))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -123,6 +123,9 @@ escalations:
         from_role: orchestrator,
         reason: "task 01-core-logic: architect amendment landed for the re-plan
           disposition — acknowledge to proceed (see plan.md's dated ADR)",
-        resolved: false
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-26T23:13:55.840Z,
+        resolution: LGTM
       }
   ]

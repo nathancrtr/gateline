@@ -78,7 +78,7 @@ acceptance_tests:
 depends_on: []
 
 status: in-review
-review_rounds: 1
+review_rounds: 3
 
 notes: |
   Environment pre-check (plan.md ADR-2/ADR-3): `python3 --version` reports
@@ -105,3 +105,42 @@ notes: |
   parseability per ADR-5, with is_int/is_float local helpers via
   try/except ValueError. No deviations from plan.md's interface contract,
   ADR-4/ADR-5/ADR-6, or the spec's ACs.
+
+  Round 3 (rework, addressing review-01.md round 1 + round 2, both carrying
+  the same F1):
+
+  F1 (blocking, carried from rounds 1-2) — fixed. Implemented plan.md
+  ADR-11's pinned mechanism exactly, in `detect_delimiter`
+  (apps/csvpeek/csvpeek.py): after the existing empty-text and
+  csv.Error-fallback cases, the sniffed delimiter is now validated by
+  probing reader construction — `csv.reader([], delimiter=<sniffed>)`
+  inside `try/except (TypeError, ValueError)` — falling back to ',' when
+  the probe raises, else returning the sniffed delimiter. Updated the
+  docstring to the amended wording pinned in plan.md's "Interface
+  contracts" section (the ADR-11 validation sentence + the "always
+  accepted by csv.reader construction" guarantee). No change to
+  parse_csv or any other function, per ADR-11's rejected-alternatives
+  reasoning (the fix belongs in detect_delimiter, not parse_csv).
+
+  Evidence (all run from apps/csvpeek/, Python 3.14.6):
+  - `python3 -c 'import csvpeek as c; c.parse_csv("\""); c.parse_csv("\"\"\""); print("ok")'`
+    -> prints `ok`, exits 0 (no traceback).
+  - `python3 -c 'import csv, csvpeek as c; csv.reader([], delimiter=c.detect_delimiter("\""))'`
+    -> exits 0 (the ADR-11 guarantee holds).
+  - `python3 -c "import csvpeek as c; assert c.detect_delimiter('\"') == ','"`
+    -> passes (detect_delimiter('"') now returns ',').
+  - `python3 -c "import csvpeek as c; print(c.parse_csv('\"\"\"'))"`
+    -> `(['"'], [])`, no exception.
+
+  Re-ran all 14 executable python3 -c acceptance tests (task file lines
+  61-74) verbatim from apps/csvpeek/ — all still pass, no regressions.
+  Re-ran the AST-based scan: imports = csv, io, collections (all
+  stdlib); no `def main`; no `__main__` guard; `python3 -c "import
+  csvpeek"` exits 0 with no output. `python3 -m py_compile csvpeek.py`
+  succeeds. Environment pre-check unchanged and reconfirmed this round:
+  `python3 --version` -> Python 3.14.6; `python3 -m pytest --version`
+  -> pytest 9.1.1.
+
+  No other review-01.md findings exist to address in this round (both
+  round 1 and round 2 reported only F1; round 2's Coverage section
+  confirmed everything else already conformed to the amended plan).

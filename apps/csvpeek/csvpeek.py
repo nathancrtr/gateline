@@ -17,14 +17,24 @@ TOP_N = 5
 
 def detect_delimiter(text: str) -> str:
     """Delimiter of the CSV in `text`, via csv.Sniffer().sniff(text).delimiter
-    over the whole text. Returns ',' when text is empty or Sniffer raises
-    csv.Error (R4 + spec fallback assumption). Never raises."""
+    over the whole text, validated against csv.reader. Returns ',' when text
+    is empty, when Sniffer raises csv.Error, or when the sniffed delimiter is
+    rejected by csv.reader — validation is the probe
+    csv.reader([], delimiter=<sniffed>) with TypeError/ValueError treated as
+    rejection (ADR-11; R4 + spec fallback assumption). Guarantee: the
+    returned delimiter is always accepted by csv.reader construction on the
+    running interpreter. Never raises."""
     if not text:
         return ","
     try:
-        return csv.Sniffer().sniff(text).delimiter
+        delimiter = csv.Sniffer().sniff(text).delimiter
     except csv.Error:
         return ","
+    try:
+        csv.reader([], delimiter=delimiter)
+    except (TypeError, ValueError):
+        return ","
+    return delimiter
 
 
 def parse_csv(text: str) -> tuple[list[str], list[list[str]]]:

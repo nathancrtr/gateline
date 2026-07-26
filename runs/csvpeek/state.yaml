@@ -5,7 +5,7 @@ paused_reason: null
 
 budget:
   cost_limit_usd: 30
-  cost_spent_usd: 21.12
+  cost_spent_usd: 22.53
   ledger:
     [
       {
@@ -136,9 +136,9 @@ budget:
           round: 1,
           adapter: claude-code,
           model: anthropic/claude-fable-5,
-          tokens_in: null,
-          tokens_out: null,
-          cost_usd: null
+          tokens_in: 8,
+          tokens_out: 1516,
+          cost_usd: 1.409176
         },
       {
           at: 2026-07-26T23:27:34.231Z,

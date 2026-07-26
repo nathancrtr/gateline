@@ -33,3 +33,42 @@ I re-ran the server suite at the reviewed commit, applied five mutants to the ro
 ## Boundary check
 
 Clean. Commit 81c70b4 touches exactly the two declared surface files plus the task YAML's own `notes:` block, the accepted implementer report channel. No fixture, core, lockfile, or sibling-package change. (Unrelated to the diff: the branch advanced under this checkout mid-review as tasks 04/05 landed their own commits; nothing from them is reviewed here.)
+
+---
+
+## Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** commit c23f059 (round-2 remediation; touches only `frontend/packages/server/test/escalation-recovery.test.ts` and the task YAML's `notes:` block — sibling task and state commits in the intervening range excluded as out of scope)
+
+### Prior findings
+
+#### F1 (blocking, round 1) — RESOLVED
+- **Fix:** the AC3.2 block now asserts a single `toEqual` against the two exact expected objects, with `at` derived from the fixture (`new Date((fixture.now - 86400) * 1000).toISOString()`, test:60).
+- **Independently re-verified:** derivation matches the fixture source (`DAY = 86_400`, `escRecoveredAt = new Date((now - 1 * DAY) * 1000).toISOString()` spread into both open entries — fixtures/src/index.ts:11,409,648-649). Mutant re-run by me at the current tree: `at: null` in the app.ts projection → AC3.2 fails, 1 failed / 7 passed. app.ts reverted cleanly after (git diff empty).
+
+#### F2 (major, round 1) — RESOLVED
+- **Fix:** same `toEqual` — exact object equality bounds the projection to `{ at, from_role, reason }`.
+- **Independently re-verified:** whole-entry-leak mutant `.map((e) => ({ ...e }))` → AC3.2 fails, 1 failed / 7 passed. app.ts reverted cleanly after.
+
+### New findings
+
+None.
+
+## Coverage (round 2)
+
+I re-ran all five round-one mutants by hand against the current tree and re-ran both test suites; both prior findings are genuinely fixed and nothing already working was weakened.
+
+- F1 mutant (`at: null`) ✓ killed — AC3.2 fails on the expected fixture ISO string.
+- F2 mutant (whole-entry leak) ✓ killed — AC3.2 fails on the extra `resolved`/`resolved_by`/`resolved_at`/`resolution` keys.
+- Prior kills preserved ✓ — include-resolved (filter dropped), reversed order, and null-instead-of-absent mutants each still fail exactly one test (AC3.2, AC3.2, AC1.2 rider respectively); each mutation reverted cleanly between runs.
+- No weakened assertions ✓ — the removed `toHaveLength`, per-property, `toMatchObject`, and resolved-reason-absence checks are all subsumed by the exact two-element `toEqual` (length, order, field values, and shape in one assertion).
+- Fixture coupling ✓ — the test's `at` derivation reads `fixture.now` from the `FixtureRepo` return, the same `now` the generator stamps into both open entries, so the assertion cannot drift from the fixture.
+- Verification ✓ — `npx vitest run packages/server` 43/43 green and the full `npx vitest run` 412 passed + 1 skipped, 0 failed, both re-run by me at the reviewed tree (no router.test.ts flake this run). Working tree clean after all mutant work.
+- app.ts unchanged this round ✓ — confirmed by the commit stat and a clean `git diff` after my mutant reverts; the round-1-approved route behavior is untouched.
+- Not assessed: web/CLI surfacing (tasks 04/05); core derivation internals (task 01).
+
+## Boundary check (round 2)
+
+Clean. Commit c23f059 touches exactly the declared test file plus the task YAML's own `notes:` block (the accepted implementer report channel). app.ts, fixtures, lockfile, and sibling packages untouched; the implementer's noted lockfile churn was reverted before commit and does not appear in the diff.

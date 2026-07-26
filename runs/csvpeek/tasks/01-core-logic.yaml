@@ -77,6 +77,31 @@ acceptance_tests:
 
 depends_on: []
 
-status: pending
+status: in-review
+review_rounds: 1
 
-notes: ""
+notes: |
+  Environment pre-check (plan.md ADR-2/ADR-3): `python3 --version` reports
+  Python 3.14.6; `python3 -m pytest --version` reports pytest 9.1.1. Both
+  present — the machine is provisioned; no escalation needed. (Note: this
+  is well past 3.9, so the 3.9-safe annotation spellings in this file are
+  conservative-but-unnecessary on this box; kept them anyway per ADR-3,
+  since later tasks may run elsewhere.)
+
+  Implemented apps/csvpeek/csvpeek.py exactly per the interface contract in
+  plan.md: module docstring stating what is reported and the blank rule,
+  TOP_N=5, detect_delimiter(), parse_csv(), column_values(), infer_type(),
+  count_missing(), top_values(), format_report(). No main(), no __main__
+  guard, no non-stdlib imports (csv, io, collections.Counter only) — left
+  import-clean for task 02-cli-shell, which edits this same file next.
+
+  All 16 acceptance tests in this task file pass verbatim (run from
+  apps/csvpeek/), including the module-import/no-main/stdlib-only checks
+  and the AC12.2-style ast-based import scan (csv, io, Counter — all
+  stdlib). `python3 -m py_compile csvpeek.py` also succeeds.
+
+  top_values uses Counter + explicit sorted(key=lambda p: (-p[1], p[0]))
+  per ADR-6, not Counter.most_common(). infer_type uses int()/float()
+  parseability per ADR-5, with is_int/is_float local helpers via
+  try/except ValueError. No deviations from plan.md's interface contract,
+  ADR-4/ADR-5/ADR-6, or the spec's ACs.

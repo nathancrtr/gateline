@@ -102,6 +102,39 @@ budget:
           tokens_in: 13,
           tokens_out: 3353,
           cost_usd: 2.4186215000000004
+        },
+      {
+          at: 2026-07-26T22:17:36.906Z,
+          role: implementer,
+          task: 03-server-surface,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
+        },
+      {
+          at: 2026-07-26T22:17:36.906Z,
+          role: implementer,
+          task: 04-web-readonly,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
+        },
+      {
+          at: 2026-07-26T22:17:36.906Z,
+          role: implementer,
+          task: 05-cli-inbox,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:
@@ -127,8 +160,8 @@ tasks:
   [
     { id: 01-core-recovery, status: review-approved, review_rounds: 2 },
     { id: 02-fixture-run, status: review-approved, review_rounds: 1 },
-    { id: 03-server-surface, status: pending, review_rounds: 0 },
-    { id: 04-web-readonly, status: pending, review_rounds: 0 },
-    { id: 05-cli-inbox, status: pending, review_rounds: 0 }
+    { id: 03-server-surface, status: dispatched, review_rounds: 0 },
+    { id: 04-web-readonly, status: dispatched, review_rounds: 0 },
+    { id: 05-cli-inbox, status: dispatched, review_rounds: 0 }
   ]
 escalations: []

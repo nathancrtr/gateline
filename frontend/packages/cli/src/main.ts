@@ -734,7 +734,7 @@ export function resolveUpMode(
 
 program
   .command('up')
-  .description('FleetView + the v1 orchestrator over one clone — the single-authority deployment (docs/TOPOLOGY.md §3.1)')
+  .description('Gatehouse + the v1 orchestrator over one clone — the single-authority deployment (docs/TOPOLOGY.md §3.1)')
   .option('--port <n>', 'port', '4310')
   .option('--host <h>', 'bind address', '127.0.0.1')
   .option('--no-open', 'do not open the browser')
@@ -757,7 +757,7 @@ program
   .addHelpText(
     'after',
     '\nEngine only, no server or browser: the orchestrator has its own binary —\n' +
-      '  agentic-orchestrator watch   resident engine (this command minus FleetView)\n' +
+      '  agentic-orchestrator watch   resident engine (this command minus Gatehouse)\n' +
       '  agentic-orchestrator tick    one reconcile pass, --dry-run to preview\n' +
       'See frontend/packages/cli/README.md, "Headless / no browser".',
   )

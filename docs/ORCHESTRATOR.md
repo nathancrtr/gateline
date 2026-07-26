@@ -45,7 +45,7 @@ noted where the choice was genuinely contested.
 | Execution model | **Stateless reconciler.** The orchestrator wakes on triggers, reads `state.yaml` at the run branch tip, derives the next action from files alone, executes it, commits, and exits. No conversation state survives between wakes — the purest expression of P1, and a gate wait costs nothing (it is simply "no action derivable"). Rejected: a long-running harness session (accrues exactly the conversation state P1 exists to eliminate; undefined crash recovery; a session burning while humans deliberate at a gate). |
 | Dispatch | **Adapter-shaped seam; one implementation first.** A runtime-neutral dispatch interface, implemented for the claude-code adapter first with copilot-cli as a fast-follow milestone — P5 decorrelation is designed in from day one and delivered incrementally. Rejected: single-harness-forever (bakes the P5 gap into the first autonomous mode) and cross-vendor-before-anything-works (delays the first trust-building loop). |
 | Metering | **Designed here, enforced by the orchestrator.** Automated budget metering is DESIGN.md §4's stated v1 prerequisite, and the enforcement hook — who checks the cap and flips `phase: paused` — is naturally the process that performs every dispatch. Folding it in (§6) keeps the meter and its enforcer from drifting apart. |
-| First deployment | **Single-user, this repo — the operator's laptop or their hosted cockpit machine.** v1 runs against this repository on a machine the operator owns: locally, or as a second process on the hosted single-user instance that serves FleetView ([DEPLOY.md](DEPLOY.md)), with gates decided in the hosted frontend. Humans remain at every gate either way — hosting changes where the process sleeps, not who decides. *Amended 2026-07-14 from "Local, this repo" so the M2 toy run proves the shape a production user actually runs; hosted mode adds hard ceilings (`--push`, `--require-budget`, `--spend-limit-usd`).* Host-repo delivery (repositories the operator does not own the machine for) is designed-for-but-later (§10). |
+| First deployment | **Single-user, this repo — the operator's laptop or their hosted cockpit machine.** v1 runs against this repository on a machine the operator owns: locally, or as a second process on the hosted single-user instance that serves Gatehouse ([DEPLOY.md](DEPLOY.md)), with gates decided in the hosted frontend. Humans remain at every gate either way — hosting changes where the process sleeps, not who decides. *Amended 2026-07-14 from "Local, this repo" so the M2 toy run proves the shape a production user actually runs; hosted mode adds hard ceilings (`--push`, `--require-budget`, `--spend-limit-usd`).* Host-repo delivery (repositories the operator does not own the machine for) is designed-for-but-later (§10). |
 
 ## 3. The judgment/mechanics split
 
@@ -226,7 +226,7 @@ landed locally would otherwise wait on the engine's next commit to reach
 origin, and an engine at rest never commits, so the viewer and origin consumers
 would silently see different runs. Any residual divergence is surfaced, not
 hidden: run summaries carry an ahead-of-origin commit count, shown as an
-"unpushed" badge in FleetView. Under the **local-only** topology
+"unpushed" badge in Gatehouse. Under the **local-only** topology
 (docs/TOPOLOGY.md §3.6) neither writer pushes, and origin is never fetched
 either — both writers still commit locally, exactly as above, but the
 push/fetch half of this section does not apply.
@@ -588,7 +588,7 @@ restart" is the only steady state left to describe).
   half-updated tree.
 - **`paused` is deliberate idling, not a silent hang.** The heartbeat keeps
   writing while paused (`codeState: 'paused'`, plus `codeReason` carrying the
-  monitor's specific cause), and FleetView's drift chip renders that reason —
+  monitor's specific cause), and Gatehouse's drift chip renders that reason —
   which branch, which conflict — rather than a generic message, as a distinct,
   stronger-tone pill beside the engine outage banner; a paused engine reads
   differently from a dead one, and points at the actual fix.

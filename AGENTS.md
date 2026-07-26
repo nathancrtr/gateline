@@ -43,7 +43,7 @@ contracts, and adapters. Runs declare a **profile** — `patch | standard | full
 (DESIGN.md §4.1) — scaling which roles run and which gates exist to the size of the
 change; a run whose `state.yaml` carries no `profile:` is `full`. Three runner
 adapters are built: `claude-code`, `copilot-cli`, and `opencode` (the any-provider
-one). The gate frontend (FleetView) and the v1 orchestrator are implemented and
+one). The gate frontend (Gatehouse) and the v1 orchestrator are implemented and
 co-located by design — `agentic up` runs both over a single clone, which is the
 blessed topology; the hosted recipe under `deploy/` remains a documented self-host
 option. Integration tooling v0 (`scripts/integrate.py`) ships `init|validate|fork`.
@@ -127,7 +127,7 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   * inspect — `status`, `inbox`, `show <slug> [artifact]`
   * decide — `approve`, `decline`, `resolve-escalation`, `pause`, `resume`, `sync`
   * create a run — `new` stages `runs/<slug>/` on its branch; `arm <slug>` starts it
-  * serve — `up [--repo <path>]` (FleetView + engine over one clone, the blessed
+  * serve — `up [--repo <path>]` (Gatehouse + engine over one clone, the blessed
     topology), `ui` (viewer only), `upgrade` (pull + rebuild the web dist, then let
     the running engine self-supersede)
 * Verify the orchestrator without dispatching: `agentic-orchestrator tick --dry-run`

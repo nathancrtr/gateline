@@ -22,12 +22,12 @@ Two proofs, in dependency order:
    procedure and a bare commit pin.
 2. **Downstream:** integration #2 is re-based onto that release and operated
    through the framework's own toolchain — its operator manages real gate
-   decisions through a locally launched gate-frontend (FleetView) instance
+   decisions through a locally launched gate-frontend (Gatehouse) instance
    pointed at the host, with the audit trail landing in the host's git history.
 
 **The plan's exit criterion** (deliberately stricter than "validate passes"):
 `integrate.py validate` passes on integration #2, *and* at least one real gate
-decision on that host is recorded through its FleetView instance — named human,
+decision on that host is recorded through its Gatehouse instance — named human,
 timestamp, CAS commit — with no hand edit of `state.yaml`. That is the
 INTEGRATION.md Stage-3 discipline ("done when validate passes for someone other
 than the operator who ran init") adapted to a single-operator host: the second
@@ -47,7 +47,7 @@ Best-effort escalation parsing (#49, `run/escalation-visibility`) rides the same
 milestone or lands immediately after.
 
 *Why it heads the queue:* INTEGRATION.md §11 — the tag must not freeze the
-about-to-fork schema; the FleetView proof (§3) is unreachable for a non-SDLC
+about-to-fork schema; the Gatehouse proof (§3) is unreachable for a non-SDLC
 host without it; and it is the one item with an intent brief already filed.
 **Exit:** integration #2's runs — per-run gate maps (`publish`), artifact
 lifecycle phases — parse as well-formed against the host's own contract;
@@ -106,7 +106,7 @@ fleet config for operators with several hosts). One documented page — a
 WALKTHROUGH or frontend README section — sufficient for a cold operator.
 npm-publishing the packages stays deferred until the repo goes public (epic
 #12); running from the pinned checkout *is* the v0 distribution.
-**Exit:** a second operator (or a clean machine) launches FleetView against a
+**Exit:** a second operator (or a clean machine) launches Gatehouse against a
 host from the docs alone.
 
 ## 3. Proof — integration #2 as the test case
@@ -116,7 +116,7 @@ host-specific content to this repository (retro lessons flow back
 maintainer-mediated and redacted, as INTEGRATION.md §6 requires).
 
 - **P0 — read re-probe (immediately after W0, before anything else).** Re-run
-  the host's FleetView generality probe: `agentic status` / `inbox` / API
+  the host's Gatehouse generality probe: `agentic status` / `inbox` / API
   against the host. Prior result: everything generalized except the compiled-in
   state schema. Expected now: runs render with their real phases and gate maps,
   the known open escalation is visible, metrics populate. Any residual bounce is
@@ -132,7 +132,7 @@ maintainer-mediated and redacted, as INTEGRATION.md §6 requires).
   taken subset, provenance mode `private` matches its NOTICE pattern, renders
   current, state parses against the host's own contract, instance vocabulary
   (`web` capability; `publish`/`none` gates) declared rather than incidental.
-- **P3 — FleetView live.** From the cockpit checkout at the pinned tag:
+- **P3 — Gatehouse live.** From the cockpit checkout at the pinned tag:
   `agentic ui --repo <host>` — single-user, `127.0.0.1`, browser. Acceptance,
   in order of increasing consequence:
   1. Portfolio lists the host's runs with true phases and its own gate

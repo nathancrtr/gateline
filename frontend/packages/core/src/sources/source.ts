@@ -71,7 +71,7 @@ export interface RunSource {
   identity(): Promise<Identity | null>
   /**
    * Commits on the run branch that origin does not yet have — unpushed
-   * writes (#149): the lineage FleetView renders and the lineage origin
+   * writes (#149): the lineage Gatehouse renders and the lineage origin
    * consumers see have silently diverged. Absent method or null result
    * means "not knowable" (no origin tracking, remote-kind run) — display
    * nothing, never zero.

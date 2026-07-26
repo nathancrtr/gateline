@@ -36,7 +36,7 @@ round-trip.
   them. Edit the source role spec or adapter manifest, then run
   `python3 scripts/render-agents.py` (CI fails stale renders).
 - Tests: `pytest scripts/test_integrate.py` for the integration tool,
-  `npm test` in `frontend/` for FleetView and the orchestrator (Node ≥ 24),
+  `npm test` in `frontend/` for Gatehouse and the orchestrator (Node ≥ 24),
   `pytest apps/wordfreq` for pipeline-run output.
 - Everything that vendors into host repos stays stdlib-only, Python
   3.9-compatible.

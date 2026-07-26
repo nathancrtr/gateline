@@ -144,7 +144,7 @@ export async function runLoop(engine: EngineLike, repoDir: string, cfg: RunLoopC
     // Liveness heartbeat (#100): written after every pass, read by the
     // co-located frontend. Under the git common dir — machine-local, never
     // committed; its presence marks "an engine runs on this deployment".
-    // Kept up while paused/pending too — that's how FleetView surfaces drift.
+    // Kept up while paused/pending too — that's how Gatehouse surfaces drift.
     try {
       const codeFields = cfg.codeMonitor
         ? {

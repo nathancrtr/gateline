@@ -1,6 +1,6 @@
-# Hosting FleetView: single-user deployment
+# Hosting Gatehouse: single-user deployment
 
-This guide deploys the gate frontend (FleetView) as a hosted single-user
+This guide deploys the gate frontend (Gatehouse) as a hosted single-user
 instance: a URL you can open in any browser to read runs and record gate
 decisions on your pipeline repository. The v1 orchestrator can run on the
 same machine as an **opt-in second process** (`ORCH_ENABLED=1`, see
@@ -20,7 +20,7 @@ topology described in [TOPOLOGY.md](TOPOLOGY.md) §3.6.
 
 ## Security model — read this first
 
-FleetView has **no authentication of its own**. Anyone who can reach the port
+Gatehouse has **no authentication of its own**. Anyone who can reach the port
 can read every run and approve gates as you. The design intends the app to sit
 on `127.0.0.1`; hosting it means *you* provide the authentication layer in
 front. This recipe does that with:
@@ -64,7 +64,7 @@ local branch holding a decision that has not been pushed yet is never
 clobbered — the decision's own push reconciles it. Every fetch that moves a
 ref becomes a live update in the UI (the ref watcher feeds SSE).
 
-If you also run FleetView locally against your own checkout, both instances
+If you also run Gatehouse locally against your own checkout, both instances
 write through git's compare-and-swap: a conflicting decision fails loudly and
 re-presents rather than corrupting state.
 
@@ -98,14 +98,14 @@ re-presents rather than corrupting state.
 From the repository root, with Docker installed:
 
 ```sh
-docker build -f deploy/Dockerfile -t fleetview .
+docker build -f deploy/Dockerfile -t gatehouse .
 docker run --rm -p 4310:4310 \
   -e REPO_URL=https://github.com/OWNER/REPO.git \
   -e GIT_TOKEN=... \
   -e GIT_USER_NAME="Your Name" -e GIT_USER_EMAIL=you@example.com \
   -e PUSH_DECISIONS=false \
-  -v fleetview-data:/data \
-  fleetview
+  -v gatehouse-data:/data \
+  gatehouse
 ```
 
 Open `http://localhost:4310`. (`PUSH_DECISIONS=false` makes local experiments
@@ -120,7 +120,7 @@ git host — for GitHub, a fine-grained PAT scoped to the one repository with
 ```sh
 cp deploy/fly.example.toml fly.toml   # edit: app name, region
 fly apps create <your-app-name>
-fly volumes create fleetview_data --size 1 --region <region>
+fly volumes create gatehouse_data --size 1 --region <region>
 fly secrets set \
   REPO_URL=https://github.com/OWNER/REPO.git \
   GIT_TOKEN=<token> \
@@ -143,7 +143,7 @@ In the Cloudflare dashboard (Zero Trust), with a domain on your account:
    `TUNNEL_TOKEN` secret. You install nothing yourself; the container runs
    cloudflared.
 2. **Route a hostname to the app.** In the tunnel's *Public hostnames*, add
-   e.g. `fleetview.example.com` → service `http://localhost:4310`.
+   e.g. `gatehouse.example.com` → service `http://localhost:4310`.
 3. **Protect it with Access** (Access → Applications → Add, self-hosted).
    Set the application domain to that hostname and add an *Allow* policy
    matching only your login (e.g. your email, verified by a one-time PIN or
@@ -200,13 +200,13 @@ and [ORCHESTRATOR.md](ORCHESTRATOR.md) §10's autonomy gate — before first
 enabling it.
 
 **Liveness.** The engine writes a machine-local heartbeat after every
-reconcile pass; FleetView renders a banner when a heartbeat exists and goes
+reconcile pass; Gatehouse renders a banner when a heartbeat exists and goes
 stale, so decisions landing with no engine consuming them read as an outage,
 never as "waiting on gate". A viewer-only deployment (`ORCH_ENABLED=0`, no
 engine ever run here) has no heartbeat file and gets no banner.
 
 **Run it locally in one command.** `agentic up [--repo <path>]` serves
-FleetView and runs the engine over the same clone — the local twin of this
+Gatehouse and runs the engine over the same clone — the local twin of this
 hosted deployment, with the same hard lines (`--push` by default,
 `--require-budget` always; add `--spend-limit-usd`). Dispatch bills through
 whatever the local harness CLI is logged in as. If you previously ran an
@@ -228,7 +228,7 @@ absorb a self-supersede exit if this process ever ran from a live git
 checkout. Where the mechanism is live end to end is the bare local twin:
 `agentic up`, run directly from the blessed git checkout, notices a pull (by
 hand, or `agentic upgrade`) and — having no supervisor of its own — exits
-`75` and waits for the operator to restart it by hand. FleetView's drift
+`75` and waits for the operator to restart it by hand. Gatehouse's drift
 chip renders the engine's loaded commit against the checkout's on-disk
 `HEAD` from the heartbeat either way, whenever one is present.
 
@@ -276,7 +276,7 @@ in git, restart converges, kills are safe.
 ## Verify the deployment
 
 1. `https://<hostname>/` from a clean browser session → Cloudflare Access
-   login, then the FleetView inbox with your real runs.
+   login, then the Gatehouse inbox with your real runs.
 2. Push a run branch from your workstation → it appears in the UI within
    `FETCH_INTERVAL` seconds, without a reload.
 3. Approve a gate on a scratch run → the decision commit lands on `origin`

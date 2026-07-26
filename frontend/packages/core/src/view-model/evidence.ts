@@ -1,6 +1,6 @@
 // Evidence-presence rollup (#165): for each acceptance criterion the spec
 // defines, where in the record does evidence cite it? Derived at read time
-// from the run's own artifacts — never stored, never judged. FleetView
+// from the run's own artifacts — never stored, never judged. Gatehouse
 // computes PRESENCE, not verdicts: the report's verdict cell travels as a
 // verbatim quote attributed to the report; no aggregate score, meter, or
 // pass/fail rollup is ever computed here. Uncited criteria are the headline —

@@ -1,5 +1,5 @@
 #!/bin/sh
-# FleetView hosted single-user entrypoint — see docs/DEPLOY.md.
+# Gatehouse hosted single-user entrypoint — see docs/DEPLOY.md.
 # Clones the pipeline repository onto the data volume, points the server at
 # it, optionally runs the v1 orchestrator (ORCH_ENABLED=1), and — when
 # TUNNEL_TOKEN is set — runs a Cloudflare tunnel so the machine needs no

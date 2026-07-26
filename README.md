@@ -58,7 +58,7 @@ render the same agents).
 ```sh
 git clone https://github.com/nathancrtr/agentic-sandbox.git
 cd agentic-sandbox/frontend
-npm install && npm run build      # builds the FleetView SPA once
+npm install && npm run build      # builds the Gatehouse SPA once
 (cd packages/cli && npm link)     # global `agentic`, linked to this checkout
 ```
 
@@ -100,7 +100,7 @@ dispatch. Then:
 agentic up --repo ~/repos/my-app --spend-limit-usd 20
 ```
 
-That serves FleetView on `127.0.0.1:4310` and runs the orchestrator engine over
+That serves Gatehouse on `127.0.0.1:4310` and runs the orchestrator engine over
 the same clone — dispatch bills through whatever harness CLI is logged in
 locally, orchestrator commits push to origin by default (`--no-push` to keep
 them local), and gates remain named-human decisions in the UI or via
@@ -109,7 +109,7 @@ them local), and gates remain named-human decisions in the UI or via
 
 The browser is optional. The whole gate workflow is terminal-native —
 `agentic inbox`, `approve`, `decline`, `resolve-escalation` — and the engine
-runs headless without FleetView: `agentic-orchestrator watch` (resident) or
+runs headless without Gatehouse: `agentic-orchestrator watch` (resident) or
 `tick` (one reconcile pass, with `--dry-run` to derive and print next actions
 while writing and dispatching nothing). Common terminal workflows and their
 pitfalls: [`frontend/packages/cli/README.md`](frontend/packages/cli/README.md).

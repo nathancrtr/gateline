@@ -210,7 +210,7 @@ gates:
 tasks:
   [
     { id: 01-core-logic, status: review-approved, review_rounds: 3 },
-    { id: 02-cli-shell, status: in-review, review_rounds: 1 },
+    { id: 02-cli-shell, status: in-review, review_rounds: 2 },
     { id: 03-unit-tests, status: dispatched, review_rounds: 1 },
     { id: 04-cli-tests, status: pending, review_rounds: 0 }
   ]

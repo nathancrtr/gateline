@@ -190,6 +190,17 @@ budget:
           tokens_in: 14,
           tokens_out: 2894,
           cost_usd: 1.7111370000000001
+        },
+      {
+          at: 2026-07-26T22:43:30.884Z,
+          role: verifier,
+          task: null,
+          round: null,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:

@@ -5,7 +5,7 @@ paused_reason: escalation
 
 budget:
   cost_limit_usd: 30
-  cost_spent_usd: 27.98
+  cost_spent_usd: 30.59
   ledger:
     [
       {
@@ -180,9 +180,9 @@ budget:
           round: 2,
           adapter: claude-code,
           model: anthropic/claude-sonnet-5,
-          tokens_in: null,
-          tokens_out: null,
-          cost_usd: null
+          tokens_in: 28,
+          tokens_out: 7477,
+          cost_usd: 2.6090484499999995
         }
     ] # appended by the v1 orchestrator's dispatch seam
 
@@ -211,7 +211,7 @@ tasks:
   [
     { id: 01-core-logic, status: review-approved, review_rounds: 3 },
     { id: 02-cli-shell, status: in-review, review_rounds: 2 },
-    { id: 03-unit-tests, status: dispatched, review_rounds: 1 },
+    { id: 03-unit-tests, status: in-review, review_rounds: 1 },
     { id: 04-cli-tests, status: pending, review_rounds: 0 }
   ]
 

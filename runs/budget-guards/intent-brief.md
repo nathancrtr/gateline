@@ -69,9 +69,18 @@ mode most likely to be hit by the first adopter who is not the maintainer: budge
 caps exist precisely so people set them, and the guard firing is the expected
 case, not the exceptional one.
 
-It is also self-inflicting right now. Four runs on this repository sit unmerged
-with ledgers summing toward the host ceiling, so the next dispatch on the hosted
-instance is closer to HB than to any per-run limit.
+It is also self-inflicting right now, and the workaround already in force is the
+strongest evidence that the guards are unlivable as built. Measured on this
+repository at the time of staging, the lifetime ledgers of the unmerged run
+branches sum to **$103.64** — more than double the $50 host ceiling that
+ORCHESTRATOR.md and DEPLOY.md document. The two largest contributors are
+`fleetview-intake` at $41.14, a *finished* run whose only sin is that its
+directory has not landed on the default branch, and `state-contract-split-2` at
+$42.22, in flight. Under today's semantics this deployment is already in the
+permanently-exhausted state #97 predicts: no run can dispatch, at any per-run
+budget, until branches merge or the flag moves. The engine is in fact running as
+`agentic up --no-budget-enforcement` — the maintainer's live remedy is to switch
+the guards off entirely, which is the honest measure of how usable they are.
 
 The two issues are one change: the same escalate+pause path, the same pause-card
 copy, the same dedup question, and the same "what can a human do about it"

@@ -131,3 +131,97 @@ which is permitted: the surface is a ceiling, and the existing wildcard
 export makes the edit unnecessary. Nothing outside
 `frontend/packages/core` changed (AC6.1 holds for this task), and no other
 task's work rides in the diff.
+
+---
+
+## Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** commit bc1d1e1 on `run/state-contract-split-2` (round-2 delta
+over 65adb86); verified `git diff bc1d1e1 HEAD -- frontend/packages/core/` is
+empty — no later commit touched this task's surface. The commit adds 82 lines to
+`test/state-contract.test.ts` and the round-2 notes to the task YAML; no
+implementation change, matching the implementer's account.
+
+### Prior-finding resolution
+
+- **F1 (blocking) — RESOLVED.** Two new stub-template cases
+  (`test/state-contract.test.ts:254-289`) pin required keys to the offered
+  template. Ran the mutant myself: deleted the template-resolution block
+  (`validate.ts:128-148`, leaving `required = BUILTIN_STATE_KEYS` — the
+  ADR-5-rejected approach); both new tests fail (2 failed | 18 passed): the
+  primary case expects the four-entry missing set and gets the seven-entry
+  builtin-derived one, and the state-core-only case pins the fallback branch
+  specifically, with `notes: []` distinguishing fallback from no-contracts.
+  Reverted; tree clean.
+- **F2 (blocking) — RESOLVED.** New partial-marker classification case
+  (`test/state-contract.test.ts:67-85`). Ran both named mutants:
+  `SDLC_MARKERS.every` → `.some` (`state-contract.ts:64`) fails exactly the new
+  case (1 failed | 19 passed); unconditional `branchRequired: false`
+  (`state-contract.ts:46`) fails the same case. One case kills both, as the
+  round-1 kill prescription specified. Reverted.
+- **F3 (major) — RESOLVED.** New gateOrder case
+  (`test/state-contract.test.ts:158-177`) with file order `publish, intake` and
+  the declared `review` gate absent. Ran the mutant
+  `gateOrder: Object.keys(s.gates)` (`schema.ts:215`): fails exactly the new
+  case (1 failed | 19 passed) — `['publish','intake']` vs the required
+  `['intake','publish','review']`, discriminating on both axes (file order,
+  absent declared gate). Reverted.
+- **F4 (minor) — RESOLVED.** The sweep (`test/state-contract.test.ts:249`) now
+  asserts `parseRunState(content).error === null` per file under the default
+  SDLC contract; seven committed `runs/*/state.yaml` files checked, giving
+  mdtoc and dupefind the direct parse evidence AC3.2 names. Verified in the
+  passing suite.
+
+### Findings
+
+### F5 — minor — the stub-template test's disjointness claim is false, though the assertion it guards is sound
+- **Where:** `frontend/packages/core/test/state-contract.test.ts:255-259` (repeated
+  in the task YAML's round-2 notes)
+- **Failure scenario:** PLAUSIBLE — none constructible today: the comment claims
+  the stub's five keys are "none of which are the eight-key builtin/this-repo
+  list", but all five are a proper subset of `BUILTIN_STATE_KEYS`; the kill
+  actually rests on the exact-equality `missing` assertion (four entries vs the
+  mutant's seven), which I verified fires. Risk is only that a future edit
+  trusting the stated disjointness relaxes the assertion (e.g. to
+  `arrayContaining`) and silently revives the mutant. Non-blocking.
+- **Requirement:** none violated; test-comment accuracy only.
+
+### Coverage
+
+I re-ran the full suite and typecheck, executed all four named mutants by hand
+and reverted them, and re-checked every acceptance criterion; the round-2 delta
+holds up on all of them and adds nothing beyond the four tests the findings
+asked for.
+
+- Mutation kills F1–F3 ✓ — four mutants applied and reverted locally; each
+  killed by exactly the advertised test, with the failure counts pasted above;
+  tree verified clean after each revert (`git status --porcelain` empty)
+- Full suite ✓ — 414 passed, 1 skipped (44 files passed, 1 skipped), matching
+  the claimed 410 + 4
+- Typecheck ✓ — `npm run typecheck` clean
+- AC3.1 ✓ — real-repo.test.ts absent from the commit and passing in the suite
+- AC3.2 ✓ — the sweep now parses all seven committed run-state files with a
+  null error, covering the wordfreq, mdtoc, and dupefind halves directly
+- AC4.3 ✓ — template-derived required keys pinned against both the primary
+  template and the state-core fallback via stub `ContractTemplates`
+- Test-coverage criterion ✓ — classification rows (now including the
+  partial-marker row), generic accept/reject, default-path stability, and the
+  required-keys sweep are all present in the one new test file
+- Lockfile ✓ — bc1d1e1 contains no package-lock change; I reproduced the same
+  npm-version metadata churn on a fresh install and reverted it
+- Zero expected-value edits ✓ — readiness.test.ts, profiles.test.ts,
+  real-repo.test.ts untouched by the commit
+- Implementer-note accuracy — one inaccuracy found (F5's disjointness claim);
+  every other checkable round-2 claim verified true, including the predicted
+  seven-entry mutant missing set for the F1 kill
+
+### Boundary check
+
+The round-2 commit touches exactly one declared surface file
+(`frontend/packages/core/test/state-contract.test.ts`) plus the task's own
+`tasks/02-state-contract-resolution.yaml` notes (the implementer's report
+channel, treated as non-product surface as in round 1). `git diff bc1d1e1 HEAD
+-- frontend/packages/core/` is empty, so no later commit rides on this surface,
+and nothing outside `frontend/packages/core` changed (AC6.1 holds).

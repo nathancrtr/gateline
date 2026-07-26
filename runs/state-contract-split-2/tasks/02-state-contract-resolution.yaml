@@ -112,3 +112,55 @@ notes: |
   + 16 new, zero expected-value edits to readiness.test.ts, profiles.test.ts,
   real-repo.test.ts) and `npm run typecheck` clean, no edits outside
   frontend/packages/core.
+
+  Implementer (round 2): addressed review-03.md's four findings, all inside
+  test/state-contract.test.ts (no implementation change needed — every added
+  test passed against the round-1 implementation unmodified, so no defect was
+  found; the review's own Coverage section had already confirmed the
+  implementation matches the plan on every point checked).
+  - F1 (blocking, fixed): added two validateArtifact cases using a stub
+    ContractTemplates whose state.yaml template is the plan's five-key
+    core-only fixture (run/phase/paused_reason/gates/escalations) —
+    disjoint from BUILTIN_STATE_KEYS' eight keys and from this repo's own
+    template, so a mutant substituting the builtin list (or an empty
+    resolution) reports a different missing set — asserting exact `missing`
+    for both the all-absent and all-five-present content cases; and a third
+    case offering only state-core.yaml (state.yaml returns null) to pin the
+    fallback branch specifically, asserting the same five-key required set
+    and no fallback note. Confirmed by hand that reverting to
+    `required = BUILTIN_STATE_KEYS` (the plan's ADR-5-rejected mutant) now
+    fails the first two tests: against the eight-key builtin list the
+    all-absent case's `missing` would be
+    `['branch','phase','paused_reason','budget','gates','tasks','escalations']`
+    (seven entries), not the expected five-key-derived
+    `['phase','paused_reason','gates','escalations']` (four entries) — a
+    concrete assertion mismatch, not just a different array identity.
+  - F2 (blocking, fixed): added one deriveStateContract case — a template
+    with top-level `branch`, `phase`, `gates`, `escalations` but not
+    `budget`/`tasks` — asserting `generic` with `branchRequired: true` and
+    the derived gateIds/requiredKeys. This kills the `every`->`some` marker
+    mutant (only one of the three SDLC markers is present, so `some` would
+    wrongly classify sdlc) and the dead-`branchRequired: false` mutant (the
+    template does declare `branch`, so the correct derivation is `true`) in
+    the same assertion, as review-03 specified.
+  - F3 (major, fixed): added one parseRunState case with a three-gate
+    contract (`intake, publish, review`) and a file listing `publish` before
+    `intake` and omitting `review` entirely, asserting
+    `generic.gateOrder === ['intake', 'publish', 'review']` — the exact
+    contract order — which a `gateOrder: Object.keys(s.gates)` mutant would
+    fail on two independent axes (file order, and the absent declared gate
+    not appearing at all).
+  - F4 (minor, fixed): the runs/*/state.yaml sweep now also calls
+    `parseRunState(content)` (default SDLC contract) per file and asserts
+    `error === null`, alongside the existing validateArtifact check, closing
+    the AC3.2 parse-evidence gap the review named for the mdtoc/dupefind
+    halves (wordfreq was already covered by real-repo.test.ts).
+  Test file grew from 16 to 20 tests, each new test added inside the
+  existing describe block the corresponding finding cited, so no new
+  describe was needed. Final: `npm test` in frontend/ — 414 passed, 1 skipped (410
+  round-1 baseline + 4 new), zero expected-value edits to readiness.test.ts,
+  profiles.test.ts, real-repo.test.ts; `npm run typecheck` clean. `npm
+  install` again regenerated frontend/package-lock.json with the same
+  npm-version-only metadata churn (dropped `libc` arrays, stray `peer:
+  true`); reverted via `git checkout` as in round 1, so the diff is scoped to
+  test/state-contract.test.ts only.

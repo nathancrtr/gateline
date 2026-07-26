@@ -63,6 +63,26 @@ describe('deriveStateContract — classification table', () => {
   it('a state.yaml that parses to a non-object (garbage) classifies as sdlc', () => {
     expect(deriveStateContract('- a\n- b\n', null)).toEqual(SDLC_STATE_CONTRACT)
   })
+
+  it('a template carrying `branch` but not `budget`/`tasks` classifies as generic with branchRequired true', () => {
+    // Kills both the every->some marker-detection mutant (a real SDLC host
+    // would need all three markers, not just one) and the dead branchRequired
+    // derivation (this template does declare `branch`, so branchRequired must
+    // be true, not unconditionally false).
+    const partialMarkerTemplate = `run: example
+branch: run/example
+phase: intake
+gates:
+  intake: {approved: false, by: null, at: null, notes: null}
+escalations: []
+`
+    expect(deriveStateContract(partialMarkerTemplate, null)).toEqual({
+      kind: 'generic',
+      gateIds: ['intake'],
+      requiredKeys: ['run', 'branch', 'phase', 'gates', 'escalations'],
+      branchRequired: true,
+    })
+  })
 })
 
 describe('resolveStateContract', () => {
@@ -135,6 +155,27 @@ gates: [not, a, mapping]
     expect(error).toMatch(/gates/)
   })
 
+  it('gateOrder is the contract order regardless of file order, including a declared gate absent from the file', () => {
+    // Kills the Object.keys(s.gates)-instead-of-declared-order mutant: the
+    // file lists `publish` before `intake` and omits the declared `review`
+    // gate entirely, so file order or file-presence-only would both produce
+    // a different array than the contract's declared order.
+    const threeGateContract: StateContract = {
+      kind: 'generic',
+      gateIds: ['intake', 'publish', 'review'],
+      requiredKeys: ['run', 'gates'],
+      branchRequired: false,
+    }
+    const text = `run: example
+gates:
+  publish: {approved: false, by: null}
+  intake: {approved: true, by: Someone}
+`
+    const { generic, error } = parseRunState(text, threeGateContract)
+    expect(error).toBeNull()
+    expect(generic!.gateOrder).toEqual(['intake', 'publish', 'review'])
+  })
+
   it('requires branch only when the contract declares it', () => {
     const branchRequired: StateContract = { ...GENERIC_CONTRACT, branchRequired: true }
     const withoutBranch = `run: example
@@ -202,7 +243,48 @@ describe('validateArtifact(state.yaml) resolves required keys from the target re
       checked++
       const v = await validateArtifact('state.yaml', content, repoTemplates)
       expect({ slug, ...v }).toMatchObject({ slug, ok: true, missing: [] })
+      // AC3.2: presence-only validation is not enough evidence that the file
+      // actually parses under the compiled SDLC schema (parseRunState) — the
+      // schema and the required-key sweep are independent code paths.
+      expect({ slug, error: parseRunState(content).error }).toEqual({ slug, error: null })
     }
     expect(checked).toBeGreaterThan(0)
+  })
+
+  it('resolves required keys from a stub template whose keys differ from BUILTIN_STATE_KEYS', async () => {
+    // Kills the mutant that replaces the whole template-resolution block with
+    // `required = BUILTIN_STATE_KEYS`: this stub's template has five keys,
+    // none of which are the eight-key builtin/this-repo list, so a mutant
+    // reading the builtin list instead of the stub's own template would
+    // report a different (wrong) missing set.
+    const stubTemplates: ContractTemplates = {
+      read: async (name) => (name === 'state.yaml' ? CORE_ONLY_TEMPLATE : null),
+    }
+    const missingAll = await validateArtifact('state.yaml', 'run: x\n', stubTemplates)
+    expect(missingAll.contract).toBe('state.yaml')
+    expect(missingAll.ok).toBe(false)
+    expect(missingAll.missing).toEqual(['phase', 'paused_reason', 'gates', 'escalations'])
+
+    const allFivePresent = `run: x
+phase: intake
+paused_reason: null
+gates: {}
+escalations: []
+`
+    const ok = await validateArtifact('state.yaml', allFivePresent, stubTemplates)
+    expect(ok.ok).toBe(true)
+    expect(ok.missing).toEqual([])
+  })
+
+  it('falls back to contracts/state-core.yaml (not the built-in list) when contracts/state.yaml is absent', async () => {
+    // Kills the same mutant on the fallback branch specifically: only
+    // state-core.yaml is offered here, so the required set must come from it
+    // (five keys), not from BUILTIN_STATE_KEYS (eight keys) or an empty set.
+    const stubTemplates: ContractTemplates = {
+      read: async (name) => (name === 'state-core.yaml' ? CORE_ONLY_TEMPLATE : null),
+    }
+    const v = await validateArtifact('state.yaml', 'run: x\n', stubTemplates)
+    expect(v.missing).toEqual(['phase', 'paused_reason', 'gates', 'escalations'])
+    expect(v.notes).toEqual([])
   })
 })

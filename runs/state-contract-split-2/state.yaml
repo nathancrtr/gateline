@@ -113,6 +113,17 @@ budget:
           tokens_in: 19,
           tokens_out: 5048,
           cost_usd: 2.8724404999999997
+        },
+      {
+          at: 2026-07-26T21:58:39.094Z,
+          role: reviewer,
+          task: 02-state-contract-resolution,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:

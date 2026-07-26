@@ -131,10 +131,11 @@ whose copies drift by nature — consumers integrate against a version they can 
 and the upstream owes them the tagging discipline that implies (§11). This debt is
 now overdue rather than theoretical: no tag exists, so integration #2 had to pin a
 bare commit hash and record the missing release as a retro item. The first tagged
-release therefore sits at the head of the build queue, immediately *behind* the
-state-contract split (§11's sequencing note — tagging first would freeze the
-about-to-fork schema), and the first `upgrade` must accept commit-pinned locks
-(§6).
+release therefore sits at the head of the build queue. It no longer waits on the
+state-contract split (§11's sequencing note): the split has landed
+(`runs/state-contract-split-2/`), leaving one deferred release-prep item — adding
+`contracts/state-core.yaml` to `scripts/copy-manifest.json` (ADR-6) — and the
+first `upgrade` must accept commit-pinned locks (§6).
 
 ### Vendored trees are not the only channel
 
@@ -153,9 +154,11 @@ deliberately do not vendor:
   host, every frontend read surface — discovery, run enumeration, CLI, inbox, API,
   bounce discipline — generalized with **zero code changes**. The single boundary
   was the compiled-in run-state schema, which rejected the host's legitimately
-  forked `state.yaml`; the fix (a generic state core + SDLC extension, with state
-  validated against the host's own `contracts/state.yaml` per the frontend's R3
-  rule, `frontend/README.md`) is sequenced as an active run.
+  forked `state.yaml`; that boundary is now fixed, landed in
+  `runs/state-contract-split-2/`: `contracts/state.yaml` is split into a generic
+  core (`contracts/state-core.yaml`) and an SDLC extension (`contracts/state.yaml`
+  itself), and state validates against whichever of the two the host's own
+  `contracts/` declares, per the frontend's R3 rule (`frontend/README.md`).
 
 Distribution is therefore **two channels pinned by one lock**: core trees vendor
 into the host; the toolchain runs from the same pinned release against the host.
@@ -241,12 +244,13 @@ worked as designed: integration #2's brief-shaped runs could not be described by
 the tasks mirror don't apply — so the host forked the core state contract in its
 first hour and recorded it. A fork of the *state* contract is qualitatively worse
 than a fork of an artifact template: state is what the frontend, the orchestrator,
-and `validate` all read. The upstream fix is sequenced as an active run: split
-`contracts/state.yaml` into a generic core (run identity, gates-as-map,
-escalations, pause) and an SDLC extension (branch convention, G0–G3, tasks,
-budget), so non-SDLC hosts extend instead of forking. Related template SDLC-isms
-surfaced by the same retro (the `writes_code` role-spec key) are tracked as
-issues; none forced a fork.
+and `validate` all read. The upstream fix has landed
+(`runs/state-contract-split-2/`): `contracts/state.yaml` is split into a generic
+core, `contracts/state-core.yaml` (run identity, gates-as-map, escalations,
+pause), and an SDLC extension, `contracts/state.yaml` itself (branch convention,
+G0–G3, tasks, budget), so non-SDLC hosts instantiate the core instead of forking.
+Related template SDLC-isms surfaced by the same retro (the `writes_code`
+role-spec key) are tracked as issues; none forced a fork.
 
 ## 5. The workflow
 
@@ -364,12 +368,16 @@ teammate runs it too:
   `validate`):** point the gate frontend at the host — `agentic status --repo
   <host>` from the framework checkout — and confirm the smoke run renders without
   bounces. `validate` (stdlib Python) prints the command; it does not run a Node
-  toolchain it doesn't ship. Precondition: the state-contract split — until it
-  lands, a host with instance gate vocabulary bounces by design and the check's
-  pass criterion applies only to SDLC-shaped hosts. This one command exercises
-  the full read path (discovery, state parse, contract validation) end-to-end,
-  and it is exactly the check that caught the state-schema boundary at
-  integration #2.
+  toolchain it doesn't ship. The state-contract split (`runs/state-contract-split-2/`)
+  has landed, so the check's pass criterion now applies to both SDLC-shaped hosts
+  and hosts that declare only the generic core — a host with instance gate
+  vocabulary parses cleanly instead of bouncing by design. One residual
+  limitation, named for a follow-up at G1 (ADR-6): the core read path and the
+  HTTP API generalize, but the cli and web gate-glyph cells still assume the
+  SDLC gate ids and can throw on a purely non-SDLC host's gate column. This one
+  command exercises the full read path (discovery, state parse, contract
+  validation) end-to-end, and it is exactly the check that caught the
+  state-schema boundary at integration #2.
 
 Integration is *done* when validate passes for someone other than the operator who
 ran init.
@@ -452,7 +460,7 @@ runs *before* the environment probe has fixed anything.
 | Smoke run passes, real run fails | validate is necessary, not sufficient; the first real run stays supervised (the pilot's Phase 1 discipline is unchanged) |
 | Version drift across adopting repos | Lockfile census; upgrade is cheap enough to actually run |
 | Integrator hallucinates policy the host doesn't have | Every guardrail in the profile must trace to a probe finding or a cited host policy; untraceable rules are malformed (consumer bounces, per contract discipline) |
-| Framework tooling's compiled-in schema rejects a compliant host's runs | State validated against the host's own `contracts/state.yaml` per the frontend's R3 rule (`frontend/README.md`; state-contract split, active run); until it lands, foreign-schema runs render loudly as bounced, never silently wrong |
+| Framework tooling's compiled-in schema rejects a compliant host's runs | State validated against the host's own `contracts/state.yaml` (core, or SDLC extension) per the frontend's R3 rule (`frontend/README.md`; state-contract split landed, `runs/state-contract-split-2/`); foreign-schema runs render loudly as bounced, never silently wrong |
 | Open escalation invisible behind a schema error | Frontend fix, sequenced as an active run: escalation entries stay readable even when full state validation fails |
 | Typo'd capability or gate name renders silently | Declared instance vocabulary (§4); renderer fails on anything outside the declared union |
 | Private host mislicensed by a repo-root Apache LICENSE | Dual provenance modes in `init` (§5); validate checks the mode matches the host's posture |
@@ -460,7 +468,7 @@ runs *before* the environment probe has fixed anything.
 ## 10. Open questions for team review
 
 1. **Contract extensions** — *partially resolved by events.* The state contract's
-   answer is the core/extension split (§4, active run). Still open for the markdown
+   answer is the core/extension split (§4), now landed. Still open for the markdown
    artifact contracts: fork-and-record, or the `## Project fields` extension point
    from day one?
 2. **Integrator scope** — should it also draft the host's *pilot plan* (phases,
@@ -485,10 +493,12 @@ runs *before* the environment probe has fixed anything.
 
 ## 11. Build phasing
 
-Sequencing note: the state-contract split (§4) is upstream of everything below —
-the lock's copy manifest, `validate`'s state checks, and the frontend read check
-all want the split schema, and cutting a tag *before* it lands would ship the
-about-to-fork shape as v1.0's frozen interface.
+Sequencing note: the state-contract split (§4) has landed
+(`runs/state-contract-split-2/`) and no longer blocks the first tag — `validate`'s
+state checks and the frontend read check already read the split schema. One
+deferred item from that run remains a release-prep task before the tag: adding
+`contracts/state-core.yaml` to the lock's copy manifest,
+`scripts/copy-manifest.json` (ADR-6).
 
 - **v0:** a first **versioned, tagged release** of the framework — the lockfile's
   `version` field needs something real to pin before the first arms-length

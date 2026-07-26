@@ -1,7 +1,7 @@
 run: csvpeek
 branch: run/csvpeek
-phase: implement # spec | plan | implement | integrate | release | done | paused
-paused_reason: null
+phase: paused # spec | plan | implement | integrate | release | done | paused
+paused_reason: escalation
 
 budget:
   cost_limit_usd: 30
@@ -237,5 +237,11 @@ escalations:
         resolved_by: Nathan Carter,
         resolved_at: 2026-07-26T23:13:55.840Z,
         resolution: LGTM
+      },
+    {
+        at: 2026-07-26T23:39:58.709Z,
+        from_role: orchestrator,
+        reason: reviewer escalated task 02-cli-shell — see review-02.md,
+        resolved: false
       }
   ]

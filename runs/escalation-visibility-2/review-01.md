@@ -36,3 +36,35 @@ The implementation matches the plan's interface contracts exactly and all requir
 ## Boundary check
 
 Clean. The commit touches exactly the four declared surface files plus the task file's own `notes:`/status block (the standard implementer report channel). `readiness.test.ts` is untouched and the shared `@agentic/fixtures` generator gains no run in this commit — the `esc-recovered` generator run on the branch belongs to task 02's commit f254d66, outside this review's scope.
+
+# Review Report: 01-core-recovery — Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** commit 3123765 (round-2 delta; cumulative task diff 8488a80..3123765 restricted to the task surface — sibling commit f254d66 is task 02's, out of scope)
+
+## Findings
+
+None. All three round-1 findings are resolved; the round-2 delta introduces no new defects.
+
+## Prior-finding resolution
+
+- **F1 (blocking) — resolved.** Both AC1.3 cases now place a well-formed sibling entry before the malformed one while still asserting `'bestEffortEscalations' in result === false` (`frontend/packages/core/test/escalation-recovery.test.ts:62-105`). Mutation re-run by me, not taken on faith: I replaced the whole-list `z.array(escalationSchema).safeParse` in `schema.ts` with a keep-valid/drop-bad per-entry salvage; both AC1.3 tests fail (`expected true to be false`), 2 failed / 7 passed. This also kills the prefix-salvage variant, since the surviving sibling precedes the bad entry. Mutant reverted, diff clean.
+- **F2 (major) — resolved.** The readiness test asserts exact epoch seconds for both open recovered items (`escalation-recovery.test.ts:266,269`), computable from the fixture's `at()` helper via the module-scope `DAY` the fixture builder shares. Mutation re-run: hardcoding `since: null` at `readiness.ts:100` fails the test (`expected null to be 1785017685`), 1 failed / 8 passed. Mutant reverted, diff clean.
+- **F3 (minor) — resolved.** The fixture's first entry omits `from_role`; titles are exact `toBe` for both the fallback (`'Escalation from unknown role'`) and a real role (`'Escalation from verifier'`), and `problems: []` is asserted per item (`escalation-recovery.test.ts:260,264,267`). I applied the two mutants separately — stronger than the implementer's combined check: dropping the `?? 'unknown role'` fallback fails on `expected 'Escalation from null' to be 'Escalation from unknown role'`; setting `problems: [error ?? 'state.yaml unreadable']` fails the `toMatchObject`. Both reverted, diff clean.
+
+## Coverage
+
+I re-ran every prior mutation check myself, re-ran both acceptance commands, and scanned the round-2 delta for regressions; everything came back clean.
+
+- Source stability ✓ — `git diff 8488a80 3123765` over the parser (`schema.ts`), portfolio, and readiness sources is empty; the implementer's no-production-change claim holds byte-for-byte.
+- Mutation kills ✓ — four mutants applied and reverted by hand: per-entry salvage (2 test failures), `since: null` (1), fallback drop (1), non-empty `problems` (1); `git status` clean after each revert.
+- No weakened bindings ✓ — every r2 test edit strengthens: `toContain` → exact `toBe`, added `since`/`problems` assertions, sibling entries added; the omitted `from_role` on entry 1 un-binds nothing because entry 2 still pins a present role in the title, and the open-count fixture stays N=2 open + 1 resolved.
+- DAY hoist ✓ — the constant is file-local to the new test module; no other test or fixture reads it, so hoisting changes nothing outside the two `since` assertions.
+- Exact-value assertions ✓ — the pinned titles, `since` values, and `problems: []` match the plan's view-model contract expressions character-for-character, so brittleness is aimed at the contract, not incidental formatting.
+- Acceptance commands ✓ — at the clean head: `npx vitest run packages/core` 183 passed / 0 failed (21 files); `npm run typecheck` clean over both tsconfigs. `npm install`'s package-lock rewrite was reverted before testing.
+- Not re-assessed: round-1's clean areas (AC1.2 byte-stability, R2 open-only filter, item ordering) beyond confirming their assertions are untouched or strengthened in the delta; server/web/CLI surfacing remains tasks 03–05.
+
+## Boundary check
+
+Clean. Commit 3123765 touches exactly two files: the declared test file `frontend/packages/core/test/escalation-recovery.test.ts` and the task YAML's own notes/status block, the accepted implementer report channel. No fixture-generator, source, or lockfile change; the committed `frontend/package-lock.json` is untouched.

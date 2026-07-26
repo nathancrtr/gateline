@@ -30,7 +30,7 @@ export function DecidePanel({ item, primary = false }: { item: InboxItem; primar
     () => ({
       a: () => {
         if (item.kind === 'gate' && item.reviewable) setMode('approve')
-        else if (item.kind === 'escalation') setMode('resolve')
+        else if (item.kind === 'escalation' && item.reviewable) setMode('resolve')
       },
       x: () => {
         if (item.kind === 'gate' && item.reviewable) setMode('decline')
@@ -126,10 +126,13 @@ export function DecidePanel({ item, primary = false }: { item: InboxItem; primar
           {item.kind === 'gate' && !item.reviewable && (
             <p className="text-[12.5px] font-semibold text-bad">Bounced — fix the artifacts (or the contract) and the card returns; no approval is offered for a malformed packet.</p>
           )}
-          {item.kind === 'escalation' && (
+          {item.kind === 'escalation' && item.reviewable && (
             <Button primary onClick={() => setMode('resolve')} data-decide="resolve">
               Resolve…
             </Button>
+          )}
+          {item.kind === 'escalation' && !item.reviewable && (
+            <p className="text-[12.5px] font-semibold text-bad">Read-only — recovered from malformed run state. Fix state.yaml to act on it; no resolution is offered here.</p>
           )}
           {item.kind === 'paused' && (
             <Button primary onClick={submitResume} disabled={mutation.isPending} data-decide="resume">

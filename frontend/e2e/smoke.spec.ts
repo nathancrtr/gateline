@@ -52,6 +52,22 @@ test('bounce view renders problems and offers no approval (R3)', async ({ page }
   await expect(card).toContainText('no approval is offered')
 })
 
+test('recovered escalations show role and reason with no resolve control (AC4.1)', async ({ page }) => {
+  await page.goto('/runs/' + sourceId() + '/esc-recovered')
+  await expect(page.getByText('Malformed run state').first()).toBeVisible()
+  const cards = page.locator('[data-needs-card]')
+  const escalationCards = cards.filter({ hasText: 'Escalation from' })
+  await expect(escalationCards).toHaveCount(2)
+  await expect(escalationCards.filter({ hasText: 'Escalation from implementer' })).toContainText('file_contact_surface conflict with a parallel task')
+  await expect(escalationCards.filter({ hasText: 'Escalation from verifier' })).toContainText('AC2.2 unverifiable: the oversized-input fixture referenced by the spec is missing from the repo')
+  await expect(page.locator('[data-decide="resolve"]')).toHaveCount(0)
+})
+
+test('a schema-valid run keeps its resolve control', async ({ page }) => {
+  await page.goto('/runs/' + sourceId() + '/escalated')
+  await expect(page.locator('[data-decide="resolve"]')).toHaveCount(1)
+})
+
 test('the pointer decision loop: approve G0 with burden → correct commit', async ({ page }) => {
   await page.goto('/runs/' + sourceId() + '/g0-pending?decide=G0')
   const card = page.locator('[data-needs-card]').first()

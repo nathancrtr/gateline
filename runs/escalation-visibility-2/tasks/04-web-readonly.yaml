@@ -54,3 +54,30 @@ depends_on: [01-core-recovery, 02-fixture-run]
 status: pending
 
 notes: |
+  Implementer round 1: decide.tsx now requires item.reviewable before entering
+  resolve mode (keyboard 'a' and idle-mode Resolve button), and a new idle
+  branch for item.kind === 'escalation' && !item.reviewable renders the
+  read-only paragraph (no button, no data-decide attribute), matching the
+  bounced-gate branch's styling. Added two e2e tests to smoke.spec.ts: one
+  navigating to /runs/<sourceId()>/esc-recovered asserting the malformed-run
+  banner, two escalation cards (filtered by "Escalation from") each showing
+  from_role in the title and reason text, and zero [data-decide="resolve"]
+  controls; a second asserting /runs/<sourceId()>/escalated still shows
+  exactly one [data-decide="resolve"]. Deviation from the task's literal
+  assertion count: [data-decide-card] on esc-recovered is 3 (the malformed
+  item plus the two escalation items), not 2 — the plan's "two escalation
+  cards render" is satisfied by filtering cards to hasText: 'Escalation from'
+  rather than asserting the page's total card count, since the existing
+  malformed-run bounce item card is unchanged, additional, and out of this
+  task's scope.
+
+  Verification (frontend/, Node v24.12.0, after `npm install` once):
+  - `npm run typecheck` — passes (tsc -p tsconfig.json && tsc -p
+    packages/web/tsconfig.json), no errors.
+  - `npm test` — 44 files passed, 1 skipped (live-smoke, expected), 403
+    tests passed, 1 skipped, 0 failed.
+  - `npm run build && npx playwright test` — Playwright browsers installed
+    successfully in this environment (`npx playwright install chromium`
+    completed, exit 0), so AC4.1's e2e criterion is verified locally, not
+    deferred: all 15 e2e tests passed, including both new tests and the
+    unchanged bounce-view/keyboard-loop regression tests.

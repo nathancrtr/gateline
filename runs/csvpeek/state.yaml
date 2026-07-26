@@ -88,7 +88,7 @@ gates:
 
 tasks:
   [
-    { id: 01-core-logic, status: in-review, review_rounds: 0 },
+    { id: 01-core-logic, status: in-review, review_rounds: 1 },
     { id: 02-cli-shell, status: pending, review_rounds: 0 },
     { id: 03-unit-tests, status: pending, review_rounds: 0 },
     { id: 04-cli-tests, status: pending, review_rounds: 0 }

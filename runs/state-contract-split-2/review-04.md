@@ -121,3 +121,89 @@ implementer's report channel, treated as non-product surface as in review-02
 and review-03). Nothing outside `frontend/packages/core` changed, so the
 task's no-diff-outside-core acceptance test and AC6.1 hold, and no other
 task's work rides in the diff.
+
+---
+
+# Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** commit 22753d8 on `run/state-contract-split-2`; verified
+`git diff 22753d8 HEAD -- frontend/packages/core/` is empty (later commits are
+orchestrator state bookkeeping only), and the cumulative task diff
+`9675807..HEAD` touches exactly the four declared surface files plus this
+report and the task's own YAML.
+
+## Resolution of round-1 findings
+
+Dispatch again barred editing source or test files, so each mutant kill below
+is proven by mechanical reasoning about the committed fixture — the
+implementer's claimed mutant executions were not taken on faith, each failure
+mode is re-derived independently — plus my own run of the full suite.
+
+- **F1 — resolved.** The kill fixture's contract declares gates in order
+  intake/review/publish (`gateIds` preserves template key order,
+  state-contract.ts:44); the run file lists publish then intake and omits
+  `review`. Mutant (a) `Object.keys(generic.gates)`: parseGeneric passes the
+  file's own key order through (record/schema.ts:214), so keys would be
+  `['publish','intake']` — the exact-order assertion
+  (generic-host.test.ts:167) fails on both order and the dropped `review`.
+  Mutant (b) unguarded `cell(generic.gates[id]!)`: `generic.gates['review']`
+  is `undefined`, so `cell` throws reading `.approved` (portfolio.ts:52),
+  failing both new tests. The undecided shape and both present-gate cells
+  (including `decided: true` via non-null `by`) are asserted exactly
+  (generic-host.test.ts:167-170).
+- **F2 — resolved.** Same fixture: no `phase` key (the generic schema
+  normalizes absent to null, record/schema.ts:179, so `?? '—'` is the only
+  path to the asserted `'—'` and the `?? 'unknown'` mutant fails); a non-null
+  `paused_reason` asserted verbatim (the `null` mutant fails); one resolved
+  plus one unresolved escalation with `escalationsOpen` asserted `1` (the
+  unfiltered `.length` mutant yields 2 and fails). Both escalation entries
+  satisfy escalationSchema (only `reason` and `resolved` are required,
+  record/schema.ts:89-99), so the fixture parses — confirmed by the passing
+  run, not assumed.
+- **F3 — resolved.** portfolio.ts:85 now spreads `{ ...UNDECIDED_CELL }` per
+  absent-gate entry, matching the file's own `emptyLedger` idiom; the new
+  reference-inequality test (generic-host.test.ts:179-187) asserts the
+  absent-gate cells of two independent `summarizeRun` calls are distinct
+  objects, which the shared-instance mutant fails (same reference both
+  times). Present-gate cells were already fresh via `cell()`.
+
+## Findings (round 2)
+
+None.
+
+## Coverage (round 2)
+
+The round-2 diff is a one-token source fix plus one new test block, and
+everything in it checked clean.
+
+- F1/F2/F3 kill discrimination ✓ — each argued mechanically above
+- Fixture parse mechanics ✓ — the kill run state is valid under the generic
+  schema (gate entries and escalations schema-valid, the unquoted author name
+  parses as a plain YAML string), and `Object.fromEntries` preserves
+  insertion order for these non-numeric keys, so the exact-order assertion is
+  deterministic
+- Source-change minimality ✓ — the portfolio.ts diff is exactly the
+  per-entry spread; the generic branch is otherwise byte-identical to round 1
+- Test hygiene ✓ — the kill-fixture repo registers in the shared cleanup
+  list and reuses the gitconfig isolation idiom
+- Acceptance run ✓ — ran `npm test` (45 passed + 1 skipped files, 421 passed
+  + 1 skipped tests — round 1's 419 plus the two new cases) and
+  `npm run typecheck` (clean, both tsconfig projects) myself; targeted run of
+  generic-host.test.ts: 7 of 7 passing; reverted my own install's
+  package-lock churn, tree clean
+- AC4.1 / AC4.2 / AC4.3 ✓ — the four round-1 test cases unchanged and passing
+- AC3.1 / AC5.2 ✓ — real-repo.test.ts absent from the cumulative diff and
+  passing; the wordfreq regression guard passing
+- Round-1 section integrity ✓ — this round is appended only; the round-1
+  content above is untouched
+
+## Boundary check (round 2)
+
+Commit 22753d8 touches `frontend/packages/core/src/view-model/portfolio.ts`,
+`frontend/packages/core/test/generic-host.test.ts`, and the task's own
+`tasks/03-generic-read-path.yaml` (status/notes bookkeeping, the implementer's
+report channel as in prior rounds) — all inside the declared surface. Nothing
+outside `frontend/packages/core` changed, no later commit touched the
+surface, and the cumulative diff carries no other task's work.

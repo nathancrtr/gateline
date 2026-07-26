@@ -29,6 +29,17 @@ budget:
           tokens_in: 13,
           tokens_out: 3531,
           cost_usd: 4.929643999999998
+        },
+      {
+          at: 2026-07-26T21:33:43.148Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ] # appended by the v1 orchestrator's dispatch seam
 

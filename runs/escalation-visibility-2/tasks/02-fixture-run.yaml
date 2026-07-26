@@ -58,3 +58,23 @@ depends_on: []
 status: pending
 
 notes: |
+  Implementer (round 1): added `esc-recovered` (age 1, phase: verifying —
+  the sole out-of-enum violation, gates G0/G1 approved-by-operator + G2/G3
+  undecided, tasks: [], and 3 hand-written escalations: 2 resolved:false
+  from_role implementer/verifier with distinct reasons, 1 resolved:true with
+  resolved_by/resolved_at/resolution) to frontend/fixtures/src/index.ts, all
+  `at` timestamps via `new Date((now - 1 * DAY) * 1000).toISOString()` per
+  the `escalated` run's idiom. Updated the three count-sensitive assertions
+  exactly as scoped: readiness.test.ts's sorted slug list (esc-recovered
+  sorts between done-merged and escalated), app.test.ts's
+  `toHaveLength(12)` -> 13, and fixture.test.ts's new
+  `esc-recovered -> { kind: 'rest', rule: 'D0' }` assertion next to
+  bad-state's.
+  `npm install` in frontend/ regenerated package-lock.json as a side effect
+  (node_modules was absent); reverted that file with `git checkout --` since
+  it is outside this task's file_contact_surface — the lockfile itself
+  needed no content change for this task.
+  Full `cd frontend && npx vitest run`: 43 test files passed, 1 skipped
+  (44), 394 tests passed, 1 skipped (395) — no regressions, including
+  `escalated` still ranking first in cli.test.ts and app.test.ts's inbox
+  ordering assertions.

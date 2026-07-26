@@ -67,6 +67,7 @@ describe('run discovery', () => {
     expect(slugs).toEqual([
       'bad-state',
       'done-merged',
+      'esc-recovered',
       'escalated',
       'g0-pending',
       'g1-pending',

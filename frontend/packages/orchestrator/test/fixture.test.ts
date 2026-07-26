@@ -37,6 +37,7 @@ describe('dry-run tick over the fixture repo', () => {
     expect(bySlug['escalated']).toMatchObject({ kind: 'rest', rule: 'D3' })
     expect(bySlug['paused-budget']).toMatchObject({ kind: 'rest', rule: 'D2' })
     expect(bySlug['bad-state']).toMatchObject({ kind: 'rest', rule: 'D0' })
+    expect(bySlug['esc-recovered']).toMatchObject({ kind: 'rest', rule: 'D0' })
     expect(bySlug['done-merged']).toMatchObject({ kind: 'rest', rule: 'D1' })
 
     // The round-cap breach escalates and pauses.

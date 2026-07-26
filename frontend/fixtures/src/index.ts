@@ -403,6 +403,11 @@ export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts 
     commits?: { files: Record<string, string>; message: string; age: number }[]
   }
 
+  // Shared timestamp for the esc-recovered run's escalations, per the
+  // `escalated` run's idiom: young enough (now - 1*DAY) that it never
+  // outranks the 7-day-old `escalated` run in age-sorted inbox assertions.
+  const escRecoveredAt = new Date((now - 1 * DAY) * 1000).toISOString()
+
   const branchRuns: BranchRun[] = [
     {
       slug: 'g0-pending',
@@ -604,6 +609,46 @@ export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts 
       age: 1,
       files: {
         'state.yaml': 'run: bad-state\nbranch: run/bad-state\nphase: [this is\n  not: valid yaml for a phase\n',
+      },
+    },
+    // R1's AC1.1 shape: an unrelated schema violation (`phase` out of enum)
+    // alongside a fully well-formed `escalations` array — hand-written since
+    // stateYaml() can only emit valid phases. Youngest run (age 1) so the
+    // 7-day-old `escalated` run keeps ranking first in every inbox ordering
+    // assertion.
+    {
+      slug: 'esc-recovered',
+      age: 1,
+      files: {
+        'intent-brief.md': brief('escalation recovery harness'),
+        'spec.md': spec('escalation recovery harness'),
+        'state.yaml': `# Contract: maintained by Orchestrator (human in v0); read by everyone.
+# Lives at runs/<slug>/state.yaml — the single source of truth for a run.
+
+run: esc-recovered
+branch: run/esc-recovered
+phase: verifying               # deliberately out of enum (spec | plan | implement | integrate | release | done | paused) — the AC1.1 schema violation
+paused_reason: null
+
+budget:
+  cost_limit_usd: 25      # exhaustion pauses the run; it never silently degrades
+  cost_spent_usd: 4.4      # derived: sum of ledger[].cost_usd
+  ledger: []
+
+gates:                    # a gate entry is written ONLY by the named human
+  G0: {approved: true, by: operator, at: 2026-07-20T09:00:00Z, notes: null}
+  G1: {approved: true, by: operator, at: 2026-07-21T09:00:00Z, notes: null}
+  G2: {approved: false, by: null, at: null, notes: null}
+  G3: {approved: false, by: null, at: null, notes: null}
+
+tasks:                    # mirrors tasks/*.yaml status; the ONLY home of review_rounds
+  []
+
+escalations:              # append-only: {at, from_role, reason, resolved}
+  - {at: ${escRecoveredAt}, from_role: implementer, reason: "file_contact_surface conflict with a parallel task; escalating rather than guessing which owns the shared module", resolved: false}
+  - {at: ${escRecoveredAt}, from_role: verifier, reason: "AC2.2 unverifiable: the oversized-input fixture referenced by the spec is missing from the repo", resolved: false}
+  - {at: ${escRecoveredAt}, from_role: implementer, reason: "naming collision on a shared config module, raised before either task touched it", resolved: true, resolved_by: operator, resolved_at: ${escRecoveredAt}, resolution: "architect clarified ownership; implementer proceeded on the original assignment"}
+`,
       },
     },
   ]

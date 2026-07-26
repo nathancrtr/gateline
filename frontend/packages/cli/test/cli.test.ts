@@ -82,6 +82,28 @@ describe('agentic CLI', () => {
     expect(stdout).toContain('BOUNCED')
   })
 
+  it('inbox names role and reason for recovered escalations, alongside the malformed-run line (AC3.1)', async () => {
+    const { stdout } = await run(['inbox'])
+    const lines = stdout.trim().split('\n')
+    // Ordering guard: the 7-day-old `escalated` run still leads.
+    expect(lines[0]).toContain('escalated')
+
+    const recoveredLines = lines.filter((l) => l.startsWith('escalation') && l.includes('esc-recovered'))
+    expect(recoveredLines).toHaveLength(2)
+    const byRole = (role: string) => recoveredLines.find((l) => l.includes(`Escalation from ${role}`))
+    expect(byRole('implementer')).toContain(' — file_contact_surface conflict with a parallel task; escalating rather than guessing which owns the shared module')
+    expect(byRole('verifier')).toContain(' — AC2.2 unverifiable: the oversized-input fixture referenced by the spec is missing from the repo')
+
+    // The existing malformed-run-state line for esc-recovered is still present, unchanged.
+    const malformedLine = lines.find((l) => l.startsWith('malformed') && l.includes('esc-recovered'))
+    expect(malformedLine).toBeTruthy()
+
+    // The schema-valid `escalated` run's line is unchanged: no reason suffix.
+    const escalatedLine = lines.find((l) => l.startsWith('escalation') && l.includes('/escalated'))
+    expect(escalatedLine).toBeTruthy()
+    expect(escalatedLine).not.toContain(' — ')
+  })
+
   it('approve requires burden when non-interactive', async () => {
     const { code, stderr } = await run(['approve', 'g0-pending', 'G0'], true)
     expect(code).toBe(1)

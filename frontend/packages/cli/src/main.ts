@@ -126,7 +126,12 @@ program
 
 function printItem(item: InboxItem): void {
   const kind = item.kind === 'gate' ? item.gate : item.kind
-  console.log(`${(kind ?? '').padEnd(10)} ${age(item.since).padStart(4)}  ${item.source}/${item.slug}  ${item.title}`)
+  // Recovered escalations (kind=escalation, non-reviewable — ADR-3) name their
+  // reason inline: title already carries from_role ("Escalation from <role>"),
+  // so appending the detail here names both on one line (AC3.1). Reviewable
+  // escalations and every other kind print exactly as before.
+  const reasonSuffix = item.kind === 'escalation' && !item.reviewable ? ` — ${item.detail}` : ''
+  console.log(`${(kind ?? '').padEnd(10)} ${age(item.since).padStart(4)}  ${item.source}/${item.slug}  ${item.title}${reasonSuffix}`)
   if (!item.reviewable && item.problems.length) {
     for (const p of item.problems) console.log(`${' '.repeat(17)}✕ BOUNCED: ${p}`)
   }

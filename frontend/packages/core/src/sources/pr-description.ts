@@ -28,6 +28,10 @@ export interface RunDescriptionInput {
   /** `runs/<slug>` as it sits in this repo's layout (prefixed hosts differ). */
   runDir: string
   profile: Profile | null
+  /** The run's phase, for the in-flight banner; null when state is unreadable. */
+  phase: string | null
+  /** Gate ledger in profile order, for the banner's progress line. */
+  gates: { id: string; approved: boolean }[]
   /** `runs/<slug>/intent-brief.md`, or null when unreadable. */
   brief: string | null
   /** `runs/<slug>/spec.md` once the analyst has produced it, else null. */
@@ -128,9 +132,46 @@ function section(heading: string, text: string | null): string[] {
   return text ? [`## ${heading}`, '', truncate(text), ''] : []
 }
 
+/**
+ * The lead banner. A run PR is a working surface, not a proposal: merging one
+ * mid-run lands an unfinished record on the default branch and, worse, kills
+ * the only review surface the run has (#207). The GitHub draft flag alone did
+ * not stop that happening on 2026-07-25, and a description that reads like
+ * finished work makes it likelier, so the state of the run is said outright.
+ */
+function banner(input: RunDescriptionInput): string[] {
+  // Show only the gates this profile declares. `parseRunState` normalizes the
+  // ledger to all four entries so consumers keep a total record (schema.ts),
+  // which would otherwise advertise a G3 on a standard run — a gate outside
+  // the profile is absent, not pending, and a PR banner is the last place to
+  // blur that.
+  //
+  // `?? []` rather than a bare read: this runs inside ensureDraftPr's
+  // never-throws envelope, and a caller that omits the field should thin the
+  // banner, not take the whole ensure down.
+  const declared = input.profile ? new Set<string>(PROFILE_GATES[input.profile]) : null
+  const ledger = (input.gates ?? [])
+    .filter((g) => declared === null || declared.has(g.id))
+    .map((g) => `${g.id} ${g.approved ? '✓' : '·'}`)
+    .join(' ')
+  const where = [input.phase ? `phase \`${input.phase}\`` : null, ledger ? `gates ${ledger}` : null].filter(Boolean).join(' · ')
+
+  // A finished run is exactly what this PR is for — say so instead of warning.
+  const quoted =
+    input.phase === 'done'
+      ? ['> **Run complete.** All gates are signed and the record is final.', where && `> ${where}`]
+      : [
+          '> ⚠️ **Run in flight — do not merge.**',
+          where && `> ${where}`,
+          '> Merging now lands an incomplete run record and leaves the run with no review surface.',
+        ]
+  // No blank line may fall inside the quote or markdown splits it in two.
+  return [...quoted.filter((l): l is string => Boolean(l)), '']
+}
+
 function footer(input: RunDescriptionInput, from: RunDescription['from']): string[] {
   const bits = [`Run \`${input.slug}\``]
-  if (input.profile) bits.push(`profile \`${input.profile}\``, `gates ${PROFILE_GATES[input.profile].join(' ')}`)
+  if (input.profile) bits.push(`profile \`${input.profile}\``)
   bits.push(`record \`${input.runDir}/\``)
   const source = from === 'slug' ? 'no readable run artifact' : `\`${input.runDir}/${from}\``
   return ['---', '', bits.join(' · '), '', `<sub>Description generated from ${source}; it refreshes as the run's artifacts land, and stops the moment anyone edits it.</sub>`]
@@ -155,8 +196,7 @@ export function describeRun(input: RunDescriptionInput): RunDescription {
   const from: RunDescription['from'] = useSpec ? 'spec.md' : useBrief ? 'intent-brief.md' : 'slug'
   const title = (useSpec ? (specTitle ?? briefTitle) : briefTitle) ?? `run/${input.slug}`
 
-  const lead = `**Draft.** The run record is authoritative until this PR is marked ready for review.`
-  const parts: string[] = [GENERATED_MARKER, '', lead, '']
+  const parts: string[] = [GENERATED_MARKER, '', ...banner(input), '']
 
   if (useSpec) {
     parts.push(...section('Context', specContext))

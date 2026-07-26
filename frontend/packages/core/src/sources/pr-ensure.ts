@@ -38,31 +38,43 @@ const defaultExec: ExecLike = (cmd, args, opts) =>
  * state.yaml, or a malformed artifact degrades to a thinner description — at
  * worst today's `run/<slug>` title — and never to a failure.
  */
-/** The run's profile, read leniently: a state.yaml too broken to validate
- * still names its profile, and a description is no place to lose that. */
-function readProfile(raw: string | null): Profile | null {
-  if (raw === null) return null
-  const validated = parseRunState(raw).state?.profile
-  if (validated) return validated
-  const m = /^profile:\s*([a-z]+)/m.exec(raw)
-  return m && (PROFILES as readonly string[]).includes(m[1]!) ? (m[1] as Profile) : null
+/** Profile, phase, and the gate ledger, read leniently: a state.yaml too broken
+ * to validate still names its profile and phase, and a description is no place
+ * to lose them. Anything unreadable simply thins the banner. */
+function readStateBits(raw: string | null): { profile: Profile | null; phase: string | null; gates: { id: string; approved: boolean }[] } {
+  if (raw === null) return { profile: null, phase: null, gates: [] }
+  const state = parseRunState(raw).state
+  if (state) {
+    return {
+      profile: state.profile,
+      phase: state.phase,
+      gates: Object.entries(state.gates).map(([id, gate]) => ({ id, approved: gate.approved })),
+    }
+  }
+  const profileMatch = /^profile:\s*([a-z]+)/m.exec(raw)
+  const phaseMatch = /^phase:\s*([a-z-]+)/m.exec(raw)
+  return {
+    profile: profileMatch && (PROFILES as readonly string[]).includes(profileMatch[1]!) ? (profileMatch[1] as Profile) : null,
+    phase: phaseMatch ? phaseMatch[1]! : null,
+    gates: [],
+  }
 }
 
 async function describeFromBranch(git: Git, rev: string, slug: string): Promise<RunDescription> {
   let runDir = `runs/${slug}`
-  let profile: Profile | null = null
+  let bits = readStateBits(null)
   let brief: string | null = null
   let spec: string | null = null
   try {
     const roots = await resolveFrameworkRoots(git, rev)
     runDir = `${roots.runs}/${slug}`
-    profile = readProfile(await git.show(rev, `${runDir}/state.yaml`))
+    bits = readStateBits(await git.show(rev, `${runDir}/state.yaml`))
     brief = await git.show(rev, `${runDir}/intent-brief.md`)
     spec = await git.show(rev, `${runDir}/spec.md`)
   } catch {
     // Fall through with whatever was read before the failure.
   }
-  return describeRun({ slug, runDir, profile, brief, spec })
+  return describeRun({ slug, runDir, ...bits, brief, spec })
 }
 
 interface ListedPr {

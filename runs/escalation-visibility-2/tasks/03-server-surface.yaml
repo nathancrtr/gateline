@@ -76,3 +76,45 @@ notes: |
   unrelated to this task's file_contact_surface (app.ts, the new server
   test file), not a regression from this change.
 
+  Implementer round 2: addressed review-03.md's two findings, both fixed
+  (no rebuttals). Only file touched: the new test file itself; app.ts
+  needed no change (confirmed unmodified via `git diff` after the mutant
+  checks below).
+
+  F1 (blocking, at unbound) + F2 (major, projection shape unbound): both
+  fixed with the reviewer's single suggested change. Replaced the AC3.2
+  block's per-property toHaveProperty/toMatchObject checks with one
+  `toEqual` against the two exact expected objects ({ at, from_role,
+  reason } each), with `at` derived from the fixture rather than
+  hardcoded: `new Date((fixture.now - 86400) * 1000).toISOString()`. I
+  verified this derivation against the fixture source
+  (frontend/fixtures/src/index.ts) before using it: `DAY = 86_400`
+  (line 11), and the esc-recovered run's two open entries both use
+  `escRecoveredAt = new Date((now - 1 * DAY) * 1000).toISOString()`
+  (line 409, spread into both `{at: ${escRecoveredAt}, ...}` YAML
+  entries at lines 648-649) — the reviewer's derivation matches the
+  fixture exactly, so used it as-is. toEqual also keeps the existing
+  order and open-only kills the prior test already had.
+
+  Mutant-kill evidence (re-verified by me post-fix, app.ts restored after
+  each): `at: null` in the app.ts projection → AC3.2 test fails (received
+  at: null vs expected the fixture ISO string), 1 failed/7 passed. Whole-
+  entry-leak mutant `.map((e) => ({ ...e }))` → AC3.2 test fails (received
+  object carries resolved: false, resolved_by: null, resolved_at: null,
+  resolution: null alongside the three expected fields), 1 failed/7
+  passed. Reverted app.ts after each mutant; `git diff
+  frontend/packages/server/src/app.ts` shows no diff, confirming it's
+  back to the round-1 committed state (this round touches only the test
+  file).
+
+  Verification (round 2): `cd frontend && npx vitest run packages/server`
+  → 3 files, 43 tests, all green. Full `cd frontend && npx vitest run` →
+  45 files passed + 1 skipped (46 total), 412 passed + 1 skipped (413
+  tests), 0 failed — no router.test.ts flake this run (full suite clean
+  in one pass, ~75s). `npm install` in frontend/ perturbed
+  frontend/package-lock.json (peer/libc metadata churn from a different
+  local npm/lockfile-version); reverted with `git checkout --
+  frontend/package-lock.json` since it's outside this task's
+  file_contact_surface, then re-ran packages/server to confirm still
+  green post-revert (43/43).
+

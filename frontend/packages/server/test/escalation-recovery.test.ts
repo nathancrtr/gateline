@@ -55,22 +55,21 @@ describe('GET /api/runs/:src/:slug (R2/R3)', () => {
 
   it('AC3.2: recoveredEscalations names exactly the 2 open entries, resolved entry absent', async () => {
     const { body } = await get('/api/runs/fixture/esc-recovered')
-    expect(body.recoveredEscalations).toHaveLength(2)
-    for (const entry of body.recoveredEscalations) {
-      expect(entry).toHaveProperty('from_role')
-      expect(entry).toHaveProperty('reason')
-      expect(entry).toHaveProperty('at')
-    }
-    expect(body.recoveredEscalations[0]).toMatchObject({
-      from_role: 'implementer',
-      reason: 'file_contact_surface conflict with a parallel task; escalating rather than guessing which owns the shared module',
-    })
-    expect(body.recoveredEscalations[1]).toMatchObject({
-      from_role: 'verifier',
-      reason: 'AC2.2 unverifiable: the oversized-input fixture referenced by the spec is missing from the repo',
-    })
-    const reasons = body.recoveredEscalations.map((e: { reason: string }) => e.reason)
-    expect(reasons.every((r: string) => !r.includes('architect clarified ownership'))).toBe(true)
+    // Both open escalations in the esc-recovered fixture share one timestamp:
+    // new Date((fixture.now - 1 * DAY) * 1000).toISOString() (frontend/fixtures/src/index.ts).
+    const at = new Date((fixture.now - 86400) * 1000).toISOString()
+    expect(body.recoveredEscalations).toEqual([
+      {
+        at,
+        from_role: 'implementer',
+        reason: 'file_contact_surface conflict with a parallel task; escalating rather than guessing which owns the shared module',
+      },
+      {
+        at,
+        from_role: 'verifier',
+        reason: 'AC2.2 unverifiable: the oversized-input fixture referenced by the spec is missing from the repo',
+      },
+    ])
   })
 
   it("R4 item shape: items[] carries the malformed item plus 2 non-reviewable escalation items with a null escalationIndex", async () => {

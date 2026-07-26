@@ -1,7 +1,7 @@
 run: csvpeek
 branch: run/csvpeek
-phase: paused # spec | plan | implement | integrate | release | done | paused
-paused_reason: escalation
+phase: implement # spec | plan | implement | integrate | release | done | paused
+paused_reason: null
 
 budget:
   cost_limit_usd: 30

@@ -995,4 +995,7 @@ escalations:
     from_role: orchestrator
     reason: "ops failed twice: run branch run/fleetview-design is checked out at
       /Users/nthncrtr/repos/agentic-sandbox/.claude/worktrees/design-dept-r…"
-    resolved: false
+    resolved: true
+    resolved_by: Nathan Carter
+    resolved_at: 2026-07-26T23:14:17.726Z
+    resolution: hmm, let's try this again

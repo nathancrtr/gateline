@@ -1,10 +1,10 @@
 # Contributing
 
-Thanks for your interest in ADS. Here is the honest state of things.
+Thanks for your interest in gateline. Here is the honest state of things.
 
 ## Code contributions: not yet
 
-ADS is currently **maintainer-authored by policy**, not by accident. Settling a
+gateline is currently **maintainer-authored by policy**, not by accident. Settling a
 contribution policy (CLA or DCO) is a deliberate prerequisite to accepting
 outside code, because it preserves licensing options that matter for the
 project's long-term health. Until that lands, pull requests from outside the
@@ -36,7 +36,7 @@ round-trip.
   them. Edit the source role spec or adapter manifest, then run
   `python3 scripts/render-agents.py` (CI fails stale renders).
 - Tests: `pytest scripts/test_integrate.py` for the integration tool,
-  `npm test` in `frontend/` for FleetView and the orchestrator (Node ≥ 24),
+  `npm test` in `frontend/` for Gatehouse and the orchestrator (Node ≥ 24),
   `pytest apps/wordfreq` for pipeline-run output.
 - Everything that vendors into host repos stays stdlib-only, Python
   3.9-compatible.

@@ -14,5 +14,5 @@ labels: bug
      flags. -->
 
 **Environment**
-<!-- OS, Python version; Node version if FleetView; runner (Claude Code /
+<!-- OS, Python version; Node version if Gatehouse; runner (Claude Code /
      Copilot CLI) if agent-related. -->

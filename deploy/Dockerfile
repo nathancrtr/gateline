@@ -1,4 +1,4 @@
-# FleetView hosted single-user image — see docs/DEPLOY.md.
+# Gatehouse hosted single-user image — see docs/DEPLOY.md.
 # Build from the repository root:  docker build -f deploy/Dockerfile .
 #
 # The image carries the gate frontend (server + built SPA) and, opt-in via

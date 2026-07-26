@@ -1,4 +1,4 @@
-# FleetView hosted single-user instance — example Fly.io config.
+# Gatehouse hosted single-user instance — example Fly.io config.
 # Copy to fly.toml at the repository root, set an app name and region, then
 # follow docs/DEPLOY.md. fly.toml is gitignored on purpose: it is instance
 # configuration, not framework code.
@@ -10,7 +10,7 @@ primary_region = "iad"
   dockerfile = "deploy/Dockerfile"
 
 [mounts]
-  source = "fleetview_data"
+  source = "gatehouse_data"
   destination = "/data"
 
 [env]
@@ -31,7 +31,7 @@ primary_region = "iad"
 # No [http_service] / [[services]] section on purpose: with a Cloudflare
 # tunnel (TUNNEL_TOKEN secret) the machine exposes no public port at all.
 # Traffic enters through the tunnel and Cloudflare Access authenticates it
-# before it reaches FleetView, which has no auth of its own.
+# before it reaches Gatehouse, which has no auth of its own.
 #
 # Keep exactly one machine: the git clone on the volume is single-writer.
 #   fly scale count 1

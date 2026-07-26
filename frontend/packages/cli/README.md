@@ -1,6 +1,6 @@
 # `agentic` — the gate frontend in terminal form
 
-The same portfolio, inbox, and decision write path as FleetView, driveable
+The same portfolio, inbox, and decision write path as Gatehouse, driveable
 entirely from a shell. Nothing here is a second system: every view is
 recomputed from `runs/*/state.yaml` in git (R1), every mutation is one
 compare-and-swap commit to a run's `state.yaml` (R2), and a malformed packet
@@ -75,7 +75,7 @@ entries and `sync --live` records them (uses the `gh` CLI's login).
 `.agentic/framework-lock.json` — no per-host configuration.
 
 **Headless / no browser.** Everything above is already browser-free. The
-engine, too — `up` serves FleetView alongside it, but the orchestrator has
+engine, too — `up` serves Gatehouse alongside it, but the orchestrator has
 its own binary for engine-only operation:
 
 ```sh

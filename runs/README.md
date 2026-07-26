@@ -3,6 +3,11 @@
 One directory per pipeline run, on the run's branch (`run/<slug>`). The run directory
 **is** the pipeline's state — no state lives anywhere else.
 
+Runs are historical records and are never retro-edited. Runs that predate the
+naming change call the web UI *FleetView* and the framework *ADS*; the slugs
+`fleetview-design` and `fleetview-intake`, and their branches, keep those names
+permanently. Current names are in [`AGENTS.md`](../AGENTS.md).
+
 ```
 runs/<slug>/
 ├── state.yaml               # phase, gate ledger, budgets, task statuses (Orchestrator-owned)

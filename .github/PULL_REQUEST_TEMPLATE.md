@@ -1,4 +1,4 @@
-<!-- Note: ADS is maintainer-authored until a contribution policy (CLA/DCO)
+<!-- Note: gateline is maintainer-authored until a contribution policy (CLA/DCO)
      lands — see CONTRIBUTING.md. Outside PRs will be read and credited, but
      the substance should live in an issue. -->
 

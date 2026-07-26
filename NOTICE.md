@@ -1,4 +1,4 @@
-Agentic Development System
+gateline
 Copyright © 2026 Nathan Carter <nathan.andrew.carter@gmail.com>
 
 This framework — including its role specifications, artifact contracts, model

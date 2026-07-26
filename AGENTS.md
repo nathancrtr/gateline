@@ -1,4 +1,4 @@
-# Agentic Software Development: Sandbox
+# gateline
 
 Guidance for coding agents (and humans) working on this repository. It is
 runner-neutral on purpose — the same portability principle the framework itself is
@@ -15,6 +15,15 @@ server over `@agentic/core`) and the v1 orchestrator
 (`frontend/packages/orchestrator`), with a hosted single-user deployment recipe
 under `deploy/`. Application code under `apps/` is the output of pipeline runs, kept
 as evidence — not software being maintained for its own sake.
+
+**Names.** The framework and this repository are **gateline**; the web UI is
+**Gatehouse**. Two earlier names are retired and must not be reintroduced:
+*FleetView* (never a decided name) and *ADS* / *Agentic Development System*. Both
+still appear inside `runs/` — those are historical records and stay as written.
+Lowercase `gate` remains the domain term for a pipeline approval point, and is
+unrelated to the UI's name. Renaming the git repository, the `.agentic/` vendored
+prefix, and the `agentic` / `@agentic/*` command and package names is a separate,
+still-pending step — leave them as they are.
 
 Read [`docs/DESIGN.md`](docs/DESIGN.md) before changing the framework: it defines the
 principles (P1–P6), roles, gates, and failure modes that changes are judged against.
@@ -43,7 +52,7 @@ contracts, and adapters. Runs declare a **profile** — `patch | standard | full
 (DESIGN.md §4.1) — scaling which roles run and which gates exist to the size of the
 change; a run whose `state.yaml` carries no `profile:` is `full`. Three runner
 adapters are built: `claude-code`, `copilot-cli`, and `opencode` (the any-provider
-one). The gate frontend (FleetView) and the v1 orchestrator are implemented and
+one). The gate frontend (Gatehouse) and the v1 orchestrator are implemented and
 co-located by design — `agentic up` runs both over a single clone, which is the
 blessed topology; the hosted recipe under `deploy/` remains a documented self-host
 option. Integration tooling v0 (`scripts/integrate.py`) ships `init|validate|fork`.
@@ -127,7 +136,7 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   * inspect — `status`, `inbox`, `show <slug> [artifact]`
   * decide — `approve`, `decline`, `resolve-escalation`, `pause`, `resume`, `sync`
   * create a run — `new` stages `runs/<slug>/` on its branch; `arm <slug>` starts it
-  * serve — `up [--repo <path>]` (FleetView + engine over one clone, the blessed
+  * serve — `up [--repo <path>]` (Gatehouse + engine over one clone, the blessed
     topology), `ui` (viewer only), `upgrade` (pull + rebuild the web dist, then let
     the running engine self-supersede)
 * Verify the orchestrator without dispatching: `agentic-orchestrator tick --dry-run`

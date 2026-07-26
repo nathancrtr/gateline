@@ -11,12 +11,12 @@ discipline, control plane); [DEPLOY.md](DEPLOY.md)
 
 ## 1. The problem, stated honestly
 
-The frontend (FleetView) and the v1 orchestrator are separated cleanly in code:
+The frontend (Gatehouse) and the v1 orchestrator are separated cleanly in code:
 derivation is a pure function of committed state, writes are CAS'd, humans and
 machines commit under distinguishable identities. That separation is correct and
 this document does not touch it.
 
-What failed in practice is the **topology**. Within one day of running FleetView
+What failed in practice is the **topology**. Within one day of running Gatehouse
 hosted and the orchestrator on an operator workstation, every seam between the two
 produced an incident:
 
@@ -98,7 +98,7 @@ extends to **push-then-launch**: a dispatch is armed only once its intent commit
 accepted by origin. A rejected push means another authority acted; the response is
 sync + re-derive, and repeated rejection is a host-scoped escalation, never a
 silent retry loop (#103). Sync/push health (last successful push per branch,
-divergence counts) becomes visible state in FleetView.
+divergence counts) becomes visible state in Gatehouse.
 
 ### 3.3 The runner agent — distribute the right thing
 
@@ -121,7 +121,7 @@ polls the control plane; no inbound port on the workstation).
 
 ### 3.4 Liveness as first-class state
 
-FleetView surfaces, per repository: engine heartbeat age, last successful push,
+Gatehouse surfaces, per repository: engine heartbeat age, last successful push,
 and open decisions older than the heartbeat interval. The Airflow banner,
 verbatim: if decisions are landing and no engine has ticked within N minutes, the
 portfolio view says so at the top, loudly (#100).
@@ -135,7 +135,7 @@ there, that would put unreviewed code in charge of live, metered dispatch.
 
 Instead, the branch's own worktree is the trial instance. Two properties make
 this free: the CLI and server run from TypeScript source (`node
-packages/cli/src/main.ts` in any tree *is* that tree's `agentic`), and FleetView
+packages/cli/src/main.ts` in any tree *is* that tree's `agentic`), and Gatehouse
 observes a repository through its git refs, so the observed repo's checked-out
 branch is irrelevant. From the worktree:
 
@@ -145,7 +145,7 @@ npm install && npm run build     # the server serves web/dist — UI changes are
 node packages/cli/src/main.ts ui --repo <path-to-repo> --port 4312
 ```
 
-That is a self-contained second FleetView on a side port; the blessed instance
+That is a self-contained second Gatehouse on a side port; the blessed instance
 is untouched and ctrl-C removes the trial. Rules of the road:
 
 - **`ui`, never `up`, from a trial tree.** `up` starts the dispatch engine;

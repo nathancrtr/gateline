@@ -219,7 +219,7 @@ tasks:
         status: review-approved,
         review_rounds: 2
       },
-    { id: 03-generic-read-path, status: in-review, review_rounds: 2 },
+    { id: 03-generic-read-path, status: review-approved, review_rounds: 2 },
     { id: 04-docs-landed, status: review-approved, review_rounds: 2 }
   ]
 escalations: []

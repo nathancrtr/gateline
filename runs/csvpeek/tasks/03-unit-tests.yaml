@@ -77,3 +77,75 @@ notes: |
   comma/semicolon/empty delimiter tests but no dedicated pathological-input
   test (e.g. '"') was added since it's outside this task's minimum-behaviors
   list and belongs to task 04 if the Reviewer wants CLI-level coverage.
+
+  Round 2 (implementer): Addressed all five review-03.md findings in
+  apps/csvpeek/test_core.py (all fixed, none rebutted). File contact surface
+  unchanged (test_core.py only); csvpeek.py NOT modified — confirmed
+  byte-identical before/after (see mutation-verification method below).
+
+  - F1 (blocking, fixed): added test_delimiter_pathological_quote_input_
+    never_raises, exercising the amended ADR-11 detect_delimiter contract
+    directly on '"' and '"""': asserts detect_delimiter's guarantee
+    (csv.reader([], delimiter=<returned>) constructs without raising) and
+    that parse_csv doesn't raise on those inputs either. Interpreter-
+    portable by construction (no hardcoded expected delimiter character, per
+    ADR-11's own rejection of a static criterion).
+  - F2 (blocking, fixed): test_common_bounded_to_at_most_five_of_seven_
+    distinct now asserts the full expected 5-pair list
+    [("a",1),("b",1),("c",1),("d",1),("e",1)] instead of len(result) <= 5,
+    so a TOP_N/truncation-bound mutant is caught.
+  - F3 (minor, fixed): added test_ragged_short_row_kept_and_included_in_
+    parse_csv_row_count — parse_csv("a,b,c\nx,y\n") must yield rows ==
+    [["x","y"]] (len 1), pinning that a ragged row is kept (not dropped) at
+    the parse_csv level, independent of column_values' padding.
+  - F4 (minor, fixed): the finding's failure scenario names THREE functions
+    as vulnerable to a strip()-based blank rule — count_missing, infer_type,
+    and top_values (my first pass covered only the first and third; the
+    coordinator flagged the infer_type gap and I've corrected it here).
+    Added test_missing_whitespace_only_value_is_not_blank (count_missing([
+    " "]) == 0), test_type_whitespace_only_value_is_not_blank_and_forces_
+    string (infer_type(["1", " "]) == "string" — a lone [" "] can't
+    discriminate the exact-blank rule from a strip()-based one since both
+    reduce to an empty non-blank set and return "string" via the same
+    early-return path, so a non-blank numeric value ("1") must be paired
+    with the whitespace value to make the two rules diverge), and
+    test_common_whitespace_only_value_is_not_treated_as_blank (top_values([
+    " "," ","x"]) == [(" ",2),("x",1)]). All three functions the finding
+    named are now covered.
+  - F5 (minor, fixed): added test_common_ties_order_lexicographically_even_
+    for_numeric_looking_values — top_values(["10","2","10","2"]) ==
+    [("10",2),("2",2)], pinning the lexicographic (not numeric) tie-break
+    per the plan's top_values contract / ADR-6.
+
+  Verification method: for F1/F2/F3/F5 and all three F4 functions
+  (count_missing, infer_type, top_values), I temporarily applied the exact
+  mutation the Reviewer described (or the closest equivalent named in the
+  finding) directly to csvpeek.py, reran the corresponding new test to
+  confirm it fails against the mutant, then restored csvpeek.py from a
+  pre-mutation copy and diffed byte-for-byte (`diff csvpeek.py <backup>`
+  reported no differences) before removing the backup. Each mutant was
+  reverted before starting the next, one at a time. For infer_type
+  specifically: mutated `non_blank = [v for v in values if v != ""]` to
+  `v.strip() != ""` in infer_type, reran
+  test_type_whitespace_only_value_is_not_blank_and_forces_string, confirmed
+  it FAILED (`infer_type(["1", " "]) == "integer"`, not the expected
+  "string"), then restored and re-diffed byte-identical. `git diff --stat`
+  (run from repo root) after all rounds shows only apps/csvpeek/test_core.py
+  and this task file changed — csvpeek.py absent from the diff, confirming
+  it is unmodified relative to the commit this round started from.
+
+  Test run (Python 3.14.6 / pytest 9.1.1, from apps/csvpeek/):
+  `pytest test_core.py -v` -> 30 passed in 0.01s (24 round-1 tests + 6 new:
+  test_delimiter_pathological_quote_input_never_raises,
+  test_type_whitespace_only_value_is_not_blank_and_forces_string,
+  test_common_ties_order_lexicographically_even_for_numeric_looking_values,
+  test_common_whitespace_only_value_is_not_treated_as_blank,
+  test_missing_whitespace_only_value_is_not_blank,
+  test_ragged_short_row_kept_and_included_in_parse_csv_row_count).
+  `pytest test_core.py --collect-only` -> 30 tests collected; all six
+  AC11.2 substrings (row_count, columns, delimiter, type, missing, common)
+  still present among collected names.
+
+  No rebuttals — all five findings were addressable within the test-only
+  file contact surface without touching csvpeek.py, so all were fixed
+  rather than rebutted.

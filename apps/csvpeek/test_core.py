@@ -63,6 +63,24 @@ def test_delimiter_empty_text_falls_back_to_comma():
     assert csvpeek.detect_delimiter("") == ","
 
 
+def test_delimiter_pathological_quote_input_never_raises():
+    """ADR-11 — Sniffer can return a delimiter (e.g. '"', which collides with
+    csv's default quotechar) that csv.reader refuses to construct with on
+    some interpreters. detect_delimiter's amended guarantee: the returned
+    delimiter is always accepted by csv.reader construction on the running
+    interpreter, and neither detect_delimiter nor parse_csv ever raises —
+    interpreter-portable, so this must not hardcode the returned character.
+    Deleting the ADR-11 probe/fallback step (or restoring the pre-amendment
+    'follows Sniffer as-is' behavior) makes this raise ValueError on
+    interpreters (e.g. 3.14.6) that reject delimiter == quotechar."""
+    import csv
+
+    for text in ('"', '"""'):
+        delimiter = csvpeek.detect_delimiter(text)
+        csv.reader([], delimiter=delimiter)  # the guarantee itself
+        csvpeek.parse_csv(text)  # must not raise ValueError either
+
+
 # --- type (R5) -----------------------------------------------------------------
 
 def test_type_all_integer_values_reports_integer():
@@ -85,6 +103,18 @@ def test_type_mixed_numeric_and_non_numeric_reports_string():
     """AC5.3 — a mixed set of one non-numeric and numeric values reports
     'string' (any unparseable value forces string)."""
     assert csvpeek.infer_type(["1", "a", "3"]) == "string"
+
+
+def test_type_whitespace_only_value_is_not_blank_and_forces_string():
+    """spec Assumption — blank means exactly '', not whitespace-only, so a
+    whitespace-only value is judged as a real (non-numeric) value, not
+    excluded from the type check like a blank would be. infer_type(["1", " "])
+    forces 'string' because ' ' fails int()/float() parsing. A single-space-
+    only input (e.g. infer_type([" "])) can't discriminate the exact-blank
+    rule from a strip()-based one — both empty-non-blank-set paths return
+    'string' — so a non-blank numeric value must be paired with it, per
+    review-03.md F4."""
+    assert csvpeek.infer_type(["1", " "]) == "string"
 
 
 def test_type_blank_values_excluded_still_reports_integer():
@@ -117,6 +147,13 @@ def test_missing_no_blank_entries_counts_zero():
     assert csvpeek.count_missing(["1", "2", "3"]) == 0
 
 
+def test_missing_whitespace_only_value_is_not_blank():
+    """spec Assumption — blank means exactly '', not whitespace-only (no
+    .strip()); a single space is not counted as missing."""
+    assert csvpeek.count_missing([" "]) == 0
+    assert csvpeek.count_missing([" ", "", "1"]) == 1
+
+
 # --- common (R7) ------------------------------------------------------------------
 
 def test_common_ranks_by_descending_count():
@@ -130,10 +167,13 @@ def test_common_ranks_by_descending_count():
 
 def test_common_bounded_to_at_most_five_of_seven_distinct():
     """AC7.2 — more than 5 distinct values lists at most 5 pairs (bounded
-    top-N, not a full histogram)."""
+    top-N, not a full histogram). Pinned to the exact expected 5-pair list
+    (not just its length) so a truncation-bound mutant (e.g. TOP_N=4) is
+    caught: all seven values tie at count 1, so the surviving five are the
+    five lexicographically-smallest ('a'..'e'), in ascending order."""
     values = ["a", "b", "c", "d", "e", "f", "g"]
     result = csvpeek.top_values(values)
-    assert len(result) <= 5
+    assert result == [("a", 1), ("b", 1), ("c", 1), ("d", 1), ("e", 1)]
 
 
 def test_common_ties_order_ascending_by_value_and_are_reproducible():
@@ -146,7 +186,36 @@ def test_common_ties_order_ascending_by_value_and_are_reproducible():
     assert csvpeek.top_values(values) == expected
 
 
+def test_common_ties_order_lexicographically_even_for_numeric_looking_values():
+    """plan top_values contract / ADR-6 — the tie-break is lexicographic on
+    the string, even when the values look numeric: '10' sorts before '2'
+    because '1' < '2' as a character, not because 10 < 2 numerically. A
+    numeric-aware tie key would instead order '2' before '10'."""
+    values = ["10", "2", "10", "2"]
+    assert csvpeek.top_values(values) == [("10", 2), ("2", 2)]
+
+
+def test_common_whitespace_only_value_is_not_treated_as_blank():
+    """spec Assumption — blank means exactly '', not whitespace-only,
+    everywhere the blank rule applies, including top_values: a single space
+    is ranked as its own value rather than silently excluded as blank."""
+    result = csvpeek.top_values([" ", " ", "x"])
+    assert result == [(" ", 2), ("x", 1)]
+
+
 # --- ragged (R8) -------------------------------------------------------------------
+
+def test_ragged_short_row_kept_and_included_in_parse_csv_row_count():
+    """AC8.1 — parse_csv keeps a ragged row (fewer fields than the header)
+    as its own row rather than dropping it, so that row is included in the
+    row count; padding to the header length is column_values' job, not
+    parse_csv's (plan parse_csv contract: 'kept exactly as csv.reader
+    yields them')."""
+    header, rows = csvpeek.parse_csv("a,b,c\nx,y\n")
+    assert header == ["a", "b", "c"]
+    assert len(rows) == 1
+    assert rows == [["x", "y"]]
+
 
 def test_ragged_short_row_padded_with_blank():
     """AC8.1 semantics — a row with fewer fields than the header is padded

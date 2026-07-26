@@ -12,7 +12,7 @@ intake:
   staged_by: "Nathan Carter"
 budget:
   cost_limit_usd: 50
-  cost_spent_usd: 21.51
+  cost_spent_usd: 22.59
   ledger:
     [
       {
@@ -110,9 +110,9 @@ budget:
           round: 1,
           adapter: claude-code,
           model: anthropic/claude-sonnet-5,
-          tokens_in: null,
-          tokens_out: null,
-          cost_usd: null
+          tokens_in: 16,
+          tokens_out: 2288,
+          cost_usd: 1.0722839999999996
         },
       {
           at: 2026-07-26T22:17:36.906Z,
@@ -160,7 +160,7 @@ tasks:
   [
     { id: 01-core-recovery, status: review-approved, review_rounds: 2 },
     { id: 02-fixture-run, status: review-approved, review_rounds: 1 },
-    { id: 03-server-surface, status: dispatched, review_rounds: 0 },
+    { id: 03-server-surface, status: in-review, review_rounds: 0 },
     { id: 04-web-readonly, status: dispatched, review_rounds: 0 },
     { id: 05-cli-inbox, status: dispatched, review_rounds: 0 }
   ]

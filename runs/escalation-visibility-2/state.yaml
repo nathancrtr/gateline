@@ -58,6 +58,28 @@ budget:
           tokens_in: 21,
           tokens_out: 6298,
           cost_usd: 1.7037888999999997
+        },
+      {
+          at: 2026-07-26T21:45:51.150Z,
+          role: reviewer,
+          task: 01-core-recovery,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
+        },
+      {
+          at: 2026-07-26T21:45:51.150Z,
+          role: reviewer,
+          task: 02-fixture-run,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:

@@ -5,7 +5,7 @@ paused_reason: null
 
 budget:
   cost_limit_usd: 30
-  cost_spent_usd: 12.71
+  cost_spent_usd: 15.08
   ledger:
     [
       {
@@ -70,9 +70,9 @@ budget:
           round: null,
           adapter: claude-code,
           model: anthropic/claude-fable-5,
-          tokens_in: null,
-          tokens_out: null,
-          cost_usd: null
+          tokens_in: 6,
+          tokens_out: 2858,
+          cost_usd: 2.371669
         }
     ] # appended by the v1 orchestrator's dispatch seam
 

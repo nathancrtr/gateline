@@ -81,3 +81,34 @@ depends_on: [01-contracts-split]
 status: pending
 
 notes: |
+  Implementer (round 1): baseline `npm install` + `npm test` (394 passed, 1
+  skipped) + `npm run typecheck` in frontend/ confirmed green before any edit,
+  per plan Risks. Implemented exactly the five interface contracts from
+  plan.md "Interface contracts": state-contract.ts (deriveStateContract's
+  unparseable-state.yaml case falls straight to sdlc without consulting
+  state-core.yaml, matching plan.md's classification table row 4 read
+  literally); schema.ts (GenericRunState, StateParseResult.generic, parseRunState's
+  optional StateContract param defaulting to SDLC_STATE_CONTRACT, generic
+  schema built per-call from the contract with z.record for gates —
+  confirmed it rejects non-mapping gates values and z.string() rejects a
+  missing `run`); validate.ts (BUILTIN_STATE_KEYS, state.yaml branch mirrors
+  work-item.yaml's try/parse/catch exactly, with contracts/state.yaml as
+  primary source and contracts/state-core.yaml consulted only when
+  state.yaml itself is absent, not when it's unparseable — same asymmetry as
+  item 1's classification table). record/index.ts re-exports
+  state-contract.ts; src/index.ts already wildcard-re-exports record/index.ts
+  so no edit was needed there (left untouched). New
+  test/state-contract.test.ts (16 tests): classification table rows including
+  this repo's own contracts/state.yaml -> sdlc and the plan's fixture
+  core-only template -> generic; generic accept (declared gates, no branch)
+  and reject (missing run, non-mapping gates, branch-required) paths; default
+  SDLC path unchanged; validateArtifact required-keys resolution off this
+  repo's own template plus a sweep over all seven runs/*/state.yaml (matches
+  the plan's audited eight-key set). `npm install` regenerated
+  frontend/package-lock.json with npm-version-only metadata churn (dropped
+  `libc` arrays, added a stray `peer: true`) unrelated to any dependency
+  change; reverted via `git checkout` to keep the diff scoped to the task's
+  file_contact_surface. Final: `npm test` 410 passed/1 skipped (394 baseline
+  + 16 new, zero expected-value edits to readiness.test.ts, profiles.test.ts,
+  real-repo.test.ts) and `npm run typecheck` clean, no edits outside
+  frontend/packages/core.

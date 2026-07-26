@@ -61,6 +61,10 @@ export const BUILTIN_WORK_ITEM_KEYS = [
   'notes',
 ]
 
+/** Mirrors contracts/state.yaml's SDLC-extension shape (the fallback when
+ * neither contracts/state.yaml nor contracts/state-core.yaml is readable). */
+export const BUILTIN_STATE_KEYS = ['run', 'branch', 'phase', 'paused_reason', 'budget', 'gates', 'tasks', 'escalations']
+
 /** Map a run-relative artifact path to its contract template filename. */
 export function contractFor(path: string): string | null {
   const base = path.split('/').pop()!
@@ -115,8 +119,44 @@ export async function validateArtifact(
   }
 
   if (contract === 'state.yaml') {
-    // state.yaml is validated by schema.ts (parseRunState); here it's presence-only.
-    return { contract, ok: true, missing: [], notes }
+    // Required top-level keys come from the repo's own template — the same
+    // work-item.yaml mechanism above — falling back from contracts/state.yaml
+    // to contracts/state-core.yaml to the built-in SDLC key set. Detailed
+    // shape (gate entries, phase vocabulary) is schema.ts's job
+    // (parseRunState); this is the AC4.3 presence/required-key check.
+    let required: string[] = BUILTIN_STATE_KEYS
+    const template = await templates.read(contract)
+    if (template) {
+      try {
+        const parsed = parseYaml(template)
+        if (parsed && typeof parsed === 'object') required = Object.keys(parsed)
+      } catch {
+        notes.push('contract template unparseable; used built-in keys')
+      }
+    } else {
+      const coreTemplate = await templates.read('state-core.yaml')
+      if (coreTemplate) {
+        try {
+          const parsed = parseYaml(coreTemplate)
+          if (parsed && typeof parsed === 'object') required = Object.keys(parsed)
+        } catch {
+          notes.push('contract template unparseable; used built-in keys')
+        }
+      } else {
+        notes.push('no contracts/ in repo; used built-in keys')
+      }
+    }
+    let keys: string[] = []
+    try {
+      const parsed = parseYaml(content)
+      if (parsed && typeof parsed === 'object') keys = Object.keys(parsed)
+      else return { contract, ok: false, missing: required, notes }
+    } catch (e) {
+      return { contract, ok: false, missing: [], notes: [...notes, `not valid YAML: ${(e as Error).message}`] }
+    }
+    const have = new Set(keys)
+    const missing = required.filter((k) => !have.has(k))
+    return { contract, ok: missing.length === 0, missing, notes }
   }
 
   // Markdown contracts: required H2s from the repo's template, else built-in.

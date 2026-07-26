@@ -4,6 +4,7 @@
 // visible, never guessed around (the contracts' bounce rule applied to us).
 import { parse as parseYaml, type Document } from 'yaml'
 import { z } from 'zod'
+import { SDLC_STATE_CONTRACT, type StateContract } from './state-contract.ts'
 
 export type StateDocMutation = (doc: Document) => void
 
@@ -153,19 +154,78 @@ export type TaskEntry = z.infer<typeof taskEntrySchema>
 export type Escalation = z.infer<typeof escalationSchema>
 export type RunState = z.infer<typeof runStateSchema>
 
+/**
+ * A run-state document under a `generic` contract (record/state-contract.ts):
+ * a host's own gate names and free-form phase vocabulary, none of the SDLC
+ * shape (`branch`, `budget`, `tasks`, the seven-value phase ladder).
+ */
+export interface GenericRunState {
+  run: string
+  /** Host-declared label; no vocabulary check. */
+  phase: string | null
+  /** Non-null = paused (the core pause signal). */
+  paused_reason: string | null
+  gates: Record<string, GateEntry>
+  /** Declared gate ids (contract order) first, then undeclared ids present in the file. */
+  gateOrder: string[]
+  escalations: Escalation[]
+}
+
+const genericStateSchema = (contract: Extract<StateContract, { kind: 'generic' }>) =>
+  z
+    .object({
+      run: z.string(),
+      branch: z.string().nullish(),
+      phase: yamlScalarToString.nullish().transform((v) => v ?? null),
+      paused_reason: yamlScalarToString.nullish().transform((v) => v ?? null),
+      gates: z.record(z.string(), gateEntrySchema),
+      escalations: z.array(escalationSchema).nullish().transform((v) => v ?? []),
+    })
+    .passthrough()
+    .superRefine((s, ctx) => {
+      if (contract.branchRequired && !s.branch)
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['branch'], message: "required by the target repo's state contract" })
+    })
+
 export interface StateParseResult {
   state: RunState | null
   /** Human-readable reason the state file is malformed, or null when it parsed. */
   error: string | null
+  /** Set (non-null) only when parsed under a generic contract. Optional for compat. */
+  generic?: GenericRunState | null
 }
 
-export function parseRunState(text: string): StateParseResult {
+function parseGeneric(raw: unknown, contract: Extract<StateContract, { kind: 'generic' }>): StateParseResult {
+  const result = genericStateSchema(contract).safeParse(raw)
+  if (!result.success) {
+    const issues = result.error.issues
+      .slice(0, 5)
+      .map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+      .join('; ')
+    return { state: null, error: `state.yaml does not match the contract: ${issues}`, generic: null }
+  }
+  const s = result.data
+  const declared = new Set(contract.gateIds)
+  const undeclared = Object.keys(s.gates).filter((id) => !declared.has(id))
+  const generic: GenericRunState = {
+    run: s.run,
+    phase: s.phase,
+    paused_reason: s.paused_reason,
+    gates: s.gates,
+    gateOrder: [...contract.gateIds, ...undeclared],
+    escalations: s.escalations,
+  }
+  return { state: null, error: null, generic }
+}
+
+export function parseRunState(text: string, contract: StateContract = SDLC_STATE_CONTRACT): StateParseResult {
   let raw: unknown
   try {
     raw = parseYaml(text)
   } catch (e) {
     return { state: null, error: `state.yaml is not valid YAML: ${(e as Error).message}` }
   }
+  if (contract.kind === 'generic') return parseGeneric(raw, contract)
   const result = runStateSchema.safeParse(raw)
   if (!result.success) {
     const issues = result.error.issues

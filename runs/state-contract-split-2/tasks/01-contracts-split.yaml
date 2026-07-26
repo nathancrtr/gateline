@@ -67,3 +67,25 @@ depends_on: []
 status: pending
 
 notes: |
+  Implementer (round 1): created contracts/state-core.yaml (generic core: run,
+  paused_reason, gates, escalations, plus commented-out intake) and rewrote
+  contracts/state.yaml in place as the SDLC extension. The extension's only
+  content changes vs. the pre-split file are (1) an expanded header declaring
+  it the SDLC extension of state-core.yaml and (2) commenting out the
+  `profile:` line (text preserved verbatim, mirroring `intake:`) per ADR-5 —
+  every other field, writer rule, and provenance note (intake block, budget
+  ledger, G0-G3 gates, tasks mirror, escalations) is byte-identical to before,
+  confirmed by `git diff` against HEAD. In the core doc's run-identity comment
+  I avoided the word "ticket" (used "database key" instead of "ticket key")
+  to stay clear of AC6.2's ticket-system-vocabulary ban even though the
+  original phrasing was only illustrative, not a named system.
+  Verification run: `grep -E 'G0|G1|G2|G3|run/<slug>|budget:' contracts/state-core.yaml`
+  → no matches, exit 1. Both files parsed via `node -e` with the `yaml` npm
+  package (after `npm install` in frontend/, which was not yet installed):
+  state-core.yaml top-level keys = [run, paused_reason, gates, escalations];
+  state.yaml top-level keys = [run, branch, phase, paused_reason, budget,
+  gates, tasks, escalations] — both match exactly. Manual diff review (git
+  show HEAD:contracts/state.yaml vs. working tree) confirms every field is
+  either unchanged in the extension or additionally, redundantly documented
+  in generic form in the core (pause signal, gates entry shape, escalations,
+  writer/provenance grammar); nothing was dropped.

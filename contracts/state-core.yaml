@@ -1,0 +1,72 @@
+# Contract: the generic core of a run's state file — the fields any host's run
+# tracking needs regardless of that host's own process shape. Maintained by
+# whatever writes run state for a host (a human in v0, an orchestrator engine
+# in v1); read by everyone. Lives at runs/<slug>/state.yaml — the single
+# source of truth for a run — validated against the core fields below plus
+# whatever extension a host layers on top (see the pointer at the end of this
+# document; contracts/state.yaml is this repository's own extension).
+#
+# Writers and provenance, restated in gate-name-free form (an extension may
+# restate these rules with its own concrete gate names; nothing here names
+# one):
+#   - A gate entry is written ONLY by the named human approver for that gate.
+#     An absent entry means undecided — never treat absence as approved.
+#   - A host's automation (e.g. an orchestrator) may co-write bookkeeping
+#     fields under a dedicated bot identity — never a person's git config —
+#     so machine bookkeeping and human decisions stay distinguishable in
+#     history.
+#   - Commit messages touching this file are structured for the audit trail
+#     and the metrics reader:
+#       human decision grammar (reserved for humans):
+#         state(<slug>): <gate> approved by <name> [burden: light-correction]
+#         state(<slug>): staged by <name> [client-key: <key>]
+#           (client-key suffix present only when a key was supplied at staging)
+#         state(<slug>): armed by <name>
+#       automation bookkeeping verbs (bot identity only):
+#         state(<slug>): dispatched|bounced|advanced|escalated|paused|metered …
+#
+# An extension may add fields on top of the ones below — a fixed process-phase
+# ladder, a branch-naming convention, a cost-ledger block, a task mirror, and
+# similar host-specific shape all belong in the extension, not here. This
+# document specifies only what is common to any host: run identity, gates,
+# escalations, and the pause signal.
+
+run: example-slug        # run identity; a host may use any string it likes
+                          # (a slug, a database key, an opaque id) as long as
+                          # it is stable for the life of the run.
+
+paused_reason: null       # the pause signal: null = running; a host-declared
+                          # non-null string = paused. The vocabulary of
+                          # reasons is host-declared — this contract does not
+                          # enumerate them.
+
+# intake:                 # optional; present only on runs created via a
+#                          # staging seam. Source-agnostic staging provenance —
+#                          # written once at staging time and never edited
+#                          # after.
+#   source: cli            # what staged the run (e.g. cli, api, web)
+#   ref: "upstream item reference"  # a generic pointer to whatever prompted
+#                          # the run (opaque to this contract — no tracker
+#                          # vocabulary)
+#   url: null               # optional link for humans following the reference
+#   client_key: null        # optional idempotency key supplied by the caller
+#   staged_by: someone      # who (or what) staged the run
+
+gates:                    # a mapping keyed by host-declared gate names; this
+                          # contract fixes no set and no count — an extension
+                          # may fix both. A gate entry is written ONLY by the
+                          # named human approver for that gate; an absent
+                          # entry means undecided, never approved.
+                          # `at` should be an ISO-8601 timestamp (a bare date
+                          # parses, but decision-latency metrics degrade).
+                          # A decided entry may carry `burden` — how much work
+                          # the review took: confirmation | light-correction |
+                          # heavy-correction. A gate frontend records it in the
+                          # act of deciding; hand-recorded decisions should set
+                          # it too.
+  example-gate: {approved: false, by: null, at: null, notes: null}
+
+escalations: []           # append-only: {at, from_role, reason, resolved}
+
+# An extension of this contract lives at contracts/state.yaml in this
+# repository (the SDLC extension); a different host may declare its own.

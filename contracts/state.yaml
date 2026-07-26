@@ -1,5 +1,15 @@
-# Contract: maintained by Orchestrator (human in v0, orchestrator engine in v1);
-# read by everyone. Lives at runs/<slug>/state.yaml — the single source of truth
+# Contract: the SDLC extension of contracts/state-core.yaml — this repository's
+# own layering of a fixed process-phase ladder, a branch-naming convention, a
+# cost-ledger budget block, and a task mirror on top of the core's run
+# identity, gates, escalations, and pause signal. The core document is
+# normative for those core fields (their writer/provenance rules and field
+# shapes); this document restates them so it stays a complete, self-contained
+# example instance — restating is redundancy, not a second source of truth,
+# and nothing the pre-split single file specified has been dropped, only
+# distributed between the two documents.
+#
+# Maintained by Orchestrator (human in v0, orchestrator engine in v1); read by
+# everyone. Lives at runs/<slug>/state.yaml — the single source of truth
 # for a run.
 #
 # Writers and provenance (docs/ORCHESTRATOR.md §4.3, §7):
@@ -21,12 +31,12 @@ run: example-slug
 branch: run/example-slug
 phase: spec               # spec | plan | implement | integrate | release | done | paused
                           # (reduced profiles skip phases: see `profile` below)
-profile: full             # patch | standard | full — which roles run and which
-                          # gates exist (DESIGN.md §4.1). Absent → full, so every
-                          # pre-profile run record keeps its meaning. Recorded at
-                          # init from the intent brief; upgrades mid-run are a
-                          # human edit to a heavier value only — the orchestrator
-                          # escalates on a downgrade rather than guessing.
+# profile: full            # patch | standard | full — which roles run and which
+#                          # gates exist (DESIGN.md §4.1). Absent → full, so every
+#                          # pre-profile run record keeps its meaning. Recorded at
+#                          # init from the intent brief; upgrades mid-run are a
+#                          # human edit to a heavier value only — the orchestrator
+#                          # escalates on a downgrade rather than guessing.
 paused_reason: null       # set when phase=paused: budget-exhausted | round-cap | escalation | gate-declined | staged
                           # (staged: a staged-but-unarmed run; `agentic arm` starts it)
 

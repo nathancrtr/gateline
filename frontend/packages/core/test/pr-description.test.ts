@@ -40,7 +40,17 @@ Rows fit the current schema.
 Import.
 `
 
-const base = { slug: 'csv-export', runDir: 'runs/csv-export', profile: 'standard' as const }
+const base = {
+  slug: 'csv-export',
+  runDir: 'runs/csv-export',
+  profile: 'standard' as const,
+  phase: 'plan',
+  gates: [
+    { id: 'G0', approved: true },
+    { id: 'G1', approved: false },
+    { id: 'G2', approved: false },
+  ],
+}
 
 describe('describeRun', () => {
   it('titles from the intent brief H1 and carries its four sections', () => {
@@ -61,11 +71,54 @@ describe('describeRun', () => {
     expect(d.body).not.toContain('all four sections required')
   })
 
-  it('records profile, gates, and run dir in the footer', () => {
+  it('records profile and run dir in the footer', () => {
     const d = describeRun({ ...base, brief, spec: null })
 
-    expect(d.body).toContain('Run `csv-export` · profile `standard` · gates G0 G1 G2 · record `runs/csv-export/`')
+    expect(d.body).toContain('Run `csv-export` · profile `standard` · record `runs/csv-export/`')
     expect(d.body).toContain('`runs/csv-export/intent-brief.md`')
+  })
+
+  it('leads with an in-flight warning carrying phase and the live gate ledger', () => {
+    const d = describeRun({ ...base, brief, spec: null })
+
+    expect(d.body).toContain('> ⚠️ **Run in flight — do not merge.**')
+    expect(d.body).toContain('> phase `plan` · gates G0 ✓ G1 · G2 ·')
+    expect(d.body).toContain('leaves the run with no review surface')
+  })
+
+  it('keeps the banner as one unbroken blockquote', () => {
+    const lines = describeRun({ ...base, brief, spec: null }).body.split('\n')
+    const first = lines.findIndex((l) => l.startsWith('>'))
+    const last = lines.findLastIndex((l) => l.startsWith('>'))
+
+    expect(first).toBeGreaterThan(-1)
+    expect(lines.slice(first, last + 1).every((l) => l.startsWith('>'))).toBe(true)
+  })
+
+  it('congratulates rather than warns once the run is done', () => {
+    const d = describeRun({ ...base, phase: 'done', gates: base.gates.map((g) => ({ ...g, approved: true })), brief, spec: null })
+
+    expect(d.body).toContain('> **Run complete.** All gates are signed and the record is final.')
+    expect(d.body).toContain('> phase `done` · gates G0 ✓ G1 ✓ G2 ✓')
+    expect(d.body).not.toContain('do not merge')
+  })
+
+  it('shows only the gates the profile declares, not the parser-normalized four', () => {
+    // parseRunState pads the ledger to G0-G3 so consumers keep a total record;
+    // a standard run has no G3, and the banner must not imply it is pending.
+    const padded = [...base.gates, { id: 'G3', approved: false }]
+
+    expect(describeRun({ ...base, gates: padded, brief, spec: null }).body).toContain('gates G0 ✓ G1 · G2 ·')
+    expect(describeRun({ ...base, gates: padded, brief, spec: null }).body).not.toContain('G3')
+    expect(describeRun({ ...base, profile: 'full', gates: padded, brief, spec: null }).body).toContain('gates G0 ✓ G1 · G2 · G3 ·')
+  })
+
+  it('thins the banner rather than inventing state when the record is unreadable', () => {
+    const d = describeRun({ ...base, phase: null, gates: [], brief, spec: null })
+
+    expect(d.body).toContain('> ⚠️ **Run in flight — do not merge.**')
+    expect(d.body).not.toContain('phase')
+    expect(d.body).not.toContain('gates')
   })
 
   it('prefers the spec once one exists, listing its requirement names', () => {

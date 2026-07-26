@@ -38,31 +38,43 @@ const defaultExec: ExecLike = (cmd, args, opts) =>
  * state.yaml, or a malformed artifact degrades to a thinner description — at
  * worst today's `run/<slug>` title — and never to a failure.
  */
-/** The run's profile, read leniently: a state.yaml too broken to validate
- * still names its profile, and a description is no place to lose that. */
-function readProfile(raw: string | null): Profile | null {
-  if (raw === null) return null
-  const validated = parseRunState(raw).state?.profile
-  if (validated) return validated
-  const m = /^profile:\s*([a-z]+)/m.exec(raw)
-  return m && (PROFILES as readonly string[]).includes(m[1]!) ? (m[1] as Profile) : null
+/** Profile, phase, and the gate ledger, read leniently: a state.yaml too broken
+ * to validate still names its profile and phase, and a description is no place
+ * to lose them. Anything unreadable simply thins the banner. */
+function readStateBits(raw: string | null): { profile: Profile | null; phase: string | null; gates: { id: string; approved: boolean }[] } {
+  if (raw === null) return { profile: null, phase: null, gates: [] }
+  const state = parseRunState(raw).state
+  if (state) {
+    return {
+      profile: state.profile,
+      phase: state.phase,
+      gates: Object.entries(state.gates).map(([id, gate]) => ({ id, approved: gate.approved })),
+    }
+  }
+  const profileMatch = /^profile:\s*([a-z]+)/m.exec(raw)
+  const phaseMatch = /^phase:\s*([a-z-]+)/m.exec(raw)
+  return {
+    profile: profileMatch && (PROFILES as readonly string[]).includes(profileMatch[1]!) ? (profileMatch[1] as Profile) : null,
+    phase: phaseMatch ? phaseMatch[1]! : null,
+    gates: [],
+  }
 }
 
 async function describeFromBranch(git: Git, rev: string, slug: string): Promise<RunDescription> {
   let runDir = `runs/${slug}`
-  let profile: Profile | null = null
+  let bits = readStateBits(null)
   let brief: string | null = null
   let spec: string | null = null
   try {
     const roots = await resolveFrameworkRoots(git, rev)
     runDir = `${roots.runs}/${slug}`
-    profile = readProfile(await git.show(rev, `${runDir}/state.yaml`))
+    bits = readStateBits(await git.show(rev, `${runDir}/state.yaml`))
     brief = await git.show(rev, `${runDir}/intent-brief.md`)
     spec = await git.show(rev, `${runDir}/spec.md`)
   } catch {
     // Fall through with whatever was read before the failure.
   }
-  return describeRun({ slug, runDir, profile, brief, spec })
+  return describeRun({ slug, runDir, ...bits, brief, spec })
 }
 
 interface ListedPr {
@@ -73,10 +85,10 @@ interface ListedPr {
 }
 
 /**
- * Refreshes an existing PR's title/body when the framework still owns them
- * (AC: the `<!-- agentic:draft-pr -->` marker is present) and the newest
- * artifacts would produce different text. A human-edited body, a closed or
- * merged PR, and an already-current description are all left alone.
+ * Refreshes an open PR's title/body when the framework still owns them (the
+ * `<!-- agentic:draft-pr -->` marker is present) and the newest artifacts would
+ * produce different text. A human-edited body and an already-current
+ * description are both left alone.
  */
 async function refreshPr(
   exec: ExecLike,
@@ -85,7 +97,6 @@ async function refreshPr(
   desc: RunDescription,
 ): Promise<string> {
   if (!isGeneratedBody(pr.body)) return 'description is human-authored — left untouched'
-  if (pr.state !== 'OPEN') return `PR is ${pr.state.toLowerCase()} — description left untouched`
   if (pr.title === desc.title && pr.body === desc.body) return `description already current (from ${desc.from})`
   try {
     await exec('gh', ['pr', 'edit', String(pr.number), '--title', desc.title, '--body', desc.body], {
@@ -99,13 +110,19 @@ async function refreshPr(
 }
 
 /**
- * Ensures a draft PR exists for `branch` (the run `slug`'s branch), opening
- * one if none exists yet, and keeps its description current while the
+ * Ensures an *open* draft PR exists for `branch` (the run `slug`'s branch),
+ * opening one if there is none, and keeps its description current while the
  * framework still owns it. Steps: no `remote.origin.url` configured ->
  * skipped; `branch` isn't on origin yet -> skipped ("branch not pushed");
- * `gh pr list --head <branch> --state all --limit 1` finds any PR (any state)
- * -> exists, refreshing its generated title/body (#202) if the run's artifacts
- * have moved on; else `gh pr create --draft ...` -> created.
+ * `gh pr list --head <branch> --state all` finds an open PR -> exists,
+ * refreshing its generated title/body (#202) if the run's artifacts have moved
+ * on; else `gh pr create --draft ...` -> created.
+ *
+ * A merged or closed PR is absent for this purpose (#207): the branch is still
+ * live and still accruing commits, so a run that outlives its PR gets a
+ * replacement rather than being left with no review surface. The listing still
+ * asks for every state, because that is how the replacement note can name the
+ * dead PR it is standing in for.
  */
 export async function ensureDraftPr(
   dir: string,
@@ -128,7 +145,7 @@ export async function ensureDraftPr(
     try {
       listOut = await exec(
         'gh',
-        ['pr', 'list', '--head', branch, '--state', 'all', '--limit', '1', '--json', 'number,title,body,state'],
+        ['pr', 'list', '--head', branch, '--state', 'all', '--limit', '20', '--json', 'number,title,body,state'],
         { cwd: dir, maxBuffer: 16 * 1024 * 1024 },
       )
     } catch (e) {
@@ -144,12 +161,16 @@ export async function ensureDraftPr(
 
     const desc = await describeFromBranch(git, `refs/remotes/origin/${branch}`, slug)
 
-    if (prs.length > 0) {
-      const pr = prs[0]!
-      const refreshed = await refreshPr(exec, dir, pr, desc)
-      return { status: 'exists', note: `PR #${pr.number} already exists for ${branch} — ${refreshed}` }
+    const open = prs.find((pr) => pr.state === 'OPEN')
+    if (open) {
+      const refreshed = await refreshPr(exec, dir, open, desc)
+      return { status: 'exists', note: `PR #${open.number} already exists for ${branch} — ${refreshed}` }
     }
 
+    // Every PR for this branch is merged or closed, so the run has no review
+    // surface (#207). Name the most recent dead one in the note — a
+    // replacement appearing without explanation is its own confusion.
+    const dead = prs[0]
     const base = await git.defaultBranch()
     try {
       await exec(
@@ -160,7 +181,11 @@ export async function ensureDraftPr(
     } catch (e) {
       return { status: 'skipped', note: `gh pr create failed: ${e instanceof Error ? e.message : String(e)}` }
     }
-    return { status: 'created', note: `opened a draft PR for ${branch} against ${base} (described from ${desc.from})` }
+    const standingIn = dead ? ` — replaces #${dead.number}, which is ${dead.state.toLowerCase()}` : ''
+    return {
+      status: 'created',
+      note: `opened a draft PR for ${branch} against ${base} (described from ${desc.from})${standingIn}`,
+    }
   } catch (e) {
     // Belt-and-braces: this function must never throw (AC8.2).
     return { status: 'skipped', note: `unexpected error ensuring PR: ${e instanceof Error ? e.message : String(e)}` }

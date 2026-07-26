@@ -73,6 +73,17 @@ budget:
           tokens_in: 6,
           tokens_out: 2858,
           cost_usd: 2.371669
+        },
+      {
+          at: 2026-07-26T23:14:12.700Z,
+          role: reviewer,
+          task: 01-core-logic,
+          round: 2,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ] # appended by the v1 orchestrator's dispatch seam
 

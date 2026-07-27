@@ -346,17 +346,32 @@ export class LocalGitSource implements RunSource {
 
     // If the branch is checked out somewhere, an update-ref behind its back
     // would leave that checkout silently diverged. Commit through it instead
-    // (clean), or refuse (dirty).
+    // (clean), or refuse (dirty) — unless the dirt is provably this engine's
+    // own abandoned write (plan "Interface contracts": recovery predicate).
     const worktree = (await this.git.worktrees()).find((w) => w.branch === branchRef)
     if (worktree) {
       const wtGit = new Git(worktree.path)
+      const intentRef = `refs/agentic/wip/${ref.branch}`
       const status = await wtGit.run(['status', '--porcelain', '--', statePath])
-      if (status.trim() !== '')
-        return {
-          ok: false,
-          reason: 'dirty-worktree',
-          message: `${statePath} has uncommitted changes in the checkout at ${worktree.path} — commit or discard them first`,
-        }
+      if (status.trim() !== '') {
+        if (!(await this.recoverIntent(wtGit, intentRef, tip, statePath, worktree.path)))
+          return {
+            ok: false,
+            reason: 'dirty-worktree',
+            message: `${statePath} has uncommitted changes in the checkout at ${worktree.path} — commit or discard them first`,
+          }
+      }
+
+      // Write-ahead intent: an ordinary commit object, held by a ref no
+      // branch reaches, recording the tip this write built on and the exact
+      // bytes it meant to write — so a later write killed between here and
+      // the worktree commit can recognize and clean up its own abandoned
+      // work (plan ADR-1).
+      const intentBlob = await this.git.hashObject(updated)
+      const intentTree = await this.git.writeTreeWithBlob(tip, statePath, intentBlob)
+      const intentCommit = await this.git.commitTree(intentTree, tip, message, this.options.identity)
+      await this.git.run(['update-ref', intentRef, intentCommit])
+
       await writeFile(join(worktree.path, statePath), updated, 'utf8')
       // Pathspec commit: records exactly this file, whatever else is staged.
       const id = this.options.identity
@@ -365,6 +380,13 @@ export class LocalGitSource implements RunSource {
           ? { GIT_AUTHOR_NAME: id.name, GIT_AUTHOR_EMAIL: id.email, GIT_COMMITTER_NAME: id.name, GIT_COMMITTER_EMAIL: id.email }
           : undefined,
       })
+      // Best-effort: the commit above landed, so the intent it recorded is
+      // resolved. A missing ref (recovery already deleted it) is fine.
+      try {
+        await this.git.run(['update-ref', '-d', intentRef])
+      } catch {
+        // swallowed — see above
+      }
       const oid = await wtGit.revParse('HEAD')
       // push follows every decision commit, whichever write path carried it —
       // a hosted source that only pushed the plumbing path would strand the
@@ -395,6 +417,52 @@ export class LocalGitSource implements RunSource {
       }
     }
     return { ok: true, commit }
+  }
+
+  /**
+   * Recovery predicate (plan "Interface contracts"): dirt found on a
+   * checked-out branch's state file is provably this engine's own abandoned
+   * write — and so safe to discard — only when every condition holds:
+   *
+   * 1. the dirt is a worktree-only modification of exactly the state file
+   *    (nothing staged, untracked, or additional);
+   * 2. `refs/agentic/wip/<branch>` resolves to a commit whose first parent is
+   *    the current branch tip;
+   * 3. the checkout's bytes for the state file equal that commit's copy.
+   *
+   * On a full match, the file is restored from HEAD, the intent ref is
+   * deleted, and this returns true so the caller falls through to the
+   * unchanged clean-path write (ADR-2: recovery discards and re-derives, it
+   * never finishes the abandoned commit). Any miss returns false and leaves
+   * the checkout untouched — the caller refuses with `dirty-worktree` (ADR-3).
+   */
+  private async recoverIntent(wtGit: Git, intentRef: string, tip: string, statePath: string, checkoutPath: string): Promise<boolean> {
+    const status = await wtGit.run(['status', '--porcelain', '--', statePath])
+    const lines = status.split('\n').filter(Boolean)
+    if (lines.length !== 1 || lines[0]!.slice(0, 3) !== ' M ' || lines[0]!.slice(3) !== statePath) return false
+
+    const intentOid = await this.git.revParse(intentRef)
+    if (!intentOid) return false
+    let parent: string
+    try {
+      parent = (await this.git.run(['rev-parse', `${intentOid}^1`])).trim()
+    } catch {
+      return false
+    }
+    if (parent !== tip) return false
+
+    const intentContent = await this.git.show(intentOid, statePath)
+    if (intentContent === null) return false
+    const checkoutContent = await readFile(join(checkoutPath, statePath), 'utf8')
+    if (checkoutContent !== intentContent) return false
+
+    await wtGit.run(['checkout', '--', statePath])
+    try {
+      await this.git.run(['update-ref', '-d', intentRef])
+    } catch {
+      // best-effort — see the lifecycle comment at the call site
+    }
+    return true
   }
 
   /**

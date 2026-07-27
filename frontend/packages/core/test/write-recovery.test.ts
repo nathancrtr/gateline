@@ -179,3 +179,30 @@ describe('writeState kill-window recovery', () => {
     expect(await readFile(statePath, 'utf8')).toBe(abandonedContent) // untouched
   })
 })
+
+describe('surviving refusal message (plan "Interface contracts": Surviving refusal message)', () => {
+  it('AC3.1: an unattributable dirty refusal names the run and prints copy-pasteable remedy commands', async () => {
+    const ref = await refFor('g1-pending')
+    const relStatePath = 'runs/g1-pending/state.yaml'
+    const statePath = join(ctx.repo.dir, relStatePath)
+    const intentRef = `refs/agentic/wip/${ref.branch}`
+    const git = new Git(ctx.repo.dir)
+    await git.run(['checkout', '-q', 'run/g1-pending'])
+
+    const handEdited = (await readFile(statePath, 'utf8')) + '# local scribble\n'
+    await writeFile(statePath, handEdited, 'utf8')
+    expect(await ctx.source.git.revParse(intentRef)).toBeNull() // absent, never written — unattributable
+
+    const { state } = await ctx.source.readState(ref)
+    const planned = planDecision(state!, { action: 'approve', gate: 'G1', burden: 'confirmation' }, who)
+    const result = await ctx.source.writeState(ref, planned.mutate, planned.message)
+    expect(result.ok).toBe(false)
+    expect(result.reason).toBe('dirty-worktree')
+
+    const message = (result as { message: string }).message
+    expect(message).toContain(ref.slug)
+    expect(message).toContain(ctx.repo.dir)
+    expect(message).toContain(relStatePath)
+    expect(message).toMatch(/git -C \S+ .*-- \S+state\.yaml/) // at least one full remedy command
+  })
+})

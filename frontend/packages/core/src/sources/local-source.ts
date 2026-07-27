@@ -358,7 +358,10 @@ export class LocalGitSource implements RunSource {
           return {
             ok: false,
             reason: 'dirty-worktree',
-            message: `${statePath} has uncommitted changes in the checkout at ${worktree.path} — commit or discard them first`,
+            message:
+              `run ${ref.slug} refused: ${statePath} has uncommitted changes in the checkout at ${worktree.path} — ` +
+              `commit or discard them first. Keep: git -C ${worktree.path} commit -m "state(${ref.slug}): manual recovery" -- ${statePath}. ` +
+              `Discard: git -C ${worktree.path} checkout -- ${statePath}`,
           }
       }
 

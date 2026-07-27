@@ -401,7 +401,7 @@ describe('the autonomous loop, one vendor (M2)', () => {
     }
   })
 
-  it('ensures a draft PR once per observed branch tip, re-ensuring after the run commits; a skipped ensure never affects the tick outcome (#118, AC8.1 engine half, AC8.2, #208)', async () => {
+  it('ensures a draft PR once per observed branch tip, dispatching and resting alike, so a run that finishes without dispatching still refreshes its PR; a skipped ensure never affects the tick outcome (#118, AC8.1 engine half, AC8.2, #208, #232)', async () => {
     // engine.ts memoizes ensureDraftPr in a module-level, per-process Map
     // keyed by slug -> branch tip (ADR-5, #208). Every other test in this file
     // also dispatches for slug `toy` against the same statically-imported
@@ -422,35 +422,49 @@ describe('the autonomous loop, one vendor (M2)', () => {
     })
     const ensureLines = () => logs.filter((l) => l.includes('draft PR ensure'))
     try {
-      // First dispatching tick (analyst, D6). makeToyRepo's scratch repo
-      // never configures a remote, so the ensure call degrades to AC8.2's
-      // `skipped` path — never fatal — while the tick still dispatches and
-      // rests normally.
+      // First reconcile: the analyst dispatches (one ensure, at the tip that
+      // derivation observed), commits spec.md, and the following tick rests at
+      // G0 against a tip that has *moved* — which ensures too (#232).
+      // makeToyRepo's scratch repo never configures a remote, so every ensure
+      // degrades to AC8.2's `skipped` path — never fatal — while the ticks
+      // dispatch and rest normally.
       await reconcile(engine) // analyst done, resting at G0
-      expect(ensureLines()).toHaveLength(1)
-      expect(ensureLines()[0]).toMatch(/skipped/)
+      expect(ensureLines()).toHaveLength(2)
+      expect(ensureLines().every((l) => /skipped/.test(l))).toBe(true)
       let state = (await new LocalGitSource('check', dir).readState(toyRef(dir))).state
       expect(state!.phase).toBe('spec')
       expect(state!.gates.G0.by).toBeNull()
 
-      // Second dispatching tick for the same slug (the architect, once G0 is
-      // approved). The branch has moved since the last ensure — spec.md
-      // landed and the gate was signed — so the description gets a chance to
-      // catch up with the artifacts (#208). Before that fix a slug-keyed memo
-      // froze the description here for the life of the process.
+      // Resting on a tip that has not moved costs no `gh` round-trip, however
+      // many times it is reconciled. Now that the ensure runs for every
+      // action, the tip-keyed memo — not the call site — is the whole reason
+      // an idle run stays quiet, so it is worth pinning directly.
+      await engine.tick()
+      await engine.tick()
+      expect(ensureLines()).toHaveLength(2)
+
+      // Approving G0 moves the branch, so the architect's dispatch re-ensures
+      // and its commit gives the description a chance to catch up with the
+      // artifacts (#208). Before that fix a slug-keyed memo froze the
+      // description here for the life of the process.
       await humanDecide(dir, { action: 'approve', gate: 'G0', burden: 'confirmation' })
+      const beforeArchitect = ensureLines().length
       await reconcile(engine)
       state = (await new LocalGitSource('check', dir).readState(toyRef(dir))).state
       expect(state!.phase).toBe('plan') // unaffected by the ensure: architect ran, resting at G1
-      expect(ensureLines()).toHaveLength(2)
-      expect(ensureLines()[1]).toMatch(/skipped/) // still the no-remote path: never fatal
+      expect(ensureLines().length).toBeGreaterThan(beforeArchitect)
+      expect(ensureLines().every((l) => /skipped/.test(l))).toBe(true) // still the no-remote path: never fatal
 
-      // Resting ticks do not ensure at all — the call lives inside the
-      // dispatch branch, so an idle run costs no `gh` round-trip no matter
-      // how many times it is reconciled.
-      await engine.tick()
-      await engine.tick()
-      expect(ensureLines()).toHaveLength(2)
+      // The regression #232 names. A run reaching `done` derives rest (D1)
+      // and will never dispatch again, so a dispatch-only ensure left its PR
+      // wearing "Run in flight — do not merge" forever — on the one PR whose
+      // whole point is now to be merged. The closing write moved the tip, so
+      // this resting tick ensures exactly once.
+      const beforeDone = ensureLines().length
+      await new LocalGitSource('human', dir).writeState(toyRef(dir), (doc) => doc.setIn(['phase'], 'done'), 'state(toy): done')
+      const outcomes = await engine.tick()
+      expect(outcomes.every((o) => o.action.kind === 'rest')).toBe(true)
+      expect(ensureLines()).toHaveLength(beforeDone + 1)
     } finally {
       await removeRunCheckout(dir, 'run/toy')
     }

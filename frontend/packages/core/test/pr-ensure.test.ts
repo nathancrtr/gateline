@@ -38,6 +38,8 @@ function pushRunBranch(branch: string, files: Record<string, string>): void {
 const TOY_STATE = 'run: toy\nbranch: run/toy\nphase: spec\nprofile: standard\ngates:\n  G0: { approved: false, by: null, at: null, notes: null }\ntasks: []\nescalations: []\n'
 const TOY_BRIEF = '# Intent Brief: Toy exporter is unusable at scale\n\n## Problem\nExporting by hand is slow.\n\n## Motivation\nSaves an afternoon.\n\n## Constraints\nOffline.\n\n## Out of scope\nImporting.\n'
 const TOY_RUN = { 'runs/toy/state.yaml': TOY_STATE, 'runs/toy/intent-brief.md': TOY_BRIEF }
+/** The same run after its closing gate — the state a dispatch-only ensure could never observe (#232). */
+const DONE_STATE = 'run: toy\nbranch: run/toy\nphase: done\nprofile: standard\ngates:\n  G0: { approved: true, by: Fixture Operator, at: 2026-07-26T00:00:00Z, notes: null }\ntasks: []\nescalations: []\n'
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'agentic-pr-ensure-'))
@@ -165,6 +167,7 @@ describe('ensureDraftPr descriptions', () => {
       if (args.includes('list')) return JSON.stringify(listed ? [listed] : [])
       if (args.includes('create')) return 'https://github.com/acme/widgets/pull/9\n'
       if (args.includes('edit')) return ''
+      if (args.includes('ready')) return ''
       throw new Error(`unexpected gh invocation: ${args.join(' ')}`)
     })
   }
@@ -304,6 +307,74 @@ describe('ensureDraftPr descriptions', () => {
     expect(result.status).toBe('exists')
     expect(result.note).toContain('refresh failed')
     expect(result.note).toContain('could not edit')
+  })
+
+  it('marks a done run’s draft PR ready for review (#232)', async () => {
+    pushRunBranch('run/toy', { ...TOY_RUN, 'runs/toy/state.yaml': DONE_STATE })
+    const exec = ghStub({ number: 42, title: 'run/toy', body: `${GENERATED_MARKER}\n\nstale`, state: 'OPEN', isDraft: true })
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
+
+    expect(result.status).toBe('exists')
+    expect(result.note).toContain('marked ready for review')
+    const [, args] = exec.mock.calls.find(([, a]) => a.includes('ready'))!
+    expect(args).toEqual(['pr', 'ready', '42'])
+    // The banner it is marked ready alongside must agree with the flag.
+    const [, editArgs] = exec.mock.calls.find(([, a]) => a.includes('edit'))!
+    expect(argOf(editArgs, '--body')).toContain('Run complete.')
+    expect(argOf(editArgs, '--body')).not.toContain('do not merge')
+  })
+
+  it('leaves an in-flight run’s PR in draft', async () => {
+    pushRunBranch('run/toy', TOY_RUN) // phase: spec
+    const exec = ghStub({ number: 42, title: 'run/toy', body: `${GENERATED_MARKER}\n\nstale`, state: 'OPEN', isDraft: true })
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
+
+    expect(result.status).toBe('exists')
+    expect(exec.mock.calls.some(([, args]) => args.includes('ready'))).toBe(false)
+    expect(result.note).not.toContain('ready for review')
+  })
+
+  it('never re-drafts a PR a human already marked ready, even mid-run', async () => {
+    pushRunBranch('run/toy', { ...TOY_RUN, 'runs/toy/state.yaml': DONE_STATE })
+    const exec = ghStub({ number: 42, title: 'run/toy', body: `${GENERATED_MARKER}\n\nstale`, state: 'OPEN', isDraft: false })
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
+
+    expect(result.status).toBe('exists')
+    expect(exec.mock.calls.some(([, args]) => args.includes('ready'))).toBe(false)
+  })
+
+  it('reports a failed ready-marking in the note without throwing (AC8.2 holds for the ready path)', async () => {
+    pushRunBranch('run/toy', { ...TOY_RUN, 'runs/toy/state.yaml': DONE_STATE })
+    const exec = vi.fn(async (_cmd: string, args: string[]) => {
+      if (args.includes('list')) return JSON.stringify([{ number: 42, title: 'run/toy', body: `${GENERATED_MARKER}\n\nstale`, state: 'OPEN', isDraft: true }])
+      if (args.includes('edit')) return ''
+      throw new Error('gh: could not mark pull request ready')
+    })
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
+
+    expect(result.status).toBe('exists')
+    expect(result.note).toContain('ready-for-review failed')
+    expect(result.note).toContain('could not mark')
+    expect(result.note).toContain('description refreshed') // the refresh still stands
+  })
+
+  it('opens a replacement PR ready rather than draft when the run is already done (#232)', async () => {
+    // Nothing dispatches after `done`, so a draft opened here would be a draft
+    // no later ensure ever clears.
+    pushRunBranch('run/toy', { ...TOY_RUN, 'runs/toy/state.yaml': DONE_STATE })
+    const exec = ghStub({ number: 42, title: 'run/toy', body: `${GENERATED_MARKER}\n\nstale`, state: 'MERGED' })
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
+
+    expect(result.status).toBe('created')
+    expect(result.note).toContain('ready-for-review PR')
+    const [, args] = exec.mock.calls.find(([, a]) => a.includes('create'))!
+    expect(args).not.toContain('--draft')
+    expect(exec.mock.calls.some(([, a]) => a.includes('ready'))).toBe(false) // created ready; nothing to flip
   })
 
   it('falls back to the slug title when the branch carries no readable run record', async () => {

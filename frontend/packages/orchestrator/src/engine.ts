@@ -104,11 +104,15 @@ const DEFAULT_MAX_CONCURRENT_DISPATCHES = 2
  * first and starved the second — a description was written once per process
  * and then frozen until restart.
  *
- * What this costs, stated plainly: the ensure site sits after a write that
- * always moves the branch, so in practice every *dispatching* tick re-ensures
- * — one `gh pr list` per dispatch, against a dispatch that is already spending
- * real money on a role. Idle and resting ticks cost nothing, because the
- * ensure lives inside the dispatch branch and never runs on them. Text that
+ * What this costs, stated plainly: the ensure runs for every derived action,
+ * so a dispatching tick re-ensures once — its write always moves the branch —
+ * against a dispatch already spending real money on a role. Resting ticks are
+ * where the tip-keyed memo earns its place: a resting run's tip is static, so
+ * the second tick onward is free, and the cost of covering them is one
+ * `gh pr list` per run per moved tip, plus one per run on the first tick after
+ * a restart. That is the price of #232 — a run's *last* state change is
+ * usually the closing gate approval, which dispatches nothing, so a
+ * dispatch-only ensure could never show a finished run as finished. Text that
  * would be identical still issues no `gh pr edit`, so a re-ensure is a read,
  * not churn on the PR timeline. The memo still collapses repeat executions
  * derived from one observed tip, such as a re-derive after a lost CAS.
@@ -439,9 +443,30 @@ export class Engine {
     }
   }
 
+  /**
+   * Draft-PR ensure (#118, ADR-5, R8), once per observed tip. Guarantees a
+   * reviewable PR exists however the branch was made (hand, CLI, or a future
+   * driver), keeps the generated description current as artifacts land (#202,
+   * #208), and marks it ready for review once the run is done (#232).
+   *
+   * Runs ahead of the action rather than inside the dispatch branch, because
+   * the states worth advertising loudest — done, paused, escalated — are
+   * exactly the ones that dispatch nothing. `tip` is the pre-write tip this
+   * derivation observed, so a run that has committed anything since the last
+   * ensure re-ensures exactly once. Never fatal: `ensureDraftPr` does not
+   * throw, and its result never touches the tick outcome.
+   */
+  private async ensurePr(ref: RunRef, tip: string): Promise<void> {
+    if (ensuredDraftPrs.get(ref.slug) === tip) return
+    ensuredDraftPrs.set(ref.slug, tip)
+    const ensured = await ensureDraftPr(this.cfg.repoDir, ref.branch, ref.slug, { localOnly: this.cfg.localOnly })
+    this.log(`${ref.slug}: draft PR ensure — ${ensured.status}: ${ensured.note}`)
+  }
+
   private async execute(ref: RunRef, tip: string, obs: RunObservation, action: DerivedAction): Promise<TickOutcome> {
     const base: TickOutcome = { slug: ref.slug, action, wrote: false, launched: 0, detail: action.why }
     const cas = { expectedTip: tip }
+    await this.ensurePr(ref, tip)
     switch (action.kind) {
       case 'rest':
         return base
@@ -541,22 +566,6 @@ export class Engine {
         // later accepted push carry the intent commit.
         if (result.pushFailed) this.notePushFailure(ref, result.pushFailed)
         else this.notePushAccepted(ref.branch)
-
-        // Draft-PR ensure (#118, ADR-5, R8): the first dispatch a fresh
-        // process observes for this run is as good a "first arm/dispatch"
-        // moment as any to guarantee a reviewable PR exists, regardless of
-        // how the branch was made (hand, CLI, or a future driver), and every
-        // later dispatch against a moved branch is when its description can
-        // catch up with the artifacts (#202, #208). `tip` is the pre-write
-        // tip this derivation observed, so a run that has committed anything
-        // since the last ensure re-ensures exactly once. Never fatal —
-        // ensureDraftPr itself never throws, and its result never touches the
-        // tick outcome.
-        if (ensuredDraftPrs.get(ref.slug) !== tip) {
-          ensuredDraftPrs.set(ref.slug, tip)
-          const ensured = await ensureDraftPr(this.cfg.repoDir, ref.branch, ref.slug, { localOnly: this.cfg.localOnly })
-          this.log(`${ref.slug}: draft PR ensure — ${ensured.status}: ${ensured.note}`)
-        }
 
         for (const intent of action.dispatches) this.launch(ref, obs, intent, at)
         return { ...base, wrote: true, launched: action.dispatches.length }

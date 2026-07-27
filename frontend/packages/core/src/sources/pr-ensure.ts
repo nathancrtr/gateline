@@ -60,7 +60,7 @@ function readStateBits(raw: string | null): { profile: Profile | null; phase: st
   }
 }
 
-async function describeFromBranch(git: Git, rev: string, slug: string): Promise<RunDescription> {
+async function describeFromBranch(git: Git, rev: string, slug: string): Promise<{ desc: RunDescription; phase: string | null }> {
   let runDir = `runs/${slug}`
   let bits = readStateBits(null)
   let brief: string | null = null
@@ -74,7 +74,7 @@ async function describeFromBranch(git: Git, rev: string, slug: string): Promise<
   } catch {
     // Fall through with whatever was read before the failure.
   }
-  return describeRun({ slug, runDir, ...bits, brief, spec })
+  return { desc: describeRun({ slug, runDir, ...bits, brief, spec }), phase: bits.phase }
 }
 
 interface ListedPr {
@@ -82,6 +82,8 @@ interface ListedPr {
   title: string
   body: string
   state: string
+  /** Absent when an older listing (or a test stub) didn't ask for it — treated as "don't know", so the draft flag is left alone. */
+  isDraft?: boolean
 }
 
 /**
@@ -110,6 +112,29 @@ async function refreshPr(
 }
 
 /**
+ * Reconciles the GitHub draft flag with the run's phase (#232). Draft is how
+ * the framework says "not yet" — and while a run is in flight that is exactly
+ * right (#207). Once the phase is `done` every gate is signed and the record is
+ * final, so the flag has become a lie sitting inches from a banner that reads
+ * "Run complete", and the one state a merger most needs to see is asserted
+ * nowhere they look.
+ *
+ * Only ever draft -> ready. A run cannot leave `done`, and re-drafting someone
+ * else's deliberate "ready" would be the framework overriding a human. Returns
+ * null when there is nothing to say, and never throws: a failed `gh pr ready`
+ * degrades to a note like every other step in the ensure (AC8.2).
+ */
+async function readyPr(exec: ExecLike, dir: string, pr: ListedPr, phase: string | null): Promise<string | null> {
+  if (phase !== 'done' || pr.isDraft !== true) return null
+  try {
+    await exec('gh', ['pr', 'ready', String(pr.number)], { cwd: dir, maxBuffer: 16 * 1024 * 1024 })
+  } catch (e) {
+    return `ready-for-review failed: ${e instanceof Error ? e.message : String(e)}`
+  }
+  return 'marked ready for review — the run is done'
+}
+
+/**
  * Ensures an *open* draft PR exists for `branch` (the run `slug`'s branch),
  * opening one if there is none, and keeps its description current while the
  * framework still owns it. Steps: no `remote.origin.url` configured ->
@@ -123,6 +148,10 @@ async function refreshPr(
  * replacement rather than being left with no review surface. The listing still
  * asks for every state, because that is how the replacement note can name the
  * dead PR it is standing in for.
+ *
+ * "Draft" in the name is the default, not the whole story (#232): the draft
+ * flag tracks the run's phase, so a `done` run's PR is marked ready for review
+ * in the same pass that writes its "Run complete" description.
  */
 export async function ensureDraftPr(
   dir: string,
@@ -145,7 +174,7 @@ export async function ensureDraftPr(
     try {
       listOut = await exec(
         'gh',
-        ['pr', 'list', '--head', branch, '--state', 'all', '--limit', '20', '--json', 'number,title,body,state'],
+        ['pr', 'list', '--head', branch, '--state', 'all', '--limit', '20', '--json', 'number,title,body,state,isDraft'],
         { cwd: dir, maxBuffer: 16 * 1024 * 1024 },
       )
     } catch (e) {
@@ -159,12 +188,15 @@ export async function ensureDraftPr(
       return { status: 'skipped', note: `gh pr list returned unparseable output: ${e instanceof Error ? e.message : String(e)}` }
     }
 
-    const desc = await describeFromBranch(git, `refs/remotes/origin/${branch}`, slug)
+    const { desc, phase } = await describeFromBranch(git, `refs/remotes/origin/${branch}`, slug)
 
     const open = prs.find((pr) => pr.state === 'OPEN')
     if (open) {
-      const refreshed = await refreshPr(exec, dir, open, desc)
-      return { status: 'exists', note: `PR #${open.number} already exists for ${branch} — ${refreshed}` }
+      // Description first, draft flag second: if the ready-marking is what
+      // draws a human to the PR, the text they arrive at should already be the
+      // final one.
+      const notes = [await refreshPr(exec, dir, open, desc), await readyPr(exec, dir, open, phase)]
+      return { status: 'exists', note: `PR #${open.number} already exists for ${branch} — ${notes.filter(Boolean).join('; ')}` }
     }
 
     // Every PR for this branch is merged or closed, so the run has no review
@@ -172,10 +204,14 @@ export async function ensureDraftPr(
     // replacement appearing without explanation is its own confusion.
     const dead = prs[0]
     const base = await git.defaultBranch()
+    // A replacement PR for an already-`done` run opens ready, not draft
+    // (#232): there is no dispatch left to come back and un-draft it, so
+    // opening it draft would strand it in a state nothing ever clears.
+    const draft = phase !== 'done'
     try {
       await exec(
         'gh',
-        ['pr', 'create', '--draft', '--head', branch, '--base', base, '--title', desc.title, '--body', desc.body],
+        ['pr', 'create', ...(draft ? ['--draft'] : []), '--head', branch, '--base', base, '--title', desc.title, '--body', desc.body],
         { cwd: dir, maxBuffer: 16 * 1024 * 1024 },
       )
     } catch (e) {
@@ -184,7 +220,7 @@ export async function ensureDraftPr(
     const standingIn = dead ? ` — replaces #${dead.number}, which is ${dead.state.toLowerCase()}` : ''
     return {
       status: 'created',
-      note: `opened a draft PR for ${branch} against ${base} (described from ${desc.from})${standingIn}`,
+      note: `opened a ${draft ? 'draft' : 'ready-for-review'} PR for ${branch} against ${base} (described from ${desc.from})${standingIn}`,
     }
   } catch (e) {
     // Belt-and-braces: this function must never throw (AC8.2).

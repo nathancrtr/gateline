@@ -104,6 +104,6 @@ gates:
 tasks:
   [
     { id: 01-intent-ref-recovery, status: review-approved, review_rounds: 1 },
-    { id: 02-refusal-message, status: in-review, review_rounds: 1 }
+    { id: 02-refusal-message, status: review-approved, review_rounds: 1 }
   ]
 escalations: []

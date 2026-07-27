@@ -1,0 +1,42 @@
+id: 02-refusal-message
+title: Surviving dirty-worktree refusal names the run and prints the remedy
+requirements: [R3, R5]
+
+scope: |
+  Rewrite the dirty-worktree refusal message in
+  frontend/packages/core/src/sources/local-source.ts (the refusal that task 01's
+  recovery predicate falls through to) per plan.md "Interface contracts →
+  Surviving refusal message". The message must contain:
+  - the run's slug, named as the run (ref.slug is in scope), not only as a path
+    substring
+  - the checkout path (worktree.path) and the state-file path (statePath)
+  - two literal, copy-pasteable commands, each scoped with `git -C
+    <worktree.path>` and the `-- <statePath>` pathspec: a keep remedy
+    (`commit -m "state(<slug>): manual recovery"`) and a discard remedy
+    (`checkout`)
+
+  The reason field stays exactly 'dirty-worktree' — the server maps HTTP 423
+  off that string (frontend/packages/server/src/app.ts:450). Touch nothing else
+  in the file.
+
+  Append a describe block to frontend/packages/core/test/write-recovery.test.ts
+  asserting AC3.1: provoke an unattributable dirty refusal (hand edit, as in
+  write-path.test.ts's dirty case) and assert the returned message contains the
+  slug, the checkout path, the state-file path, and at least one full `git -C
+  ... -- .../state.yaml` command. Assert on those components, not on one exact
+  frozen sentence, so wording stays adjustable without a contract change.
+
+file_contact_surface:
+  - frontend/packages/core/src/sources/local-source.ts
+  - frontend/packages/core/test/write-recovery.test.ts
+
+acceptance_tests:
+  - AC3.1
+  - AC5.1
+  - "npm test and npm run typecheck both pass in frontend/ (Node >= 24)"
+
+depends_on: [01-intent-ref-recovery]
+
+status: pending
+
+notes: |

@@ -1,0 +1,127 @@
+run: writestate-kill-window
+branch: run/writestate-kill-window
+phase: done # staged — not yet armed; `agentic arm writestate-kill-window` starts the run
+paused_reason: null
+profile: standard # patch | standard | full
+intake:
+  # source-agnostic staging provenance; free-form path: nulls + client_key
+  source: null
+  ref: null
+  url: null
+  client_key: null
+  staged_by: "Nathan Carter"
+budget:
+  cost_limit_usd: 50
+  cost_spent_usd: 13.16
+  ledger:
+    [
+      {
+          at: 2026-07-25T20:42:13.126Z,
+          role: analyst,
+          task: null,
+          round: null,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 4,
+          tokens_out: 1574,
+          cost_usd: 1.2285129000000001
+        },
+      {
+          at: 2026-07-26T23:01:10.451Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 8,
+          tokens_out: 1818,
+          cost_usd: 2.5306735
+        },
+      {
+          at: 2026-07-27T01:30:26.659Z,
+          role: implementer,
+          task: 01-intent-ref-recovery,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 58,
+          tokens_out: 8078,
+          cost_usd: 2.5026880999999994
+        },
+      {
+          at: 2026-07-27T01:46:11.781Z,
+          role: reviewer,
+          task: 01-intent-ref-recovery,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 18,
+          tokens_out: 2503,
+          cost_usd: 2.4981482
+        },
+      {
+          at: 2026-07-27T01:53:37.397Z,
+          role: implementer,
+          task: 02-refusal-message,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 24,
+          tokens_out: 3271,
+          cost_usd: 0.8298874500000001
+        },
+      {
+          at: 2026-07-27T01:58:21.579Z,
+          role: reviewer,
+          task: 02-refusal-message,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-fable-5,
+          tokens_in: 22,
+          tokens_out: 3494,
+          cost_usd: 1.7095117000000002
+        },
+      {
+          at: 2026-07-27T03:16:01.848Z,
+          role: verifier,
+          task: null,
+          round: null,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: 15,
+          tokens_out: 4468,
+          cost_usd: 1.8621443999999998
+        }
+    ]
+gates:
+  # exactly PROFILE_GATES[standard] — no others
+  G0:
+    {
+      approved: true,
+      by: Nathan Carter,
+      at: 2026-07-26T23:01:08.917Z,
+      notes: null,
+      burden: confirmation
+    }
+  G1:
+    {
+      approved: true,
+      by: Nathan Carter,
+      at: 2026-07-27T00:57:04.596Z,
+      notes: null,
+      burden: confirmation
+    }
+  G2:
+    {
+      approved: true,
+      by: Nathan Carter,
+      at: 2026-07-27T03:26:44.373Z,
+      notes: null,
+      burden: confirmation
+    }
+tasks:
+  [
+    { id: 01-intent-ref-recovery, status: review-approved, review_rounds: 1 },
+    { id: 02-refusal-message, status: review-approved, review_rounds: 1 }
+  ]
+escalations: []

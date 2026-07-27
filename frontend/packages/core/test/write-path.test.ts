@@ -93,18 +93,20 @@ describe('approve via the write path', () => {
     expect(after.state!.gates.G1.approved).toBe(true)
   })
 
-  it('refuses when the checked-out state file is dirty', async () => {
+  it('refuses when the checked-out state file is dirty (AC2.1: the hand edit is byte-identical on disk afterward)', async () => {
     const ref = await refFor('g1-pending')
     const git = new Git(ctx.repo.dir)
     await git.run(['checkout', '-q', 'run/g1-pending'])
     const statePath = join(ctx.repo.dir, 'runs/g1-pending/state.yaml')
-    await writeFile(statePath, (await readFile(statePath, 'utf8')) + '# local scribble\n')
+    const dirtied = (await readFile(statePath, 'utf8')) + '# local scribble\n'
+    await writeFile(statePath, dirtied)
 
     const { state } = await ctx.source.readState(ref)
     const planned = planDecision(state!, { action: 'approve', gate: 'G1', burden: 'confirmation' }, who)
     const result = await ctx.source.writeState(ref, planned.mutate, planned.message)
     expect(result.ok).toBe(false)
     expect(result.reason).toBe('dirty-worktree')
+    expect(await readFile(statePath, 'utf8')).toBe(dirtied) // AC2.1: never silently discarded
   })
 })
 

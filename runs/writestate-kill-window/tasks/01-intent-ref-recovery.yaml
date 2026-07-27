@@ -1,0 +1,112 @@
+id: 01-intent-ref-recovery
+title: Write-ahead intent ref and self-recovery for the writeState kill window
+requirements: [R1, R2, R4, R5]
+
+scope: |
+  In LocalGitSource.writeState's checked-out-branch path
+  (frontend/packages/core/src/sources/local-source.ts), implement the intent
+  record and recovery exactly as pinned in plan.md "Interface contracts":
+
+  1. Before the working-tree writeFile, build the intent commit (hashObject →
+     writeTreeWithBlob → commitTree, parent = tip, author = options.identity
+     when set) and force-set refs/agentic/wip/<branch> to it via the main Git
+     handle. After the worktree commit succeeds and before push, best-effort
+     delete the ref (update-ref -d, swallow a missing-ref error).
+  2. Where the code currently refuses on any dirty status, first evaluate the
+     three-part recovery predicate (worktree-only ` M` modification of the state
+     file and nothing else; intent commit's first parent equals current tip;
+     checkout bytes identical to show(<intent>, <statePath>)). On a full match:
+     restore the file from HEAD in the checkout, delete the intent ref, and fall
+     through to the unchanged clean-path write. On any miss: refuse with
+     reason 'dirty-worktree' as today (task 02 rewords the message; do not
+     block on wording here).
+
+  Do not change writeState's signature, the WriteFailure union, the plumbing
+  (no-checkout) path, CAS handling, identity handling, or push behavior. Keep
+  the file's no-parameter-properties style (Node strip-only mode).
+
+  Add frontend/packages/core/test/write-recovery.test.ts using the existing
+  fixture helper (see write-path.test.ts for the idioms: makeFixture, refFor,
+  checking out run/g1-pending in ctx.repo.dir). Reproduce the kill per plan
+  ADR-4: patch Git.prototype.run in the test to throw on the worktree 'commit'
+  invocation after the intent ref and file write land, restore it in finally,
+  then call writeState again. Cover at least:
+  - AC1.1: post-kill writeState returns ok true and the checkout status is clean
+  - AC1.2: a second writeState also succeeds and `git log` on the branch holds
+    exactly the commits the two calls' mutations account for
+  - AC2.2: after a reproduced kill, further hand-editing the dirty file (and,
+    separately, a hand edit with a stale/absent intent ref) refuses with
+    dirty-worktree and leaves the edit byte-identical on disk
+  - AC4.1: after a recovered write, HEAD equals the branch ref and status is
+    empty
+
+  Leave frontend/packages/core/test/write-path.test.ts untouched — AC2.1 and
+  AC4.1 require its existing cases to pass unmodified.
+
+file_contact_surface:
+  - frontend/packages/core/src/sources/local-source.ts
+  - frontend/packages/core/test/write-recovery.test.ts
+
+acceptance_tests:
+  - AC1.1
+  - AC1.2
+  - AC2.1
+  - AC2.2
+  - AC4.1
+  - AC5.1
+  - "npm test and npm run typecheck both pass in frontend/ (Node >= 24)"
+
+depends_on: []
+
+status: pending
+
+notes: |
+  Implementer (round 1): implemented exactly per plan "Interface contracts" —
+  write-ahead intent commit built via hashObject -> writeTreeWithBlob ->
+  commitTree (parent=tip, author=options.identity), force-set via
+  `update-ref refs/agentic/wip/<branch> <intentCommit>` before the worktree
+  writeFile; best-effort `update-ref -d` (try/catch, swallowed) after the
+  worktree commit lands and before push. Added a private `recoverIntent`
+  method implementing the three-part predicate (worktree-only ` M
+  <statePath>` and nothing else; intent's first parent === current tip via
+  `rev-parse <oid>^1`; checkout bytes === `show(<intent>, <statePath>)`); on
+  a full match it restores the file (`checkout -- <statePath>`), deletes the
+  intent ref, and returns true so writeState falls through into the
+  unchanged clean-path write (a fresh intent is then recorded for the
+  *current* write, per the lifecycle in the plan). On any miss, refuses with
+  reason 'dirty-worktree' using the exact same message text as before (task
+  02's concern, untouched).
+
+  No deviations from the plan/spec. Two small implementation notes not
+  spelled out in the plan: (1) the two extra ref updates on the worktree
+  path (build+set at step 2, best-effort delete at step 5) use the main
+  `this.git` handle throughout, including for hashObject/writeTreeWithBlob/
+  commitTree, matching how the existing plumbing (no-checkout) path already
+  builds objects — objects and refs are shared across worktrees so this
+  matches the "written and read through the source's main Git handle" note;
+  (2) `rev-parse <oid>^1` (not a new git.ts primitive, since git.ts is
+  outside this task's file_contact_surface) is what resolves the intent
+  commit's first parent for condition 2 — wrapped in try/catch so a
+  root/parentless intent commit (shouldn't occur in practice, since intent
+  is always built with `-p tip`) falls through to refusal rather than
+  throwing.
+
+  Added frontend/packages/core/test/write-recovery.test.ts with 4 cases:
+  (1) AC1.1/AC1.2/AC4.1 combined — reproduces the kill via a
+  Git.prototype.run patch on the worktree's 'commit' invocation (restored in
+  finally), asserts the mid-kill dirty status and live intent ref, then
+  asserts a recovering write returns ok:true with a clean checkout and
+  HEAD===branch tip, then asserts a second write after recovery also
+  succeeds and the branch log holds exactly the two calls' commits (no
+  orphan from the abandoned intent); (2) AC2.2a — kill reproduced, then a
+  further hand edit diverges the checkout bytes from the recorded intent:
+  refuses dirty-worktree, edit unchanged; (3) AC2.2b — hand edit with no
+  intent ref ever recorded (absent): refuses dirty-worktree, edit unchanged;
+  (4) AC2.2c (bonus, beyond the task's minimum) — kill reproduced, then the
+  branch tip is advanced out from under the intent ref via plumbing (parent
+  no longer equals tip): refuses dirty-worktree, abandoned content
+  unchanged. write-path.test.ts left untouched.
+
+  Verification: `npm test` in frontend/ — 566 passed, 2 skipped (live-smoke,
+  pre-existing skip), including all 19 pre-existing write-path.test.ts
+  cases unmodified. `npm run typecheck` in frontend/ — clean, no errors.

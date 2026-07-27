@@ -1,13 +1,64 @@
 id: 01-inbox-decide-link
-title: "Honor the inbox decide link on the run page"
-requirements: []
+title: Resolve the inbox ?decide= param on the run page and open that card
+requirements: []          # patch profile — no spec.md; the intent brief is the baseline
 
 scope: |
-  Fill in what to build — the human author completes this stub before the run arms.
+  `frontend/packages/web/src/pages/inbox.tsx` already writes the human's intent
+  into every inbox link via its `itemHref` helper: `?decide=G2`,
+  `?decide=esc-<n>`, `?decide=paused`, or `?decide=staged`.
+  `frontend/packages/web/src/pages/run.tsx` never reads it. Make the run page
+  honor it.
 
-file_contact_surface: []
+  On run-page load, if `decide` is present, resolve it against the needs-you
+  cards the page already derives from committed state, then scroll that card into
+  view, move focus to it, and open its decide panel. Handle all four shapes.
 
-acceptance_tests: []
+  Design constraints that shape this work:
+
+  1. EXTRACT ONE SHARED PARSER. The `decide` string format is currently written in
+     `itemHref` and would now be read in `run.tsx`. Two hand-rolled copies of a
+     string format drift. Put the format in one place — a pure function pair
+     (build + parse) — and have both pages use it. This is the main structural
+     point of the change; do not duplicate the format.
+
+  2. THE URL SELECTS, IT NEVER CONJURES. Whether a card exists and whether it is
+     decidable comes from the run record. The `decide` value only picks among
+     cards that already exist. It must not be able to render a card, open a panel
+     for a decision that is not actually pending, or otherwise put the page in a
+     state a human could not have reached by clicking.
+
+  3. SILENT DEGRADATION IS A HARD REQUIREMENT. Unknown (`?decide=G9`), stale, or
+     already-decided values land at the top of the run page exactly as today. No
+     error banner, no empty panel, no thrown exception, no console noise. Treat a
+     hand-edited URL as untrusted input.
+
+  4. TEST WHERE A HARNESS EXISTS. `packages/web` has NO unit test harness today —
+     no jsdom, no testing-library — and standing one up is out of scope for this
+     run. Therefore the parse/resolve logic must be DOM-free and pure so it can be
+     tested under the existing vitest setup, and the scroll/focus/open behavior is
+     covered by one Playwright e2e in `frontend/e2e/`. If the pure function needs
+     a home reachable from both web and the test suite, prefer a small leaf module
+     over inlining it in a component.
+
+  Nothing about which cards render, their content, or their order changes. This
+  run only reorders attention.
+
+file_contact_surface:
+  - frontend/packages/web/src/pages/run.tsx
+  - frontend/packages/web/src/pages/inbox.tsx
+  - frontend/packages/core/src/view-model/decide-link.ts
+  - frontend/packages/core/src/view-model/index.ts
+  - frontend/packages/core/test/decide-link.test.ts
+  - frontend/e2e/decide-link.spec.ts
+
+acceptance_tests:
+  - "Clicking an inbox row for a gate decision lands on the run page with that gate's card scrolled into view, focused, and its decide panel open."
+  - "The same holds for an escalation row (esc-<n>), a paused run, and a staged run — all four shapes the inbox emits."
+  - "Hand-editing the URL to ?decide=G9 lands at the top of the run page exactly as today: no error state, no empty panel, no console error."
+  - "A ?decide= value naming an already-decided gate degrades the same silent way."
+  - "The decide-link format is defined in exactly one module; inbox.tsx builds with it and run.tsx parses with it — grep shows no second hand-rolled copy of the format."
+  - "The parse/resolve function is DOM-free and covered by vitest unit tests; no jsdom or testing-library dependency is added to the repo."
+  - "npm test, npm run typecheck, and npm run build all pass; the existing e2e specs (smoke, staging) still pass alongside the new one."
 
 depends_on: []
 

@@ -21,7 +21,7 @@ const DISPOSITION_OPTIONS: { value: Disposition; label: string; hint: string }[]
 
 type Mode = 'idle' | 'approve' | 'decline' | 'resolve' | 'arm'
 
-export function DecidePanel({ item, primary = false }: { item: InboxItem; primary?: boolean }) {
+export function DecidePanel({ item, primary = false, chips = null }: { item: InboxItem; primary?: boolean; chips?: React.ReactNode }) {
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<Mode>('idle')
   const [burden, setBurden] = useState<Burden | null>(null)
@@ -121,47 +121,57 @@ export function DecidePanel({ item, primary = false }: { item: InboxItem; primar
 
   if (flash?.kind === 'ok') return <Flash kind="ok" text={flash.text} />
 
+  // Idle mode shares one footer row with the card's packet chips — evidence on
+  // the left, the decision affordance on the right. Expanded modes keep the
+  // chips row and open the form below it at full width.
+  const chipRow = chips ? <div className="flex min-w-0 flex-wrap items-center gap-1.5">{chips}</div> : null
+
   return (
-    <div className="mt-3.5 border-t border-line pt-3.5" data-decide-panel>
+    <div className="mt-3 border-t border-line pt-3" data-decide-panel>
       {flash && <Flash kind={flash.kind} text={flash.text} />}
 
       {mode === 'idle' && (
-        <div className="flex flex-wrap gap-2">
-          {item.kind === 'gate' && item.reviewable && (
-            <>
-              <Button primary onClick={() => setMode('approve')} data-decide="approve">
-                Approve…
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5">
+          {chipRow}
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {item.kind === 'gate' && item.reviewable && (
+              <>
+                <Button primary onClick={() => setMode('approve')} data-decide="approve">
+                  Approve…
+                </Button>
+                <Button onClick={() => setMode('decline')} data-decide="decline">
+                  Decline…
+                </Button>
+              </>
+            )}
+            {item.kind === 'gate' && !item.reviewable && (
+              <p className="text-[12.5px] font-semibold text-bad">Bounced — fix the artifacts (or the contract) and the card returns; no approval is offered for a malformed packet.</p>
+            )}
+            {item.kind === 'escalation' && (
+              <Button primary onClick={() => setMode('resolve')} data-decide="resolve">
+                Resolve…
               </Button>
-              <Button onClick={() => setMode('decline')} data-decide="decline">
-                Decline…
+            )}
+            {item.kind === 'paused' && (
+              <Button primary onClick={submitResume} disabled={mutation.isPending} data-decide="resume">
+                {mutation.isPending ? 'Resuming…' : 'Resume run'}
               </Button>
-            </>
-          )}
-          {item.kind === 'gate' && !item.reviewable && (
-            <p className="text-[12.5px] font-semibold text-bad">Bounced — fix the artifacts (or the contract) and the card returns; no approval is offered for a malformed packet.</p>
-          )}
-          {item.kind === 'escalation' && (
-            <Button primary onClick={() => setMode('resolve')} data-decide="resolve">
-              Resolve…
-            </Button>
-          )}
-          {item.kind === 'paused' && (
-            <Button primary onClick={submitResume} disabled={mutation.isPending} data-decide="resume">
-              {mutation.isPending ? 'Resuming…' : 'Resume run'}
-            </Button>
-          )}
-          {item.kind === 'staged' && (
-            <Button primary onClick={() => setMode('arm')} data-decide="arm">
-              Arm run…
-            </Button>
-          )}
-          {item.kind === 'round-cap' && (
-            <p className="text-xs text-muted">
-              Read both sides, then unblock: decline the pending gate with direction, or edit the spec/plan and let the loop retry.
-            </p>
-          )}
+            )}
+            {item.kind === 'staged' && (
+              <Button primary onClick={() => setMode('arm')} data-decide="arm">
+                Arm run…
+              </Button>
+            )}
+            {item.kind === 'round-cap' && (
+              <p className="text-xs text-muted">
+                Read both sides, then unblock: decline the pending gate with direction, or edit the spec/plan and let the loop retry.
+              </p>
+            )}
+          </div>
         </div>
       )}
+
+      {mode !== 'idle' && chipRow && <div className="mb-3">{chipRow}</div>}
 
       {mode === 'approve' && (
         <div className="flex flex-col gap-3">

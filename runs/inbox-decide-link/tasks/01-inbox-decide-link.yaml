@@ -1,0 +1,16 @@
+id: 01-inbox-decide-link
+title: "Honor the inbox decide link on the run page"
+requirements: []
+
+scope: |
+  Fill in what to build — the human author completes this stub before the run arms.
+
+file_contact_surface: []
+
+acceptance_tests: []
+
+depends_on: []
+
+status: pending
+
+notes: ""

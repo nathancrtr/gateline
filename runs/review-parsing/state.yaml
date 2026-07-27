@@ -1,7 +1,7 @@
 run: review-parsing
 branch: run/review-parsing
-phase: implement # staged — not yet armed; `agentic arm review-parsing` starts the run
-paused_reason: null
+phase: paused # staged — not yet armed; `agentic arm review-parsing` starts the run
+paused_reason: escalation
 profile: patch # patch | standard | full
 intake:
   # source-agnostic staging provenance; free-form path: nulls + client_key
@@ -12,7 +12,7 @@ intake:
   staged_by: "Nathan Carter"
 budget:
   cost_limit_usd: 30
-  cost_spent_usd: 0
+  cost_spent_usd: 1.63
   ledger:
     [
       {
@@ -22,9 +22,10 @@ budget:
           round: 1,
           adapter: claude-code,
           model: anthropic/claude-sonnet-5,
-          tokens_in: null,
-          tokens_out: null,
-          cost_usd: null
+          tokens_in: 12,
+          tokens_out: 3848,
+          cost_usd: 1.6284705,
+          failed: true
         }
     ]
 gates:
@@ -38,5 +39,15 @@ gates:
       burden: confirmation
     }
   G2: { approved: false, by: null, at: null, notes: null }
-tasks: [ { id: 01-review-parsing, status: dispatched, review_rounds: 0 } ]
-escalations: []
+tasks: [ { id: 01-review-parsing, status: failed, review_rounds: 0 } ]
+escalations:
+  [
+    {
+        at: 2026-07-27T01:53:25.430Z,
+        from_role: orchestrator,
+        reason: "implementer (01-review-parsing) failed twice: rebase of
+          run/review-parsing--task/01-review-parsing onto run/review-parsing
+          conflicted — overlapping file-contact surf…",
+        resolved: false
+      }
+  ]

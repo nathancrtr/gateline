@@ -12,7 +12,7 @@ import { LocalGitSource } from '@agentic/core'
 import { Engine } from '../src/engine.ts'
 import { parseLedger } from '../src/observe.ts'
 import type { Dispatcher, DispatchOutcome, DispatchRequest } from '../src/seam.ts'
-import { foldHarvestBranch } from '../src/workspace.ts'
+import { foldHarvestBranch, isPlanDefect } from '../src/workspace.ts'
 import { makeToyRepo, TEST_REGISTRY, toyRef } from './engine.helper.ts'
 
 const BOT = { name: 'agentic-orchestrator', email: 'orchestrator@agentic.invalid' }
@@ -61,7 +61,7 @@ describe('foldHarvestBranch', () => {
     expect(base).toBe(runTipBefore) // the worker's clone was at the same tip
 
     const result = await foldHarvestBranch(dir, 'run/toy', { branch: 'run/toy--harvest/analyst-1', base })
-    expect(result).toMatchObject({ ok: true, conflict: false })
+    expect(result).toMatchObject({ ok: true, cause: null, retained: null })
 
     // The run branch now carries the harvested file, and moved past the pre-fold tip.
     expect(git(dir, ['show', 'run/toy:runs/toy/spec.md'])).toBe('harvested')
@@ -92,8 +92,12 @@ describe('foldHarvestBranch', () => {
 
     const result = await foldHarvestBranch(dir, 'run/toy', { branch: 'run/toy--harvest/a-1', base })
     expect(result.ok).toBe(false)
-    expect(result.conflict).toBe(true)
+    // A real content conflict is the one case still entitled to claim a plan
+    // defect, and the only one the engine treats as fatal (#223).
+    expect(result.cause).toBe('conflict')
+    expect(isPlanDefect(result)).toBe(true)
     expect(result.message).toContain('overlapping file-contact surfaces')
+    expect(result.retained).toBe('run/toy--harvest/a-1')
 
     // No leftover rebase-in-progress state or worktree.
     expect(git(dir, ['worktree', 'list'])).not.toContain('harvest')

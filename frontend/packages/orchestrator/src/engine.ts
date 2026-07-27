@@ -14,7 +14,7 @@ import { observeRun, parseLedger, type RunObservation } from './observe.ts'
 import { promptBody } from './prompts.ts'
 import { resolveModel, type Registry } from './registry.ts'
 import type { Dispatcher, DispatchOutcome } from './seam.ts'
-import { ensureRunCheckout, ensureTaskCheckout, foldHarvestBranch, foldTaskBranch, removeRunCheckout, type TaskCheckout } from './workspace.ts'
+import { ensureRunCheckout, ensureTaskCheckout, foldHarvestBranch, foldTaskBranch, isPlanDefect, reapTaskBranches, removeRunCheckout, type TaskCheckout } from './workspace.ts'
 
 export interface EngineConfig {
   repoDir: string
@@ -118,6 +118,15 @@ const DEFAULT_MAX_CONCURRENT_DISPATCHES = 2
  * derived from one observed tip, such as a re-derive after a lost CAS.
  */
 const ensuredDraftPrs = new Map<string, string>()
+
+/**
+ * Runs whose leftover task branches have been reaped this process (#225).
+ * Retention on a failed fold is what gives an escalated human a diff to
+ * inspect, but a terminal run will dispatch nothing further, so the refs stop
+ * being evidence and start being litter. Once per run per process is enough:
+ * the reap is idempotent and a done run cannot sprout new task branches.
+ */
+const reapedTaskBranches = new Set<string>()
 
 /** One in-flight dispatch, as reported to the operator during drain (#150). */
 export interface InFlightJob {
@@ -467,6 +476,12 @@ export class Engine {
     const base: TickOutcome = { slug: ref.slug, action, wrote: false, launched: 0, detail: action.why }
     const cas = { expectedTip: tip }
     await this.ensurePr(ref, tip)
+    // A finished run keeps no evidence it will never be asked for (#225).
+    if (obs.state?.phase === 'done' && !reapedTaskBranches.has(ref.slug)) {
+      reapedTaskBranches.add(ref.slug)
+      const reaped = await reapTaskBranches(this.cfg.repoDir, ref.branch).catch(() => [] as string[])
+      if (reaped.length > 0) this.log(`${ref.slug}: reaped retained task branches — ${reaped.join(', ')}`)
+    }
     switch (action.kind) {
       case 'rest':
         return base
@@ -612,7 +627,7 @@ export class Engine {
         if (isolate) {
           const fold = await this.withLock(ref.slug, () => foldTaskBranch(this.cfg.repoDir, ref.branch, checkout as TaskCheckout))
           if (outcome.ok && !fold.ok) {
-            outcome = { ok: false, costUsd: outcome.costUsd, tokensIn: outcome.tokensIn, tokensOut: outcome.tokensOut, error: fold.message, fatal: fold.conflict }
+            outcome = { ok: false, costUsd: outcome.costUsd, tokensIn: outcome.tokensIn, tokensOut: outcome.tokensOut, error: fold.message, fatal: isPlanDefect(fold) }
           }
           // The fold moves the run ref outside writeState; push it explicitly
           // so agent work reaches origin even if the closing commit fails.
@@ -625,7 +640,7 @@ export class Engine {
           const harvest = outcome.harvest
           const fold = await this.withLock(ref.slug, () => foldHarvestBranch(this.cfg.repoDir, ref.branch, harvest))
           if (outcome.ok && !fold.ok) {
-            outcome = { ok: false, costUsd: outcome.costUsd, tokensIn: outcome.tokensIn, tokensOut: outcome.tokensOut, error: fold.message, fatal: fold.conflict }
+            outcome = { ok: false, costUsd: outcome.costUsd, tokensIn: outcome.tokensIn, tokensOut: outcome.tokensOut, error: fold.message, fatal: isPlanDefect(fold) }
           }
           if (fold.ok) await this.pushBranch(ref.branch)
         } else if (checkout && outcome.ok) {

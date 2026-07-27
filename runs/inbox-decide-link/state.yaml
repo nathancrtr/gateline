@@ -26,6 +26,17 @@ budget:
           tokens_out: null,
           cost_usd: 8,
           failed: true
+        },
+      {
+          at: 2026-07-27T02:00:48.118Z,
+          role: implementer,
+          task: 01-inbox-decide-link,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:
@@ -39,5 +50,5 @@ gates:
       burden: confirmation
     }
   G2: { approved: false, by: null, at: null, notes: null }
-tasks: [ { id: 01-inbox-decide-link, status: pending, review_rounds: 0 } ]
+tasks: [ { id: 01-inbox-decide-link, status: dispatched, review_rounds: 0 } ]
 escalations: []

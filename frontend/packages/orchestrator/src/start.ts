@@ -75,6 +75,8 @@ export interface OrchestratorOptions {
    * not map to marginal cost. Metering stays unconditional.
    */
   budgetEnforcement?: boolean
+  /** Most dispatches running at once across all runs; 0 disables (#227). */
+  maxConcurrentDispatches?: number
   /** Wall clock per dispatched role before its process group is killed (default 30 min). */
   roleTimeoutSeconds?: number
   heartbeatSeconds?: number
@@ -188,6 +190,7 @@ export async function assembleOrchestrator(
     requireBudget: opts.requireBudget,
     budgetEnforcement: opts.budgetEnforcement,
     roleTimeoutMs: opts.roleTimeoutSeconds !== undefined ? opts.roleTimeoutSeconds * 1000 : undefined,
+    maxConcurrentDispatches: opts.maxConcurrentDispatches,
   })
   // Scheduler stays on `common` — i.e. always the local dispatcher, never remote.
   const scheduler = new Scheduler(common)

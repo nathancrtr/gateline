@@ -58,6 +58,17 @@ budget:
           tokens_in: 18,
           tokens_out: 2503,
           cost_usd: 2.4981482
+        },
+      {
+          at: 2026-07-27T01:53:37.397Z,
+          role: implementer,
+          task: 02-refusal-message,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:
@@ -82,6 +93,6 @@ gates:
 tasks:
   [
     { id: 01-intent-ref-recovery, status: review-approved, review_rounds: 1 },
-    { id: 02-refusal-message, status: pending, review_rounds: 0 }
+    { id: 02-refusal-message, status: dispatched, review_rounds: 0 }
   ]
 escalations: []

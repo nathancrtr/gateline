@@ -81,4 +81,52 @@ depends_on: []
 
 status: pending
 
-notes: ""
+notes: |
+  Implementer round 1. Surveyed all runs/*/review-*.md before designing (47
+  files exist today, not 29 — the run count has grown since the task was
+  written; acceptance test's "every one of the 29" is honored as "every one
+  of the corpus, at least the surveyed 29" in the vitest test, so it stays
+  correct as the corpus keeps growing).
+
+  Design: round segments are anchored on each round's own `**Round:**`
+  bold field (uniform across 46/47 files), with a `Round <n>` heading-token
+  fallback merged in within a small window — this satisfies "anchor on the
+  token, not a fixed heading level" while staying robust. One artifact
+  (runs/creation-seam/review-06.md) has no round-1 `**Round:**` field at
+  all and reuses the literal heading "## Round 2" for what is actually its
+  third chronological block; the parser degrades gracefully there (two
+  segments both labeled round 2, no finding lost, no throw) rather than
+  guessing a "corrected" number — verbatim-derivation-only per the intent
+  brief.
+
+  Findings-vs-resolutions grammar: a fresh finding heading always has the
+  severity word directly after the first em dash
+  (`### F<n> — blocking — ...`); a later round's resolution restated as a
+  heading always has a parenthetical directly against the id instead
+  (`### F<n> (blocking) — RESOLVED`) — that's the disambiguator. Severity
+  qualifiers can carry their own internal em dash inside parens (survey
+  example: `blocking (repo integrity / process — NOT a defect …)`), so the
+  severity/title split is dash-depth-aware (splitTopLevelDash), not a plain
+  regex split on the first em dash.
+
+  Resolution classification is negation-aware and biased toward "still
+  open" per the brief: only an unnegated whole-word "resolved" match
+  counts (`\bresolved\b` naturally excludes "unresolved" — no boundary
+  before the embedded "resolved"). "NOT genuinely resolved" and "NOT
+  RESOLVED" are both confirmed false by test, including against the real
+  runner-agent/review-04.md artifact the survey found it in (not just a
+  synthetic fixture).
+
+  file_contact_surface note: `packages/core/src/index.ts` already does
+  `export * from './view-model/index.ts'`, so exporting from the view-model
+  barrel was sufficient for the "export from the package root" requirement
+  — no edit needed there, so it was left untouched.
+
+  `npm install` regenerated frontend/package-lock.json (npm-version lockfile
+  churn, unrelated to this change); reverted before finishing so the diff
+  stays inside the declared surface.
+
+  Verification: `npm test` — 583 passed, 2 skipped (pre-existing,
+  live-smoke), 0 failed. `npm run typecheck` — clean. Ran the 47-artifact
+  sweep directly (ad hoc script, not committed) before writing the vitest
+  version: 0 throws, 0 nulls, 0 verbatim mismatches.

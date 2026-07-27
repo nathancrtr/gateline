@@ -8,6 +8,7 @@ import {
   buildEvidenceRollup,
   buildLexicon,
   buildPortfolio,
+  buildReviewReport,
   BUILTIN_SECTIONS,
   collectRunDecisions,
   computeMetrics,
@@ -361,6 +362,26 @@ export function createApp(deps: AppDeps): Hono {
       return buildLexicon({ spec, plan })
     })
     return c.json({ entries: lexicon.entries, pattern: ID_PATTERN })
+  })
+
+  // Typed review reports (#214): rounds, verdicts, and findings (with
+  // cross-round resolution state) parsed verbatim from every review-NN.md
+  // this run has, shipped as data for the same reason the lexicon route is —
+  // the browser must not bundle the core runtime. A file that doesn't parse
+  // (malformed or unrecognized grammar) reports `report: null`, and the
+  // client falls back to today's prose rendering for that artifact only.
+  app.get('/api/runs/:src/:slug/reviews', async (c) => {
+    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+    if (!found) return c.json({ error: 'run not found' }, 404)
+    const { source, ref } = found
+    const reviews = await cache.get(`reviews:${ref.source}:${ref.slug}`, async () => {
+      const artifacts = await source.listArtifacts(ref)
+      const paths = artifacts.filter((p) => /^review-\d+.*\.md$/.test(p)).sort()
+      return Promise.all(
+        paths.map(async (path) => ({ path, report: buildReviewReport(await source.readArtifact(ref, path)) })),
+      )
+    })
+    return c.json({ reviews })
   })
 
   // Evidence-presence rollup (#165): which criteria the verification record

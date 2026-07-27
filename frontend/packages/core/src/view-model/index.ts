@@ -3,6 +3,7 @@
 // stack; nothing in record/ or sources/ may import from here.
 export * from './evidence.ts'
 export * from './lexicon.ts'
+export * from './review-report.ts'
 export * from './readiness.ts'
 export * from './portfolio.ts'
 export * from './metrics.ts'

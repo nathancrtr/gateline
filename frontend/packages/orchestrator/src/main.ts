@@ -49,6 +49,11 @@ program
     'meter spend but never pause on it: disables the per-run cap, --require-budget, and --spend-limit-usd (for flat-rate-billed harnesses, #109)',
   )
   .option('--role-timeout <seconds>', 'wall clock per dispatched role before its process group is killed (default 1800)', parseFloat)
+  .option(
+    '--max-concurrent-dispatches <n>',
+    'most dispatches running at once across all runs; 0 disables the cap (default 2, #227)',
+    parseFloat,
+  )
 
 interface Opened {
   dir: string
@@ -78,6 +83,7 @@ async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler:
     requireBudget?: boolean
     budgetEnforcement?: boolean
     roleTimeout?: number
+    maxConcurrentDispatches?: number
   }>()
   return assembleOrchestrator({
     repoDir: opened.dir,
@@ -89,6 +95,7 @@ async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler:
     requireBudget: hosted.requireBudget,
     budgetEnforcement: hosted.budgetEnforcement,
     roleTimeoutSeconds: hosted.roleTimeout,
+    maxConcurrentDispatches: hosted.maxConcurrentDispatches,
     log: (line: string) => console.log(line),
   })
 }

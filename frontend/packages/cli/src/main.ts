@@ -754,6 +754,11 @@ program
   .option('--local-only', 'no push, no gh/GitHub calls, no origin fetch — everything about this run stays in this clone')
   .option('--heartbeat <seconds>', 'engine heartbeat interval', '180')
   .option('--role-timeout <seconds>', 'wall clock per dispatched role before its process group is killed (default 1800)', parseFloat)
+  .option(
+    '--max-concurrent-dispatches <n>',
+    'most dispatches running at once across all runs; 0 disables the cap (default 2, #227)',
+    parseFloat,
+  )
   .addHelpText(
     'after',
     '\nEngine only, no server or browser: the orchestrator has its own binary —\n' +
@@ -774,6 +779,7 @@ program
         localOnly?: boolean
         heartbeat: string
         roleTimeout?: number
+        maxConcurrentDispatches?: number
       },
       cmd: Command,
     ) => {
@@ -864,6 +870,7 @@ program
         budgetEnforcement: flags.budgetEnforcement,
         spendLimitUsd: flags.spendLimitUsd ?? null,
         roleTimeoutSeconds: flags.roleTimeout,
+        maxConcurrentDispatches: flags.maxConcurrentDispatches,
         heartbeatSeconds: Number(flags.heartbeat),
         log: (line) => console.log(line),
         onSupersede: (status) => {

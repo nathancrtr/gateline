@@ -53,6 +53,23 @@ export interface EngineConfig {
    * token counts — is unconditional and unaffected. Default true.
    */
   budgetEnforcement?: boolean
+  /**
+   * Resource ceiling (#227): the most dispatches allowed to run at once
+   * across every active run. Budget guards bound what a tick may *spend*;
+   * nothing bounded what it may *start*, so concurrency equalled the number
+   * of runs with ready work. Each dispatch carries an agent process, a cold
+   * worktree install (#229), and — per `roles/implementer.md` — a full suite
+   * run, so three simultaneous implementers were enough to exhaust a 48 GB
+   * workstation. On the blessed single-machine topology (TOPOLOGY.md §3.1)
+   * that machine is also the control plane, so exhaustion takes down
+   * dispatch, Gatehouse, and the operator's ability to intervene at once.
+   *
+   * Unlike a budget ceiling, hitting this is not an escalation: no human
+   * decision unblocks it and it clears itself as jobs finish, so a capped
+   * dispatch is simply not started and re-derives on a later tick. `0`
+   * (or negative) disables the cap.
+   */
+  maxConcurrentDispatches?: number
   now?: () => Date
   log?: (line: string) => void
 }
@@ -67,6 +84,16 @@ export interface TickOutcome {
 
 const DEFAULT_ROLE_TIMEOUT_MS = 30 * 60 * 1000
 const DEFAULT_STALE_MS = 5 * 60 * 1000
+
+/**
+ * Default resource ceiling (#227). Deliberately low: the blessed topology
+ * runs the engine on the operator's own workstation, and a dispatch's real
+ * footprint is an agent process plus a full dependency install plus the
+ * project's whole test suite. Two keeps a run pipelined without letting a
+ * quiet afternoon of ready work take the machine down. Raise it on a
+ * dedicated host with `--max-concurrent-dispatches`.
+ */
+const DEFAULT_MAX_CONCURRENT_DISPATCHES = 2
 
 /**
  * Run branch tip at the last draft-PR ensure, per slug (ADR-5, R8).
@@ -306,9 +333,44 @@ export class Engine {
         isAncestor: (a, b) => this.source.git.isAncestor(a, b),
       })
       const action = deriveAction(obs)
-      outcomes.push(await this.execute(ref, tip, obs, this.hostGuards(obs, action, host)))
+      // Concurrency is checked before the budget guards, not after: a
+      // dispatch this tick will not start must not add its estimate to the
+      // host projection hostGuards accumulates across runs, or a deferral
+      // here would spend budget headroom nothing consumed.
+      const admitted = this.concurrencyGuard(ref, action)
+      outcomes.push(await this.execute(ref, tip, obs, this.hostGuards(obs, admitted, host)))
     }
     return outcomes
+  }
+
+  /**
+   * Resource admission control (#227, rule MC). Budget guards bound what a
+   * tick may spend; this bounds what it may start. Counted across every
+   * active run — `inFlight()` includes jobs still running from earlier ticks
+   * — so the loop in `tick()` naturally stops granting once the host is
+   * saturated, and later runs in the same pass defer.
+   *
+   * Deferral, not escalation, is the whole point. A budget ceiling needs a
+   * human to raise it, so DB/RB/HB pause the run and escalate; a resource
+   * ceiling clears itself the moment a job finishes. So a capped dispatch is
+   * downgraded to `rest`: nothing is written, no intent commit claims the run
+   * is dispatched, and the stateless reconciler derives the same work again
+   * on a later tick. Partial grants are legal for the same reason — the
+   * ungranted intents are simply re-derived, since a task the engine never
+   * dispatched is still `pending` in committed state.
+   */
+  private concurrencyGuard(ref: RunRef, action: DerivedAction): DerivedAction {
+    if (action.kind !== 'dispatch') return action
+    const cap = this.cfg.maxConcurrentDispatches ?? DEFAULT_MAX_CONCURRENT_DISPATCHES
+    if (cap <= 0) return action // explicitly uncapped
+    const free = cap - this.inFlight()
+    if (free >= action.dispatches.length) return action
+
+    const deferred = action.dispatches.length - Math.max(free, 0)
+    const why = `${deferred} dispatch(es) deferred — ${this.inFlight()} in flight against --max-concurrent-dispatches ${cap}; re-derived when a slot frees`
+    this.log(`${ref.slug}: ${why}`)
+    if (free <= 0) return { kind: 'rest', rule: 'MC', why }
+    return { ...action, dispatches: action.dispatches.slice(0, free), why: `${action.why} (${why})` }
   }
 
   /**

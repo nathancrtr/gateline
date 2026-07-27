@@ -497,6 +497,7 @@ Extends DESIGN.md §9 for the autonomous mode:
 | Duplicate dispatch (two instances, crash-restart, racing ticks) | Commit-then-launch: intent is a CAS commit; heartbeat probes liveness before re-dispatching |
 | Orchestrator races a human decision | CAS refusal → re-tick; both writers already treat refusal as the designed outcome |
 | Runaway spend | Every model invocation flows through the metered seam; pre-flight cap; pause-don't-degrade |
+| Runaway *resource* use (the host, not the budget) | Dispatch concurrency cap across all runs (default 2; `--max-concurrent-dispatches`, `0` disables). Each dispatch carries an agent process, a cold dependency install, and a full suite run, so concurrency — not cost — is what exhausts the machine. Unlike a budget ceiling this never escalates: no human decision unblocks it and it clears itself as jobs finish, so a capped dispatch is deferred (rule `MC`), written nowhere, and re-derived on a later tick |
 | Hung or stuck dispatch job | Per-role wall-clock timeout (default 30 min; `--role-timeout`) → kill the harness's whole process group, re-dispatch once, then escalate. The group kill matters: a surviving child would keep spending and hold the stdio pipes open, delaying the closing commit |
 | Engine rules drift from frontend readiness rules | One library (`@agentic/core`) hosts both derivations; the readiness table remains the shared spec with one test per row |
 | Machine writes masquerade as human decisions | Distinct bot author identity; reserved decision grammar; no code path writes `gates.*` |

@@ -19,7 +19,7 @@ export function PhaseChip({ phase, pausedReason }: { phase: string; pausedReason
   if (phase === 'paused' && pausedReason === 'staged') {
     const t = PHASE_TONE.staged!
     return (
-      <span className={`inline-flex items-center gap-[6px] whitespace-nowrap rounded-md border px-[10px] py-[4px] text-[12.5px] font-semibold leading-none ${t.chip}`}>
+      <span data-phase-chip className={`inline-flex items-center gap-[6px] whitespace-nowrap rounded-md border px-[10px] py-[4px] text-[12.5px] font-semibold leading-none ${t.chip}`}>
         <span className={`inline-block h-[9px] w-[9px] shrink-0 rounded-full ${t.mark}`} />
         <span>staged</span>
       </span>
@@ -27,7 +27,7 @@ export function PhaseChip({ phase, pausedReason }: { phase: string; pausedReason
   }
   const t = PHASE_TONE[phase] ?? PHASE_TONE.unknown!
   return (
-    <span className={`inline-flex items-center gap-[6px] whitespace-nowrap rounded-md border px-[10px] py-[4px] text-[12.5px] font-semibold leading-none ${t.chip}`}>
+    <span data-phase-chip className={`inline-flex items-center gap-[6px] whitespace-nowrap rounded-md border px-[10px] py-[4px] text-[12.5px] font-semibold leading-none ${t.chip}`}>
       <span className={`inline-block h-[9px] w-[9px] shrink-0 rounded-full opacity-90 ${t.mark}`} />
       <span>{phase}</span>
       {pausedReason ? <span className="opacity-80">· {pausedReason}</span> : null}
@@ -147,7 +147,7 @@ export function BudgetMeter({ limit, spent }: { limit: number | null; spent: num
         />
       </span>
       <span className={`font-mono text-[11.5px] tabular-nums ${over ? 'font-semibold text-bad' : 'text-muted'}`}>
-        {used === 0 ? 'unmetered' : `$${used.toFixed(0)} / ${limit.toFixed(0)}${over ? ' · spent' : ''}`}
+        {used === 0 ? 'unmetered' : `$${used.toFixed(0)} / $${limit.toFixed(0)}${over ? ' · over' : ''}`}
       </span>
     </span>
   )

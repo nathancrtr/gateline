@@ -135,10 +135,10 @@ test('a staged run renders distinctly and offers only Arm, never Resume (AC6.1/A
   await expect(row).not.toContainText('paused')
 
   await page.goto(`/runs/${sourceId()}/${STAGE_SLUG}`)
-  // The PhaseChip itself (h1's immediate sibling) — not the header at large,
-  // which also carries the genesis-preview candidate's permanent "staged by
+  // The PhaseChip itself (its data hook) — not the header at large, which
+  // also carries the genesis-preview candidate's permanent "staged by
   // <name>" provenance line regardless of current phase.
-  const phaseChip = page.locator('header h1 + span')
+  const phaseChip = page.locator('header [data-phase-chip]')
   await expect(phaseChip).toHaveText('staged')
 
   const card = page.locator('[data-needs-card]').first()
@@ -160,7 +160,7 @@ test('arm commits "armed by" and clears the staged treatment (AC5.1)', async ({ 
   expect(state).not.toContain('phase: paused')
 
   await page.reload()
-  const phaseChip = page.locator('header h1 + span')
+  const phaseChip = page.locator('header [data-phase-chip]')
   await expect(phaseChip).not.toHaveText('staged')
 })
 

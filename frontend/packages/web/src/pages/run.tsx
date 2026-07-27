@@ -11,7 +11,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 // detail.history. No new server data (ADR-6 rider, ADR-7).
 import { readIntake } from '@agentic/core/record'
 import { useKeys } from '../use-keys.ts'
-import { api, formatAge, formatWhen, type InboxItem, type RunDetailResponse } from '../api.ts'
+import { api, formatAge, formatWhen, type InboxItem, type RunDetailResponse, type RunSummary } from '../api.ts'
 import { AgeBadge, BudgetMeter, GateLedger, KindChip, PhaseChip, ValidationBadge } from '../components/chips.tsx'
 import { DecidePanel } from '../components/decide.tsx'
 import { DiffView } from '../components/diff-view.tsx'
@@ -80,119 +80,115 @@ export function RunPage() {
     setParams(next, { replace: true })
   }
 
+  // Two page modes, chosen by whether anything needs a human (the brief's
+  // A4: density follows the job). Busy — decisions pending — is a two-column
+  // band closed by a full-width rule: cards left, quiet status rail right.
+  // Quiet is one column: the status facts flow horizontally under the header
+  // and the record (tabs) rises. Status content is never boxed — card chrome
+  // belongs to the decision cards alone, so no box edge is left waiting to
+  // align with another.
+  const busy = items.length > 0
+
+  const header = (
+    <header className="mb-6">
+      <div className="font-mono text-[12px] tracking-[0.14em] uppercase text-accent-deep">
+        {summary.phase} phase · {summary.profile} profile
+        {busy ? ' · needs you' : ''}
+      </div>
+      <h1 className="mt-2 mb-1.5 font-sans text-[46px] font-semibold leading-[1.06] tracking-[-0.02em]">{summary.slug}</h1>
+      {genesisIntake && genesisCommit && (
+        <p className="font-mono text-[12.5px] text-muted leading-[1.6]">
+          staged by{' '}
+          {genesisIntake.staged_by ? (
+            <span className="font-medium text-[#4d4742]">{genesisIntake.staged_by}</span>
+          ) : null}
+          {genesisIntake.staged_by ? ' · ' : ''}
+          {formatWhen(genesisCommit.time)}
+          {genesisProvenance.length > 0 && <> · from {genesisProvenance.join(' · ')}</>}
+          · branch <span className="font-mono">{summary.ref}</span>
+        </p>
+      )}
+      <div className="flex items-center gap-3.5 flex-wrap mt-[18px]">
+        <PhaseChip phase={summary.phase} pausedReason={summary.pausedReason} />
+        <GateLedger gates={summary.gates} profile={summary.profile} />
+      </div>
+    </header>
+  )
+
+  const stateErrorBlock = detail.stateError ? (
+    <div className="mb-6 rounded-md border border-bad-line bg-bad-bg px-3.5 py-3">
+      <p className="text-[13px] font-semibold text-bad">Malformed run state</p>
+      <p className="mt-1 text-xs text-muted">{detail.stateError}</p>
+      {detail.stateRaw && (
+        <pre className="mt-2.5 overflow-x-auto rounded-[4px] bg-inset p-2.5 font-mono text-[11.5px] leading-[1.5] text-ink">{detail.stateRaw}</pre>
+      )}
+    </div>
+  ) : null
+
+  const board = summary.tasks.total > 0 && detail.state ? <TaskBoard state={detail.state} /> : null
+
   return (
     <div className="mx-auto max-w-5xl">
-      <header className="mb-5 grid grid-cols-[1fr_300px] gap-10 items-start border-b border-line pb-7">
-        <div>
-          <div className="font-mono text-[12px] tracking-[0.14em] uppercase text-accent-deep">
-            {summary.phase} phase · {summary.profile} profile
-            {items.length > 0 ? ' · needs you' : ''}
+      {busy ? (
+        <div className="grid grid-cols-[minmax(0,1fr)_300px] gap-10 items-start max-md:flex max-md:flex-col border-b border-line pb-7">
+          <div className="min-w-0 max-md:w-full">
+            {header}
+            {stateErrorBlock}
+            <section className="flex flex-col gap-4">
+              {items.map((item, i) => (
+                <NeedsYouCard
+                  key={`${item.kind}-${item.gate ?? item.escalationIndex ?? i}`}
+                  item={item}
+                  now={now}
+                  detail={detail}
+                  primary={i === items.findIndex((x) => x.reviewable)}
+                />
+              ))}
+            </section>
           </div>
-          <h1 className="mt-2 mb-1.5 font-sans text-[46px] font-semibold leading-[1.06] tracking-[-0.02em]">{summary.slug}</h1>
-          {genesisIntake && genesisCommit && (
-            <p className="font-mono text-[12.5px] text-muted leading-[1.6]">
-              staged by{' '}
-              {genesisIntake.staged_by ? (
-                <span className="font-medium text-[#4d4742]">{genesisIntake.staged_by}</span>
-              ) : null}
-              {genesisIntake.staged_by ? ' · ' : ''}
-              {formatWhen(genesisCommit.time)}
-              {genesisProvenance.length > 0 && <> · from {genesisProvenance.join(' · ')}</>}
-              · branch <span className="font-mono">{summary.ref}</span>
-            </p>
-          )}
-          <div className="flex items-center gap-3.5 flex-wrap mt-[18px]">
-            <PhaseChip phase={summary.phase} pausedReason={summary.pausedReason} />
-            <GateLedger gates={summary.gates} profile={summary.profile} />
-          </div>
+          <aside className="md:sticky md:top-6 max-md:w-full min-w-0">
+            <RunFacts summary={summary} />
+            {board && <div className="mt-7">{board}</div>}
+          </aside>
         </div>
-        <aside className="rounded-md border border-line bg-surface px-3.5 py-1.5 shadow-[var(--shadow-soft)] text-[13px]">
-          <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted pt-2 pb-1.5">Run metadata</div>
-          <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-            <span className="text-[12.5px] text-muted">Phase</span>
-            <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">{summary.phase}</span>
-          </div>
-          <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-            <span className="text-[12.5px] text-muted">Profile</span>
-            <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">{summary.profile}</span>
-          </div>
-          <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-            <span className="text-[12.5px] text-muted">Gates</span>
-            <span className="text-right">
-              {(['G0', 'G1', 'G2', 'G3'] as const).map((g) => {
-                const c = summary.gates[g]
-                if (!c) return null
-                const toneCls = c.approved ? 'text-ok' : c.decided ? 'text-bad' : 'text-warn'
-                return (
-                  <span key={g} className={`text-[12.5px] font-mono tabular-nums ${toneCls}`}>
-                    {g}{c.approved ? '✓' : c.decided ? '✕' : '·'}{' '}
+      ) : (
+        <div className="border-b border-line pb-7">
+          {header}
+          {stateErrorBlock}
+          <div className="flex flex-wrap items-start gap-x-14 gap-y-7 text-[13px]">
+            <section className="w-[300px]">
+              <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted pb-1.5">Gates</div>
+              <GateLines gates={summary.gates} rows />
+            </section>
+            {board && <div className="w-[300px]">{board}</div>}
+            <section className="w-[230px]">
+              <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted pb-1.5">Vitals</div>
+              <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
+                <span className="text-[12.5px] text-muted">Budget</span>
+                <span className="text-right">
+                  <BudgetMeter limit={summary.budget.limit} spent={summary.budget.spent} />
+                </span>
+              </div>
+              {summary.aheadOfOrigin != null && summary.aheadOfOrigin > 0 && (
+                <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
+                  <span className="text-[12.5px] text-muted">Divergence</span>
+                  <span className={`text-[12.5px] font-mono tabular-nums text-right ${(summary.behindOrigin ?? 0) > 0 ? 'text-bad' : 'text-warn'}`}>
+                    ↑{summary.aheadOfOrigin}{(summary.behindOrigin ?? 0) > 0 && <>↓{summary.behindOrigin}</>}
                   </span>
-                )
-              })}
-            </span>
+                </div>
+              )}
+              <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
+                <span className="text-[12.5px] text-muted">Updated</span>
+                <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">
+                  {summary.updatedAt ? formatAge(summary.updatedAt, Date.now() / 1000) + ' ago' : '—'}
+                </span>
+              </div>
+            </section>
           </div>
-          <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-            <span className="text-[12.5px] text-muted">Tasks</span>
-            <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">{summary.tasks.done} / {summary.tasks.total}</span>
-          </div>
-          <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-            <span className="text-[12.5px] text-muted">Max rounds</span>
-            <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">{summary.tasks.maxRounds}</span>
-          </div>
-          <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-            <span className="text-[12.5px] text-muted">Budget</span>
-            <span className="text-right">
-              <BudgetMeter limit={summary.budget.limit} spent={summary.budget.spent} />
-            </span>
-          </div>
-          {summary.aheadOfOrigin != null && summary.aheadOfOrigin > 0 && (
-            <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-              <span className="text-[12.5px] text-muted">Divergence</span>
-              <span className={`text-[12.5px] font-mono tabular-nums text-right ${(summary.behindOrigin ?? 0) > 0 ? 'text-bad' : 'text-warn'}`}>
-                ↑{summary.aheadOfOrigin}{(summary.behindOrigin ?? 0) > 0 && <>↓{summary.behindOrigin}</>}
-              </span>
-            </div>
-          )}
-          <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-            <span className="text-[12.5px] text-muted">Needs you</span>
-            <span className={`text-[12.5px] font-mono tabular-nums text-right ${summary.needsHuman > 0 ? 'text-bad' : 'text-ok'}`}>{summary.needsHuman}</span>
-          </div>
-          <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-            <span className="text-[12.5px] text-muted">Updated</span>
-            <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">
-              {summary.updatedAt ? formatAge(summary.updatedAt, Date.now() / 1000) + ' ago' : '—'}
-            </span>
-          </div>
-        </aside>
-      </header>
-
-      {detail.stateError && (
-        <div className="mb-6 rounded-md border border-bad-line bg-bad-bg px-3.5 py-3">
-          <p className="text-[13px] font-semibold text-bad">Malformed run state</p>
-          <p className="mt-1 text-xs text-muted">{detail.stateError}</p>
-          {detail.stateRaw && (
-            <pre className="mt-2.5 overflow-x-auto rounded-[4px] bg-inset p-2.5 font-mono text-[11.5px] leading-[1.5] text-ink">{detail.stateRaw}</pre>
-          )}
         </div>
       )}
 
-      {items.length > 0 && (
-        <section className="mb-[22px] flex flex-col gap-[22px]">
-          {items.map((item, i) => (
-            <NeedsYouCard
-              key={`${item.kind}-${item.gate ?? item.escalationIndex ?? i}`}
-              item={item}
-              now={now}
-              detail={detail}
-              primary={i === items.findIndex((x) => x.reviewable)}
-            />
-          ))}
-        </section>
-      )}
-
-      {summary.tasks.total > 0 && detail.state && <TaskBoard state={detail.state} />}
-
-      <nav className="mt-9 mb-[18px] flex gap-0.5 border-b border-line">
+      <nav className="mt-6 mb-[18px] flex gap-0.5 border-b border-line">
         <button
           onClick={() => setTab('artifacts')}
           className={`px-4 py-2.5 text-[13.5px] font-medium border-b-2 -mb-px transition-colors ${
@@ -247,6 +243,27 @@ export function RunPage() {
  *  get accent-tint ground, bounced cards get bad-bg — no animation, no glow. */
 function NeedsYouCard({ item, now, detail, primary }: { item: InboxItem; now: number; detail: RunDetailResponse; primary?: boolean }) {
   const urgent = item.since !== null && now - item.since > 3 * 86_400
+  // The card names artifacts and tasks in prose; resolve those mentions from
+  // data already in the detail payload so the card answers "what happened,
+  // where do I look" without a trip to the tabs.
+  const prose = `${item.title} ${item.detail}`
+  const mentioned = detail.artifacts.filter((p) => !item.packet.includes(p) && prose.includes(p))
+  const chipPaths = [...item.packet.filter((p) => detail.artifacts.includes(p) || p === 'state.yaml'), ...mentioned]
+  const mentionedTask = detail.state?.tasks.find((t) => prose.includes(t.id)) ?? null
+  const chips =
+    chipPaths.length > 0 ? (
+      <>
+        {chipPaths.map((p) => (
+          <Link
+            key={p}
+            to={`/runs/${item.source}/${item.slug}?tab=artifacts&artifact=${encodeURIComponent(p)}`}
+            className="rounded-xs border border-line-cool bg-surface px-2 py-0.5 font-mono text-[11.5px] text-muted hover:border-accent hover:text-accent-deep"
+          >
+            {p}
+          </Link>
+        ))}
+      </>
+    ) : null
   return (
     <section
       className={`relative grid overflow-hidden rounded-lg ${
@@ -260,7 +277,7 @@ function NeedsYouCard({ item, now, detail, primary }: { item: InboxItem; now: nu
         className={`w-[4px] self-stretch ${item.reviewable ? 'bg-accent' : 'bg-bad'}`}
         aria-hidden="true"
       />
-      <div className="px-7 py-[22px]">
+      <div className="min-w-0 px-6 py-4">
         <div className="flex items-center gap-3 flex-wrap">
           <span className="inline-flex items-center gap-2 font-mono text-[11px] tracking-[0.12em] uppercase text-accent-deep bg-white border border-[#e9d3c4] px-[9px] py-[3px] rounded-xs">
             <span className="inline-block w-[7px] h-[7px] rounded-full bg-accent" />
@@ -271,8 +288,13 @@ function NeedsYouCard({ item, now, detail, primary }: { item: InboxItem; now: nu
             <AgeBadge label={`waiting ${formatAge(item.since, now)}`} urgent={urgent} />
           </span>
         </div>
-        <h2 className="mt-2.5 mb-4 font-sans text-[26px] font-semibold tracking-[-0.015em] text-ink">{item.title}</h2>
+        <h2 className="mt-2 mb-1.5 font-sans text-[24px] font-semibold leading-[1.2] tracking-[-0.015em] text-ink">{item.title}</h2>
         <p className="max-w-[76ch] text-[14.5px] text-[#4d4742] leading-[1.55]">{item.detail}</p>
+        {mentionedTask && (
+          <p className="mt-1.5 font-mono text-[12px] text-muted">
+            {mentionedTask.id} · {mentionedTask.status} · review round {mentionedTask.review_rounds}/3
+          </p>
+        )}
         {item.problems.length > 0 && (
           <ul className="mt-2 flex flex-col gap-1">
             {item.problems.map((p) => (
@@ -282,61 +304,127 @@ function NeedsYouCard({ item, now, detail, primary }: { item: InboxItem; now: nu
             ))}
           </ul>
         )}
-        {item.packet.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {item.packet
-              .filter((p) => detail.artifacts.includes(p) || p === 'state.yaml')
-              .map((p) => (
-                <Link
-                  key={p}
-                  to={`/runs/${item.source}/${item.slug}?tab=artifacts&artifact=${encodeURIComponent(p)}`}
-                  className="rounded-xs border border-line-cool bg-surface px-2 py-0.5 font-mono text-[11.5px] text-muted hover:border-accent hover:text-accent-deep"
-                >
-                  {p}
-                </Link>
-              ))}
-          </div>
-        )}
         {item.kind === 'gate' && item.gate === 'G2' && <EvidenceRollupPanel src={item.source} slug={item.slug} />}
-        <DecidePanel item={item} primary={primary} />
+        <DecidePanel item={item} primary={primary} chips={chips} />
       </div>
     </section>
   )
 }
 
+/** Gate provenance lines — who decided each gate, and when. Right-aligned
+ * stack in the busy rail; `rows` renders them as hairline rows for the quiet
+ * facts block. */
+function GateLines({ gates, rows = false }: { gates: RunSummary['gates']; rows?: boolean }) {
+  return (
+    <>
+      {(['G0', 'G1', 'G2', 'G3'] as const).map((g) => {
+        const c = gates[g]
+        if (!c) return null
+        const toneCls = c.approved ? 'text-ok' : c.decided ? 'text-bad' : 'text-warn'
+        return (
+          <span key={g} className={`text-[12px] font-mono tabular-nums ${toneCls} ${rows ? 'block border-t border-line py-[7px]' : ''}`}>
+            {g} {c.approved ? '✓' : c.decided ? '✕' : '·'}
+            {c.decided ? (
+              <span className="text-muted"> {c.by ?? '—'}{c.at ? ` · ${String(c.at).slice(0, 10)}` : ''}</span>
+            ) : (
+              <span className="text-faint"> pending</span>
+            )}
+          </span>
+        )
+      })}
+    </>
+  )
+}
+
+/** The busy-mode status rail: quiet, unboxed key/value rows — mono labels
+ * and hairlines only, deliberately not a card, so nothing competes with the
+ * decision cards or leaves a box edge waiting to align with one. */
+function RunFacts({ summary }: { summary: RunSummary }) {
+  return (
+    <div className="text-[13px]">
+      <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted pb-1.5">Run metadata</div>
+      <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
+        <span className="text-[12.5px] text-muted">Phase</span>
+        <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">{summary.phase}</span>
+      </div>
+      <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
+        <span className="text-[12.5px] text-muted">Profile</span>
+        <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">{summary.profile}</span>
+      </div>
+      <div className="flex justify-between gap-3 py-[7px] border-t border-line">
+        <span className="text-[12.5px] text-muted">Gates</span>
+        <span className="flex flex-col items-end gap-[3px] text-right">
+          <GateLines gates={summary.gates} />
+        </span>
+      </div>
+      <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
+        <span className="text-[12.5px] text-muted">Tasks</span>
+        <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">{summary.tasks.done} / {summary.tasks.total}</span>
+      </div>
+      <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
+        <span className="text-[12.5px] text-muted">Max rounds</span>
+        <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">{summary.tasks.maxRounds}</span>
+      </div>
+      <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
+        <span className="text-[12.5px] text-muted">Budget</span>
+        <span className="text-right">
+          <BudgetMeter limit={summary.budget.limit} spent={summary.budget.spent} />
+        </span>
+      </div>
+      {summary.aheadOfOrigin != null && summary.aheadOfOrigin > 0 && (
+        <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
+          <span className="text-[12.5px] text-muted">Divergence</span>
+          <span className={`text-[12.5px] font-mono tabular-nums text-right ${(summary.behindOrigin ?? 0) > 0 ? 'text-bad' : 'text-warn'}`}>
+            ↑{summary.aheadOfOrigin}{(summary.behindOrigin ?? 0) > 0 && <>↓{summary.behindOrigin}</>}
+          </span>
+        </div>
+      )}
+      <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
+        <span className="text-[12.5px] text-muted">Needs you</span>
+        <span className={`text-[12.5px] font-mono tabular-nums text-right ${summary.needsHuman > 0 ? 'text-bad' : 'text-ok'}`}>{summary.needsHuman}</span>
+      </div>
+      <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
+        <span className="text-[12.5px] text-muted">Updated</span>
+        <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">
+          {summary.updatedAt ? formatAge(summary.updatedAt, Date.now() / 1000) + ' ago' : '—'}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+/** The task board shares the status grammar — mono label, hairline rows —
+ * and, like all status content, is never boxed. */
 function TaskBoard({ state }: { state: NonNullable<RunDetailResponse['state']> }) {
   const doneCount = state.tasks.filter((t) => t.status === 'done').length
   return (
-    <section className="mt-[26px] mb-6">
-      <div className="font-mono text-[11px] tracking-[0.12em] uppercase text-muted mb-2.5">
-        Task board · {state.tasks.length} task{state.tasks.length !== 1 ? 's' : ''} · {doneCount} review-approved
+    <section className="text-[13px]">
+      <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted pb-1.5">
+        Task board · {doneCount} / {state.tasks.length} done
       </div>
-      <div className="flex gap-2.5 flex-wrap">
-        {state.tasks.map((t) => {
-          const capped = t.review_rounds >= 3
-          const statusChip = capped
-            ? 'font-bold text-bad bg-bad-bg border-bad-line'
-            : t.status === 'done'
-              ? 'text-ok bg-ok-bg border-ok-line'
-              : 'text-muted bg-inset border-line'
-          return (
-            <span
-              key={t.id}
-              className="inline-flex items-center gap-2.5 rounded-md border border-line bg-surface px-3 py-2 text-[13px] shadow-[var(--shadow-soft)]"
-            >
-              <span className="font-mono text-[12.5px] text-ink font-medium">{t.id}</span>
-              <span className={`rounded-xs border px-2 py-0.5 text-[11.5px] font-semibold ${statusChip}`}>
-                {t.status === 'done' ? '✓ ' : ''}{t.status}
-              </span>
+      {state.tasks.map((t) => {
+        const capped = t.review_rounds >= 3
+        const statusChip = capped
+          ? 'font-bold text-bad bg-bad-bg border-bad-line'
+          : t.status === 'done'
+            ? 'text-ok bg-ok-bg border-ok-line'
+            : 'text-muted bg-inset border-line'
+        return (
+          <div key={t.id} className="flex items-center justify-between gap-3 py-[7px] border-t border-line">
+            <span className="min-w-0 truncate font-mono text-[12.5px] font-medium text-ink">{t.id}</span>
+            <span className="flex shrink-0 items-center gap-1.5">
               {t.review_rounds > 0 && (
                 <span className={`font-mono text-[11.5px] tabular-nums ${capped ? 'font-bold text-bad' : 'text-muted'}`} title="review rounds">
                   ⟲{t.review_rounds}
                 </span>
               )}
+              <span className={`rounded-xs border px-2 py-0.5 text-[11px] font-semibold ${statusChip}`}>
+                {t.status === 'done' ? '✓ ' : ''}{t.status}
+              </span>
             </span>
-          )
-        })}
-      </div>
+          </div>
+        )
+      })}
     </section>
   )
 }

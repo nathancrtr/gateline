@@ -1,13 +1,81 @@
 id: 01-review-parsing
-title: "Typed parsing of review reports (findings, verdicts, rounds)"
-requirements: []
+title: Browser-safe typed parser for review reports (findings, verdicts, rounds)
+requirements: []          # patch profile — no spec.md; the intent brief is the baseline
 
 scope: |
-  Fill in what to build — the human author completes this stub before the run arms.
+  Add a browser-safe, zero-import parser for review-report artifacts under
+  `frontend/packages/core/src/view-model/`, following the `lexicon.ts` leaf-module
+  pattern exactly: a pure function from artifact text to a typed value, no Node
+  imports, no filesystem, no network. Export it from the view-model barrel and the
+  package root, and expose it from the server beside the existing lexicon route.
 
-file_contact_surface: []
+  Per round, extract:
+    - the `**Verdict:** approve | request-changes | escalate` line;
+    - the `**Round:** <n> of <m>` line;
+    - the `**Diff reviewed:** <ref>` line;
+    - each `### F<n> — <severity> — <title>` finding with its `Where`,
+      `Failure scenario`, and `Requirement` fields;
+    - later-round resolution lines, so a finding carries a resolved-in-round-N state.
 
-acceptance_tests: []
+  READ THIS BEFORE DESIGNING THE PARSER. The committed artifacts under `runs/`
+  are the ground truth, and they vary far more than `contracts/review-report.md`
+  suggests. A parser written to the contract alone will be wrong on real data.
+  Survey them first (`runs/*/review-*.md`, 29 files) and design for what is
+  actually there:
+
+  1. ROUND HEADERS ARE NOT UNIFORM. Round 1 is implicit — it has no header at
+     all. Later rounds appear as `# Round 2`, `# Round 2 (of 3)`, `## Round 2`,
+     `## Round 2 — 2026-07-21`, and `## Round 2 (verify)`. Both `#` and `##`
+     levels occur, with optional trailing dates and parentheticals. Anchor on the
+     `Round <n>` token, not on a fixed heading level or exact string.
+
+  2. SECTION NAMES DRIFT BETWEEN ROUNDS. Round 1 uses `## Findings`, `## Coverage`,
+     `## Boundary check`. Later rounds use `## Finding resolutions`,
+     `## Delta coverage`, `## Boundary check (round 2)`. Do not hard-code the
+     round-1 names.
+
+  3. THE RESOLUTION VOCABULARY IS FREE-FORM AND CONTAINS A NEGATION TRAP. Real
+     lines include: `resolved.`, `genuinely resolved.`, `resolved, mutant-verified.`,
+     `resolved in code, unverified by test.`, `resolved by documentation`,
+     `resolved-by-disposition`, `stands as written`, `unresolved.`, `open,`,
+     `intentionally deferred`, `n/a, correctly left alone.`, and — critically —
+     `**F1 — NOT genuinely resolved.**`.
+
+     A substring test for "resolved" classifies that last one as RESOLVED. That
+     would fold a still-standing finding out of the approver's default view, which
+     is the exact failure this whole reading-experience effort exists to prevent.
+
+     Required behavior: classify a finding as resolved ONLY on a confident,
+     negation-aware match. Anything you cannot classify with confidence is
+     `unclassified`, NOT resolved — it carries its verbatim resolution text and
+     renders unfolded. Biasing toward "still open" is correct; a false "resolved"
+     is a correctness bug, a false "open" is only mild noise. Add a test asserting
+     the `NOT genuinely resolved` line does not classify as resolved.
+
+  Severity is `blocking | major | minor`, and findings must be orderable
+  blocking-first. Note that severity fields in the wild carry qualifiers such as
+  `minor (PLAUSIBLE)` — extract the severity token without losing the qualifier
+  text from the finding's verbatim title.
+
+  Malformed or unrecognized input degrades to "no typed view" (return null / an
+  empty result) so the caller falls back to today's prose rendering. The parser
+  must never throw and never drop artifact text on the floor.
+
+file_contact_surface:
+  - frontend/packages/core/src/view-model/review-report.ts
+  - frontend/packages/core/src/view-model/index.ts
+  - frontend/packages/core/test/review-report.test.ts
+  - frontend/packages/server/src/app.ts
+
+acceptance_tests:
+  - "Parsing runs/dupefind/review-01.md yields 4 findings across 2 rounds: F1 resolved in round 2; F2, F3, F4 still standing."
+  - "For that file, verdicts parse in order as request-changes (round 1) then approve (round 2)."
+  - "F1's severity parses as blocking and sorts ahead of the three minor findings."
+  - "A line of the form '- **F1 — NOT genuinely resolved.**' does NOT classify the finding as resolved."
+  - "Every one of the 29 runs/*/review-*.md artifacts parses without throwing; none produces a finding whose verbatim text is absent from the source file."
+  - "The parser module imports nothing (no node: builtins, no fs, no network) — packages/core/test/layering.test.ts still passes."
+  - "The server exposes the parsed payload on a route alongside /api/runs/:src/:slug/lexicon."
+  - "npm test and npm run typecheck pass in frontend/."
 
 depends_on: []
 

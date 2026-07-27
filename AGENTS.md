@@ -167,7 +167,10 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   PR. That PR's title and description are generated from the run's own artifacts
   (the intent brief, then the spec once it lands) and refresh as the run
   progresses — until a human edits the body, which hands the description to them
-  for good. The profile is chosen in the intent brief and recorded as
+  for good. The PR stays a draft, carrying a "do not merge" banner, for as long
+  as the run is in flight; reaching `done` is what marks it ready for review and
+  replaces the banner with the finished record. The profile is chosen in the
+  intent brief and recorded as
   `profile:` at init; from then on `state.yaml` is authoritative, and `gates:` carries
   exactly that profile's gates (a gate that doesn't exist is absent, never
   auto-approved).

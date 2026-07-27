@@ -82,13 +82,14 @@ export function RunPage() {
 
   return (
     <div className="mx-auto max-w-5xl">
-      {/* The metadata rail runs alongside the whole decision surface (header +
-          cards + task board) rather than boxing the header to its own height —
-          the rail's row count must never push the attention cards down. The
-          reading surface (tabs) stays full-width below. */}
-      <div className="grid grid-cols-[minmax(0,1fr)_300px] gap-10 items-start max-md:flex max-md:flex-col">
+      {/* One two-column band, closed by a full-width rule: the left column is
+          the decision surface (title + needs-you cards), the right column the
+          status surface (metadata rail + task board) — paired so the column
+          heights stay close and neither strands the other in dead space. The
+          reading surface (tabs) runs full-width below the rule. */}
+      <div className="grid grid-cols-[minmax(0,1fr)_300px] gap-10 items-start max-md:flex max-md:flex-col border-b border-line pb-7">
         <div className="min-w-0 max-md:w-full">
-          <header className="mb-5 border-b border-line pb-6">
+          <header className="mb-6">
             <div className="font-mono text-[12px] tracking-[0.14em] uppercase text-accent-deep">
               {summary.phase} phase · {summary.profile} profile
               {items.length > 0 ? ' · needs you' : ''}
@@ -123,7 +124,7 @@ export function RunPage() {
           )}
 
           {items.length > 0 && (
-            <section className="mb-4 flex flex-col gap-4">
+            <section className="flex flex-col gap-4">
               {items.map((item, i) => (
                 <NeedsYouCard
                   key={`${item.kind}-${item.gate ?? item.escalationIndex ?? i}`}
@@ -135,11 +136,10 @@ export function RunPage() {
               ))}
             </section>
           )}
-
-          {summary.tasks.total > 0 && detail.state && <TaskBoard state={detail.state} />}
         </div>
 
-        <aside className="md:sticky md:top-6 max-md:w-full rounded-md border border-line bg-surface px-3.5 py-1.5 shadow-[var(--shadow-soft)] text-[13px]">
+        <aside className="md:sticky md:top-6 max-md:w-full min-w-0">
+          <div className="rounded-md border border-line bg-surface px-3.5 py-1.5 shadow-[var(--shadow-soft)] text-[13px]">
           <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted pt-2 pb-1.5">Run metadata</div>
           <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
             <span className="text-[12.5px] text-muted">Phase</span>
@@ -173,20 +173,6 @@ export function RunPage() {
             <span className="text-[12.5px] text-muted">Tasks</span>
             <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">{summary.tasks.done} / {summary.tasks.total}</span>
           </div>
-          {detail.state && detail.state.tasks.length > 0 && (
-            <div className="flex gap-[3px] pb-2" aria-hidden="true">
-              {detail.state.tasks.map((t) => {
-                const capped = t.review_rounds >= 3 && t.status !== 'done'
-                return (
-                  <span
-                    key={t.id}
-                    title={`${t.id} · ${t.status}${t.review_rounds > 0 ? ` · ⟲${t.review_rounds}` : ''}`}
-                    className={`h-[6px] min-w-0 flex-1 rounded-full ${t.status === 'done' ? 'bg-ok' : capped ? 'bg-bad' : 'bg-line'}`}
-                  />
-                )
-              })}
-            </div>
-          )}
           <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
             <span className="text-[12.5px] text-muted">Max rounds</span>
             <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">{summary.tasks.maxRounds}</span>
@@ -215,10 +201,12 @@ export function RunPage() {
               {summary.updatedAt ? formatAge(summary.updatedAt, Date.now() / 1000) + ' ago' : '—'}
             </span>
           </div>
+          </div>
+          {summary.tasks.total > 0 && detail.state && <TaskBoard state={detail.state} />}
         </aside>
       </div>
 
-      <nav className="mt-9 mb-[18px] flex gap-0.5 border-b border-line">
+      <nav className="mt-6 mb-[18px] flex gap-0.5 border-b border-line">
         <button
           onClick={() => setTab('artifacts')}
           className={`px-4 py-2.5 text-[13.5px] font-medium border-b-2 -mb-px transition-colors ${
@@ -341,39 +329,38 @@ function NeedsYouCard({ item, now, detail, primary }: { item: InboxItem; now: nu
   )
 }
 
+/** The task board lives in the status column under the metadata rail and
+ * shares its visual grammar: mono label row, hairline-separated rows. */
 function TaskBoard({ state }: { state: NonNullable<RunDetailResponse['state']> }) {
   const doneCount = state.tasks.filter((t) => t.status === 'done').length
   return (
-    <section className="mt-[26px] mb-6">
-      <div className="font-mono text-[11px] tracking-[0.12em] uppercase text-muted mb-2.5">
-        Task board · {state.tasks.length} task{state.tasks.length !== 1 ? 's' : ''} · {doneCount} review-approved
+    <section className="mt-4 rounded-md border border-line bg-surface px-3.5 py-1.5 shadow-[var(--shadow-soft)]">
+      <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted pt-2 pb-1.5">
+        Task board · {doneCount} / {state.tasks.length} done
       </div>
-      <div className="flex gap-2.5 flex-wrap">
-        {state.tasks.map((t) => {
-          const capped = t.review_rounds >= 3
-          const statusChip = capped
-            ? 'font-bold text-bad bg-bad-bg border-bad-line'
-            : t.status === 'done'
-              ? 'text-ok bg-ok-bg border-ok-line'
-              : 'text-muted bg-inset border-line'
-          return (
-            <span
-              key={t.id}
-              className="inline-flex items-center gap-2.5 rounded-md border border-line bg-surface px-3 py-2 text-[13px] shadow-[var(--shadow-soft)]"
-            >
-              <span className="font-mono text-[12.5px] text-ink font-medium">{t.id}</span>
-              <span className={`rounded-xs border px-2 py-0.5 text-[11.5px] font-semibold ${statusChip}`}>
-                {t.status === 'done' ? '✓ ' : ''}{t.status}
-              </span>
+      {state.tasks.map((t) => {
+        const capped = t.review_rounds >= 3
+        const statusChip = capped
+          ? 'font-bold text-bad bg-bad-bg border-bad-line'
+          : t.status === 'done'
+            ? 'text-ok bg-ok-bg border-ok-line'
+            : 'text-muted bg-inset border-line'
+        return (
+          <div key={t.id} className="flex items-center justify-between gap-3 py-[7px] border-t border-line">
+            <span className="min-w-0 truncate font-mono text-[12.5px] font-medium text-ink">{t.id}</span>
+            <span className="flex shrink-0 items-center gap-1.5">
               {t.review_rounds > 0 && (
                 <span className={`font-mono text-[11.5px] tabular-nums ${capped ? 'font-bold text-bad' : 'text-muted'}`} title="review rounds">
                   ⟲{t.review_rounds}
                 </span>
               )}
+              <span className={`rounded-xs border px-2 py-0.5 text-[11px] font-semibold ${statusChip}`}>
+                {t.status === 'done' ? '✓ ' : ''}{t.status}
+              </span>
             </span>
-          )
-        })}
-      </div>
+          </div>
+        )
+      })}
     </section>
   )
 }

@@ -1,7 +1,7 @@
 run: review-parsing
 branch: run/review-parsing
-phase: paused # staged — not yet armed; `agentic arm review-parsing` starts the run
-paused_reason: escalation
+phase: implement # staged — not yet armed; `agentic arm review-parsing` starts the run
+paused_reason: null
 profile: patch # patch | standard | full
 intake:
   # source-agnostic staging provenance; free-form path: nulls + client_key

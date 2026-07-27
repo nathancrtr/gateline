@@ -48,6 +48,16 @@ escalations:
         reason: "implementer (01-review-parsing) failed twice: rebase of
           run/review-parsing--task/01-review-parsing onto run/review-parsing
           conflicted — overlapping file-contact surf…",
-        resolved: false
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-27T03:13:29.798Z,
+        resolution: "Misdiagnosis, not a plan defect. foldTaskBranch labels every rebase
+          failure 'overlapping file-contact surfaces' (#223); the actual cause
+          was an unstaged frontend/package-lock.json in the task worktree, which
+          makes git rebase refuse to start (#224). No surface overlap existed —
+          the task branch and run tip were the same commit. Fixed at the source
+          by #226 (lockfile normalized so npm install no longer dirties the
+          tree). No implementer work survived the failed fold (#225), so this
+          needs a fresh round from scratch."
       }
   ]

@@ -13,7 +13,20 @@ intake:
 budget:
   cost_limit_usd: 30
   cost_spent_usd: 0
-  ledger: []
+  ledger:
+    [
+      {
+          at: 2026-07-27T01:30:18.957Z,
+          role: implementer,
+          task: 01-review-parsing,
+          round: 1,
+          adapter: claude-code,
+          model: anthropic/claude-sonnet-5,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
+        }
+    ]
 gates:
   # exactly PROFILE_GATES[patch] — no others
   G1:
@@ -25,5 +38,5 @@ gates:
       burden: confirmation
     }
   G2: { approved: false, by: null, at: null, notes: null }
-tasks: [ { id: 01-review-parsing, status: pending, review_rounds: 0 } ]
+tasks: [ { id: 01-review-parsing, status: dispatched, review_rounds: 0 } ]
 escalations: []

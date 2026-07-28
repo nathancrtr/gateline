@@ -40,6 +40,9 @@ const TOY_BRIEF = '# Intent Brief: Toy exporter is unusable at scale\n\n## Probl
 const TOY_RUN = { 'runs/toy/state.yaml': TOY_STATE, 'runs/toy/intent-brief.md': TOY_BRIEF }
 /** The same run after its closing gate — the state a dispatch-only ensure could never observe (#232). */
 const DONE_STATE = 'run: toy\nbranch: run/toy\nphase: done\nprofile: standard\ngates:\n  G0: { approved: true, by: Fixture Operator, at: 2026-07-26T00:00:00Z, notes: null }\ntasks: []\nescalations: []\n'
+/** `agentic new` staged the run; nobody has armed it. */
+const STAGED_STATE =
+  'run: toy\nbranch: run/toy\nphase: paused\npaused_reason: staged\nprofile: standard\ngates:\n  G0: { approved: false, by: null, at: null, notes: null }\ntasks: []\nescalations: []\n'
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'agentic-pr-ensure-'))
@@ -261,6 +264,51 @@ describe('ensureDraftPr descriptions', () => {
     expect(result.status).toBe('skipped')
     expect(result.note).toContain('still deriving')
     expect(result.note).toContain('#213')
+  })
+
+  it('leaves a closed PR closed when the run has not moved since — a human closing it is a decision (#207, narrowed)', async () => {
+    pushRunBranch('run/toy', TOY_RUN)
+    const closedAt = new Date(Date.now() + 60_000).toISOString() // closed after the branch's last commit
+    const exec = ghStub({ number: 42, title: 'run/toy', body: `${GENERATED_MARKER}\n\nstale`, state: 'CLOSED', closedAt })
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
+
+    expect(result.status).toBe('skipped')
+    expect(result.note).toContain('#42 was closed')
+    expect(result.note).toContain('has not moved since')
+    expect(exec.mock.calls.some(([, args]) => args.includes('create'))).toBe(false)
+  })
+
+  it('reopens the review surface once a closed-PR run commits again — the run outlived the PR after all', async () => {
+    pushRunBranch('run/toy', TOY_RUN)
+    const closedAt = new Date(Date.now() - 60_000).toISOString() // the branch committed after the close
+    const exec = ghStub({ number: 42, title: 'run/toy', body: `${GENERATED_MARKER}\n\nstale`, state: 'CLOSED', closedAt })
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
+
+    expect(result.status).toBe('created')
+    expect(result.note).toContain('replaces #42, which is closed')
+  })
+
+  it('opens nothing for a staged run — arming is what ensures its PR', async () => {
+    pushRunBranch('run/toy', { ...TOY_RUN, 'runs/toy/state.yaml': STAGED_STATE })
+    const exec = ghStub(null)
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
+
+    expect(result.status).toBe('skipped')
+    expect(result.note).toContain('staged')
+    expect(exec.mock.calls.some(([, args]) => args.includes('create'))).toBe(false)
+  })
+
+  it('still refreshes an armed run’s existing PR after it was staged — the skip is about opening, not maintaining', async () => {
+    pushRunBranch('run/toy', TOY_RUN) // phase: spec — armed
+    const exec = ghStub({ number: 42, title: 'run/toy', body: `${GENERATED_MARKER}\n\nstale`, state: 'OPEN' })
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
+
+    expect(result.status).toBe('exists')
+    expect(result.note).toContain('refreshed')
   })
 
   it('opens a replacement when the only PR is closed', async () => {

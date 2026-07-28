@@ -82,7 +82,7 @@ describe('buildReviewReport', () => {
   it('a NOT genuinely resolved line does NOT classify the finding as resolved (the negation trap)', () => {
     const f1 = report.findings.find((f) => f.id === 'F1')!
     expect(f1.resolutions).toHaveLength(1)
-    expect(f1.resolutions[0]).toMatchObject({ round: 2, resolved: false })
+    expect(f1.resolutions[0]).toMatchObject({ round: 2, resolved: false, status: 'open' })
     expect(f1.resolutions[0]!.text).toContain('NOT genuinely resolved')
     expect(f1.resolved).toBe(false)
   })
@@ -90,7 +90,106 @@ describe('buildReviewReport', () => {
   it('a confident, unnegated resolved match classifies the finding as resolved', () => {
     const f2 = report.findings.find((f) => f.id === 'F2')!
     expect(f2.resolved).toBe(true)
-    expect(f2.resolutions[0]).toMatchObject({ round: 2, resolved: true })
+    expect(f2.resolutions[0]).toMatchObject({ round: 2, resolved: true, status: 'resolved' })
+  })
+
+  it('(round-2 F1) a contraction negation ("isn\'t resolved") does NOT classify as resolved', () => {
+    const out = of(`**Verdict:** request-changes
+**Round:** 1 of 1
+
+## Findings
+
+### F1 — blocking — a defect
+- **Where:** \`x:1\`
+- **Failure scenario:** n/a
+- **Requirement:** R1
+
+## Finding resolutions
+
+- **F1 — still isn't resolved.** The mechanism exists but misses the case.
+`)!
+    const f1 = out.findings.find((f) => f.id === 'F1')!
+    expect(f1.resolutions[0]).toMatchObject({ resolved: false, status: 'open' })
+    expect(f1.resolved).toBe(false)
+  })
+
+  it('(round-2 F1) "cannot be resolved without a spec change" does NOT classify as resolved', () => {
+    const out = of(`**Verdict:** request-changes
+**Round:** 1 of 1
+
+## Findings
+
+### F1 — blocking — a defect
+- **Where:** \`x:1\`
+- **Failure scenario:** n/a
+- **Requirement:** R1
+
+## Finding resolutions
+
+- **F1 — cannot be resolved without a spec change.**
+`)!
+    const f1 = out.findings.find((f) => f.id === 'F1')!
+    expect(f1.resolutions[0]).toMatchObject({ resolved: false, status: 'open' })
+    expect(f1.resolved).toBe(false)
+  })
+
+  it('(round-2 F2) the "(severity, resolved)" parenthetical shape classifies as resolved even with no dash-tail status', () => {
+    const out = of(`**Verdict:** request-changes
+**Round:** 1 of 1
+
+## Findings
+
+### F1 — blocking — a defect
+- **Where:** \`x:1\`
+- **Failure scenario:** n/a
+- **Requirement:** R1
+
+## Resolution of round-1 findings
+
+- **F1 (blocking, resolved)** — \`x.ts:1-4\`. Traced and killed.
+`)!
+    const f1 = out.findings.find((f) => f.id === 'F1')!
+    expect(f1.resolutions[0]).toMatchObject({ resolved: true, status: 'resolved' })
+    expect(f1.resolved).toBe(true)
+  })
+
+  it('(round-2 F3) an explicit negative marker without the word "resolved" classifies as the confident "open" status, not "unclassified"', () => {
+    const out = of(`**Verdict:** request-changes
+**Round:** 1 of 1
+
+## Findings
+
+### F1 — minor — a defect
+- **Where:** \`x:1\`
+- **Failure scenario:** n/a
+- **Requirement:** R1
+
+## Finding resolutions
+
+- **F1 — unresolved.** Carried forward.
+`)!
+    const f1 = out.findings.find((f) => f.id === 'F1')!
+    expect(f1.resolutions[0]).toMatchObject({ resolved: false, status: 'open' })
+  })
+
+  it('(round-2 F3) free-form text the parser cannot confidently place either way classifies as "unclassified", distinct from a confident "open"', () => {
+    const out = of(`**Verdict:** request-changes
+**Round:** 1 of 1
+
+## Findings
+
+### F1 — minor — a defect
+- **Where:** \`x:1\`
+- **Failure scenario:** n/a
+- **Requirement:** R1
+
+## Finding resolutions
+
+- **F1 — stands as written** (minor, plan-accepted). Not gating.
+`)!
+    const f1 = out.findings.find((f) => f.id === 'F1')!
+    expect(f1.resolutions[0]).toMatchObject({ resolved: false, status: 'unclassified' })
+    expect(f1.resolved).toBe(false)
   })
 
   it('sorts findings blocking-first even when the source declares major/minor before blocking', () => {
@@ -141,11 +240,34 @@ describe('real finished runs', () => {
     expect([...byId.keys()].sort()).toEqual(['F1', 'F2', 'F3', 'F4'])
 
     expect(byId.get('F1')).toMatchObject({ severity: 'blocking', round: 1, resolved: true })
-    expect(byId.get('F1')!.resolutions[0]).toMatchObject({ round: 2, resolved: true })
+    expect(byId.get('F1')!.resolutions[0]).toMatchObject({ round: 2, resolved: true, status: 'resolved' })
 
     for (const id of ['F2', 'F3', 'F4']) {
       expect(byId.get(id)!.resolved).toBe(false)
+      // Their round-2 disposition is free-form ('stands as written') — the
+      // parser can't confidently call these open or resolved, so they're
+      // `unclassified`, not silently folded into 'open' (round-2 F3).
+      expect(byId.get(id)!.resolutions[0]).toMatchObject({ status: 'unclassified', resolved: false })
     }
+  })
+
+  it('(round-2 F2) wordfreq review-03.md: the "(severity, resolved)" parenthetical shape classifies both F1 and F2 as resolved', () => {
+    const report = buildReviewReport(read('runs/wordfreq/review-03.md'))!
+    const byId = new Map(report.findings.map((f) => [f.id, f]))
+    for (const id of ['F1', 'F2']) {
+      const f = byId.get(id)!
+      expect(f.resolved, id).toBe(true)
+      expect(f.resolutions[0], id).toMatchObject({ round: 2, resolved: true, status: 'resolved' })
+    }
+  })
+
+  it('(round-2 F3) runner-agent review-04.md: an explicit "unresolved"/"open" marker classifies as the confident "open" status', () => {
+    const report = buildReviewReport(read('runs/runner-agent/review-04.md'))!
+    const byId = new Map(report.findings.map((f) => [f.id, f]))
+    const f2 = byId.get('F2')!
+    const unresolvedEntry = f2.resolutions.find((r) => r.text.includes('unresolved'))
+    expect(unresolvedEntry).toBeDefined()
+    expect(unresolvedEntry).toMatchObject({ resolved: false, status: 'open' })
   })
 
   it("F1's severity sorts ahead of the three minor findings", () => {

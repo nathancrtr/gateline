@@ -32,13 +32,26 @@ export interface ReviewRound {
 
 export type FindingSeverity = 'blocking' | 'major' | 'minor' | 'unknown'
 
+/** `resolved` — a confident, unnegated "resolved" match. `open` — a
+ * confident negative signal (a negated "resolved", or an explicit
+ * `unresolved` / `open` marker). `unclassified` — neither: the parser could
+ * not tell (empty status, or free-form text like `stands as written` /
+ * `n/a, correctly left alone` / `intentionally deferred`). Per the task's
+ * "bias toward still open" rule, only `resolved` folds a finding out of the
+ * default view — both `open` and `unclassified` render unfolded. */
+export type ResolutionStatus = 'resolved' | 'open' | 'unclassified'
+
 export interface FindingResolution {
   /** Round whose text carried this resolution statement. */
   round: number
-  /** true only on a confident, negation-aware "resolved" match. Anything
-   * else — including a plain substring hit inside a negated or unrelated
-   * phrase — is false, per the "bias toward still open" rule: a false
-   * "resolved" is a correctness bug, a false "open" is only mild noise. */
+  /** The classification. See `ResolutionStatus`. */
+  status: ResolutionStatus
+  /** Convenience: `status === 'resolved'`. Kept alongside `status` (rather
+   * than replaced) so callers that only care about the fold decision don't
+   * need a status switch — `unclassified` is deliberately false here too,
+   * per the "bias toward still open" rule: a false "resolved" is a
+   * correctness bug, a false "open" (which includes "abstained") is only
+   * mild noise. */
   resolved: boolean
   /** Verbatim resolution text (the bullet or heading block), unfolded. */
   text: string
@@ -135,10 +148,24 @@ const FINDING_ID = /F\d+/g
 // mild noise (task #214). 'unresolved' never matches RESOLVED_WORD — \b
 // requires a boundary before 'resolved', which the leading 'un' denies.
 const RESOLVED_WORD = /\bresolved\b/i
-const NEGATED_RESOLVED = /\b(?:not|never)\b[^.\n]{0,40}\bresolved\b/i
+// Negation cues that can precede "resolved" in real English and must block
+// a RESOLVED_WORD hit: 'not'/'never'/'cannot'/'no longer' as whole words,
+// plus contraction negatives generally ('isn't', 'wasn't', 'hasn't',
+// "doesn't", "didn't", "can't", "won't", "couldn't", ...) via the shared
+// n't suffix, so the list doesn't need to enumerate every contraction by
+// hand (round-2 finding #214-F1: the original 'not|never'-only lexicon
+// missed exactly these).
+const NEGATED_RESOLVED = /(?:\bnot\b|\bnever\b|\bcannot\b|\bno longer\b|\w+n['’]t\b)[^.\n]{0,40}\bresolved\b/i
+// Explicit confident-negative markers seen in the survey even without the
+// word "resolved" at all ('- **F3 — open** …', '- **F2 — unresolved…').
+const OPEN_WORD = /\bunresolved\b|\bopen\b/i
 
-function classifyResolved(text: string): boolean {
-  return RESOLVED_WORD.test(text) && !NEGATED_RESOLVED.test(text)
+/** Tri-state classification of a resolution status/text span. See
+ * `ResolutionStatus`. */
+function classifyResolution(text: string): ResolutionStatus {
+  if (RESOLVED_WORD.test(text) && !NEGATED_RESOLVED.test(text)) return 'resolved'
+  if (NEGATED_RESOLVED.test(text) || OPEN_WORD.test(text)) return 'open'
+  return 'unclassified'
 }
 
 interface Line {
@@ -296,7 +323,9 @@ function findRoundGroups(lines: Line[]): RoundGroup[] {
 }
 
 /** Record a resolution for each id a resolution line names — a single
- * bullet can carry several ('F3, F4, F5, F6 — still open, …'). */
+ * bullet can carry several ('F3, F4, F5, F6 — still open, …'). `status` is
+ * the text classification runs against (never rendered); `text` is the
+ * verbatim span shown to the reader. */
 function recordResolutions(
   out: Map<string, FindingResolution[]>,
   ids: string[],
@@ -305,10 +334,10 @@ function recordResolutions(
   text: string,
   line: number,
 ): void {
-  const resolved = classifyResolved(status)
+  const cls = classifyResolution(status)
   for (const id of ids) {
     const list = out.get(id)
-    const entry: FindingResolution = { round, resolved, text, line }
+    const entry: FindingResolution = { round, status: cls, resolved: cls === 'resolved', text, line }
     if (list) list.push(entry)
     else out.set(id, [entry])
   }
@@ -336,7 +365,14 @@ function scanResolutions(lines: Line[], start: number, end: number, round: numbe
       const tail = RESOLUTION_BULLET_TAIL.exec(line.text.slice(rb[0].length))
       if (tail) status = tail[1]!.trim()
     }
-    recordResolutions(out, ids, round, status, itemFrom(lines, i, end), i + 1)
+    // The disposition can also sit inside the id's own parenthetical
+    // instead of after a trailing dash ('- **F1 (blocking, resolved)** —
+    // …', runs/wordfreq/review-03.md) — fold it into the classification
+    // input (never into the verbatim `text` field below) so it isn't
+    // silently dropped when the dash-tail is empty.
+    const paren = (rb[2] ?? '').trim()
+    const classificationInput = paren ? `${status} ${paren}`.trim() : status
+    recordResolutions(out, ids, round, classificationInput, itemFrom(lines, i, end), i + 1)
   }
 }
 

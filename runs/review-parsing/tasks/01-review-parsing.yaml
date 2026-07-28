@@ -130,3 +130,63 @@ notes: |
   live-smoke), 0 failed. `npm run typecheck` — clean. Ran the 47-artifact
   sweep directly (ad hoc script, not committed) before writing the vitest
   version: 0 throws, 0 nulls, 0 verbatim mismatches.
+
+  Implementer round 2 — responses to review-01.md's three findings, all
+  fixed in code (none rebutted):
+
+  F1 (major, negation lexicon too narrow) — fixed. `NEGATED_RESOLVED`
+  widened from `not|never` to `not|never|cannot|no longer` plus a general
+  contraction pattern (`\w+n['’]t\b`) that covers "isn't", "wasn't",
+  "hasn't", "doesn't", "didn't", "can't", "won't", "couldn't", "shouldn't"
+  without enumerating each by hand
+  (frontend/packages/core/src/view-model/review-report.ts:150-158). Verified
+  the widened lexicon introduces zero regressions against the corpus: the
+  reviewer's own grep (`isn't|wasn't|hasn't|cannot|can't|no longer`) found
+  zero real hits outside review-01.md itself (the review report describing
+  the bug), which I reconfirmed independently. Added two tests pinning the
+  reviewer's exact failure scenarios verbatim ("still isn't resolved.",
+  "cannot be resolved without a spec change.") —
+  frontend/packages/core/test/review-report.test.ts, `(round-2 F1)` cases.
+
+  F2 (minor, `(severity, resolved)` parenthetical dropped) — fixed. The
+  captured parenthetical (`rb[2]`, previously discarded) is now folded into
+  the classification input alongside the dash-tail status — never into the
+  verbatim `text` field, so rendering is unaffected
+  (review-report.ts:368-375, `scanResolutions`). Added a synthetic test for
+  the exact shape plus a real-artifact test against
+  runs/wordfreq/review-03.md asserting both F1 and F2 now classify
+  `resolved: true, status: 'resolved'` (previously both false) — same file
+  and lines (133, 144) the reviewer cited.
+
+  F3 (minor, no `unclassified` state) — fixed, and folded together with F1's
+  fix since both touch the same classifier. `FindingResolution.resolved:
+  boolean` is now `FindingResolution.status: 'resolved' | 'open' |
+  'unclassified'` plus a `resolved: boolean` convenience field derived as
+  `status === 'resolved'` (kept, not removed, so any caller that only wants
+  the fold decision needs no status switch — round-1's "false resolved is a
+  correctness bug, false open is mild noise" bias is preserved: unclassified
+  reads as not-resolved). `open` is now a distinct, confident-negative
+  status (a negated "resolved", or an explicit "unresolved"/"open" marker
+  with no "resolved" token at all — both seen in the wild:
+  runs/runner-agent/review-04.md F2-F6), separate from `unclassified`
+  (free-form abstains like "stands as written", verified against
+  runs/dupefind/review-01.md's F2-F4). No other module in the surface reads
+  `FindingResolution` — grepped `frontend/packages` for
+  `FindingResolution|buildReviewReport` before changing the shape; only
+  review-report.ts, its test, and server/app.ts (which passes the report
+  through as opaque JSON and never touches `.resolved`/`.status`) reference
+  it, so the type change needed no other file's cooperation. Added tests for
+  both new branches (contraction/explicit-negative → 'open', free-form →
+  'unclassified') as synthetic cases plus real-artifact corroboration
+  (dupefind review-01.md F2-F4 → 'unclassified'; runner-agent review-04.md
+  F2 → 'open').
+
+  Verification (round 2): `npm test` — 590 passed, 2 skipped (pre-existing,
+  live-smoke), 0 failed (8 new tests added: 20/20 in
+  review-report.test.ts, up from 12). `npm run typecheck` — clean.
+  `npm install` again churned frontend/package-lock.json; reverted (`git
+  checkout -- frontend/package-lock.json`) before finishing, confirmed
+  clean via `git status`. Diff stays inside the four declared
+  file_contact_surface files (only review-report.ts and its test needed
+  changes this round; server/app.ts and view-model/index.ts untouched,
+  neither finding touched their contents).

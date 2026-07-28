@@ -1,9 +1,10 @@
-// The gate's packet decides the landing artifact (#250). Every profile/gate
-// pair in DESIGN.md §4.1 is covered, plus the cases that must fall through to
-// the caller's own default rather than guess.
+// Where the run page points you: the landing artifact (#250) and the card an
+// inbox link names (#216). Every profile/gate pair in DESIGN.md §4.1 is
+// covered, plus every case that must fall through to the caller's own
+// behavior rather than guess.
 import { describe, expect, it } from 'vitest'
 import type { InboxItem, Profile } from '../src/api.ts'
-import { landingArtifact } from '../src/landing.ts'
+import { decideTargetIndex, landingArtifact } from '../src/landing.ts'
 
 function item(over: Partial<InboxItem>): InboxItem {
   return {
@@ -91,5 +92,33 @@ describe('landingArtifact', () => {
   it('takes the first pending item that has an opinion', () => {
     const items = [item({ kind: 'escalation', gate: null }), item({ gate: 'G2' })]
     expect(land(items, 'full', FULL)).toBe('verification-report.md')
+  })
+})
+
+describe('decideTargetIndex', () => {
+  const items = [
+    item({ kind: 'escalation', gate: null, escalationIndex: 0 }),
+    item({ kind: 'escalation', gate: null, escalationIndex: 1 }),
+    item({ kind: 'gate', gate: 'G2' }),
+  ]
+
+  it('resolves each of the four shapes the inbox emits', () => {
+    expect(decideTargetIndex('G2', items)).toBe(2)
+    expect(decideTargetIndex('esc-1', items)).toBe(1)
+    expect(decideTargetIndex('paused', [item({ kind: 'paused', gate: null })])).toBe(0)
+    expect(decideTargetIndex('staged', [item({ kind: 'staged', gate: null })])).toBe(0)
+  })
+
+  it('does not confuse one escalation for another', () => {
+    expect(decideTargetIndex('esc-0', items)).toBe(0)
+    expect(decideTargetIndex('esc-2', items)).toBe(-1)
+  })
+
+  it('degrades to -1 for absent, empty, unknown, or already-decided values', () => {
+    expect(decideTargetIndex(null, items)).toBe(-1)
+    expect(decideTargetIndex('', items)).toBe(-1)
+    expect(decideTargetIndex('G9', items)).toBe(-1)
+    expect(decideTargetIndex('G0', items)).toBe(-1) // pending G2, so a stale G0 link finds nothing
+    expect(decideTargetIndex('G2', [])).toBe(-1)
   })
 })

@@ -1,7 +1,7 @@
 // One run's story: header + gate ledger, the "needs you" panel, and tabs for
 // artifacts, diff, and state history. Decision affordances live in the cards
 // (M2 wires them to POST /api/decisions).
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 // genesis-preview candidate (state.yaml gates.G1.notes): the run header's
@@ -11,7 +11,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 // detail.history. No new server data (ADR-6 rider, ADR-7).
 import { readIntake } from '@agentic/core/record'
 import { useKeys } from '../use-keys.ts'
-import { landingArtifact } from '../landing.ts'
+import { decideTargetIndex, landingArtifact } from '../landing.ts'
 import { api, formatAge, formatWhen, type InboxItem, type RunDetailResponse, type RunSummary } from '../api.ts'
 import { AgeBadge, BudgetMeter, GateLedger, KindChip, PhaseChip, ValidationBadge } from '../components/chips.tsx'
 import { DecidePanel } from '../components/decide.tsx'
@@ -90,6 +90,14 @@ export function RunPage() {
   // align with another.
   const busy = items.length > 0
 
+  // The inbox already encodes what it is calling you to decide (`?decide=G2`,
+  // `esc-<n>`, `paused`, `staged`); until #216 the run page dropped it on the
+  // floor. When it names a card that is still pending, that card is the one
+  // the keyboard loop drives and the one focus lands on. A stale or unknown
+  // value resolves to -1 and everything below behaves exactly as before.
+  const decideIndex = decideTargetIndex(params.get('decide'), items)
+  const primaryIndex = decideIndex >= 0 ? decideIndex : items.findIndex((x) => x.reviewable)
+
   const header = (
     <header className="mb-6">
       <div className="font-mono text-[12px] tracking-[0.14em] uppercase text-accent-deep">
@@ -142,7 +150,8 @@ export function RunPage() {
                   item={item}
                   now={now}
                   detail={detail}
-                  primary={i === items.findIndex((x) => x.reviewable)}
+                  primary={i === primaryIndex}
+                  sentHere={i === decideIndex}
                 />
               ))}
             </section>
@@ -242,8 +251,28 @@ export function RunPage() {
 /** A pending decision, rendered as a stakes-varied card. Candidate A:
  *  4px accent left-rail + tinted ground + lifted shadow. Reviewable cards
  *  get accent-tint ground, bounced cards get bad-bg — no animation, no glow. */
-function NeedsYouCard({ item, now, detail, primary }: { item: InboxItem; now: number; detail: RunDetailResponse; primary?: boolean }) {
+function NeedsYouCard({
+  item,
+  now,
+  detail,
+  primary,
+  sentHere,
+}: {
+  item: InboxItem
+  now: number
+  detail: RunDetailResponse
+  primary?: boolean
+  sentHere?: boolean
+}) {
   const urgent = item.since !== null && now - item.since > 3 * 86_400
+  // Arriving from an inbox link: bring the named card into view and give it
+  // focus, so the decision is where the eye and the keyboard already are.
+  const cardRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (!sentHere) return
+    cardRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    cardRef.current?.focus({ preventScroll: true })
+  }, [sentHere])
   // The card names artifacts and tasks in prose; resolve those mentions from
   // data already in the detail payload so the card answers "what happened,
   // where do I look" without a trip to the tabs.
@@ -273,6 +302,9 @@ function NeedsYouCard({ item, now, detail, primary }: { item: InboxItem; now: nu
           : 'grid-cols-[4px_1fr] bg-bad-bg border border-bad-line'
       }`}
       data-needs-card
+      data-sent-here={sentHere ? 'true' : undefined}
+      ref={cardRef}
+      tabIndex={-1}
     >
       <span
         className={`w-[4px] self-stretch ${item.reviewable ? 'bg-accent' : 'bg-bad'}`}
@@ -306,7 +338,7 @@ function NeedsYouCard({ item, now, detail, primary }: { item: InboxItem; now: nu
           </ul>
         )}
         {item.kind === 'gate' && item.gate === 'G2' && <EvidenceRollupPanel src={item.source} slug={item.slug} />}
-        <DecidePanel item={item} primary={primary} chips={chips} />
+        <DecidePanel item={item} primary={primary} sentHere={sentHere} chips={chips} />
       </div>
     </section>
   )

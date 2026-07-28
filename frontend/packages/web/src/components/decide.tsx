@@ -21,7 +21,18 @@ const DISPOSITION_OPTIONS: { value: Disposition; label: string; hint: string }[]
 
 type Mode = 'idle' | 'approve' | 'decline' | 'resolve' | 'arm'
 
-export function DecidePanel({ item, primary = false, chips = null }: { item: InboxItem; primary?: boolean; chips?: React.ReactNode }) {
+export function DecidePanel({
+  item,
+  primary = false,
+  sentHere = false,
+  chips = null,
+}: {
+  item: InboxItem
+  primary?: boolean
+  /** Arrived here from an inbox link naming this decision (#216). */
+  sentHere?: boolean
+  chips?: React.ReactNode
+}) {
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<Mode>('idle')
   const [burden, setBurden] = useState<Burden | null>(null)
@@ -50,6 +61,18 @@ export function DecidePanel({ item, primary = false, chips = null }: { item: Inb
     [item.kind, item.reviewable],
   )
   useKeys(keyHandlers, primary)
+
+  // Arriving from an inbox link opens the form for the kinds that have exactly
+  // one, non-destructive one (#216). Gates are deliberately excluded: opening
+  // either their approve or their decline form would presume an outcome the
+  // human has not chosen. `paused` is excluded too — its single affordance
+  // submits on click rather than opening a form, and a link must never arm a
+  // write. Those kinds get focus (handled by the card) and nothing more.
+  useEffect(() => {
+    if (!sentHere) return
+    if (item.kind === 'escalation') setMode('resolve')
+    else if (item.kind === 'staged') setMode('arm')
+  }, [sentHere, item.kind])
 
   // Let page-level Escape (back to inbox) yield while a decision is open.
   useEffect(() => {

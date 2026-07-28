@@ -1,5 +1,8 @@
-// Where the run page lands when something needs a human (#250). The gate on
-// the table decides which artifact opens — not which filename sorts first.
+// Where the run page points you when something needs a human: which artifact
+// opens (#250), and which pending card the inbox sent you to (#216).
+//
+// The gate on the table decides which artifact opens — not which filename
+// sorts first.
 // Since #249 closed the gate and profile vocabulary, that mapping is total:
 // every (profile, gate) pair names exactly one artifact to open on.
 //
@@ -58,4 +61,31 @@ export function landingArtifact(input: { items: InboxItem[]; profile: Profile; a
     if (wanted !== null && input.artifacts.includes(wanted)) return wanted
   }
   return null
+}
+
+/**
+ * Which pending card the inbox's `?decide=` param names, or -1 (#216). The
+ * four shapes mirror `itemHref` in pages/inbox.tsx exactly: a gate id, an
+ * `esc-<n>` index, `paused`, or `staged`.
+ *
+ * A value that is unknown, stale, or names a decision the run has since moved
+ * past resolves to -1, and the caller falls back to its ordinary behavior —
+ * a link that has aged out is not an error state.
+ */
+export function decideTargetIndex(decide: string | null, items: InboxItem[]): number {
+  if (decide === null || decide === '') return -1
+  return items.findIndex((item) => {
+    switch (item.kind) {
+      case 'gate':
+        return item.gate === decide
+      case 'escalation':
+        return item.escalationIndex !== null && decide === `esc-${item.escalationIndex}`
+      case 'paused':
+        return decide === 'paused'
+      case 'staged':
+        return decide === 'staged'
+      default:
+        return false
+    }
+  })
 }

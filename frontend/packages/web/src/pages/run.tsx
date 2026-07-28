@@ -11,6 +11,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 // detail.history. No new server data (ADR-6 rider, ADR-7).
 import { readIntake } from '@agentic/core/record'
 import { useKeys } from '../use-keys.ts'
+import { landingArtifact } from '../landing.ts'
 import { api, formatAge, formatWhen, type InboxItem, type RunDetailResponse, type RunSummary } from '../api.ts'
 import { AgeBadge, BudgetMeter, GateLedger, KindChip, PhaseChip, ValidationBadge } from '../components/chips.tsx'
 import { DecidePanel } from '../components/decide.tsx'
@@ -439,7 +440,14 @@ function ArtifactsTab({
   onSelect: (path: string) => void
 }) {
   const paths = detail.artifacts
-  const current = selected ?? paths.find((p) => p.endsWith('.md')) ?? paths[0] ?? null
+  // An explicit selection always wins; otherwise the pending gate's own packet
+  // decides what opens (#250), and only then does filename order get a say.
+  const current =
+    selected ??
+    landingArtifact({ items: detail.items, profile: detail.summary.profile, artifacts: paths }) ??
+    paths.find((p) => p.endsWith('.md')) ??
+    paths[0] ??
+    null
   return (
     <div className="grid grid-cols-[280px_1fr] gap-0 max-md:flex max-md:flex-col border-b border-line">
       <nav className="border-r border-line bg-surface py-[18px] max-md:w-full max-md:border-r-0">

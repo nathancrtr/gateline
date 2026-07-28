@@ -43,3 +43,43 @@ I ran every acceptance check myself, swept the full 47-artifact corpus through t
 ## Boundary check
 
 In bounds. Commit 073f1bb touches exactly the four declared surface files plus the task YAML's own `notes:`/status bookkeeping (expected). The claimed `package-lock.json` churn revert is confirmed — the lockfile is untouched in the diff, and my own `npm install` reproduced (and reverted) the same churn.
+
+---
+
+## Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** commit cc835f0 (branch run/review-parsing; cumulative 8f4a22c..cc835f0)
+
+## Findings
+
+None blocking. All three round-1 findings are genuinely resolved (verified below); one new plausible gap, non-blocking.
+
+### F4 — minor (PLAUSIBLE) — affirmative-form "not yet" phrasings still classify as resolved: the widened lexicon blocks negations but not aspectual or degree constructions
+- **Where:** `frontend/packages/core/src/view-model/review-report.ts:150-169` (`RESOLVED_WORD`/`NEGATED_RESOLVED`/`classifyResolution`)
+- **Failure scenario:** a future resolution bullet whose status reads "partially resolved; edge case remains" (likewise "remains to be resolved", "yet to be resolved", "far from resolved") carries no negation cue, so the unnegated "resolved" token classifies `resolved` and a still-standing finding folds. I probed all four against the built classifier: each returns `resolved`. PLAUSIBLE only — zero hits across all 48 corpus artifacts, the negation family the task mandates is now handled, and round 1 accepted this lexicon architecture as the fix path. Non-blocking; a follow-on lexicon entry for these phrasings is cheap whenever this file is next touched.
+- **Requirement:** task scope item 3 ("resolved ONLY on a confident … match")
+
+### Resolution of round-1 findings
+
+- **F1 (major, resolved)** — `review-report.ts:150-169`. Re-ran both round-1 failure scenarios against the built classifier, not the notes: "still isn't resolved." and "cannot be resolved without a spec change." both classify `open` now, as do "no longer resolved", a curly-apostrophe "wasn’t resolved", and the mandated negation trap (runner-agent review-04's F1 stays `open` through round 3, matching the artifact). Regression check: the resolved-true sets of the round-1 and round-2 parsers over all 48 artifacts differ by zero losses — the widened lexicon un-resolves nothing genuine. The two new pinning tests match my scenarios verbatim. Killed.
+- **F2 (minor, resolved)** — `review-report.ts:368-375`. The captured parenthetical now reaches the classifier: wordfreq review-03's F1 and F2 resolutions (its lines 134 and 144) classify `resolved`, and my old-versus-new corpus diff shows exactly those two entries gained, nothing else changed. The parenthetical stays out of the verbatim text field as claimed. Killed.
+- **F3 (minor, resolved)** — `review-report.ts:42-60`. The tri-state `status` landed with `resolved` kept as the derived fold decision, preserving the still-open bias (`unclassified` reads as not-resolved). Verified against real artifacts: dupefind F2-F4 classify `unclassified` (free-form "stands as written"), runner-agent review-04 F2 classifies `open` in round 2 then `resolved` in round 3 — both matching artifact ground truth. No other module reads the type (grepped the packages; the server passes the report through opaquely; typecheck clean). Killed.
+
+## Delta coverage
+
+I re-verified every round-1 finding against the real corpus with my own independent old-versus-new parser comparison, re-ran the full suite and typecheck myself, and audited the round-2 changes for newly introduced defects; outside the one plausible lexicon gap above, the delta is clean.
+
+- Round-1 fixes ✓ — each failure scenario re-executed directly (see resolutions), none taken on faith from the implementer's notes.
+- Corpus sweep ✓ — all 48 review artifacts (the corpus grew by this run's own round-1 report): 0 throws, 0 nulls, 0 verbatim mismatches; classification flips versus round 1 are exactly the two intended wordfreq gains.
+- Widened-negation audit ✓ — the contraction pattern covers straight and curly apostrophes; "unresolved" still never matches the affirmative; the classifier checks `resolved` first, so an open-token mention inside a genuinely-resolved line cannot demote it.
+- Paren-fold audit ✓ — the classification input orders dash-tail status before the parenthetical, so a tail negation is never severed from its target; only the classifier sees the parenthetical, never the rendered text.
+- Tri-state audit ✓ — `open` requires a negated "resolved" or an explicit unresolved/open marker; free-form abstains and empty statuses land in `unclassified`; finding-level `resolved` still derives from the last resolution only, false when there is none.
+- Tests ✓ — 8 added (20 total in the parser's test file), each fixed finding pinned by a synthetic case plus a real-artifact case; `npm test` 590 passed / 2 pre-existing skips and `npm run typecheck` clean, run by me.
+- Acceptance spot-recheck ✓ — dupefind review-01 still yields 4 findings, blocking F1 resolved in round 2, verdict order request-changes then approve.
+- Not assessed: server route behavior beyond pass-through (unchanged this round) and Playwright e2e (no web change).
+
+## Boundary check (round 2)
+
+In bounds. Commit cc835f0 touches two declared surface files (the parser and its test) plus the task YAML's own `notes:` bookkeeping — expected, per round-1's treatment. The lockfile is untouched in the diff; my own install reproduced and reverted the same churn.

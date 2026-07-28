@@ -146,7 +146,7 @@ has earned trust (design §10).
 | `capabilities.ts` | Reads `roles/<role>.md` frontmatter for `capabilities: [...]` (#182): the engine's only signal for which roles have no shell and must be told the orchestrator will harvest their work rather than to commit it themselves. |
 | `seam.ts` + `manifest.ts` | `dispatch()` driven entirely by adapters' `headless` manifest sections; a new runner costs one manifest. |
 | `router.ts` | Dispatch-time P5: `avoid_vendor_of` routes reviewer/verifier to an adapter on a different vendor than the implementer; refuses when two adapters both violate the pin; advisory when one single-vendor adapter makes it unsatisfiable. |
-| `workspace.ts` | Run checkouts as disposable worktrees; per-task isolation for parallel implementers with serial fold-back (a fold conflict = plan defect → escalate). |
+| `workspace.ts` | Run checkouts as disposable worktrees; per-task isolation for parallel implementers with serial fold-back. A fold classifies its own failure (`conflict \| dirty \| contention \| infra`): only a content conflict is a plan defect and escalates, the rest retry. Uncommitted tracked dirt is discarded and reported before the rebase, and a failed fold keeps its task branch for inspection. |
 | `triggers.ts` | Ref watcher, heartbeat, dispatch-completion, manual — all funnel into one non-overlapping tick loop. |
 | `schedule.ts` | Scheduled roles (S0–S4 + SB, one test per row): `orchestrator.yaml` schedules → due sweeps seeded as marker-only mini-runs by commit-then-launch, metered through the same seam. |
 | `shadow.ts` | M1: replay history, derived vs actual, disagreements dispositioned (see `shadow-wordfreq.md`). |

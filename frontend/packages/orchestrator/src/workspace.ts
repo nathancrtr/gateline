@@ -94,48 +94,150 @@ export async function ensureTaskCheckout(repoDir: string, runBranch: string, tas
   return { path, branch }
 }
 
+/**
+ * Why a fold did not land (#223). The old shape was a single `conflict`
+ * boolean, which made "overlapping file-contact surfaces, a plan defect" the
+ * diagnosis for every way a rebase can fail — including ones the architecture
+ * rules out. Only `conflict` is a plan defect, and only a plan defect is fatal.
+ */
+export type FoldFailure =
+  /** Genuine content conflict: the surfaces the Architect declared disjoint were not. */
+  | 'conflict'
+  /** Uncommitted tracked changes stopped the rebase before it compared anything. */
+  | 'dirty'
+  /** The run branch kept moving under us; nothing is wrong with the work. */
+  | 'contention'
+  /** Missing ref, unreadable head, git invocation failure. */
+  | 'infra'
+
 export interface FoldResult {
   ok: boolean
-  /** True when the rebase hit a conflict — a plan defect (overlapping surfaces). */
-  conflict: boolean
+  /** Null on success. */
+  cause: FoldFailure | null
   message: string
+  /** Branch kept for inspection because the fold did not land (#225); null when nothing was retained. */
+  retained: string | null
+  /** Uncommitted tracked paths discarded to let the rebase start (#224); never silently dropped. */
+  discarded: string[]
+}
+
+/** Only a plan defect is worth burning a human's escalation review on; everything else is retryable. */
+export const isPlanDefect = (fold: FoldResult): boolean => fold.cause === 'conflict'
+
+/**
+ * Reads a git failure's own words rather than assuming (#223). `git rebase`
+ * distinguishes these cases clearly, and the run's fate differs by case: a
+ * content conflict escalates as a plan defect, everything else is retried.
+ */
+function classifyRebaseFailure(message: string): FoldFailure {
+  if (/CONFLICT|could not apply|Merge conflict|fix conflicts/i.test(message)) return 'conflict'
+  if (/cannot rebase|unstaged changes|uncommitted changes|would be overwritten|please commit or stash/i.test(message)) return 'dirty'
+  return 'infra'
+}
+
+/**
+ * Uncommitted *tracked* paths in a worktree — what makes `git rebase` refuse to
+ * start. Untracked files are deliberately not listed: they do not block a
+ * rebase (established in #223) and may be scratch the agent still wants.
+ */
+async function dirtyTrackedPaths(wtGit: Git): Promise<string[]> {
+  const out = await wtGit.run(['status', '--porcelain']).catch(() => '')
+  return out
+    .split('\n')
+    .filter((line) => line.trim().length > 0 && !line.startsWith('??'))
+    .map((line) => line.slice(3).trim())
+    .filter(Boolean)
 }
 
 /**
  * Serial fold-back: rebase the task branch onto the current run tip, then
  * CAS the run branch to the rebased head. Mechanical while file-contact
- * surfaces are disjoint (the Architect guarantees this); a conflict is a
- * plan defect and escalates. Call under the engine's per-run write lock.
+ * surfaces are disjoint (the Architect guarantees this); a genuine content
+ * conflict is a plan defect and escalates. Call under the engine's per-run
+ * write lock.
+ *
+ * Two things happen around the rebase that the failure record depends on.
+ * Uncommitted tracked changes are cleared first (#224): an implementer that
+ * runs the suite in a fresh worktree must `npm install` to do it, which
+ * rewrites the lockfile — a file in no task's contact surface, so an obedient
+ * implementer leaves it uncommitted and its own work becomes unfoldable. What
+ * it *did* produce it committed, so what is left over is by definition not the
+ * task's product; it is discarded and every path named in the result. And the
+ * task branch now survives a failed fold (#225), matching the position
+ * `foldHarvestBranch` has held since review-04.md round-2 F9.
  */
 export async function foldTaskBranch(repoDir: string, runBranch: string, checkout: TaskCheckout): Promise<FoldResult> {
   const git = new Git(repoDir)
   const wtGit = new Git(checkout.path)
-  try {
-    for (let attempt = 0; attempt < 3; attempt++) {
+  const retained = checkout.branch
+  const discarded = await dirtyTrackedPaths(wtGit)
+  if (discarded.length > 0) await wtGit.run(['reset', '--hard', 'HEAD']).catch(() => {})
+
+  const attempt = async (): Promise<FoldResult> => {
+    const dirt = discarded.length > 0 ? ` (discarded uncommitted: ${discarded.join(', ')})` : ''
+    for (let i = 0; i < 3; i++) {
       const runTip = await git.revParse(`refs/heads/${runBranch}`)
-      if (!runTip) return { ok: false, conflict: false, message: `${runBranch} disappeared mid-fold` }
+      if (!runTip) return { ok: false, cause: 'infra', message: `${runBranch} disappeared mid-fold`, retained, discarded }
       try {
         await wtGit.run(['rebase', runTip])
       } catch (e) {
         await wtGit.run(['rebase', '--abort']).catch(() => {})
-        return {
-          ok: false,
-          conflict: true,
-          message: `rebase of ${checkout.branch} onto ${runBranch} conflicted — overlapping file-contact surfaces, a plan defect: ${(e as Error).message}`,
-        }
+        const raw = (e as Error).message
+        const cause = classifyRebaseFailure(raw)
+        const why =
+          cause === 'conflict'
+            ? `conflicted — overlapping file-contact surfaces, a plan defect`
+            : cause === 'dirty'
+              ? `could not start — the worktree still has uncommitted tracked changes`
+              : `failed for a reason that is neither a conflict nor a dirty worktree`
+        return { ok: false, cause, message: `rebase of ${checkout.branch} onto ${runBranch} ${why}${dirt}: ${raw}`, retained, discarded }
       }
       const folded = await wtGit.revParse('HEAD')
-      if (!folded) return { ok: false, conflict: false, message: 'rebased head unreadable' }
+      if (!folded) return { ok: false, cause: 'infra', message: 'rebased head unreadable', retained, discarded }
       if (await git.updateRefCAS(`refs/heads/${runBranch}`, folded, runTip)) {
-        return { ok: true, conflict: false, message: `folded ${checkout.branch} into ${runBranch}` }
+        return { ok: true, cause: null, message: `folded ${checkout.branch} into ${runBranch}${dirt}`, retained: null, discarded }
       }
       // The run branch moved (another fold, a human decision): rebase again.
     }
-    return { ok: false, conflict: false, message: 'fold lost CAS 3× — will re-derive' }
-  } finally {
-    await git.run(['worktree', 'remove', '--force', checkout.path]).catch(() => {})
-    await git.run(['branch', '-D', checkout.branch]).catch(() => {})
+    return { ok: false, cause: 'contention', message: 'fold lost CAS 3× — will re-derive', retained, discarded }
   }
+
+  let result: FoldResult
+  try {
+    result = await attempt()
+  } catch (e) {
+    result = { ok: false, cause: 'infra', message: `fold of ${checkout.branch} failed: ${(e as Error).message}`, retained, discarded }
+  } finally {
+    // The worktree always goes: it holds a lock and a tmpdir path, and its
+    // commits live on the branch regardless. The branch goes only once the
+    // fold has landed — on failure it is the sole surviving copy of a
+    // dispatch that was paid for, and the escalated human has nothing else
+    // to inspect (#225).
+    await git.run(['worktree', 'remove', '--force', checkout.path]).catch(() => {})
+  }
+  if (result.ok) await git.run(['branch', '-D', checkout.branch]).catch(() => {})
+  else result.message += ` — task branch ${checkout.branch} kept for inspection`
+  return result
+}
+
+/**
+ * Deletes task branches left behind by failed folds for a finished run (#225).
+ * Retention buys the escalated human a diff to inspect; it must not accrue
+ * local refs forever. A re-dispatch of the same task already reaps its own
+ * branch in `ensureTaskCheckout`, so this covers the other end: a run that has
+ * reached a terminal state and will dispatch nothing further.
+ */
+export async function reapTaskBranches(repoDir: string, runBranch: string): Promise<string[]> {
+  const git = new Git(repoDir)
+  const prefix = `${runBranch}--task/`
+  const out = await git.run(['for-each-ref', '--format=%(refname:short)', `refs/heads/${prefix}*`]).catch(() => '')
+  const branches = out.split('\n').map((l) => l.trim()).filter(Boolean)
+  const reaped: string[] = []
+  for (const branch of branches) {
+    // -D, not -d: a retained branch is unmerged by definition — that is why it was kept.
+    if (await git.run(['branch', '-D', branch]).then(() => true).catch(() => false)) reaped.push(branch)
+  }
+  return reaped
 }
 
 /**
@@ -164,13 +266,16 @@ export async function foldHarvestBranch(
   const fetchRef = `refs/agentic-harvest/${localBranch}`
   const path = join(tmpdir(), 'agentic-orchestrator', repoKey, localBranch)
 
+  // The origin branch is this fold's retained copy on every failure path: it
+  // is what the escalated human recovers from (F9), so name it in the result.
+  const retained = harvest.branch
   try {
     await git.run(['fetch', 'origin', `+refs/heads/${harvest.branch}:${fetchRef}`])
   } catch (e) {
-    return { ok: false, conflict: false, message: `fetch of harvest branch ${harvest.branch} failed: ${(e as Error).message}` }
+    return { ok: false, cause: 'infra', message: `fetch of harvest branch ${harvest.branch} failed: ${(e as Error).message}`, retained, discarded: [] }
   }
   const fetchedTip = await git.revParse(fetchRef)
-  if (!fetchedTip) return { ok: false, conflict: false, message: `harvest branch ${harvest.branch} not found on origin after fetch` }
+  if (!fetchedTip) return { ok: false, cause: 'infra', message: `harvest branch ${harvest.branch} not found on origin after fetch`, retained, discarded: [] }
 
   if (await git.revParse(`refs/heads/${localBranch}`)) await git.run(['branch', '-D', localBranch]).catch(() => {})
   await git.run(['worktree', 'prune']).catch(() => {})
@@ -182,7 +287,7 @@ export async function foldHarvestBranch(
     result = await (async (): Promise<FoldResult> => {
       for (let attempt = 0; attempt < 3; attempt++) {
         const runTip = await git.revParse(`refs/heads/${runBranch}`)
-        if (!runTip) return { ok: false, conflict: false, message: `${runBranch} disappeared mid-fold` }
+        if (!runTip) return { ok: false, cause: 'infra', message: `${runBranch} disappeared mid-fold`, retained, discarded: [] }
         try {
           // Explicit --onto (rather than foldTaskBranch's single-arg rebase):
           // the harvest branch's real parent (harvest.base) is known exactly,
@@ -191,20 +296,29 @@ export async function foldHarvestBranch(
           await wtGit.run(['rebase', '--onto', runTip, harvest.base])
         } catch (e) {
           await wtGit.run(['rebase', '--abort']).catch(() => {})
+          const raw = (e as Error).message
+          // Same classification as the local fold (#223). This worktree is
+          // built fresh from the fetched tip, so `dirty` is not expected here
+          // — but asserting a plan defect for, say, a missing base ref was
+          // exactly the bug, and the fix is to stop asserting either way.
+          const cause = classifyRebaseFailure(raw)
+          const why = cause === 'conflict' ? 'conflicted — overlapping file-contact surfaces, a plan defect' : 'failed'
           return {
             ok: false,
-            conflict: true,
-            message: `rebase of harvest branch ${harvest.branch} onto ${runBranch} conflicted — overlapping file-contact surfaces, a plan defect: ${(e as Error).message}`,
+            cause,
+            message: `rebase of harvest branch ${harvest.branch} onto ${runBranch} ${why}: ${raw}`,
+            retained,
+            discarded: [],
           }
         }
         const folded = await wtGit.revParse('HEAD')
-        if (!folded) return { ok: false, conflict: false, message: 'rebased head unreadable' }
+        if (!folded) return { ok: false, cause: 'infra', message: 'rebased head unreadable', retained, discarded: [] }
         if (await git.updateRefCAS(`refs/heads/${runBranch}`, folded, runTip)) {
-          return { ok: true, conflict: false, message: `folded harvest branch ${harvest.branch} into ${runBranch}` }
+          return { ok: true, cause: null, message: `folded harvest branch ${harvest.branch} into ${runBranch}`, retained: null, discarded: [] }
         }
         // The run branch moved (another fold, a human decision): rebase again.
       }
-      return { ok: false, conflict: false, message: 'fold lost CAS 3× — will re-derive' }
+      return { ok: false, cause: 'contention', message: 'fold lost CAS 3× — will re-derive', retained, discarded: [] }
     })()
   } finally {
     await git.run(['worktree', 'remove', '--force', path]).catch(() => {})

@@ -83,7 +83,7 @@ gates:
       burden: confirmation
     }
   G2: { approved: false, by: null, at: null, notes: null }
-tasks: [ { id: 01-review-parsing, status: in-review, review_rounds: 1 } ]
+tasks: [ { id: 01-review-parsing, status: in-review, review_rounds: 2 } ]
 escalations:
   [
     {

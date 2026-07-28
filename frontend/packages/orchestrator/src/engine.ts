@@ -346,11 +346,15 @@ export class Engine {
         isAncestor: (a, b) => this.source.git.isAncestor(a, b),
       })
       const action = deriveAction(obs)
+      // The landed-slug guard runs first, for the same reason concurrency
+      // runs before the budget guards: a run this tick refuses outright must
+      // not spend headroom, or reserve a slot, on work it will never start.
+      const live = await this.landedGuard(ref, action)
       // Concurrency is checked before the budget guards, not after: a
       // dispatch this tick will not start must not add its estimate to the
       // host projection hostGuards accumulates across runs, or a deferral
       // here would spend budget headroom nothing consumed.
-      const admitted = this.concurrencyGuard(ref, action)
+      const admitted = this.concurrencyGuard(ref, live)
       outcomes.push(await this.execute(ref, tip, obs, this.hostGuards(obs, admitted, host)))
     }
     return outcomes
@@ -408,6 +412,49 @@ export class Engine {
       host.projected += add
     }
     return action
+  }
+
+  /** The default branch, probed once per process — a deployment does not change it mid-flight. */
+  private defaultBranchPromise: Promise<string> | null = null
+  private defaultBranch(): Promise<string> {
+    if (!this.defaultBranchPromise) this.defaultBranchPromise = this.source.git.defaultBranch()
+    return this.defaultBranchPromise
+  }
+
+  /**
+   * Landed-slug guard (#213, rule LR). A run whose `runs/<slug>/` is already
+   * on the default branch has shipped: the durable record is there, and this
+   * branch is a second life for a slug that has one. `listRuns` retires the
+   * clean case — a record identical to the one that landed is classified
+   * historical and never reaches this loop at all. What reaches here is the
+   * branch that *kept going* after its merge, and that is the expensive shape:
+   * `fleetview-design` spent $152.78 deriving toward gates on content that had
+   * already shipped, and nothing objected until Ops reached G3 and found the
+   * change was live.
+   *
+   * So refuse, pause, and hand it to a human. Unlike the resource cap this is
+   * not self-clearing and unlike the budget caps it is not a ceiling to raise:
+   * the run cannot become un-merged, and the only way forward is a fresh slug
+   * for whatever work remains. A human is also the only one who can say what
+   * becomes of the branch, which is why this escalates rather than resting
+   * quietly (#200 has no terminal state to put it in yet).
+   *
+   * Bookkeeping is refused alongside dispatch. A `record` costs nothing, but
+   * advancing the phase of a run that has already shipped writes a fiction
+   * into a record whose durable copy says otherwise.
+   */
+  private async landedGuard(ref: RunRef, action: DerivedAction): Promise<DerivedAction> {
+    if (action.kind !== 'dispatch' && action.kind !== 'record') return action
+    const defaultBranch = await this.defaultBranch()
+    const { runs } = await this.source.frameworkRoots()
+    const runDir = `${runs}/${ref.slug}`
+    if ((await this.source.git.objectId(defaultBranch, runDir)) === null) return action
+    const reason =
+      `${runDir}/ is already on ${defaultBranch} — this slug has shipped, and this branch has moved on since the merge. ` +
+      `Refusing to ${action.kind === 'dispatch' ? 'dispatch' : 'advance'} it: a merged run cannot be continued, because its ` +
+      `record on ${defaultBranch} is the durable one and nothing here can amend it. Carry any remaining work on a fresh slug (see #213).`
+    this.log(`${ref.slug}: landed-slug guard — ${reason}`)
+    return { kind: 'escalate', rule: 'LR', reason, pause: 'slug-landed', why: reason }
   }
 
   /** Spend committed or in flight across the given runs: closed ledger costs plus estimates for open entries. */

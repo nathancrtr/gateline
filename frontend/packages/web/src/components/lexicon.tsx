@@ -196,6 +196,39 @@ export function LexRef({ children }: { children?: ReactNode }) {
 }
 
 // ---------------------------------------------------------------------------
+// Plain prose that cites ids: needs-you card titles and details (#252).
+
+/**
+ * Wrap every id the run's lexicon can resolve in a `LexRef`, leaving the rest
+ * of the string untouched. Used for prose that is not markdown and so never
+ * passes through the rehype stage — an escalation reason, a gate question, a
+ * round-cap detail line.
+ *
+ * Unlike the artifact renderer this wraps **only resolvable ids**. An artifact
+ * view is a reading surface where "cited but defined nowhere" is a finding
+ * worth showing; a decision card is not the place to introduce a warning about
+ * a citation the human did not write, so an unresolvable id stays plain text.
+ */
+export function CitedText({ children }: { children: string }) {
+  const lex = useLexicon()
+  if (!lex) return <>{children}</>
+  const re = new RegExp(lex.pattern, 'g')
+  const parts: ReactNode[] = []
+  let last = 0
+  let key = 0
+  let m: RegExpExecArray | null
+  while ((m = re.exec(children))) {
+    if (!lex.byId.has(m[0])) continue
+    if (m.index > last) parts.push(children.slice(last, m.index))
+    parts.push(<LexRef key={key++}>{m[0]}</LexRef>)
+    last = m.index + m[0].length
+  }
+  if (parts.length === 0) return <>{children}</>
+  if (last < children.length) parts.push(children.slice(last))
+  return <>{parts}</>
+}
+
+// ---------------------------------------------------------------------------
 // Cited-objects strip: the artifact's reference surface, compressed.
 
 /** [1,2,3,5] with fmt R → 'R1–R3, R5'. */

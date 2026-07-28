@@ -10,7 +10,7 @@
 // rather than the branch name, and are refreshed as better artifacts land —
 // until a human edits the body, which hands the description over for good.
 import { execFile } from 'node:child_process'
-import { parseRunState, PROFILES, type Profile } from '../record/schema.ts'
+import { parseRunState, PROFILES, STAGED_REASON, type Profile } from '../record/schema.ts'
 import { resolveFrameworkRoots } from './framework-roots.ts'
 import { Git } from './git.ts'
 import { describeRun, isGeneratedBody, type RunDescription } from './pr-description.ts'
@@ -41,26 +41,38 @@ const defaultExec: ExecLike = (cmd, args, opts) =>
 /** Profile, phase, and the gate ledger, read leniently: a state.yaml too broken
  * to validate still names its profile and phase, and a description is no place
  * to lose them. Anything unreadable simply thins the banner. */
-function readStateBits(raw: string | null): { profile: Profile | null; phase: string | null; gates: { id: string; approved: boolean }[] } {
-  if (raw === null) return { profile: null, phase: null, gates: [] }
+function readStateBits(raw: string | null): {
+  profile: Profile | null
+  phase: string | null
+  pausedReason: string | null
+  gates: { id: string; approved: boolean }[]
+} {
+  if (raw === null) return { profile: null, phase: null, pausedReason: null, gates: [] }
   const state = parseRunState(raw).state
   if (state) {
     return {
       profile: state.profile,
       phase: state.phase,
+      pausedReason: state.paused_reason,
       gates: Object.entries(state.gates).map(([id, gate]) => ({ id, approved: gate.approved })),
     }
   }
   const profileMatch = /^profile:\s*([a-z]+)/m.exec(raw)
   const phaseMatch = /^phase:\s*([a-z-]+)/m.exec(raw)
+  const pausedMatch = /^paused_reason:\s*([a-z-]+)/m.exec(raw)
   return {
     profile: profileMatch && (PROFILES as readonly string[]).includes(profileMatch[1]!) ? (profileMatch[1] as Profile) : null,
     phase: phaseMatch ? phaseMatch[1]! : null,
+    pausedReason: pausedMatch ? pausedMatch[1]! : null,
     gates: [],
   }
 }
 
-async function describeFromBranch(git: Git, rev: string, slug: string): Promise<{ desc: RunDescription; phase: string | null }> {
+async function describeFromBranch(
+  git: Git,
+  rev: string,
+  slug: string,
+): Promise<{ desc: RunDescription; phase: string | null; staged: boolean }> {
   let runDir = `runs/${slug}`
   let bits = readStateBits(null)
   let brief: string | null = null
@@ -74,7 +86,12 @@ async function describeFromBranch(git: Git, rev: string, slug: string): Promise<
   } catch {
     // Fall through with whatever was read before the failure.
   }
-  return { desc: describeRun({ slug, runDir, ...bits, brief, spec }), phase: bits.phase }
+  const { pausedReason, ...describable } = bits
+  return {
+    desc: describeRun({ slug, runDir, ...describable, brief, spec }),
+    phase: bits.phase,
+    staged: bits.phase === 'paused' && pausedReason === STAGED_REASON,
+  }
 }
 
 interface ListedPr {
@@ -84,6 +101,36 @@ interface ListedPr {
   state: string
   /** Absent when an older listing (or a test stub) didn't ask for it — treated as "don't know", so the draft flag is left alone. */
   isDraft?: boolean
+  /** ISO-8601, absent on an open PR (and on an older listing) — see `closedForGood`. */
+  closedAt?: string | null
+}
+
+/**
+ * Whether a human's `gh pr close` still stands (#207's closed case, narrowed).
+ *
+ * #207 decided that a closed PR means the run has lost its review surface and
+ * should get a replacement, listing "superseded, closed to quiet notifications"
+ * among the reasons a branch outlives its PR. What it did not anticipate is the
+ * operator closing a PR *because the run is over* — a declined run, a slug
+ * retried under a fresh name — where a replacement within one tick reads as the
+ * framework arguing with the person cleaning up after it. Its own note that "the
+ * only way to loop would be a PR that is closed immediately by something else"
+ * turned out to describe a human with a mouse.
+ *
+ * The branch itself settles it, and needs no new state to do so. A close is
+ * honored while the run stays where the human left it; the moment the run
+ * commits again — it was only superseded, or work resumed — the branch has
+ * outlived that PR in the sense #207 meant, and the replacement opens as it
+ * always did. A listing without `closedAt` (an older `gh`, a test stub) is a
+ * "don't know", and don't-know keeps #207's behavior.
+ */
+async function closedForGood(git: Git, rev: string, pr: ListedPr): Promise<boolean> {
+  if (!pr.closedAt) return false
+  const closedAt = Date.parse(pr.closedAt)
+  if (Number.isNaN(closedAt)) return false
+  const tip = (await git.log(rev, [], { maxCount: 1 }))[0]
+  if (!tip) return false
+  return tip.time * 1000 <= closedAt
 }
 
 /**
@@ -145,11 +192,20 @@ async function readyPr(exec: ExecLike, dir: string, pr: ListedPr, phase: string 
  *
  * A closed PR is absent for this purpose (#207): the branch is still live and
  * still accruing commits, so a run that outlives its PR gets a replacement
- * rather than being left with no review surface. A *merged* PR is the one
- * exception (#213) — that branch has shipped, and a replacement would be a PR
- * against landed work. The listing asks for every state so both rules can see
- * what they need: the merged verdict, and the name of the dead PR a
+ * rather than being left with no review surface. Two cases are not that, and
+ * each declines to open anything:
+ *
+ * - A *merged* PR (#213) — that branch has shipped, and a replacement would be
+ *   a PR against landed work.
+ * - A close that still stands (`closedForGood`) — the run has not moved since a
+ *   human closed its PR, so the close was a decision, not an accident.
+ *
+ * The listing asks for every state so all three rules can see what they need:
+ * the merged verdict, the close's timestamp, and the name of the dead PR a
  * replacement stands in for.
+ *
+ * A *staged* run opens nothing at all: it is inert until `agentic arm`, and
+ * arming is what ensures its PR.
  *
  * "Draft" in the name is the default, not the whole story (#232): the draft
  * flag tracks the run's phase, so a `done` run's PR is marked ready for review
@@ -176,7 +232,7 @@ export async function ensureDraftPr(
     try {
       listOut = await exec(
         'gh',
-        ['pr', 'list', '--head', branch, '--state', 'all', '--limit', '20', '--json', 'number,title,body,state,isDraft'],
+        ['pr', 'list', '--head', branch, '--state', 'all', '--limit', '20', '--json', 'number,title,body,state,isDraft,closedAt'],
         { cwd: dir, maxBuffer: 16 * 1024 * 1024 },
       )
     } catch (e) {
@@ -190,7 +246,8 @@ export async function ensureDraftPr(
       return { status: 'skipped', note: `gh pr list returned unparseable output: ${e instanceof Error ? e.message : String(e)}` }
     }
 
-    const { desc, phase } = await describeFromBranch(git, `refs/remotes/origin/${branch}`, slug)
+    const originRef = `refs/remotes/origin/${branch}`
+    const { desc, phase, staged } = await describeFromBranch(git, originRef, slug)
 
     const open = prs.find((pr) => pr.state === 'OPEN')
     if (open) {
@@ -215,10 +272,20 @@ export async function ensureDraftPr(
       return { status: 'skipped', note: `#${merged.number} already merged ${branch} — landed work gets no replacement PR${stillRunning}` }
     }
 
+    // A staged run is inert until `agentic arm`, and arming is what ensures
+    // its PR. Opening one here would advertise for review a run its own
+    // operator has not started — and every tick until they do.
+    if (staged) return { status: 'skipped', note: `${slug} is staged — a PR is ensured at \`agentic arm\`, not before` }
+
     // Every PR for this branch is closed, so the run has no review surface
-    // (#207). Name the most recent dead one in the note — a replacement
-    // appearing without explanation is its own confusion.
+    // (#207) — unless the newest close still stands, in which case the human
+    // who closed it gets the last word until the run moves.
     const dead = prs[0]
+    if (dead && (await closedForGood(git, originRef, dead)))
+      return {
+        status: 'skipped',
+        note: `#${dead.number} was closed and ${branch} has not moved since — leaving it closed (it reopens if the run commits again)`,
+      }
     const base = await git.defaultBranch()
     // A replacement PR for an already-`done` run opens ready, not draft
     // (#232): there is no dispatch left to come back and un-draft it, so

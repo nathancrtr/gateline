@@ -143,11 +143,13 @@ async function readyPr(exec: ExecLike, dir: string, pr: ListedPr, phase: string 
  * refreshing its generated title/body (#202) if the run's artifacts have moved
  * on; else `gh pr create --draft ...` -> created.
  *
- * A merged or closed PR is absent for this purpose (#207): the branch is still
- * live and still accruing commits, so a run that outlives its PR gets a
- * replacement rather than being left with no review surface. The listing still
- * asks for every state, because that is how the replacement note can name the
- * dead PR it is standing in for.
+ * A closed PR is absent for this purpose (#207): the branch is still live and
+ * still accruing commits, so a run that outlives its PR gets a replacement
+ * rather than being left with no review surface. A *merged* PR is the one
+ * exception (#213) — that branch has shipped, and a replacement would be a PR
+ * against landed work. The listing asks for every state so both rules can see
+ * what they need: the merged verdict, and the name of the dead PR a
+ * replacement stands in for.
  *
  * "Draft" in the name is the default, not the whole story (#232): the draft
  * flag tracks the run's phase, so a `done` run's PR is marked ready for review
@@ -199,9 +201,23 @@ export async function ensureDraftPr(
       return { status: 'exists', note: `PR #${open.number} already exists for ${branch} — ${notes.filter(Boolean).join('; ')}` }
     }
 
-    // Every PR for this branch is merged or closed, so the run has no review
-    // surface (#207). Name the most recent dead one in the note — a
-    // replacement appearing without explanation is its own confusion.
+    // A branch whose PR already merged has shipped, and shipped work is not
+    // waiting on a review (#213). #207's replacement rule answers a run still
+    // accruing commits toward a review nobody can give it; a merged branch is
+    // the opposite case, and a replacement there is a PR against already-landed
+    // content — opened ready-for-review, on a finished run, by a check the
+    // operator never asked for. GitHub's own verdict is the signal here rather
+    // than git ancestry, because a squash or rebase merge leaves the branch an
+    // ancestor of nothing.
+    const merged = prs.find((pr) => pr.state === 'MERGED')
+    if (merged) {
+      const stillRunning = phase !== null && phase !== 'done' ? ` — the run is still deriving on a branch that already shipped (see #213)` : ''
+      return { status: 'skipped', note: `#${merged.number} already merged ${branch} — landed work gets no replacement PR${stillRunning}` }
+    }
+
+    // Every PR for this branch is closed, so the run has no review surface
+    // (#207). Name the most recent dead one in the note — a replacement
+    // appearing without explanation is its own confusion.
     const dead = prs[0]
     const base = await git.defaultBranch()
     // A replacement PR for an already-`done` run opens ready, not draft

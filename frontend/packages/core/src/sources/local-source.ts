@@ -170,16 +170,30 @@ export class LocalGitSource implements RunSource {
       bySlug.set(slug, { source: this.id, slug, ref: short, kind: 'remote', branch: `${RUN_BRANCH_PREFIX}${slug}` })
     }
 
-    // A branch fully merged into the default branch is historical there; the
-    // default-branch copy is the durable record and the branch may be stale.
+    // A branch whose work is already on the default branch is historical
+    // there; the default-branch copy is the durable record and the branch may
+    // be stale.
+    //
+    // Two ways to have landed, because merge strategy is the host's choice and
+    // not the framework's (#213). Ancestry is the merge-commit answer. A squash
+    // or rebase merge rewrites the commits, so the branch is not an ancestor of
+    // anything and never becomes one — under ancestry alone a squash-merged run
+    // stays "active" forever, keeps being derived, and collects a fresh PR on
+    // shipped work. The second answer is content: the default branch carrying a
+    // byte-identical copy of `runs/<slug>/` means the record landed whole, which
+    // is the same durability claim ancestry was standing in for. A branch that
+    // has moved on since the merge fails both tests and stays active — that run
+    // is genuinely diverged from the record, and hiding it would be worse.
     const defaultTip = await this.git.revParse(defaultBranch)
     for (const [slug, runRef] of bySlug) {
-      if (defaultTip && (await this.git.isAncestor(runRef.ref, defaultBranch))) {
-        const onDefault = await this.git.show(defaultBranch, `${await this.runDir(slug)}/state.yaml`)
-        if (onDefault !== null) {
-          bySlug.set(slug, { source: this.id, slug, ref: defaultBranch, kind: 'default', branch: runRef.branch })
-        }
-      }
+      if (!defaultTip) break
+      const dir = await this.runDir(slug)
+      const recordOnDefault = await this.git.objectId(defaultBranch, dir)
+      if (recordOnDefault === null) continue
+      if ((await this.git.show(defaultBranch, `${dir}/state.yaml`)) === null) continue
+      const landed =
+        (await this.git.isAncestor(runRef.ref, defaultBranch)) || recordOnDefault === (await this.git.objectId(runRef.ref, dir))
+      if (landed) bySlug.set(slug, { source: this.id, slug, ref: defaultBranch, kind: 'default', branch: runRef.branch })
     }
 
     // Runs that live only on the default branch (merged, branch deleted).

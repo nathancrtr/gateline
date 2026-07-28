@@ -74,7 +74,9 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   render — without an explicit maintainer decision recorded in an issue first. A
   run may prototype an extension role inside its own `runs/<slug>/` record, but
   that record is evidence, not a merge path: generalizing into `roles/` or
-  `contracts/` is never a pipeline outcome.
+  `contracts/` is never a pipeline outcome. The rationale, the
+  evidence-position/production-role distinction, and the adopter extension rule
+  ("open table, closed gates") are recorded in DESIGN.md §4.2.
 * **`scripts/render-agents.py` and `scripts/integrate.py` stay stdlib-only and
   Python 3.9-compatible** (JSON manifests, no PEP 604 annotations) so they run on
   any operator's machine — including before the environment probe has fixed

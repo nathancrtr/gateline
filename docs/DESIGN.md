@@ -175,6 +175,83 @@ Mechanics and guardrails:
   mid-run is forbidden — an engine that observes a profile lighter than the
   gates already decided escalates rather than guessing.
 
+### 4.2 Closed vocabulary, open table — why the sets are fixed
+
+The gate set and the profile set are closed vocabulary, not defaults. §4.1
+states the rule ("fixed sets, not knobs"); this section records the reasoning,
+because the pressure to make them configurable will recur — from adopters who
+want one more gate, and from maintainers who fear having shipped one too few.
+
+A run record is a set of claims. `profile: standard` claims exactly which gates
+had to be decided, by name, before the run reached `done` — and that claim is
+checkable only because the profile→gates mapping is fixed by the framework, not
+by the deployment. Make the gate set configurable and every check degrades from
+"were the required approvals given?" to "were the approvals this deployment
+chose to require given?": the record stops being comparable across
+repositories, and a reader must audit the configuration before the evidence
+means anything. A control the adoptee can reconfigure certifies little. (The
+pattern is familiar elsewhere: fixed-catalog compliance regimes versus
+choose-your-own-commitments ones, and Kubernetes' conformance-certified core
+versus its extension surface.)
+
+The closed set is also what the machinery stands on:
+
+- The v1 orchestrator is a stateless reconciler (ORCHESTRATOR.md): it derives
+  the next action from files alone, which is tractable because the derivation
+  table is exhaustive over a known gate vocabulary.
+- Shadow replays of finished runs are comparable evidence for the trust ladder
+  only if a gate means the same thing in every run they replay.
+- The burden metric that gates autonomy (§7) averages over gate decisions; it
+  is meaningless if G2 varies by deployment.
+- Every gate is a claim on the scarcest resource in the design — attentive
+  human judgment (the concision budgets in §5 exist to protect it). An open
+  gate set inflates toward gates nobody attends, and a gate that is always
+  approved is indistinguishable from no gate.
+
+Roles are a different case, and the §3 roster hides a distinction worth making
+explicit. Two kinds of role wear one name:
+
+- **Evidence-bearing positions.** Implementer, Reviewer, Verifier, and the
+  Orchestrator-as-emitter are positions the record's claims are *about*: the P5
+  decorrelation claim is precisely "the parties that reviewed and verified were
+  bound to a different vendor than the party that authored," and the record
+  must name those positions for the claim to be stated at all. These are as
+  closed as the gates.
+- **Production roles.** Analyst, Architect, Ops, and Historian shape the
+  quality of what lands on a gate's table, but no record-level claim depends on
+  their identity: G0's meaning is "a named human approved this spec," not "an
+  Analyst produced it." Here the roster is a curated realization, closed in
+  this repository by governance (the AGENTS.md invariant: maintainer decision,
+  recorded in an issue) rather than by anything structural — vocabulary growth
+  stays maintainer-gated and versioned, never adopter-configured.
+
+For host repositories adding roles through the overlay layer (INTEGRATION.md),
+the extension rule that follows is: **open table, closed gates.** An
+adopter-defined role may produce a contracted artifact that lands on an
+*existing* gate's table as additional evidence; it may never mint, remove, or
+substitute a gate. More roles mean richer gate decisions, not more gate
+decisions. A host whose runs are not SDLC-shaped (the state contract's
+core/extension split, INTEGRATION.md §4) may declare its own checkpoint
+vocabulary, but those names live in the instance's declared namespace — never
+`G<n>` — and carry whatever weight the instance assigns them; the framework's
+profile claims are not available to them.
+
+One more boundary, learned from practice: a role is a contract position —
+defined by what it consumes, produces, and refuses to do, and by where it sits
+relative to a gate — not a persona. A reusable prompt ("a designer to critique
+this screen") that consumes nothing contracted and produces nothing contracted
+is a useful *companion agent*, but it is not a role, and checking it into
+`roles/` would dilute what membership there asserts. Companions belong in a
+runner's native agent mechanism, outside the rendered set.
+
+Last, the asymmetry that should govern any "did we forget a role or gate?"
+worry. An omission is recoverable: adding a role costs three files (the
+Historian precedent, §3), and adding a gate or profile is an additive, versioned
+revision. Configurability is not recoverable: once adopters treat the
+vocabulary as knobs, every deployment is a bespoke variant, and no later
+release can restore comparable meaning. When in doubt, ship the smaller fixed
+set.
+
 ## 5. Artifact contracts
 
 Every handoff artifact has a template in [`contracts/`](../contracts/). Templates are

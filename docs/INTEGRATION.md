@@ -226,6 +226,14 @@ gate names the instance adds, and the renderer validates against the union of
 framework-declared and instance-declared vocabulary, failing on anything else.
 "Instance-added" and "misspelled" must be distinguishable states.
 
+The *semantics* of that declaration are now decided (DESIGN.md §4.2): an
+instance may declare added capabilities and added roles; it may never add,
+remove, or rename the framework's gates or profiles. Instance checkpoint names
+(integration #2's `publish`) are legitimate for non-SDLC hosts, but they live in
+the instance's declared namespace — never `G<n>` — and carry whatever weight the
+instance assigns them; framework profile claims are not available to them. What
+remains open is the declaration syntax (question 6).
+
 **Contract extensions:** v0 keeps contracts as direct copies and treats any local
 edit as a lock-recorded fork. The pilot needed exactly one field added to one
 contract; that pressure doesn't yet justify a compose step for contracts. If two or
@@ -476,9 +484,11 @@ runs *before* the environment probe has fixed anything.
    (the pilot host and integration #2). Replaying the tool against each and
    diffing is the recommended acceptance test (§11); do we also *adopt* the
    tool-built result in those repos, or leave their scaffolds as-is?
-6. **Vocabulary declaration syntax** — do instance-added capabilities and gate
-   names live in the adapter manifest, an overlay header, or a dedicated
-   vocabulary file the renderer and validate both read?
+6. **Vocabulary declaration syntax** — *semantics resolved* (DESIGN.md §4.2:
+   capabilities and roles may be instance-added; gates and profiles may not,
+   and instance checkpoints are namespaced apart from `G<n>`). Still open:
+   where do the declarations live — the adapter manifest, an overlay header, or
+   a dedicated vocabulary file the renderer and `validate` both read?
 7. **Fleet registration** — should `init` also register the host in the operator's
    frontend/orchestrator multi-repo config, or is pointing the toolchain at the
    host a deliberately separate operator step?

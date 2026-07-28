@@ -76,6 +76,20 @@ export class Git {
     }
   }
 
+  /**
+   * Object id of `rev:path` — a tree for a directory, a blob for a file — or
+   * null when that path does not exist at that rev. Content identity without
+   * reading the content: two revs naming the same tree carry byte-identical
+   * directories.
+   */
+  async objectId(rev: string, path: string): Promise<string | null> {
+    try {
+      return (await this.run(['rev-parse', '--verify', '--quiet', `${rev}:${path}`])).trim() || null
+    } catch {
+      return null
+    }
+  }
+
   async toplevel(): Promise<string> {
     return (await this.run(['rev-parse', '--show-toplevel'])).trim()
   }

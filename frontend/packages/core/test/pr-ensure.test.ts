@@ -240,17 +240,27 @@ describe('ensureDraftPr descriptions', () => {
     expect(exec.mock.calls.some(([, args]) => args.includes('edit'))).toBe(false)
   })
 
-  it('opens a replacement when the only PR is merged — a run outliving its PR keeps a review surface (#207)', async () => {
+  it('opens no replacement when the branch has already merged — landed work is not awaiting review (#213)', async () => {
     pushRunBranch('run/toy', TOY_RUN)
     const exec = ghStub({ number: 42, title: 'run/toy', body: `${GENERATED_MARKER}\n\nstale`, state: 'MERGED' })
 
     const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
 
-    expect(result.status).toBe('created')
-    expect(result.note).toContain('replaces #42, which is merged')
+    expect(result.status).toBe('skipped')
+    expect(result.note).toContain('#42 already merged')
+    expect(exec.mock.calls.some(([, args]) => args.includes('create'))).toBe(false)
     expect(exec.mock.calls.some(([, args]) => args.includes('edit'))).toBe(false)
-    const [, args] = exec.mock.calls.find(([, a]) => a.includes('create'))!
-    expect(argOf(args, '--title')).toBe('Toy exporter is unusable at scale')
+  })
+
+  it('names the slug-reuse hazard when a merged branch is still deriving (#213)', async () => {
+    pushRunBranch('run/toy', TOY_RUN) // phase: spec — still in flight, on a shipped branch
+    const exec = ghStub({ number: 42, title: 'run/toy', body: `${GENERATED_MARKER}\n\nstale`, state: 'MERGED' })
+
+    const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
+
+    expect(result.status).toBe('skipped')
+    expect(result.note).toContain('still deriving')
+    expect(result.note).toContain('#213')
   })
 
   it('opens a replacement when the only PR is closed', async () => {
@@ -284,7 +294,7 @@ describe('ensureDraftPr descriptions', () => {
 
   it('does not open a second replacement once one exists, because the new PR is open', async () => {
     pushRunBranch('run/toy', TOY_RUN)
-    const first = ghStub({ number: 42, title: 'run/toy', body: `${GENERATED_MARKER}\n\nstale`, state: 'MERGED' })
+    const first = ghStub({ number: 42, title: 'run/toy', body: `${GENERATED_MARKER}\n\nstale`, state: 'CLOSED' })
     await ensureDraftPr(dir, 'run/toy', 'toy', { exec: first })
     const [, createArgs] = first.mock.calls.find(([, a]) => a.includes('create'))!
     const exec = ghStub({ number: 45, title: argOf(createArgs, '--title')!, body: argOf(createArgs, '--body')!, state: 'OPEN' })
@@ -366,7 +376,7 @@ describe('ensureDraftPr descriptions', () => {
     // Nothing dispatches after `done`, so a draft opened here would be a draft
     // no later ensure ever clears.
     pushRunBranch('run/toy', { ...TOY_RUN, 'runs/toy/state.yaml': DONE_STATE })
-    const exec = ghStub({ number: 42, title: 'run/toy', body: `${GENERATED_MARKER}\n\nstale`, state: 'MERGED' })
+    const exec = ghStub({ number: 42, title: 'run/toy', body: `${GENERATED_MARKER}\n\nstale`, state: 'CLOSED' })
 
     const result = await ensureDraftPr(dir, 'run/toy', 'toy', { exec })
 

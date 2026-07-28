@@ -12,7 +12,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { readIntake } from '@agentic/core/record'
 import { useKeys } from '../use-keys.ts'
 import { decideTargetIndex, landingArtifact } from '../landing.ts'
-import { api, formatAge, formatWhen, type InboxItem, type RunDetailResponse, type RunSummary } from '../api.ts'
+import { PROFILE_GATES, api, formatAge, formatWhen, type InboxItem, type Profile, type RunDetailResponse, type RunSummary } from '../api.ts'
 import { AgeBadge, BudgetMeter, GateLedger, KindChip, PhaseChip, ValidationBadge } from '../components/chips.tsx'
 import { DecidePanel } from '../components/decide.tsx'
 import { DiffView } from '../components/diff-view.tsx'
@@ -168,7 +168,7 @@ export function RunPage() {
           <div className="flex flex-wrap items-start gap-x-14 gap-y-7 text-[13px]">
             <section className="w-[300px]">
               <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted pb-1.5">Gates</div>
-              <GateLines gates={summary.gates} rows />
+              <GateLines gates={summary.gates} profile={summary.profile} rows />
             </section>
             {board && <div className="w-[300px]">{board}</div>}
             <section className="w-[230px]">
@@ -347,10 +347,10 @@ function NeedsYouCard({
 /** Gate provenance lines — who decided each gate, and when. Right-aligned
  * stack in the busy rail; `rows` renders them as hairline rows for the quiet
  * facts block. */
-function GateLines({ gates, rows = false }: { gates: RunSummary['gates']; rows?: boolean }) {
+function GateLines({ gates, profile, rows = false }: { gates: RunSummary['gates']; profile: Profile; rows?: boolean }) {
   return (
     <>
-      {(['G0', 'G1', 'G2', 'G3'] as const).map((g) => {
+      {PROFILE_GATES[profile].map((g) => {
         const c = gates[g]
         if (!c) return null
         const toneCls = c.approved ? 'text-ok' : c.decided ? 'text-bad' : 'text-warn'
@@ -387,7 +387,7 @@ function RunFacts({ summary }: { summary: RunSummary }) {
       <div className="flex justify-between gap-3 py-[7px] border-t border-line">
         <span className="text-[12.5px] text-muted">Gates</span>
         <span className="flex flex-col items-end gap-[3px] text-right">
-          <GateLines gates={summary.gates} />
+          <GateLines gates={summary.gates} profile={summary.profile} />
         </span>
       </div>
       <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">

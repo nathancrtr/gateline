@@ -59,6 +59,10 @@ escalations:
         from_role: orchestrator,
         reason: "implementer (01-inbox-decide-link) failed twice: dispatch lost
           (orchestrator restart or crash) — aged out by the heartbeat",
-        resolved: false
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-07-29T01:58:59.375Z,
+        resolution: "Work landed via PR #262 (issue #216). Nothing left for the
+          implementer to retry."
       }
   ]

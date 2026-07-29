@@ -347,7 +347,7 @@ function NeedsYouCard({
           </ul>
         )}
         {item.kind === 'gate' && item.gate === 'G2' && <EvidenceRollupPanel src={item.source} slug={item.slug} />}
-        <DecidePanel item={item} primary={primary} sentHere={sentHere} chips={chips} />
+        <DecidePanel item={item} profile={detail.summary.profile} primary={primary} sentHere={sentHere} chips={chips} />
       </div>
     </section>
   )

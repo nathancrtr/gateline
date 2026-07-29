@@ -56,7 +56,8 @@ escalations:
 beforeAll(async () => {
   ctx = await makeFixture()
   addPausedRun(ctx.repo.dir, 'staged-run', 'staged')
-  addPausedRun(ctx.repo.dir, 'paused-other-reason', 'gate-declined')
+  addPausedRun(ctx.repo.dir, 'paused-declined', 'gate-declined')
+  addPausedRun(ctx.repo.dir, 'paused-other-reason', 'round-cap')
   refs = new Map((await ctx.source.listRuns()).map((r) => [r.slug, r]))
 })
 afterAll(() => dropFixture(ctx))
@@ -76,6 +77,7 @@ describe('run discovery', () => {
       'patch-g1-pending',
       'patch-g2-pending',
       'paused-budget',
+      'paused-declined',
       'paused-other-reason',
       'round-cap',
       'staged-run',
@@ -183,8 +185,27 @@ describe('readiness derivation (§2.3, one row per test)', () => {
     const items = await gateItem('paused-other-reason')
     expect(items).toHaveLength(1)
     expect(items[0]).toMatchObject({ kind: 'paused' })
-    expect(items[0]!.title).toContain('gate-declined')
+    expect(items[0]!.title).toContain('round-cap')
     expect(items.some((i) => i.kind === 'staged')).toBe(false)
+  })
+
+  it('declined: paused_reason=gate-declined needs nothing — the human already answered (#200)', async () => {
+    // The card this used to show said "Resume, or decline the pending gate to
+    // end the run" to someone who had just declined the gate.
+    expect(await gateItem('paused-declined')).toEqual([])
+  })
+
+  it('declined runs stay in the portfolio and off the inbox — decided is not deleted (#200)', async () => {
+    const { runs, inbox } = await buildPortfolio([ctx.source])
+    const row = runs.find((r) => r.slug === 'paused-declined')
+    expect(row).toMatchObject({ phase: 'paused', pausedReason: 'gate-declined', needsHuman: 0 })
+    expect(inbox.some((i) => i.slug === 'paused-declined')).toBe(false)
+  })
+
+  it('a run paused FOR an escalation shows the escalation, not a second card restating it', async () => {
+    const items = await gateItem('escalated')
+    expect(items.filter((i) => i.kind === 'escalation')).toHaveLength(1)
+    expect(items.some((i) => i.kind === 'paused')).toBe(false)
   })
 
   it('R3: malformed spec yields a NON-reviewable gate item (bounce)', async () => {

@@ -16,6 +16,7 @@ import {
   engineHealthStale,
   extractSections,
   ID_PATTERN,
+  parseReview,
   missingSections,
   parseUnifiedDiff,
   planDecision,
@@ -361,6 +362,25 @@ export function createApp(deps: AppDeps): Hono {
       return buildLexicon({ spec, plan })
     })
     return c.json({ entries: lexicon.entries, pattern: ID_PATTERN })
+  })
+
+  // Typed review reports (#214): findings, severities, verdicts and rounds,
+  // parsed from this run's own review-NN.md and shipped as data — the browser
+  // must not bundle the core runtime. Every field is a verbatim slice of the
+  // committed artifact; nothing here summarizes or judges.
+  app.get('/api/runs/:src/:slug/reviews', async (c) => {
+    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+    if (!found) return c.json({ error: 'run not found' }, 404)
+    const { source, ref } = found
+    const reports = await cache.get(`reviews:${ref.source}:${ref.slug}`, async () => {
+      const artifacts = await source.listArtifacts(ref)
+      return Promise.all(
+        artifacts
+          .filter((p) => /^review-\d+.*\.md$/.test(p))
+          .map(async (p) => parseReview(p, (await source.readArtifact(ref, p)) ?? '')),
+      )
+    })
+    return c.json({ reports })
   })
 
   // Evidence-presence rollup (#165): which criteria the verification record

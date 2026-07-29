@@ -20,8 +20,12 @@ import type {
   Profile,
   RunMetricsSummary,
   RunState,
+  ReviewFinding,
+  ReviewReport,
   RunSummary,
+  Severity,
   Validation,
+  Verdict,
 } from '@agentic/core'
 
 export type {
@@ -34,9 +38,13 @@ export type {
   InboxItem,
   LexiconEntry,
   Profile,
+  ReviewFinding,
+  ReviewReport,
   RunState,
   RunSummary,
+  Severity,
   Validation,
+  Verdict,
 }
 
 /** Mirror of core's PROFILE_GATES (DESIGN.md §4.1) — a value import from core would pull the node runtime into the browser bundle. */
@@ -44,6 +52,11 @@ export const PROFILE_GATES: Record<Profile, GateId[]> = {
   patch: ['G1', 'G2'],
   standard: ['G0', 'G1', 'G2'],
   full: ['G0', 'G1', 'G2', 'G3'],
+}
+
+/** Typed review reports for a run (#214), keyed by artifact path. */
+export interface ReviewsResponse {
+  reports: ReviewReport[]
 }
 
 export interface InboxResponse {
@@ -235,6 +248,7 @@ export const api = {
     getJson<ArtifactResponse>(`/api/runs/${src}/${slug}/artifact?path=${encodeURIComponent(path)}`),
   lexicon: (src: string, slug: string) => getJson<LexiconResponse>(`/api/runs/${src}/${slug}/lexicon`),
   evidence: (src: string, slug: string) => getJson<EvidenceRollup>(`/api/runs/${src}/${slug}/evidence`),
+  reviews: (src: string, slug: string) => getJson<ReviewsResponse>(`/api/runs/${src}/${slug}/reviews`),
   diff: (src: string, slug: string) => getJson<DiffResponse>(`/api/runs/${src}/${slug}/diff`),
   metrics: () => getJson<MetricsResponse>('/api/metrics'),
   decide: async (req: DecisionRequest): Promise<{ ok: boolean; commit?: string; summary?: string; note?: string | null }> => {

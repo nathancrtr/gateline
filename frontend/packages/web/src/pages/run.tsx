@@ -1,7 +1,7 @@
 // One run's story: header + gate ledger, the "needs you" panel, and tabs for
 // artifacts, diff, and state history. Decision affordances live in the cards
 // (M2 wires them to POST /api/decisions).
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 // genesis-preview candidate (state.yaml gates.G1.notes): the run header's
@@ -11,16 +11,20 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 // detail.history. No new server data (ADR-6 rider, ADR-7).
 import { readIntake } from '@agentic/core/record'
 import { useKeys } from '../use-keys.ts'
-import { api, formatAge, formatWhen, type InboxItem, type RunDetailResponse, type RunSummary } from '../api.ts'
+import { decideTargetIndex, landingArtifact } from '../landing.ts'
+import { PROFILE_GATES, api, formatAge, formatWhen, type InboxItem, type Profile, type RunDetailResponse, type RunSummary } from '../api.ts'
 import { AgeBadge, BudgetMeter, GateLedger, KindChip, PhaseChip, ValidationBadge } from '../components/chips.tsx'
 import { DecidePanel } from '../components/decide.tsx'
 import { DiffView } from '../components/diff-view.tsx'
 import { EvidenceRollupPanel } from '../components/evidence.tsx'
-import { CitedObjects, LexiconProvider, useRunLexicon } from '../components/lexicon.tsx'
+import { FindingsPanel, VerdictChip, useReviews } from '../components/findings.tsx'
+import { CitedObjects, CitedText, LexiconProvider, useRunLexicon } from '../components/lexicon.tsx'
 import { Markdown } from '../components/markdown.tsx'
 import { PageStatus } from './inbox.tsx'
 
 type Tab = 'artifacts' | 'diff' | 'history'
+
+const isReviewPath = (p: string) => /^review-\d+.*\.md$/.test(p)
 
 export function RunPage() {
   const { src, slug } = useParams<{ src: string; slug: string }>()
@@ -89,6 +93,14 @@ export function RunPage() {
   // align with another.
   const busy = items.length > 0
 
+  // The inbox already encodes what it is calling you to decide (`?decide=G2`,
+  // `esc-<n>`, `paused`, `staged`); until #216 the run page dropped it on the
+  // floor. When it names a card that is still pending, that card is the one
+  // the keyboard loop drives and the one focus lands on. A stale or unknown
+  // value resolves to -1 and everything below behaves exactly as before.
+  const decideIndex = decideTargetIndex(params.get('decide'), items)
+  const primaryIndex = decideIndex >= 0 ? decideIndex : items.findIndex((x) => x.reviewable)
+
   const header = (
     <header className="mb-6">
       <div className="font-mono text-[12px] tracking-[0.14em] uppercase text-accent-deep">
@@ -127,98 +139,101 @@ export function RunPage() {
 
   const board = summary.tasks.total > 0 && detail.state ? <TaskBoard state={detail.state} /> : null
 
+  // The lexicon covers the whole page, not just the artifact reader: a
+  // decision card that names AC2.1 should resolve it where it stands (#252).
   return (
-    <div className="mx-auto max-w-5xl">
-      {busy ? (
-        <div className="grid grid-cols-[minmax(0,1fr)_300px] gap-10 items-start max-md:flex max-md:flex-col border-b border-line pb-7">
-          <div className="min-w-0 max-md:w-full">
+    <LexiconProvider value={lexicon}>
+      <div className="mx-auto max-w-5xl">
+        {busy ? (
+          <div className="grid grid-cols-[minmax(0,1fr)_300px] gap-10 items-start max-md:flex max-md:flex-col border-b border-line pb-7">
+            <div className="min-w-0 max-md:w-full">
+              {header}
+              {stateErrorBlock}
+              <section className="flex flex-col gap-4">
+                {items.map((item, i) => (
+                  <NeedsYouCard
+                    key={`${item.kind}-${item.gate ?? item.escalationIndex ?? i}`}
+                    item={item}
+                    now={now}
+                    detail={detail}
+                    primary={i === primaryIndex}
+                    sentHere={i === decideIndex}
+                  />
+                ))}
+              </section>
+            </div>
+            <aside className="md:sticky md:top-6 max-md:w-full min-w-0">
+              <RunFacts summary={summary} />
+              {board && <div className="mt-7">{board}</div>}
+            </aside>
+          </div>
+        ) : (
+          <div className="border-b border-line pb-7">
             {header}
             {stateErrorBlock}
-            <section className="flex flex-col gap-4">
-              {items.map((item, i) => (
-                <NeedsYouCard
-                  key={`${item.kind}-${item.gate ?? item.escalationIndex ?? i}`}
-                  item={item}
-                  now={now}
-                  detail={detail}
-                  primary={i === items.findIndex((x) => x.reviewable)}
-                />
-              ))}
-            </section>
-          </div>
-          <aside className="md:sticky md:top-6 max-md:w-full min-w-0">
-            <RunFacts summary={summary} />
-            {board && <div className="mt-7">{board}</div>}
-          </aside>
-        </div>
-      ) : (
-        <div className="border-b border-line pb-7">
-          {header}
-          {stateErrorBlock}
-          <div className="flex flex-wrap items-start gap-x-14 gap-y-7 text-[13px]">
-            <section className="w-[300px]">
-              <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted pb-1.5">Gates</div>
-              <GateLines gates={summary.gates} rows />
-            </section>
-            {board && <div className="w-[300px]">{board}</div>}
-            <section className="w-[230px]">
-              <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted pb-1.5">Vitals</div>
-              <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-                <span className="text-[12.5px] text-muted">Budget</span>
-                <span className="text-right">
-                  <BudgetMeter limit={summary.budget.limit} spent={summary.budget.spent} />
-                </span>
-              </div>
-              {summary.aheadOfOrigin != null && summary.aheadOfOrigin > 0 && (
+            <div className="flex flex-wrap items-start gap-x-14 gap-y-7 text-[13px]">
+              <section className="w-[300px]">
+                <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted pb-1.5">Gates</div>
+                <GateLines gates={summary.gates} profile={summary.profile} rows />
+              </section>
+              {board && <div className="w-[300px]">{board}</div>}
+              <section className="w-[230px]">
+                <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted pb-1.5">Vitals</div>
                 <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-                  <span className="text-[12.5px] text-muted">Divergence</span>
-                  <span className={`text-[12.5px] font-mono tabular-nums text-right ${(summary.behindOrigin ?? 0) > 0 ? 'text-bad' : 'text-warn'}`}>
-                    ↑{summary.aheadOfOrigin}{(summary.behindOrigin ?? 0) > 0 && <>↓{summary.behindOrigin}</>}
+                  <span className="text-[12.5px] text-muted">Budget</span>
+                  <span className="text-right">
+                    <BudgetMeter limit={summary.budget.limit} spent={summary.budget.spent} />
                   </span>
                 </div>
-              )}
-              <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-                <span className="text-[12.5px] text-muted">Updated</span>
-                <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">
-                  {summary.updatedAt ? formatAge(summary.updatedAt, Date.now() / 1000) + ' ago' : '—'}
-                </span>
-              </div>
-            </section>
+                {summary.aheadOfOrigin != null && summary.aheadOfOrigin > 0 && (
+                  <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
+                    <span className="text-[12.5px] text-muted">Divergence</span>
+                    <span className={`text-[12.5px] font-mono tabular-nums text-right ${(summary.behindOrigin ?? 0) > 0 ? 'text-bad' : 'text-warn'}`}>
+                      ↑{summary.aheadOfOrigin}{(summary.behindOrigin ?? 0) > 0 && <>↓{summary.behindOrigin}</>}
+                    </span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
+                  <span className="text-[12.5px] text-muted">Updated</span>
+                  <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">
+                    {summary.updatedAt ? formatAge(summary.updatedAt, Date.now() / 1000) + ' ago' : '—'}
+                  </span>
+                </div>
+              </section>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <nav className="mt-6 mb-[18px] flex gap-0.5 border-b border-line">
-        <button
-          onClick={() => setTab('artifacts')}
-          className={`px-4 py-2.5 text-[13.5px] font-medium border-b-2 -mb-px transition-colors ${
-            tab === 'artifacts' ? 'border-accent text-ink font-semibold' : 'border-transparent text-muted hover:text-ink'
-          }`}
-        >
-          Artifacts
-          <span className="ml-1.5 font-mono text-[11px] text-faint">{detail.artifacts.length}</span>
-        </button>
-        <button
-          onClick={() => setTab('diff')}
-          className={`px-4 py-2.5 text-[13.5px] font-medium border-b-2 -mb-px transition-colors ${
-            tab === 'diff' ? 'border-accent text-ink font-semibold' : 'border-transparent text-muted hover:text-ink'
-          }`}
-        >
-          Diff
-        </button>
-        <button
-          onClick={() => setTab('history')}
-          className={`px-4 py-2.5 text-[13.5px] font-medium border-b-2 -mb-px transition-colors ${
-            tab === 'history' ? 'border-accent text-ink font-semibold' : 'border-transparent text-muted hover:text-ink'
-          }`}
-        >
-          History
-          <span className="ml-1.5 font-mono text-[11px] text-faint">{detail.history.length}</span>
-        </button>
-      </nav>
+        <nav className="mt-6 mb-[18px] flex gap-0.5 border-b border-line">
+          <button
+            onClick={() => setTab('artifacts')}
+            className={`px-4 py-2.5 text-[13.5px] font-medium border-b-2 -mb-px transition-colors ${
+              tab === 'artifacts' ? 'border-accent text-ink font-semibold' : 'border-transparent text-muted hover:text-ink'
+            }`}
+          >
+            Artifacts
+            <span className="ml-1.5 font-mono text-[11px] text-faint">{detail.artifacts.length}</span>
+          </button>
+          <button
+            onClick={() => setTab('diff')}
+            className={`px-4 py-2.5 text-[13.5px] font-medium border-b-2 -mb-px transition-colors ${
+              tab === 'diff' ? 'border-accent text-ink font-semibold' : 'border-transparent text-muted hover:text-ink'
+            }`}
+          >
+            Diff
+          </button>
+          <button
+            onClick={() => setTab('history')}
+            className={`px-4 py-2.5 text-[13.5px] font-medium border-b-2 -mb-px transition-colors ${
+              tab === 'history' ? 'border-accent text-ink font-semibold' : 'border-transparent text-muted hover:text-ink'
+            }`}
+          >
+            History
+            <span className="ml-1.5 font-mono text-[11px] text-faint">{detail.history.length}</span>
+          </button>
+        </nav>
 
-      {tab === 'artifacts' && (
-        <LexiconProvider value={lexicon}>
+        {tab === 'artifacts' && (
           <ArtifactsTab
             detail={detail}
             selected={artifact}
@@ -230,51 +245,85 @@ export function RunPage() {
               setParams(next, { replace: true })
             }}
           />
-        </LexiconProvider>
-      )}
-      {tab === 'diff' && <DiffTab src={summary.source} slug={summary.slug} />}
-      {tab === 'history' && <HistoryTab history={detail.history} />}
-    </div>
+        )}
+        {tab === 'diff' && <DiffTab src={summary.source} slug={summary.slug} />}
+        {tab === 'history' && <HistoryTab history={detail.history} />}
+      </div>
+    </LexiconProvider>
   )
 }
 
 /** A pending decision, rendered as a stakes-varied card. Candidate A:
  *  4px accent left-rail + tinted ground + lifted shadow. Reviewable cards
  *  get accent-tint ground, bounced cards get bad-bg — no animation, no glow. */
-function NeedsYouCard({ item, now, detail, primary }: { item: InboxItem; now: number; detail: RunDetailResponse; primary?: boolean }) {
+function NeedsYouCard({
+  item,
+  now,
+  detail,
+  primary,
+  sentHere,
+}: {
+  item: InboxItem
+  now: number
+  detail: RunDetailResponse
+  primary?: boolean
+  sentHere?: boolean
+}) {
   const urgent = item.since !== null && now - item.since > 3 * 86_400
+  // Arriving from an inbox link: bring the named card into view and give it
+  // focus, so the decision is where the eye and the keyboard already are.
+  const cardRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (!sentHere) return
+    cardRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    cardRef.current?.focus({ preventScroll: true })
+  }, [sentHere])
   // The card names artifacts and tasks in prose; resolve those mentions from
   // data already in the detail payload so the card answers "what happened,
   // where do I look" without a trip to the tabs.
+  const reports = useReviews(item.source, item.slug)
   const prose = `${item.title} ${item.detail}`
   const mentioned = detail.artifacts.filter((p) => !item.packet.includes(p) && prose.includes(p))
   const chipPaths = [...item.packet.filter((p) => detail.artifacts.includes(p) || p === 'state.yaml'), ...mentioned]
   const mentionedTask = detail.state?.tasks.find((t) => prose.includes(t.id)) ?? null
+  // A packet chip that names a review carries what that review concluded
+  // (#215) — the G2 approver should not have to open three files to learn
+  // that one of them said request-changes.
   const chips =
     chipPaths.length > 0 ? (
       <>
-        {chipPaths.map((p) => (
-          <Link
-            key={p}
-            to={`/runs/${item.source}/${item.slug}?tab=artifacts&artifact=${encodeURIComponent(p)}`}
-            className="rounded-xs border border-line-cool bg-surface px-2 py-0.5 font-mono text-[11.5px] text-muted hover:border-accent hover:text-accent-deep"
-          >
-            {p}
-          </Link>
-        ))}
+        {chipPaths.map((p) => {
+          const report = isReviewPath(p) ? reports?.find((r) => r.path === p) : undefined
+          return (
+            <Link
+              key={p}
+              to={`/runs/${item.source}/${item.slug}?tab=artifacts&artifact=${encodeURIComponent(p)}`}
+              className="inline-flex items-center gap-1.5 rounded-xs border border-line-cool bg-surface px-2 py-0.5 font-mono text-[11.5px] text-muted hover:border-accent hover:text-accent-deep"
+            >
+              {p}
+              {report && report.rounds.length > 0 && <VerdictChip verdicts={report.rounds.map((r) => r.verdict)} />}
+            </Link>
+          )
+        })}
       </>
     ) : null
+  // No overflow-hidden on the card: the lexicon hover card (#252) is
+  // absolutely positioned and would be clipped by it. The accent rail rounds
+  // its own left corners instead, which is all the clip was ever doing.
   return (
     <section
-      className={`relative grid overflow-hidden rounded-lg ${
+      className={`relative grid rounded-lg ${
         item.reviewable
           ? 'grid-cols-[4px_1fr] bg-accent-tint border border-[#e9d3c4] shadow-[var(--shadow-lift)]'
           : 'grid-cols-[4px_1fr] bg-bad-bg border border-bad-line'
       }`}
       data-needs-card
+      data-sent-here={sentHere ? 'true' : undefined}
+      ref={cardRef}
+      tabIndex={-1}
     >
       <span
-        className={`w-[4px] self-stretch ${item.reviewable ? 'bg-accent' : 'bg-bad'}`}
+        className={`w-[4px] self-stretch rounded-l-[7px] ${item.reviewable ? 'bg-accent' : 'bg-bad'}`}
         aria-hidden="true"
       />
       <div className="min-w-0 px-6 py-4">
@@ -288,8 +337,12 @@ function NeedsYouCard({ item, now, detail, primary }: { item: InboxItem; now: nu
             <AgeBadge label={`waiting ${formatAge(item.since, now)}`} urgent={urgent} />
           </span>
         </div>
-        <h2 className="mt-2 mb-1.5 font-sans text-[24px] font-semibold leading-[1.2] tracking-[-0.015em] text-ink">{item.title}</h2>
-        <p className="max-w-[76ch] text-[14.5px] text-[#4d4742] leading-[1.55]">{item.detail}</p>
+        <h2 className="mt-2 mb-1.5 font-sans text-[24px] font-semibold leading-[1.2] tracking-[-0.015em] text-ink">
+          <CitedText>{item.title}</CitedText>
+        </h2>
+        <p className="max-w-[76ch] text-[14.5px] text-[#4d4742] leading-[1.55]">
+          <CitedText>{item.detail}</CitedText>
+        </p>
         {mentionedTask && (
           <p className="mt-1.5 font-mono text-[12px] text-muted">
             {mentionedTask.id} · {mentionedTask.status} · review round {mentionedTask.review_rounds}/3
@@ -305,7 +358,7 @@ function NeedsYouCard({ item, now, detail, primary }: { item: InboxItem; now: nu
           </ul>
         )}
         {item.kind === 'gate' && item.gate === 'G2' && <EvidenceRollupPanel src={item.source} slug={item.slug} />}
-        <DecidePanel item={item} primary={primary} chips={chips} />
+        <DecidePanel item={item} profile={detail.summary.profile} primary={primary} sentHere={sentHere} chips={chips} />
       </div>
     </section>
   )
@@ -314,10 +367,10 @@ function NeedsYouCard({ item, now, detail, primary }: { item: InboxItem; now: nu
 /** Gate provenance lines — who decided each gate, and when. Right-aligned
  * stack in the busy rail; `rows` renders them as hairline rows for the quiet
  * facts block. */
-function GateLines({ gates, rows = false }: { gates: RunSummary['gates']; rows?: boolean }) {
+function GateLines({ gates, profile, rows = false }: { gates: RunSummary['gates']; profile: Profile; rows?: boolean }) {
   return (
     <>
-      {(['G0', 'G1', 'G2', 'G3'] as const).map((g) => {
+      {PROFILE_GATES[profile].map((g) => {
         const c = gates[g]
         if (!c) return null
         const toneCls = c.approved ? 'text-ok' : c.decided ? 'text-bad' : 'text-warn'
@@ -354,7 +407,7 @@ function RunFacts({ summary }: { summary: RunSummary }) {
       <div className="flex justify-between gap-3 py-[7px] border-t border-line">
         <span className="text-[12.5px] text-muted">Gates</span>
         <span className="flex flex-col items-end gap-[3px] text-right">
-          <GateLines gates={summary.gates} />
+          <GateLines gates={summary.gates} profile={summary.profile} />
         </span>
       </div>
       <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
@@ -439,7 +492,23 @@ function ArtifactsTab({
   onSelect: (path: string) => void
 }) {
   const paths = detail.artifacts
-  const current = selected ?? paths.find((p) => p.endsWith('.md')) ?? paths[0] ?? null
+  // An explicit selection always wins; otherwise the pending gate's own packet
+  // decides what opens (#250), and only then does filename order get a say.
+  const current =
+    selected ??
+    landingArtifact({ items: detail.items, profile: detail.summary.profile, artifacts: paths }) ??
+    paths.find((p) => p.endsWith('.md')) ??
+    paths[0] ??
+    null
+  // Verdict chips on the review entries (#215): what the review concluded,
+  // without opening it. Reports load lazily; until they do, the list is
+  // exactly what it was.
+  const reports = useReviews(detail.summary.source, detail.summary.slug)
+  const verdictsFor = (path: string) => {
+    const report = reports?.find((r) => r.path === path)
+    if (!report || report.rounds.length === 0) return null
+    return <VerdictChip verdicts={report.rounds.map((r) => r.verdict)} compact />
+  }
   return (
     <div className="grid grid-cols-[280px_1fr] gap-0 max-md:flex max-md:flex-col border-b border-line">
       <nav className="border-r border-line bg-surface py-[18px] max-md:w-full max-md:border-r-0">
@@ -461,6 +530,7 @@ function ArtifactsTab({
                 >
                   {v && <ValidationBadge ok={v.ok} missing={v.missing} />}
                   <span className="truncate">{p}</span>
+                  {verdictsFor(p) && <span className="ml-auto">{verdictsFor(p)}</span>}
                 </button>
               </li>
             )
@@ -522,6 +592,7 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
             <EvidenceRollupPanel src={src} slug={slug} />
           </div>
         )}
+        {isReviewPath(path) && <FindingsPanel src={src} slug={slug} path={path} />}
         {path.endsWith('.md') ? (
           <Markdown sourcePath={path}>{content}</Markdown>
         ) : (

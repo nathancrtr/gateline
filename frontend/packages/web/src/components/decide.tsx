@@ -4,7 +4,7 @@
 // the refusal is the designed outcome.
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ApiError, api, type Burden, type Disposition, type GateId, type InboxItem } from '../api.ts'
+import { ApiError, api, type Burden, type Disposition, type GateId, type InboxItem, type Profile } from '../api.ts'
 import { useKeys } from '../use-keys.ts'
 
 const BURDEN_OPTIONS: { value: Burden; key: string; label: string; hint: string }[] = [
@@ -12,6 +12,30 @@ const BURDEN_OPTIONS: { value: Burden; key: string; label: string; hint: string 
   { value: 'light-correction', key: '2', label: 'Light correction', hint: 'approved, notes attached' },
   { value: 'heavy-correction', key: '3', label: 'Heavy correction', hint: 'took real work to accept' },
 ]
+
+/**
+ * Where a decline sends the run back to (#253). Closed since #249 froze the
+ * gates and the role positions, so the panel can name the destination instead
+ * of hedging about "the producing role".
+ *
+ * A patch run is the case most worth saying out loud: it has no Architect to
+ * bounce to, because the human supplied that judgment at init by authoring the
+ * brief and the work item themselves (DESIGN.md §4.1).
+ */
+function declineDestination(gate: GateId | null, profile: Profile): string | null {
+  switch (gate) {
+    case 'G0':
+      return 'the Analyst'
+    case 'G1':
+      return profile === 'patch' ? 'the brief and work item you wrote' : 'the Architect'
+    case 'G2':
+      return 'the Implementer and Reviewer loop'
+    case 'G3':
+      return 'Ops'
+    default:
+      return null
+  }
+}
 
 const DISPOSITION_OPTIONS: { value: Disposition; label: string; hint: string }[] = [
   { value: 're-review', label: 'Re-review', hint: 'the named condition is addressed; verify now' },
@@ -21,7 +45,21 @@ const DISPOSITION_OPTIONS: { value: Disposition; label: string; hint: string }[]
 
 type Mode = 'idle' | 'approve' | 'decline' | 'resolve' | 'arm'
 
-export function DecidePanel({ item, primary = false, chips = null }: { item: InboxItem; primary?: boolean; chips?: React.ReactNode }) {
+export function DecidePanel({
+  item,
+  profile,
+  primary = false,
+  sentHere = false,
+  chips = null,
+}: {
+  item: InboxItem
+  /** The run's profile — decides where a decline sends the run (#253). */
+  profile: Profile
+  primary?: boolean
+  /** Arrived here from an inbox link naming this decision (#216). */
+  sentHere?: boolean
+  chips?: React.ReactNode
+}) {
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<Mode>('idle')
   const [burden, setBurden] = useState<Burden | null>(null)
@@ -50,6 +88,18 @@ export function DecidePanel({ item, primary = false, chips = null }: { item: Inb
     [item.kind, item.reviewable],
   )
   useKeys(keyHandlers, primary)
+
+  // Arriving from an inbox link opens the form for the kinds that have exactly
+  // one, non-destructive one (#216). Gates are deliberately excluded: opening
+  // either their approve or their decline form would presume an outcome the
+  // human has not chosen. `paused` is excluded too — its single affordance
+  // submits on click rather than opening a form, and a link must never arm a
+  // write. Those kinds get focus (handled by the card) and nothing more.
+  useEffect(() => {
+    if (!sentHere) return
+    if (item.kind === 'escalation') setMode('resolve')
+    else if (item.kind === 'staged') setMode('arm')
+  }, [sentHere, item.kind])
 
   // Let page-level Escape (back to inbox) yield while a decision is open.
   useEffect(() => {
@@ -85,6 +135,7 @@ export function DecidePanel({ item, primary = false, chips = null }: { item: Inb
 
   const base = { source: item.source, slug: item.slug }
   const gate = item.gate as GateId | null
+  const destination = declineDestination(gate, profile)
 
   const submitApprove = () => {
     if (!burden || !gate) return
@@ -232,11 +283,19 @@ export function DecidePanel({ item, primary = false, chips = null }: { item: Inb
             value={notes}
             onChange={setNotes}
             autoFocus
-            placeholder="Why? Specific notes are the correction channel back to the producing role — required."
+            placeholder={
+              destination
+                ? `Why? Specific notes are the correction channel back to ${destination} — required.`
+                : 'Why? Specific notes are the correction channel back to the producing role — required.'
+            }
           />
           <div className="flex gap-2">
             <Button danger onClick={submitDecline} disabled={!notes.trim() || mutation.isPending} data-decide="decline-confirm">
-              {mutation.isPending ? 'Committing…' : `Decline ${gate} and pause the run`}
+              {mutation.isPending
+                ? 'Committing…'
+                : destination
+                  ? `Decline ${gate} — pause, and back to ${destination}`
+                  : `Decline ${gate} and pause the run`}
             </Button>
             <Button onClick={() => setMode('idle')}>Cancel</Button>
           </div>

@@ -24,6 +24,10 @@ export type PausedReason = (typeof PAUSED_REASONS)[number]
  * row. Exported so callers never inline the literal twice. */
 export const STAGED_REASON = 'staged' as const
 
+/** A run at rest because a human declined its gate — a decided run, not a
+ * pending one (#200). Exported so no caller inlines the literal twice. */
+export const DECLINED_REASON = 'gate-declined' as const
+
 export const GATE_IDS = ['G0', 'G1', 'G2', 'G3'] as const
 export type GateId = (typeof GATE_IDS)[number]
 

@@ -8,12 +8,24 @@
 //   G3 ready     phase=release    ∧ release-plan.md present ∧ ¬G3
 //   Escalation   any escalations[] entry with resolved: false
 //   Round-cap    any task review_rounds ≥ 3 ∧ status not complete
-//   Paused       phase=paused ∧ paused_reason ≠ staged
+//   Paused       phase=paused ∧ paused_reason ∉ {staged, gate-declined}
+//                ∧ nothing else already speaks for the run
 //   Staged       phase=paused ∧ paused_reason = staged — awaiting arm, not resume/kill
+//   Declined     phase=paused ∧ paused_reason = gate-declined — no item at all
+//
+// The last two rows are #200's surgical half. A `gate-declined` run is a
+// DECIDED run: the human already answered the gate, and the card it used to
+// show told them to "decline the pending gate to end the run" — the very thing
+// they had just done. It stays visible in the portfolio; it stops claiming to
+// need a decision. The known limit, and why #200 stays open: the record cannot
+// distinguish a decline that is a correction awaiting revival from one that is
+// a walk-away, because decline carries no typed disposition. #200's terminal
+// state with `already-delivered | superseded | obsolete | abandoned` is the
+// real fix; until it lands, a declined run at rest reads as at rest.
 //
 // A gate whose packet is present but malformed yields a NON-reviewable item —
 // the bounce view (rule R3) — never a reviewable card.
-import { G2_COMPLETE_STATUSES, gateUndecided, GATE_PHASES, PROFILE_GATES, STAGED_REASON, type GateId, type RunState } from '../record/schema.ts'
+import { DECLINED_REASON, G2_COMPLETE_STATUSES, gateUndecided, GATE_PHASES, PROFILE_GATES, STAGED_REASON, type GateId, type RunState } from '../record/schema.ts'
 import { validateArtifact, type Validation } from '../record/validate.ts'
 import type { RunRef, RunSource } from '../sources/source.ts'
 
@@ -166,6 +178,13 @@ export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<R
       })
       return { items, validations }
     }
+    // A declined gate is an answered gate (#200). Offering "resume or decline"
+    // to a human who already declined is asking them to repeat themselves.
+    if (state.paused_reason === DECLINED_REASON) return { items, validations }
+    // Nor does the run need a second card restating a need another item
+    // already carries: a run paused *for* an escalation or a round cap is
+    // unblocked by resolving that, which is the item already above.
+    if (items.length > 0) return { items, validations }
     items.push({
       kind: 'paused',
       gate: null,

@@ -17,11 +17,14 @@ import { AgeBadge, BudgetMeter, GateLedger, KindChip, PhaseChip, ValidationBadge
 import { DecidePanel } from '../components/decide.tsx'
 import { DiffView } from '../components/diff-view.tsx'
 import { EvidenceRollupPanel } from '../components/evidence.tsx'
+import { FindingsPanel, VerdictChip, useReviews } from '../components/findings.tsx'
 import { CitedObjects, CitedText, LexiconProvider, useRunLexicon } from '../components/lexicon.tsx'
 import { Markdown } from '../components/markdown.tsx'
 import { PageStatus } from './inbox.tsx'
 
 type Tab = 'artifacts' | 'diff' | 'history'
+
+const isReviewPath = (p: string) => /^review-\d+.*\.md$/.test(p)
 
 export function RunPage() {
   const { src, slug } = useParams<{ src: string; slug: string }>()
@@ -278,22 +281,30 @@ function NeedsYouCard({
   // The card names artifacts and tasks in prose; resolve those mentions from
   // data already in the detail payload so the card answers "what happened,
   // where do I look" without a trip to the tabs.
+  const reports = useReviews(item.source, item.slug)
   const prose = `${item.title} ${item.detail}`
   const mentioned = detail.artifacts.filter((p) => !item.packet.includes(p) && prose.includes(p))
   const chipPaths = [...item.packet.filter((p) => detail.artifacts.includes(p) || p === 'state.yaml'), ...mentioned]
   const mentionedTask = detail.state?.tasks.find((t) => prose.includes(t.id)) ?? null
+  // A packet chip that names a review carries what that review concluded
+  // (#215) — the G2 approver should not have to open three files to learn
+  // that one of them said request-changes.
   const chips =
     chipPaths.length > 0 ? (
       <>
-        {chipPaths.map((p) => (
-          <Link
-            key={p}
-            to={`/runs/${item.source}/${item.slug}?tab=artifacts&artifact=${encodeURIComponent(p)}`}
-            className="rounded-xs border border-line-cool bg-surface px-2 py-0.5 font-mono text-[11.5px] text-muted hover:border-accent hover:text-accent-deep"
-          >
-            {p}
-          </Link>
-        ))}
+        {chipPaths.map((p) => {
+          const report = isReviewPath(p) ? reports?.find((r) => r.path === p) : undefined
+          return (
+            <Link
+              key={p}
+              to={`/runs/${item.source}/${item.slug}?tab=artifacts&artifact=${encodeURIComponent(p)}`}
+              className="inline-flex items-center gap-1.5 rounded-xs border border-line-cool bg-surface px-2 py-0.5 font-mono text-[11.5px] text-muted hover:border-accent hover:text-accent-deep"
+            >
+              {p}
+              {report && report.rounds.length > 0 && <VerdictChip verdicts={report.rounds.map((r) => r.verdict)} />}
+            </Link>
+          )
+        })}
       </>
     ) : null
   // No overflow-hidden on the card: the lexicon hover card (#252) is
@@ -489,6 +500,15 @@ function ArtifactsTab({
     paths.find((p) => p.endsWith('.md')) ??
     paths[0] ??
     null
+  // Verdict chips on the review entries (#215): what the review concluded,
+  // without opening it. Reports load lazily; until they do, the list is
+  // exactly what it was.
+  const reports = useReviews(detail.summary.source, detail.summary.slug)
+  const verdictsFor = (path: string) => {
+    const report = reports?.find((r) => r.path === path)
+    if (!report || report.rounds.length === 0) return null
+    return <VerdictChip verdicts={report.rounds.map((r) => r.verdict)} compact />
+  }
   return (
     <div className="grid grid-cols-[280px_1fr] gap-0 max-md:flex max-md:flex-col border-b border-line">
       <nav className="border-r border-line bg-surface py-[18px] max-md:w-full max-md:border-r-0">
@@ -510,6 +530,7 @@ function ArtifactsTab({
                 >
                   {v && <ValidationBadge ok={v.ok} missing={v.missing} />}
                   <span className="truncate">{p}</span>
+                  {verdictsFor(p) && <span className="ml-auto">{verdictsFor(p)}</span>}
                 </button>
               </li>
             )
@@ -571,6 +592,7 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
             <EvidenceRollupPanel src={src} slug={slug} />
           </div>
         )}
+        {isReviewPath(path) && <FindingsPanel src={src} slug={slug} path={path} />}
         {path.endsWith('.md') ? (
           <Markdown sourcePath={path}>{content}</Markdown>
         ) : (

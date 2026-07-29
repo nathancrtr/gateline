@@ -4,6 +4,7 @@
 export * from './evidence.ts'
 export * from './lexicon.ts'
 export * from './readiness.ts'
+export * from './review.ts'
 export * from './portfolio.ts'
 export * from './metrics.ts'
 export * from './config.ts'

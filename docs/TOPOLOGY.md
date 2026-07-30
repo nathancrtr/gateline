@@ -140,9 +140,9 @@ observes a repository through its git refs, so the observed repo's checked-out
 branch is irrelevant. From the worktree:
 
 ```sh
-cd <worktree>/frontend
+cd <worktree>/packages
 npm install && npm run build     # the server serves web/dist — UI changes are invisible until built
-node packages/cli/src/main.ts ui --repo <path-to-repo> --port 4312
+node cli/src/main.ts ui --repo <path-to-repo> --port 4312
 ```
 
 That is a self-contained second Gatehouse on a side port; the blessed instance
@@ -164,10 +164,10 @@ API call, no `git fetch` of `origin` — is not an accident of `--no-push` left
 with a fetch loop that happens to fail quietly. It is a named, first-class
 mode: **local-only**. `agentic up` and per-source config resolve through the
 one `push`/local-only precedence table implemented once in `resolveMode`
-(`frontend/packages/core/src/view-model/config.ts`, called from
+(`packages/core/src/view-model/config.ts`, called from
 `loadSources`). The standalone `agentic-orchestrator` binary never calls
 `loadSources` — it has its own repo (no config file, no multi-source list) —
-so `assembleOrchestrator` (`frontend/packages/orchestrator/src/start.ts`)
+so `assembleOrchestrator` (`packages/orchestrator/src/start.ts`)
 repeats the same conflict check and auto-detect logic against its own
 `--push`/`--local-only` flags. Two call sites, one precedence table: the
 tiers below hold for both.

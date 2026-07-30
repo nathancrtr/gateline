@@ -15,8 +15,8 @@ pair-programming to multi-agent development.
 | [`docs/DESIGN.md`](docs/DESIGN.md) | The architecture: principles, roles, gates, failure modes | — |
 | [`docs/FRONTEND.md`](docs/FRONTEND.md) | Design for the gate frontend — the human interfaces to the pipeline (plan: [FRONTEND-PLAN.md](docs/FRONTEND-PLAN.md)) | — |
 | [`docs/INTEGRATION.md`](docs/INTEGRATION.md) | Design (draft) for the workflow that imports the framework into a host repo | — |
-| [`docs/ORCHESTRATOR.md`](docs/ORCHESTRATOR.md) | Design for the v1 agent-orchestrated operating mode (implemented in `frontend/packages/orchestrator`) | — |
-| [`frontend/`](frontend/) | The gate frontend (web, CLI, server over `@agentic/core`) and the v1 orchestrator (`packages/orchestrator`) | product component |
+| [`docs/ORCHESTRATOR.md`](docs/ORCHESTRATOR.md) | Design for the v1 agent-orchestrated operating mode (implemented in `packages/orchestrator`) | — |
+| [`packages/`](packages/) | The gate frontend (web, CLI, server over `@agentic/core`) and the v1 orchestrator (`packages/orchestrator`) | product component |
 | [`roles/`](roles/) | Runtime-neutral role specs (mission, instructions, escalation triggers) | ✅ core |
 | [`contracts/`](contracts/) | Templates for every handoff artifact (spec, plan, task, reports, state) | ✅ core |
 | [`registry/models.yaml`](registry/models.yaml) | The only place vendor/model IDs exist; roles bind via capability profiles | ✅ core |
@@ -57,9 +57,9 @@ render the same agents).
 
 ```sh
 git clone https://github.com/nathancrtr/agentic-sandbox.git
-cd agentic-sandbox/frontend
+cd agentic-sandbox/packages
 npm install && npm run build      # builds the Gatehouse SPA once
-(cd packages/cli && npm link)     # global `agentic`, linked to this checkout
+(cd cli && npm link)              # global `agentic`, linked to this checkout
 ```
 
 The linked CLI runs from this tree — keep the checkout on `main` (it is the
@@ -112,7 +112,7 @@ The browser is optional. The whole gate workflow is terminal-native —
 runs headless without Gatehouse: `agentic-orchestrator watch` (resident) or
 `tick` (one reconcile pass, with `--dry-run` to derive and print next actions
 while writing and dispatching nothing). Common terminal workflows and their
-pitfalls: [`frontend/packages/cli/README.md`](frontend/packages/cli/README.md).
+pitfalls: [`packages/cli/README.md`](packages/cli/README.md).
 
 Before the first real dispatch, read [ORCHESTRATOR.md §10](docs/ORCHESTRATOR.md)
 (the autonomy ladder — first live work is a toy run with humans at every gate).
@@ -132,7 +132,7 @@ retro findings fold back into roles, contracts, and all three adapters. Runs now
 declare a **profile** — `patch | standard | full` ([DESIGN.md](docs/DESIGN.md) §4.1)
 — that scales which roles run and which gates exist to the size of the change, so a
 bug fix no longer pays for the full ceremony. The gate frontend (web, CLI, server)
-and the v1 orchestrator are implemented in `frontend/` and run as one co-located unit
+and the v1 orchestrator are implemented in `packages/` and run as one co-located unit
 (`agentic up`) over a single clone — one authority per deployment
 ([TOPOLOGY.md](docs/TOPOLOGY.md)); a single-user hosting recipe lives in
 [`deploy/`](deploy/). Autonomy stays gated on the DESIGN.md §7 promotion criterion.

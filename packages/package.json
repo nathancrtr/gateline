@@ -1,0 +1,30 @@
+{
+  "name": "packages",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "cli",
+    "core",
+    "orchestrator",
+    "runner-agent",
+    "server",
+    "web",
+    "fixtures"
+  ],
+  "scripts": {
+    "build": "npm run build -w @agentic/web",
+    "dev": "npm run dev -w @agentic/server",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json && tsc -p web/tsconfig.json",
+    "fixture": "node fixtures/src/main.ts"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}

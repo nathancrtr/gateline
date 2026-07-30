@@ -10,9 +10,9 @@ through the import in [`CLAUDE.md`](CLAUDE.md).
 This repository **is the product**: a runtime-neutral framework of SDLC agent roles
 (`roles/`), handoff contracts (`contracts/`), a model registry (`registry/`), thin
 runtime adapters (`adapters/`), host-repo integration tooling (`scripts/`), and the
-framework's product components under `frontend/` — the gate frontend (web, CLI,
+framework's product components under `packages/` — the gate frontend (web, CLI,
 server over `@agentic/core`) and the v1 orchestrator
-(`frontend/packages/orchestrator`), with a hosted single-user deployment recipe
+(`packages/orchestrator`), with a hosted single-user deployment recipe
 under `deploy/`. Application code under `apps/` is the output of pipeline runs, kept
 as evidence — not software being maintained for its own sake.
 
@@ -32,7 +32,7 @@ Then, by area:
 * [`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md) — driving the pipeline in v0
   (human-orchestrated) mode; [`runs/README.md`](runs/README.md) — run directory layout
 * [`docs/ORCHESTRATOR.md`](docs/ORCHESTRATOR.md) — the v1 agent-orchestrated mode
-  (runbook in `frontend/packages/orchestrator/README.md`)
+  (runbook in `packages/orchestrator/README.md`)
 * [`docs/FRONTEND.md`](docs/FRONTEND.md) — the gate frontend design
   (plan: [`docs/FRONTEND-PLAN.md`](docs/FRONTEND-PLAN.md))
 * [`docs/INTEGRATION.md`](docs/INTEGRATION.md) — importing the framework into a host
@@ -129,10 +129,10 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
 
 * Re-render adapter agent files after any `roles/` or manifest change:
   `python3 scripts/render-agents.py` (verify with `--check` — the same check CI runs)
-* Run the frontend/orchestrator tests: `npm test` in `frontend/` (typecheck:
+* Run the frontend/orchestrator tests: `npm test` in `packages/` (typecheck:
   `npm run typecheck`; e2e: `npm run build && npx playwright test`; needs
   `npm install` once, Node ≥ 24)
-* Drive the local instance with the `agentic` CLI (`frontend/packages/cli`, run from
+* Drive the local instance with the `agentic` CLI (`packages/cli`, run from
   source — `node packages/cli/src/main.ts <cmd>` in any tree *is* that tree's
   `agentic`):
   * inspect — `status`, `inbox`, `show <slug> [artifact]`
@@ -144,7 +144,8 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
 * Verify the orchestrator without dispatching: `agentic-orchestrator tick --dry-run`
   or `shadow <slug>` (replay a finished run); `watch` and `sweep <role>` are live
 * Try unmerged frontend changes: from that branch's worktree, `npm install &&
-  npm run build` then `node packages/cli/src/main.ts ui --demo` (or `--repo <path>`)
+  npm run build` in `packages/`, then `node packages/cli/src/main.ts ui --demo`
+  (or `--repo <path>`)
   on a side port — never check the branch out in the blessed main checkout, and never
   `up` from a trial tree (TOPOLOGY.md §3.5). Web-only changes can use
   `npm run dev -w @agentic/web` instead
@@ -154,9 +155,9 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
 * Run the integration-tooling tests: `pytest scripts/test_integrate.py`
 * Integrate the framework into a host repo:
   `python3 scripts/integrate.py init|validate|fork` (see INTEGRATION.md)
-* CI: `render-check` (stale renders), `frontend-ci` (typecheck, vitest, build,
+* CI: `render-check` (stale renders), `packages-ci` (typecheck, vitest, build,
   Playwright e2e), `deploy-image` (Docker build + container smoke test; triggered
-  by `deploy/**` or `frontend/**` changes)
+  by `deploy/**` or `packages/**` changes)
 
 ## Conventions
 
@@ -182,8 +183,8 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
 * Route framework fixes by kind: agent misbehavior → the role spec (`roles/*.md`,
   then re-render); a malformed or ambiguous handoff → the contract (`contracts/*`);
   a model or vendor change → `registry/models.yaml`; orchestrator behavior →
-  `frontend/packages/orchestrator` (design: ORCHESTRATOR.md); what a human sees or
-  clicks → `frontend/packages/{core,server,web,cli}` (design: FRONTEND.md; `core` is
+  `packages/orchestrator` (design: ORCHESTRATOR.md); what a human sees or
+  clicks → `packages/{core,server,web,cli}` (design: FRONTEND.md; `core` is
   layered record → sources → view-model, and derivation stays a pure function of
   committed state); integration workflow → `scripts/integrate.py` + the copy manifest
   (design: INTEGRATION.md); deployment posture → TOPOLOGY.md; hosting → `deploy/`

@@ -7,14 +7,14 @@ on:
   pull_request:
     paths:
       - 'deploy/**'
-      - 'frontend/**'
+      - 'packages/**'
       - '.dockerignore'
       - '.github/workflows/deploy-image.yml'
   push:
     branches: [main]
     paths:
       - 'deploy/**'
-      - 'frontend/**'
+      - 'packages/**'
       - '.dockerignore'
       - '.github/workflows/deploy-image.yml'
 
@@ -80,7 +80,7 @@ jobs:
 
       - name: Orchestrator dry-run in the image
         run: |
-          docker exec gatehouse node /app/frontend/packages/orchestrator/src/main.ts \
+          docker exec gatehouse node /app/packages/orchestrator/src/main.ts \
             --repo /data/repo tick --dry-run
 
       - name: Container logs

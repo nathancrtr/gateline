@@ -9,5 +9,5 @@
 - [ ] No vendor or model names in `roles/` or `contracts/`
 - [ ] Vendored tooling stays stdlib-only, Python 3.9-compatible
 - [ ] Tests pass: `pytest scripts/test_integrate.py` (and `npm test` in
-      `frontend/` if it's touched)
+      `packages/` if it's touched)
 - [ ] No retro-edits to completed runs under `runs/`

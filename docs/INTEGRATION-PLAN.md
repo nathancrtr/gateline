@@ -89,7 +89,7 @@ convention exists. Runs in parallel with W1–W2; only W4 waits on it.
 ### W4 — the first tagged release *(#42; also decide #31 first)*
 
 Tag, release checklist (what ships: core trees, copy manifest, `integrate.py`,
-the frontend workspace as source; what doesn't: `runs/`, `apps/`, `ee/` paths),
+the `packages/` workspace as source; what doesn't: `runs/`, `apps/`, `ee/` paths),
 and the versioning decision — recommendation: start semver at `v0.3.0` to match
 the docs' version narrative rather than resetting to 0.1.0, since two field
 locks already cite "v0.2". Decide the `runs/` tree fan-out (#31) before cutting,
@@ -101,7 +101,7 @@ real to re-pin to.
 ### W5 — the operator cockpit path, documented
 
 The two-channel model's second channel (INTEGRATION.md §3): checkout the tag,
-`npm install` in `frontend/`, `agentic ui --repo <host>` (and the multi-repo
+`npm install` in `packages/`, `agentic ui --repo <host>` (and the multi-repo
 fleet config for operators with several hosts). One documented page — a
 WALKTHROUGH or frontend README section — sufficient for a cold operator.
 npm-publishing the packages stays deferred until the repo goes public (epic
@@ -161,7 +161,7 @@ maintainer-mediated and redacted, as INTEGRATION.md §6 requires).
 | F7 tag-sequencing contradiction | §3 wording (round-2 edit); W0 ordered before W4 here |
 | F8 read check unsatisfiable pre-split | §5 precondition stated (round-2 edit); P0 sequenced after W0 |
 | F9 manifest × lock × upgrade gaps | §3/§6 taken-subset checksums, fork-base rule, added-file notes (round-2 edit); W2 |
-| F10 R3 citation target | Citations now point at `frontend/README.md` (round-2 edit) |
+| F10 R3 citation target | Citations now point at `packages/README.md` (round-2 edit) |
 | F11 scheduled-dispatch omission | §5 profile "dispatch reality" section (round-2 edit); contract authored in W2 |
 
 ## 5. Sequencing, risks, non-goals

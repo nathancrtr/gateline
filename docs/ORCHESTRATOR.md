@@ -1,7 +1,7 @@
 # The v1 Orchestrator — Design
 
 **Status:** v0.3 — implemented through the M0–M4 trust ladder in
-[`frontend/packages/orchestrator`](../frontend/packages/orchestrator/) (see its
+[`packages/orchestrator`](../packages/orchestrator/) (see its
 README for the runbook); the §12 open questions are resolved (2026-07-10, answers
 folded into §3, §4, §6, §10)
 **Prerequisite reading:** [DESIGN.md](DESIGN.md) §4 (gates and caps), §7 (operating
@@ -440,9 +440,9 @@ Small and explicit, in the FRONTEND-PLAN §7 pattern; these are M0:
 
 The engine's hard mechanics — run discovery, schema parsing, contract validation,
 readiness derivation, comment-preserving CAS writes — are already implemented,
-tested, and golden-filed once, in `@agentic/core` (`frontend/packages/core` on the
+tested, and golden-filed once, in `@agentic/core` (`packages/core` on the
 frontend branch). **The orchestrator becomes a sibling package in that workspace,
-`frontend/packages/orchestrator`, consuming core** and adding what is genuinely new:
+`packages/orchestrator`, consuming core** and adding what is genuinely new:
 the derivation rules' dispatch half, the seam, the metering normalizer, the triggers.
 
 - This does not violate the frontend's R2: R2 governs the human surfaces (web, CLI,
@@ -537,7 +537,7 @@ process replacement instead of a silent drift nobody notices.
 §3.1) is one checkout, co-located: the server, the engine, and the CLI are one
 process (`agentic up`) reading and writing one clone, with the globally
 installed `agentic` binary `npm link`ed to that checkout's
-`frontend/packages/cli`. There is exactly one blessed tree per deployment, so
+`packages/cli`. There is exactly one blessed tree per deployment, so
 "update the code" reduces to "advance that one checkout" — no fleet of
 processes to reconcile against each other.
 
@@ -613,16 +613,16 @@ same way it would on a crash. `agentic-orchestrator watch` and `agentic up`
 both wire this exit in; a `tick`-driven deployment (§4.1, trigger 4) doesn't
 need it — a one-shot tick already exits after a single pass regardless. A
 launchd example plist for this deployment is deliberately deferred (tracked
-on #141); `frontend/packages/orchestrator/README.md`'s trigger-packaging
+on #141); `packages/orchestrator/README.md`'s trigger-packaging
 section carries one for `tick`, which doesn't need updating for this.
 
 **`agentic upgrade`.** Convenience over the same mechanism, not a second one:
 refuses on a dirty tree, `git pull --ff-only`, then `npm install` — and,
 when the workspace carries the web app, `npm run build`: the server serves
 `packages/web/dist`, the one part of the tree that does not run from
-source — in the workspace (`frontend/` under the resolved code repo,
-falling back to the repo root, or skipped if neither carries a
-`package.json`) when `HEAD` moved, printing `upgraded <old7>..<new7>` (or
+source — in the workspace (`packages/` under the resolved code repo,
+`frontend/` in a pre-rename checkout (#133), falling back to the repo
+root, or skipped if none carries a `package.json`) when `HEAD` moved, printing `upgraded <old7>..<new7>` (or
 `already up to date at <head7>`). It does not itself restart a running engine — the monitor's own
 tick-boundary check is what notices the moved `HEAD` and drives the exit, on
 whatever cadence the heartbeat runs.

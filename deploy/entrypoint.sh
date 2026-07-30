@@ -81,7 +81,7 @@ fi
 # after 10s (state is in git, restart converges) — ordinary crashes today.
 # It would equally absorb a deliberate self-supersede exit (75, #141, see
 # docs/ORCHESTRATOR.md §13) if this process ever ran from a live git
-# checkout, but it doesn't here: frontend/ is baked into the image at build
+# checkout, but it doesn't here: packages/ is baked into the image at build
 # time with no .git above it, so that code path stays inert and a hosted
 # update is still `fly deploy` from a newer checkout (docs/DEPLOY.md).
 if [ "${ORCH_ENABLED:-0}" = "1" ]; then
@@ -90,7 +90,7 @@ if [ "${ORCH_ENABLED:-0}" = "1" ]; then
   [ "${ORCH_NO_BUDGET_ENFORCEMENT:-0}" = "1" ] && ORCH_BUDGET_FLAG="--no-budget-enforcement"
   (
     while :; do
-      node /app/frontend/packages/orchestrator/src/main.ts \
+      node /app/packages/orchestrator/src/main.ts \
         --repo "$REPO_DIR" \
         --adapter "${ORCH_ADAPTER:-claude-code}" \
         --push "$ORCH_BUDGET_FLAG" \
@@ -102,4 +102,4 @@ if [ "${ORCH_ENABLED:-0}" = "1" ]; then
   ) &
 fi
 
-exec node /app/frontend/packages/server/src/main.ts --host "$HOST" --port "$PORT"
+exec node /app/packages/server/src/main.ts --host "$HOST" --port "$PORT"

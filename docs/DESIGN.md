@@ -1,7 +1,7 @@
 # gateline — Design
 
 **Status:** v0.2 — exercised end-to-end by the wordfreq run (`runs/wordfreq/`); the
-gate frontend and the v1 orchestrator it describes in §7 are implemented (`frontend/`)
+gate frontend and the v1 orchestrator it describes in §7 are implemented (`packages/`)
 **Audience:** senior engineers moving from single-stream AI pair-programming to multi-agent, semi-autonomous development
 
 ---
@@ -315,7 +315,7 @@ criterion: the team has run enough v0 cycles that gate reviews have become
 confirmations rather than corrections. The v1 design — a stateless reconciler over
 `state.yaml` with an adapter-shaped dispatch seam and automated budget metering — is
 specified in [ORCHESTRATOR.md](ORCHESTRATOR.md) and implemented in
-[`frontend/packages/orchestrator`](../frontend/packages/orchestrator/) (runbook in
+[`packages/orchestrator`](../packages/orchestrator/) (runbook in
 its README; WALKTHROUGH.md closes with the v1 form of the same pipeline). Autonomy
 remains gated on the promotion criterion, measured by the frontend's burden metric.
 

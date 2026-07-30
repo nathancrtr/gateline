@@ -217,8 +217,8 @@ it in favor of `up`.
 The engine notices a `git pull` in the checkout it runs from at its next
 tick boundary and exits (`75`) rather than silently keep serving stale code.
 That mechanism does not reach the hosted process on *this* recipe: the image
-bakes `frontend/` in at build time with no `.git` above it (the Dockerfile
-copies only `frontend/` and `deploy/`, and `.dockerignore` excludes `.git`),
+bakes `packages/` in at build time with no `.git` above it (the Dockerfile
+copies only `packages/` and `deploy/`, and `.dockerignore` excludes `.git`),
 so `resolveCodeRepo` finds nothing to watch and the code-tree monitor is
 never constructed inside the container. A hosted update is still `fly
 deploy` from a newer checkout (Operational notes, below), which replaces the
@@ -263,7 +263,7 @@ visible, not quiet.
    session), and set `ORCH_SPEND_LIMIT_USD` in `fly.toml`'s `[env]`.
 3. Prove the plumbing before real dispatch: from the machine, run the
    one-prompt live smoke (`fly ssh console`, then `ORCH_LIVE_SMOKE=1` per
-   `frontend/packages/orchestrator/README.md`) — it costs cents and verifies
+   `packages/orchestrator/README.md`) — it costs cents and verifies
    auth + usage metering in the real environment.
 4. First live work should be a **toy run** with humans at every gate
    (ORCHESTRATOR.md §10 M2) — not a real feature.

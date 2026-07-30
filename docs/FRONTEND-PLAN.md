@@ -19,14 +19,14 @@ scoping decisions are settled and not revisited below:
 | Posture | **Local-first, remote-ready.** One command serves the app on localhost; it reads local clones and writes real git commits. Data access sits behind a driver interface so a GitHub-API driver can arrive later without UI changes. |
 | Stack | **TypeScript end-to-end.** React 19 + Vite + Tailwind v4 (shadcn/ui-style copied components) in front; a small Hono server on Node behind; npm workspaces (Node ≥ 22, no extra toolchain). |
 | Scope | Core surfaces (inbox, portfolio, run detail, gate cards, the write path) **plus** the `agentic` CLI, metrics/trends (I8), and GitHub PR-approval sync (§2 of FRONTEND.md). Slack notifications: out. |
-| Home | **This repo, top-level `frontend/`** — a product component of the framework, versioned with the contracts it renders. `apps/` stays reserved for pipeline-run output. |
+| Home | **This repo, top-level `packages/`** — a product component of the framework, versioned with the contracts it renders. `apps/` stays reserved for pipeline-run output. |
 
 Everything in FRONTEND.md §4 remains binding. Three of its principles harden into
 architecture rules here:
 
 - **R1 — The repo is the only database** (§4.6). The app owns no store. Its entire
   state is `(repo refs, working config)`; every view is recomputable from `git` alone,
-  and deleting `frontend/` loses nothing.
+  and deleting `packages/` loses nothing.
 - **R2 — Exactly one write path** (§5). The only mutation the system performs is a
   commit that edits one run's `state.yaml` (gate decision, escalation resolution,
   pause/resume). No dispatch, no artifact edits, no second write channel.
@@ -253,7 +253,7 @@ All from git history of `state.yaml` plus the burden field — no scribe, no sto
    second approver exists.
 2. `docs/FRONTEND.md`: status note that Stage C's UX was pulled forward as a
    local-first build (posture decision recorded, staging logic intact).
-3. New `frontend/README.md`: quickstart, config, keyboard reference, the R1–R3 rules
+3. New `packages/README.md`: quickstart, config, keyboard reference, the R1–R3 rules
    restated for contributors.
 
 No role spec changes; no `.claude/agents` / `.github/agents` re-render needed
@@ -262,23 +262,22 @@ No role spec changes; no `.claude/agents` / `.github/agents` re-render needed
 ## 8. Repository layout
 
 ```
-frontend/
+packages/
 ├── package.json            # npm workspaces root; engines: node ≥22
-├── packages/
-│   ├── core/               # @agentic/core — everything in §2–§3, zero UI deps
-│   ├── cli/                # agentic — commander-based, thin over core
-│   ├── server/             # Hono app, thin over core
-│   └── web/                # Vite + React SPA
+├── core/                   # @agentic/core — everything in §2–§3, zero UI deps
+├── cli/                    # agentic — commander-based, thin over core
+├── server/                 # Hono app, thin over core
+├── web/                    # Vite + React SPA
 └── fixtures/               # demo-repo generator (§9)
 ```
 
 Root `package.json` scripts: `build`, `test`, `lint`, `dev` (server + Vite HMR).
-CI: a `frontend-ci.yml` workflow (install, typecheck, test, build) that triggers only
-on `frontend/**` paths so framework-only PRs stay fast.
+CI: a `packages-ci.yml` workflow (install, typecheck, test, build) that triggers only
+on `packages/**` paths so framework-only PRs stay fast.
 
 ## 9. Testing and verification
 
-- **Fixture generator** (`frontend/fixtures/`): scripts a temp git repo containing
+- **Fixture generator** (`packages/fixtures/`): scripts a temp git repo containing
   runs in *every* interesting state — each gate pending, an unresolved escalation, a
   round-cap breach, a paused run, a malformed spec, a done run. Used by unit tests,
   by Playwright, and by `agentic ui --demo` for screenshots and hand-testing. This

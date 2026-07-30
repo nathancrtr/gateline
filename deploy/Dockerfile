@@ -8,7 +8,7 @@
 
 FROM node:24-slim AS build
 WORKDIR /app
-COPY frontend/ ./
+COPY packages/ ./
 RUN npm ci --no-audit --no-fund && npm run build
 
 FROM node:24-slim
@@ -35,10 +35,10 @@ ENV HOME=/home/agentic
 
 # Server and core run straight from TypeScript source (Node >= 24 strip-only
 # mode); only the SPA needs the build stage.
-WORKDIR /app/frontend
-COPY frontend/ ./
+WORKDIR /app/packages
+COPY packages/ ./
 RUN npm ci --omit=dev --no-audit --no-fund
-COPY --from=build /app/packages/web/dist packages/web/dist
+COPY --from=build /app/web/dist web/dist
 
 COPY deploy/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

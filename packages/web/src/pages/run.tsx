@@ -1,7 +1,7 @@
 // One run's story: header + gate ledger, the "needs you" panel, and tabs for
 // artifacts, diff, and state history. Decision affordances live in the cards
 // (M2 wires them to POST /api/decisions).
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 // genesis-preview candidate (state.yaml gates.G1.notes): the run header's
@@ -247,7 +247,7 @@ export function RunPage() {
           />
         )}
         {tab === 'diff' && <DiffTab src={summary.source} slug={summary.slug} />}
-        {tab === 'history' && <HistoryTab history={detail.history} />}
+        {tab === 'history' && <HistoryTab history={detail.history} src={src!} slug={slug!} />}
       </div>
     </LexiconProvider>
   )
@@ -611,32 +611,116 @@ function DiffTab({ src, slug }: { src: string; slug: string }) {
   return <DiffView files={data!.files} />
 }
 
-/** The instrument log: a signal spine down the left (an accent-colored node
- * marks each phase transition, per candidate-b's run-history.html) built
- * from Tailwind's before: pseudo-element utilities — static border,
- * background, and shadow only; no new motion is defined here. */
-function HistoryTab({ history }: { history: RunDetailResponse['history'] }) {
+/** Actor treatment: a human decision reads as the decision it is; the engine's
+ * verbs sit back in mono. The distinction is a fact of the grammar — the
+ * `G<N> approved by <name>` form is reserved for named humans (AGENTS.md) and
+ * the orchestrator structurally never writes `gates.*`. */
+const LEDGER_TONE: Record<string, string> = {
+  human: 'text-ink font-medium',
+  orchestrator: 'font-mono text-[12px] text-muted',
+  unknown: 'text-muted',
+}
+
+/** Verbs that carry a decision, and so earn a filled marker on the spine. */
+const DECISION_KINDS = new Set(['gate-approved', 'gate-declined', 'escalation-resolved', 'paused', 'resumed', 'armed', 'staged'])
+
+/**
+ * The decision ledger (#268): `state.yaml`'s history read as the decisions and
+ * dispatches it records, not as a commit log. Per #259 / FRONTEND.md §4.1, time,
+ * subject, author and short oid are the host's job — phase transitions, gate
+ * approvals under the `G<N> approved by <name>` grammar, and the orchestrator's
+ * verbs are what no host can represent.
+ *
+ * Verbatim and reachable (#261's standing rule): every word rendered comes
+ * byte-identical from the record — `detail` is the raw remainder of the commit
+ * subject and the extracted fields are substrings of it — and the raw commit
+ * columns stay one toggle away rather than being deleted. Nothing here is
+ * summarized and no verdict is computed.
+ *
+ * Gate decisions are enriched from the decisions endpoint, which reads
+ * `state.yaml` *content* rather than subjects — this is what keeps the ledger
+ * useful on the v0 runs (wordfreq/mdtoc/dupefind), whose commits predate the
+ * `state(<slug>):` grammar and therefore all read as `other`.
+ */
+function HistoryTab({ history, src, slug }: { history: RunDetailResponse['history']; src: string; slug: string }) {
+  const [raw, setRaw] = useState(false)
+  // A run whose state.yaml is schema-invalid still renders its ledger (#198
+  // precedent): parsing reads commit subjects only and never touches the state,
+  // so a failed decisions fetch degrades this view rather than emptying it.
+  const { data: decisions } = useQuery({
+    queryKey: ['decisions', src, slug],
+    queryFn: () => api.decisions(src, slug),
+    enabled: Boolean(src && slug),
+    retry: false,
+  })
+
+  const burdenByGate = useMemo(() => {
+    const m = new Map<string, { burden: string | null; notes: string | null }>()
+    for (const d of decisions?.decisions ?? []) m.set(d.gate, { burden: d.burden, notes: d.notes })
+    return m
+  }, [decisions])
+
   if (history.length === 0) return <PageStatus text="No state history at this ref." />
+
   return (
-    <ol className="relative ml-1.5 flex flex-col before:absolute before:bottom-1.5 before:left-1.5 before:top-1.5 before:w-0.5 before:bg-line before:content-['']">
-      {history.map((h, i) => {
-        const transition = Boolean(h.phase && i < history.length - 1 && history[i + 1]!.phase !== h.phase)
-        return (
-          <li
-            key={h.oid}
-            className={`relative flex items-baseline gap-3 border-b border-line py-2.5 pl-7 text-sm last:border-b-0 before:absolute before:left-0.5 before:top-[15px] before:h-2.5 before:w-2.5 before:rounded-full before:border-2 before:content-[''] ${
-              transition ? 'before:border-accent before:bg-accent' : 'before:border-faint before:bg-inset'
-            }`}
-          >
-            <span className="w-32 shrink-0 font-mono text-[11.5px] tabular-nums text-faint">{formatWhen(h.time)}</span>
-            <span className="min-w-0 flex-1 truncate text-[13px]">{h.subject}</span>
-            {transition && <span className="shrink-0 font-mono text-[11px] text-accent-deep">→ {h.phase}</span>}
-            <span className="w-24 shrink-0 truncate text-right text-[11.5px] text-muted">{h.author}</span>
-            <span className="shrink-0 font-mono text-[11px] text-faint">{h.oid.slice(0, 7)}</span>
-          </li>
-        )
-      })}
-    </ol>
+    <div>
+      <div className="mb-2 flex items-center justify-end">
+        <button
+          type="button"
+          onClick={() => setRaw((v) => !v)}
+          className="font-mono text-[11px] text-muted underline decoration-dotted underline-offset-2 hover:text-ink"
+          aria-pressed={raw}
+        >
+          {raw ? 'hide raw commits' : 'show raw commits'}
+        </button>
+      </div>
+      <ol
+        data-ledger
+        className="relative ml-1.5 flex flex-col before:absolute before:bottom-1.5 before:left-1.5 before:top-1.5 before:w-0.5 before:bg-line before:content-['']"
+      >
+        {history.map((h, i) => {
+          const transition = Boolean(h.phase && i < history.length - 1 && history[i + 1]!.phase !== h.phase)
+          const e = h.ledger
+          const decided = DECISION_KINDS.has(e.kind)
+          const extra = e.gate ? burdenByGate.get(e.gate) : undefined
+          return (
+            <li
+              key={h.oid}
+              data-ledger-actor={e.actor}
+              data-ledger-kind={e.kind}
+              className={`relative flex items-baseline gap-3 border-b border-line py-2.5 pl-7 text-sm last:border-b-0 before:absolute before:left-0.5 before:top-[15px] before:h-2.5 before:w-2.5 before:rounded-full before:border-2 before:content-[''] ${
+                transition
+                  ? 'before:border-accent before:bg-accent'
+                  : decided
+                    ? 'before:border-accent before:bg-inset'
+                    : 'before:border-faint before:bg-inset'
+              }`}
+            >
+              <span className="w-32 shrink-0 font-mono text-[11.5px] tabular-nums text-faint">{formatWhen(h.time)}</span>
+              <span className={`min-w-0 flex-1 truncate text-[13px] ${LEDGER_TONE[e.actor] ?? ''}`} title={h.subject}>
+                {e.detail}
+              </span>
+              {/* Burden and notes come from the decisions endpoint, quoted, never scored. */}
+              {extra?.burden && (
+                <span className="shrink-0 rounded-xs border border-line px-1.5 py-px font-mono text-[10.5px] text-muted">{extra.burden}</span>
+              )}
+              {e.actor === 'orchestrator' && (
+                <span className="shrink-0 font-mono text-[10.5px] text-faint" title="committed under the orchestrator's bot identity">
+                  engine
+                </span>
+              )}
+              {transition && <span className="shrink-0 font-mono text-[11px] text-accent-deep">→ {h.phase}</span>}
+              {raw && (
+                <>
+                  <span className="w-24 shrink-0 truncate text-right text-[11.5px] text-muted">{h.author}</span>
+                  <span className="shrink-0 font-mono text-[11px] text-faint">{h.oid.slice(0, 7)}</span>
+                </>
+              )}
+            </li>
+          )
+        })}
+      </ol>
+    </div>
   )
 }
 

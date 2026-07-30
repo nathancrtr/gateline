@@ -435,36 +435,145 @@ export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts 
     },
     {
       slug: 'g2-pending',
-      age: 3,
+      // The genesis commit predates the ledger commits below (ages 5→3), so
+      // the history reads oldest-last without a date inversion. The run's own
+      // freshness still comes from its tip, which stays at 3 days.
+      age: 6,
+      // The genesis commit holds only what exists before G0 is decided; the
+      // rest of the record arrives across the ledger commits below, which is
+      // both how a real run accretes and what gives each commit something to
+      // land. The final commit restores the same tree this run had before.
       files: {
         'intent-brief.md': brief('log rotator'),
         'spec.md': spec('log rotator'),
-        'plan.md': plan('log rotator'),
-        'tasks/01-core.yaml': workItem('01-core', 'R1', 'review-approved'),
-        'tasks/02-errors.yaml': workItem('02-errors', 'R2', 'review-approved'),
-        'state.yaml': stateYaml({
-          slug: 'g2-pending',
-          phase: 'implement',
-          gates: {
-            G0: { by: 'operator', at: '2026-07-02T09:00:00Z', burden: 'confirmation' },
-            G1: { by: 'operator', at: '2026-07-03T09:00:00Z', burden: 'light-correction' },
-          },
-          tasks: [
-            { id: '01-core', status: 'review-approved', rounds: 1 },
-            { id: '02-errors', status: 'review-approved', rounds: 2 },
-          ],
-        }),
+        'state.yaml': stateYaml({ slug: 'g2-pending', phase: 'spec', gates: {} }),
       },
+      // g2-pending carries a realistic decision ledger (#268): the commit
+      // subjects below are the grammar the two seams actually write —
+      // record/actions.ts for the human decisions, orchestrator/src/engine.ts
+      // for the bot verbs. Without them every demo run reads as `other` and the
+      // ledger has nothing to show. The final commit restores the same
+      // state.yaml the base commit wrote, so the branch tip — which is what
+      // every other test reads — is unchanged.
       commits: [
         {
-          age: 3,
-          message: 'Implement core + reviews + verification',
+          age: 5,
+          message: 'state(g2-pending): G0 approved by operator [burden: confirmation]',
+          files: {
+            'state.yaml': stateYaml({
+              slug: 'g2-pending',
+              phase: 'plan',
+              gates: { G0: { by: 'operator', at: '2026-07-02T09:00:00Z', burden: 'confirmation' } },
+            }),
+          },
+        },
+        {
+          // Each engine verb also writes state.yaml — metering, task status,
+          // harvest — which is why they appear in a state history at all.
+          age: 5,
+          message: 'state(g2-pending): dispatched architect',
+          files: {
+            'plan.md': plan('log rotator'),
+            'tasks/01-core.yaml': workItem('01-core', 'R1', 'pending'),
+            'state.yaml': stateYaml({
+              slug: 'g2-pending',
+              phase: 'plan',
+              gates: { G0: { by: 'operator', at: '2026-07-02T09:00:00Z', burden: 'confirmation' } },
+              budget: { limit: 25, spent: 0.54 },
+            }),
+          },
+        },
+        {
+          age: 4,
+          message: 'state(g2-pending): G1 approved by operator [burden: light-correction]',
+          files: {
+            'state.yaml': stateYaml({
+              slug: 'g2-pending',
+              phase: 'implement',
+              gates: { G0: { by: 'operator', at: '2026-07-02T09:00:00Z', burden: 'confirmation' }, G1: { by: 'operator', at: '2026-07-03T09:00:00Z', burden: 'light-correction' } },
+              tasks: [{ id: '01-core', status: 'pending', rounds: 0 }],
+              budget: { limit: 25, spent: 0.54 },
+            }),
+          },
+        },
+        {
+          age: 4,
+          message: 'state(g2-pending): dispatched implementer(01-core)',
           files: {
             '../../src/core.py': 'def process(text):\n    return text.split()\n',
+            'state.yaml': stateYaml({
+              slug: 'g2-pending',
+              phase: 'implement',
+              gates: { G0: { by: 'operator', at: '2026-07-02T09:00:00Z', burden: 'confirmation' }, G1: { by: 'operator', at: '2026-07-03T09:00:00Z', burden: 'light-correction' } },
+              tasks: [{ id: '01-core', status: 'dispatched', rounds: 0 }],
+              budget: { limit: 25, spent: 0.91 },
+            }),
+          },
+        },
+        {
+          age: 3,
+          message: 'state(g2-pending): bounced review-02.md — re-dispatching reviewer (missing: Boundary check)',
+          files: {
             '../../src/errors.py': 'class InputError(Exception):\n    pass\n',
+            'state.yaml': stateYaml({
+              slug: 'g2-pending',
+              phase: 'implement',
+              gates: { G0: { by: 'operator', at: '2026-07-02T09:00:00Z', burden: 'confirmation' }, G1: { by: 'operator', at: '2026-07-03T09:00:00Z', burden: 'light-correction' } },
+              tasks: [{ id: '01-core', status: 'in-review', rounds: 1 }],
+              budget: { limit: 25, spent: 1.20 },
+            }),
+          },
+        },
+        {
+          age: 3,
+          message: 'state(g2-pending): metered reviewer(02-errors r2) $1.86',
+          files: {
             'review-01.md': review('01-core', 1, 'approve'),
             'review-02.md': review('02-errors', 2, 'approve'),
+            'state.yaml': stateYaml({
+              slug: 'g2-pending',
+              phase: 'implement',
+              gates: { G0: { by: 'operator', at: '2026-07-02T09:00:00Z', burden: 'confirmation' }, G1: { by: 'operator', at: '2026-07-03T09:00:00Z', burden: 'light-correction' } },
+              tasks: [{ id: '01-core', status: 'review-approved', rounds: 1 }],
+              budget: { limit: 25, spent: 1.86 },
+            }),
+          },
+        },
+        {
+          age: 3,
+          message: 'state(g2-pending): harvested 2 artifacts',
+          files: {
             'verification-report.md': verification(),
+            'state.yaml': stateYaml({
+              slug: 'g2-pending',
+              phase: 'implement',
+              gates: { G0: { by: 'operator', at: '2026-07-02T09:00:00Z', burden: 'confirmation' }, G1: { by: 'operator', at: '2026-07-03T09:00:00Z', burden: 'light-correction' } },
+              tasks: [{ id: '01-core', status: 'review-approved', rounds: 1 }],
+              budget: { limit: 25, spent: 2.31 },
+            }),
+          },
+        },
+        {
+          // Restores exactly the state.yaml and work items this run had before
+          // the ledger commits were added, so the branch tip every other test
+          // reads is unchanged.
+          age: 3,
+          message: 'state(g2-pending): advanced — phase implement',
+          files: {
+            'tasks/01-core.yaml': workItem('01-core', 'R1', 'review-approved'),
+            'tasks/02-errors.yaml': workItem('02-errors', 'R2', 'review-approved'),
+            'state.yaml': stateYaml({
+              slug: 'g2-pending',
+              phase: 'implement',
+              gates: {
+                G0: { by: 'operator', at: '2026-07-02T09:00:00Z', burden: 'confirmation' },
+                G1: { by: 'operator', at: '2026-07-03T09:00:00Z', burden: 'light-correction' },
+              },
+              tasks: [
+                { id: '01-core', status: 'review-approved', rounds: 1 },
+                { id: '02-errors', status: 'review-approved', rounds: 2 },
+              ],
+            }),
           },
         },
       ],

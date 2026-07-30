@@ -18,6 +18,7 @@ import {
   ID_PATTERN,
   parseReview,
   missingSections,
+  parseLedgerSubject,
   parseUnifiedDiff,
   planDecision,
   planRunScaffold,
@@ -332,6 +333,9 @@ export function createApp(deps: AppDeps): Hono {
           author: h.author,
           subject: h.subject,
           phase: h.state?.phase ?? null,
+          // The ledger reading (#268). Parsed here rather than in the browser
+          // because web takes only types from core, never values.
+          ledger: parseLedgerSubject(h.subject),
         })),
       }
     })

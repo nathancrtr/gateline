@@ -13,6 +13,7 @@ pair-programming to multi-agent development.
 | Path | What it is | Portable? |
 |------|-----------|-----------|
 | [`docs/DESIGN.md`](docs/DESIGN.md) | The architecture: principles, roles, gates, failure modes | — |
+| [`docs/TOPOLOGY.md`](docs/TOPOLOGY.md) | Control-plane topology: one authority per deployment, origin as linearization point | — |
 | [`docs/FRONTEND.md`](docs/FRONTEND.md) | Design for the gate frontend — the human interfaces to the pipeline (plan: [FRONTEND-PLAN.md](docs/FRONTEND-PLAN.md)) | — |
 | [`docs/INTEGRATION.md`](docs/INTEGRATION.md) | Design (draft) for the workflow that imports the framework into a host repo | — |
 | [`docs/ORCHESTRATOR.md`](docs/ORCHESTRATOR.md) | Design for the v1 agent-orchestrated operating mode (implemented in `packages/orchestrator`) | — |

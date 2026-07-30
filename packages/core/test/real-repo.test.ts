@@ -5,7 +5,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { collectRunDecisions, LocalGitSource, summarizeRun } from '../src/index.ts'
 
-const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../../..')
+const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../..')
 const source = new LocalGitSource('sandbox', repoRoot)
 
 describe('this repository (wordfreq)', () => {

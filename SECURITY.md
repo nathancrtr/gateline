@@ -17,7 +17,7 @@ The security-relevant surfaces of gateline are:
   operator machines against operator repos. Anything that could make them
   write outside the target repo, execute unexpected code, or misrepresent
   provenance is in scope.
-- **Gatehouse (`frontend/`)** — the server binds to localhost by design;
+- **Gatehouse (`packages/`)** — the server binds to localhost by design;
   anything that widens that exposure, bypasses the single write path, or lets
   a non-human author a gate entry is in scope.
 - **Role and contract text** — prompt-injection vectors that would cause a

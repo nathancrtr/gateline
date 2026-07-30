@@ -5,16 +5,16 @@ entirely from a shell. Nothing here is a second system: every view is
 recomputed from `runs/*/state.yaml` in git (R1), every mutation is one
 compare-and-swap commit to a run's `state.yaml` (R2), and a malformed packet
 is never presented as approvable (R3) — see the
-[frontend README](../../README.md) for the three rules and
-[docs/FRONTEND.md](../../../docs/FRONTEND.md) for the design.
+[frontend README](../README.md) for the three rules and
+[docs/FRONTEND.md](../../docs/FRONTEND.md) for the design.
 
 ## Install
 
 Runs from TypeScript source — Node ≥ 24, no build step for the CLI:
 
 ```sh
-cd frontend && npm install
-(cd packages/cli && npm link)   # global `agentic`, linked to this checkout
+cd packages && npm install
+(cd cli && npm link)   # global `agentic`, linked to this checkout
 ```
 
 The link points at the checkout, so `git pull` there updates the CLI; re-run
@@ -70,7 +70,7 @@ review, `agentic sync` plans the copy of approved reviews into undecided G2
 entries and `sync --live` records them (uses the `gh` CLI's login).
 
 **Many repos.** List sources in `~/.config/agentic/config.yaml` (see the
-[frontend README](../../README.md)), or point at one ad hoc with
+[frontend README](../README.md)), or point at one ad hoc with
 `--repo <path>`. Hosts integrated under a prefix are discovered via their
 `.agentic/framework-lock.json` — no per-host configuration.
 

@@ -13,7 +13,7 @@ const live = process.env.ORCH_LIVE_SMOKE === '1'
 
 describe.skipIf(!live)('claude-code headless (live)', () => {
   it('dispatches one prompt and parses real usage', { timeout: 300_000 }, async () => {
-    const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../../..')
+    const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../..')
     const manifest = await loadHeadlessManifest(repoRoot, 'claude-code')
     // Neutral prompt: the manifest template normally names a subagent via
     // {role}; for the smoke we only prove the invocation + usage plumbing.

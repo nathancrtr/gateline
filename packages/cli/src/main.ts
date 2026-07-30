@@ -764,7 +764,7 @@ program
     '\nEngine only, no server or browser: the orchestrator has its own binary —\n' +
       '  agentic-orchestrator watch   resident engine (this command minus Gatehouse)\n' +
       '  agentic-orchestrator tick    one reconcile pass, --dry-run to preview\n' +
-      'See frontend/packages/cli/README.md, "Headless / no browser".',
+      'See packages/cli/README.md, "Headless / no browser".',
   )
   .action(
     async (
@@ -921,9 +921,19 @@ export async function runUpgrade(repoDir: string, log: (line: string) => void = 
     return 0
   }
 
+  // The workspace lives at packages/ since the frontend/ → packages/ rename
+  // (#133); frontend/ remains as a fallback so `agentic upgrade` run from a
+  // pre-rename checkout can still cross the rename.
+  const packagesPkg = join(repoDir, 'packages', 'package.json')
   const frontendPkg = join(repoDir, 'frontend', 'package.json')
   const rootPkg = join(repoDir, 'package.json')
-  const workspaceDir = existsSync(frontendPkg) ? join(repoDir, 'frontend') : existsSync(rootPkg) ? repoDir : null
+  const workspaceDir = existsSync(packagesPkg)
+    ? join(repoDir, 'packages')
+    : existsSync(frontendPkg)
+      ? join(repoDir, 'frontend')
+      : existsSync(rootPkg)
+        ? repoDir
+        : null
   if (workspaceDir) {
     const npmCode = await streamCommand('npm', ['install'], workspaceDir)
     if (npmCode !== 0) {
@@ -934,8 +944,12 @@ export async function runUpgrade(repoDir: string, log: (line: string) => void = 
     // the server serves packages/web/dist, a built artifact. An upgrade that
     // stops at `npm install` leaves the previous build's UI running over
     // current APIs — invisibly, because everything else picks up the new
-    // code on restart.
-    if (existsSync(join(workspaceDir, 'packages', 'web', 'package.json'))) {
+    // code on restart. The web package sits at <workspace>/web, or
+    // <workspace>/packages/web in the pre-rename layout.
+    const webPkg = [join(workspaceDir, 'web', 'package.json'), join(workspaceDir, 'packages', 'web', 'package.json')].find((p) =>
+      existsSync(p),
+    )
+    if (webPkg) {
       const buildCode = await streamCommand('npm', ['run', 'build'], workspaceDir)
       if (buildCode !== 0) {
         console.error(`agentic upgrade: npm run build failed in ${workspaceDir} (exit ${buildCode})`)

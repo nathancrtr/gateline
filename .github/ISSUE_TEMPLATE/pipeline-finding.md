@@ -9,7 +9,7 @@ labels: pipeline-finding
 - [ ] Contract (`contracts/*`) — a handoff artifact was malformed or ambiguous
 - [ ] Registry (`registry/models.yaml`) — model binding or capability profile
 - [ ] Integration (`scripts/integrate.py`, INTEGRATION.md workflow)
-- [ ] Gatehouse / orchestrator (`frontend/`)
+- [ ] Gatehouse / orchestrator (`packages/`)
 - [ ] Not sure
 
 **What happened**

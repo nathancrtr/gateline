@@ -14,7 +14,7 @@ const git = (args: string[]) => execFileSync('git', ['-C', fixtureDir, ...args],
 
 test.beforeAll(async () => {
   fixtureDir = generateFixtureRepo().dir
-  server = spawn('node', ['packages/server/src/main.ts', '--repo', fixtureDir, '--port', String(PORT)], {
+  server = spawn('node', ['server/src/main.ts', '--repo', fixtureDir, '--port', String(PORT)], {
     cwd: new URL('..', import.meta.url).pathname,
     stdio: 'ignore',
   })

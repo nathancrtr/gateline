@@ -2,7 +2,7 @@
 
 **Status:** v0.2 — the architecture and implementation plan exists
 ([FRONTEND-PLAN.md](FRONTEND-PLAN.md)), and Stage C's *UX* has been pulled
-forward as a local-first build (`frontend/`): the decision inbox, portfolio,
+forward as a local-first build (`packages/`): the decision inbox, portfolio,
 gate cards with burden capture, the `agentic` CLI, metrics, and PR-approval
 sync — all while refusing Stage C *infrastructure* (no hosting, no auth, no
 store; reads address git refs, writes are CAS commits to `state.yaml`). The

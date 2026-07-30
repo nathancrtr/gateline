@@ -13,15 +13,15 @@
     "types": ["node"]
   },
   "include": [
-    "packages/core/src/**/*.ts",
-    "packages/core/test/**/*.ts",
-    "packages/cli/src/**/*.ts",
-    "packages/orchestrator/src/**/*.ts",
-    "packages/orchestrator/test/**/*.ts",
-    "packages/server/src/**/*.ts",
-    "packages/server/test/**/*.ts",
-    "packages/runner-agent/src/**/*.ts",
-    "packages/runner-agent/test/**/*.ts",
+    "core/src/**/*.ts",
+    "core/test/**/*.ts",
+    "cli/src/**/*.ts",
+    "orchestrator/src/**/*.ts",
+    "orchestrator/test/**/*.ts",
+    "server/src/**/*.ts",
+    "server/test/**/*.ts",
+    "runner-agent/src/**/*.ts",
+    "runner-agent/test/**/*.ts",
     "fixtures/src/**/*.ts"
   ]
 }

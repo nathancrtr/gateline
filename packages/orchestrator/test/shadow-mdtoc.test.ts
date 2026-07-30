@@ -12,7 +12,7 @@ import { describe, expect, it } from 'vitest'
 import { LocalGitSource } from '@agentic/core'
 import { shadowReplay, type ShadowStep } from '../src/shadow.ts'
 
-const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../../..')
+const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../..')
 const source = new LocalGitSource('sandbox', repoRoot)
 
 // One replay serves every test — it walks every commit of the run and is

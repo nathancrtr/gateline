@@ -102,7 +102,7 @@ describe.skipIf(!live)('runner-agent path (live)', () => {
         // role it dispatches first (buildCommand's {prompt} substitution has
         // nothing left to substitute against once {role}/{body} are absent
         // from the template, so the literal string is what the harness sees).
-        const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../../..')
+        const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../..')
         const manifest = JSON.parse(readFileSync(join(repoRoot, 'adapters/claude-code/manifest.json'), 'utf8'))
         manifest.headless.dispatch_prompt = 'Reply with exactly the word: pong'
 

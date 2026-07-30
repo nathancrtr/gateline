@@ -15,7 +15,7 @@ import { generateFixtureRepo } from '@agentic/fixtures'
 const PORT = 4398
 test.use({ baseURL: `http://127.0.0.1:${PORT}` })
 
-// The fixture's built-in intent-brief.md template (frontend/fixtures/src/index.ts's
+// The fixture's built-in intent-brief.md template (packages/fixtures/src/index.ts's
 // CONTRACTS['intent-brief.md']) — the same order GET /api/staging serves.
 const SECTIONS = ['Problem', 'Motivation', 'Constraints', 'Out of scope']
 
@@ -36,7 +36,7 @@ function sourceId(): string {
 
 test.beforeAll(async () => {
   fixtureDir = generateFixtureRepo().dir
-  server = spawn('node', ['packages/server/src/main.ts', '--repo', fixtureDir, '--port', String(PORT)], {
+  server = spawn('node', ['server/src/main.ts', '--repo', fixtureDir, '--port', String(PORT)], {
     cwd: new URL('..', import.meta.url).pathname,
     stdio: 'ignore',
   })

@@ -62,8 +62,21 @@ afterAll(async () => {
 })
 
 describe('agentic upgrade', () => {
-  it('pulls, installs, and rebuilds the web dist when the workspace carries the web app', async () => {
+  it('pulls, installs, and rebuilds the web dist when the workspace carries the web app (packages/ layout)', async () => {
     const work = scratchRepo('with-web', {
+      'packages/package.json': '{"name":"ws"}',
+      'packages/web/package.json': '{"name":"web"}',
+    })
+    await rm(npmLog, { force: true })
+    const lines: string[] = []
+    const code = await runUpgrade(work, (l) => lines.push(l))
+    expect(code).toBe(0)
+    expect(npmCalls()).toEqual(['install', 'run build'])
+    expect(lines.join('\n')).toMatch(/upgraded [0-9a-f]{7}\.\.[0-9a-f]{7}/)
+  })
+
+  it('finds the workspace in a pre-rename frontend/ layout (#133 fallback)', async () => {
+    const work = scratchRepo('with-web-legacy', {
       'frontend/package.json': '{"name":"ws"}',
       'frontend/packages/web/package.json': '{"name":"web"}',
     })

@@ -1,6 +1,6 @@
 # @agentic/orchestrator — the v1 orchestrator
 
-The [ORCHESTRATOR.md](../../../docs/ORCHESTRATOR.md) design, implemented: a
+The [ORCHESTRATOR.md](../../docs/ORCHESTRATOR.md) design, implemented: a
 **stateless reconciler** that executes `roles/orchestrator.md` without a human.
 Triggers fire an idempotent tick that reads `state.yaml` at the run branch tip,
 derives the next action from committed files alone, executes it, CAS-commits,
@@ -28,30 +28,30 @@ Rules it is built to be checked against:
 
 ## Runbook
 
-All commands run from `frontend/` (Node ≥ 24, `npm install` once). The target
+All commands run from `packages/` (Node ≥ 24, `npm install` once). The target
 repo defaults to the current directory; pass `--repo <path>` otherwise.
 
 ```bash
 # M1 — shadow mode: derive and print; writes nothing, dispatches nothing
-node packages/orchestrator/src/main.ts --repo ~/repos/myproject tick --dry-run
+node orchestrator/src/main.ts --repo ~/repos/myproject tick --dry-run
 
 # Replay a finished run: engine's derived action vs what the human did
-node packages/orchestrator/src/main.ts --repo ~/repos/myproject shadow wordfreq
+node orchestrator/src/main.ts --repo ~/repos/myproject shadow wordfreq
 
 # M2 — one live reconcile pass (dispatches agents, meters, exits when idle)
-node packages/orchestrator/src/main.ts --repo ~/repos/myproject tick
+node orchestrator/src/main.ts --repo ~/repos/myproject tick
 
 # Resident mode: ref watcher + heartbeat + dispatch completions
-node packages/orchestrator/src/main.ts --repo ~/repos/myproject watch
+node orchestrator/src/main.ts --repo ~/repos/myproject watch
 
 # M3 — cross-vendor: first adapter runs the pipeline; later adapters satisfy
 # the registry's avoid_vendor_of pins (reviewer/verifier off the implementer's vendor)
-node packages/orchestrator/src/main.ts --repo ~/repos/myproject \
+node orchestrator/src/main.ts --repo ~/repos/myproject \
   --adapter claude-code --adapter copilot-cli watch
 
 # Force a scheduled sweep now (dueness bypassed; the open-sweep and
 # same-day guards still apply)
-node packages/orchestrator/src/main.ts --repo ~/repos/myproject sweep historian
+node orchestrator/src/main.ts --repo ~/repos/myproject sweep historian
 ```
 
 **Merge-updates.** `watch` (and `agentic up`, its co-located twin) checks the
@@ -109,7 +109,7 @@ and a missed event is only ever a delay, never a lost action:
 
 ```bash
 # cron: a tick every 5 minutes
-*/5 * * * * cd $HOME/repos/agentic-sandbox/frontend && /usr/local/bin/node packages/orchestrator/src/main.ts --repo $HOME/repos/myproject tick >> $HOME/.agentic-orchestrator.log 2>&1
+*/5 * * * * cd $HOME/repos/agentic-sandbox/packages && /usr/local/bin/node orchestrator/src/main.ts --repo $HOME/repos/myproject tick >> $HOME/.agentic-orchestrator.log 2>&1
 ```
 
 ```xml
@@ -120,11 +120,11 @@ and a missed event is only ever a delay, never a lost action:
   <key>Label</key><string>dev.agentic.orchestrator</string>
   <key>ProgramArguments</key><array>
     <string>/usr/local/bin/node</string>
-    <string>packages/orchestrator/src/main.ts</string>
+    <string>orchestrator/src/main.ts</string>
     <string>--repo</string><string>/Users/you/repos/myproject</string>
     <string>tick</string>
   </array>
-  <key>WorkingDirectory</key><string>/Users/you/repos/agentic-sandbox/frontend</string>
+  <key>WorkingDirectory</key><string>/Users/you/repos/agentic-sandbox/packages</string>
   <key>StartInterval</key><integer>300</integer>
   <key>StandardOutPath</key><string>/tmp/agentic-orchestrator.log</string>
   <key>StandardErrorPath</key><string>/tmp/agentic-orchestrator.log</string>

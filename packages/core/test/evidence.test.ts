@@ -99,7 +99,7 @@ describe('buildEvidenceRollup', () => {
 })
 
 describe('real finished runs', () => {
-  const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../../..')
+  const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../..')
   const read = (p: string) => readFileSync(join(repoRoot, p), 'utf8')
 
   it('dupefind: every evidence block resolves to a spec-defined criterion', () => {

@@ -1,10 +1,10 @@
-# The deploy image needs only frontend/ and deploy/ (build context is the
+# The deploy image needs only packages/ and deploy/ (build context is the
 # repository root so both are reachable).
 *
-!frontend
+!packages
 !deploy
-frontend/node_modules
-frontend/**/node_modules
-frontend/packages/web/dist
-frontend/test-results
-frontend/playwright-report
+packages/node_modules
+packages/**/node_modules
+packages/web/dist
+packages/test-results
+packages/playwright-report

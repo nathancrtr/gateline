@@ -130,7 +130,7 @@ describe('criterionRequirement', () => {
 })
 
 describe('real finished runs', () => {
-  const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../../..')
+  const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../..')
   const read = (p: string) => readFileSync(join(repoRoot, p), 'utf8')
 
   it('dupefind: requirements, criteria, and decisions all resolve', () => {

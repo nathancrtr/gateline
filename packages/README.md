@@ -11,7 +11,7 @@ Design: [docs/FRONTEND.md](../docs/FRONTEND.md) · Plan:
 ## The three rules
 
 - **R1 — The repo is the only database.** Every view is recomputed from git;
-  deleting `frontend/` loses nothing. The app owns no store, ever.
+  deleting `packages/` loses nothing. The app owns no store, ever.
 - **R2 — Exactly one write path.** The only mutation in the system is a commit
   editing one run's `state.yaml`: gate decisions, escalation resolutions,
   pause/resume. No dispatch, no artifact edits, no second channel. Writes are
@@ -37,13 +37,13 @@ Requires Node ≥ 24 (the packages run from TypeScript source; no build step for
 the CLI/server) and `git`.
 
 ```sh
-cd frontend
+cd packages
 npm install
 npm run build          # builds the SPA once
 
-node packages/cli/src/main.ts ui            # serve the current repo
-node packages/cli/src/main.ts ui --demo     # explore a generated demo repo
-node packages/cli/src/main.ts status        # portfolio in the terminal
+node cli/src/main.ts ui            # serve the current repo
+node cli/src/main.ts ui --demo     # explore a generated demo repo
+node cli/src/main.ts status        # portfolio in the terminal
 ```
 
 `agentic ui` binds to `127.0.0.1` and opens the browser. `--host` exists, but
@@ -71,7 +71,7 @@ Global: `--repo <path>` (repeatable) overrides source discovery.
 
 Common terminal workflows and pitfalls — deciding gates, approve-and-hold,
 PR-review sync, headless engine operation:
-[packages/cli/README.md](packages/cli/README.md).
+[packages/cli/README.md](cli/README.md).
 
 ## Multi-repo configuration
 

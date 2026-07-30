@@ -175,16 +175,16 @@ production pilot plan (Future Consideration #2).
 
 Everything above is v0 — you are the Orchestrator. In v1 the same run is driven
 by the orchestrator engine ([ORCHESTRATOR.md](ORCHESTRATOR.md), implemented in
-[`frontend/packages/orchestrator`](../frontend/packages/orchestrator/)): you
+[`packages/orchestrator`](../packages/orchestrator/)): you
 still write the intent brief and set up the run (§0), but steps 1–6's
 dispatching, bouncing, round counting, and budget metering happen without you.
 You act only where the design says a human must — gates, escalations,
 pause/resume — through the gate frontend or the `agentic` CLI.
 
 ```bash
-cd frontend
-node packages/orchestrator/src/main.ts tick --dry-run   # shadow: derive, print, touch nothing
-node packages/orchestrator/src/main.ts watch            # live: reconcile until ^C
+cd packages
+node orchestrator/src/main.ts tick --dry-run   # shadow: derive, print, touch nothing
+node orchestrator/src/main.ts watch            # live: reconcile until ^C
 ```
 
 Two things to know before trusting it with more than a toy: autonomy is gated
@@ -194,4 +194,4 @@ one hand-maintained duty moves into the contract either way — in v0, append a
 each dispatch (the wordfreq run proved a running total silently stays zero;
 the ledger is the shape v1 automates). The runbook, trigger packaging, and
 crash-recovery story live in the
-[orchestrator README](../frontend/packages/orchestrator/README.md).
+[orchestrator README](../packages/orchestrator/README.md).

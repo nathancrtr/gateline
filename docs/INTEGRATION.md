@@ -5,7 +5,7 @@ v0.1: the design's lockfile and forks mechanisms were hand-executed by a second
 integration — a non-SDLC, single-operator ops host (its integration retro is
 maintained outside this repository; framework-general findings are tracked as
 issues here) — and two framework components that postdate the draft shipped:
-the gate frontend ([FRONTEND.md](FRONTEND.md), `frontend/`) and the v1
+the gate frontend ([FRONTEND.md](FRONTEND.md), `packages/`) and the v1
 orchestrator ([ORCHESTRATOR.md](ORCHESTRATOR.md)). A v0 of the tooling now
 ships: `integrate.py init|validate|fork`, the copy manifest, the normative lock
 schema, and renderer overlay splicing (`scripts/`, tested by
@@ -142,8 +142,8 @@ v0.1 assumed everything that travels is a file copy. Two framework components
 that shipped since are **runnable tools, not portable trees**, and they
 deliberately do not vendor:
 
-- **The gate frontend** (`frontend/`: the web UI, `agentic` CLI, and server) and
-  **the v1 orchestrator** (`frontend/packages/orchestrator`) run *from the
+- **The gate frontend** (`packages/`: the web UI, `agentic` CLI, and server) and
+  **the v1 orchestrator** (`packages/orchestrator`) run *from the
   framework checkout or release*, pointed at host repos via `--repo` / the
   multi-repo config. They are operators' instruments over host state, not host
   files; a Node ≥ 24 workspace has no business being checked into every adopting
@@ -155,7 +155,7 @@ deliberately do not vendor:
   was the compiled-in run-state schema, which rejected the host's legitimately
   forked `state.yaml`; the fix (a generic state core + SDLC extension, with state
   validated against the host's own `contracts/state.yaml` per the frontend's R3
-  rule, `frontend/README.md`) is sequenced as an active run.
+  rule, `packages/README.md`) is sequenced as an active run.
 
 Distribution is therefore **two channels pinned by one lock**: core trees vendor
 into the host; the toolchain runs from the same pinned release against the host.
@@ -460,7 +460,7 @@ runs *before* the environment probe has fixed anything.
 | Smoke run passes, real run fails | validate is necessary, not sufficient; the first real run stays supervised (the pilot's Phase 1 discipline is unchanged) |
 | Version drift across adopting repos | Lockfile census; upgrade is cheap enough to actually run |
 | Integrator hallucinates policy the host doesn't have | Every guardrail in the profile must trace to a probe finding or a cited host policy; untraceable rules are malformed (consumer bounces, per contract discipline) |
-| Framework tooling's compiled-in schema rejects a compliant host's runs | State validated against the host's own `contracts/state.yaml` per the frontend's R3 rule (`frontend/README.md`; state-contract split, active run); until it lands, foreign-schema runs render loudly as bounced, never silently wrong |
+| Framework tooling's compiled-in schema rejects a compliant host's runs | State validated against the host's own `contracts/state.yaml` per the frontend's R3 rule (`packages/README.md`; state-contract split, active run); until it lands, foreign-schema runs render loudly as bounced, never silently wrong |
 | Open escalation invisible behind a schema error | Frontend fix, sequenced as an active run: escalation entries stay readable even when full state validation fails |
 | Typo'd capability or gate name renders silently | Declared instance vocabulary (§4); renderer fails on anything outside the declared union |
 | Private host mislicensed by a repo-root Apache LICENSE | Dual provenance modes in `init` (§5); validate checks the mode matches the host's posture |

@@ -1,22 +1,22 @@
-name: frontend-ci
+name: packages-ci
 
 on:
   pull_request:
     paths:
-      - 'frontend/**'
-      - '.github/workflows/frontend-ci.yml'
+      - 'packages/**'
+      - '.github/workflows/packages-ci.yml'
   push:
     branches: [main]
     paths:
-      - 'frontend/**'
-      - '.github/workflows/frontend-ci.yml'
+      - 'packages/**'
+      - '.github/workflows/packages-ci.yml'
 
 jobs:
   test:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: frontend
+        working-directory: packages
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,7 +25,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: packages/package-lock.json
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
@@ -35,14 +35,14 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: frontend
+        working-directory: packages
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: packages/package-lock.json
       - run: npm ci
       - run: npm run build
       - run: npx playwright install --with-deps chromium

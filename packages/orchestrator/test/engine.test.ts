@@ -491,7 +491,7 @@ describe('usage parsing (seam)', () => {
   it('loads both real adapter manifests', async () => {
     const { loadHeadlessManifest } = await import('../src/manifest.ts')
     const { fileURLToPath } = await import('node:url')
-    const repoRoot = join(fileURLToPath(import.meta.url), '../../../../..')
+    const repoRoot = join(fileURLToPath(import.meta.url), '../../../..')
     const cc = await loadHeadlessManifest(repoRoot, 'claude-code')
     expect(cc.command[0]).toBe('claude')
     expect(cc.usage.format).toBe('json-stdout')

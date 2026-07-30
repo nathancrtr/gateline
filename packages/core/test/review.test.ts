@@ -136,7 +136,7 @@ describe('parseReview', () => {
 })
 
 describe('the real reports under runs/', () => {
-  const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../../..')
+  const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../..')
   const reports: { path: string; content: string }[] = []
   for (const slug of readdirSync(join(repoRoot, 'runs'), { withFileTypes: true })) {
     if (!slug.isDirectory()) continue

@@ -10,7 +10,7 @@ import { adapterVendor, RoutingDispatcher, VendorPinError } from '../src/router.
 import type { Dispatcher, DispatchOutcome, DispatchRequest } from '../src/seam.ts'
 import { TEST_REGISTRY } from './engine.helper.ts'
 
-const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../../..')
+const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../..')
 
 class RecordingDispatcher implements Dispatcher {
   readonly adapter: string

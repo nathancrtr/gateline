@@ -1,7 +1,7 @@
 // The workstation agent's poll/claim/execute/report loop (ORCHESTRATOR.md /
 // TOPOLOGY.md §3.3, run "runner-agent" — R3/R4/R5/R8): a standalone process
 // that authenticates with a service token, polls the control plane
-// (frontend/packages/server/src/runner-api.ts) for dispatch intents, claims
+// (packages/server/src/runner-api.ts) for dispatch intents, claims
 // one, executes it in a disposable workspace (workspace.ts), and reports the
 // outcome back. It never opens a listening port (R3 — outbound HTTP only)
 // and never writes state.yaml, gates.*, or any git ref (R5) — the control

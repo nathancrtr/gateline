@@ -152,6 +152,68 @@ requirements a frontend will be judged against, whatever its form:
    accretes state of its own (its own approval store, its own run status) has forked
    the source of truth and will drift, like `review_rounds` did across two files in
    the wordfreq run.
+7. **A local view earns its place only by saying something the git host structurally
+   cannot.** The test is not "does the host also do this?" — the host does almost
+   everything also. It is whether the view depends on knowledge the host does not
+   have: the run's profile, its gate packet, a work item's declared file-contact
+   surface, the decision grammar in `state.yaml`. A view that passes renders here. A
+   view that fails is a commodity re-implementation that will stay permanently worse,
+   and it should link out instead.
+
+### 4.1 Which views Gatehouse owns (#259)
+
+Principle 7 was adopted to settle a concrete question: do the Diff and History views
+belong in Gatehouse, or are they a second-rate copy of the host every adopter already
+has open? **Decision: keep derived, gateline-specific views and retire the generic
+ones.** Neither view is deleted before its replacement or its link-out exists.
+
+Applying the test to what we had:
+
+- **A unified-diff renderer fails.** It offers no syntax highlighting, no
+  expand-context, no blame, and no review comments, and it never will.
+- **A diff scoped to the task's `file_contact_surface`, with out-of-surface hunks
+  called out, passes.** No host can compute it, because no host knows the work item.
+  It makes the Reviewer's `Boundary check` section checkable.
+- **A commit log fails.** Time, subject, author, and short oid are the host's job.
+- **`state.yaml`'s history as a decision ledger passes.** Phase transitions, gate
+  approvals under the `G<N> approved by <name>` grammar, and the orchestrator's own
+  verbs are concepts the host has no representation for.
+
+Three facts about the current code set the real order of work, and two of them run
+opposite to the intuition:
+
+- The History view is **already half a ledger** — it marks phase transitions from each
+  commit's `state.yaml`. The decision data is already built and served, in
+  `collectRunDecisions` and `GET /api/runs/:src/:slug/decisions`, and History simply
+  does not read it. Converting it is wiring, not a rebuild.
+- The scoped diff is **further away than it looks**. `file_contact_surface` is written
+  by `record/scaffold.ts` and required by `record/validate.ts`, and nothing parses
+  `tasks/*.yaml` into the view model. It needs a browser-safe core leaf first, the way
+  typed review parsing needed one.
+- **The link-out does not exist yet, and cannot be added naively.** `ensureDraftPr`
+  lives in `core/src/sources/`, returns only `{ status, note }`, and discards the PR's
+  identity. Nothing persists a PR number, so a PR URL is not committed state and the
+  view model may not hold one without either a network call or a record-shape change.
+  Deleting a view before the link exists strands the approver, so the link-out comes
+  first.
+
+That last point forks, and the fork is deliberately left to #248 rather than settled
+here, because one arm of it is a one-way door:
+
+- **Link to the branch, not the PR** — derivable from `remote.origin.url` plus the
+  run's branch, with no record change and no network call. The host's branch page
+  surfaces the associated PR itself. **Recommended.**
+- **Persist PR identity into the record** — makes it committed state and keeps
+  derivation pure, but changes the record shape, which is a format-freeze decision.
+
+Two costs are accepted explicitly rather than left to degrade:
+
+- **The diff is contractually part of G2's packet** (DESIGN.md §4). It stays renderable
+  in Gatehouse for that reason. Retiring the *generic* renderer is not the same as
+  moving a gate artifact off-site.
+- **Local-only sources have no PR to link to.** `resolveMode` supports them as a
+  first-class tier, so every link-out affordance must degrade to the local view rather
+  than to a dead end.
 
 ## 5. The dashboard question
 

@@ -85,6 +85,15 @@ export interface RunSource {
    */
   behindOrigin?(ref: RunRef): Promise<number | null>
   /**
+   * This source's `remote.origin.url`, verbatim, for deriving a link out to
+   * the git host (#267 — `view-model/host-link.ts` decides what it means).
+   * Null means there is nothing to link to and the caller keeps its local
+   * view: no remote configured, or a local-only source, which has no origin
+   * by definition (FRONTEND.md §4.1 — degrade to the local view, never to a
+   * dead end). Absent method means the same.
+   */
+  originUrl?(): Promise<string | null>
+  /**
    * The single write path (rule R2): apply a mutation to state.yaml and commit
    * it to the run branch, compare-and-swap semantics. `expectedTip` extends
    * the CAS window back to the caller's read: when given and the branch no

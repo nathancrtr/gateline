@@ -190,21 +190,27 @@ opposite to the intuition:
   by `record/scaffold.ts` and required by `record/validate.ts`, and nothing parses
   `tasks/*.yaml` into the view model. It needs a browser-safe core leaf first, the way
   typed review parsing needed one.
-- **The link-out does not exist yet, and cannot be added naively.** `ensureDraftPr`
-  lives in `core/src/sources/`, returns only `{ status, note }`, and discards the PR's
+- **The link-out could not be added naively.** `ensureDraftPr` lives in
+  `core/src/sources/`, returns only `{ status, note }`, and discards the PR's
   identity. Nothing persists a PR number, so a PR URL is not committed state and the
   view model may not hold one without either a network call or a record-shape change.
-  Deleting a view before the link exists strands the approver, so the link-out comes
+  Deleting a view before the link exists strands the approver, so the link-out came
   first.
 
-That last point forks, and the fork is deliberately left to #248 rather than settled
-here, because one arm of it is a one-way door:
+That last point forked, and one arm of it is a one-way door:
 
 - **Link to the branch, not the PR** — derivable from `remote.origin.url` plus the
   run's branch, with no record change and no network call. The host's branch page
-  surfaces the associated PR itself. **Recommended.**
+  surfaces the associated PR itself. **Taken, in #267.**
+  `view-model/host-link.ts` is a pure function of the origin URL and the branch,
+  `RunSource.originUrl()` supplies the former, and the run header renders the result.
+  Nothing resolves that cannot be resolved without guessing: a non-github.com remote
+  (Enterprise, GitLab and Gitea share one URL shape), a source with no origin, a
+  local-only source, and a merged run whose branch is gone all yield no link, and the
+  page keeps its local view.
 - **Persist PR identity into the record** — makes it committed state and keeps
   derivation pure, but changes the record shape, which is a format-freeze decision.
+  Still open, still #248.
 
 Two costs are accepted explicitly rather than left to degrade:
 

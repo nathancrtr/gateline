@@ -122,6 +122,46 @@ test('evidence rollup (#165): uncited criteria are the headline; anchors jump to
   await expect(page.locator('#def-E1')).toBeVisible()
 })
 
+test('decision ledger (#268): History reads decisions and engine verbs, not a commit log', async ({ page }) => {
+  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=history')
+  const ledger = page.locator('[data-ledger]')
+  await expect(ledger).toBeVisible()
+
+  // AC1 — a gate decision names its approver and burden, verbatim from the record.
+  const approval = ledger.locator('[data-ledger-kind="gate-approved"]').first()
+  await expect(approval).toContainText('G1 approved by operator [burden: light-correction]')
+  await expect(approval).toHaveAttribute('data-ledger-actor', 'human')
+
+  // AC2 — the orchestrator's verbs are their own entries, attributed to the engine.
+  const engineRows = ledger.locator('[data-ledger-actor="orchestrator"]')
+  await expect(engineRows.first()).toContainText('engine')
+  // Newest-first, so the implementer dispatch leads and the architect's trails.
+  await expect(ledger.locator('[data-ledger-kind="dispatched"]')).toHaveCount(2)
+  await expect(ledger.locator('[data-ledger-kind="dispatched"]').first()).toContainText('dispatched implementer(01-core)')
+  await expect(ledger.locator('[data-ledger-kind="dispatched"]').last()).toContainText('dispatched architect')
+  await expect(ledger.locator('[data-ledger-kind="metered"]').first()).toContainText('$1.86')
+  // No engine verb may be dressed as a human decision (AGENTS.md: the
+  // orchestrator never writes gates.*).
+  await expect(ledger.locator('[data-ledger-actor="orchestrator"][data-ledger-kind="gate-approved"]')).toHaveCount(0)
+
+  // AC3 — the phase-transition spine survives.
+  await expect(approval).toContainText('implement')
+
+  // AC4 — the raw commit columns are folded, not deleted: reachable on demand.
+  await expect(page.getByRole('button', { name: 'show raw commits' })).toBeVisible()
+  await page.getByRole('button', { name: 'show raw commits' }).click()
+  await expect(page.getByRole('button', { name: 'hide raw commits' })).toBeVisible()
+  await expect(approval).toContainText(/[0-9a-f]{7}/)
+})
+
+test('decision ledger (#268): a schema-invalid run still renders its ledger (AC5)', async ({ page }) => {
+  // bad-state's state.yaml is not valid YAML. Parsing reads commit subjects
+  // only, so the ledger must survive what the state parser cannot.
+  await page.goto('/runs/' + sourceId() + '/bad-state?tab=history')
+  await expect(page.locator('[data-ledger]')).toBeVisible()
+  await expect(page.locator('[data-ledger] li').first()).toBeVisible()
+})
+
 function sourceId(): string {
   return fixtureDir.replace(/\/+$/, '').split('/').pop()!
 }

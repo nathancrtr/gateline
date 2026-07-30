@@ -17,6 +17,8 @@ import type {
   EvidenceRollup,
   LexiconEntry,
   Phase,
+  GateDecisionRecord,
+  LedgerEntry,
   Profile,
   RunMetricsSummary,
   RunState,
@@ -34,8 +36,10 @@ export type {
   DiffFile,
   Disposition,
   EvidenceRollup,
+  GateDecisionRecord,
   GateId,
   InboxItem,
+  LedgerEntry,
   LexiconEntry,
   Profile,
   ReviewFinding,
@@ -75,6 +79,18 @@ export interface HistoryEntry {
   author: string
   subject: string
   phase: string | null
+  /**
+   * The subject read as a ledger entry (#268), parsed in core on the server —
+   * the browser takes types from core but never values (see PROFILE_GATES).
+   * `kind: 'other'` means the subject matched no known grammar and must be
+   * rendered verbatim.
+   */
+  ledger: LedgerEntry
+}
+
+/** Gate decision records for one run (#268 AC1) — approver, burden and notes. */
+export interface DecisionsResponse {
+  decisions: GateDecisionRecord[]
 }
 
 export interface RunDetailResponse {
@@ -249,6 +265,7 @@ export const api = {
   lexicon: (src: string, slug: string) => getJson<LexiconResponse>(`/api/runs/${src}/${slug}/lexicon`),
   evidence: (src: string, slug: string) => getJson<EvidenceRollup>(`/api/runs/${src}/${slug}/evidence`),
   reviews: (src: string, slug: string) => getJson<ReviewsResponse>(`/api/runs/${src}/${slug}/reviews`),
+  decisions: (src: string, slug: string) => getJson<DecisionsResponse>(`/api/runs/${src}/${slug}/decisions`),
   diff: (src: string, slug: string) => getJson<DiffResponse>(`/api/runs/${src}/${slug}/diff`),
   metrics: () => getJson<MetricsResponse>('/api/metrics'),
   decide: async (req: DecisionRequest): Promise<{ ok: boolean; commit?: string; summary?: string; note?: string | null }> => {

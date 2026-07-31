@@ -26,6 +26,8 @@ import type {
   ReviewReport,
   RunSummary,
   Severity,
+  SurfaceItemRef,
+  SurfaceScopedDiff,
   Validation,
   Verdict,
 } from '@agentic/core'
@@ -47,6 +49,8 @@ export type {
   RunState,
   RunSummary,
   Severity,
+  SurfaceItemRef,
+  SurfaceScopedDiff,
   Validation,
   Verdict,
 }
@@ -127,8 +131,15 @@ export interface LexiconResponse {
 }
 
 export interface DiffResponse {
+  /** The whole diff, in git's order. Scoping labels this list; it never filters it. */
   files: DiffFile[]
   merged: boolean
+  /**
+   * Which work item declared each changed file (#270), positional against
+   * `files`. `surface.withheld` is non-null when the run has no readable task
+   * set, and the view then renders the plain diff with that reason.
+   */
+  surface: SurfaceScopedDiff
 }
 
 export interface MetricsResponse {

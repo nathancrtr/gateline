@@ -173,7 +173,14 @@ Applying the test to what we had:
   expand-context, no blame, and no review comments, and it never will.
 - **A diff scoped to the task's `file_contact_surface`, with out-of-surface hunks
   called out, passes.** No host can compute it, because no host knows the work item.
-  It makes the Reviewer's `Boundary check` section checkable.
+  It makes the Reviewer's `Boundary check` section checkable. **Taken, in #269 and
+  #270.** `view-model/tasks.ts` parses the work item, `view-model/surface-diff.ts`
+  labels each changed file with the items that declared it, and the diff renders in
+  those groups with the undeclared files leading. The labelling never filters:
+  `declaredBy` is positional against the whole diff, so scoping is not truncation.
+  Presence holds — the view states that a file falls under no declared surface, and
+  says in as many words that whether that is a breach or an amendment the plan
+  already carries is the Reviewer's section and the approver's call.
 - **A commit log fails.** Time, subject, author, and short oid are the host's job.
 - **`state.yaml`'s history as a decision ledger passes.** Phase transitions, gate
   approvals under the `G<N> approved by <name>` grammar, and the orchestrator's own
@@ -186,10 +193,11 @@ opposite to the intuition:
   commit's `state.yaml`. The decision data is already built and served, in
   `collectRunDecisions` and `GET /api/runs/:src/:slug/decisions`, and History simply
   does not read it. Converting it is wiring, not a rebuild.
-- The scoped diff is **further away than it looks**. `file_contact_surface` is written
-  by `record/scaffold.ts` and required by `record/validate.ts`, and nothing parses
-  `tasks/*.yaml` into the view model. It needs a browser-safe core leaf first, the way
-  typed review parsing needed one.
+- The scoped diff was **further away than it looked**. `file_contact_surface` is
+  written by `record/scaffold.ts` and required by `record/validate.ts`, and nothing
+  parsed `tasks/*.yaml` into the view model. It needed a browser-safe core leaf
+  first, the way typed review parsing did — which is why it landed as two issues,
+  #269 for the leaf and #270 for the view.
 - **The link-out could not be added naively.** `ensureDraftPr` lives in
   `core/src/sources/`, returns only `{ status, note }`, and discards the PR's
   identity. Nothing persists a PR number, so a PR URL is not committed state and the

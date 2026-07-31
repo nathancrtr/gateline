@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom'
 import { api, type CriterionEvidence, type EvidenceRollup, type Profile, type ReviewFinding, type ReviewReport } from '../api.ts'
 import { FindingCard, VerdictChip, useReviews } from './findings.tsx'
 import { useLexicon } from './lexicon.tsx'
+import { boundaryLine, fileLabel } from '../surface.ts'
 
 const artifactLink = (src: string, slug: string, artifact: string, anchor?: string) =>
   `/runs/${src}/${slug}?tab=artifacts&artifact=${encodeURIComponent(artifact)}${anchor ? `&anchor=${anchor}` : ''}`
@@ -390,6 +391,43 @@ export function G2Packet({ src, slug, profile }: { src: string; slug: string; pr
       {!rollup.withheld && ordered.length > 0 && reports && (
         <UnattributedFindings reports={reports} claimed={claimed} src={src} slug={slug} />
       )}
+      <BoundaryCheck src={src} slug={slug} />
     </section>
+  )
+}
+
+/**
+ * The diff's place in G2's packet (#270). DESIGN.md §4 names the diff as part
+ * of what G2 approves, and #256 deferred which form it takes to #259; the answer
+ * was the contact-surface-scoped view. The card carries the one fact that view
+ * exists to produce — did the change stay inside what the plan declared — and
+ * routes to the diff itself rather than reprinting it under the criterion spine.
+ *
+ * Presence, not verdicts, to the end: "N outside every declared surface" is a
+ * fact about the record. It is not called a breach, and a clean count is not
+ * called a pass — an amendment may have widened a surface legitimately.
+ */
+function BoundaryCheck({ src, slug }: { src: string; slug: string }) {
+  const { data } = useQuery({ queryKey: ['diff', src, slug], queryFn: () => api.diff(src, slug) })
+  if (!data || data.merged) return null
+  const line = boundaryLine(data.files, data.surface)
+  if (!line || line.changed === 0) return null
+
+  return (
+    <p className="mt-2.5 border-t border-line pt-2 text-[12px] leading-[1.55] text-muted" data-boundary-check>
+      <span className="font-mono text-[11px] uppercase tracking-wide text-muted">boundary</span>{' '}
+      <span className="text-ink">{line.changed}</span> changed file{line.changed === 1 ? '' : 's'};{' '}
+      {line.undeclared.length === 0 ? (
+        <>every one falls under a declared contact surface.</>
+      ) : (
+        <>
+          <span className="text-warn">{line.undeclared.length}</span> outside every declared surface —{' '}
+          <span className="font-mono text-[11.5px] text-warn">{line.undeclared.map(fileLabel).join(', ')}</span>.
+        </>
+      )}{' '}
+      <Link className="text-accent underline underline-offset-2" to={`/runs/${src}/${slug}?tab=diff`}>
+        read the diff by surface
+      </Link>
+    </p>
   )
 }

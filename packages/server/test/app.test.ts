@@ -142,6 +142,31 @@ describe('read routes', () => {
     expect(merged.body.files).toHaveLength(0)
   })
 
+  it('GET diff labels each changed file with the work item that declared it (#270)', async () => {
+    const { body } = await get('/api/runs/fixture/g2-pending/diff')
+    expect(body.surface.withheld).toBeNull()
+    expect(body.surface.items.map((i: { id: string }) => i.id)).toEqual(['01-core', '02-errors'])
+    // Positional against `files`, which stays the whole diff — the labelling
+    // never filters it, so the two arrays are the same length.
+    expect(body.surface.declaredBy).toHaveLength(body.files.length)
+
+    const labelled = Object.fromEntries(
+      body.files.map((f: { newPath: string }, i: number) => [f.newPath, body.surface.declaredBy[i]]),
+    )
+    expect(labelled['src/core.py']).toEqual(['01-core'])
+    expect(labelled['src/errors.py']).toEqual(['02-errors'])
+    // The boundary case the fixture carries on purpose: touched, declared by
+    // nobody. The route states it; judging it is the approver's.
+    expect(labelled['src/config.py']).toEqual([])
+  })
+
+  it('GET diff withholds the labelling for a run with no task set, keeping the diff (#270)', async () => {
+    const { body } = await get('/api/runs/fixture/g0-pending/diff')
+    expect(body.surface.withheld).toContain('no work item declares a file-contact surface')
+    expect(body.surface.items).toEqual([])
+    expect(body.surface.declaredBy).toHaveLength(body.files.length)
+  })
+
   it('GET /api/staging serves the fixture source config and the slug grammar', async () => {
     const { status, body } = await get('/api/staging')
     expect(status).toBe(200)

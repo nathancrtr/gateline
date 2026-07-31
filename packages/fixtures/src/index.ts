@@ -148,6 +148,35 @@ status: ${status}
 notes: |
 `
 
+/**
+ * A work item from a fork whose `contracts/work-item.yaml` writes the contact
+ * surface as a structured block rather than the list this parser reads. Every
+ * required top-level key is present, so it passes validation and the gate stays
+ * reviewable — it exercises the withheld path (#270 AC5), not the bounce path,
+ * exactly as `forkedVerification` does for the evidence grammar.
+ */
+const forkedWorkItem = (id: string, req: string, status: string) => `id: ${id}
+title: ${id.replace(/^\d+-/, '').replace(/-/g, ' ')}
+requirements: [${req}]
+
+scope: |
+  Implement the ${id} slice per plan.md.
+
+file_contact_surface:
+  mode: exclusive
+  paths:
+    - src/pruner.py
+
+acceptance_tests:
+  - AC1.1
+
+depends_on: []
+
+status: ${status}
+
+notes: |
+`
+
 const review = (task: string, round: number, verdict: string) => `# Review Report: ${task}
 
 **Verdict:** ${verdict}
@@ -590,6 +619,12 @@ export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts 
           message: 'state(g2-pending): bounced review-02.md — re-dispatching reviewer (missing: Boundary check)',
           files: {
             '../../src/errors.py': 'class InputError(Exception):\n    pass\n',
+            // Touched by no work item's declared surface — the case the
+            // contact-surface-scoped diff (#270) exists to make visible, and
+            // exactly what the Reviewer's `Boundary check` section is for. The
+            // demo needs it: with every file inside its surface, the view's
+            // whole point never renders.
+            '../../src/config.py': 'TIMEOUT = 30\nRETRIES = 3\n',
             'state.yaml': stateYaml({
               slug: 'g2-pending',
               phase: 'implement',
@@ -777,17 +812,22 @@ export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts 
       },
     },
     {
-      // A forked contract, not a broken record: the report has every required
-      // section, so the gate is reviewable, but its evidence is written in a
-      // grammar this parser does not read. G2's packet withholds the criterion
-      // view and names the reason (#256).
+      // A forked contract, not a broken record: every artifact has its required
+      // sections and keys, so the gate is reviewable, but two of them are
+      // written in grammars this parser does not read. The evidence blocks
+      // withhold G2's criterion view (#256) and the work item's structured
+      // contact surface withholds the diff's grouping (#270) — a fork writes
+      // its own contracts/ for more than one artifact, and both fallbacks say
+      // which grammar they looked for rather than guessing.
       slug: 'forked-contract',
       age: 2,
       files: {
         'intent-brief.md': brief('archive pruner'),
         'spec.md': spec('archive pruner'),
         'plan.md': plan('archive pruner'),
-        'tasks/01-core.yaml': workItem('01-core', 'R1', 'review-approved'),
+        // The diff is a G2 artifact and renders whatever the labelling does.
+        '../../src/pruner.py': 'def prune(paths):\n    return [p for p in paths if p]\n',
+        'tasks/01-core.yaml': forkedWorkItem('01-core', 'R1', 'review-approved'),
         'review-01.md': review('01-core', 1, 'request-changes'),
         'verification-report.md': forkedVerification(),
         'state.yaml': stateYaml({

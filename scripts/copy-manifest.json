@@ -24,6 +24,7 @@
       "contracts/work-item.yaml",
       "contracts/review-report.md",
       "contracts/verification-report.md",
+      "contracts/release-plan.md",
       "contracts/state.yaml"
     ]
   }

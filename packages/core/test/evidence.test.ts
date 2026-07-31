@@ -45,11 +45,47 @@ $ tool mystery
 AC1.2 could not be verified — no fixture reproduces the timing window.
 `
 
+// Two reports, deliberately out of severity order on disk and out of path
+// order by severity, so the join has something to sort.
+const REVIEW_01 = `# Review Report: 01-core
+
+**Verdict:** request-changes
+**Round:** 1 of 3
+
+## Findings
+
+### F1 — minor — output column is misaligned
+- **Where:** \`src/core.py:11\`
+- **Requirement:** AC1.1
+
+## Coverage
+AC1.1 exercised by reading; AC1.2 not assessed.
+`
+
+const REVIEW_02 = `# Review Report: 02-errors
+
+**Verdict:** request-changes
+**Round:** 1 of 3
+
+## Findings
+
+### F1 — blocking — malformed input exits zero
+- **Where:** \`src/errors.py:7\`
+- **Failure scenario:** garbage input exits 0, so callers cannot tell
+- **Requirement:** AC2.1
+
+### F2 — major — the cap is checked after parsing
+- **Requirement:** AC1.1
+`
+
 const lexicon = buildLexicon({ spec: SPEC })
 const rollup = buildEvidenceRollup({
   lexicon,
   verification: VERIFICATION,
-  reviews: [{ path: 'review-01.md', content: '## Coverage\nAC1.1 exercised by reading; AC1.2 not assessed.' }],
+  reviews: [
+    { path: 'review-01.md', content: REVIEW_01 },
+    { path: 'review-02.md', content: REVIEW_02 },
+  ],
 })
 const byId = new Map(rollup.criteria.map((c) => [c.id, c]))
 
@@ -61,8 +97,18 @@ describe('buildEvidenceRollup', () => {
 
   it('anchors evidence blocks and quotes Results cells verbatim', () => {
     const ac11 = byId.get('AC1.1')!
-    expect(ac11.evidence).toEqual([{ artifact: 'verification-report.md', line: 10, label: 'E1' }])
+    expect(ac11.evidence).toHaveLength(1)
+    expect(ac11.evidence[0]).toMatchObject({ artifact: 'verification-report.md', line: 10, label: 'E1' })
     expect(ac11.result).toEqual({ verdict: 'verified', evidence: 'see E1' })
+  })
+
+  it('carries the evidence block byte-identical, fenced content and all (#256)', () => {
+    const block = byId.get('AC1.1')!.evidence[0]!.block
+    expect(block).toBe(
+      ['### E1 — AC1.1', '```', '$ tool sample.txt', '### E9 — AC1.2 (inside a fence — not an evidence block)', '```'].join('\n'),
+    )
+    // Verbatim means a slice, not a reconstruction: it appears in the source.
+    expect(VERIFICATION).toContain(block)
   })
 
   it('uncited criteria carry no evidence and surface their Gaps line verbatim', () => {
@@ -86,15 +132,50 @@ describe('buildEvidenceRollup', () => {
   })
 
   it('review mentions are anchored separately as discussion, not evidence', () => {
-    expect(byId.get('AC1.1')!.reviewMentions).toEqual([{ artifact: 'review-01.md', line: 2, label: '' }])
+    expect(byId.get('AC1.1')!.reviewMentions).toEqual([
+      { artifact: 'review-01.md', line: 10, label: '' },
+      { artifact: 'review-01.md', line: 13, label: '' },
+      { artifact: 'review-02.md', line: 14, label: '' },
+    ])
     expect(byId.get('AC1.2')!.reviewMentions).toHaveLength(1)
   })
 
-  it('no verification report → criteria listed, hasVerification false', () => {
+  it('joins the findings that cite a criterion, in the reports’ own severity order (#256)', () => {
+    // blocking → major → minor, across reports; a citation anywhere in the
+    // finding's block counts, which is where `**Requirement:**` lives.
+    expect(byId.get('AC1.1')!.findings).toEqual([
+      { artifact: 'review-02.md', id: 'F2' },
+      { artifact: 'review-01.md', id: 'F1' },
+    ])
+    expect(byId.get('AC2.1')!.findings).toEqual([{ artifact: 'review-02.md', id: 'F1' }])
+    // Mentioned only in prose outside any finding → discussed, not found against.
+    expect(byId.get('AC1.2')!.findings).toEqual([])
+  })
+
+  it('no verification report → criteria listed, hasVerification false, nothing withheld', () => {
+    // The patch profile runs no verifier, so an absent report is the ordinary
+    // shape of that record — never an error and never a withheld view.
     const bare = buildEvidenceRollup({ lexicon, verification: null })
     expect(bare.hasVerification).toBe(false)
+    expect(bare.withheld).toBeNull()
     expect(bare.criteria).toHaveLength(3)
     expect(bare.criteria.every((c) => c.evidence.length === 0)).toBe(true)
+  })
+
+  it('a report matching the parser’s grammar withholds nothing', () => {
+    expect(rollup.withheld).toBeNull()
+  })
+
+  it('withholds itself, with a reason, when the report follows another grammar (#256)', () => {
+    // A fork may legitimately write its verification report some other way.
+    // The contracts' bounce rule turned on the UI: say so, never guess.
+    const forked = buildEvidenceRollup({
+      lexicon,
+      verification: '# Verification Report: sample\n\n## Results\n\nEverything checked out; see the transcript below.\n',
+    })
+    expect(forked.hasVerification).toBe(true)
+    expect(forked.withheld).toMatch(/evidence-block grammar/)
+    expect(forked.criteria.every((c) => c.evidence.length === 0 && c.result === null)).toBe(true)
   })
 })
 

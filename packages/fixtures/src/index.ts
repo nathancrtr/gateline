@@ -159,10 +159,60 @@ const review = (task: string, round: number, verdict: string) => `# Review Repor
 ${verdict === 'approve' ? 'None.' : `### F1 — major — off-by-one in boundary handling
 - **Where:** \`src/core.py:42\`
 - **Failure scenario:** empty input → IndexError instead of clean exit
-- **Requirement:** R2`}
+- **Requirement:** R2/AC2.1`}
 
 ## Coverage
 Requirement coverage R1–R2 checked; error paths exercised by reading.
+
+## Boundary check
+Diff stayed inside the declared file_contact_surface.
+`
+
+/**
+ * A report that took two rounds, which is what a task carrying
+ * `review_rounds: 2` actually looks like on disk: rounds APPEND to one file
+ * (roles/reviewer.md — never overwrite an earlier round), a finding raised in
+ * round 1 is dispositioned in round 2, and the verdict in force is the last
+ * one. Exercises the typed parse (#214), the finding cards (#215), and the
+ * criterion → finding join on G2's packet surface (#256).
+ */
+const reviewTwoRounds = (task: string) => `# Review Report: ${task}
+
+**Verdict:** request-changes
+**Round:** 1 of 3
+**Diff reviewed:** run branch tip
+
+## Findings
+
+### F1 — blocking — malformed input exits zero
+- **Where:** \`src/errors.py:7\`
+- **Failure scenario:** a binary file is rejected in the log but the process still exits 0, so a caller cannot tell failure from success
+- **Requirement:** R2/AC2.1
+
+### F2 — minor — the diagnosis spans two lines
+- **Where:** \`src/errors.py:12\`
+- **Failure scenario:** the second line is dropped by callers that read one line
+- **Requirement:** R2/AC2.1
+
+## Coverage
+Requirement coverage R1–R2 checked; error paths exercised by reading.
+
+## Boundary check
+Diff stayed inside the declared file_contact_surface.
+
+## Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** run branch tip
+
+## Findings
+
+- **F1 — resolved (round 2):** the guard exits 1 and prints one line.
+- **F2 — stands (round 2):** cosmetic, and the caller contract is one line either way.
+
+## Coverage
+Re-checked R2; R1 is unchanged since round 1.
 
 ## Boundary check
 Diff stayed inside the declared file_contact_surface.
@@ -198,6 +248,31 @@ Probed empty file, 100MB file, and mid-write interruption: all clean.
 
 ## Gaps
 AC2.2 not verified — the fixture corpus has no oversized sample.
+`
+
+/**
+ * A verification report that carries every section its contract requires and
+ * none of the grammar the evidence parser reads: no `### E<k> — AC<n>.<m>`
+ * blocks, no Results rows keyed by a criterion. Contracts are forkable
+ * (INTEGRATION.md), so this is a legitimate record, not a malformed one — it
+ * passes validation and the gate is reviewable. It exists to prove the
+ * structured G2 view withholds itself and says why (#256) instead of guessing.
+ */
+const forkedVerification = () => `# Verification Report: run
+
+**Change verified:** run branch tip
+**Environment:** hosted CI, python 3.12
+
+## Results
+Every acceptance criterion in the spec was exercised against the built
+artifact and all of them held. The transcripts live in the CI job for this
+branch rather than inline, per this repository's own reporting convention.
+
+## Beyond the happy path
+Probed an empty file and a truncated file; both exit cleanly.
+
+## Gaps
+None recorded.
 `
 
 const releasePlan = () => `# Release Plan: run
@@ -529,7 +604,9 @@ export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts 
           message: 'state(g2-pending): metered reviewer(02-errors r2) $1.86',
           files: {
             'review-01.md': review('01-core', 1, 'approve'),
-            'review-02.md': review('02-errors', 2, 'approve'),
+            // 02-errors carries review_rounds: 2 in state.yaml, so its report
+            // is the two-round shape the record claims.
+            'review-02.md': reviewTwoRounds('02-errors'),
             'state.yaml': stateYaml({
               slug: 'g2-pending',
               phase: 'implement',
@@ -696,6 +773,33 @@ export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts 
           profile: 'patch',
           gates: { G1: { by: 'operator', at: '2026-07-08T09:00:00Z', burden: 'confirmation' } },
           tasks: [{ id: '01-fix', status: 'review-approved', rounds: 1 }],
+        }),
+      },
+    },
+    {
+      // A forked contract, not a broken record: the report has every required
+      // section, so the gate is reviewable, but its evidence is written in a
+      // grammar this parser does not read. G2's packet withholds the criterion
+      // view and names the reason (#256).
+      slug: 'forked-contract',
+      age: 2,
+      files: {
+        'intent-brief.md': brief('archive pruner'),
+        'spec.md': spec('archive pruner'),
+        'plan.md': plan('archive pruner'),
+        'tasks/01-core.yaml': workItem('01-core', 'R1', 'review-approved'),
+        'review-01.md': review('01-core', 1, 'request-changes'),
+        'verification-report.md': forkedVerification(),
+        'state.yaml': stateYaml({
+          slug: 'forked-contract',
+          phase: 'implement',
+          profile: 'standard',
+          gates: {
+            G0: { by: 'operator', at: '2026-07-07T09:00:00Z', burden: 'confirmation' },
+            G1: { by: 'operator', at: '2026-07-08T09:00:00Z', burden: 'confirmation' },
+          },
+          tasks: [{ id: '01-core', status: 'review-approved', rounds: 1 }],
+          budget: { limit: 25, spent: 3.4 },
         }),
       },
     },

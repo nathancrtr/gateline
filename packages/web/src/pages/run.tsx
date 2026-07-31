@@ -16,7 +16,7 @@ import { PROFILE_GATES, api, formatAge, formatWhen, type InboxItem, type Profile
 import { AgeBadge, BudgetMeter, GateLedger, KindChip, PhaseChip, ValidationBadge } from '../components/chips.tsx'
 import { DecidePanel } from '../components/decide.tsx'
 import { DiffView } from '../components/diff-view.tsx'
-import { EvidenceRollupPanel } from '../components/evidence.tsx'
+import { EvidenceRollupPanel, G2Packet } from '../components/evidence.tsx'
 import { FindingsPanel, VerdictChip, useReviews } from '../components/findings.tsx'
 import { CitedObjects, CitedText, LexiconProvider, useRunLexicon } from '../components/lexicon.tsx'
 import { Markdown } from '../components/markdown.tsx'
@@ -360,7 +360,12 @@ function NeedsYouCard({
             ))}
           </ul>
         )}
-        {item.kind === 'gate' && item.gate === 'G2' && <EvidenceRollupPanel src={item.source} slug={item.slug} />}
+        {/* G2's packet, composed in criterion order (#256). The one-line
+            citation map this replaced still renders on verification-report.md
+            itself, where the report's own markdown is already on screen. */}
+        {item.kind === 'gate' && item.gate === 'G2' && (
+          <G2Packet src={item.source} slug={item.slug} profile={detail.summary.profile} />
+        )}
         <DecidePanel item={item} profile={detail.summary.profile} primary={primary} sentHere={sentHere} chips={chips} />
       </div>
     </section>

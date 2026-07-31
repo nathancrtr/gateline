@@ -1,10 +1,10 @@
-// Where the run page points you when something needs a human: which artifact
-// opens (#250), and which pending card the inbox sent you to (#216).
+// Where the run page points you: which surface opens (#258), which artifact
+// opens within it (#250), and which pending card the inbox sent you to (#216).
 //
-// The gate on the table decides which artifact opens — not which filename
-// sorts first.
-// Since #249 closed the gate and profile vocabulary, that mapping is total:
-// every (profile, gate) pair names exactly one artifact to open on.
+// The gate on the table decides both — not which filename sorts first, and not
+// which storage location the bytes happen to live in. Since #249 closed the
+// gate and profile vocabulary, that mapping is total: every (profile, gate)
+// pair names exactly one artifact to open on.
 //
 // Pure and type-only by design, so it is unit-testable without a DOM and
 // carries no React or core-runtime weight into the bundle.
@@ -61,6 +61,69 @@ export function landingArtifact(input: { items: InboxItem[]; profile: Profile; a
     if (wanted !== null && input.artifacts.includes(wanted)) return wanted
   }
   return null
+}
+
+/**
+ * The run page's surfaces (#258). Three tasks, not three storage locations:
+ * decide what is on the table, read the record, read the decisions already
+ * taken. `artifacts` and `diff` were containers and are retired.
+ */
+export type Surface = 'decide' | 'record' | 'history'
+
+/**
+ * What Record has open when the reader wants the change rather than a file.
+ * Not a path, and it cannot collide with one: artifact paths are repo-relative
+ * and never begin with `@`.
+ */
+export const DIFF_SELECTION = '@diff'
+
+/** The retired container-tab names, and what each one means now. */
+const RETIRED: Record<string, { surface: Surface; selection: string | null }> = {
+  artifacts: { surface: 'record', selection: null },
+  diff: { surface: 'record', selection: DIFF_SELECTION },
+}
+
+export interface Route {
+  surface: Surface
+  /** Record's selection: an artifact path, DIFF_SELECTION, or null for its own default. */
+  selection: string | null
+  /** The URL named a surface it did not get; the page should rewrite it in place. */
+  rewrite: boolean
+}
+
+/**
+ * Which surface the URL asks for, and which it actually gets.
+ *
+ * Two rules do all the work. A run with nothing pending is never offered an
+ * empty Decide surface, so a `?tab=decide` link that has aged out lands on the
+ * record instead of on a blank panel. And a URL that names a retired container
+ * tab still resolves: `artifacts` is the record, `diff` is the record with the
+ * change open — the views did not go anywhere, only the names did.
+ *
+ * `rewrite` reports that the resolved surface differs from what the URL said,
+ * so the page can replace the params and leave a canonical URL behind. A URL
+ * that names no tab at all is not a wrong URL — the surface is derived and
+ * nothing is rewritten.
+ */
+export function resolveSurface(
+  params: { tab: string | null; artifact: string | null },
+  run: { pending: boolean },
+): Route {
+  const { tab, artifact } = params
+  const resolved = resolve(tab, artifact, run.pending)
+  return { ...resolved, rewrite: tab !== null && (tab !== resolved.surface || artifact !== resolved.selection) }
+}
+
+function resolve(tab: string | null, artifact: string | null, pending: boolean): { surface: Surface; selection: string | null } {
+  const retired = tab === null ? undefined : RETIRED[tab]
+  if (retired) return { surface: retired.surface, selection: retired.selection ?? artifact }
+  // Decide exists only while something is on the table.
+  if (tab === 'decide') return pending ? { surface: 'decide', selection: artifact } : { surface: 'record', selection: artifact }
+  if (tab === 'record' || tab === 'history') return { surface: tab, selection: artifact }
+  // No tab named, or one this page has never had. Naming an artifact is asking
+  // to read it; otherwise the decision leads whenever there is one.
+  if (artifact !== null) return { surface: 'record', selection: artifact }
+  return { surface: pending ? 'decide' : 'record', selection: null }
 }
 
 /**

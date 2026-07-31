@@ -185,7 +185,7 @@ export function LexRef({ children }: { children?: ReactNode }) {
         {entry && (
           <Link
             className="lex-card-jump"
-            to={`/runs/${lex.src}/${lex.slug}?tab=artifacts&artifact=${encodeURIComponent(entry.artifact)}&anchor=${anchorFor(id)}`}
+            to={`/runs/${lex.src}/${lex.slug}?tab=record&artifact=${encodeURIComponent(entry.artifact)}&anchor=${anchorFor(id)}`}
           >
             {entry.artifact}:{entry.line} — jump to definition ↗
           </Link>
@@ -296,7 +296,7 @@ export function CitedObjects({ content, path }: { content: string; path: string 
                   <span className="min-w-0 truncate text-muted">{entry.shortName || entry.body.replace(/\s+/g, ' ')}</span>
                   <Link
                     className="ml-auto shrink-0 font-mono text-[11px] text-accent underline underline-offset-2"
-                    to={`/runs/${lex.src}/${lex.slug}?tab=artifacts&artifact=${encodeURIComponent(entry.artifact)}&anchor=${anchorFor(id)}`}
+                    to={`/runs/${lex.src}/${lex.slug}?tab=record&artifact=${encodeURIComponent(entry.artifact)}&anchor=${anchorFor(id)}`}
                   >
                     {entry.artifact}:{entry.line}
                   </Link>

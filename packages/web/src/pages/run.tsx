@@ -1,6 +1,8 @@
-// One run's story: header + gate ledger, the "needs you" panel, and tabs for
-// artifacts, diff, and state history. Decision affordances live in the cards
-// (M2 wires them to POST /api/decisions).
+// One run's story: header + gate ledger, then the surface the run's own state
+// asks for — Decide, Record, History (#258). Those are three tasks, not three
+// storage locations: the tab bar this replaced was `Artifacts | Diff | History`,
+// a filesystem hierarchy standing in for the human's job at a gate.
+// Decision affordances live in the cards (M2 wires them to POST /api/decisions).
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -11,7 +13,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 // detail.history. No new server data (ADR-6 rider, ADR-7).
 import { readIntake } from '@agentic/core/record'
 import { useKeys } from '../use-keys.ts'
-import { decideTargetIndex, landingArtifact } from '../landing.ts'
+import { DIFF_SELECTION, decideTargetIndex, landingArtifact, resolveSurface, type Surface } from '../landing.ts'
 import { PROFILE_GATES, api, formatAge, formatWhen, type InboxItem, type Profile, type RunDetailResponse, type RunSummary } from '../api.ts'
 import { AgeBadge, BudgetMeter, GateLedger, KindChip, PhaseChip, ValidationBadge } from '../components/chips.tsx'
 import { DecidePanel } from '../components/decide.tsx'
@@ -22,15 +24,11 @@ import { CitedObjects, CitedText, LexiconProvider, useRunLexicon } from '../comp
 import { Markdown } from '../components/markdown.tsx'
 import { PageStatus } from './inbox.tsx'
 
-type Tab = 'artifacts' | 'diff' | 'history'
-
 const isReviewPath = (p: string) => /^review-\d+.*\.md$/.test(p)
 
 export function RunPage() {
   const { src, slug } = useParams<{ src: string; slug: string }>()
   const [params, setParams] = useSearchParams()
-  const tab = (params.get('tab') as Tab) ?? 'artifacts'
-  const artifact = params.get('artifact')
 
   const navigate = useNavigate()
   const { data, isLoading, error } = useQuery({
@@ -39,6 +37,25 @@ export function RunPage() {
     enabled: Boolean(src && slug),
   })
   const lexicon = useRunLexicon(src, slug)
+
+  // Which surface the URL asks for and which it gets. Pure, so it runs before
+  // the loading guards below; until the run loads nothing is pending, which is
+  // why the rewrite effect waits for `data` rather than acting on that.
+  const pending = (data?.items.length ?? 0) > 0
+  const route = resolveSurface({ tab: params.get('tab'), artifact: params.get('artifact') }, { pending })
+
+  // A link that named a retired container tab still works, and leaves a
+  // canonical URL behind: `?tab=artifacts` and `?tab=diff` are the record, and
+  // a `?tab=decide` that has aged out is too. Replace, never push — a redirect
+  // the reader never asked for should not cost them a back button press.
+  useEffect(() => {
+    if (!data || !route.rewrite) return
+    const next = new URLSearchParams(window.location.search)
+    next.set('tab', route.surface)
+    if (route.selection === null) next.delete('artifact')
+    else next.set('artifact', route.selection)
+    setParams(next, { replace: true })
+  }, [data, route.rewrite, route.surface, route.selection, setParams])
 
   // e cycles artifacts; esc returns to the inbox unless a decision is open.
   const keyHandlers = useMemo(
@@ -50,7 +67,7 @@ export function RunPage() {
         const idx = current ? paths.indexOf(current) : -1
         const nextPath = paths[(idx + 1) % paths.length]!
         const next = new URLSearchParams(window.location.search)
-        next.set('tab', 'artifacts')
+        next.set('tab', 'record')
         next.set('artifact', nextPath)
         setParams(next, { replace: true })
       },
@@ -77,20 +94,20 @@ export function RunPage() {
   const genesisCommit = detail.history.length > 0 ? detail.history[detail.history.length - 1] : null
   const genesisProvenance = genesisIntake ? [genesisIntake.source, genesisIntake.ref, genesisIntake.url].filter((v): v is string => Boolean(v)) : []
 
-  const setTab = (t: Tab) => {
+  const setSurface = (s: Surface) => {
     const next = new URLSearchParams(params)
-    next.set('tab', t)
-    if (t !== 'artifacts') next.delete('artifact')
+    next.set('tab', s)
+    if (s !== 'record') next.delete('artifact')
     setParams(next, { replace: true })
   }
 
-  // Two page modes, chosen by whether anything needs a human (the brief's
-  // A4: density follows the job). Busy — decisions pending — is a two-column
-  // band closed by a full-width rule: cards left, quiet status rail right.
-  // Quiet is one column: the status facts flow horizontally under the header
-  // and the record (tabs) rises. Status content is never boxed — card chrome
-  // belongs to the decision cards alone, so no box edge is left waiting to
-  // align with another.
+  // One layout, with the Decide surface present or absent. The page used to
+  // fork its whole shape on this flag — a two-column rail when something was
+  // pending, one flowing column when nothing was — because it could not predict
+  // what a state needs. Since #249 closed the gate and profile vocabulary it
+  // can, so the prediction moved into the surface and the fork went away with
+  // the duplicate vitals it required. Status content is still never boxed: card
+  // chrome belongs to the decision cards alone.
   const busy = items.length > 0
 
   // The inbox already encodes what it is calling you to decide (`?decide=G2`,
@@ -147,112 +164,131 @@ export function RunPage() {
   return (
     <LexiconProvider value={lexicon}>
       <div className="mx-auto max-w-5xl">
-        {busy ? (
-          <div className="grid grid-cols-[minmax(0,1fr)_300px] gap-10 items-start max-md:flex max-md:flex-col border-b border-line pb-7">
-            <div className="min-w-0 max-md:w-full">
-              {header}
-              {stateErrorBlock}
-              <section className="flex flex-col gap-4">
-                {items.map((item, i) => (
-                  <NeedsYouCard
-                    key={`${item.kind}-${item.gate ?? item.escalationIndex ?? i}`}
-                    item={item}
-                    now={now}
-                    detail={detail}
-                    primary={i === primaryIndex}
-                    sentHere={i === decideIndex}
-                  />
-                ))}
-              </section>
-            </div>
-            <aside className="md:sticky md:top-6 max-md:w-full min-w-0">
-              <RunFacts summary={summary} />
-              {board && <div className="mt-7">{board}</div>}
-            </aside>
-          </div>
-        ) : (
-          <div className="border-b border-line pb-7">
-            {header}
-            {stateErrorBlock}
-            <div className="flex flex-wrap items-start gap-x-14 gap-y-7 text-[13px]">
-              <section className="w-[300px]">
-                <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted pb-1.5">Gates</div>
-                <GateLines gates={summary.gates} profile={summary.profile} rows />
-              </section>
-              {board && <div className="w-[300px]">{board}</div>}
-              <section className="w-[230px]">
-                <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted pb-1.5">Vitals</div>
-                <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-                  <span className="text-[12.5px] text-muted">Budget</span>
-                  <span className="text-right">
-                    <BudgetMeter limit={summary.budget.limit} spent={summary.budget.spent} />
-                  </span>
-                </div>
-                {summary.aheadOfOrigin != null && summary.aheadOfOrigin > 0 && (
-                  <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-                    <span className="text-[12.5px] text-muted">Divergence</span>
-                    <span className={`text-[12.5px] font-mono tabular-nums text-right ${(summary.behindOrigin ?? 0) > 0 ? 'text-bad' : 'text-warn'}`}>
-                      ↑{summary.aheadOfOrigin}{(summary.behindOrigin ?? 0) > 0 && <>↓{summary.behindOrigin}</>}
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-                  <span className="text-[12.5px] text-muted">Updated</span>
-                  <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">
-                    {summary.updatedAt ? formatAge(summary.updatedAt, Date.now() / 1000) + ' ago' : '—'}
-                  </span>
-                </div>
-              </section>
-            </div>
-          </div>
-        )}
+        <div className="border-b border-line pb-7">
+          {header}
+          {stateErrorBlock}
+          <RunMetadata summary={summary} board={board} />
+        </div>
 
-        <nav className="mt-6 mb-[18px] flex gap-0.5 border-b border-line">
-          <button
-            onClick={() => setTab('artifacts')}
-            className={`px-4 py-2.5 text-[13.5px] font-medium border-b-2 -mb-px transition-colors ${
-              tab === 'artifacts' ? 'border-accent text-ink font-semibold' : 'border-transparent text-muted hover:text-ink'
-            }`}
-          >
-            Artifacts
-            <span className="ml-1.5 font-mono text-[11px] text-faint">{detail.artifacts.length}</span>
-          </button>
-          <button
-            onClick={() => setTab('diff')}
-            className={`px-4 py-2.5 text-[13.5px] font-medium border-b-2 -mb-px transition-colors ${
-              tab === 'diff' ? 'border-accent text-ink font-semibold' : 'border-transparent text-muted hover:text-ink'
-            }`}
-          >
-            Diff
-          </button>
-          <button
-            onClick={() => setTab('history')}
-            className={`px-4 py-2.5 text-[13.5px] font-medium border-b-2 -mb-px transition-colors ${
-              tab === 'history' ? 'border-accent text-ink font-semibold' : 'border-transparent text-muted hover:text-ink'
-            }`}
-          >
-            History
-            <span className="ml-1.5 font-mono text-[11px] text-faint">{detail.history.length}</span>
-          </button>
+        <nav className="mt-6 mb-[18px] flex gap-0.5 border-b border-line" data-surfaces>
+          {busy && (
+            <SurfaceTab surface="decide" label="Decide" count={items.length} current={route.surface} onSelect={setSurface} />
+          )}
+          <SurfaceTab surface="record" label="Record" count={detail.artifacts.length} current={route.surface} onSelect={setSurface} />
+          <SurfaceTab surface="history" label="History" count={detail.history.length} current={route.surface} onSelect={setSurface} />
         </nav>
 
-        {tab === 'artifacts' && (
-          <ArtifactsTab
+        {route.surface === 'decide' && (
+          <section className="flex flex-col gap-4 pb-7 border-b border-line">
+            {items.map((item, i) => (
+              <NeedsYouCard
+                key={`${item.kind}-${item.gate ?? item.escalationIndex ?? i}`}
+                item={item}
+                now={now}
+                detail={detail}
+                primary={i === primaryIndex}
+                sentHere={i === decideIndex}
+              />
+            ))}
+          </section>
+        )}
+        {route.surface === 'record' && (
+          <RecordSurface
             detail={detail}
-            selected={artifact}
+            selected={route.selection}
             onSelect={(p) => {
               const next = new URLSearchParams(params)
-              next.set('tab', 'artifacts')
+              next.set('tab', 'record')
               next.set('artifact', p)
               next.delete('anchor')
               setParams(next, { replace: true })
             }}
           />
         )}
-        {tab === 'diff' && <DiffTab src={summary.source} slug={summary.slug} />}
-        {tab === 'history' && <HistoryTab history={detail.history} src={src!} slug={slug!} />}
+        {route.surface === 'history' && <HistoryTab history={detail.history} src={src!} slug={slug!} />}
       </div>
     </LexiconProvider>
+  )
+}
+
+/** One surface in the bar. Decide carries a count only because a run can have
+ *  more than one thing on the table at once — a gate and an aged escalation. */
+function SurfaceTab({
+  surface,
+  label,
+  count,
+  current,
+  onSelect,
+}: {
+  surface: Surface
+  label: string
+  count: number
+  current: Surface
+  onSelect: (s: Surface) => void
+}) {
+  const active = current === surface
+  return (
+    <button
+      onClick={() => onSelect(surface)}
+      data-surface={surface}
+      aria-current={active ? 'page' : undefined}
+      className={`px-4 py-2.5 text-[13.5px] font-medium border-b-2 -mb-px transition-colors ${
+        active ? 'border-accent text-ink font-semibold' : 'border-transparent text-muted hover:text-ink'
+      }`}
+    >
+      {label}
+      <span className="ml-1.5 font-mono text-[11px] text-faint">{count}</span>
+    </button>
+  )
+}
+
+/**
+ * The run's standing facts, in one form (#258). This block and the busy-mode
+ * `RunFacts` rail used to say most of the same things in two different shapes,
+ * because the page had two layouts to fill; with one layout there is one block.
+ *
+ * What the header already says is not repeated here: the phase and profile are
+ * the header's eyebrow, the gate glyphs are its ledger strip, and how many
+ * things need a human is the Decide surface's own count. Gate *provenance* —
+ * who decided each one and when — is the part the ledger strip only carries in
+ * a tooltip, so it stays.
+ */
+function RunMetadata({ summary, board }: { summary: RunSummary; board: React.ReactNode }) {
+  return (
+    <div className="flex flex-wrap items-start gap-x-14 gap-y-7 text-[13px]">
+      <section className="w-[300px]">
+        <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted pb-1.5">Gates</div>
+        <GateLines gates={summary.gates} profile={summary.profile} />
+      </section>
+      {board && <div className="w-[300px]">{board}</div>}
+      <section className="w-[230px]">
+        <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted pb-1.5">Vitals</div>
+        <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
+          <span className="text-[12.5px] text-muted">Budget</span>
+          <span className="text-right">
+            <BudgetMeter limit={summary.budget.limit} spent={summary.budget.spent} />
+          </span>
+        </div>
+        <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
+          <span className="text-[12.5px] text-muted">Max rounds</span>
+          <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">{summary.tasks.maxRounds}</span>
+        </div>
+        {summary.aheadOfOrigin != null && summary.aheadOfOrigin > 0 && (
+          <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
+            <span className="text-[12.5px] text-muted">Divergence</span>
+            <span className={`text-[12.5px] font-mono tabular-nums text-right ${(summary.behindOrigin ?? 0) > 0 ? 'text-bad' : 'text-warn'}`}>
+              ↑{summary.aheadOfOrigin}{(summary.behindOrigin ?? 0) > 0 && <>↓{summary.behindOrigin}</>}
+            </span>
+          </div>
+        )}
+        <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
+          <span className="text-[12.5px] text-muted">Updated</span>
+          <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">
+            {summary.updatedAt ? formatAge(summary.updatedAt, Date.now() / 1000) + ' ago' : '—'}
+          </span>
+        </div>
+      </section>
+    </div>
   )
 }
 
@@ -300,7 +336,7 @@ function NeedsYouCard({
           return (
             <Link
               key={p}
-              to={`/runs/${item.source}/${item.slug}?tab=artifacts&artifact=${encodeURIComponent(p)}`}
+              to={`/runs/${item.source}/${item.slug}?tab=record&artifact=${encodeURIComponent(p)}`}
               className="inline-flex items-center gap-1.5 rounded-xs border border-line-cool bg-surface px-2 py-0.5 font-mono text-[11.5px] text-muted hover:border-accent hover:text-accent-deep"
             >
               {p}
@@ -372,10 +408,10 @@ function NeedsYouCard({
   )
 }
 
-/** Gate provenance lines — who decided each gate, and when. Right-aligned
- * stack in the busy rail; `rows` renders them as hairline rows for the quiet
- * facts block. */
-function GateLines({ gates, profile, rows = false }: { gates: RunSummary['gates']; profile: Profile; rows?: boolean }) {
+/** Gate provenance lines — who decided each gate, and when. One form now
+ * (#258): the `rows` prop existed to serve the busy layout's right-aligned
+ * rail alongside the quiet layout's hairline rows, and there is one layout. */
+function GateLines({ gates, profile }: { gates: RunSummary['gates']; profile: Profile }) {
   return (
     <>
       {PROFILE_GATES[profile].map((g) => {
@@ -383,7 +419,7 @@ function GateLines({ gates, profile, rows = false }: { gates: RunSummary['gates'
         if (!c) return null
         const toneCls = c.approved ? 'text-ok' : c.decided ? 'text-bad' : 'text-warn'
         return (
-          <span key={g} className={`text-[12px] font-mono tabular-nums ${toneCls} ${rows ? 'block border-t border-line py-[7px]' : ''}`}>
+          <span key={g} className={`block border-t border-line py-[7px] text-[12px] font-mono tabular-nums ${toneCls}`}>
             {g} {c.approved ? '✓' : c.decided ? '✕' : '·'}
             {c.decided ? (
               <span className="text-muted"> {c.by ?? '—'}{c.at ? ` · ${String(c.at).slice(0, 10)}` : ''}</span>
@@ -433,63 +469,6 @@ function BranchRef({ refName, kind, url }: { refName: string; kind: RunSummary['
   )
 }
 
-/** The busy-mode status rail: quiet, unboxed key/value rows — mono labels
- * and hairlines only, deliberately not a card, so nothing competes with the
- * decision cards or leaves a box edge waiting to align with one. */
-function RunFacts({ summary }: { summary: RunSummary }) {
-  return (
-    <div className="text-[13px]">
-      <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted pb-1.5">Run metadata</div>
-      <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-        <span className="text-[12.5px] text-muted">Phase</span>
-        <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">{summary.phase}</span>
-      </div>
-      <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-        <span className="text-[12.5px] text-muted">Profile</span>
-        <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">{summary.profile}</span>
-      </div>
-      <div className="flex justify-between gap-3 py-[7px] border-t border-line">
-        <span className="text-[12.5px] text-muted">Gates</span>
-        <span className="flex flex-col items-end gap-[3px] text-right">
-          <GateLines gates={summary.gates} profile={summary.profile} />
-        </span>
-      </div>
-      <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-        <span className="text-[12.5px] text-muted">Tasks</span>
-        <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">{summary.tasks.done} / {summary.tasks.total}</span>
-      </div>
-      <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-        <span className="text-[12.5px] text-muted">Max rounds</span>
-        <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">{summary.tasks.maxRounds}</span>
-      </div>
-      <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-        <span className="text-[12.5px] text-muted">Budget</span>
-        <span className="text-right">
-          <BudgetMeter limit={summary.budget.limit} spent={summary.budget.spent} />
-        </span>
-      </div>
-      {summary.aheadOfOrigin != null && summary.aheadOfOrigin > 0 && (
-        <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-          <span className="text-[12.5px] text-muted">Divergence</span>
-          <span className={`text-[12.5px] font-mono tabular-nums text-right ${(summary.behindOrigin ?? 0) > 0 ? 'text-bad' : 'text-warn'}`}>
-            ↑{summary.aheadOfOrigin}{(summary.behindOrigin ?? 0) > 0 && <>↓{summary.behindOrigin}</>}
-          </span>
-        </div>
-      )}
-      <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-        <span className="text-[12.5px] text-muted">Needs you</span>
-        <span className={`text-[12.5px] font-mono tabular-nums text-right ${summary.needsHuman > 0 ? 'text-bad' : 'text-ok'}`}>{summary.needsHuman}</span>
-      </div>
-      <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-        <span className="text-[12.5px] text-muted">Updated</span>
-        <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">
-          {summary.updatedAt ? formatAge(summary.updatedAt, Date.now() / 1000) + ' ago' : '—'}
-        </span>
-      </div>
-    </div>
-  )
-}
-
 /** The task board shares the status grammar — mono label, hairline rows —
  * and, like all status content, is never boxed. */
 function TaskBoard({ state }: { state: NonNullable<RunDetailResponse['state']> }) {
@@ -526,7 +505,18 @@ function TaskBoard({ state }: { state: NonNullable<RunDetailResponse['state']> }
   )
 }
 
-function ArtifactsTab({
+/**
+ * Record — the run's committed output, and the answer to "show me the bytes"
+ * (#258). The escape hatch and the fork fallback: whatever a structured surface
+ * withholds itself over, the artifact it was reading is here in full.
+ *
+ * The change reads here too, as an entry below the artifacts rather than the
+ * sibling `Diff` tab it used to be. It is not an artifact — nothing under
+ * `runs/<slug>/` produced it — so it sits under its own heading, and it earns
+ * its place in Gatehouse only as the surface-scoped view #270 built
+ * (FRONTEND.md principle 7). `?tab=diff` links land here.
+ */
+function RecordSurface({
   detail,
   selected,
   onSelect,
@@ -536,10 +526,11 @@ function ArtifactsTab({
   onSelect: (path: string) => void
 }) {
   const paths = detail.artifacts
+  const showDiff = selected === DIFF_SELECTION
   // An explicit selection always wins; otherwise the pending gate's own packet
   // decides what opens (#250), and only then does filename order get a say.
   const current =
-    selected ??
+    (showDiff ? null : selected) ??
     landingArtifact({ items: detail.items, profile: detail.summary.profile, artifacts: paths }) ??
     paths.find((p) => p.endsWith('.md')) ??
     paths[0] ??
@@ -566,8 +557,10 @@ function ArtifactsTab({
               <li key={p}>
                 <button
                   onClick={() => onSelect(p)}
+                  data-artifact-entry={p}
+                  data-selected={!showDiff && p === current ? 'true' : undefined}
                   className={`flex w-full items-center gap-2.5 px-[18px] py-2.5 text-left font-mono text-[12.5px] border-l-2 transition-colors ${
-                    p === current
+                    !showDiff && p === current
                       ? 'bg-accent-tint border-l-accent text-accent-deep font-semibold'
                       : 'border-l-transparent text-[#4d4742] hover:bg-inset hover:text-ink'
                   }`}
@@ -580,14 +573,30 @@ function ArtifactsTab({
             )
           })}
         </ul>
-        {current && detail.validations[current] && !detail.validations[current].ok && (
+        <div className="mt-3.5 border-t border-line pt-3.5">
+          <div className="font-mono text-[10.5px] tracking-[0.12em] uppercase text-muted px-[18px] pb-2.5">The change</div>
+          <button
+            onClick={() => onSelect(DIFF_SELECTION)}
+            data-select-diff
+            className={`flex w-full items-center gap-2.5 px-[18px] py-2.5 text-left font-mono text-[12.5px] border-l-2 transition-colors ${
+              showDiff
+                ? 'bg-accent-tint border-l-accent text-accent-deep font-semibold'
+                : 'border-l-transparent text-[#4d4742] hover:bg-inset hover:text-ink'
+            }`}
+          >
+            <span className="truncate">diff by surface</span>
+          </button>
+        </div>
+        {!showDiff && current && detail.validations[current] && !detail.validations[current].ok && (
           <div className="mx-[18px] mt-3.5 rounded-sm border border-bad-line bg-bad-bg px-3 py-2.5 text-[12px] text-bad">
             Fails its {detail.validations[current].contract} contract — missing: {detail.validations[current].missing.join(', ')}
           </div>
         )}
       </nav>
       <div className="min-w-0">
-        {current ? (
+        {showDiff ? (
+          <DiffPane src={detail.summary.source} slug={detail.summary.slug} />
+        ) : current ? (
           <ArtifactBody src={detail.summary.source} slug={detail.summary.slug} path={current} />
         ) : (
           <PageStatus text="No artifacts yet." />
@@ -647,12 +656,16 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
   )
 }
 
-function DiffTab({ src, slug }: { src: string; slug: string }) {
+function DiffPane({ src, slug }: { src: string; slug: string }) {
   const { data, isLoading, error } = useQuery({ queryKey: ['diff', src, slug], queryFn: () => api.diff(src, slug) })
   if (isLoading) return <LoadingSkeleton text="Computing diff…" />
   if (error) return <PageStatus text={(error as Error).message} bad />
   if (data!.merged) return <PageStatus text="Run is merged — its change lives in the default branch history now." />
-  return <DiffView files={data!.files} surface={data!.surface} />
+  return (
+    <div className="px-[18px] py-[18px]">
+      <DiffView files={data!.files} surface={data!.surface} />
+    </div>
+  )
 }
 
 /** Actor treatment: a human decision reads as the decision it is; the engine's

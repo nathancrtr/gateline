@@ -102,6 +102,14 @@ export interface RunDetailResponse {
   validations: Record<string, Validation>
   artifacts: string[]
   history: HistoryEntry[]
+  /**
+   * The run branch's page on the git host (#267), derived on the server from
+   * `remote.origin.url` plus the run's branch. Null whenever no such page can
+   * be named without guessing — a local-only source, no origin, a non-GitHub
+   * remote, or a merged run whose branch is gone — and the page then keeps its
+   * own view rather than offering a dead link (FRONTEND.md §4.1).
+   */
+  branchUrl: string | null
   now: number
 }
 

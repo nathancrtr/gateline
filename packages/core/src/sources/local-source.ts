@@ -298,6 +298,17 @@ export class LocalGitSource implements RunSource {
     return this.git.revListCount(`refs/heads/${ref.branch}..refs/remotes/origin/${ref.branch}`)
   }
 
+  /**
+   * `remote.origin.url` as configured, or null when there is nothing to link
+   * out to (#267). Local-only short-circuits before reading git config, the
+   * same way `syncFromRemote` short-circuits before fetching: a local-only
+   * source has no origin by designation, whatever a stale config line says.
+   */
+  async originUrl(): Promise<string | null> {
+    if (this.localOnly) return null
+    return this.git.configGet('remote.origin.url')
+  }
+
   async writeState(ref: RunRef, mutate: StateDocMutation, message: string, options: { expectedTip?: string } = {}): Promise<WriteResult> {
     if (!(await this.identity()))
       return { ok: false, reason: 'no-identity', message: 'git user.name/user.email are unset — decisions must be attributable to a named human' }

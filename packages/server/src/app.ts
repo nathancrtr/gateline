@@ -15,6 +15,7 @@ import {
   DecisionError,
   engineHealthStale,
   extractSections,
+  hostBranchUrl,
   ID_PATTERN,
   parseReview,
   missingSections,
@@ -312,12 +313,13 @@ export function createApp(deps: AppDeps): Hono {
     const { source, ref } = found
     const key = `run:${ref.source}:${ref.slug}`
     const payload = await cache.get(key, async () => {
-      const [{ summary, items }, { state, error, raw }, readiness, artifacts, history] = await Promise.all([
+      const [{ summary, items }, { state, error, raw }, readiness, artifacts, history, origin] = await Promise.all([
         summarizeRun(source, ref),
         source.readState(ref),
         deriveReadiness(source, ref),
         source.listArtifacts(ref),
         source.stateHistory(ref),
+        source.originUrl?.() ?? null,
       ])
       return {
         summary,
@@ -327,6 +329,13 @@ export function createApp(deps: AppDeps): Hono {
         stateRaw: raw,
         validations: readiness.validations,
         artifacts,
+        // The link out to the host (#267). A `default`-kind run is one whose
+        // branch exists neither locally nor on origin — it merged and was
+        // cleaned up — so there is no branch page to send anyone to, and the
+        // rule is degrade to the local view, never to a dead end. Everything
+        // else is decided by host-link.ts, which returns null for any remote
+        // it cannot resolve without guessing.
+        branchUrl: ref.kind === 'default' ? null : hostBranchUrl(origin, ref.branch),
         history: history.map((h) => ({
           oid: h.oid,
           time: h.time,

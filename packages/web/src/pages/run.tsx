@@ -108,18 +108,21 @@ export function RunPage() {
         {busy ? ' · needs you' : ''}
       </div>
       <h1 className="mt-2 mb-1.5 font-sans text-[46px] font-semibold leading-[1.06] tracking-[-0.02em]">{summary.slug}</h1>
-      {genesisIntake && genesisCommit && (
-        <p className="font-mono text-[12.5px] text-muted leading-[1.6]">
-          staged by{' '}
-          {genesisIntake.staged_by ? (
-            <span className="font-medium text-[#4d4742]">{genesisIntake.staged_by}</span>
-          ) : null}
-          {genesisIntake.staged_by ? ' · ' : ''}
-          {formatWhen(genesisCommit.time)}
-          {genesisProvenance.length > 0 && <> · from {genesisProvenance.join(' · ')}</>}
-          · branch <span className="font-mono">{summary.ref}</span>
-        </p>
-      )}
+      <p className="font-mono text-[12.5px] text-muted leading-[1.6]">
+        {genesisIntake && genesisCommit && (
+          <>
+            staged by{' '}
+            {genesisIntake.staged_by ? (
+              <span className="font-medium text-[#4d4742]">{genesisIntake.staged_by}</span>
+            ) : null}
+            {genesisIntake.staged_by ? ' · ' : ''}
+            {formatWhen(genesisCommit.time)}
+            {genesisProvenance.length > 0 && <> · from {genesisProvenance.join(' · ')}</>}
+            {' · '}
+          </>
+        )}
+        <BranchRef refName={summary.ref} kind={summary.kind} url={detail.branchUrl} />
+      </p>
       <div className="flex items-center gap-3.5 flex-wrap mt-[18px]">
         <PhaseChip phase={summary.phase} pausedReason={summary.pausedReason} />
         <GateLedger gates={summary.gates} profile={summary.profile} />
@@ -385,6 +388,42 @@ function GateLines({ gates, profile, rows = false }: { gates: RunSummary['gates'
           </span>
         )
       })}
+    </>
+  )
+}
+
+/**
+ * The ref the run is read at, linked to its page on the git host when one can
+ * be named (#267). #259's principle 7 is why this is a link and not a view: a
+ * branch page is commodity — commits, files, the associated PR — and the host
+ * will always do it better. The link is also the prerequisite for retiring the
+ * generic views, so it has to exist before anything is deleted.
+ *
+ * `url === null` is the ordinary case, not an error: a local-only source, a
+ * repo with no origin, a remote this cannot resolve without guessing, or a
+ * merged run whose branch is gone. The ref still shows — the fact is the fact —
+ * it simply is not a link.
+ *
+ * A `default`-kind run is the one case where the word matters: its run branch
+ * no longer exists, and the ref shown is the default branch the record is now
+ * read *at*. Calling that "branch main" would name the wrong branch.
+ */
+function BranchRef({ refName, kind, url }: { refName: string; kind: RunSummary['kind']; url: string | null }) {
+  const label = kind === 'default' ? 'read at' : 'branch'
+  if (!url) return <>{label} <span className="font-mono">{refName}</span></>
+  return (
+    <>
+      {label}{' '}
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        data-branch-link
+        className="font-mono text-accent underline underline-offset-2 hover:text-ink"
+        title={`Open ${refName} on the git host`}
+      >
+        {refName} ↗
+      </a>
     </>
   )
 }

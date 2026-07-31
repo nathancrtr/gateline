@@ -489,3 +489,48 @@ describe('GET /api/engine-health (#141 drift passthrough)', () => {
     })
   })
 })
+
+describe('GET /api/runs/:src/:slug branchUrl — the link out to the host (#267)', () => {
+  // The origin is stubbed onto a source rather than configured on the fixture
+  // repo: a real `remote.origin.url` would also flip a zero-config source into
+  // push mode (view-model/config.ts's pushWhenOriginExists), which is a
+  // different behavior than the one under test. Same prototype-copy idiom
+  // sync.ts's tests use to stub `localOnly`.
+  const withOrigin = (origin: string | null): LocalGitSource =>
+    Object.assign(Object.create(Object.getPrototypeOf(source)) as LocalGitSource, source, {
+      originUrl: async () => origin,
+    })
+
+  const detailFrom = async (src: LocalGitSource, slug: string) => {
+    const res = await createApp({ sources: [src] }).request(`/api/runs/fixture/${slug}`)
+    return (await res.json()) as any
+  }
+
+  it('names the run branch’s page on the host (AC1, AC2)', async () => {
+    const body = await detailFrom(withOrigin('git@github.com:acme/gateline.git'), 'g2-pending')
+    expect(body.branchUrl).toBe('https://github.com/acme/gateline/tree/run/g2-pending')
+  })
+
+  it('is null for a source with no origin — local-only keeps its local view (AC3)', async () => {
+    expect((await detailFrom(withOrigin(null), 'g2-pending')).branchUrl).toBeNull()
+  })
+
+  it('is null for a remote that cannot be resolved without guessing', async () => {
+    expect((await detailFrom(withOrigin('git@git.acme-corp.com:acme/gateline.git'), 'g2-pending')).branchUrl).toBeNull()
+  })
+
+  it('is null for a merged run, whose branch is gone — never a dead link', async () => {
+    // done-merged has no run branch: it is read at the default branch, which
+    // is what `kind: 'default'` means.
+    const body = await detailFrom(withOrigin('git@github.com:acme/gateline.git'), 'done-merged')
+    expect(body.summary.kind).toBe('default')
+    expect(body.branchUrl).toBeNull()
+  })
+
+  it('stores nothing — the record is untouched by asking for a link (AC4)', async () => {
+    const before = git(['log', '-1', '--format=%H', 'run/g2-pending'])
+    await detailFrom(withOrigin('git@github.com:acme/gateline.git'), 'g2-pending')
+    expect(git(['log', '-1', '--format=%H', 'run/g2-pending'])).toBe(before)
+    expect(git(['status', '--porcelain'])).toBe('')
+  })
+})

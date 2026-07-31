@@ -43,6 +43,7 @@ export type {
   InboxItem,
   LedgerEntry,
   LexiconEntry,
+  Phase,
   Profile,
   ReviewFinding,
   ReviewReport,
@@ -55,12 +56,46 @@ export type {
   Verdict,
 }
 
-/** Mirror of core's PROFILE_GATES (DESIGN.md §4.1) — a value import from core would pull the node runtime into the browser bundle. */
+/**
+ * Mirrors of core's closed vocabulary (DESIGN.md §4.1, §4.2) — a value import
+ * from core would pull the node runtime into the browser bundle.
+ *
+ * These are four fixed tables, not defaults: #249 closed the gate set, the
+ * profile set, and what each gate asks, so a display layer is entitled to read
+ * position off them. `packages/web/test/spine.test.ts` value-imports the core
+ * originals and fails if any mirror drifts.
+ */
 export const PROFILE_GATES: Record<Profile, GateId[]> = {
   patch: ['G1', 'G2'],
   standard: ['G0', 'G1', 'G2'],
   full: ['G0', 'G1', 'G2', 'G3'],
 }
+
+/** Which phases a run of each profile passes through — the spine's sequence (#254). */
+export const PROFILE_PHASES: Record<Profile, Phase[]> = {
+  patch: ['plan', 'implement', 'integrate', 'done', 'paused'],
+  standard: ['spec', 'plan', 'implement', 'integrate', 'done', 'paused'],
+  full: ['spec', 'plan', 'implement', 'integrate', 'release', 'done', 'paused'],
+}
+
+/** The phases in which each gate's decision is on the table. */
+export const GATE_PHASES: Record<GateId, Phase[]> = {
+  G0: ['spec'],
+  G1: ['plan'],
+  G2: ['implement', 'integrate'],
+  G3: ['release'],
+}
+
+/** What each gate asks — the one thing `G2` alone cannot tell a newcomer. */
+export const GATE_QUESTIONS: Record<GateId, string> = {
+  G0: 'Is this what we actually want built?',
+  G1: 'Is this how we’d want it built, cut into safe parallel pieces?',
+  G2: 'Does the evidence support merging?',
+  G3: 'Ship it?',
+}
+
+/** In a patch run G1 absorbs the G0 question — brief and work item are approved together. */
+export const PATCH_G1_QUESTION = 'Is this the change we want, scoped this way?'
 
 /** Typed review reports for a run (#214), keyed by artifact path. */
 export interface ReviewsResponse {

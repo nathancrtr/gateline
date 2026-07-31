@@ -1,6 +1,8 @@
 // The fixed status vocabulary: phases, gate states, inbox kinds, validation.
 // Used identically everywhere — status is encoded in form, not just color.
+import { Fragment } from 'react'
 import { PROFILE_GATES, type GateId, type InboxItem, type Profile, type RunSummary } from '../api.ts'
+import { phaseSpine, type GateCell, type PhaseCell } from '../spine.ts'
 
 const PHASE_TONE: Record<string, { chip: string; mark: string }> = {
   spec:       { chip: 'bg-[#f3eee5] text-[#6f5a3a] border-[#e2d6bd]', mark: 'bg-current' },
@@ -121,6 +123,98 @@ export function GateLedger({ gates, profile = 'full' }: { gates: RunSummary['gat
         <GateCell key={g} id={g} cell={gates[g]} />
       ))}
     </span>
+  )
+}
+
+/**
+ * The run header's phase spine (#254) — the profile's phases left to right with
+ * its gates as the transitions between them. `spine.ts` decides the shape; this
+ * decides how each cell reads.
+ *
+ * It replaces a phase chip plus a detached four-box gate ledger, which between
+ * them said where the run was without ever saying that gates are what move it
+ * there. Because the sequence is now visible, the profile no longer has to be
+ * spelled out: four phases and two gates *is* `patch`.
+ *
+ * The connectors are flex-grown rather than fixed, so the spine fills whatever
+ * width it is given — a run header at 900px is a first-class layout, not a
+ * degraded wide one.
+ */
+export function PhaseSpine({ summary }: { summary: RunSummary }) {
+  const spine = phaseSpine(summary)
+  return (
+    <ol data-spine data-rest={spine.rest ?? undefined} className="flex w-full flex-wrap items-start gap-x-1.5 gap-y-2.5">
+      {spine.cells.map((cell, i) => (
+        <Fragment key={cell.kind === 'phase' ? `p-${cell.phase}` : `g-${cell.gate}`}>
+          {i > 0 && <li aria-hidden="true" className="mt-[11px] h-px min-w-[8px] max-w-[72px] flex-1 bg-line" />}
+          {cell.kind === 'phase' ? <SpinePhase cell={cell} atRest={spine.rest !== null} /> : <SpineGate cell={cell} />}
+        </Fragment>
+      ))}
+    </ol>
+  )
+}
+
+const PHASE_STATE_TONE: Record<PhaseCell['state'], string> = {
+  past: 'border-line bg-surface text-muted',
+  current: 'border-accent bg-accent-tint text-accent-deep font-semibold',
+  future: 'border-dashed border-line bg-transparent text-faint',
+}
+
+function SpinePhase({ cell, atRest }: { cell: PhaseCell; atRest: boolean }) {
+  // At rest the run still stands somewhere; the ring goes dashed to say it is
+  // standing there rather than moving through, and the phase chip beside the
+  // spine names the reason.
+  const tone = cell.state === 'current' && atRest ? 'border-dashed border-warn-line bg-warn-bg text-warn font-semibold' : PHASE_STATE_TONE[cell.state]
+  return (
+    <li data-spine-phase={cell.phase} data-state={cell.state} className="flex shrink-0 flex-col items-center gap-[3px]">
+      <span className={`inline-flex h-[22px] items-center rounded-full border px-2.5 text-[12px] leading-none ${tone}`}>{cell.phase}</span>
+      <span className="h-[24px]" />
+    </li>
+  )
+}
+
+const GATE_STATE_TONE: Record<GateCell['state'], string> = {
+  approved: 'border-ok-line bg-ok-bg text-ok',
+  declined: 'border-dashed border-bad-line bg-bad-bg text-bad',
+  pending: 'border-accent bg-accent text-white font-bold',
+  future: 'border-dashed border-line bg-transparent text-faint',
+}
+
+const GATE_STATE_GLYPH: Record<GateCell['state'], string> = { approved: '✓', declined: '✕', pending: '●', future: '·' }
+const GATE_STATE_WORD: Record<GateCell['state'], string> = {
+  approved: 'approved',
+  declined: 'declined',
+  pending: 'pending your decision',
+  future: 'not yet reached',
+}
+
+/** One gate, as the transition it is. Its question is what `G2` alone cannot
+ *  say, so it is the accessible name and the hover text — never inferred, always
+ *  the fixed GATE_QUESTIONS string for the profile it is asked in. */
+function SpineGate({ cell }: { cell: GateCell }) {
+  const decided = cell.by !== null || cell.at !== null
+  const provenance = decided ? `${cell.by ?? '—'}${cell.at ? ` · ${String(cell.at).slice(0, 10)}` : ''}` : null
+  // Approver over date rather than beside it: a gate cell as wide as
+  // `operator · 2026-06-28` wraps the whole spine on a laptop, and the sequence
+  // is what the spine is for.
+  const note = cell.state === 'pending' ? <>on the table</> : decided ? <>{cell.by ?? '—'}<br />{cell.at ? String(cell.at).slice(0, 10) : ''}</> : null
+  const label = `${cell.gate} — ${cell.question} — ${GATE_STATE_WORD[cell.state]}${provenance ? ` by ${provenance}` : ''}`
+  return (
+    <li data-spine-gate={cell.gate} data-state={cell.state} className="flex shrink-0 flex-col items-center gap-[3px]">
+      <span
+        title={label}
+        className={`inline-flex h-[22px] items-center gap-1 rounded-full border px-2 font-mono leading-none ${GATE_STATE_TONE[cell.state]}`}
+      >
+        <span aria-hidden="true" className="text-[10.5px] font-semibold tracking-[0.04em]">
+          {cell.gate}
+        </span>
+        <span aria-hidden="true" className="text-[11px]">
+          {GATE_STATE_GLYPH[cell.state]}
+        </span>
+        <span className="sr-only">{label}</span>
+      </span>
+      <span className="h-[24px] whitespace-nowrap text-center font-mono text-[10.5px] leading-[12px] text-muted">{note}</span>
+    </li>
   )
 }
 

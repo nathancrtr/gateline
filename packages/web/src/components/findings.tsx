@@ -61,7 +61,12 @@ function SeverityChip({ finding }: { finding: ReviewFinding }) {
   )
 }
 
-function FindingCard({ finding }: { finding: ReviewFinding }) {
+/**
+ * One finding, verbatim. Exported because G2's packet surface (#256) renders
+ * the same card under the criterion the finding cites — the finding is the
+ * same object in both places and must not grow a second rendering.
+ */
+export function FindingCard({ finding, source }: { finding: ReviewFinding; source?: string }) {
   const resolved = finding.resolution?.state === 'resolved'
   const [open, setOpen] = useState(!resolved)
   return (
@@ -69,6 +74,9 @@ function FindingCard({ finding }: { finding: ReviewFinding }) {
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span className={`shrink-0 font-mono text-[11.5px] font-semibold ${resolved ? 'text-faint' : 'text-ink'}`}>{finding.id}</span>
         <SeverityChip finding={finding} />
+        {/* Named only where the card leaves its own report — under a criterion,
+            "which review raised this" is not otherwise on screen. */}
+        {source && <span className="shrink-0 font-mono text-[10.5px] text-faint">{source}</span>}
         {finding.round !== null && <span className="shrink-0 font-mono text-[10.5px] text-faint">round {finding.round}</span>}
         <span className={`min-w-0 flex-1 text-[12.5px] ${resolved ? 'text-muted line-through decoration-faint' : 'text-ink'}`}>
           {finding.title}

@@ -111,7 +111,9 @@ test('run lexicon (#163): ids resolve to verbatim hover cards and jump to their 
 })
 
 test('evidence rollup (#165): uncited criteria are the headline; anchors jump to the evidence block', async ({ page }) => {
-  await page.goto('/runs/' + sourceId() + '/g2-pending')
+  // The one-line citation map now lives where the report itself is on screen;
+  // G2's decision card carries the composed packet instead (#256).
+  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=artifacts&artifact=verification-report.md')
   const rollup = page.locator('[data-evidence-rollup]').first()
   await expect(rollup).toContainText('No verification evidence cites:')
   await expect(rollup).toContainText('AC2.2')
@@ -120,6 +122,83 @@ test('evidence rollup (#165): uncited criteria are the headline; anchors jump to
   await rollup.getByRole('link', { name: 'E1', exact: true }).click()
   await expect(page).toHaveURL(/artifact=verification-report\.md/)
   await expect(page.locator('#def-E1')).toBeVisible()
+})
+
+test('G2 packet (#256): the gate opens on a criterion-ordered surface, not a file listing', async ({ page }) => {
+  await page.goto('/runs/' + sourceId() + '/g2-pending')
+  const packet = page.locator('[data-g2-packet]')
+  await expect(packet).toBeVisible()
+
+  // Spec order, with the uncited criterion promoted to the headline: a fact
+  // about the record, computed from it, never a score.
+  const criteria = packet.locator('[data-criterion]')
+  await expect(criteria).toHaveCount(3)
+  await expect(criteria.nth(0)).toHaveAttribute('data-criterion', 'AC2.2')
+  await expect(criteria.nth(1)).toHaveAttribute('data-criterion', 'AC1.1')
+  await expect(criteria.nth(2)).toHaveAttribute('data-criterion', 'AC2.1')
+
+  // AC2.2 — cited by no evidence, and named in the report's own Gaps line.
+  const ac22 = criteria.nth(0)
+  await expect(ac22).toContainText('No verification evidence cites it')
+  await expect(ac22).toContainText('AC2.2 not verified — the fixture corpus has no oversized sample.')
+  // The criterion is quoted from spec.md, not paraphrased.
+  await expect(ac22).toContainText('input larger than the documented cap is rejected before parsing')
+
+  // AC1.1 — the report's verdict quoted and attributed, its E-block inline and
+  // byte-identical, its transcript included.
+  const ac11 = criteria.nth(1)
+  await expect(ac11).toContainText('verification-report.md states')
+  await expect(ac11).toContainText('“verified”')
+  const block = ac11.locator('[data-evidence-block="E1"]')
+  await expect(block).toContainText('### E1 — AC1.1')
+  await expect(block).toContainText('ok (3 records)')
+
+  // AC2.1 — the findings that cite it, in the reports' own severity order, and
+  // a resolved finding still present rather than dropped.
+  const ac21 = criteria.nth(2)
+  const findings = ac21.locator('[data-finding]')
+  await expect(findings).toHaveCount(2)
+  await expect(findings.nth(0)).toHaveAttribute('data-finding', 'F1')
+  await expect(findings.nth(0)).toContainText('blocking')
+  await expect(findings.nth(0)).toContainText('resolved (round 2)')
+  await expect(findings.nth(1)).toContainText('stands (round 2)')
+
+  // Every word stays reachable: the block links back to the report it came from.
+  await block.getByRole('link', { name: /verification-report\.md:\d+/ }).click()
+  await expect(page).toHaveURL(/artifact=verification-report\.md/)
+  await expect(page.locator('#def-E1')).toBeVisible()
+})
+
+test('G2 packet (#256): a patch run shows the reviews as the whole packet, with no missing-verifier error', async ({ page }) => {
+  await page.goto('/runs/' + sourceId() + '/patch-g2-pending')
+  const packet = page.locator('[data-g2-packet]')
+  await expect(packet).toContainText('patch profile runs no verifier — the reviews are the packet')
+  // No verification column, and nothing claiming the record is incomplete.
+  await expect(packet.locator('[data-criterion]')).toHaveCount(0)
+  await expect(packet).not.toContainText('verification-report.md states')
+  await expect(packet).not.toContainText('No verification evidence cites')
+  // The reviews carry the decision instead, verdict and all.
+  await expect(packet.locator('[data-report="review-01.md"]')).toContainText('approve')
+})
+
+test('G2 packet (#256): a forked verification grammar withholds the view and says why', async ({ page }) => {
+  await page.goto('/runs/' + sourceId() + '/forked-contract')
+  const packet = page.locator('[data-g2-packet]')
+  // The report passes its contract — the gate is reviewable, not bounced.
+  await expect(page.locator('[data-needs-card]')).toContainText('Does the evidence support merging?')
+  await expect(page.locator('[data-decide="approve"]')).toHaveCount(1)
+  // …but the parser does not guess: it names the grammar it looked for.
+  await expect(packet.locator('[data-withheld]')).toContainText('evidence-block grammar')
+  await expect(packet.locator('[data-criterion]')).toHaveCount(0)
+  // Never a claim the record cannot support.
+  await expect(packet).not.toContainText('No verification evidence cites')
+  // The reviews still render, and the report is one click away.
+  await expect(packet.locator('[data-report="review-01.md"]')).toContainText('off-by-one in boundary handling')
+  await packet.getByRole('link', { name: 'read verification-report.md' }).click()
+  await expect(page).toHaveURL(/artifact=verification-report\.md/)
+  // The artifact page stands down too, rather than asserting nothing cites AC1.1.
+  await expect(page.locator('[data-evidence-withheld]')).toBeVisible()
+  await expect(page.locator('[data-evidence-rollup]')).toHaveCount(0)
 })
 
 test('decision ledger (#268): History reads decisions and engine verbs, not a commit log', async ({ page }) => {

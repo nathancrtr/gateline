@@ -69,6 +69,7 @@ describe('run discovery', () => {
       'bad-state',
       'done-merged',
       'escalated',
+      'forked-contract',
       'g0-pending',
       'g1-pending',
       'g2-pending',

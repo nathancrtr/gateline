@@ -241,6 +241,62 @@ test('decision ledger (#268): a schema-invalid run still renders its ledger (AC5
   await expect(page.locator('[data-ledger] li').first()).toBeVisible()
 })
 
+test('surface-scoped diff (#270): the diff groups by what each work item declared', async ({ page }) => {
+  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=diff')
+
+  // AC1 — a group per work item, named by the item and the surface it declared.
+  const core = page.locator('[data-surface-group="01-core"]')
+  await expect(core).toContainText('declared: src/core.py')
+  await expect(core).toContainText('def process(text):')
+  await expect(page.locator('[data-surface-group="02-errors"]')).toContainText('declared: src/errors.py')
+
+  // AC2 — the undeclared file is called out, and leads the page.
+  const undeclared = page.locator('[data-undeclared]')
+  await expect(undeclared).toContainText('1 changed file outside every declared contact surface')
+  await expect(undeclared).toContainText('src/config.py')
+  // Presence, not verdicts: the callout names the Reviewer's section and the
+  // approver, and never calls the change a breach.
+  await expect(undeclared).toContainText('Boundary check')
+  // …and it leads: a boundary the approver has to go looking for is not a check.
+  await expect(page.locator('[data-undeclared], [data-surface-group]').first()).toHaveAttribute('data-undeclared')
+
+  // AC3 — reachable: every changed file still renders, grouped or not.
+  for (const path of ['src/core.py', 'src/errors.py', 'src/config.py']) {
+    await expect(page.getByText(path, { exact: true }).first()).toBeVisible()
+  }
+})
+
+test('surface-scoped diff (#270): a forked work-item grammar withholds the grouping (AC5)', async ({ page }) => {
+  // forked-contract writes its contact surface as a structured block. Every
+  // required key is there, so the gate is reviewable — the view stands down and
+  // names the grammar rather than reporting every file as out of surface.
+  await page.goto('/runs/' + sourceId() + '/forked-contract?tab=diff')
+  await expect(page.locator('[data-surface-withheld]')).toContainText('nested block')
+  await expect(page.locator('[data-surface-group]')).toHaveCount(0)
+  await expect(page.locator('[data-undeclared]')).toHaveCount(0)
+  // AC3 — the diff itself is untouched by the scoping standing down.
+  await expect(page.getByText('src/pruner.py', { exact: true }).first()).toBeVisible()
+  await expect(page.getByText('def prune(paths):')).toBeVisible()
+  // The G2 card claims no boundary check it did not run.
+  await page.goto('/runs/' + sourceId() + '/forked-contract')
+  await expect(page.locator('[data-boundary-check]')).toHaveCount(0)
+})
+
+test('surface-scoped diff (#270): G2’s packet carries the boundary fact and routes to it', async ({ page }) => {
+  // DESIGN.md §4 puts the diff in G2's packet; #256 deferred its form to #259,
+  // which chose this view. The card states the fact and links to the diff.
+  await page.goto('/runs/' + sourceId() + '/g2-pending')
+  const boundary = page.locator('[data-boundary-check]')
+  await expect(boundary).toContainText('3 changed files')
+  await expect(boundary).toContainText('1 outside every declared surface')
+  await expect(boundary).toContainText('src/config.py')
+  // No score, no verdict word — a count and a link.
+  await expect(boundary).not.toContainText('%')
+  await boundary.getByRole('link', { name: 'read the diff by surface' }).click()
+  await expect(page).toHaveURL(/tab=diff/)
+  await expect(page.locator('[data-undeclared]')).toBeVisible()
+})
+
 function sourceId(): string {
   return fixtureDir.replace(/\/+$/, '').split('/').pop()!
 }

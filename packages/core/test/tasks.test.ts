@@ -221,6 +221,34 @@ describe('parseWorkItem', () => {
     expect(item.withheld).toContain('file_contact_surface')
   })
 
+  it('AC3 — withholds when a fork writes the surface as a nested block, not a list', () => {
+    // The gap this closes: read as "declared nothing", a forked shape would let
+    // a diff view state that every changed file is out of surface — a verdict
+    // manufactured out of a record the parser had not read.
+    const forked = WELL_FORMED.replace(
+      /file_contact_surface:\n(  - .*\n)+/,
+      'file_contact_surface:\n  paths:\n    - src/example/thing.ts\n  mode: exclusive\n',
+    )
+    const item = parseWorkItem('tasks/01-example.yaml', forked)
+    expect(item.withheld).toContain('nested block')
+    expect(item.withheld).toContain('file_contact_surface')
+    expect(item.fileContactSurface).toEqual([])
+    // The keys after the nested block are still read — the block is skipped,
+    // not swallowed.
+    expect(item.status).toBe('pending')
+    expect(item.acceptanceTests).toEqual(['AC1.1'])
+  })
+
+  it('reads a flow sequence written on its own indented line', () => {
+    // `file_contact_surface:` then an indented `[]` is a list, not a nested
+    // shape — the distinction the withholding above turns on.
+    const indented = WELL_FORMED.replace(/file_contact_surface:\n(  - .*\n)+/, 'file_contact_surface:\n  []\n')
+    expect(parseWorkItem('tasks/01-x.yaml', indented)).toMatchObject({ withheld: null, fileContactSurface: [] })
+
+    const wrapped = WELL_FORMED.replace(/file_contact_surface:\n(  - .*\n)+/, 'file_contact_surface:\n  [a.ts, b.ts]\n')
+    expect(parseWorkItem('tasks/01-x.yaml', wrapped).fileContactSurface).toEqual(['a.ts', 'b.ts'])
+  })
+
   it('distinguishes a declared-empty surface from an absent one', () => {
     // The `patch`-profile stub scaffold writes `file_contact_surface: []`. That
     // is a record saying "nothing declared", not a record this view cannot read.
@@ -261,12 +289,15 @@ describe('buildTaskSet', () => {
     expect(set.withheld).toContain('no work item declares a file-contact surface')
   })
 
-  it('AC3 — a set no item of which parses withholds and counts what it checked', () => {
+  it('AC3 — a set no item of which parses withholds with each item’s own reason', () => {
     const set = buildTaskSet([
       { path: 'tasks/01-a.yaml', content: 'tasks:\n  - some: other\n    shape: entirely\n' },
       { path: 'tasks/02-b.yaml', content: '# nothing here\n' },
     ])
-    expect(set.withheld).toContain('2 files checked')
+    // Naming the files beats counting them: the fork fallback owes the reader
+    // which grammar was looked for, and where.
+    expect(set.withheld).toContain('tasks/01-a.yaml')
+    expect(set.withheld).toContain('tasks/02-b.yaml')
     expect(set.items).toHaveLength(2)
   })
 

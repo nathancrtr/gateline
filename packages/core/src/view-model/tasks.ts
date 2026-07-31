@@ -90,6 +90,8 @@ type Raw =
   | { kind: 'seq'; items: string[] }
   | { kind: 'block'; value: string }
   | { kind: 'empty' }
+  /** The key is there, carrying a nested shape this subset does not read. */
+  | { kind: 'unreadable' }
 
 /** Leading spaces. YAML forbids tabs for indentation, so only spaces count. */
 function indentOf(line: string): number {
@@ -338,9 +340,35 @@ function parseMapping(content: string): Map<string, Raw> {
     }
     if (plainScalar(rest) === '' && !rest.trim().startsWith('"') && !rest.trim().startsWith("'")) {
       const { items, next } = readBlockSeq(lines, i)
-      // No sequence followed: the key is present with an empty value.
-      if (!map.has(name)) map.set(name, next === i && items.length === 0 ? { kind: 'empty' } : { kind: 'seq', items })
-      i = next
+      if (next !== i || items.length > 0) {
+        if (!map.has(name)) map.set(name, { kind: 'seq', items })
+        i = next
+        continue
+      }
+      // No sequence followed. Either the key carries nothing, or it carries a
+      // nested shape this subset does not read — a fork writing its surface as
+      // a mapping, say. Those are different answers and must not be conflated:
+      // reading "I cannot read this" as "nothing was declared" is precisely the
+      // guess the contracts' bounce rule forbids.
+      let j = i
+      while (j < lines.length && (BLANK.test(lines[j]!) || COMMENT_LINE.test(lines[j]!))) j++
+      const nested = j < lines.length && indentOf(lines[j]!) > 0
+      if (!nested) {
+        if (!map.has(name)) map.set(name, { kind: 'empty' })
+        continue
+      }
+      // A flow sequence may sit on its own indented line — `[]` under the key
+      // is how an empty surface is often written, and it is a list, not a shape
+      // this subset cannot read.
+      if (lines[j]!.trimStart().startsWith('[')) {
+        const { raw, next } = readFlow(lines, j, lines[j]!.trim())
+        if (!map.has(name)) map.set(name, raw)
+        i = next
+        continue
+      }
+      if (!map.has(name)) map.set(name, { kind: 'unreadable' })
+      i = j
+      while (i < lines.length && (BLANK.test(lines[i]!) || indentOf(lines[i]!) > 0)) i++
       continue
     }
     if (!map.has(name)) map.set(name, { kind: 'scalar', value: scalar(rest) })
@@ -349,10 +377,20 @@ function parseMapping(content: string): Map<string, Raw> {
 }
 
 const asText = (raw: Raw | undefined): string =>
-  raw === undefined || raw.kind === 'empty' ? '' : raw.kind === 'seq' ? raw.items.join(' ') : raw.value
+  raw === undefined || raw.kind === 'empty' || raw.kind === 'unreadable'
+    ? ''
+    : raw.kind === 'seq'
+      ? raw.items.join(' ')
+      : raw.value
 
 const asList = (raw: Raw | undefined): string[] =>
-  raw === undefined || raw.kind === 'empty' ? [] : raw.kind === 'seq' ? raw.items : raw.value.trim() === '' ? [] : [raw.value]
+  raw === undefined || raw.kind === 'empty' || raw.kind === 'unreadable'
+    ? []
+    : raw.kind === 'seq'
+      ? raw.items
+      : raw.value.trim() === ''
+        ? []
+        : [raw.value]
 
 const SURFACE = 'file_contact_surface'
 
@@ -364,7 +402,11 @@ const SURFACE = 'file_contact_surface'
 export function parseWorkItem(path: string, content: string): WorkItem {
   const map = parseMapping(content)
   const statusText = asText(map.get('status'))
-  const missing = (['id', SURFACE] as const).filter((k) => !map.has(k))
+  const absent = (['id', SURFACE] as const).filter((k) => !map.has(k))
+  // Present but written in a shape this subset does not read — a fork whose
+  // surface is a mapping rather than a sequence, say. Distinct from absent, and
+  // distinct again from a surface declared empty on purpose.
+  const unreadable = (['id', SURFACE] as const).filter((k) => map.get(k)?.kind === 'unreadable')
 
   return {
     path,
@@ -379,9 +421,11 @@ export function parseWorkItem(path: string, content: string): WorkItem {
     statusText,
     notes: asText(map.get('notes')),
     withheld:
-      missing.length === 0
-        ? null
-        : `${path} declares no top-level \`${missing.join('\` and \`')}\`, so it does not follow the contracts/work-item.yaml grammar this view reads.`,
+      absent.length > 0
+        ? `${path} declares no top-level \`${absent.join('\` and \`')}\`, so it does not follow the contracts/work-item.yaml grammar this view reads.`
+        : unreadable.length > 0
+          ? `${path} writes \`${unreadable.join('\` and \`')}\` as a nested block rather than the list contracts/work-item.yaml fixes, so this view cannot say which files it declared.`
+          : null,
   }
 }
 
@@ -393,13 +437,17 @@ export function parseWorkItem(path: string, content: string): WorkItem {
 export function buildTaskSet(files: { path: string; content: string }[]): TaskSet {
   const items = files.map((f) => parseWorkItem(f.path, f.content))
   const readable = items.filter((i) => i.withheld === null)
+  // When nothing is readable, the set says what each item said. A summary that
+  // counted the files instead would drop the one thing the fork fallback owes
+  // the reader: which grammar was looked for, in which file.
+  const reasons = [...new Set(items.map((i) => i.withheld).filter((r): r is string => r !== null))]
   return {
     items,
     withheld:
       files.length === 0
         ? 'This run commits no `tasks/*.yaml`, so no work item declares a file-contact surface.'
         : readable.length === 0
-          ? `No work item in this run follows the contracts/work-item.yaml grammar this view reads (${items.length} file${items.length === 1 ? '' : 's'} checked).`
+          ? reasons.join(' ')
           : null,
   }
 }

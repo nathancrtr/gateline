@@ -8,6 +8,7 @@ import {
   buildEvidenceRollup,
   buildLexicon,
   buildPortfolio,
+  buildTaskSet,
   BUILTIN_SECTIONS,
   collectRunDecisions,
   computeMetrics,
@@ -22,6 +23,7 @@ import {
   parseLedgerSubject,
   parseUnifiedDiff,
   planDecision,
+  scopeDiff,
   planRunScaffold,
   PROFILES,
   readEngineHealth,
@@ -419,12 +421,26 @@ export function createApp(deps: AppDeps): Hono {
     return c.json(rollup)
   })
 
+  // The diff, labelled with the contact surface each work item declared (#270).
+  // `files` stays the whole diff — the scoping labels it and never filters it —
+  // and `surface` is positional against that list. A run with no readable task
+  // set still gets its diff, with `surface.withheld` naming why it carries no
+  // labels (FRONTEND.md §4.1).
   app.get('/api/runs/:src/:slug/diff', async (c) => {
     const found = await findRun(c.req.param('src'), c.req.param('slug'))
     if (!found) return c.json({ error: 'run not found' }, 404)
     const { source, ref } = found
-    const text = await cache.get(`diff:${ref.source}:${ref.slug}`, () => source.readDiff(ref))
-    return c.json({ files: parseUnifiedDiff(text), merged: ref.kind === 'default' })
+    const { text, tasks } = await cache.get(`diff:${ref.source}:${ref.slug}`, async () => {
+      const [text, artifacts] = await Promise.all([source.readDiff(ref), source.listArtifacts(ref)])
+      const tasks = await Promise.all(
+        artifacts
+          .filter((p) => /^tasks\/.*\.yaml$/.test(p))
+          .map(async (p) => ({ path: p, content: (await source.readArtifact(ref, p)) ?? '' })),
+      )
+      return { text, tasks }
+    })
+    const files = parseUnifiedDiff(text)
+    return c.json({ files, merged: ref.kind === 'default', surface: scopeDiff(files, buildTaskSet(tasks)) })
   })
 
   app.get('/api/metrics', async (c) => {

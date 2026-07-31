@@ -652,7 +652,7 @@ function DiffTab({ src, slug }: { src: string; slug: string }) {
   if (isLoading) return <LoadingSkeleton text="Computing diff…" />
   if (error) return <PageStatus text={(error as Error).message} bad />
   if (data!.merged) return <PageStatus text="Run is merged — its change lives in the default branch history now." />
-  return <DiffView files={data!.files} />
+  return <DiffView files={data!.files} surface={data!.surface} />
 }
 
 /** Actor treatment: a human decision reads as the decision it is; the engine's

@@ -69,6 +69,45 @@ test('the pointer decision loop: approve G0 with burden → correct commit', asy
   expect(state).toMatch(/phase: plan/)
 })
 
+// Ordered before the keyboard-loop test below, which approves this very
+// gate: once G1 is decided there is no G1 card left to compose a packet
+// for. The file already runs in declaration order for the same reason.
+test('G1 packet (#255): coverage and parallel safety, composed from the record', async ({ page }) => {
+  await page.goto('/runs/' + sourceId() + '/g1-pending?decide=G1')
+  const packet = page.locator('[data-g1-packet]')
+  await expect(packet).toBeVisible()
+
+  // AC1 — every requirement the spec defines appears, and the one no mapping
+  // row names leads and says so.
+  const coverage = packet.locator('[data-g1-coverage] [data-coverage]')
+  await expect(coverage).toHaveCount(3)
+  await expect(coverage.first()).toHaveAttribute('data-coverage', 'R3')
+  await expect(coverage.first()).toContainText('no task')
+  await expect(packet.locator('[data-uncovered]')).toContainText('1 requirement appears in no row')
+  // …and a covered one names the task the plan mapped it to, verbatim.
+  await expect(packet.locator('[data-coverage="R1"]')).toContainText('01-core')
+  await expect(packet.locator('[data-unmapped-tasks]')).toContainText('03-cli')
+
+  // AC2 — two independent tasks declaring the same path are flagged; the pair
+  // a depends_on orders is shown as ordered rather than hidden.
+  await expect(packet.locator('[data-unordered]')).toContainText('1 pair of tasks declares')
+  const unordered = packet.locator('[data-overlap][data-ordered="false"]')
+  await expect(unordered).toHaveCount(1)
+  await expect(unordered).toContainText('01-core ↔ 02-errors')
+  await expect(unordered).toContainText('src/shared.py')
+  await expect(packet.locator('[data-overlap][data-ordered="true"]')).toContainText('ordered by depends_on')
+
+  // AC3 — ADR cards show the Choice line, with the argument one click away and
+  // byte-identical to the artifact.
+  const adr = packet.locator('[data-adr="ADR-1"]')
+  await expect(adr).toContainText('keep all logic in a pure function')
+  await expect(adr).not.toContainText('untestable')
+  await adr.getByRole('button').click()
+  await expect(adr).toContainText('- **Rejected:** logic in the CLI handler — untestable.')
+  // An amended ADR carries its qualifier — which of two is the live one.
+  await expect(packet.locator('[data-adr="ADR-2"]')).toContainText('amended 2026-07-06')
+})
+
 test('the keyboard loop: a → 1 → approve on the primary card', async ({ page }) => {
   await page.goto('/runs/' + sourceId() + '/g1-pending?decide=G1')
   const card = page.locator('[data-needs-card]').first()
@@ -352,6 +391,14 @@ test('surfaces (#258): the change reads inside Record, and every artifact stays 
   await page.getByRole('button', { name: /spec\.md/ }).click()
   await expect(page.locator('[data-surface="record"]')).toHaveAttribute('aria-current', 'page')
   await expect(page.locator('.prose-artifact')).toBeVisible()
+})
+
+test('G1 packet (#255): a patch run keeps its brief-plus-work-item view', async ({ page }) => {
+  // AC4 — patch runs have no plan.md and no spec, so there is no mapping to
+  // check and no coverage claim to make.
+  await page.goto('/runs/' + sourceId() + '/patch-g1-pending?decide=G1')
+  await expect(page.locator('[data-needs-card]').first()).toBeVisible()
+  await expect(page.locator('[data-g1-packet]')).toHaveCount(0)
 })
 
 function sourceId(): string {

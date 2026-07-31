@@ -128,6 +128,91 @@ A single module with a thin CLI wrapper, mirroring the existing layout.
 Input format drift; early signal is AC1.1 failing on fresh samples.
 `
 
+// The G1 run's own spec and plan (#255). The shared `spec`/`plan` builders
+// describe a tidy two-requirement change where nothing is uncovered and no two
+// tasks meet — which is exactly the record against which a coverage view has
+// nothing to say. G1's demo run carries what a G1 approver is actually looking
+// for: a requirement the mapping table forgot, two independent tasks declaring
+// the same file, and a third overlap that a `depends_on` already orders.
+const g1Spec = (title: string) => `# Specification: ${title}
+
+## Context
+The repository currently handles ${title} by hand. This spec automates it.
+
+## Requirements
+
+### R1 — Core behavior
+The tool reads sample input and emits the documented output, end to end.
+**Acceptance criteria:**
+- [ ] AC1.1 — running the tool on sample input produces the documented output
+
+### R2 — Error handling
+**Acceptance criteria:**
+- [ ] AC2.1 — malformed input exits non-zero with a one-line diagnosis
+
+### R3 — Rate accounting
+Every decision the limiter takes is counted, so an operator can see what it refused.
+**Acceptance criteria:**
+- [ ] AC3.1 — a refused request increments the refusal counter exactly once
+
+## Assumptions
+- **ASSUMPTION:** input fits in memory → resolved as yes because samples are <1MB.
+
+## Out of scope
+Concurrency; internationalization.
+`
+
+const g1Plan = (title: string) => `# Technical Plan: ${title}
+
+## Approach
+A single module with a thin CLI wrapper, mirroring the existing layout.
+
+## Interface contracts
+\`process(input: str) -> Result\` — pure; the CLI owns I/O.
+
+## Decisions (ADRs)
+
+### ADR-1: Pure core, thin shell
+- **Choice:** keep all logic in a pure function.
+- **Rejected:** logic in the CLI handler — untestable.
+- **Consequences:** the CLI layer stays under 50 lines.
+
+### ADR-2 (amended 2026-07-06, G1 decline): Shared config module
+- **Choice:** the limiter and the error path read one shared config module.
+- **Rejected:** duplicating the defaults in each module — they drift.
+- **Consequences:** two tasks touch \`src/shared.py\`, so their order matters.
+
+## Requirement → task mapping
+| Requirement | Task(s) |
+|-------------|---------|
+| R1 | 01-core |
+| R2 | 02-errors |
+
+## Risks
+Input format drift; early signal is AC1.1 failing on fresh samples.
+`
+
+/** A work item with an explicit surface and dependency list, for the G1 run. */
+const g1Task = (id: string, req: string, surface: string[], dependsOn: string[]) => `id: ${id}
+title: ${id.replace(/^\d+-/, '').replace(/-/g, ' ')} slice
+requirements: [${req}]
+
+scope: |
+  Implement the ${id} slice per plan.md.
+
+file_contact_surface:
+${surface.map((s) => `  - ${s}`).join('\n')}
+
+acceptance_tests:
+  - AC1.1
+
+depends_on: [${dependsOn.join(', ')}]
+
+status: pending
+
+notes: |
+`
+
 const workItem = (id: string, req: string, status: string) => `id: ${id}
 title: ${id.replace(/^\d+-/, '').replace(/-/g, ' ')}
 requirements: [${req}]
@@ -522,10 +607,14 @@ export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts 
       age: 2,
       files: {
         'intent-brief.md': brief('rate limiter'),
-        'spec.md': spec('rate limiter'),
-        'plan.md': plan('rate limiter'),
-        'tasks/01-core.yaml': workItem('01-core', 'R1', 'pending'),
-        'tasks/02-errors.yaml': workItem('02-errors', 'R2', 'pending'),
+        'spec.md': g1Spec('rate limiter'),
+        'plan.md': g1Plan('rate limiter'),
+        // 01-core and 02-errors both declare src/shared.py and nothing orders
+        // them — the decomposition defect G1 exists to catch. 03-cli overlaps
+        // 01-core too, but depends on it, so the record already orders that pair.
+        'tasks/01-core.yaml': g1Task('01-core', 'R1', ['src/core.py', 'src/shared.py'], []),
+        'tasks/02-errors.yaml': g1Task('02-errors', 'R2', ['src/errors.py', 'src/shared.py'], []),
+        'tasks/03-cli.yaml': g1Task('03-cli', 'R1', ['src/cli.py', 'src/core.py'], ['01-core']),
         'state.yaml': stateYaml({
           slug: 'g1-pending',
           phase: 'plan',
@@ -533,6 +622,7 @@ export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts 
           tasks: [
             { id: '01-core', status: 'pending', rounds: 0 },
             { id: '02-errors', status: 'pending', rounds: 0 },
+            { id: '03-cli', status: 'pending', rounds: 0 },
           ],
         }),
       },

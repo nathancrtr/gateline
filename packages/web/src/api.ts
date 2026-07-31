@@ -13,8 +13,10 @@ import type {
   GateId,
   GateMetrics,
   InboxItem,
+  CoverageRow,
   CriterionEvidence,
   EvidenceRollup,
+  G1Packet,
   LexiconEntry,
   Phase,
   GateDecisionRecord,
@@ -27,9 +29,11 @@ import type {
   RunSummary,
   Severity,
   SurfaceItemRef,
+  SurfaceOverlap,
   SurfaceScopedDiff,
   Validation,
   Verdict,
+  WorkItem,
 } from '@gateline/core'
 
 export type {
@@ -37,7 +41,9 @@ export type {
   CriterionEvidence,
   DiffFile,
   Disposition,
+  CoverageRow,
   EvidenceRollup,
+  G1Packet,
   GateDecisionRecord,
   GateId,
   InboxItem,
@@ -50,9 +56,11 @@ export type {
   RunSummary,
   Severity,
   SurfaceItemRef,
+  SurfaceOverlap,
   SurfaceScopedDiff,
   Validation,
   Verdict,
+  WorkItem,
 }
 
 /** Mirror of core's PROFILE_GATES (DESIGN.md §4.1) — a value import from core would pull the node runtime into the browser bundle. */
@@ -283,6 +291,7 @@ export const api = {
     getJson<ArtifactResponse>(`/api/runs/${src}/${slug}/artifact?path=${encodeURIComponent(path)}`),
   lexicon: (src: string, slug: string) => getJson<LexiconResponse>(`/api/runs/${src}/${slug}/lexicon`),
   evidence: (src: string, slug: string) => getJson<EvidenceRollup>(`/api/runs/${src}/${slug}/evidence`),
+  g1: (src: string, slug: string) => getJson<G1Packet>(`/api/runs/${src}/${slug}/g1`),
   reviews: (src: string, slug: string) => getJson<ReviewsResponse>(`/api/runs/${src}/${slug}/reviews`),
   decisions: (src: string, slug: string) => getJson<DecisionsResponse>(`/api/runs/${src}/${slug}/decisions`),
   diff: (src: string, slug: string) => getJson<DiffResponse>(`/api/runs/${src}/${slug}/diff`),

@@ -6,6 +6,7 @@ import { timingSafeEqual } from 'node:crypto'
 import { Hono, type Context } from 'hono'
 import {
   buildEvidenceRollup,
+  buildG1Packet,
   buildLexicon,
   buildPortfolio,
   buildTaskSet,
@@ -419,6 +420,30 @@ export function createApp(deps: AppDeps): Hono {
       return buildEvidenceRollup({ lexicon: buildLexicon({ spec }), verification, reviews })
     })
     return c.json(rollup)
+  })
+
+  // G1's packet (#255): requirement coverage against the plan's own mapping
+  // table, and the surface overlaps between work items no dependency orders.
+  // Presence, never verdicts — an uncovered requirement is a statement about
+  // the record, not a computed failure, and no plan is scored.
+  app.get('/api/runs/:src/:slug/g1', async (c) => {
+    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+    if (!found) return c.json({ error: 'run not found' }, 404)
+    const { source, ref } = found
+    const packet = await cache.get(`g1:${ref.source}:${ref.slug}`, async () => {
+      const [spec, plan, artifacts] = await Promise.all([
+        source.readArtifact(ref, 'spec.md'),
+        source.readArtifact(ref, 'plan.md'),
+        source.listArtifacts(ref),
+      ])
+      const tasks = await Promise.all(
+        artifacts
+          .filter((p) => /^tasks\/.*\.yaml$/.test(p))
+          .map(async (p) => ({ path: p, content: (await source.readArtifact(ref, p)) ?? '' })),
+      )
+      return buildG1Packet({ lexicon: buildLexicon({ spec }), plan, tasks })
+    })
+    return c.json(packet)
   })
 
   // The diff, labelled with the contact surface each work item declared (#270).

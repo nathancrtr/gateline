@@ -1,4 +1,4 @@
-// New-run staging: the web sibling of `agentic new`. genesis-preview candidate
+// New-run staging: the web sibling of `gateline new`. genesis-preview candidate
 // (state.yaml gates.G1.notes) — the organizing element is the record itself,
 // previewed live via the same planRunScaffold the server commits with (ADR-6),
 // so the preview cannot drift from the truth. No model/API call of any kind
@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { planRunScaffold, ScaffoldError, SLUG_PATTERN, type RunScaffold } from '@agentic/core/record'
+import { planRunScaffold, ScaffoldError, SLUG_PATTERN, type RunScaffold } from '@gateline/core/record'
 import { ApiError, PROFILE_GATES, api, type Profile, type StageOutcomeView, type StagingSourceConfig } from '../api.ts'
 import { PageStatus } from './inbox.tsx'
 

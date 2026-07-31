@@ -139,7 +139,7 @@ describe('usage_report format ndjson-sum (opencode: one step_finish event per ag
 })
 
 describe('the engine threads run identity through the seam (R2)', () => {
-  const BOT = { name: 'agentic-orchestrator', email: 'orchestrator@agentic.invalid' }
+  const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
 
   it("launch() passes the run's slug and branch in the DispatchRequest", async () => {
     const { dir, clock } = makeToyRepo()

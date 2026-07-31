@@ -1,22 +1,22 @@
 {
-  "name": "@agentic/orchestrator",
+  "name": "@gateline/orchestrator",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "The v1 orchestrator (docs/ORCHESTRATOR.md): a stateless reconciler that derives dispatches from run state. Consumes @agentic/core; adds the dispatch half of the derivation rules, the adapter dispatch seam, budget metering, and triggers.",
+  "description": "The v1 orchestrator (docs/ORCHESTRATOR.md): a stateless reconciler that derives dispatches from run state. Consumes @gateline/core; adds the dispatch half of the derivation rules, the adapter dispatch seam, budget metering, and triggers.",
   "bin": {
-    "agentic-orchestrator": "./src/main.ts"
+    "gateline-orchestrator": "./src/main.ts"
   },
   "exports": {
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@agentic/core": "*",
+    "@gateline/core": "*",
     "commander": "^14.0.0",
     "yaml": "^2.8.0"
   },
   "devDependencies": {
-    "@agentic/fixtures": "*",
-    "@agentic/server": "*"
+    "@gateline/fixtures": "*",
+    "@gateline/server": "*"
   }
 }

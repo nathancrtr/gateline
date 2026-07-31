@@ -1,4 +1,4 @@
-// Multi-repo configuration: ~/.config/agentic/config.yaml lists sources;
+// Multi-repo configuration: ~/.config/gateline/config.yaml lists sources;
 // no config file → the current repo, zero setup (plan §2.2).
 import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
@@ -21,10 +21,10 @@ const sourceEntrySchema = z.object({
   /** Seconds between `git fetch`es of origin; unset = never poll. */
   fetch_interval: z.number().positive().optional(),
   /**
-   * Override the `.agentic` default when this source was integrated with a
+   * Override the `.gateline` default when this source was integrated with a
    * custom `integrate.py --prefix` (#94) — otherwise auto-detected.
    */
-  agentic_prefix: z.string().optional(),
+  gateline_prefix: z.string().optional(),
 })
 
 const configSchema = z.object({
@@ -55,7 +55,7 @@ export class LocalOnlyPushConflictError extends Error {
 
 export function defaultConfigPath(): string {
   const base = process.env.XDG_CONFIG_HOME || join(homedir(), '.config')
-  return join(base, 'agentic', 'config.yaml')
+  return join(base, 'gateline', 'config.yaml')
 }
 
 function slugForPath(p: string): string {
@@ -128,13 +128,13 @@ export async function loadSources(opts: {
   cwd?: string
   /**
    * Overrides the origin-exists push auto-detection for zero-config sources
-   * — `false` honors an operator's explicit no-push ceiling (`agentic up
+   * — `false` honors an operator's explicit no-push ceiling (`gateline up
    * --no-push`), which at this CLI tier also implies local-only (ADR-1)
    * unless `localOnly` says otherwise. Config-file sources always keep their
    * own `push`/`local_only` entries.
    */
   push?: boolean
-  /** Explicit local-only designator for zero-config (CLI-tier) sources — `agentic up --local-only`. */
+  /** Explicit local-only designator for zero-config (CLI-tier) sources — `gateline up --local-only`. */
   localOnly?: boolean
 }): Promise<LoadedConfig> {
   const warnings: string[] = []
@@ -199,7 +199,7 @@ export async function loadSources(opts: {
           push,
           localOnly,
           fetchIntervalSeconds: entry.fetch_interval,
-          frameworkPrefix: entry.agentic_prefix,
+          frameworkPrefix: entry.gateline_prefix,
         }),
       )
     }

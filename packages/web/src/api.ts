@@ -1,7 +1,7 @@
-// API client. Types come from @agentic/core as TYPE-ONLY imports — the core
+// API client. Types come from @gateline/core as TYPE-ONLY imports — the core
 // runtime touches node:child_process and must never enter the browser bundle.
 // EXCEPTION (ADR-6, genesis-preview candidate): pages/new-run.tsx value-imports
-// planRunScaffold from '@agentic/core/record' for its live commit preview —
+// planRunScaffold from '@gateline/core/record' for its live commit preview —
 // the record layer is probed browser-safe (yaml + zod only, no node builtins,
 // core/test/layering.test.ts enforces the ceiling). This file itself stays
 // type-only; the exception is scoped to that one subpath and that one page.
@@ -30,7 +30,7 @@ import type {
   SurfaceScopedDiff,
   Validation,
   Verdict,
-} from '@agentic/core'
+} from '@gateline/core'
 
 export type {
   Burden,

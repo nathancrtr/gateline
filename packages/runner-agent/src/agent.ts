@@ -10,7 +10,7 @@
 //
 // Adapter-generic by construction (R8): the command this file runs and how
 // it parses that command's stdout both come entirely from the target repo's
-// own adapter manifest (loadHeadlessManifest, @agentic/orchestrator) plus
+// own adapter manifest (loadHeadlessManifest, @gateline/orchestrator) plus
 // the intent's own data (role, body) — nothing below names a role or a
 // harness/vendor outside of that manifest-driven data. `buildCommand` and
 // `computeOutcome` mirror seam.ts's `HeadlessDispatcher.dispatch()` exactly
@@ -29,7 +29,7 @@ import {
   resolveFrameworkRootsFromDisk,
   sumField,
   type HeadlessManifest,
-} from '@agentic/orchestrator'
+} from '@gateline/orchestrator'
 import { createWorkspace, getHead, harvestAndPush, type CreateWorkspaceOptions, type HarvestResult, type Workspace } from './workspace.ts'
 
 /** Mirrors runner-api.ts's `PendingIntent` (server side of this relay). */

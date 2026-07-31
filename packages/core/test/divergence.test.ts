@@ -96,7 +96,7 @@ describe('zero-config sources push human writes when an origin exists (#149)', (
     expect(originTip(bare, ref.branch)).toBe(result.commit)
   })
 
-  it('an explicit push:false ceiling silences the auto-push (agentic up --no-push)', async () => {
+  it('an explicit push:false ceiling silences the auto-push (gateline up --no-push)', async () => {
     const bare = addOrigin(ctx.repo.dir)
     const { sources } = await loadSources({ repoOverrides: [ctx.repo.dir], push: false })
     const source = sources[0]!

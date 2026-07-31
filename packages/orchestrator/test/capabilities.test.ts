@@ -63,16 +63,16 @@ describe('loadRoleCapabilities', () => {
 
   it('resolves roles/ under the metadata prefix for a prefixed layout', async () => {
     const dir = mktemp()
-    mkdirSync(join(dir, '.agentic', 'roles'), { recursive: true })
-    writeFileSync(join(dir, '.agentic', 'roles', 'analyst.md'), roleSpec('capabilities: [read, search, write-artifacts]'))
-    writeFileSync(join(dir, '.agentic', 'framework-lock.json'), JSON.stringify({ layout: 'prefixed', prefix: '.agentic' }))
+    mkdirSync(join(dir, '.gateline', 'roles'), { recursive: true })
+    writeFileSync(join(dir, '.gateline', 'roles', 'analyst.md'), roleSpec('capabilities: [read, search, write-artifacts]'))
+    writeFileSync(join(dir, '.gateline', 'framework-lock.json'), JSON.stringify({ layout: 'prefixed', prefix: '.gateline' }))
     const caps = await loadRoleCapabilities(dir)
     expect(hasShell(caps, 'analyst')).toBe(false)
   })
 })
 
 function mktemp(): string {
-  return mkdtempSync(join(tmpdir(), 'agentic-caps-'))
+  return mkdtempSync(join(tmpdir(), 'gateline-caps-'))
 }
 
 function writeRole(dir: string, role: string, content: string): void {

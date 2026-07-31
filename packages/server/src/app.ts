@@ -1,4 +1,4 @@
-// The HTTP layer: thin JSON views over @agentic/core. Every mutation rides
+// The HTTP layer: thin JSON views over @gateline/core. Every mutation rides
 // its own sanctioned core seam (ADR-2): decisions over
 // planDecision/writeState, staging over planRunScaffold/stageRun. No route
 // here composes a sources/git.ts primitive directly (AC1.1).
@@ -39,7 +39,7 @@ import {
   type Profile,
   type RunRef,
   type RunSource,
-} from '@agentic/core'
+} from '@gateline/core'
 import { GenerationCache } from './cache.ts'
 import type { DispatchOutcome, RunnerApi } from './runner-api.ts'
 import { verifySignature, type WebhookConfig } from './webhook.ts'

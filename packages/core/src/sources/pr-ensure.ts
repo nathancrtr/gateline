@@ -1,5 +1,5 @@
 // Draft-PR ensure (#118, R8): best-effort, idempotent, and never fatal. A
-// staged/armed run's first `agentic arm` or the engine's first dispatch calls
+// staged/armed run's first `gateline arm` or the engine's first dispatch calls
 // this so a reviewable PR exists regardless of how the branch was made — by
 // hand, by the CLI, or (later) by a GitHub-triggered intake. It never throws:
 // no remote, an unpushed branch, or any `gh` failure (missing binary,
@@ -135,7 +135,7 @@ async function closedForGood(git: Git, rev: string, pr: ListedPr): Promise<boole
 
 /**
  * Refreshes an open PR's title/body when the framework still owns them (the
- * `<!-- agentic:draft-pr -->` marker is present) and the newest artifacts would
+ * `<!-- gateline:draft-pr -->` marker is present) and the newest artifacts would
  * produce different text. A human-edited body and an already-current
  * description are both left alone.
  */
@@ -204,7 +204,7 @@ async function readyPr(exec: ExecLike, dir: string, pr: ListedPr, phase: string 
  * the merged verdict, the close's timestamp, and the name of the dead PR a
  * replacement stands in for.
  *
- * A *staged* run opens nothing at all: it is inert until `agentic arm`, and
+ * A *staged* run opens nothing at all: it is inert until `gateline arm`, and
  * arming is what ensures its PR.
  *
  * "Draft" in the name is the default, not the whole story (#232): the draft
@@ -272,10 +272,10 @@ export async function ensureDraftPr(
       return { status: 'skipped', note: `#${merged.number} already merged ${branch} — landed work gets no replacement PR${stillRunning}` }
     }
 
-    // A staged run is inert until `agentic arm`, and arming is what ensures
+    // A staged run is inert until `gateline arm`, and arming is what ensures
     // its PR. Opening one here would advertise for review a run its own
     // operator has not started — and every tick until they do.
-    if (staged) return { status: 'skipped', note: `${slug} is staged — a PR is ensured at \`agentic arm\`, not before` }
+    if (staged) return { status: 'skipped', note: `${slug} is staged — a PR is ensured at \`gateline arm\`, not before` }
 
     // Every PR for this branch is closed, so the run has no review surface
     // (#207) — unless the newest close still stands, in which case the human

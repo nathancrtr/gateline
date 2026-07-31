@@ -28,7 +28,7 @@ profile: full             # patch | standard | full — which roles run and whic
                           # human edit to a heavier value only — the orchestrator
                           # escalates on a downgrade rather than guessing.
 paused_reason: null       # set when phase=paused: budget-exhausted | round-cap | escalation | gate-declined | staged
-                          # (staged: a staged-but-unarmed run; `agentic arm` starts it)
+                          # (staged: a staged-but-unarmed run; `gateline arm` starts it)
 
 # intake:                 # optional; present only on runs created via the staging
 #                          # seam. Source-agnostic staging provenance — written once

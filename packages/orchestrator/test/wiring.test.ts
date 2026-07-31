@@ -1,15 +1,15 @@
 // Wiring (run "runner-agent", task 05): RemoteDispatcher plugged into a real
 // Engine and polled/claimed/reported through the *real* runner API
-// (@agentic/server's buildRunnerApi + createApp) — a mock HTTP server via
+// (@gateline/server's buildRunnerApi + createApp) — a mock HTTP server via
 // hono's in-process app.request(), not a live socket or a hand-rolled
 // substitute, per the task's own "no real workstation" constraint. Proves
 // the whole relay chain end to end (AC7.1, AC7.2, AC9.2) and that R7's lease
 // semantics need no new mechanism: `this.jobs` (engine.ts) already gates
 // `sweepStale` for a live remote dispatch exactly like a live local one.
 import { describe, expect, it } from 'vitest'
-import { LocalGitSource } from '@agentic/core'
-import { createApp } from '@agentic/server'
-import { buildRunnerApi } from '@agentic/server/main'
+import { LocalGitSource } from '@gateline/core'
+import { createApp } from '@gateline/server'
+import { buildRunnerApi } from '@gateline/server/main'
 import { Engine } from '../src/engine.ts'
 import { parseLedger } from '../src/observe.ts'
 import { RemoteDispatcher } from '../src/runner-dispatcher.ts'
@@ -17,7 +17,7 @@ import type { DispatchOutcome } from '../src/seam.ts'
 import { makeRunnerCallback } from '../src/start.ts'
 import { makeToyRepo, TEST_REGISTRY, toyRef } from './engine.helper.ts'
 
-const BOT = { name: 'agentic-orchestrator', email: 'orchestrator@agentic.invalid' }
+const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
 const TOKEN = 'runner-secret'
 
 /** Structural mirror of runner-api.ts's `PendingIntent` — only the fields

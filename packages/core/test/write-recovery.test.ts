@@ -1,5 +1,5 @@
 // The writeState kill window (plan "Interface contracts", ADR-1..ADR-4): a
-// write-ahead intent commit under refs/agentic/wip/<branch> lets a later
+// write-ahead intent commit under refs/gateline/wip/<branch> lets a later
 // write recognize and clean up its own abandoned mid-write kill, while any
 // dirt it cannot attribute to itself still refuses.
 import { readFile, writeFile } from 'node:fs/promises'
@@ -56,7 +56,7 @@ describe('writeState kill-window recovery', () => {
   it('AC1.1/AC1.2/AC4.1: self-heals an abandoned mid-write kill and leaves exactly the two calls\' commits', async () => {
     const ref = await refFor('g1-pending')
     const branchRef = `refs/heads/${ref.branch}`
-    const intentRef = `refs/agentic/wip/${ref.branch}`
+    const intentRef = `refs/gateline/wip/${ref.branch}`
     const relStatePath = 'runs/g1-pending/state.yaml'
     const statePath = join(ctx.repo.dir, relStatePath)
     const git = new Git(ctx.repo.dir)
@@ -133,7 +133,7 @@ describe('writeState kill-window recovery', () => {
     const ref = await refFor('g1-pending')
     const relStatePath = 'runs/g1-pending/state.yaml'
     const statePath = join(ctx.repo.dir, relStatePath)
-    const intentRef = `refs/agentic/wip/${ref.branch}`
+    const intentRef = `refs/gateline/wip/${ref.branch}`
     const git = new Git(ctx.repo.dir)
     await git.run(['checkout', '-q', 'run/g1-pending'])
 
@@ -185,7 +185,7 @@ describe('surviving refusal message (plan "Interface contracts": Surviving refus
     const ref = await refFor('g1-pending')
     const relStatePath = 'runs/g1-pending/state.yaml'
     const statePath = join(ctx.repo.dir, relStatePath)
-    const intentRef = `refs/agentic/wip/${ref.branch}`
+    const intentRef = `refs/gateline/wip/${ref.branch}`
     const git = new Git(ctx.repo.dir)
     await git.run(['checkout', '-q', 'run/g1-pending'])
 

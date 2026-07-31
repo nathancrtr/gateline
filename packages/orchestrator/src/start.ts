@@ -1,9 +1,9 @@
 // Orchestrator assembly as a library (#100): the same engine + scheduler +
-// run loop the `agentic-orchestrator` binary drives, callable in-process so
-// a frontend can co-locate the engine over its own clone (`agentic up`) —
+// run loop the `gateline-orchestrator` binary drives, callable in-process so
+// a frontend can co-locate the engine over its own clone (`gateline up`) —
 // one deployment, one clone, one authority (docs/TOPOLOGY.md §3.1).
 import { stat } from 'node:fs/promises'
-import { CodeTreeMonitor, Git, LocalGitSource, LocalOnlyPushConflictError, resolveCodeRepo, type CodeTreeStatus, type Identity } from '@agentic/core'
+import { CodeTreeMonitor, Git, LocalGitSource, LocalOnlyPushConflictError, resolveCodeRepo, type CodeTreeStatus, type Identity } from '@gateline/core'
 import { Engine, type InFlightJob } from './engine.ts'
 import { headlessManifestPath, loadHeadlessManifest } from './manifest.ts'
 import { loadRegistry } from './registry.ts'
@@ -14,11 +14,11 @@ import { HeadlessDispatcher, type DispatchOutcome } from './seam.ts'
 import { runLoop, type RunLoop } from './triggers.ts'
 
 /**
- * The zero-argument shape @agentic/server's own `RunnerCallback` expects
+ * The zero-argument shape @gateline/server's own `RunnerCallback` expects
  * (runner-api.ts) — mirrored structurally here rather than imported, so this
- * package carries no edge to `@agentic/server` (the same no-edge convention
+ * package carries no edge to `@gateline/server` (the same no-edge convention
  * runner-api.ts documents in the other direction, toward this package).
- * Structurally assignable to `@agentic/server`'s `RunnerCallback` — a caller
+ * Structurally assignable to `@gateline/server`'s `RunnerCallback` — a caller
  * assembling both (main.ts) passes a value of this shape straight into
  * `ServeOptions.runnerCallback`.
  */
@@ -46,15 +46,15 @@ export function makeRunnerCallback(engine: Engine, remote: RemoteDispatcher): Ru
 
 /** One identity per orchestrator install (resolved question 4). */
 export const BOT_IDENTITY: Identity = {
-  name: 'agentic-orchestrator',
-  email: 'orchestrator@agentic.invalid',
+  name: 'gateline-orchestrator',
+  email: 'orchestrator@gateline.invalid',
 }
 
 export interface OrchestratorOptions {
   repoDir: string
   /** Headless adapter names; the first is the default runner (default: claude-code). */
   adapters?: string[]
-  /** Metadata prefix of an integrate.py --prefix host, when not `.agentic`. */
+  /** Metadata prefix of an integrate.py --prefix host, when not `.gateline`. */
   frameworkPrefix?: string
   /** Push every orchestrator commit to origin — origin is the record. */
   push?: boolean

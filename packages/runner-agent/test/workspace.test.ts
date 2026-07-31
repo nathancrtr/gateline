@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createWorkspace, getHead, harvestAndPush } from '../src/workspace.ts'
 
-const BOT = { name: 'agentic-orchestrator', email: 'orchestrator@agentic.invalid' }
+const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
 
 // Isolate from the operator's real ~/.gitconfig, same convention as
 // server/test/runner-api.test.ts's makeRepo.
@@ -21,7 +21,7 @@ afterEach(() => {
 /** A real throwaway git repo with two commits on `branch` — a local path is
  *  a perfectly good `git clone` source, so this doubles as the "remote". */
 function makeRepo(branch: string): { dir: string; firstOid: string; secondOid: string } {
-  const dir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-src-'))
+  const dir = mkdtempSync(join(tmpdir(), 'gateline-runner-agent-src-'))
   cleanups.push(dir)
   const git = (args: string[]) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', env: GIT_ENV })
   git(['init', '-q', '-b', branch])
@@ -41,7 +41,7 @@ function makeRepo(branch: string): { dir: string; firstOid: string; secondOid: s
 describe('createWorkspace', () => {
   it('clones the branch into a fresh directory under workDir', async () => {
     const repo = makeRepo('run/toy')
-    const workDir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-work-'))
+    const workDir = mkdtempSync(join(tmpdir(), 'gateline-runner-agent-work-'))
     cleanups.push(workDir)
 
     const ws = await createWorkspace({ workDir, slug: 'toy', branch: 'run/toy', repoUrl: repo.dir })
@@ -56,7 +56,7 @@ describe('createWorkspace', () => {
 
   it('removes the workspace directory on remove() (AC4.1)', async () => {
     const repo = makeRepo('run/toy')
-    const workDir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-work-'))
+    const workDir = mkdtempSync(join(tmpdir(), 'gateline-runner-agent-work-'))
     cleanups.push(workDir)
 
     const ws = await createWorkspace({ workDir, slug: 'toy', branch: 'run/toy', repoUrl: repo.dir })
@@ -67,7 +67,7 @@ describe('createWorkspace', () => {
 
   it('checks out baseOid after cloning when provided', async () => {
     const repo = makeRepo('run/toy')
-    const workDir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-work-'))
+    const workDir = mkdtempSync(join(tmpdir(), 'gateline-runner-agent-work-'))
     cleanups.push(workDir)
 
     const ws = await createWorkspace({ workDir, slug: 'toy', branch: 'run/toy', repoUrl: repo.dir, baseOid: repo.firstOid })
@@ -82,7 +82,7 @@ describe('createWorkspace', () => {
 
   it('tolerates an unresolvable baseOid — the branch-tip clone remains usable (review-03.md F5)', async () => {
     const repo = makeRepo('run/toy')
-    const workDir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-work-'))
+    const workDir = mkdtempSync(join(tmpdir(), 'gateline-runner-agent-work-'))
     cleanups.push(workDir)
 
     const ws = await createWorkspace({ workDir, slug: 'toy', branch: 'run/toy', repoUrl: repo.dir, baseOid: 'deadbeef'.repeat(5) })
@@ -95,7 +95,7 @@ describe('createWorkspace', () => {
 
   it('two consecutive createWorkspace calls produce two independent directories (AC4.2)', async () => {
     const repo = makeRepo('run/toy')
-    const workDir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-work-'))
+    const workDir = mkdtempSync(join(tmpdir(), 'gateline-runner-agent-work-'))
     cleanups.push(workDir)
 
     const first = await createWorkspace({ workDir, slug: 'toy', branch: 'run/toy', repoUrl: repo.dir })
@@ -117,7 +117,7 @@ describe('createWorkspace', () => {
 describe('harvestAndPush (run "runner-agent" ADR-3, review-04.md round-2 F8/F9/F10)', () => {
   it('an unmatched pathspec alongside a matched one does not drop the matched file (F10)', async () => {
     const repo = makeRepo('run/toy')
-    const workDir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-work-'))
+    const workDir = mkdtempSync(join(tmpdir(), 'gateline-runner-agent-work-'))
     cleanups.push(workDir)
     const ws = await createWorkspace({ workDir, slug: 'toy', branch: 'run/toy', repoUrl: repo.dir })
     const base = await getHead(ws)
@@ -139,7 +139,7 @@ describe('harvestAndPush (run "runner-agent" ADR-3, review-04.md round-2 F8/F9/F
 
   it('a harness commit alone (nothing left uncommitted) is still pushed — HEAD moved past base (F8)', async () => {
     const repo = makeRepo('run/toy')
-    const workDir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-work-'))
+    const workDir = mkdtempSync(join(tmpdir(), 'gateline-runner-agent-work-'))
     cleanups.push(workDir)
     const ws = await createWorkspace({ workDir, slug: 'toy', branch: 'run/toy', repoUrl: repo.dir })
     const base = await getHead(ws)
@@ -159,7 +159,7 @@ describe('harvestAndPush (run "runner-agent" ADR-3, review-04.md round-2 F8/F9/F
 
   it('nothing committed and nothing matching the sweep reports pushed: false, base unchanged', async () => {
     const repo = makeRepo('run/toy')
-    const workDir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-work-'))
+    const workDir = mkdtempSync(join(tmpdir(), 'gateline-runner-agent-work-'))
     cleanups.push(workDir)
     const ws = await createWorkspace({ workDir, slug: 'toy', branch: 'run/toy', repoUrl: repo.dir })
     const base = await getHead(ws)

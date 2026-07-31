@@ -4,7 +4,7 @@
 // HMAC signature, not by the proxy in front — document a bypass for it.
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { execFile } from 'node:child_process'
-import { applySync, parseGitHubRemote, planSync, RestPrProvider, type RunSource } from '@agentic/core'
+import { applySync, parseGitHubRemote, planSync, RestPrProvider, type RunSource } from '@gateline/core'
 
 export interface WebhookConfig {
   secret: string

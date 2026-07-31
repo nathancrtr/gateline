@@ -101,7 +101,7 @@ real to re-pin to.
 ### W5 — the operator cockpit path, documented
 
 The two-channel model's second channel (INTEGRATION.md §3): checkout the tag,
-`npm install` in `packages/`, `agentic ui --repo <host>` (and the multi-repo
+`npm install` in `packages/`, `gateline ui --repo <host>` (and the multi-repo
 fleet config for operators with several hosts). One documented page — a
 WALKTHROUGH or frontend README section — sufficient for a cold operator.
 npm-publishing the packages stays deferred until the repo goes public (epic
@@ -116,7 +116,7 @@ host-specific content to this repository (retro lessons flow back
 maintainer-mediated and redacted, as INTEGRATION.md §6 requires).
 
 - **P0 — read re-probe (immediately after W0, before anything else).** Re-run
-  the host's Gatehouse generality probe: `agentic status` / `inbox` / API
+  the host's Gatehouse generality probe: `gateline status` / `inbox` / API
   against the host. Prior result: everything generalized except the compiled-in
   state schema. Expected now: runs render with their real phases and gate maps,
   the known open escalation is visible, metrics populate. Any residual bounce is
@@ -133,7 +133,7 @@ maintainer-mediated and redacted, as INTEGRATION.md §6 requires).
   current, state parses against the host's own contract, instance vocabulary
   (`web` capability; `publish`/`none` gates) declared rather than incidental.
 - **P3 — Gatehouse live.** From the cockpit checkout at the pinned tag:
-  `agentic ui --repo <host>` — single-user, `127.0.0.1`, browser. Acceptance,
+  `gateline ui --repo <host>` — single-user, `127.0.0.1`, browser. Acceptance,
   in order of increasing consequence:
   1. Portfolio lists the host's runs with true phases and its own gate
      vocabulary; no synthesized G0–G3 ghosts.

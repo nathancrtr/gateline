@@ -5,7 +5,7 @@
 // updates, comment-preserving YAML, the orchestrator's own commit verbs
 // (dispatched | bounced | advanced | escalated | paused | metered | harvested),
 // a bot identity, and — structurally — no code path that writes gates.*.
-import { ensureDraftPr, Git, LocalGitSource, type Identity, type RunRef, type WriteResult } from '@agentic/core'
+import { ensureDraftPr, Git, LocalGitSource, type Identity, type RunRef, type WriteResult } from '@gateline/core'
 import type { Document } from 'yaml'
 import { hasShell, loadRoleCapabilities } from './capabilities.ts'
 import { deriveAction, DEFAULT_ESTIMATE_USD, type Bookkeeping, type DerivedAction, type DispatchIntent } from './derive.ts'
@@ -22,7 +22,7 @@ export interface EngineConfig {
   dispatcher: Dispatcher
   registry: Registry | null
   /**
-   * Override the `.agentic` default when this repo was integrated with a
+   * Override the `.gateline` default when this repo was integrated with a
    * custom `integrate.py --prefix` (#95) — otherwise auto-detected.
    */
   frameworkPrefix?: string

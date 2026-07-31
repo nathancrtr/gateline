@@ -79,7 +79,7 @@ describe('LocalGitSource.originUrl', () => {
 
   /** A bare-minimum repo — the config read under test needs no runs and no commits. */
   function repo(originUrl?: string): string {
-    const dir = mkdtempSync(join(tmpdir(), 'agentic-origin-'))
+    const dir = mkdtempSync(join(tmpdir(), 'gateline-origin-'))
     dirs.push(dir)
     execFileSync('git', ['-C', dir, 'init', '-q', '-b', 'main'])
     if (originUrl) execFileSync('git', ['-C', dir, 'remote', 'add', 'origin', originUrl])

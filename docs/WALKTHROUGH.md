@@ -116,7 +116,7 @@ nothing about the orchestrated path below deprecates it.
 **The orchestrated path (v1, issue #190).** When the reviewer's verdict is
 `escalate` rather than `request-changes` — the finding is a decomposition defect,
 not something an implementer round can fix — resolve the escalation with
-`--disposition re-plan` (`agentic resolve-escalation <slug> <index> --note "…" --disposition re-plan`,
+`--disposition re-plan` (`gateline resolve-escalation <slug> <index> --note "…" --disposition re-plan`,
 or the web decide card's "Re-plan" option). The engine dispatches the **architect**
 in amendment mode, carrying the review report path and your resolution note: the
 architect amends `plan.md` with a dated ADR and, if the finding names a surface or
@@ -179,7 +179,7 @@ by the orchestrator engine ([ORCHESTRATOR.md](ORCHESTRATOR.md), implemented in
 still write the intent brief and set up the run (§0), but steps 1–6's
 dispatching, bouncing, round counting, and budget metering happen without you.
 You act only where the design says a human must — gates, escalations,
-pause/resume — through the gate frontend or the `agentic` CLI.
+pause/resume — through the gate frontend or the `gateline` CLI.
 
 ```bash
 cd packages

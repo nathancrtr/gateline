@@ -12,10 +12,10 @@ Usage (from a pinned framework release checkout or tarball):
     python3 <framework>/scripts/integrate.py init <target-repo> \
         --provenance redistribute|private \
         [--take all|sdlc|<file,file,...>] [--layout prefixed|root] \
-        [--prefix .agentic] [--adapters auto|<name,name,...>]
+        [--prefix .gateline] [--adapters auto|<name,name,...>]
 
 Usage (from the vendored copy inside a host repo):
-    python3 scripts/integrate.py validate [<target-repo>] [--prefix .agentic]
+    python3 scripts/integrate.py validate [<target-repo>] [--prefix .gateline]
     python3 scripts/integrate.py fork <core-file> --reason "why" [...]
 
 Stdlib-only and Python 3.9-compatible on purpose, same constraint as the
@@ -34,8 +34,8 @@ from pathlib import Path
 
 TOOL_VERSION = "0.1"
 SOURCE = Path(__file__).resolve().parent.parent
-PROVENANCE_START = "<!-- agentic-framework-provenance:start -->"
-PROVENANCE_END = "<!-- agentic-framework-provenance:end -->"
+PROVENANCE_START = "<!-- gateline-framework-provenance:start -->"
+PROVENANCE_END = "<!-- gateline-framework-provenance:end -->"
 
 
 def sha256(path):
@@ -130,10 +130,10 @@ def write_provenance(target, prefix_dir, mode, lock_rel):
         shutil.copy2(str(license_src), str(prefix_dir / "LICENSE.framework.md"))
     if mode == "redistribute":
         section = (
-            "This repository includes files derived from the Agentic Development\n"
-            "System framework, licensed under the Apache License 2.0. The framework\n"
-            "license text is kept at %s/LICENSE.framework.md; the derived files are\n"
-            "enumerated in %s." % (prefix_dir.name, lock_rel)
+            "This repository includes files derived from the gateline framework,\n"
+            "licensed under the Apache License 2.0. The framework license text is\n"
+            "kept at %s/LICENSE.framework.md; the derived files are enumerated\n"
+            "in %s." % (prefix_dir.name, lock_rel)
         )
     else:
         section = (
@@ -161,8 +161,8 @@ def write_provenance(target, prefix_dir, mode, lock_rel):
 def prefix_readme(prefix_dir, info):
     body = (
         "# Framework metadata\n\n"
-        "This directory pins this repository's integration of the Agentic\n"
-        "Development System (source: %s, ref %s). `framework-lock.json` is the\n"
+        "This directory pins this repository's integration of the gateline\n"
+        "framework (source: %s, ref %s). `framework-lock.json` is the\n"
         "authoritative record of what is framework core versus instance-local;\n"
         "`upstream/` retains the pristine base of any recorded fork. Do not edit\n"
         "core-layer copies in place — extend via `overlays/` or record a fork:\n"
@@ -174,12 +174,12 @@ def prefix_readme(prefix_dir, info):
 
 def wire_ci(target, layout, prefix):
     workflows = target / ".github" / "workflows"
-    workflow = workflows / "agentic-render-check.yml"
+    workflow = workflows / "gateline-render-check.yml"
     if workflow.exists():
         return
     workflows.mkdir(parents=True, exist_ok=True)
     workflow.write_text(
-        "name: agentic-render-check\n"
+        "name: gateline-render-check\n"
         "on: [push, pull_request]\n"
         "jobs:\n"
         "  render-check:\n"
@@ -413,7 +413,7 @@ def cmd_validate(args):
           % (len(lock.get("files", {})), len(lock.get("forks", {})),
              lock.get("provenance_mode")))
     print("operator read check (from the framework checkout, not part of validate):")
-    print("  agentic status --repo %s" % target)
+    print("  gateline status --repo %s" % target)
     return 0
 
 
@@ -455,7 +455,7 @@ def main():
     p_init.add_argument("--take", default="all",
                         help="all | sdlc | comma-separated file list")
     p_init.add_argument("--layout", choices=["prefixed", "root"], default="prefixed")
-    p_init.add_argument("--prefix", default=".agentic")
+    p_init.add_argument("--prefix", default=".gateline")
     p_init.add_argument("--provenance", choices=["redistribute", "private"],
                         required=True,
                         help="the host's posture; no default on purpose")
@@ -464,14 +464,14 @@ def main():
 
     p_val = sub.add_parser("validate", help="static integration checks")
     p_val.add_argument("target", nargs="?", default=".")
-    p_val.add_argument("--prefix", default=".agentic")
+    p_val.add_argument("--prefix", default=".gateline")
     p_val.set_defaults(func=cmd_validate)
 
     p_fork = sub.add_parser("fork", help="record a deliberate core-file divergence")
     p_fork.add_argument("file", help="host-relative path of the taken core file")
     p_fork.add_argument("--reason", required=True)
     p_fork.add_argument("--target", default=".")
-    p_fork.add_argument("--prefix", default=".agentic")
+    p_fork.add_argument("--prefix", default=".gateline")
     p_fork.set_defaults(func=cmd_fork)
 
     args = parser.parse_args()

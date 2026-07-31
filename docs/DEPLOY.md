@@ -54,7 +54,7 @@ the server, the built SPA, git, and cloudflared. On boot it:
    so no branch is checked out and every local branch can fast-forward.
 2. Configures git identity and, when `GIT_TOKEN` is set, a credential helper
    that reads the token from the environment (never written to disk).
-3. Writes `~/.config/agentic/config.yaml` pointing the server at the clone
+3. Writes `~/.config/gateline/config.yaml` pointing the server at the clone
    with `push: true` and `fetch_interval` set.
 4. Starts cloudflared (when `TUNNEL_TOKEN` is set) and the server.
 
@@ -188,12 +188,12 @@ run's G2 is recorded into `state.yaml` minutes-to-seconds after it happens.
 
 ## Enable the orchestrator (hosted dispatch)
 
-`ORCH_ENABLED=1` runs the v1 orchestrator (`agentic-orchestrator watch`) as a
+`ORCH_ENABLED=1` runs the v1 orchestrator (`gateline-orchestrator watch`) as a
 second process against the same clone. **Co-located is the blessed topology**
 (one machine, one clone, one authority — [TOPOLOGY.md](TOPOLOGY.md) §3.1), and
 the example config ships with it on. Hosted dispatch bills by API key
 (`ANTHROPIC_API_KEY`); an operator who wants subscription-billed dispatch runs
-the same co-located pair on their own machine with `agentic up` (below)
+the same co-located pair on their own machine with `gateline up` (below)
 instead of splitting the orchestrator off — an orchestrator over a second
 writable clone is the topology that produced #103/#104. Read this section —
 and [ORCHESTRATOR.md](ORCHESTRATOR.md) §10's autonomy gate — before first
@@ -205,7 +205,7 @@ stale, so decisions landing with no engine consuming them read as an outage,
 never as "waiting on gate". A viewer-only deployment (`ORCH_ENABLED=0`, no
 engine ever run here) has no heartbeat file and gets no banner.
 
-**Run it locally in one command.** `agentic up [--repo <path>]` serves
+**Run it locally in one command.** `gateline up [--repo <path>]` serves
 Gatehouse and runs the engine over the same clone — the local twin of this
 hosted deployment, with the same hard lines (`--push` by default,
 `--require-budget` always; add `--spend-limit-usd`). Dispatch bills through
@@ -226,8 +226,8 @@ whole machine and needs no `git pull` inside it — the entrypoint's
 while-loop restarts the orchestrator on any crash today, and would equally
 absorb a self-supersede exit if this process ever ran from a live git
 checkout. Where the mechanism is live end to end is the bare local twin:
-`agentic up`, run directly from the blessed git checkout, notices a pull (by
-hand, or `agentic upgrade`) and — having no supervisor of its own — exits
+`gateline up`, run directly from the blessed git checkout, notices a pull (by
+hand, or `gateline upgrade`) and — having no supervisor of its own — exits
 `75` and waits for the operator to restart it by hand. Gatehouse's drift
 chip renders the engine's loaded commit against the checkout's on-disk
 `HEAD` from the heartbeat either way, whenever one is present.

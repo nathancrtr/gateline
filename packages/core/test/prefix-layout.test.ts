@@ -3,7 +3,7 @@
 // root-layout repo — same runs, same states, same artifacts — instead of the
 // #83 failure class (silent empty inbox from an unresolved path assumption).
 import { rm } from 'node:fs/promises'
-import { generateFixtureRepo, type FixtureRepo } from '@agentic/fixtures'
+import { generateFixtureRepo, type FixtureRepo } from '@gateline/fixtures'
 import { afterAll, describe, expect, it } from 'vitest'
 import { LocalGitSource } from '../src/index.ts'
 
@@ -56,7 +56,7 @@ describe('prefixed integration layout', () => {
     // The diff excludes the run tree at whichever root it actually lives at —
     // it must not leak runs/ contents just because layout moved.
     const prefixedDiff = await prefixed.readDiff(prefixedRef)
-    expect(prefixedDiff).not.toMatch(/\.agentic\/runs\//)
+    expect(prefixedDiff).not.toMatch(/\.gateline\/runs\//)
   })
 
   it('validates artifacts against the host’s own contracts/ under the prefix', async () => {

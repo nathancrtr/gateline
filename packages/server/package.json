@@ -1,9 +1,9 @@
 {
-  "name": "@agentic/server",
+  "name": "@gateline/server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Localhost HTTP layer over @agentic/core: JSON reads, the single decision write path, SSE freshness, and the built SPA.",
+  "description": "Localhost HTTP layer over @gateline/core: JSON reads, the single decision write path, SSE freshness, and the built SPA.",
   "exports": {
     ".": "./src/app.ts",
     "./main": "./src/main.ts"
@@ -12,11 +12,11 @@
     "dev": "node src/main.ts"
   },
   "dependencies": {
-    "@agentic/core": "*",
+    "@gateline/core": "*",
     "@hono/node-server": "^1.15.0",
     "hono": "^4.8.0"
   },
   "devDependencies": {
-    "@agentic/fixtures": "*"
+    "@gateline/fixtures": "*"
   }
 }

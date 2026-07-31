@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { execFileSync } from 'node:child_process'
 import { describe, expect, it, vi } from 'vitest'
-import { LocalGitSource } from '@agentic/core'
+import { LocalGitSource } from '@gateline/core'
 import { Engine } from '../src/engine.ts'
 import { parseLedger } from '../src/observe.ts'
 import { removeRunCheckout } from '../src/workspace.ts'
@@ -32,7 +32,7 @@ import {
   type Clock,
 } from './engine.helper.ts'
 
-const BOT = { name: 'agentic-orchestrator', email: 'orchestrator@agentic.invalid' }
+const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
 
 function makeEngine(dir: string, dispatcher: FakeDispatcher, over: Partial<ConstructorParameters<typeof Engine>[0]> = {}): Engine {
   return new Engine({ repoDir: dir, identity: BOT, dispatcher, registry: TEST_REGISTRY, staleMs: 10 * 60 * 1000, ...over })

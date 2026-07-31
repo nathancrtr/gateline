@@ -15,7 +15,7 @@ afterEach(() => {
 })
 
 function gitRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'agentic-health-'))
+  const dir = mkdtempSync(join(tmpdir(), 'gateline-health-'))
   cleanups.push(dir)
   execFileSync('git', ['init', '-q', dir])
   return dir

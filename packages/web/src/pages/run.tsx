@@ -9,7 +9,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 // payload — readIntake reads the passthrough `intake:` block already on
 // detail.state, and the genesis commit is the oldest entry already in
 // detail.history. No new server data (ADR-6 rider, ADR-7).
-import { readIntake } from '@agentic/core/record'
+import { readIntake } from '@gateline/core/record'
 import { useKeys } from '../use-keys.ts'
 import { decideTargetIndex, landingArtifact } from '../landing.ts'
 import { PROFILE_GATES, api, formatAge, formatWhen, type InboxItem, type Profile, type RunDetailResponse, type RunSummary } from '../api.ts'
@@ -68,7 +68,7 @@ export function RunPage() {
   const { summary, items, now } = detail
 
   // The genesis line (genesis-preview candidate): whenever a run carries the
-  // creation-seam's `intake:` block (every run staged via `agentic new`/`agentic
+  // creation-seam's `intake:` block (every run staged via `gateline new`/`gateline
   // arm` or this web surface), the header names who staged it, from what, and
   // when — the record explaining why the run exists. Runs that predate the
   // seam have no intake block, so readIntake returns null and the line is

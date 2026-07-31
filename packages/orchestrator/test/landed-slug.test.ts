@@ -11,11 +11,11 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { LocalGitSource, planRunScaffold } from '@agentic/core'
+import { LocalGitSource, planRunScaffold } from '@gateline/core'
 import { Engine } from '../src/engine.ts'
 import { FakeDispatcher, makeToyRepo, TEST_REGISTRY, type Clock } from './engine.helper.ts'
 
-const BOT = { name: 'agentic-orchestrator', email: 'orchestrator@agentic.invalid' }
+const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
 
 const cleanups: string[] = []
 afterEach(() => {

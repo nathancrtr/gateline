@@ -14,7 +14,7 @@ let clone: LocalGitSource
 
 beforeEach(async () => {
   upstream = await makeFixture()
-  scratch = await mkdtemp(join(tmpdir(), 'agentic-sync-'))
+  scratch = await mkdtemp(join(tmpdir(), 'gateline-sync-'))
   await new Git(scratch).run(['clone', '--quiet', upstream.repo.dir, 'clone'])
   cloneDir = join(scratch, 'clone')
   const git = new Git(cloneDir)

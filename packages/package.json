@@ -15,8 +15,8 @@
     "fixtures"
   ],
   "scripts": {
-    "build": "npm run build -w @agentic/web",
-    "dev": "npm run dev -w @agentic/server",
+    "build": "npm run build -w @gateline/web",
+    "dev": "npm run dev -w @gateline/server",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json && tsc -p web/tsconfig.json",
     "fixture": "node fixtures/src/main.ts"

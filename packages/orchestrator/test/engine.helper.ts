@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, existsSync } from 
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { expect } from 'vitest'
-import { LocalGitSource, planDecision, type DecisionInput, type RunRef } from '@agentic/core'
+import { LocalGitSource, planDecision, type DecisionInput, type RunRef } from '@gateline/core'
 import type { Engine } from '../src/engine.ts'
 import type { Registry } from '../src/registry.ts'
 import type { Dispatcher, DispatchOutcome, DispatchRequest } from '../src/seam.ts'
@@ -102,9 +102,9 @@ export interface ToyRepoOpts {
 }
 
 export function makeToyRepo(opts: ToyRepoOpts = {}): { dir: string; clock: Clock } {
-  const dir = mkdtempSync(join(tmpdir(), 'agentic-engine-'))
+  const dir = mkdtempSync(join(tmpdir(), 'gateline-engine-'))
   const clock = new Clock()
-  const prefix = opts.prefix ?? '.agentic'
+  const prefix = opts.prefix ?? '.gateline'
   const prefixed = opts.layout === 'prefixed'
   const contractsRoot = prefixed ? `${prefix}/contracts` : 'contracts'
   const runsRoot = prefixed ? `${prefix}/runs` : 'runs'

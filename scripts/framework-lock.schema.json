@@ -48,6 +48,6 @@
     },
     "provenance_mode": {"enum": ["redistribute", "private"]},
     "layout": {"enum": ["prefixed", "root"]},
-    "prefix": {"type": "string", "description": "The metadata prefix directory (default .agentic)"}
+    "prefix": {"type": "string", "description": "The metadata prefix directory (default .gateline)"}
   }
 }

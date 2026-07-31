@@ -2,7 +2,7 @@
 // debounced change signal. Agents commit → refs move → clients revalidate.
 import { watch, type FSWatcher } from 'node:fs'
 import { join } from 'node:path'
-import { Git } from '@agentic/core'
+import { Git } from '@gateline/core'
 
 export type Unwatch = () => void
 

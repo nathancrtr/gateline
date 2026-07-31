@@ -10,7 +10,7 @@ set -eu
 # The claude CLI refuses permission-bypass modes as root, and nothing past
 # this point needs root. chown -R keeps volumes from older root-run images
 # usable after an upgrade.
-APP_USER="${APP_USER:-agentic}"
+APP_USER="${APP_USER:-gateline}"
 DATA_DIR="${DATA_DIR:-/data}"
 if [ "$(id -u)" = "0" ]; then
   mkdir -p "$DATA_DIR"
@@ -54,7 +54,7 @@ if git symbolic-ref -q HEAD >/dev/null; then
   git switch --detach --quiet
 fi
 
-CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/agentic"
+CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/gateline"
 mkdir -p "$CONF_DIR"
 cat > "$CONF_DIR/config.yaml" <<EOF
 sources:

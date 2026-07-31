@@ -40,12 +40,12 @@ const TOY_BRIEF = '# Intent Brief: Toy exporter is unusable at scale\n\n## Probl
 const TOY_RUN = { 'runs/toy/state.yaml': TOY_STATE, 'runs/toy/intent-brief.md': TOY_BRIEF }
 /** The same run after its closing gate — the state a dispatch-only ensure could never observe (#232). */
 const DONE_STATE = 'run: toy\nbranch: run/toy\nphase: done\nprofile: standard\ngates:\n  G0: { approved: true, by: Fixture Operator, at: 2026-07-26T00:00:00Z, notes: null }\ntasks: []\nescalations: []\n'
-/** `agentic new` staged the run; nobody has armed it. */
+/** `gateline new` staged the run; nobody has armed it. */
 const STAGED_STATE =
   'run: toy\nbranch: run/toy\nphase: paused\npaused_reason: staged\nprofile: standard\ngates:\n  G0: { approved: false, by: null, at: null, notes: null }\ntasks: []\nescalations: []\n'
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'agentic-pr-ensure-'))
+  dir = mkdtempSync(join(tmpdir(), 'gateline-pr-ensure-'))
   git(['init', '-q', '-b', 'main'])
   git(['config', 'user.name', 'Fixture Operator'])
   git(['config', 'user.email', 'operator@example.test'])

@@ -11,7 +11,7 @@ This repository **is the product**: a runtime-neutral framework of SDLC agent ro
 (`roles/`), handoff contracts (`contracts/`), a model registry (`registry/`), thin
 runtime adapters (`adapters/`), host-repo integration tooling (`scripts/`), and the
 framework's product components under `packages/` — the gate frontend (web, CLI,
-server over `@agentic/core`) and the v1 orchestrator
+server over `@gateline/core`) and the v1 orchestrator
 (`packages/orchestrator`), with a hosted single-user deployment recipe
 under `deploy/`. Application code under `apps/` is the output of pipeline runs, kept
 as evidence — not software being maintained for its own sake.
@@ -21,9 +21,11 @@ as evidence — not software being maintained for its own sake.
 *FleetView* (never a decided name) and *ADS* / *Agentic Development System*. Both
 still appear inside `runs/` — those are historical records and stay as written.
 Lowercase `gate` remains the domain term for a pipeline approval point, and is
-unrelated to the UI's name. Renaming the git repository, the `.agentic/` vendored
-prefix, and the `agentic` / `@agentic/*` command and package names is a separate,
-still-pending step — leave them as they are.
+unrelated to the UI's name. The rename is fully executed: the repository is
+`nathancrtr/gateline`, the CLI commands are `gateline` / `gateline-orchestrator`,
+the packages are `@gateline/*`, and the vendored prefix is `.gateline/`. The
+legacy `agentic` identifiers are retired with the old names and appear only in
+`runs/` and other historical records.
 
 Read [`docs/DESIGN.md`](docs/DESIGN.md) before changing the framework: it defines the
 principles (P1–P6), roles, gates, and failure modes that changes are judged against.
@@ -53,7 +55,7 @@ contracts, and adapters. Runs declare a **profile** — `patch | standard | full
 change; a run whose `state.yaml` carries no `profile:` is `full`. Three runner
 adapters are built: `claude-code`, `copilot-cli`, and `opencode` (the any-provider
 one). The gate frontend (Gatehouse) and the v1 orchestrator are implemented and
-co-located by design — `agentic up` runs both over a single clone, which is the
+co-located by design — `gateline up` runs both over a single clone, which is the
 blessed topology; the hosted recipe under `deploy/` remains a documented self-host
 option. Integration tooling v0 (`scripts/integrate.py`) ships `init|validate|fork`.
 Autonomy remains gated on the DESIGN.md §7 promotion criterion.
@@ -98,7 +100,7 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   observes a profile lighter than the gates already decided escalates.
 * **One authority per deployment, and the blessed checkout stays on the default
   branch** (TOPOLOGY.md §3.1, §3.5). Never point a second writable clone's engine at
-  the same runs, and never move the checkout the global `agentic` resolves to onto a
+  the same runs, and never move the checkout the global `gateline` resolves to onto a
   branch — an engine there would put unreviewed code in charge of live, metered
   dispatch. The code-tree monitor enforces this: a checkout that leaves the default
   branch, goes dirty, or moves by anything but a fast-forward pauses dispatch until
@@ -132,23 +134,23 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
 * Run the frontend/orchestrator tests: `npm test` in `packages/` (typecheck:
   `npm run typecheck`; e2e: `npm run build && npx playwright test`; needs
   `npm install` once, Node ≥ 24)
-* Drive the local instance with the `agentic` CLI (`packages/cli`, run from
+* Drive the local instance with the `gateline` CLI (`packages/cli`, run from
   source — `node packages/cli/src/main.ts <cmd>` in any tree *is* that tree's
-  `agentic`):
+  `gateline`):
   * inspect — `status`, `inbox`, `show <slug> [artifact]`
   * decide — `approve`, `decline`, `resolve-escalation`, `pause`, `resume`, `sync`
   * create a run — `new` stages `runs/<slug>/` on its branch; `arm <slug>` starts it
   * serve — `up [--repo <path>]` (Gatehouse + engine over one clone, the blessed
     topology), `ui` (viewer only), `upgrade` (pull + rebuild the web dist, then let
     the running engine self-supersede)
-* Verify the orchestrator without dispatching: `agentic-orchestrator tick --dry-run`
+* Verify the orchestrator without dispatching: `gateline-orchestrator tick --dry-run`
   or `shadow <slug>` (replay a finished run); `watch` and `sweep <role>` are live
 * Try unmerged frontend changes: from that branch's worktree, `npm install &&
   npm run build` in `packages/`, then `node packages/cli/src/main.ts ui --demo`
   (or `--repo <path>`)
   on a side port — never check the branch out in the blessed main checkout, and never
   `up` from a trial tree (TOPOLOGY.md §3.5). Web-only changes can use
-  `npm run dev -w @agentic/web` instead
+  `npm run dev -w @gateline/web` instead
 * Run the tests for pipeline-run output: `pytest apps/<app>` — one app per
   invocation (`wordfreq`, `mdtoc`, `dupefind`); the apps' identically named test
   modules collide when pytest collects `apps/` in one pass
@@ -164,7 +166,7 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
 * Pipeline runs live in `runs/<slug>/` on branch `run/<slug>`; artifacts are committed
   as they are produced. Gate approvals in a run's `state.yaml` are written only by the
   named human approver — agents never self-approve a gate.
-* A run is created in two steps: `agentic new` stages the record (branch,
+* A run is created in two steps: `gateline new` stages the record (branch,
   `intent-brief.md`, `state.yaml`) for human review, and `arm` is what makes it
   dispatchable — a staged run is inert, and arming is also what ensures its draft
   PR. That PR's title and description are generated from the run's own artifacts

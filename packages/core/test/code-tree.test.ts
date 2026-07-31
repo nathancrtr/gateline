@@ -30,7 +30,7 @@ function commit(dir: string, message: string): string {
 }
 
 function makeRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'agentic-codetree-'))
+  const dir = mkdtempSync(join(tmpdir(), 'gateline-codetree-'))
   cleanups.push(dir)
   git(dir, ['init', '-q', '-b', 'main'])
   git(dir, ['config', 'user.name', 'Toy'])
@@ -174,7 +174,7 @@ describe('resolveCodeRepo (#141)', () => {
   it('returns null for a path outside any git checkout', () => {
     // os.tmpdir() itself must not be inside a repo (it isn't); a fresh
     // tmpdir with no .git and no repo among its ancestors proves the miss.
-    const outside = mkdtempSync(join(tmpdir(), 'agentic-nogit-'))
+    const outside = mkdtempSync(join(tmpdir(), 'gateline-nogit-'))
     cleanups.push(outside)
     const fileUrl = pathToFileURL(join(outside, 'module.ts')).href
 

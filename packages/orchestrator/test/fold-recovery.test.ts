@@ -18,7 +18,7 @@ function git(dir: string, args: string[]): string {
 
 /** A repo with `run/toy` carrying one committed file, and nothing checked out on it. */
 function makeRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'agentic-fold-'))
+  const dir = mkdtempSync(join(tmpdir(), 'gateline-fold-'))
   dirs.push(dir)
   git(dir, ['init', '-q', '-b', 'main'])
   git(dir, ['config', 'user.name', 'Fixture Operator'])

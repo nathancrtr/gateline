@@ -30,8 +30,8 @@ RUN npm install -g --no-audit --no-fund "@anthropic-ai/claude-code@${CLAUDE_CODE
 
 # Unprivileged runtime user: the claude CLI refuses permission-bypass modes
 # as root, and nothing here needs root past the volume chown in entrypoint.
-RUN useradd --uid 10001 --create-home --home-dir /home/agentic agentic
-ENV HOME=/home/agentic
+RUN useradd --uid 10001 --create-home --home-dir /home/gateline gateline
+ENV HOME=/home/gateline
 
 # Server and core run straight from TypeScript source (Node >= 24 strip-only
 # mode); only the SPA needs the build stage.

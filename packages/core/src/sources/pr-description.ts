@@ -10,7 +10,7 @@
 import { PROFILE_GATES, type Profile } from '../record/schema.ts'
 
 /** Present in every generated body; its absence means a human owns the text. */
-export const GENERATED_MARKER = '<!-- agentic:draft-pr -->'
+export const GENERATED_MARKER = '<!-- gateline:draft-pr -->'
 
 /**
  * The pre-#202 body, which carried no marker because there was nothing to

@@ -392,7 +392,7 @@ autonomy multiplies the cost of a missing meter. The design:
 ## 7. Humans: gates, escalations, and the frontend contract
 
 `state.yaml` commits are the only channel between the orchestrator and humans, in
-both directions. Humans speak through it via the frontend and the `agentic` CLI
+both directions. Humans speak through it via the frontend and the `gateline` CLI
 (gate decisions, escalation resolutions, pause/resume); the orchestrator speaks
 through it by advancing state that the frontend's readiness rules recognize as
 "needs a human." I3 — escalations, "notice them, somehow" — is completed by this
@@ -440,7 +440,7 @@ Small and explicit, in the FRONTEND-PLAN §7 pattern; these are M0:
 
 The engine's hard mechanics — run discovery, schema parsing, contract validation,
 readiness derivation, comment-preserving CAS writes — are already implemented,
-tested, and golden-filed once, in `@agentic/core` (`packages/core` on the
+tested, and golden-filed once, in `@gateline/core` (`packages/core` on the
 frontend branch). **The orchestrator becomes a sibling package in that workspace,
 `packages/orchestrator`, consuming core** and adding what is genuinely new:
 the derivation rules' dispatch half, the seam, the metering normalizer, the triggers.
@@ -500,7 +500,7 @@ Extends DESIGN.md §9 for the autonomous mode:
 | Runaway *resource* use (the host, not the budget) | Dispatch concurrency cap across all runs (default 2; `--max-concurrent-dispatches`, `0` disables). Each dispatch carries an agent process, a cold dependency install, and a full suite run, so concurrency — not cost — is what exhausts the machine. Unlike a budget ceiling this never escalates: no human decision unblocks it and it clears itself as jobs finish, so a capped dispatch is deferred (rule `MC`), written nowhere, and re-derived on a later tick |
 | A run continuing past its own merge (slug reuse, #213) | A slug is used once. `runs/<slug>/` on the default branch means the run has shipped, so its record there is the durable one: the source classifies an identical record as historical — by ancestry for a merge commit, by record identity for a squash or rebase merge, which leaves no ancestry to find — and the engine refuses to dispatch or advance a branch that kept committing after its merge (rule `LR`), pausing it `slug-landed` for a human. Neither a ceiling to raise nor a condition that clears itself: the remaining work needs a fresh slug. Staging refuses the slug outright |
 | Hung or stuck dispatch job | Per-role wall-clock timeout (default 30 min; `--role-timeout`) → kill the harness's whole process group, re-dispatch once, then escalate. The group kill matters: a surviving child would keep spending and hold the stdio pipes open, delaying the closing commit |
-| Engine rules drift from frontend readiness rules | One library (`@agentic/core`) hosts both derivations; the readiness table remains the shared spec with one test per row |
+| Engine rules drift from frontend readiness rules | One library (`@gateline/core`) hosts both derivations; the readiness table remains the shared spec with one test per row |
 | Machine writes masquerade as human decisions | Distinct bot author identity; reserved decision grammar; no code path writes `gates.*` |
 | Vendor or model outage mid-run | Dispatch failure → one retry → escalate and pause. Falling back to a registry alternate is a human decision — a silent model swap would invalidate the P5 reasoning recorded for the run |
 | Orchestrator host dies | All state is in git; restart anywhere, probe, converge — the process table is the only unpersisted state and is treated as cache |
@@ -535,15 +535,15 @@ process replacement instead of a silent drift nobody notices.
 
 **Deployment model.** The blessed topology (#100/#112, [TOPOLOGY.md](TOPOLOGY.md)
 §3.1) is one checkout, co-located: the server, the engine, and the CLI are one
-process (`agentic up`) reading and writing one clone, with the globally
-installed `agentic` binary `npm link`ed to that checkout's
+process (`gateline up`) reading and writing one clone, with the globally
+installed `gateline` binary `npm link`ed to that checkout's
 `packages/cli`. There is exactly one blessed tree per deployment, so
 "update the code" reduces to "advance that one checkout" — no fleet of
 processes to reconcile against each other.
 
 **What is monitored.** Not a configured run source — the *code tree*, the git
 checkout that owns the running module's own source, resolved from
-`import.meta.url` (`resolveCodeRepo` in `@agentic/core`). Under the co-located
+`import.meta.url` (`resolveCodeRepo` in `@gateline/core`). Under the co-located
 default this is the same clone the engine reconciles runs against; under a
 host-repo setup (INTEGRATION.md) it need not be, and it is the code tree's
 staleness that matters here. When the running module isn't inside a git
@@ -552,13 +552,13 @@ Fly recipe, DEPLOY.md) baked into a container image with no `.git` above it
 — `resolveCodeRepo` returns null, no monitor is constructed, and this whole
 section is inert: there is nothing to watch.
 
-**Operator flow.** `git pull` in the checkout — by hand, or via `agentic
+**Operator flow.** `git pull` in the checkout — by hand, or via `gateline
 upgrade` (below) — is the only input; the engine never pulls on its own.
 `CodeTreeMonitor` notices at the next tick boundary (heartbeat or startup,
 the same gating `syncFromRemote` uses, §4.2), and once a clean fast-forward is
 confirmed the loop drains in-flight work and exits `75`. Under a supervisor
 that exit is restarted immediately onto the fresh code, with no manual step.
-Without one — a bare local `agentic up` — the process just stops; the
+Without one — a bare local `gateline up` — the process just stops; the
 operator restarts it by hand, at their convenience, since the code is already
 pulled and nothing is lost by waiting.
 
@@ -596,7 +596,7 @@ restart" is the only steady state left to describe).
   differently from a dead one, and points at the actual fix.
 
 **What stays human-owned.** The engine never calls `git pull`; the update
-input is always an operator action (a manual pull, or `agentic upgrade`).
+input is always an operator action (a manual pull, or `gateline upgrade`).
 Resolving a paused code tree — finishing the rebase, cleaning the working
 tree, switching back to the default branch — and restarting afterward are
 both human acts. None of this touches the gate grammar in §4.3 or §7: gate
@@ -609,14 +609,14 @@ lifecycle, never in `state.yaml`.
 ordinary code, chosen for supervisor compatibility: launchd's `KeepAlive`
 restarts on a nonzero exit by default, and systemd's
 `RestartForceExitStatus=75` makes a unit restart on this specific code the
-same way it would on a crash. `agentic-orchestrator watch` and `agentic up`
+same way it would on a crash. `gateline-orchestrator watch` and `gateline up`
 both wire this exit in; a `tick`-driven deployment (§4.1, trigger 4) doesn't
 need it — a one-shot tick already exits after a single pass regardless. A
 launchd example plist for this deployment is deliberately deferred (tracked
 on #141); `packages/orchestrator/README.md`'s trigger-packaging
 section carries one for `tick`, which doesn't need updating for this.
 
-**`agentic upgrade`.** Convenience over the same mechanism, not a second one:
+**`gateline upgrade`.** Convenience over the same mechanism, not a second one:
 refuses on a dirty tree, `git pull --ff-only`, then `npm install` — and,
 when the workspace carries the web app, `npm run build`: the server serves
 `packages/web/dist`, the one part of the tree that does not run from

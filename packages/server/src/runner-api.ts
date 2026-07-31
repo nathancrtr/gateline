@@ -5,7 +5,7 @@
 // `buildRunnerApi` returns undefined when `RUNNER_TOKEN` is unset, so the
 // route never exists unsigned (AC6.1).
 //
-// This file never imports from `@agentic/orchestrator`: `PendingIntent`,
+// This file never imports from `@gateline/orchestrator`: `PendingIntent`,
 // `DispatchOutcome`, and `RunnerCallback` below are structural mirrors of
 // `runner-dispatcher.ts` (task 02) and `seam.ts`'s shapes, kept in lockstep
 // by convention rather than a package dependency, so the server package

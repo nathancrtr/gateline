@@ -8,14 +8,14 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { LocalGitSource } from '@agentic/core'
+import { LocalGitSource } from '@gateline/core'
 import { Engine } from '../src/engine.ts'
 import { parseLedger } from '../src/observe.ts'
 import type { Dispatcher, DispatchOutcome, DispatchRequest } from '../src/seam.ts'
 import { foldHarvestBranch, isPlanDefect } from '../src/workspace.ts'
 import { makeToyRepo, TEST_REGISTRY, toyRef } from './engine.helper.ts'
 
-const BOT = { name: 'agentic-orchestrator', email: 'orchestrator@agentic.invalid' }
+const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
 const GIT_ENV = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' }
 const git = (dir: string, args: string[]) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', env: GIT_ENV }).trim()
 

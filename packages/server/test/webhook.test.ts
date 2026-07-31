@@ -3,7 +3,7 @@ import { createHmac } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { createApp } from '../src/app.ts'
 import { buildWebhook } from '../src/webhook.ts'
-import type { RunSource } from '@agentic/core'
+import type { RunSource } from '@gateline/core'
 
 const SECRET = 'hook-secret'
 

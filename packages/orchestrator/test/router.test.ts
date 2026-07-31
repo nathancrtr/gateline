@@ -90,7 +90,7 @@ describe('RoutingDispatcher (P5 at dispatch time)', () => {
       await import('./engine.helper.ts')
     const { Engine } = await import('../src/engine.ts')
     const { parseLedger } = await import('../src/observe.ts')
-    const { LocalGitSource } = await import('@agentic/core')
+    const { LocalGitSource } = await import('@gateline/core')
 
     const { dir, clock } = makeToyRepo()
     const script = (adapter: string) => (req: { cwd: string; role: string; body: string }) => {
@@ -123,7 +123,7 @@ describe('RoutingDispatcher (P5 at dispatch time)', () => {
     )
     const engine = new Engine({
       repoDir: dir,
-      identity: { name: 'agentic-orchestrator', email: 'o@x.invalid' },
+      identity: { name: 'gateline-orchestrator', email: 'o@x.invalid' },
       dispatcher: router,
       registry: TEST_REGISTRY,
       staleMs: 600_000,

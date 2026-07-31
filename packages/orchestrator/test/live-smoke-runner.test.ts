@@ -17,9 +17,9 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { LocalGitSource } from '@agentic/core'
-import { createApp } from '@agentic/server'
-import { buildRunnerApi } from '@agentic/server/main'
+import { LocalGitSource } from '@gateline/core'
+import { createApp } from '@gateline/server'
+import { buildRunnerApi } from '@gateline/server/main'
 import { Engine } from '../src/engine.ts'
 import { parseLedger } from '../src/observe.ts'
 import { RemoteDispatcher } from '../src/runner-dispatcher.ts'
@@ -29,7 +29,7 @@ import { makeToyRepo, TEST_REGISTRY, toyRef } from './engine.helper.ts'
 
 const live = process.env.ORCH_LIVE_SMOKE_RUNNER === '1'
 
-const BOT = { name: 'agentic-orchestrator', email: 'orchestrator@agentic.invalid' }
+const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
 const TOKEN = 'runner-live-smoke-secret'
 const GIT_ENV = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' }
 const git = (dir: string, args: string[]) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', env: GIT_ENV }).trim()
@@ -49,7 +49,7 @@ function addOrigin(dir: string): string {
 /** A minimal fetch-handler HTTP listener for a real socket the workstation's
  *  child process can reach. Deliberately not `@hono/node-server` (not a
  *  declared dependency of this package — wiring.test.ts already relies on
- *  `hono`'s *types* transitively through `@agentic/server`'s `createApp`
+ *  `hono`'s *types* transitively through `@gateline/server`'s `createApp`
  *  return type, but a real listening socket needs no additional runtime
  *  dependency: `node:http` plus the platform's own Fetch API, global since
  *  Node 18, is enough to adapt one to the other). */
@@ -143,7 +143,7 @@ describe.skipIf(!live)('runner-agent path (live)', () => {
         const server = await listen(app)
         stop = server.close
 
-        workDir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-live-work-'))
+        workDir = mkdtempSync(join(tmpdir(), 'gateline-runner-agent-live-work-'))
         const mainTs = resolve(dirname(fileURLToPath(import.meta.url)), '../../runner-agent/src/main.ts')
         child = spawn(
           process.execPath,

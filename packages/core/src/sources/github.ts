@@ -49,7 +49,7 @@ export class RestPrProvider implements PrProvider {
         accept: 'application/vnd.github+json',
         authorization: `Bearer ${this.token}`,
         'x-github-api-version': '2022-11-28',
-        'user-agent': 'agentic-frontend',
+        'user-agent': 'gateline-frontend',
       },
     })
     if (!response.ok) throw new Error(`GitHub API ${path} failed: HTTP ${response.status}`)

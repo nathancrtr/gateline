@@ -1,7 +1,7 @@
 // Fixture repo generator: a temp git repository with pipeline runs in every
 // interesting state — each gate pending, an escalation, a round-cap breach,
 // a paused run, malformed artifacts, and a merged/done run. Used by the core
-// and server test suites, Playwright, and `agentic ui --demo`. Timestamps are
+// and server test suites, Playwright, and `gateline ui --demo`. Timestamps are
 // deterministic (staggered ages) so inbox ordering is assertable.
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
@@ -419,15 +419,15 @@ export interface FixtureLayoutOpts {
    * fixture consumer expects.
    */
   layout?: 'root' | 'prefixed'
-  /** Metadata prefix directory when `layout: 'prefixed'`. Defaults to `.agentic`. */
+  /** Metadata prefix directory when `layout: 'prefixed'`. Defaults to `.gateline`. */
   prefix?: string
 }
 
 export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts = {}): FixtureRepo {
-  const root = dir ?? mkdtempSync(join(tmpdir(), 'agentic-fixture-'))
+  const root = dir ?? mkdtempSync(join(tmpdir(), 'gateline-fixture-'))
   const repo = new Repo(root)
   const now = Math.floor(Date.now() / 1000)
-  const prefix = layoutOpts.prefix ?? '.agentic'
+  const prefix = layoutOpts.prefix ?? '.gateline'
   const prefixed = layoutOpts.layout === 'prefixed'
   const runsRoot = prefixed ? `${prefix}/runs` : 'runs'
   const contractsRoot = prefixed ? `${prefix}/contracts` : 'contracts'

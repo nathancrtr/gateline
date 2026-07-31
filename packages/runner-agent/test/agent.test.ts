@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { HeadlessManifest } from '@agentic/orchestrator'
+import type { HeadlessManifest } from '@gateline/orchestrator'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildCommand,
@@ -267,7 +267,7 @@ describe('executeIntent — harvest-then-dispose (run "runner-agent" ADR-3, revi
   /** A real throwaway "origin" repo with a run branch — clones and pushes
    *  against it exercise the actual git plumbing, not a mock. */
   function makeOrigin(branch: string): string {
-    const dir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-origin-'))
+    const dir = mkdtempSync(join(tmpdir(), 'gateline-runner-agent-origin-'))
     cleanups.push(dir)
     git(dir, ['init', '-q', '-b', branch])
     git(dir, ['config', 'user.name', 'Toy'])
@@ -280,7 +280,7 @@ describe('executeIntent — harvest-then-dispose (run "runner-agent" ADR-3, revi
 
   it('a successful dispatch that produced changes harvests them to a branch and pushes it, only then removing the workspace', async () => {
     const origin = makeOrigin('run/toy')
-    const workDir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-work-'))
+    const workDir = mkdtempSync(join(tmpdir(), 'gateline-runner-agent-work-'))
     cleanups.push(workDir)
     const outcome = await executeIntent({
       intent: INTENT,
@@ -305,7 +305,7 @@ describe('executeIntent — harvest-then-dispose (run "runner-agent" ADR-3, revi
 
   it('a harness that commits its own work (every dispatch prompt instructs this) is still harvested — review-04.md round-2 F8', async () => {
     const origin = makeOrigin('run/toy')
-    const workDir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-work-'))
+    const workDir = mkdtempSync(join(tmpdir(), 'gateline-runner-agent-work-'))
     cleanups.push(workDir)
     // The harness writes AND commits, per prompts.ts's own instruction to
     // every dispatched role ("commit it on the current branch") — the
@@ -332,7 +332,7 @@ describe('executeIntent — harvest-then-dispose (run "runner-agent" ADR-3, revi
 
   it('a successful dispatch that produced no changes reports ok with no harvest field', async () => {
     const origin = makeOrigin('run/toy')
-    const workDir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-work-'))
+    const workDir = mkdtempSync(join(tmpdir(), 'gateline-runner-agent-work-'))
     cleanups.push(workDir)
     const outcome = await executeIntent({
       intent: INTENT,
@@ -347,7 +347,7 @@ describe('executeIntent — harvest-then-dispose (run "runner-agent" ADR-3, revi
 
   it('a rejected harvest push keeps the workspace and reports failure instead of discarding the work', async () => {
     const origin = makeOrigin('run/toy')
-    const workDir = mkdtempSync(join(tmpdir(), 'agentic-runner-agent-work-'))
+    const workDir = mkdtempSync(join(tmpdir(), 'gateline-runner-agent-work-'))
     cleanups.push(workDir)
     let workspacePath = ''
     const outcome = await executeIntent({

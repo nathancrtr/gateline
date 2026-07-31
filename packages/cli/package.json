@@ -1,22 +1,22 @@
 {
-  "name": "@agentic/cli",
+  "name": "@gateline/cli",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "agentic \u2014 the gate frontend in terminal form: status, inbox, and the same single decision write path.",
+  "description": "gateline \u2014 the gate frontend in terminal form: status, inbox, and the same single decision write path.",
   "bin": {
-    "agentic": "./src/main.ts"
+    "gateline": "./src/main.ts"
   },
   "exports": {
     ".": "./src/main.ts"
   },
   "dependencies": {
-    "@agentic/core": "*",
-    "@agentic/server": "*",
+    "@gateline/core": "*",
+    "@gateline/server": "*",
     "commander": "^14.0.0",
-    "@agentic/orchestrator": "*"
+    "@gateline/orchestrator": "*"
   },
   "devDependencies": {
-    "@agentic/fixtures": "*"
+    "@gateline/fixtures": "*"
   }
 }

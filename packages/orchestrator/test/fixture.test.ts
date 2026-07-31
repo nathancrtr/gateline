@@ -5,12 +5,12 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
-import { generateFixtureRepo } from '@agentic/fixtures'
-import { LocalGitSource } from '@agentic/core'
+import { generateFixtureRepo } from '@gateline/fixtures'
+import { LocalGitSource } from '@gateline/core'
 import { deriveAll } from '../src/tick.ts'
 import type { DerivedAction } from '../src/derive.ts'
 
-const dir = mkdtempSync(join(tmpdir(), 'agentic-orch-fixture-'))
+const dir = mkdtempSync(join(tmpdir(), 'gateline-orch-fixture-'))
 generateFixtureRepo(dir)
 const source = new LocalGitSource('fixture', dir)
 const estimates = { analyst: 2, architect: 5, implementer: 8, reviewer: 4, verifier: 6, ops: 2 }

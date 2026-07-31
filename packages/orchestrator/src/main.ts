@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// agentic-orchestrator — the v1 orchestrator's CLI.
+// gateline-orchestrator — the v1 orchestrator's CLI.
 //   tick --dry-run   derive and print each run's next action; write nothing
 //   tick             one live reconcile pass: dispatch, wait, meter, exit
 //   watch            resident mode: ref watcher + heartbeat + completions
 //   shadow <slug>    replay a run's history, derived vs actual (M1)
 //   sweep <role>     force a scheduled sweep now (ignores dueness, not the guards)
 import { Command } from 'commander'
-import { CodeTreeMonitor, Git, LocalGitSource, resolveCodeRepo, SUPERSEDE_EXIT_CODE } from '@agentic/core'
+import { CodeTreeMonitor, Git, LocalGitSource, resolveCodeRepo, SUPERSEDE_EXIT_CODE } from '@gateline/core'
 import { loadRegistry, type Registry } from './registry.ts'
 import { deriveAll } from './tick.ts'
 import { formatAction } from './derive.ts'
@@ -21,13 +21,13 @@ export { BOT_IDENTITY }
 
 const program = new Command()
 program
-  .name('agentic-orchestrator')
+  .name('gateline-orchestrator')
   .description('Stateless reconciler for artifact-driven agent pipelines (docs/ORCHESTRATOR.md)')
   .version('0.1.0')
   .option('--repo <path>', 'repository to operate on (default: cwd)', process.cwd())
   .option(
-    '--agentic-prefix <prefix>',
-    'metadata prefix of an integrate.py --layout prefixed host, when not the .agentic default',
+    '--gateline-prefix <prefix>',
+    'metadata prefix of an integrate.py --layout prefixed host, when not the .gateline default',
   )
   .option(
     '--adapter <name>',
@@ -63,17 +63,17 @@ interface Opened {
 }
 
 async function open(): Promise<Opened> {
-  const { repo: dir, agenticPrefix } = program.opts<{ repo: string; agenticPrefix?: string }>()
+  const { repo: dir, gatelinePrefix } = program.opts<{ repo: string; gatelinePrefix?: string }>()
   const git = new Git(dir)
   return {
     dir,
-    source: new LocalGitSource('local', dir, { frameworkPrefix: agenticPrefix }),
-    registry: await loadRegistry(git, await git.defaultBranch(), agenticPrefix),
-    frameworkPrefix: agenticPrefix,
+    source: new LocalGitSource('local', dir, { frameworkPrefix: gatelinePrefix }),
+    registry: await loadRegistry(git, await git.defaultBranch(), gatelinePrefix),
+    frameworkPrefix: gatelinePrefix,
   }
 }
 
-/** CLI flags → the shared assembly (start.ts): one construction path for the binary and `agentic up`. */
+/** CLI flags → the shared assembly (start.ts): one construction path for the binary and `gateline up`. */
 async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler: Scheduler; manifestStaleProbe: () => Promise<string[]> }> {
   const names = program.opts<{ adapter: string[] }>().adapter
   const hosted = program.opts<{

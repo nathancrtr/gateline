@@ -5,13 +5,13 @@
 // The ref-watch mirrors the frontend server's freshness watcher.
 import { watch, type FSWatcher } from 'node:fs'
 import { join } from 'node:path'
-import { Git, writeEngineHealth, type CodeTreeMonitor, type CodeTreeState, type CodeTreeStatus } from '@agentic/core'
+import { Git, writeEngineHealth, type CodeTreeMonitor, type CodeTreeState, type CodeTreeStatus } from '@gateline/core'
 import type { TickOutcome } from './engine.ts'
 import type { Scheduler } from './schedule.ts'
 
 /**
  * The engine surface `runLoop` actually drives, narrowed from the concrete
- * `Engine` class (which the CLI and `agentic up` pass in) so tests can
+ * `Engine` class (which the CLI and `gateline up` pass in) so tests can
  * supply a fake without fighting `Engine`'s private fields — an object
  * literal can't structurally satisfy a class type carrying private state,
  * but a real `Engine` instance satisfies this interface trivially.
@@ -170,7 +170,7 @@ export async function runLoop(engine: EngineLike, repoDir: string, cfg: RunLoopC
     }
     // Supersede (#141): fire exactly once for the loop's life, after the
     // heartbeat carrying the confirming check has been written. The callback
-    // owner (agentic up, agentic-orchestrator watch) decides to drain and
+    // owner (gateline up, gateline-orchestrator watch) decides to drain and
     // exit; the loop itself keeps idling since state stays non-fresh.
     if (!firedSupersede && lastStatus?.state === 'supersede-confirmed') {
       firedSupersede = true

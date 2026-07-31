@@ -4,12 +4,12 @@
 import { execFileSync } from 'node:child_process'
 import { rmSync } from 'node:fs'
 import { afterEach, describe, expect, it } from 'vitest'
-import { LocalGitSource } from '@agentic/core'
+import { LocalGitSource } from '@gateline/core'
 import { Engine } from '../src/engine.ts'
 import { parseLedger } from '../src/observe.ts'
 import { agentCommit, FakeDispatcher, makeToyRepo, SPEC, TEST_REGISTRY, type Clock } from './engine.helper.ts'
 
-const BOT = { name: 'agentic-orchestrator', email: 'orchestrator@agentic.invalid' }
+const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
 
 const cleanups: string[] = []
 afterEach(() => {

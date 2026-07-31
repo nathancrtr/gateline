@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto'
 import { access } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Git } from '@agentic/core'
+import { Git } from '@gateline/core'
 
 // Parallel dispatches for one run share its checkout; single-flight the
 // worktree creation so concurrent jobs don't race `git worktree add`.
@@ -26,7 +26,7 @@ export function ensureRunCheckout(repoDir: string, branch: string): Promise<stri
 async function createRunCheckout(repoDir: string, branch: string): Promise<string> {
   const git = new Git(repoDir)
   const repoKey = createHash('sha256').update(repoDir).digest('hex').slice(0, 12)
-  const path = join(tmpdir(), 'agentic-orchestrator', repoKey, branch.replace(/\//g, '-'))
+  const path = join(tmpdir(), 'gateline-orchestrator', repoKey, branch.replace(/\//g, '-'))
 
   const worktrees = await git.worktrees()
   const existing = worktrees.find((w) => w.branch === `refs/heads/${branch}`)
@@ -34,7 +34,7 @@ async function createRunCheckout(repoDir: string, branch: string): Promise<strin
     // Ours (this process or a crashed predecessor) — adopt it. Compare by
     // the marker directory, not exact path: macOS tmpdir() says /var/…
     // while git reports the resolved /private/var/….
-    if (existing.path.includes('agentic-orchestrator')) return existing.path
+    if (existing.path.includes('gateline-orchestrator')) return existing.path
     // The branch is checked out somewhere the orchestrator does not own —
     // likely a human's working copy. Dispatching an agent into it would race
     // their edits; refuse and let the failure surface as an escalation.
@@ -59,7 +59,7 @@ async function createRunCheckout(repoDir: string, branch: string): Promise<strin
 export async function removeRunCheckout(repoDir: string, branch: string): Promise<void> {
   const git = new Git(repoDir)
   const worktrees = await git.worktrees()
-  const mine = worktrees.find((w) => w.branch === `refs/heads/${branch}` && w.path.includes('agentic-orchestrator'))
+  const mine = worktrees.find((w) => w.branch === `refs/heads/${branch}` && w.path.includes('gateline-orchestrator'))
   if (mine) await git.run(['worktree', 'remove', '--force', mine.path]).catch(() => {})
 }
 
@@ -81,7 +81,7 @@ export async function ensureTaskCheckout(repoDir: string, runBranch: string, tas
   const git = new Git(repoDir)
   const branch = taskBranchName(runBranch, task)
   const repoKey = createHash('sha256').update(repoDir).digest('hex').slice(0, 12)
-  const path = join(tmpdir(), 'agentic-orchestrator', repoKey, branch.replace(/\//g, '-'))
+  const path = join(tmpdir(), 'gateline-orchestrator', repoKey, branch.replace(/\//g, '-'))
 
   // A leftover branch from a crashed dispatch is stale by definition — the
   // heartbeat re-dispatches from the current run tip, never resumes it.
@@ -263,8 +263,8 @@ export async function foldHarvestBranch(
   const git = new Git(repoDir)
   const repoKey = createHash('sha256').update(repoDir).digest('hex').slice(0, 12)
   const localBranch = `harvest-${harvest.branch.replace(/\//g, '-')}`
-  const fetchRef = `refs/agentic-harvest/${localBranch}`
-  const path = join(tmpdir(), 'agentic-orchestrator', repoKey, localBranch)
+  const fetchRef = `refs/gateline-harvest/${localBranch}`
+  const path = join(tmpdir(), 'gateline-orchestrator', repoKey, localBranch)
 
   // The origin branch is this fold's retained copy on every failure path: it
   // is what the escalated human recovers from (F9), so name it in the result.

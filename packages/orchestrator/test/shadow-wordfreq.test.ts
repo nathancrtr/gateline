@@ -5,7 +5,7 @@
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { LocalGitSource } from '@agentic/core'
+import { LocalGitSource } from '@gateline/core'
 import { shadowReplay, type ShadowStep } from '../src/shadow.ts'
 
 const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../..')

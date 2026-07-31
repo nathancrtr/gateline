@@ -128,14 +128,14 @@ portfolio view says so at the top, loudly (#100).
 
 ### 3.5 Trying changes locally — the trial instance
 
-A corollary of §3.1: the blessed checkout (the tree the global `agentic`
+A corollary of §3.1: the blessed checkout (the tree the global `gateline`
 symlinks into) stays on the default branch, always. Trying an unmerged frontend
 change never means moving that checkout to a branch — if an engine is running
 there, that would put unreviewed code in charge of live, metered dispatch.
 
 Instead, the branch's own worktree is the trial instance. Two properties make
 this free: the CLI and server run from TypeScript source (`node
-packages/cli/src/main.ts` in any tree *is* that tree's `agentic`), and Gatehouse
+packages/cli/src/main.ts` in any tree *is* that tree's `gateline`), and Gatehouse
 observes a repository through its git refs, so the observed repo's checked-out
 branch is irrelevant. From the worktree:
 
@@ -153,7 +153,7 @@ is untouched and ctrl-C removes the trial. Rules of the road:
 - **Decision clicks belong to `ui --demo`** (a generated throwaway repository).
   `POST /api/decisions` writes real state commits to whatever repo is observed.
 - **Web-only changes** can use the hot-reload loop instead: `npm run dev -w
-  @agentic/web` (vite on 4311, proxying `/api` to 4310). For changes that touch
+  @gateline/web` (vite on 4311, proxying `/api` to 4310). For changes that touch
   server or core routes, use the built self-contained flow above so the API
   comes from the trial tree too.
 
@@ -162,10 +162,10 @@ is untouched and ctrl-C removes the trial. Rules of the road:
 A deployment that never touches origin at all — no `git push`, no `gh`/GitHub
 API call, no `git fetch` of `origin` — is not an accident of `--no-push` left
 with a fetch loop that happens to fail quietly. It is a named, first-class
-mode: **local-only**. `agentic up` and per-source config resolve through the
+mode: **local-only**. `gateline up` and per-source config resolve through the
 one `push`/local-only precedence table implemented once in `resolveMode`
 (`packages/core/src/view-model/config.ts`, called from
-`loadSources`). The standalone `agentic-orchestrator` binary never calls
+`loadSources`). The standalone `gateline-orchestrator` binary never calls
 `loadSources` — it has its own repo (no config file, no multi-source list) —
 so `assembleOrchestrator` (`packages/orchestrator/src/start.ts`)
 repeats the same conflict check and auto-detect logic against its own
@@ -187,17 +187,17 @@ tiers below hold for both.
    `remote.origin.url` configured → local-only; an origin exists → not
    local-only. Whether a not-local-only source then pushes is a separate
    question, answered by rule 3's push default for its tier — CLI-tier
-   sources (`agentic up` against `--repo` paths or the cwd default) also
+   sources (`gateline up` against `--repo` paths or the cwd default) also
    auto-detect push the same way (`push = originExists`, #149); config-file
    entries and the standalone binary default `push` to `false` even with an
    origin present, and stay a read-only poller (or touch origin not at all)
    unless `push`/`--push` is set explicitly.
 
-**The `--no-push` alias, and where it stops.** `agentic up --no-push` resolves
+**The `--no-push` alias, and where it stops.** `gateline up --no-push` resolves
 to full local-only — no push, no `gh` calls, no origin fetch — not merely a
 push ceiling; a `--no-push` clone that still fetched origin and opened draft
 PRs behind the operator's back was exactly the leak this topology closes. (The
-standalone `agentic-orchestrator` binary has no `--no-push` of its own — it
+standalone `gateline-orchestrator` binary has no `--no-push` of its own — it
 takes `--push` and `--local-only` directly.) The alias holds only at the CLI
 tier.
 A **config-tier** source with an explicit `push: false` and an origin present
@@ -211,14 +211,14 @@ config source into local-only.
 - No `git push` ever runs — the resolved `push` boolean is forced `false`.
 - No `gh`/GitHub API call is made — the draft-PR ensure short-circuits before
   any git or `gh` invocation (at both call sites: the engine's first-dispatch
-  ensure and `agentic arm`), and the PR-approval sync path never even
+  ensure and `gateline arm`), and the PR-approval sync path never even
   constructs its provider.
 - No `git fetch` of `origin` runs, from either the engine's heartbeat sync or
   the server's per-source interval sync.
-- `agentic sync` never throws, including on a repo with no `origin` remote at
+- `gateline sync` never throws, including on a repo with no `origin` remote at
   all; it prints the literal `local-only: nothing to sync` and exits 0.
 
-**Naming the mode, not just inferring it.** `agentic up`'s startup log states
+**Naming the mode, not just inferring it.** `gateline up`'s startup log states
 which resolution path fired: `local-only (--local-only)`, `local-only
 (--no-push)`, or `local-only (no origin remote)` on one side; `pushing to
 origin (--push)` or `pushing to origin (origin auto-detected)` on the other.

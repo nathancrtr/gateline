@@ -48,7 +48,7 @@ export class LocalGitSource implements RunSource {
    * surfaces omit it and write as `git config user.name/email`, so machine
    * bookkeeping and human decisions stay distinguishable at a glance.
    *
-   * `options.frameworkPrefix` overrides the default `.agentic` probe location
+   * `options.frameworkPrefix` overrides the default `.gateline` probe location
    * for a host integrated with a custom `integrate.py --prefix` (#94).
    *
    * `options.localOnly` forces push off (belt-and-braces — `loadSources`
@@ -376,7 +376,7 @@ export class LocalGitSource implements RunSource {
     const worktree = (await this.git.worktrees()).find((w) => w.branch === branchRef)
     if (worktree) {
       const wtGit = new Git(worktree.path)
-      const intentRef = `refs/agentic/wip/${ref.branch}`
+      const intentRef = `refs/gateline/wip/${ref.branch}`
       const status = await wtGit.run(['status', '--porcelain', '--', statePath])
       if (status.trim() !== '') {
         if (!(await this.recoverIntent(wtGit, intentRef, tip, statePath, worktree.path)))
@@ -454,7 +454,7 @@ export class LocalGitSource implements RunSource {
    *
    * 1. the dirt is a worktree-only modification of exactly the state file
    *    (nothing staged, untracked, or additional);
-   * 2. `refs/agentic/wip/<branch>` resolves to a commit whose first parent is
+   * 2. `refs/gateline/wip/<branch>` resolves to a commit whose first parent is
    *    the current branch tip;
    * 3. the checkout's bytes for the state file equal that commit's copy.
    *

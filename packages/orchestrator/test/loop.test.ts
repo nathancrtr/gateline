@@ -10,7 +10,7 @@ import { readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { CodeTreeMonitor, engineHealthPath, type CodeTreeStatus, type EngineHealth } from '@agentic/core'
+import { CodeTreeMonitor, engineHealthPath, type CodeTreeStatus, type EngineHealth } from '@gateline/core'
 import type { TickOutcome } from '../src/engine.ts'
 import { runLoop, type EngineLike } from '../src/triggers.ts'
 
@@ -34,7 +34,7 @@ function commit(dir: string, message: string): string {
 }
 
 function makeRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'agentic-loop-'))
+  const dir = mkdtempSync(join(tmpdir(), 'gateline-loop-'))
   cleanups.push(dir)
   git(dir, ['init', '-q', '-b', 'main'])
   git(dir, ['config', 'user.name', 'Toy'])

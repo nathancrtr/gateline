@@ -68,7 +68,7 @@ export function planRunScaffold(input: RunScaffoldInput): RunScaffold {
 
   const stateYaml = `run: ${input.slug}
 branch: ${branch}
-phase: paused             # staged — not yet armed; \`agentic arm ${input.slug}\` starts the run
+phase: paused             # staged — not yet armed; \`gateline arm ${input.slug}\` starts the run
 paused_reason: staged
 profile: ${input.profile}        # patch | standard | full
 intake:                   # source-agnostic staging provenance; free-form path: nulls + client_key

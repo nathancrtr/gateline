@@ -49,7 +49,7 @@ const STALE_GRACE_MS = 60_000
 
 export async function engineHealthPath(repoDir: string): Promise<string> {
   const common = (await new Git(repoDir).run(['rev-parse', '--path-format=absolute', '--git-common-dir'])).trim()
-  return join(common, 'agentic', 'engine-health.json')
+  return join(common, 'gateline', 'engine-health.json')
 }
 
 export async function writeEngineHealth(repoDir: string, health: EngineHealth): Promise<void> {

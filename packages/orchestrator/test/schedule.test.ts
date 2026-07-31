@@ -15,7 +15,7 @@ import {
 } from '../src/schedule.ts'
 import { agentCommit, Clock, FakeDispatcher, makeToyRepo, TEST_REGISTRY } from './engine.helper.ts'
 
-const BOT = { name: 'agentic-orchestrator', email: 'orchestrator@agentic.invalid' }
+const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
 
 describe('parseEvery', () => {
   it('parses d/h/m spellings', () => {
@@ -133,7 +133,7 @@ describe('Scheduler end-to-end', () => {
     // No state.yaml: sweeps stay out of the gate engine's derivation entirely.
     expect(() => git(dir, ['show', `${branch}:runs/${slug}/state.yaml`])).toThrow()
     // The intent commit is the bot's; the human decision grammar is untouched.
-    expect(git(dir, ['log', '--format=%an', branch, '--', `runs/${slug}/sweep.yaml`])).toContain('agentic-orchestrator')
+    expect(git(dir, ['log', '--format=%an', branch, '--', `runs/${slug}/sweep.yaml`])).toContain('gateline-orchestrator')
 
     // Open sweep → rest (S1), even though dueness would still say dispatch.
     expect(await scheduler.tick()).toMatchObject([{ kind: 'rest', rule: 'S1' }])

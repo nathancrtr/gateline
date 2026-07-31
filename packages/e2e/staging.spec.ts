@@ -10,7 +10,7 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
 import { rmSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
-import { generateFixtureRepo } from '@agentic/fixtures'
+import { generateFixtureRepo } from '@gateline/fixtures'
 
 const PORT = 4398
 test.use({ baseURL: `http://127.0.0.1:${PORT}` })

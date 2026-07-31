@@ -47,7 +47,7 @@ const npmCalls = () => {
 }
 
 beforeAll(() => {
-  root = mkdtempSync(join(tmpdir(), 'agentic-upgrade-'))
+  root = mkdtempSync(join(tmpdir(), 'gateline-upgrade-'))
   binDir = join(root, 'bin')
   npmLog = join(root, 'npm.log')
   mkdirSync(binDir)
@@ -61,7 +61,7 @@ afterAll(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-describe('agentic upgrade', () => {
+describe('gateline upgrade', () => {
   it('pulls, installs, and rebuilds the web dist when the workspace carries the web app (packages/ layout)', async () => {
     const work = scratchRepo('with-web', {
       'packages/package.json': '{"name":"ws"}',

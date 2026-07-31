@@ -1,6 +1,6 @@
 // Where a source's core-layer trees actually live. Most repos keep the
 // framework at their own root; a repo integrated via `integrate.py init`
-// (the tool's own default: --layout prefixed --prefix .agentic) keeps them
+// (the tool's own default: --layout prefixed --prefix .gateline) keeps them
 // under a metadata prefix instead. Probing framework-lock.json (which
 // integrate.py always writes, regardless of layout) is how a consumer tells
 // the two apart without being told which one it is.
@@ -19,7 +19,7 @@ export interface FrameworkRoots {
   roles: string
 }
 
-export const DEFAULT_FRAMEWORK_PREFIX = '.agentic'
+export const DEFAULT_FRAMEWORK_PREFIX = '.gateline'
 
 const ROOT_LAYOUT: FrameworkRoots = { runs: 'runs', contracts: 'contracts', registry: 'registry', adapters: 'adapters', roles: 'roles' }
 
@@ -49,7 +49,7 @@ function rootsFromLock(raw: string | null, prefix: string): FrameworkRoots {
 /**
  * Resolve core-layer roots for `rev`, reading the lock through git (never the
  * working tree). `prefixHint` overrides the default probe location
- * (`.agentic`) for a host integrated with a custom `--prefix`; absent a
+ * (`.gateline`) for a host integrated with a custom `--prefix`; absent a
  * recognized lock at that location, the repo is assumed to carry the
  * framework at its own root.
  */

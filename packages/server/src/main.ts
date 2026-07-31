@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// `agentic ui` / `npm run dev` entrypoint: resolve sources, watch refs, serve
+// `gateline ui` / `npm run dev` entrypoint: resolve sources, watch refs, serve
 // the API and (when built) the SPA on localhost.
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { dirname, extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { serve } from '@hono/node-server'
-import { loadSources } from '@agentic/core'
+import { loadSources } from '@gateline/core'
 import { createApp } from './app.ts'
 import { GenerationCache } from './cache.ts'
 import { buildRunnerApi, type RunnerCallback } from './runner-api.ts'
@@ -62,7 +62,7 @@ const MIME: Record<string, string> = {
 export async function startServer(opts: ServeOptions = {}): Promise<{ url: string; close: () => void }> {
   let repoOverrides = opts.repoOverrides
   if (opts.demo) {
-    const { generateFixtureRepo } = await import('@agentic/fixtures')
+    const { generateFixtureRepo } = await import('@gateline/fixtures')
     const fixture = generateFixtureRepo()
     console.log(`demo repository generated at ${fixture.dir}`)
     repoOverrides = [fixture.dir]
@@ -71,7 +71,7 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
   const { sources, configPath, warnings } = await loadSources({ repoOverrides, push: opts.push, localOnly: opts.localOnly })
   for (const w of warnings) console.warn(`warning: ${w}`)
   if (sources.length === 0) {
-    throw new Error('no run sources — run inside a repository, pass --repo <path>, or create ~/.config/agentic/config.yaml')
+    throw new Error('no run sources — run inside a repository, pass --repo <path>, or create ~/.config/gateline/config.yaml')
   }
   console.log(
     `sources: ${sources.map((s) => s.id).join(', ')}${configPath ? ` (from ${configPath})` : ''}`,
@@ -175,7 +175,7 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
   const host = opts.host ?? '127.0.0.1'
   const server = serve({ fetch: app.fetch, port, hostname: host })
   const url = `http://${host === '0.0.0.0' ? 'localhost' : host}:${port}`
-  console.log(`agentic ui listening on ${url}${hasSpa ? '' : '  (API only — run `npm run build` for the SPA, or `npm run dev -w @agentic/web`)'}`)
+  console.log(`gateline ui listening on ${url}${hasSpa ? '' : '  (API only — run `npm run build` for the SPA, or `npm run dev -w @gateline/web`)'}`)
 
   if (opts.open) {
     const { exec } = await import('node:child_process')

@@ -1,11 +1,11 @@
-# @agentic/orchestrator — the v1 orchestrator
+# @gateline/orchestrator — the v1 orchestrator
 
 The [ORCHESTRATOR.md](../../docs/ORCHESTRATOR.md) design, implemented: a
 **stateless reconciler** that executes `roles/orchestrator.md` without a human.
 Triggers fire an idempotent tick that reads `state.yaml` at the run branch tip,
 derives the next action from committed files alone, executes it, CAS-commits,
 and exits. Gate waits are rest states and cost nothing. Humans interact only at
-gates and escalations, through the frontend or `agentic` CLI, exactly as before.
+gates and escalations, through the frontend or `gateline` CLI, exactly as before.
 
 Rules it is built to be checked against:
 
@@ -14,16 +14,16 @@ Rules it is built to be checked against:
 - **The co-writer contract** (design §7): CAS ref updates; comment-preserving
   YAML; ISO-8601 timestamps; the orchestrator's own commit verbs
   (`dispatched | bounced | advanced | escalated | paused | metered | harvested`)
-  under a bot identity (`agentic-orchestrator`, one per install) — the human
+  under a bot identity (`gateline-orchestrator`, one per install) — the human
   decision grammar (`G2 approved by <name>`) is reserved for humans.
 - **Every model invocation flows through the dispatch seam** and is metered
   into `budget.ledger[]`; enforcement is a pre-flight cap check that pauses
   (`budget-exhausted`), never degrades. Enforcement — not metering — can be
-  switched off with `--no-budget-enforcement` (also on `agentic up`) for
+  switched off with `--no-budget-enforcement` (also on `gateline up`) for
   flat-rate-billed harnesses (#109); the ledger records either way.
 - **R2 scoping:** the frontend's "exactly one write path" governs the human
   surfaces (web, CLI, server — still dispatch-free). The orchestrator is the
-  sanctioned machine co-writer, a sibling consumer of the same `@agentic/core`
+  sanctioned machine co-writer, a sibling consumer of the same `@gateline/core`
   write path, under the same rules about what it may write.
 
 ## Runbook
@@ -54,7 +54,7 @@ node orchestrator/src/main.ts --repo ~/repos/myproject \
 node orchestrator/src/main.ts --repo ~/repos/myproject sweep historian
 ```
 
-**Merge-updates.** `watch` (and `agentic up`, its co-located twin) checks the
+**Merge-updates.** `watch` (and `gateline up`, its co-located twin) checks the
 code checkout it runs from at each heartbeat/startup tick boundary; once a
 `git pull` there fast-forwards past the commit the process started on, it
 drains in-flight dispatches and exits `75` (`SUPERSEDE_EXIT_CODE`,
@@ -62,7 +62,7 @@ docs/ORCHESTRATOR.md §13 — self-supersede, #141) instead of continuing to
 reconcile on stale code. Pair `watch` with a supervisor (systemd
 `RestartForceExitStatus=75`, launchd `KeepAlive`, or the Fly recipe's own
 restart loop) for hands-off merge-updates; unsupervised, the process just
-stops and waits for a manual restart. `agentic upgrade` is the one-command
+stops and waits for a manual restart. `gateline upgrade` is the one-command
 update: refuses on a dirty tree, `git pull --ff-only`, then `npm install` if
 `HEAD` moved.
 
@@ -80,13 +80,13 @@ Driving a live toy run end-to-end (the M2 exit criterion):
    `runs/<slug>/`, intent brief, `state.yaml` with a real
    `budget.cost_limit_usd`), commit.
 2. Start `watch`. The orchestrator dispatches the Analyst and rests at G0.
-3. Decide gates in the frontend (`agentic ui`) or CLI (`agentic approve …`)
-   as they arrive in the inbox. Pause any time (`agentic pause`); in-flight
+3. Decide gates in the frontend (`gateline ui`) or CLI (`gateline approve …`)
+   as they arrive in the inbox. Pause any time (`gateline pause`); in-flight
    work lands harmlessly, nothing new launches until you resume.
 4. Watch `git log run/<slug>` — every dispatch, bounce, and metering commit is
    there, authored by the bot; every decision is yours, authored by you.
 
-Stopping a resident orchestrator (`watch`, `agentic up`) is a drain ladder (#150),
+Stopping a resident orchestrator (`watch`, `gateline up`) is a drain ladder (#150),
 so picking up a merged fix never has to cost in-flight metered work:
 
 1. First `^C` **drains**: nothing new dispatches; in-flight work runs to its
@@ -109,27 +109,27 @@ and a missed event is only ever a delay, never a lost action:
 
 ```bash
 # cron: a tick every 5 minutes
-*/5 * * * * cd $HOME/repos/agentic-sandbox/packages && /usr/local/bin/node orchestrator/src/main.ts --repo $HOME/repos/myproject tick >> $HOME/.agentic-orchestrator.log 2>&1
+*/5 * * * * cd $HOME/repos/gateline/packages && /usr/local/bin/node orchestrator/src/main.ts --repo $HOME/repos/myproject tick >> $HOME/.gateline-orchestrator.log 2>&1
 ```
 
 ```xml
-<!-- launchd: ~/Library/LaunchAgents/dev.agentic.orchestrator.plist -->
+<!-- launchd: ~/Library/LaunchAgents/dev.gateline.orchestrator.plist -->
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-  <key>Label</key><string>dev.agentic.orchestrator</string>
+  <key>Label</key><string>dev.gateline.orchestrator</string>
   <key>ProgramArguments</key><array>
     <string>/usr/local/bin/node</string>
     <string>orchestrator/src/main.ts</string>
     <string>--repo</string><string>/Users/you/repos/myproject</string>
     <string>tick</string>
   </array>
-  <key>WorkingDirectory</key><string>/Users/you/repos/agentic-sandbox/packages</string>
+  <key>WorkingDirectory</key><string>/Users/you/repos/gateline/packages</string>
   <key>StartInterval</key><integer>300</integer>
-  <key>StandardOutPath</key><string>/tmp/agentic-orchestrator.log</string>
-  <key>StandardErrorPath</key><string>/tmp/agentic-orchestrator.log</string>
+  <key>StandardOutPath</key><string>/tmp/gateline-orchestrator.log</string>
+  <key>StandardErrorPath</key><string>/tmp/gateline-orchestrator.log</string>
 </dict></plist>
-<!-- launchctl load ~/Library/LaunchAgents/dev.agentic.orchestrator.plist -->
+<!-- launchctl load ~/Library/LaunchAgents/dev.gateline.orchestrator.plist -->
 ```
 
 A CI-triggered variant (scheduled + event-dispatched workflows) slots into the

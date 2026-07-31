@@ -60,7 +60,7 @@ function isAncestor(maybeAncestor: string, of: string): boolean {
 const kindOf = async (slug: string) => (await source.listRuns()).find((r) => r.slug === slug)?.kind
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), 'agentic-merged-runs-'))
+  dir = mkdtempSync(join(tmpdir(), 'gateline-merged-runs-'))
   source = new LocalGitSource('fixture', dir)
   git(['init', '-q', '-b', 'main'])
   git(['config', 'user.name', 'Fixture Operator'])

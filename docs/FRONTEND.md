@@ -3,7 +3,7 @@
 **Status:** v0.2 — the architecture and implementation plan exists
 ([FRONTEND-PLAN.md](FRONTEND-PLAN.md)), and Stage C's *UX* has been pulled
 forward as a local-first build (`packages/`): the decision inbox, portfolio,
-gate cards with burden capture, the `agentic` CLI, metrics, and PR-approval
+gate cards with burden capture, the `gateline` CLI, metrics, and PR-approval
 sync — all while refusing Stage C *infrastructure* (no hosting, no auth, no
 store; reads address git refs, writes are CAS commits to `state.yaml`). The
 staging logic below is unchanged: Stage A remains what a fresh adopter can run
@@ -281,7 +281,7 @@ the pilot plan §6. *Purpose:* generate the evidence that says which frictions a
 
 **Stage B — gate CLI + generated status page (build ≈ days, no server).**
 Two small tools, both repo-resident:
-1. `agentic` CLI: `status` (render runs' state), `approve G1 --notes …` /
+1. `gateline` CLI: `status` (render runs' state), `approve G1 --notes …` /
    `decline` / `resolve-escalation` — writes the `state.yaml` entry with name (from
    git config), timestamp, and prompted correction-category, then commits;
    `resolve-escalation` also takes an optional `--disposition` naming a

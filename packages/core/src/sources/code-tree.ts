@@ -7,7 +7,7 @@
 //
 // `CodeTreeMonitor` is a pure check-on-demand state machine: it never calls
 // `process.exit` and holds no timers. Callers (the orchestrator loop,
-// `agentic up`) decide what a state transition means operationally; this
+// `gateline up`) decide what a state transition means operationally; this
 // module only observes and debounces.
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url'
 import { Git } from './git.ts'
 
 /**
- * Exit code `agentic up` (and `agentic-orchestrator watch`) use once they
+ * Exit code `gateline up` (and `gateline-orchestrator watch`) use once they
  * have drained and stopped in response to a confirmed supersede, so a
  * supervisor restarts them on fresh code. 75 is EX_TEMPFAIL from
  * `<sysexits.h>` — "temporary failure, please retry" — chosen because it

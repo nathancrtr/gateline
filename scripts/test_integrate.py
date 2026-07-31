@@ -34,7 +34,7 @@ def init(host, *extra):
 
 
 def validate(host):
-    return run([host / ".agentic" / "scripts" / "integrate.py", "validate", host])
+    return run([host / ".gateline" / "scripts" / "integrate.py", "validate", host])
 
 
 def test_init_and_validate_prefixed_private(tmp_path):
@@ -42,17 +42,17 @@ def test_init_and_validate_prefixed_private(tmp_path):
     result = init(host, "--take", "sdlc")
     assert result.returncode == 0, result.stdout + result.stderr
 
-    lock = json.loads((host / ".agentic" / "framework-lock.json").read_text())
+    lock = json.loads((host / ".gateline" / "framework-lock.json").read_text())
     schema = json.loads((FRAMEWORK / "scripts" / "framework-lock.schema.json").read_text())
     for key in schema["required"]:
         assert key in lock
     assert lock["provenance_mode"] == "private"
-    assert ".agentic/roles/integrator.md" in lock["files"]
+    assert ".gateline/roles/integrator.md" in lock["files"]
 
     assert (host / ".claude" / "agents" / "analyst.md").exists()
-    assert (host / ".agentic" / "LICENSE.framework.md").exists()
+    assert (host / ".gateline" / "LICENSE.framework.md").exists()
     assert "framework-lock.json" in (host / "NOTICE.md").read_text()
-    assert (host / ".github" / "workflows" / "agentic-render-check.yml").exists()
+    assert (host / ".github" / "workflows" / "gateline-render-check.yml").exists()
 
     check = validate(host)
     assert check.returncode == 0, check.stdout + check.stderr
@@ -61,7 +61,7 @@ def test_init_and_validate_prefixed_private(tmp_path):
 def test_validate_catches_in_place_edit(tmp_path):
     host = make_host(tmp_path)
     assert init(host).returncode == 0
-    role = host / ".agentic" / "roles" / "analyst.md"
+    role = host / ".gateline" / "roles" / "analyst.md"
     role.write_text(role.read_text() + "\nEDITED\n")
     check = validate(host)
     assert check.returncode == 1
@@ -71,7 +71,7 @@ def test_validate_catches_in_place_edit(tmp_path):
 def test_fork_flow(tmp_path):
     host = make_host(tmp_path)
     assert init(host).returncode == 0
-    rel = ".agentic/contracts/state.yaml"
+    rel = ".gateline/contracts/state.yaml"
     forked = run([INTEGRATE, "fork", rel, "--reason", "non-SDLC gates",
                   "--target", host])
     assert forked.returncode == 0, forked.stdout + forked.stderr
@@ -79,15 +79,15 @@ def test_fork_flow(tmp_path):
     target.write_text(target.read_text() + "\n# host-local extension\n")
     check = validate(host)
     assert check.returncode == 0, check.stdout + check.stderr
-    lock = json.loads((host / ".agentic" / "framework-lock.json").read_text())
+    lock = json.loads((host / ".gateline" / "framework-lock.json").read_text())
     assert lock["forks"][rel]["reason"] == "non-SDLC gates"
-    assert (host / ".agentic" / "upstream" / rel).exists()
+    assert (host / ".gateline" / "upstream" / rel).exists()
 
 
 def test_fork_refuses_already_edited_file(tmp_path):
     host = make_host(tmp_path)
     assert init(host).returncode == 0
-    rel = ".agentic/roles/analyst.md"
+    rel = ".gateline/roles/analyst.md"
     (host / rel).write_text((host / rel).read_text() + "drift\n")
     forked = run([INTEGRATE, "fork", rel, "--reason", "x", "--target", host])
     assert forked.returncode != 0
@@ -109,9 +109,9 @@ def test_root_layout_redistribute_two_adapters(tmp_path):
 def test_reinit_preserves_project_and_seeded_layers(tmp_path):
     host = make_host(tmp_path)
     assert init(host).returncode == 0
-    overlay = host / ".agentic" / "overlays" / "_all.md"
+    overlay = host / ".gateline" / "overlays" / "_all.md"
     overlay.write_text("House rule: run the linter.\n")
-    registry = host / ".agentic" / "registry" / "models.yaml"
+    registry = host / ".gateline" / "registry" / "models.yaml"
     registry.write_text(registry.read_text() + "# host binding note\n")
     again = init(host)
     assert again.returncode == 0, again.stdout + again.stderr
@@ -124,7 +124,7 @@ def test_reinit_preserves_project_and_seeded_layers(tmp_path):
 def test_init_refuses_silent_drift(tmp_path):
     host = make_host(tmp_path)
     assert init(host).returncode == 0
-    role = host / ".agentic" / "roles" / "reviewer.md"
+    role = host / ".gateline" / "roles" / "reviewer.md"
     original = role.read_text()
     role.write_text(original + "drift\n")
     again = init(host)
@@ -138,8 +138,8 @@ def test_overlay_splice_lands_in_rendered_agents(tmp_path):
     assert init(host).returncode == 0
     rendered = host / ".claude" / "agents" / "analyst.md"
     assert "OVERLAY" not in rendered.read_text()  # comment-only stubs splice nothing
-    (host / ".agentic" / "overlays" / "_all.md").write_text("Run tests first.\n")
-    render = run([host / ".agentic" / "scripts" / "render-agents.py"])
+    (host / ".gateline" / "overlays" / "_all.md").write_text("Run tests first.\n")
+    render = run([host / ".gateline" / "scripts" / "render-agents.py"])
     assert render.returncode == 0
     text = rendered.read_text()
     assert "OVERLAY from overlays/_all.md" in text

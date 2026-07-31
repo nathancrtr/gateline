@@ -39,6 +39,6 @@ describe('harvestPathspecs', () => {
   })
 
   it('honors a non-default runsRoot (integrate.py --layout prefixed hosts)', () => {
-    expect(harvestPathspecs('.agentic/runs', 'toy', 'analyst', null)).toEqual(['.agentic/runs/toy/spec.md'])
+    expect(harvestPathspecs('.gateline/runs', 'toy', 'analyst', null)).toEqual(['.gateline/runs/toy/spec.md'])
   })
 })

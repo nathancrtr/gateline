@@ -173,10 +173,10 @@ describe('describeRun', () => {
   })
 
   it('honors a prefixed host layout in the record path', () => {
-    const d = describeRun({ ...base, runDir: '.agentic/runs/csv-export', brief, spec: null })
+    const d = describeRun({ ...base, runDir: '.gateline/runs/csv-export', brief, spec: null })
 
-    expect(d.body).toContain('record `.agentic/runs/csv-export/`')
-    expect(d.body).toContain('`.agentic/runs/csv-export/intent-brief.md`')
+    expect(d.body).toContain('record `.gateline/runs/csv-export/`')
+    expect(d.body).toContain('`.gateline/runs/csv-export/intent-brief.md`')
   })
 })
 
@@ -191,7 +191,7 @@ describe('isGeneratedBody', () => {
 
   it('adopts the pre-#202 one-liner, so PRs opened before the upgrade are not stuck', () => {
     expect(isGeneratedBody('Draft PR for `run/toy` — see `runs/toy/` for the run record.')).toBe(true)
-    expect(isGeneratedBody('Draft PR for `run/toy` — see `.agentic/runs/toy/` for the run record.\n')).toBe(true)
+    expect(isGeneratedBody('Draft PR for `run/toy` — see `.gateline/runs/toy/` for the run record.\n')).toBe(true)
   })
 
   it('does not mistake a human body that merely opens with the old wording', () => {

@@ -1,4 +1,4 @@
-# `agentic` — the gate frontend in terminal form
+# `gateline` — the gate frontend in terminal form
 
 The same portfolio, inbox, and decision write path as Gatehouse, driveable
 entirely from a shell. Nothing here is a second system: every view is
@@ -14,7 +14,7 @@ Runs from TypeScript source — Node ≥ 24, no build step for the CLI:
 
 ```sh
 cd packages && npm install
-(cd cli && npm link)   # global `agentic`, linked to this checkout
+(cd cli && npm link)   # global `gateline`, linked to this checkout
 ```
 
 The link points at the checkout, so `git pull` there updates the CLI; re-run
@@ -24,16 +24,16 @@ the web app that `ui`/`up` serve.)
 ## Commands
 
 ```
-agentic status                          portfolio: phases, gates, needs-a-human
-agentic inbox                           everything waiting on a human, oldest first
-agentic approve <slug> <gate>           --burden … [--notes …] [--no-advance] [--hold <reason>]
-agentic decline <slug> <gate>           --reason … (pauses the run as gate-declined)
-agentic resolve-escalation <slug> <n>   --note … (index shown by inbox)
-agentic pause <slug> [--reason …]
-agentic resume <slug> [--phase …]       phase derived from the gate ledger if omitted
-agentic sync [--live]                   copy approved PR reviews into undecided G2 entries
-agentic ui [--demo] [--port N]          serve the web app (no engine)
-agentic up [--spend-limit-usd N]        web app + the v1 orchestrator over one clone
+gateline status                          portfolio: phases, gates, needs-a-human
+gateline inbox                           everything waiting on a human, oldest first
+gateline approve <slug> <gate>           --burden … [--notes …] [--no-advance] [--hold <reason>]
+gateline decline <slug> <gate>           --reason … (pauses the run as gate-declined)
+gateline resolve-escalation <slug> <n>   --note … (index shown by inbox)
+gateline pause <slug> [--reason …]
+gateline resume <slug> [--phase …]       phase derived from the gate ledger if omitted
+gateline sync [--live]                   copy approved PR reviews into undecided G2 entries
+gateline ui [--demo] [--port N]          serve the web app (no engine)
+gateline up [--spend-limit-usd N]        web app + the v1 orchestrator over one clone
 ```
 
 Global: `--repo <path>` (repeatable) overrides source discovery;
@@ -41,20 +41,20 @@ Global: `--repo <path>` (repeatable) overrides source discovery;
 
 ## Common workflows
 
-**Triage, then decide.** `agentic inbox` lists every gate and escalation
+**Triage, then decide.** `gateline inbox` lists every gate and escalation
 waiting on a human, oldest first. Read the packet's artifacts in your editor
 (paths are repo-relative), then:
 
 ```sh
-agentic approve mdtoc G1 --notes "plan holds"
-agentic decline mdtoc G2 --reason "review-02 findings unaddressed"
+gateline approve mdtoc G1 --notes "plan holds"
+gateline decline mdtoc G2 --reason "review-02 findings unaddressed"
 ```
 
 `approve` prompts for the burden category on a TTY
 (`confirmation | light-correction | heavy-correction` — the pilot's headline
 metric). `decline --reason` is the correction channel back to the producing
 role; it pauses the run as `gate-declined`. Once the fix lands,
-`agentic resume mdtoc` — the phase is derived from the gate ledger.
+`gateline resume mdtoc` — the phase is derived from the gate ledger.
 
 **Approve without releasing the next phase.** Two distinct holds:
 `--no-advance` records the approval but leaves the phase alone;
@@ -62,27 +62,27 @@ role; it pauses the run as `gate-declined`. Once the fix lands,
 dispatch-safe way to say yes while a human decision is still pending, because
 an engine watching the repo never sees an approved-but-undecided window.
 
-**Resolve an escalation.** `agentic inbox` shows each escalation's index;
-`agentic resolve-escalation mdtoc 0 --note "proceed with candidate A"`.
+**Resolve an escalation.** `gateline inbox` shows each escalation's index;
+`gateline resolve-escalation mdtoc 0 --note "proceed with candidate A"`.
 
 **G2 from a PR review.** If the change gate is exercised as a GitHub PR
-review, `agentic sync` plans the copy of approved reviews into undecided G2
+review, `gateline sync` plans the copy of approved reviews into undecided G2
 entries and `sync --live` records them (uses the `gh` CLI's login).
 
-**Many repos.** List sources in `~/.config/agentic/config.yaml` (see the
+**Many repos.** List sources in `~/.config/gateline/config.yaml` (see the
 [frontend README](../README.md)), or point at one ad hoc with
 `--repo <path>`. Hosts integrated under a prefix are discovered via their
-`.agentic/framework-lock.json` — no per-host configuration.
+`.gateline/framework-lock.json` — no per-host configuration.
 
 **Headless / no browser.** Everything above is already browser-free. The
 engine, too — `up` serves Gatehouse alongside it, but the orchestrator has
 its own binary for engine-only operation:
 
 ```sh
-agentic-orchestrator tick --dry-run   # derive and print each run's next action; write nothing
-agentic-orchestrator tick             # one live reconcile pass: dispatch, meter, exit
-agentic-orchestrator watch            # resident engine: ref watcher + heartbeat
-agentic-orchestrator shadow <slug>    # replay a finished run, derived vs actual
+gateline-orchestrator tick --dry-run   # derive and print each run's next action; write nothing
+gateline-orchestrator tick             # one live reconcile pass: dispatch, meter, exit
+gateline-orchestrator watch            # resident engine: ref watcher + heartbeat
+gateline-orchestrator shadow <slug>    # replay a finished run, derived vs actual
 ```
 
 `--dry-run` is the safe preview; a live `tick`/`watch` dispatches real,

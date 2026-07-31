@@ -2,7 +2,7 @@
 // discipline the frontend's readiness table keeps. Observations are built
 // directly so each row is exercised in isolation.
 import { describe, expect, it } from 'vitest'
-import { PROFILES, STAGED_REASON, type GateEntry, type RunState, type Validation } from '@agentic/core'
+import { PROFILES, STAGED_REASON, type GateEntry, type RunState, type Validation } from '@gateline/core'
 import { deriveAction, DEFAULT_ESTIMATE_USD } from '../src/derive.ts'
 import type { LedgerEntry, RunObservation, TaskFileInfo } from '../src/observe.ts'
 import type { ReviewInfo } from '../src/review-report.ts'

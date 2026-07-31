@@ -10,7 +10,7 @@ let ctx: FixtureContext
 let refs: Map<string, RunRef>
 
 // Staged and other-reason paused runs are added directly to the fixture repo
-// (not the shared @agentic/fixtures generator — plan ADR-8 keeps that
+// (not the shared @gateline/fixtures generator — plan ADR-8 keeps that
 // count-sensitive for server/e2e assertions); this mirrors divergence.test.ts's
 // idiom of extending `ctx.repo.dir` with git commands from the test itself.
 function addPausedRun(dir: string, slug: string, pausedReason: string | null): void {

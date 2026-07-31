@@ -75,7 +75,7 @@ import {
   phaseAfterGate,
   type GateId,
   type Phase,
-} from '@agentic/core'
+} from '@gateline/core'
 import type { RunObservation } from './observe.ts'
 
 export const ROUND_CAP = 3

@@ -4,7 +4,7 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
 import { rmSync } from 'node:fs'
 import { expect, test } from '@playwright/test'
-import { generateFixtureRepo } from '@agentic/fixtures'
+import { generateFixtureRepo } from '@gateline/fixtures'
 
 const PORT = 4399
 let fixtureDir: string

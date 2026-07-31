@@ -4,10 +4,10 @@
 // runner still costs one manifest, never orchestrator code.
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { resolveFrameworkRootsFromDisk } from '@agentic/core'
+import { resolveFrameworkRootsFromDisk } from '@gateline/core'
 
 // Re-exported so a working-tree-only consumer (runner-agent/src/agent.ts,
-// which never imports @agentic/core directly) can resolve its own clone's
+// which never imports @gateline/core directly) can resolve its own clone's
 // runsRoot for harvestPathspecs without a new package dependency.
 export { resolveFrameworkRootsFromDisk }
 
@@ -43,7 +43,7 @@ export interface HeadlessManifest {
 }
 
 /**
- * `prefixHint` overrides the default `.agentic` probe location for a host
+ * `prefixHint` overrides the default `.gateline` probe location for a host
  * integrated with a custom `integrate.py --prefix` (#95); auto-detected from
  * the checkout's own framework-lock.json otherwise.
  */

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// agentic-runner-agent — the workstation half of the remote-dispatch relay
+// gateline-runner-agent — the workstation half of the remote-dispatch relay
 // (ORCHESTRATOR.md / TOPOLOGY.md §3.3, run "runner-agent"). CLI-flag parsing
 // only; the actual poll/claim/execute/report loop lives in agent.ts so it
 // can be exercised in tests without spawning this process.
@@ -8,10 +8,10 @@ import { runAgent } from './agent.ts'
 
 const program = new Command()
 program
-  .name('agentic-runner-agent')
+  .name('gateline-runner-agent')
   .description('Workstation agent: polls a control plane for dispatch intents, executes them in a disposable clone, and reports outcomes back.')
   .version('0.1.0')
-  .requiredOption('--control-plane <url>', 'base URL of the control plane server (the @agentic/server instance exposing /api/runner/*)')
+  .requiredOption('--control-plane <url>', 'base URL of the control plane server (the @gateline/server instance exposing /api/runner/*)')
   .requiredOption('--token <token>', 'runner service token (matches the control plane\'s RUNNER_TOKEN)')
   // No default here on purpose (R8, AC8.1): a hardcoded adapter name in this
   // agent's own source would be exactly the kind of harness identity R8
@@ -22,7 +22,7 @@ program
   .option('--work-dir <path>', 'directory disposable workspaces are created under', process.cwd())
   .option('--poll-interval <seconds>', 'seconds between polls of the control plane', '5')
   .option('--repo-url <url>', 'fallback git remote URL, used only when the control plane cannot determine one itself')
-  .option('--agentic-prefix <prefix>', 'metadata prefix override for an integrate.py --prefix host (default: auto-detected per clone)')
+  .option('--gateline-prefix <prefix>', 'metadata prefix override for an integrate.py --prefix host (default: auto-detected per clone)')
   .parse(process.argv)
 
 const opts = program.opts<{
@@ -32,7 +32,7 @@ const opts = program.opts<{
   workDir: string
   pollInterval: string
   repoUrl?: string
-  agenticPrefix?: string
+  gatelinePrefix?: string
 }>()
 
 const pollIntervalSeconds = Number(opts.pollInterval)
@@ -48,7 +48,7 @@ runAgent({
   workDir: opts.workDir,
   pollIntervalMs: pollIntervalSeconds * 1000,
   repoUrl: opts.repoUrl,
-  prefixHint: opts.agenticPrefix,
+  prefixHint: opts.gatelinePrefix,
   log: (line: string) => console.log(line),
 }).catch((e) => {
   console.error((e as Error).message)

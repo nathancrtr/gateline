@@ -2,7 +2,7 @@
 
 The surfaces through which humans perform their contractual interactions with
 the agent pipeline: a decision **inbox**, a **portfolio** view, per-run detail
-with **gate cards**, the **`agentic` CLI**, and **metrics** — all rendered from
+with **gate cards**, the **`gateline` CLI**, and **metrics** — all rendered from
 `runs/*/state.yaml` and the run artifacts in git.
 
 Design: [docs/FRONTEND.md](../docs/FRONTEND.md) · Plan:
@@ -46,7 +46,7 @@ node cli/src/main.ts ui --demo     # explore a generated demo repo
 node cli/src/main.ts status        # portfolio in the terminal
 ```
 
-`agentic ui` binds to `127.0.0.1` and opens the browser. `--host` exists, but
+`gateline ui` binds to `127.0.0.1` and opens the browser. `--host` exists, but
 multi-user serving (auth, routing, rotation) is Stage C's problem and
 deliberately not this build's — see FRONTEND.md §6. A *single-user* hosted
 instance (one URL, you behind an authenticating proxy) is supported: see
@@ -55,16 +55,16 @@ instance (one URL, you behind an authenticating proxy) is supported: see
 ## CLI
 
 ```
-agentic status                          portfolio: phases, gates, needs-a-human
-agentic inbox                           everything waiting, oldest first
-agentic approve <slug> <gate>           --burden confirmation|light-correction|heavy-correction
+gateline status                          portfolio: phases, gates, needs-a-human
+gateline inbox                           everything waiting, oldest first
+gateline approve <slug> <gate>           --burden confirmation|light-correction|heavy-correction
                                         [--notes …] [--no-advance] (burden prompted on a TTY)
-agentic decline <slug> <gate>           --reason … (pauses the run as gate-declined)
-agentic resolve-escalation <slug> <n>   --note …
-agentic pause <slug> [--reason …]
-agentic resume <slug> [--phase …]       phase derived from the gate ledger if omitted
-agentic sync [--live]                   copy approved PR reviews into undecided G2 entries
-agentic ui [--demo] [--port N]          serve the web app
+gateline decline <slug> <gate>           --reason … (pauses the run as gate-declined)
+gateline resolve-escalation <slug> <n>   --note …
+gateline pause <slug> [--reason …]
+gateline resume <slug> [--phase …]       phase derived from the gate ledger if omitted
+gateline sync [--live]                   copy approved PR reviews into undecided G2 entries
+gateline ui [--demo] [--port N]          serve the web app
 ```
 
 Global: `--repo <path>` (repeatable) overrides source discovery.
@@ -75,12 +75,12 @@ PR-review sync, headless engine operation:
 
 ## Multi-repo configuration
 
-`~/.config/agentic/config.yaml`:
+`~/.config/gateline/config.yaml`:
 
 ```yaml
 sources:
   - name: sandbox
-    path: ~/repos/agentic-sandbox
+    path: ~/repos/gateline
   - name: product
     path: ~/repos/product-app
     push: true          # push run branches after each decision commit
@@ -121,7 +121,7 @@ history. Nothing is logged separately: if it isn't in git, it didn't happen.
 npm test               # vitest: core, server, CLI (fixture-repo backed)
 npm run typecheck
 npx playwright test    # e2e smoke against a generated fixture repo
-npm run dev            # API server; pair with: npm run dev -w @agentic/web
+npm run dev            # API server; pair with: npm run dev -w @gateline/web
 ```
 
 `fixtures/` generates a repo with runs in every interesting state — each gate

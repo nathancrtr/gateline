@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// agentic — decisions stay possible when no browser is. Same core, same
+// gateline — decisions stay possible when no browser is. Same core, same
 // single write path (R2), terminal rendering.
 import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, realpathSync } from 'node:fs'
@@ -42,10 +42,10 @@ import {
   type Profile,
   type RunRef,
   type RunSource,
-} from '@agentic/core'
+} from '@gateline/core'
 
 const program = new Command()
-program.name('agentic').description('Gate frontend for artifact-driven agent pipelines').version('0.1.0')
+program.name('gateline').description('Gate frontend for artifact-driven agent pipelines').version('0.1.0')
 // Repeatable, single-value: a variadic <path...> would swallow the subcommand.
 program.option(
   '--repo <path>',
@@ -73,7 +73,7 @@ async function resolveSources(): Promise<Resolved> {
   }
   for (const w of warnings) console.error(`warning: ${w}`)
   if (sources.length === 0) {
-    console.error('no run sources — run inside a repository, pass --repo <path>, or create ~/.config/agentic/config.yaml')
+    console.error('no run sources — run inside a repository, pass --repo <path>, or create ~/.config/gateline/config.yaml')
     process.exit(1)
   }
   return { sources }
@@ -124,7 +124,7 @@ program
       needs: r.needsHuman ? String(r.needsHuman) : '',
     }))
     table(rows, ['run', 'phase', 'gates', 'tasks', 'updated', 'needs'])
-    if (inbox.length) console.log(`\n${inbox.length} item(s) need a human — run \`agentic inbox\``)
+    if (inbox.length) console.log(`\n${inbox.length} item(s) need a human — run \`gateline inbox\``)
   })
 
 program
@@ -318,7 +318,7 @@ program
   .command('resolve-escalation')
   .description('resolve an escalation with a disposition note')
   .argument('<slug>', 'run slug')
-  .argument('<index>', 'escalation index (see `agentic inbox`)')
+  .argument('<index>', 'escalation index (see `gateline inbox`)')
   .requiredOption('--note <text>', 'disposition')
   .option('--disposition <route>', `${DISPOSITIONS.join(' | ')} — optional machine-actionable route for the engine; omit for the engine default`)
   .option('--source <id>')
@@ -458,7 +458,7 @@ function realInteractiveIO(): InteractiveNewIO & { close(): void } {
   return {
     prompt: (q) => rl.question(q),
     editFile: async (initial) => {
-      const dir = await mkdtemp(join(tmpdir(), 'agentic-new-'))
+      const dir = await mkdtemp(join(tmpdir(), 'gateline-new-'))
       const file = join(dir, 'intent-brief.md')
       await writeFile(file, initial, 'utf8')
       const editorCmd = process.env.VISUAL || process.env.EDITOR || 'vi'
@@ -475,7 +475,7 @@ function realInteractiveIO(): InteractiveNewIO & { close(): void } {
 }
 
 /**
- * `agentic new`'s body (flags-first, TTY fallback — AC2.1–2.3/AC3.1–3.2).
+ * `gateline new`'s body (flags-first, TTY fallback — AC2.1–2.3/AC3.1–3.2).
  * Returns the process exit code the caller should use; never calls
  * `process.exit` itself (the `runUpgrade` precedent).
  */
@@ -608,7 +608,7 @@ export async function stageNewRun(flags: NewFlags): Promise<number> {
 
 program
   .command('new')
-  .description('stage a new run (branch + intent-brief.md + state.yaml); unarmed until `agentic arm`')
+  .description('stage a new run (branch + intent-brief.md + state.yaml); unarmed until `gateline arm`')
   .option('--slug <slug>', 'run slug (branch- and path-safe: [a-z0-9][a-z0-9-]*)')
   .option('--title <title>', 'run title')
   .option('--profile <profile>', 'patch | standard | full', 'standard')
@@ -621,7 +621,7 @@ program
   })
 
 /**
- * `agentic arm`'s body: `decide()`-style flow with `{ action: 'arm' }`
+ * `gateline arm`'s body: `decide()`-style flow with `{ action: 'arm' }`
  * (DecisionError → exit 1 with its message — covers already-armed;
  * nonexistent-run comes from `findRun`'s existing refusal), then a
  * best-effort draft-PR ensure (R8) using the source's dir (the `sync`
@@ -663,7 +663,7 @@ program
   .option('--source <id>', 'only this source')
   .option('--live', 'apply the plan (default: print it)')
   .action(async (flags: { source?: string; live?: boolean }) => {
-    const { planSyncForSource, applySync, GhCliProvider } = await import('@agentic/core')
+    const { planSyncForSource, applySync, GhCliProvider } = await import('@gateline/core')
     const { sources } = await resolveSources()
     let any = false
     // A local-only source already prints its own line below; the trailing
@@ -762,8 +762,8 @@ program
   .addHelpText(
     'after',
     '\nEngine only, no server or browser: the orchestrator has its own binary —\n' +
-      '  agentic-orchestrator watch   resident engine (this command minus Gatehouse)\n' +
-      '  agentic-orchestrator tick    one reconcile pass, --dry-run to preview\n' +
+      '  gateline-orchestrator watch   resident engine (this command minus Gatehouse)\n' +
+      '  gateline-orchestrator tick    one reconcile pass, --dry-run to preview\n' +
       'See packages/cli/README.md, "Headless / no browser".',
   )
   .action(
@@ -826,8 +826,8 @@ program
         (source as { localOnly?: boolean }).localOnly === true,
       )
 
-      const { startServer } = await import('@agentic/server/main')
-      const { stagedShutdown, startOrchestrator } = await import('@agentic/orchestrator')
+      const { startServer } = await import('@gateline/server/main')
+      const { stagedShutdown, startOrchestrator } = await import('@gateline/orchestrator')
       const server = await startServer({
         port: Number(flags.port),
         host: flags.host,
@@ -896,7 +896,7 @@ program
 // --- upgrade -------------------------------------------------------------------
 
 /**
- * `agentic upgrade`'s body, factored out of the command action so it can be
+ * `gateline upgrade`'s body, factored out of the command action so it can be
  * driven directly against an arbitrary repo dir (tests, manual transcripts)
  * without going through `resolveCodeRepo(import.meta.url)` — which always
  * resolves to the checkout this module itself lives in.
@@ -907,7 +907,7 @@ program
 export async function runUpgrade(repoDir: string, log: (line: string) => void = (line) => console.log(line)): Promise<number> {
   const dirty = execFileSync('git', ['-C', repoDir, 'status', '--porcelain'], { encoding: 'utf8' })
   if (dirty.trim()) {
-    console.error(`agentic upgrade: ${repoDir} has uncommitted changes — commit or stash them before upgrading`)
+    console.error(`gateline upgrade: ${repoDir} has uncommitted changes — commit or stash them before upgrading`)
     return 1
   }
 
@@ -922,7 +922,7 @@ export async function runUpgrade(repoDir: string, log: (line: string) => void = 
   }
 
   // The workspace lives at packages/ since the frontend/ → packages/ rename
-  // (#133); frontend/ remains as a fallback so `agentic upgrade` run from a
+  // (#133); frontend/ remains as a fallback so `gateline upgrade` run from a
   // pre-rename checkout can still cross the rename.
   const packagesPkg = join(repoDir, 'packages', 'package.json')
   const frontendPkg = join(repoDir, 'frontend', 'package.json')
@@ -937,7 +937,7 @@ export async function runUpgrade(repoDir: string, log: (line: string) => void = 
   if (workspaceDir) {
     const npmCode = await streamCommand('npm', ['install'], workspaceDir)
     if (npmCode !== 0) {
-      console.error(`agentic upgrade: npm install failed in ${workspaceDir} (exit ${npmCode})`)
+      console.error(`gateline upgrade: npm install failed in ${workspaceDir} (exit ${npmCode})`)
       return npmCode
     }
     // The web app is the one part of the tree that does NOT run from source:
@@ -952,7 +952,7 @@ export async function runUpgrade(repoDir: string, log: (line: string) => void = 
     if (webPkg) {
       const buildCode = await streamCommand('npm', ['run', 'build'], workspaceDir)
       if (buildCode !== 0) {
-        console.error(`agentic upgrade: npm run build failed in ${workspaceDir} (exit ${buildCode})`)
+        console.error(`gateline upgrade: npm run build failed in ${workspaceDir} (exit ${buildCode})`)
         return buildCode
       }
     }
@@ -980,7 +980,7 @@ program
   .action(async () => {
     const repoDir = resolveCodeRepo(import.meta.url)
     if (!repoDir) {
-      console.error('agentic upgrade: this install is not a git checkout — nothing to `git pull` (e.g. installed from a published package)')
+      console.error('gateline upgrade: this install is not a git checkout — nothing to `git pull` (e.g. installed from a published package)')
       process.exit(1)
     }
     process.exit(await runUpgrade(repoDir))
@@ -994,7 +994,7 @@ program
   .option('--demo', 'generate and serve a demo repository')
   .option('--no-open', 'do not open the browser')
   .action(async (flags: { port: string; host: string; demo?: boolean; open?: boolean }) => {
-    const { startServer } = await import('@agentic/server/main')
+    const { startServer } = await import('@gateline/server/main')
     const opts = program.opts<{ repo: string[] }>()
     await startServer({
       port: Number(flags.port),
@@ -1022,7 +1022,7 @@ function table(rows: Record<string, string>[], cols: string[]): void {
 // shebang, or `node .../main.ts ...` as cli.test.ts spawns it) — not when
 // something imports it as a library, e.g. to drive `runUpgrade` directly
 // against a scratch repo without going through argv/resolveCodeRepo at all.
-// Compare realpaths, not strings: the global `agentic` bin is an npm-link
+// Compare realpaths, not strings: the global `gateline` bin is an npm-link
 // symlink chain to this file, and Node's ESM loader realpaths the entry
 // module while argv[1] keeps the symlink path.
 function isProcessEntrypoint(): boolean {

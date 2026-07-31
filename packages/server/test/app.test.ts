@@ -2,8 +2,8 @@
 import { execFileSync } from 'node:child_process'
 import { rm } from 'node:fs/promises'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { generateFixtureRepo, type FixtureRepo } from '@agentic/fixtures'
-import { LocalGitSource, parseRunState, SLUG_PATTERN, validateArtifact, writeEngineHealth } from '@agentic/core'
+import { generateFixtureRepo, type FixtureRepo } from '@gateline/fixtures'
+import { LocalGitSource, parseRunState, SLUG_PATTERN, validateArtifact, writeEngineHealth } from '@gateline/core'
 import type { Hono } from 'hono'
 import { createApp } from '../src/app.ts'
 

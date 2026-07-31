@@ -17,7 +17,7 @@ pair-programming to multi-agent development.
 | [`docs/FRONTEND.md`](docs/FRONTEND.md) | Design for the gate frontend — the human interfaces to the pipeline (plan: [FRONTEND-PLAN.md](docs/FRONTEND-PLAN.md)) | — |
 | [`docs/INTEGRATION.md`](docs/INTEGRATION.md) | Design (draft) for the workflow that imports the framework into a host repo | — |
 | [`docs/ORCHESTRATOR.md`](docs/ORCHESTRATOR.md) | Design for the v1 agent-orchestrated operating mode (implemented in `packages/orchestrator`) | — |
-| [`packages/`](packages/) | The gate frontend (web, CLI, server over `@agentic/core`) and the v1 orchestrator (`packages/orchestrator`) | product component |
+| [`packages/`](packages/) | The gate frontend (web, CLI, server over `@gateline/core`) and the v1 orchestrator (`packages/orchestrator`) | product component |
 | [`roles/`](roles/) | Runtime-neutral role specs (mission, instructions, escalation triggers) | ✅ core |
 | [`contracts/`](contracts/) | Templates for every handoff artifact (spec, plan, task, reports, state) | ✅ core |
 | [`registry/models.yaml`](registry/models.yaml) | The only place vendor/model IDs exist; roles bind via capability profiles | ✅ core |
@@ -43,7 +43,7 @@ the same mechanism.
 ## Setup
 
 The shortest path from nothing to a working install: vendor the framework into a
-host repo with `integrate.py`, then run the cockpit over it with `agentic up`.
+host repo with `integrate.py`, then run the cockpit over it with `gateline up`.
 Every step below is rehearsed against the current tree. No tagged release exists
 yet, so the source is a clone of `main`; once the first release tags, a pinned
 release replaces the clone as the canonical source
@@ -57,10 +57,10 @@ render the same agents).
 ### 1. Install
 
 ```sh
-git clone https://github.com/nathancrtr/agentic-sandbox.git
-cd agentic-sandbox/packages
+git clone https://github.com/nathancrtr/gateline.git
+cd gateline/packages
 npm install && npm run build      # builds the Gatehouse SPA once
-(cd cli && npm link)              # global `agentic`, linked to this checkout
+(cd cli && npm link)              # global `gateline`, linked to this checkout
 ```
 
 The linked CLI runs from this tree — keep the checkout on `main` (it is the
@@ -73,7 +73,7 @@ python3 <checkout>/scripts/integrate.py init ~/repos/my-app --provenance private
 ```
 
 One command: it detects the runners present in the host, vendors the portable
-core under `.agentic/`, seeds the model registry and policy overlays, renders
+core under `.gateline/`, seeds the model registry and policy overlays, renders
 the agents, and writes the lockfile. `--provenance` has no default on purpose —
 state the host's posture: `private` for a closed host, `redistribute` for an
 open-source one.
@@ -87,30 +87,30 @@ prove the result:
 
 ```sh
 cd ~/repos/my-app
-python3 .agentic/scripts/integrate.py validate   # checksums, renders, provenance
+python3 .gateline/scripts/integrate.py validate   # checksums, renders, provenance
 ```
 
 ### 3. Spin up
 
 Two things gate real dispatch: bind real model IDs in
-`.agentic/registry/models.yaml` (the seeded values are illustrative
+`.gateline/registry/models.yaml` (the seeded values are illustrative
 placeholders), and give each run a `budget.cost_limit_usd` — no ceiling, no
 dispatch. Then:
 
 ```sh
-agentic up --repo ~/repos/my-app --spend-limit-usd 20
+gateline up --repo ~/repos/my-app --spend-limit-usd 20
 ```
 
 That serves Gatehouse on `127.0.0.1:4310` and runs the orchestrator engine over
 the same clone — dispatch bills through whatever harness CLI is logged in
 locally, orchestrator commits push to origin by default (`--no-push` to keep
 them local), and gates remain named-human decisions in the UI or via
-`agentic approve`. To look before anything dispatches:
-`agentic status --repo ~/repos/my-app` renders the same state read-only.
+`gateline approve`. To look before anything dispatches:
+`gateline status --repo ~/repos/my-app` renders the same state read-only.
 
 The browser is optional. The whole gate workflow is terminal-native —
-`agentic inbox`, `approve`, `decline`, `resolve-escalation` — and the engine
-runs headless without Gatehouse: `agentic-orchestrator watch` (resident) or
+`gateline inbox`, `approve`, `decline`, `resolve-escalation` — and the engine
+runs headless without Gatehouse: `gateline-orchestrator watch` (resident) or
 `tick` (one reconcile pass, with `--dry-run` to derive and print next actions
 while writing and dispatching nothing). Common terminal workflows and their
 pitfalls: [`packages/cli/README.md`](packages/cli/README.md).
@@ -134,7 +134,7 @@ declare a **profile** — `patch | standard | full` ([DESIGN.md](docs/DESIGN.md)
 — that scales which roles run and which gates exist to the size of the change, so a
 bug fix no longer pays for the full ceremony. The gate frontend (web, CLI, server)
 and the v1 orchestrator are implemented in `packages/` and run as one co-located unit
-(`agentic up`) over a single clone — one authority per deployment
+(`gateline up`) over a single clone — one authority per deployment
 ([TOPOLOGY.md](docs/TOPOLOGY.md)); a single-user hosting recipe lives in
 [`deploy/`](deploy/). Autonomy stays gated on the DESIGN.md §7 promotion criterion.
 Next: live cross-vendor dispatch, then the integration workflow

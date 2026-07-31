@@ -9,12 +9,12 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { LocalOnlyPushConflictError } from '@agentic/core'
+import { LocalOnlyPushConflictError } from '@gateline/core'
 import { Engine } from '../src/engine.ts'
 import { assembleOrchestrator } from '../src/start.ts'
 import { FakeDispatcher, makeToyRepo, TEST_REGISTRY } from './engine.helper.ts'
 
-const BOT = { name: 'agentic-orchestrator', email: 'orchestrator@agentic.invalid' }
+const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
 
 const cleanups: string[] = []
 afterEach(() => {

@@ -22,7 +22,7 @@ afterEach(() => {
  *  base-OID augmentation against an actual `git rev-parse`, not just a
  *  no-throw assertion (review-03.md F3). */
 function makeRepo(branch: string): { dir: string; oid: string } {
-  const dir = mkdtempSync(join(tmpdir(), 'agentic-runner-api-'))
+  const dir = mkdtempSync(join(tmpdir(), 'gateline-runner-api-'))
   cleanups.push(dir)
   const git = (args: string[]) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', env: { ...process.env, ...GIT_ENV } })
   git(['init', '-q', '-b', branch])

@@ -20,7 +20,7 @@
 // purpose — the gate engine and frontend recognize runs by state.yaml, so
 // sweeps stay out of the derivation table entirely. The human surface is the
 // branch itself: review the docs-delta and doc edits, merge to approve (P4).
-import { Git, memoizedFrameworkRoots, type FrameworkRoots, type Identity } from '@agentic/core'
+import { Git, memoizedFrameworkRoots, type FrameworkRoots, type Identity } from '@gateline/core'
 import { parse as parseYaml } from 'yaml'
 import { DEFAULT_ESTIMATE_USD } from './derive.ts'
 import { resolveModel, type Registry } from './registry.ts'
@@ -165,7 +165,7 @@ export interface SchedulerConfig {
   dispatcher: Dispatcher
   registry: Registry | null
   /**
-   * Override the `.agentic` default when this repo was integrated with a
+   * Override the `.gateline` default when this repo was integrated with a
    * custom `integrate.py --prefix` (#95) — otherwise auto-detected.
    */
   frameworkPrefix?: string

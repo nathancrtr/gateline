@@ -261,7 +261,7 @@ export class Git {
    * touching any index or working tree the user owns.
    */
   async writeTreeWithBlob(baseCommit: string, path: string, blobOid: string): Promise<string> {
-    const dir = await mkdtemp(join(tmpdir(), 'agentic-index-'))
+    const dir = await mkdtemp(join(tmpdir(), 'gateline-index-'))
     const indexFile = join(dir, 'index')
     try {
       const env = { GIT_INDEX_FILE: indexFile }

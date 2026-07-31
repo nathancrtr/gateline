@@ -9,8 +9,8 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { generateFixtureRepo, type FixtureRepo } from '@agentic/fixtures'
-import { LocalGitSource } from '@agentic/core'
+import { generateFixtureRepo, type FixtureRepo } from '@gateline/fixtures'
+import { LocalGitSource } from '@gateline/core'
 import { draftBriefMarkdown, resolveUpMode, runInteractiveNew, type InteractiveNewIO } from '../src/main.ts'
 
 const exec = promisify(execFile)
@@ -33,11 +33,11 @@ const runIn = async (repoDir: string, args: string[], opts: { expectFail?: boole
 const run = (args: string[], expectFail = false) => runIn(fixture.dir, args, { expectFail })
 
 /** A scratch git repo carrying only a `contracts/intent-brief.md` template —
- * enough for `agentic new` to resolve as a source, distinct from the shared
+ * enough for `gateline new` to resolve as a source, distinct from the shared
  * `fixture` (used for identity-refusal tests, which must NOT reuse a repo
  * whose config already carries `user.name`/`user.email`). */
 function makeScratchRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'agentic-cli-scratch-'))
+  const dir = mkdtempSync(join(tmpdir(), 'gateline-cli-scratch-'))
   const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' }
   const git = (args: string[], commitEnv?: NodeJS.ProcessEnv) => execFileSync('git', ['-C', dir, ...args], { env: commitEnv ?? env, encoding: 'utf8' })
   git(['init', '-q', '-b', 'main'])
@@ -57,7 +57,7 @@ function makeScratchRepo(): string {
 
 beforeAll(async () => {
   fixture = generateFixtureRepo()
-  const briefDir = await mkdtemp(join(tmpdir(), 'agentic-brief-'))
+  const briefDir = await mkdtemp(join(tmpdir(), 'gateline-brief-'))
   briefPath = join(briefDir, 'intent-brief.md')
   await writeFile(
     briefPath,
@@ -66,7 +66,7 @@ beforeAll(async () => {
 })
 afterAll(() => rm(fixture.dir, { recursive: true, force: true }))
 
-describe('agentic CLI', () => {
+describe('gateline CLI', () => {
   it('status renders the portfolio with gate glyphs', async () => {
     const { stdout } = await run(['status'])
     expect(stdout).toMatch(/RUN\s+PHASE\s+GATES/)
@@ -231,7 +231,7 @@ describe('agentic CLI', () => {
   })
 
   it('arm starts a hand-authored staged run exactly like a CLI-staged one (AC8.1: idempotent ensure regardless of creation path)', async () => {
-    // A run staged by hand (no `agentic new` involved) — the genesis commit
+    // A run staged by hand (no `gateline new` involved) — the genesis commit
     // is written directly, not through stageRun — to prove `arm` (and the
     // ensureDraftPr it calls) treats every staged run identically regardless
     // of how its branch/state.yaml came to exist.
@@ -312,8 +312,8 @@ describe('agentic CLI', () => {
   })
 
   it('new accepts a brief whose H2 differs from the template only in punctuation/whitespace, matching core validate.ts\'s normalize (F6)', async () => {
-    const scratch = mkdtempSync(join(tmpdir(), 'agentic-cli-f6-'))
-    const briefDir = await mkdtemp(join(tmpdir(), 'agentic-brief-f6-'))
+    const scratch = mkdtempSync(join(tmpdir(), 'gateline-cli-f6-'))
+    const briefDir = await mkdtemp(join(tmpdir(), 'gateline-brief-f6-'))
     try {
       const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' }
       const git = (args: string[]) => execFileSync('git', ['-C', scratch, ...args], { env, encoding: 'utf8' })
@@ -343,7 +343,7 @@ describe('agentic CLI', () => {
   })
 })
 
-describe('agentic sync — local-only short-circuit (R3)', () => {
+describe('gateline sync — local-only short-circuit (R3)', () => {
   it('against a remoteless source resolves local-only, prints the literal line, exits 0, and never throws (AC3.1)', async () => {
     // fixture.dir carries no origin remote — resolveSources auto-detects
     // local-only (AC1.1); today's uncaught `gh pr list` rejection (the
@@ -363,7 +363,7 @@ describe('agentic sync — local-only short-circuit (R3)', () => {
   })
 })
 
-describe('agentic up — startup conflict (AC4.1)', () => {
+describe('gateline up — startup conflict (AC4.1)', () => {
   it('--local-only --push --no-open exits non-zero, names the conflict, and never listens on the port', async () => {
     const port = 48173
     const { code, stderr } = await runIn(fixture.dir, ['up', '--local-only', '--push', '--no-open', '--port', String(port)], { expectFail: true })
@@ -432,7 +432,7 @@ describe('resolveUpMode — the five startup markers (AC4.2, AC1.1, AC1.2)', () 
   })
 })
 
-describe('agentic new — interactive helpers (unit, no TTY)', () => {
+describe('gateline new — interactive helpers (unit, no TTY)', () => {
   it('draftBriefMarkdown substitutes the title into the template H1, structure only', () => {
     const template = '# Intent Brief: <title>\n\n## Problem\n\n## Motivation\n\n## Constraints\n\n## Out of scope\n'
     const drafted = draftBriefMarkdown(template, 'My New Thing')

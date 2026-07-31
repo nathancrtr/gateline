@@ -18,7 +18,7 @@ scoping decisions are settled and not revisited below:
 |---|---|
 | Posture | **Local-first, remote-ready.** One command serves the app on localhost; it reads local clones and writes real git commits. Data access sits behind a driver interface so a GitHub-API driver can arrive later without UI changes. |
 | Stack | **TypeScript end-to-end.** React 19 + Vite + Tailwind v4 (shadcn/ui-style copied components) in front; a small Hono server on Node behind; npm workspaces (Node ≥ 22, no extra toolchain). |
-| Scope | Core surfaces (inbox, portfolio, run detail, gate cards, the write path) **plus** the `agentic` CLI, metrics/trends (I8), and GitHub PR-approval sync (§2 of FRONTEND.md). Slack notifications: out. |
+| Scope | Core surfaces (inbox, portfolio, run detail, gate cards, the write path) **plus** the `gateline` CLI, metrics/trends (I8), and GitHub PR-approval sync (§2 of FRONTEND.md). Slack notifications: out. |
 | Home | **This repo, top-level `packages/`** — a product component of the framework, versioned with the contracts it renders. `apps/` stays reserved for pipeline-run output. |
 
 Everything in FRONTEND.md §4 remains binding. Three of its principles harden into
@@ -40,13 +40,13 @@ Three human surfaces plus a CLI, all views over the same core library:
 
 ```
                     ┌─────────────────────────────────────────┐
-                    │ @agentic/core                           │
+                    │ @gateline/core                           │
                     │ schema · discovery · readiness ·        │
                     │ validation · write path · metrics       │
                     └───────┬─────────────────┬───────────────┘
                             │                 │
                    ┌────────┴───────┐  ┌──────┴────────┐
-                   │ agentic (CLI)  │  │ server (Hono) │──── SSE / JSON ────┐
+                   │ gateline (CLI)  │  │ server (Hono) │──── SSE / JSON ────┐
                    │ status·inbox·  │  └───────────────┘                    │
                    │ approve·sync·ui│                              ┌────────┴───────┐
                    └────────────────┘                              │ web (React)    │
@@ -65,7 +65,7 @@ Three human surfaces plus a CLI, all views over the same core library:
   markdown with per-contract validation badges), task board with review-round
   counts, and the `state.yaml` git history as an audit trail.
 - **Gate card** — the decision surface, one per pending decision (see §4).
-- **`agentic` CLI** — the same read models and the same write path in terminal form:
+- **`gateline` CLI** — the same read models and the same write path in terminal form:
   `status`, `inbox`, `approve`/`decline`, `resolve-escalation`, `pause`/`resume`,
   `sync`, and `ui` (starts the server, opens the browser). FRONTEND.md's Stage B
   tool, subsumed rather than skipped — decisions stay possible when no browser is.
@@ -80,7 +80,7 @@ state, not dispatch.
 
 ### 2.1 Data model and validation
 
-`@agentic/core` types mirror the contracts exactly: `RunState` (from
+`@gateline/core` types mirror the contracts exactly: `RunState` (from
 `contracts/state.yaml`), `Task`, `GateEntry`, `Escalation`, plus derived types
 (`InboxItem`, `GatePacket`, `RunSummary`). Parsing is zod-validated YAML; a state
 file that fails schema validation surfaces as a *malformed run* (visible, opens the
@@ -121,7 +121,7 @@ interface RunSource {
 REST/GraphQL API with API-commit writes — the promised remote-ready seam. Nothing
 above `RunSource` may know which driver it is talking to.
 
-Multi-repo: `~/.config/agentic/config.yaml` lists sources
+Multi-repo: `~/.config/gateline/config.yaml` lists sources
 (`{path, name, fetch_interval}`), overridable per-invocation with `--repo`. No
 config file → the current repo, zero setup.
 
@@ -264,8 +264,8 @@ No role spec changes; no `.claude/agents` / `.github/agents` re-render needed
 ```
 packages/
 ├── package.json            # npm workspaces root; engines: node ≥22
-├── core/                   # @agentic/core — everything in §2–§3, zero UI deps
-├── cli/                    # agentic — commander-based, thin over core
+├── core/                   # @gateline/core — everything in §2–§3, zero UI deps
+├── cli/                    # gateline — commander-based, thin over core
 ├── server/                 # Hono app, thin over core
 ├── web/                    # Vite + React SPA
 └── fixtures/               # demo-repo generator (§9)
@@ -280,7 +280,7 @@ on `packages/**` paths so framework-only PRs stay fast.
 - **Fixture generator** (`packages/fixtures/`): scripts a temp git repo containing
   runs in *every* interesting state — each gate pending, an unresolved escalation, a
   round-cap breach, a paused run, a malformed spec, a done run. Used by unit tests,
-  by Playwright, and by `agentic ui --demo` for screenshots and hand-testing. This
+  by Playwright, and by `gateline ui --demo` for screenshots and hand-testing. This
   matters because the only real run (wordfreq) is finished — the fixture repo is how
   in-flight behavior stays testable.
 - **Core**: vitest against the fixture repo — discovery, readiness table (§2.3, one
@@ -303,8 +303,8 @@ plumbing, CAS, YAML preservation) behind the smallest UI.
 | M0 | Foundation | Workspace scaffold; core schema, discovery, readiness, validation; fixture generator | `npm test` green; core lists wordfreq from this repo and all fixture states correctly |
 | M1 | Read surfaces | Server API, app shell, portfolio, run detail, artifact + diff rendering, SSE freshness | Browse wordfreq end-to-end in the browser; malformed fixture shows bounce view |
 | M2 | Decide | Write path (plumbing + CAS + worktree fallback); gate cards with per-gate affordances + burden; CLI decision commands | Full decision loop on the fixture repo produces correct, comment-preserving commits; CAS refusal demonstrated |
-| M3 | Scale & measure | Inbox ranking/aging, multi-repo config, metrics view, GitHub PR-approval sync (`agentic sync` + opt-in poll) | Metrics computed from real wordfreq history; sync writes a correct G2 entry from a PR review (dry-run + live modes) |
-| M4 | Polish & ship | Keyboard model, empty states, dark mode, demo mode, README + contract amendment + FRONTEND.md note, CI workflow | Playwright suite green; `agentic ui` cold-start against this repo < 2s; draft PR opened |
+| M3 | Scale & measure | Inbox ranking/aging, multi-repo config, metrics view, GitHub PR-approval sync (`gateline sync` + opt-in poll) | Metrics computed from real wordfreq history; sync writes a correct G2 entry from a PR review (dry-run + live modes) |
+| M4 | Polish & ship | Keyboard model, empty states, dark mode, demo mode, README + contract amendment + FRONTEND.md note, CI workflow | Playwright suite green; `gateline ui` cold-start against this repo < 2s; draft PR opened |
 
 ## 11. Risks
 

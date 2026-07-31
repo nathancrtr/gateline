@@ -14,8 +14,8 @@ let ctx: FixtureContext
 let toplevel: string
 let subdir: string
 // A config path that never exists, so loadSources exercises the cwd fallback
-// instead of reading the developer's real ~/.config/agentic/config.yaml.
-const noConfig = { configPath: '/nonexistent/agentic-83/config.yaml' }
+// instead of reading the developer's real ~/.config/gateline/config.yaml.
+const noConfig = { configPath: '/nonexistent/gateline-83/config.yaml' }
 
 beforeAll(async () => {
   ctx = await makeFixture()
@@ -58,7 +58,7 @@ describe('loadSources roots sources at the repo toplevel (#83)', () => {
 describe('local-only mode resolution', () => {
   let fx: FixtureContext
   const cleanups: string[] = []
-  const modeNoConfig = { configPath: '/nonexistent/agentic-01/config.yaml' }
+  const modeNoConfig = { configPath: '/nonexistent/gateline-01/config.yaml' }
 
   beforeEach(async () => {
     fx = await makeFixture()
@@ -100,7 +100,7 @@ describe('local-only mode resolution', () => {
 
   /** Writes a one-source config.yaml body to a fresh temp file, returning its path. */
   async function writeConfig(body: string): Promise<string> {
-    const tmpDir = await mkdtemp(join(tmpdir(), 'agentic-mode-'))
+    const tmpDir = await mkdtemp(join(tmpdir(), 'gateline-mode-'))
     cleanups.push(tmpDir)
     const configPath = join(tmpDir, 'config.yaml')
     await writeFile(configPath, body)

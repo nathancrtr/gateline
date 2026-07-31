@@ -5,7 +5,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { LocalGitSource } from '@agentic/core'
+import { LocalGitSource } from '@gateline/core'
 import { Engine } from '../src/engine.ts'
 import { parseLedger } from '../src/observe.ts'
 import {
@@ -24,7 +24,7 @@ import {
   VERIFICATION,
 } from './engine.helper.ts'
 
-const BOT = { name: 'agentic-orchestrator', email: 'orchestrator@agentic.invalid' }
+const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
 
 describe('crash recovery (M4 drill)', () => {
   it('a dispatch lost to a crash is aged out and re-dispatched exactly once', { timeout: 60_000 }, async () => {

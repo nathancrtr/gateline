@@ -99,7 +99,7 @@ How should framework files travel into a host repo?
 | Runner plugin (e.g., a Claude Code plugin) | Adapter-layer option only | Could bundle one runner's rendered agents for install ergonomics, but the core must stay runtime-neutral files (P3); never the primary channel |
 
 The Phase 0 decision — copy, don't submodule — was right. What was missing is the
-lockfile, `.agentic/framework-lock.json`. Its schema is normative *here* — and
+lockfile, `.gateline/framework-lock.json`. Its schema is normative *here* — and
 ships as a JSON Schema beside `integrate.py` — because the field instances live in
 private hosts this repository cannot point at:
 
@@ -142,7 +142,7 @@ v0.1 assumed everything that travels is a file copy. Two framework components
 that shipped since are **runnable tools, not portable trees**, and they
 deliberately do not vendor:
 
-- **The gate frontend** (`packages/`: the web UI, `agentic` CLI, and server) and
+- **The gate frontend** (`packages/`: the web UI, `gateline` CLI, and server) and
   **the v1 orchestrator** (`packages/orchestrator`) run *from the
   framework checkout or release*, pointed at host repos via `--repo` / the
   multi-repo config. They are operators' instruments over host state, not host
@@ -169,7 +169,7 @@ Three layers with strict edit rules, all under one prefix in the host repo:
 
 ```
 host-repo/
-├── .agentic/
+├── .gateline/
 │   ├── roles/               # CORE — copied verbatim, never edited in host
 │   ├── contracts/           # CORE — ditto (forks allowed but lock-recorded)
 │   ├── scripts/             # CORE — renderer + integrate.py travel with the copy
@@ -194,7 +194,7 @@ host-repo/
 **What the field did with this model.** Integration #2 adopted a *minimal core
 set* — the renderer, the render-staleness CI check, and the one contract its runs
 consume — placed at the host's repo root rather than under the prefix, with
-`.agentic/` holding only metadata (the lock, upstream copies of forked files, the
+`.gateline/` holding only metadata (the lock, upstream copies of forked files, the
 framework license text). Its own roles, contracts, registry, and adapter manifest
 are instance-local originals that follow framework conventions, recorded in the
 lock as an instance-layer note rather than as copies. Two lessons folded into the
@@ -268,7 +268,7 @@ never someone's working copy — pointed at the target:
 
 ```
 python3 <framework-release>/scripts/integrate.py init <target-repo> \
-    [--take all|sdlc|<file list>] [--layout prefixed|root] [--prefix .agentic] \
+    [--take all|sdlc|<file list>] [--layout prefixed|root] [--prefix .gateline] \
     [--provenance redistribute|private] [--adapters auto]
 ```
 
@@ -296,9 +296,9 @@ python3 <framework-release>/scripts/integrate.py init <target-repo> \
     Apache LICENSE without mislicensing its own proprietary content. Provenance
     lands instead as a NOTICE section enumerating the framework-derived files
     (by reference to the lock), with the Apache-2.0 text kept at
-    `.agentic/LICENSE.framework.md`. Integration #2 invented this pattern by
+    `.gateline/LICENSE.framework.md`. Integration #2 invented this pattern by
     hand; `init` templates it.
-  - In both modes: an `.agentic/README.md` pointing back to the source repo, and —
+  - In both modes: an `.gateline/README.md` pointing back to the source repo, and —
     if the host has a header-sweep tool — the exclusion configuration, with the
     standing rule stated in every rendered agent: *if tooling demands a host
     header on a framework file, escalate; never comply.*
@@ -369,7 +369,7 @@ teammate runs it too:
   (ORCHESTRATOR.md §5) is the implementation validate will ride once live dispatch
   is verified — but it stays a v1 nicety, not a blocker.
 - **Frontend read check (new since v0.1; an operator step, not part of
-  `validate`):** point the gate frontend at the host — `agentic status --repo
+  `validate`):** point the gate frontend at the host — `gateline status --repo
   <host>` from the framework checkout — and confirm the smoke run renders without
   bounces. `validate` (stdlib Python) prints the command; it does not run a Node
   toolchain it doesn't ship. Precondition: the state-contract split — until it
@@ -409,6 +409,27 @@ adopts and the core wants to become org-shared infrastructure (Future
 Consideration #1), this lock/upgrade machinery is the substrate that promotion
 builds on; nothing here needs to be undone.
 
+### Migrating a pre-rename host (`.agentic/` → `.gateline/`)
+
+Hosts integrated before the gateline rename carry the legacy names: a
+`.agentic/` prefix directory, `agentic-framework-provenance` NOTICE markers, and
+an `agentic-render-check.yml` workflow. The rename is a clean break — current
+tooling reads only the new names — so migrating is a three-step, one-commit
+change in the host:
+
+1. `git mv .agentic .gateline`, and rename
+   `.github/workflows/agentic-render-check.yml` to `gateline-render-check.yml`.
+2. Delete the old NOTICE section including its
+   `<!-- agentic-framework-provenance:start/end -->` markers, then re-run
+   `integrate.py init` from the pinned framework ref (idempotent: it rewrites
+   the managed section between the new markers and refreshes `.gateline/`
+   metadata in place).
+3. `python3 .gateline/scripts/integrate.py validate` to re-prove the invariants.
+
+Until a host migrates, `validate --prefix .agentic` still checks the directory
+layout, but the provenance markers will not match — re-running `init` is the
+supported path, not hand-editing the markers.
+
 ## 7. Generated vs. copied
 
 The brief's open question — does integration include *generating* project-specific
@@ -432,12 +453,12 @@ The whole operator surface, from zero to gate-ready, should be:
 ```
 python3 <framework-release>/scripts/integrate.py init ~/repos/my-app
 cd ~/repos/my-app        # dispatch the Integrator with the prompt init printed
-python3 .agentic/scripts/integrate.py validate
+python3 .gateline/scripts/integrate.py validate
 # open the scaffold PR
 ```
 
 Two tool invocations, one agent dispatch, one PR. The tool travels into
-`.agentic/scripts/`, so the **host repo** is self-sufficient: nothing checked into
+`.gateline/scripts/`, so the **host repo** is self-sufficient: nothing checked into
 it depends on the framework source except at `upgrade` time. The **operator's
 cockpit** is a different matter under the two-channel model (§3): the gate
 frontend and the orchestrator run from the framework checkout/release for as long

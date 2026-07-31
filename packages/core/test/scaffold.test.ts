@@ -224,10 +224,10 @@ describe('resume/pause refusals around the staged rest state', () => {
     return parseRunState(scaffold.files['state.yaml']!).state!
   }
 
-  it('resume refuses a staged run, pointing at `agentic arm`', () => {
+  it('resume refuses a staged run, pointing at `gateline arm`', () => {
     const state = stagedState('full')
     expect(() => planDecision(state, { action: 'resume' }, who)).toThrow(DecisionError)
-    expect(() => planDecision(state, { action: 'resume' }, who)).toThrow(/agentic arm/)
+    expect(() => planDecision(state, { action: 'resume' }, who)).toThrow(/gateline arm/)
   })
 
   it('pause refuses a `staged` pauseReason — staging is a birth state, not a pause reason', () => {

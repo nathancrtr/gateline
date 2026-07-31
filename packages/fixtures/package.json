@@ -1,13 +1,13 @@
 {
-  "name": "@agentic/fixtures",
+  "name": "@gateline/fixtures",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Generates a demo git repository with pipeline runs in every interesting state — used by tests and `agentic ui --demo`.",
+  "description": "Generates a demo git repository with pipeline runs in every interesting state — used by tests and `gateline ui --demo`.",
   "exports": {
     ".": "./src/index.ts"
   },
   "bin": {
-    "agentic-fixture": "./src/main.ts"
+    "gateline-fixture": "./src/main.ts"
   }
 }

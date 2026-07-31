@@ -1,7 +1,7 @@
 # Shadow replay: wordfreq — disposition of disagreements
 
 **What this is:** the M1 exit deliverable for run 1 of the N=3 shadow bar
-(ORCHESTRATOR.md §10, resolved question 3). `agentic-orchestrator shadow
+(ORCHESTRATOR.md §10, resolved question 3). `gateline-orchestrator shadow
 wordfreq` replays the run's history commit by commit, deriving the engine's
 action at each state and comparing it with what the human orchestrator
 actually did next. Every disagreement below is dispositioned as an engine bug

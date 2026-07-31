@@ -7,14 +7,14 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { Git } from '@agentic/core'
+import { Git } from '@gateline/core'
 import { Engine } from '../src/engine.ts'
 import { loadHeadlessManifest } from '../src/manifest.ts'
 import { loadRegistry } from '../src/registry.ts'
 import { Scheduler, sweepSlug } from '../src/schedule.ts'
 import { agentCommit, Clock, FakeDispatcher, makeToyRepo, reconcile, toyRef, humanDecide, TEST_REGISTRY, SPEC } from './engine.helper.ts'
 
-const BOT = { name: 'agentic-orchestrator', email: 'orchestrator@agentic.invalid' }
+const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
 
 const MODELS_YAML = `
 profiles:
@@ -33,7 +33,7 @@ describe('loadRegistry against a prefixed host', () => {
   it('reads registry/models.yaml from under the metadata prefix', async () => {
     const { dir, clock } = makeToyRepo({ layout: 'prefixed' })
     execFileSync('git', ['-C', dir, 'checkout', '-q', 'main'])
-    agentCommit(dir, clock, { '.agentic/registry/models.yaml': MODELS_YAML }, 'seed registry')
+    agentCommit(dir, clock, { '.gateline/registry/models.yaml': MODELS_YAML }, 'seed registry')
     const git = new Git(dir)
     const registry = await loadRegistry(git, await git.defaultBranch())
     expect(registry?.bindings.analyst).toEqual({ profile: 'balanced' })
@@ -43,14 +43,14 @@ describe('loadRegistry against a prefixed host', () => {
 
 describe('loadHeadlessManifest against a prefixed host', () => {
   it('reads adapters/<name>/manifest.json from under the metadata prefix', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'agentic-manifest-'))
-    mkdirSync(join(dir, '.agentic', 'adapters', 'fake'), { recursive: true })
+    const dir = mkdtempSync(join(tmpdir(), 'gateline-manifest-'))
+    mkdirSync(join(dir, '.gateline', 'adapters', 'fake'), { recursive: true })
     writeFileSync(
-      join(dir, '.agentic', 'framework-lock.json'),
-      JSON.stringify({ layout: 'prefixed', prefix: '.agentic' }),
+      join(dir, '.gateline', 'framework-lock.json'),
+      JSON.stringify({ layout: 'prefixed', prefix: '.gateline' }),
     )
     writeFileSync(
-      join(dir, '.agentic', 'adapters', 'fake', 'manifest.json'),
+      join(dir, '.gateline', 'adapters', 'fake', 'manifest.json'),
       JSON.stringify({
         headless: { command: ['fake', '{prompt}'], usage_report: { format: 'static-estimate' } },
       }),
@@ -62,13 +62,13 @@ describe('loadHeadlessManifest against a prefixed host', () => {
 })
 
 describe('Engine against a prefixed host (#95)', () => {
-  it('dispatches the analyst, meters, and reaches G0 with runs/contracts under .agentic', async () => {
+  it('dispatches the analyst, meters, and reaches G0 with runs/contracts under .gateline', async () => {
     const { dir, clock } = makeToyRepo({ layout: 'prefixed' })
     const dispatcher = new FakeDispatcher((req) => {
       expect(req.role).toBe('analyst')
       // The prompt must point the agent at its real, prefixed run directory.
-      expect(req.body).toContain('.agentic/runs/toy')
-      agentCommit(req.cwd, clock, { '.agentic/runs/toy/spec.md': SPEC }, 'toy: spec')
+      expect(req.body).toContain('.gateline/runs/toy')
+      agentCommit(req.cwd, clock, { '.gateline/runs/toy/spec.md': SPEC }, 'toy: spec')
       return {}
     })
     const engine = new Engine({
@@ -83,7 +83,7 @@ describe('Engine against a prefixed host (#95)', () => {
 
     await humanDecide(dir, { action: 'approve', gate: 'G0', burden: 'confirmation' })
 
-    const { LocalGitSource } = await import('@agentic/core')
+    const { LocalGitSource } = await import('@gateline/core')
     const check = new LocalGitSource('check', dir)
     const { state } = await check.readState(toyRef(dir))
     expect(state?.gates.G0.approved).toBe(true)
@@ -93,14 +93,14 @@ describe('Engine against a prefixed host (#95)', () => {
 })
 
 describe('Scheduler against a prefixed host (#95)', () => {
-  it('sweeps under .agentic/runs and dispatches with .agentic/contracts in the prompt', async () => {
+  it('sweeps under .gateline/runs and dispatches with .gateline/contracts in the prompt', async () => {
     const { dir, clock } = makeToyRepo({ layout: 'prefixed' })
     execFileSync('git', ['-C', dir, 'checkout', '-q', 'main'])
     agentCommit(dir, clock, { 'orchestrator.yaml': 'schedules:\n  historian:\n    every: 7d\n    cost_limit_usd: 5\n' }, 'seed orchestrator.yaml')
     const registry = { ...TEST_REGISTRY, estimates: { ...TEST_REGISTRY.estimates, historian: 1 } }
     const dispatcher = new FakeDispatcher((req) => {
-      expect(req.body).toContain('.agentic/contracts/docs-delta.md')
-      agentCommit(req.cwd, clock, { [`.agentic/runs/${sweepSlug('historian', new Date())}/docs-delta.md`]: '# Docs Delta: sweep\n' }, 'docs delta')
+      expect(req.body).toContain('.gateline/contracts/docs-delta.md')
+      agentCommit(req.cwd, clock, { [`.gateline/runs/${sweepSlug('historian', new Date())}/docs-delta.md`]: '# Docs Delta: sweep\n' }, 'docs delta')
       return { costUsd: 0.42 }
     })
     const scheduler = new Scheduler({ repoDir: dir, identity: BOT, dispatcher, registry })
@@ -110,7 +110,7 @@ describe('Scheduler against a prefixed host (#95)', () => {
     await scheduler.drain()
 
     const slug = outcome!.slug!
-    const marker = execFileSync('git', ['-C', dir, 'show', `run/${slug}:.agentic/runs/${slug}/sweep.yaml`], { encoding: 'utf8' })
+    const marker = execFileSync('git', ['-C', dir, 'show', `run/${slug}:.gateline/runs/${slug}/sweep.yaml`], { encoding: 'utf8' })
     expect(marker).toContain('role: historian')
     expect(marker).toContain('cost_usd: 0.42')
 

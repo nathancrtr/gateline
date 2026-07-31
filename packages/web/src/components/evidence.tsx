@@ -8,10 +8,11 @@ import { Link } from 'react-router-dom'
 import { api, type CriterionEvidence, type EvidenceRollup, type Profile, type ReviewFinding, type ReviewReport } from '../api.ts'
 import { FindingCard, VerdictChip, useReviews } from './findings.tsx'
 import { useLexicon } from './lexicon.tsx'
+import { DIFF_SELECTION } from '../landing.ts'
 import { boundaryLine, fileLabel } from '../surface.ts'
 
 const artifactLink = (src: string, slug: string, artifact: string, anchor?: string) =>
-  `/runs/${src}/${slug}?tab=artifacts&artifact=${encodeURIComponent(artifact)}${anchor ? `&anchor=${anchor}` : ''}`
+  `/runs/${src}/${slug}?tab=record&artifact=${encodeURIComponent(artifact)}${anchor ? `&anchor=${anchor}` : ''}`
 
 export function EvidenceRollupPanel({ src, slug }: { src: string; slug: string }) {
   const { data } = useQuery({ queryKey: ['evidence', src, slug], queryFn: () => api.evidence(src, slug) })
@@ -425,7 +426,7 @@ function BoundaryCheck({ src, slug }: { src: string; slug: string }) {
           <span className="font-mono text-[11.5px] text-warn">{line.undeclared.map(fileLabel).join(', ')}</span>.
         </>
       )}{' '}
-      <Link className="text-accent underline underline-offset-2" to={`/runs/${src}/${slug}?tab=diff`}>
+      <Link className="text-accent underline underline-offset-2" to={`/runs/${src}/${slug}?tab=record&artifact=${encodeURIComponent(DIFF_SELECTION)}`}>
         read the diff by surface
       </Link>
     </p>

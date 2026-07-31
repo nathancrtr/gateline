@@ -229,6 +229,38 @@ Two costs are accepted explicitly rather than left to degrade:
   first-class tier, so every link-out affordance must degrade to the local view rather
   than to a dead end.
 
+### 4.2 The run page's surfaces (#258)
+
+The run page offers three surfaces, and they are named for what a human does, not for
+where the bytes are kept. The bar they replaced — `Artifacts | Diff | History` — was a
+filesystem listing standing in for the job at a gate.
+
+- **Decide** — whatever is on the table, composed for the gate it belongs to. Present
+  only while something needs a human, so a finished run is never offered an empty
+  panel. The per-gate surfaces render inside it: the G2 packet (#256), and #255's and
+  #257's when they land.
+- **Record** — the artifact browser, and the change below it. The escape hatch, the
+  fork fallback, and the answer to "show me the bytes": whatever a structured surface
+  withholds itself over, the artifact it was reading is here in full.
+- **History** — the decision ledger of §4.1.
+
+Two consequences worth stating, because both were load-bearing before:
+
+- **The change reads inside Record, not beside it.** It is not an artifact — nothing
+  under `runs/<slug>/` produced it — so it sits under its own heading rather than in
+  the file list, and it earns its place only as the surface-scoped view (principle 7).
+  G2's packet still routes to it by the boundary fact, per §4.1.
+- **A URL that names a retired tab still resolves, and is rewritten in place.**
+  `?tab=artifacts` is the record, `?tab=diff` is the record with the change open, and
+  a `?tab=decide` link that has aged out lands on the record. Links minted before the
+  rename — the inbox's, the lexicon's, an approver's bookmark — keep working.
+
+The page also had two layouts, forked on whether anything was pending, which is why
+gate provenance and the vitals rows each existed in two shapes. That fork was a
+symptom of not being able to predict what a state needs; #249 closed the gate and
+profile vocabulary, so the prediction moved into the surface and one layout serves
+both.
+
 ## 5. The dashboard question
 
 **For one operator running one pipeline, a dashboard is overhead — Claude Code plus

@@ -4,7 +4,7 @@
 // behavior rather than guess.
 import { describe, expect, it } from 'vitest'
 import type { InboxItem, Profile } from '../src/api.ts'
-import { decideTargetIndex, landingArtifact } from '../src/landing.ts'
+import { DIFF_SELECTION, decideTargetIndex, landingArtifact, resolveSurface } from '../src/landing.ts'
 
 function item(over: Partial<InboxItem>): InboxItem {
   return {
@@ -92,6 +92,54 @@ describe('landingArtifact', () => {
   it('takes the first pending item that has an opinion', () => {
     const items = [item({ kind: 'escalation', gate: null }), item({ gate: 'G2' })]
     expect(land(items, 'full', FULL)).toBe('verification-report.md')
+  })
+})
+
+describe('resolveSurface', () => {
+  const at = (tab: string | null, artifact: string | null = null, pending = true) =>
+    resolveSurface({ tab, artifact }, { pending })
+
+  it('opens a run with something pending on Decide, and a quiet run on Record', () => {
+    expect(at(null, null, true)).toEqual({ surface: 'decide', selection: null, rewrite: false })
+    expect(at(null, null, false)).toEqual({ surface: 'record', selection: null, rewrite: false })
+  })
+
+  it('never offers an empty Decide surface — a stale link lands on the record', () => {
+    expect(at('decide', null, false)).toEqual({ surface: 'record', selection: null, rewrite: true })
+    expect(at('decide', null, true)).toEqual({ surface: 'decide', selection: null, rewrite: false })
+  })
+
+  it('keeps the retired container tabs working: artifacts is the record', () => {
+    expect(at('artifacts', 'spec.md')).toEqual({ surface: 'record', selection: 'spec.md', rewrite: true })
+    expect(at('artifacts', null)).toEqual({ surface: 'record', selection: null, rewrite: true })
+  })
+
+  it('keeps the retired container tabs working: diff is the record, with the change open', () => {
+    expect(at('diff', null)).toEqual({ surface: 'record', selection: DIFF_SELECTION, rewrite: true })
+    // The old Diff tab carried no artifact, so nothing is lost by the change winning.
+    expect(at('diff', 'spec.md')).toEqual({ surface: 'record', selection: DIFF_SELECTION, rewrite: true })
+  })
+
+  it('leaves a canonical URL alone', () => {
+    expect(at('record', 'spec.md')).toEqual({ surface: 'record', selection: 'spec.md', rewrite: false })
+    expect(at('record', DIFF_SELECTION)).toEqual({ surface: 'record', selection: DIFF_SELECTION, rewrite: false })
+    expect(at('history', null)).toEqual({ surface: 'history', selection: null, rewrite: false })
+  })
+
+  it('reads a bare ?artifact= as asking to read it, whatever else is pending', () => {
+    expect(at(null, 'plan.md', true)).toEqual({ surface: 'record', selection: 'plan.md', rewrite: false })
+  })
+
+  it('treats an unknown tab as no tab at all, and does not rewrite what it did not name', () => {
+    // #216's inbox links carry ?decide=, never ?tab=; a run with nothing pending
+    // and no tab is simply a run being read.
+    expect(at('nonsense', null, true)).toEqual({ surface: 'decide', selection: null, rewrite: true })
+    expect(at(null, null, true).rewrite).toBe(false)
+  })
+
+  it('routes History the same whether or not anything is pending', () => {
+    expect(at('history', null, true).surface).toBe('history')
+    expect(at('history', null, false).surface).toBe('history')
   })
 })
 

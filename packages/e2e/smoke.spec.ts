@@ -91,7 +91,7 @@ test('portfolio and metrics render', async ({ page }) => {
 })
 
 test('run lexicon (#163): ids resolve to verbatim hover cards and jump to their definition', async ({ page }) => {
-  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=artifacts&artifact=verification-report.md')
+  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=verification-report.md')
   await expect(page.locator('.lex-cited > summary')).toContainText('Cites AC1.1, AC2.1')
   const ref = page.locator('.prose-artifact .lex-ref', { hasText: 'AC1.1' }).first()
   await ref.hover()
@@ -113,7 +113,7 @@ test('run lexicon (#163): ids resolve to verbatim hover cards and jump to their 
 test('evidence rollup (#165): uncited criteria are the headline; anchors jump to the evidence block', async ({ page }) => {
   // The one-line citation map now lives where the report itself is on screen;
   // G2's decision card carries the composed packet instead (#256).
-  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=artifacts&artifact=verification-report.md')
+  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=verification-report.md')
   const rollup = page.locator('[data-evidence-rollup]').first()
   await expect(rollup).toContainText('No verification evidence cites:')
   await expect(rollup).toContainText('AC2.2')
@@ -242,7 +242,7 @@ test('decision ledger (#268): a schema-invalid run still renders its ledger (AC5
 })
 
 test('surface-scoped diff (#270): the diff groups by what each work item declared', async ({ page }) => {
-  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=diff')
+  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=@diff')
 
   // AC1 — a group per work item, named by the item and the surface it declared.
   const core = page.locator('[data-surface-group="01-core"]')
@@ -270,7 +270,7 @@ test('surface-scoped diff (#270): a forked work-item grammar withholds the group
   // forked-contract writes its contact surface as a structured block. Every
   // required key is there, so the gate is reviewable — the view stands down and
   // names the grammar rather than reporting every file as out of surface.
-  await page.goto('/runs/' + sourceId() + '/forked-contract?tab=diff')
+  await page.goto('/runs/' + sourceId() + '/forked-contract?tab=record&artifact=@diff')
   await expect(page.locator('[data-surface-withheld]')).toContainText('nested block')
   await expect(page.locator('[data-surface-group]')).toHaveCount(0)
   await expect(page.locator('[data-undeclared]')).toHaveCount(0)
@@ -293,8 +293,65 @@ test('surface-scoped diff (#270): G2’s packet carries the boundary fact and ro
   // No score, no verdict word — a count and a link.
   await expect(boundary).not.toContainText('%')
   await boundary.getByRole('link', { name: 'read the diff by surface' }).click()
-  await expect(page).toHaveURL(/tab=diff/)
+  await expect(page).toHaveURL(/artifact=%40diff/)
   await expect(page.locator('[data-undeclared]')).toBeVisible()
+})
+
+test('surfaces (#258): a pending run opens on Decide, a done run on Record with no empty Decide', async ({ page }) => {
+  // AC1 — the decision is what opens, not the first artifact alphabetically.
+  await page.goto('/runs/' + sourceId() + '/g2-pending')
+  await expect(page.locator('[data-surface="decide"]')).toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('[data-needs-card]')).toBeVisible()
+  await expect(page.locator('[data-g2-packet]')).toBeVisible()
+
+  // AC1 — a run with nothing on the table is offered no Decide surface at all.
+  await page.goto('/runs/' + sourceId() + '/done-merged')
+  await expect(page.locator('[data-surface="decide"]')).toHaveCount(0)
+  await expect(page.locator('[data-surface="record"]')).toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('[data-needs-card]')).toHaveCount(0)
+
+  // The container names are gone from the bar.
+  const bar = page.locator('[data-surfaces]')
+  await expect(bar).toContainText('Record')
+  await expect(bar).not.toContainText('Artifacts')
+  await expect(bar).not.toContainText('Diff')
+})
+
+test('surfaces (#258): retired tab names still resolve, and leave a canonical URL', async ({ page }) => {
+  // AC3 — links minted before the rename keep working. ?tab=artifacts is the
+  // record, and the artifact it named is still the one open.
+  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=artifacts&artifact=spec.md')
+  await expect(page).toHaveURL(/tab=record/)
+  await expect(page).toHaveURL(/artifact=spec\.md/)
+  await expect(page.locator('.prose-artifact')).toBeVisible()
+
+  // ?tab=diff is the record with the change open.
+  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=diff')
+  await expect(page).toHaveURL(/tab=record/)
+  await expect(page.locator('[data-surface-group="01-core"]')).toBeVisible()
+
+  // A ?tab=decide link that has aged out lands on the record, not a blank panel.
+  await page.goto('/runs/' + sourceId() + '/done-merged?tab=decide')
+  await expect(page).toHaveURL(/tab=record/)
+  await expect(page.locator('[data-surface="record"]')).toHaveAttribute('aria-current', 'page')
+})
+
+test('surfaces (#258): the change reads inside Record, and every artifact stays reachable', async ({ page }) => {
+  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record')
+  // AC2 — the artifact list is unchanged, and the change sits below it.
+  for (const path of ['spec.md', 'plan.md', 'verification-report.md', 'review-01.md']) {
+    await expect(page.getByRole('button', { name: new RegExp(path.replace('.', '\\.')) })).toBeVisible()
+  }
+  await page.locator('[data-select-diff]').click()
+  await expect(page).toHaveURL(/artifact=%40diff/)
+  await expect(page.locator('[data-undeclared]')).toBeVisible()
+  // One thing is open at a time: the artifact the pending gate would have
+  // landed on must not still read as selected behind the change.
+  await expect(page.locator('[data-artifact-entry][data-selected="true"]')).toHaveCount(0)
+  // …and back out to an artifact, without leaving the surface.
+  await page.getByRole('button', { name: /spec\.md/ }).click()
+  await expect(page.locator('[data-surface="record"]')).toHaveAttribute('aria-current', 'page')
+  await expect(page.locator('.prose-artifact')).toBeVisible()
 })
 
 function sourceId(): string {

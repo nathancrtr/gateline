@@ -9,9 +9,10 @@
 // Severity ordering quotes the report's own severity cell — it does not judge
 // the finding. Nothing here computes a score, a count-based verdict, or a
 // pass/fail rollup, matching the line evidence.tsx draws for G2.
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api, type ReviewFinding, type ReviewReport, type Severity, type Verdict } from '../api.ts'
+import { CitedText } from './lexicon.tsx'
 
 const SEVERITY_RANK: Record<Severity, number> = { blocking: 0, major: 1, minor: 2, unknown: 3 }
 
@@ -62,13 +63,35 @@ function SeverityChip({ finding }: { finding: ReviewFinding }) {
 }
 
 /**
- * One finding, verbatim. Exported because G2's packet surface (#256) renders
- * the same card under the criterion the finding cites — the finding is the
- * same object in both places and must not grow a second rendering.
+ * One finding, verbatim. Exported because G2's packet surface (#256) and the
+ * round-cap comparison (#257) render the same card — under the criterion it
+ * cites, and under what the last two rounds did about it. The finding is the
+ * same object in all three places and must not grow a second rendering.
+ *
+ * `note` and `extra` are slots, not variants: a caller adds what its own
+ * surface knows (which rounds raised this; a disposition written in another
+ * file) without this card learning about that surface.
  */
-export function FindingCard({ finding, source }: { finding: ReviewFinding; source?: string }) {
+export function FindingCard({
+  finding,
+  source,
+  note,
+  extra,
+  defaultOpen,
+}: {
+  finding: ReviewFinding
+  source?: string
+  note?: ReactNode
+  extra?: ReactNode
+  /** Overrides the default fold, for a caller that knows something the finding
+   *  does not — a disposition written in a different file (#257). */
+  defaultOpen?: boolean
+}) {
   const resolved = finding.resolution?.state === 'resolved'
-  const [open, setOpen] = useState(!resolved)
+  const [open, setOpen] = useState(defaultOpen ?? !resolved)
+  // Collapsible whenever there is a fold to undo: its own disposition, or a
+  // caller that folded it.
+  const collapsible = finding.resolution !== null || defaultOpen === false
   return (
     <li className={`rounded-[5px] border px-3 py-2 ${resolved ? 'border-line bg-surface' : 'border-line bg-inset'}`} data-finding={finding.id}>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
@@ -78,19 +101,25 @@ export function FindingCard({ finding, source }: { finding: ReviewFinding; sourc
             "which review raised this" is not otherwise on screen. */}
         {source && <span className="shrink-0 font-mono text-[10.5px] text-faint">{source}</span>}
         {finding.round !== null && <span className="shrink-0 font-mono text-[10.5px] text-faint">round {finding.round}</span>}
+        {note}
         <span className={`min-w-0 flex-1 text-[12.5px] ${resolved ? 'text-muted line-through decoration-faint' : 'text-ink'}`}>
           {finding.title}
         </span>
-        {finding.resolution && (
+        {collapsible && (
           <button
             onClick={() => setOpen((v) => !v)}
             className={`shrink-0 rounded-full border px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none ${
-              resolved ? 'border-ok-line bg-ok-bg text-ok' : 'border-warn-line bg-warn-bg text-warn'
+              finding.resolution === null
+                ? 'border-line bg-surface text-muted'
+                : resolved
+                  ? 'border-ok-line bg-ok-bg text-ok'
+                  : 'border-warn-line bg-warn-bg text-warn'
             }`}
-            title={finding.resolution.text}
+            title={finding.resolution?.text}
           >
-            {finding.resolution.state}
-            {finding.resolution.round !== null ? ` (round ${finding.resolution.round})` : ''}
+            {finding.resolution === null
+              ? 'details'
+              : `${finding.resolution.state}${finding.resolution.round !== null ? ` (round ${finding.resolution.round})` : ''}`}
             {open ? ' ▾' : ' ▸'}
           </button>
         )}
@@ -101,17 +130,23 @@ export function FindingCard({ finding, source }: { finding: ReviewFinding; sourc
           {finding.failureScenario && <Field label="Failure scenario">{finding.failureScenario}</Field>}
           {finding.requirement && <Field label="Requirement">{finding.requirement}</Field>}
           {finding.resolution && <Field label={`Round ${finding.resolution.round ?? '?'}`}>{finding.resolution.text}</Field>}
+          {extra}
         </dl>
       )}
     </li>
   )
 }
 
+/** Field values run through the lexicon (#252): a finding that cites R2/AC2.1
+ *  resolves it where it stands, which is the whole point at a round cap — the
+ *  requirement is where the suspected ambiguity lives. */
 function Field({ label, children }: { label: string; children: string }) {
   return (
     <div className="flex flex-wrap gap-x-2">
       <dt className="shrink-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-faint">{label}</dt>
-      <dd className="min-w-0 flex-1 text-muted">{children}</dd>
+      <dd className="min-w-0 flex-1 text-muted">
+        <CitedText>{children}</CitedText>
+      </dd>
     </div>
   )
 }

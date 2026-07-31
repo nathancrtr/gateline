@@ -22,6 +22,7 @@ import { EvidenceRollupPanel, G2Packet } from '../components/evidence.tsx'
 import { FindingsPanel, VerdictChip, useReviews } from '../components/findings.tsx'
 import { CitedObjects, CitedText, LexiconProvider, useRunLexicon } from '../components/lexicon.tsx'
 import { Markdown } from '../components/markdown.tsx'
+import { RoundCapPanel } from '../components/rounds.tsx'
 import { PageStatus } from './inbox.tsx'
 
 const isReviewPath = (p: string) => /^review-\d+.*\.md$/.test(p)
@@ -402,6 +403,10 @@ function NeedsYouCard({
         {item.kind === 'gate' && item.gate === 'G2' && (
           <G2Packet src={item.source} slug={item.slug} profile={detail.summary.profile} />
         )}
+        {/* A round cap asks what did not converge, which is a question about two
+            rounds at once (#257). The chip list below still offers every report;
+            this is the comparison the chips could not be. */}
+        {item.kind === 'round-cap' && <RoundCapPanel src={item.source} slug={item.slug} task={mentionedTask?.id ?? null} />}
         <DecidePanel item={item} profile={detail.summary.profile} primary={primary} sentHere={sentHere} chips={chips} />
       </div>
     </section>

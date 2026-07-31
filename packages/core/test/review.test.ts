@@ -99,6 +99,36 @@ describe('parseReview', () => {
     expect(f2!.resolution).toMatchObject({ state: 'stands', round: 2 })
   })
 
+  it('lists every disposition line, including one naming a finding this file never raised', () => {
+    // The file-per-round shape (#257): round 3's file dispositions a finding
+    // round 1's file raised. It attaches to no local finding, so without this
+    // list a decided part of the record would be unreachable.
+    const later = parseReview(
+      'review-03.md',
+      `# Review Report: 01-core
+
+**Verdict:** request-changes
+**Round:** 3 of 3
+
+## Findings
+
+- **F2 — resolved (round 3):** the banner is the first line now.
+`,
+    )
+    expect(later.findings).toEqual([])
+    expect(later.dispositions).toHaveLength(1)
+    expect(later.dispositions[0]).toMatchObject({ id: 'F2', state: 'resolved', round: 3 })
+    expect(later.dispositions[0]!.text).toContain('the banner is the first line now')
+  })
+
+  it('lists the dispositions that did attach, without disturbing finding.resolution', () => {
+    expect(report.dispositions.map((d) => [d.id, d.state])).toEqual([
+      ['F1', 'resolved'],
+      ['F2', 'stands'],
+    ])
+    expect(report.findings[0]!.resolution).toMatchObject({ state: 'resolved' })
+  })
+
   it('keeps the finding block verbatim, heading through body', () => {
     expect(report.findings[0]!.block.split('\n')[0]).toBe(
       '### F1 — blocking — the parser accepts a flag it must reject',

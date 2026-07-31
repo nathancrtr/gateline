@@ -198,6 +198,64 @@ Diff stayed inside the declared file_contact_surface.
 `
 
 /**
+ * The three rounds behind a round cap, one file per round — the other shape a
+ * run's reviews take on disk, and the one the round-cap comparison (#257) has
+ * to read across files.
+ *
+ * The arc is what a cap actually looks like: F1 raised in round 1 and raised
+ * again in every round after it (the finding that did not converge), F2 raised
+ * in round 1, carried in round 2, and closed in round 3, and F3 raised for the
+ * first time in the final round. The dispositions for F2 sit in later files
+ * than the finding they name, which is exactly the case `ReviewReport.
+ * dispositions` exists for.
+ */
+const capReview = (task: string, round: 1 | 2 | 3) => {
+  const f1 = `### F1 — blocking — retry loop can double-apply a migration
+- **Where:** \`src/migrate.py:88\`
+- **Failure scenario:** a step that times out after committing is retried, so the same ALTER runs twice and the second raises
+- **Requirement:** R2/AC2.1`
+  const rounds: Record<1 | 2 | 3, string> = {
+    1: `## Findings
+
+${f1}
+
+### F2 — minor — the dry-run banner prints after the plan
+- **Where:** \`src/migrate.py:12\`
+- **Failure scenario:** an operator skimming the top of the output reads the plan as live
+- **Requirement:** R1/AC1.2`,
+    2: `## Findings
+
+${f1}
+
+- **F2 — stands (round 2):** the banner moved but still prints inside the plan block.`,
+    3: `## Findings
+
+${f1}
+
+### F3 — minor — the rollback path is untested
+- **Where:** \`tests/test_migrate.py\`
+- **Failure scenario:** a failed step leaves the schema half-applied and nothing exercises the undo
+- **Requirement:** R3/AC3.1
+
+- **F2 — resolved (round 3):** the banner is the first line of output.`,
+  }
+  return `# Review Report: ${task}
+
+**Verdict:** request-changes
+**Round:** ${round} of 3
+**Diff reviewed:** run branch tip
+
+${rounds[round]}
+
+## Coverage
+Requirement coverage R1–R3 checked; the retry path is read, not exercised.
+
+## Boundary check
+Diff stayed inside the declared file_contact_surface.
+`
+}
+
+/**
  * A report that took two rounds, which is what a task carrying
  * `review_rounds: 2` actually looks like on disk: rounds APPEND to one file
  * (roles/reviewer.md — never overwrite an earlier round), a finding raised in
@@ -749,9 +807,9 @@ export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts 
         'spec.md': spec('schema migrator'),
         'plan.md': plan('schema migrator'),
         'tasks/01-core.yaml': workItem('01-core', 'R1', 'in-review'),
-        'review-01.md': review('01-core', 1, 'request-changes'),
-        'review-02.md': review('01-core', 2, 'request-changes'),
-        'review-03.md': review('01-core', 3, 'request-changes'),
+        'review-01.md': capReview('01-core', 1),
+        'review-02.md': capReview('01-core', 2),
+        'review-03.md': capReview('01-core', 3),
         'state.yaml': stateYaml({
           slug: 'round-cap',
           phase: 'implement',

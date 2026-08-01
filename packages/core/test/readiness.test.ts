@@ -74,6 +74,7 @@ describe('run discovery', () => {
       'g1-pending',
       'g2-pending',
       'g3-pending',
+      'malformed-release',
       'malformed-spec',
       'patch-g1-pending',
       'patch-g2-pending',
@@ -122,6 +123,16 @@ describe('readiness derivation (§2.3, one row per test)', () => {
     const items = await gateItem('g3-pending')
     expect(items).toHaveLength(1)
     expect(items[0]).toMatchObject({ kind: 'gate', gate: 'G3', reviewable: true })
+  })
+
+  it('G3 bounces a release plan missing its contract’s sections (#260)', async () => {
+    // Rule R3 at the last gate. Until release-plan.md had a contract this run
+    // was reviewable: the file existed, so the gate was ready.
+    const items = await gateItem('malformed-release')
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ kind: 'gate', gate: 'G3', reviewable: false })
+    expect(items[0]!.problems.join(' ')).toContain('release-plan.md: missing required sections')
+    expect(items[0]!.problems.join(' ')).toContain('Rollback plan')
   })
 
   it('patch G1 ready: no plan.md — the brief + work item are the packet, G0 absorbed into the question', async () => {

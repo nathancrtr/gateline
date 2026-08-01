@@ -10,7 +10,10 @@ describe('contractFor', () => {
     expect(contractFor('review-03-round2.md')).toBe('review-report.md')
     expect(contractFor('tasks/01-core.yaml')).toBe('work-item.yaml')
     expect(contractFor('retro.md')).toBeNull()
-    expect(contractFor('release-plan.md')).toBeNull()
+  })
+
+  it('G3’s packet has a contract too (#260) — presence is no longer the whole check', () => {
+    expect(contractFor('release-plan.md')).toBe('release-plan.md')
   })
 })
 
@@ -66,6 +69,28 @@ describe('validateArtifact', () => {
     const v2 = await validateArtifact('spec.md', '# S\n\n## Context\nx\n\n## Requirements\nx\n\n## Assumptions\nx\n\n## Out of scope\nx\n', forked)
     expect(v2.ok).toBe(false)
     expect(v2.missing).toEqual(['Goals', 'Non-goals'])
+  })
+
+  it('bounces a release plan missing its required sections (#260)', async () => {
+    const thin = '# Release Plan: run\n\n## Release steps\n1. Ship it.\n'
+    const v = await validateArtifact('release-plan.md', thin, noTemplates)
+    expect(v.ok).toBe(false)
+    expect(v.missing).toEqual(['CI health', 'Rollback plan', 'Verification after release', 'Blast radius'])
+  })
+
+  it('passes a release plan carrying every section', async () => {
+    const full =
+      '# Release Plan: run\n\n## CI health\nx\n\n## Release steps\n1. x\n\n## Rollback plan\nx\n\n## Verification after release\nx\n\n## Blast radius\nx\n'
+    expect((await validateArtifact('release-plan.md', full, noTemplates)).ok).toBe(true)
+  })
+
+  it('reads the repo’s own release-plan contract, so a fork keeps its own sections', async () => {
+    const forked: ContractTemplates = {
+      read: async (name) => (name === 'release-plan.md' ? '# Release Plan\n\n## Steps\n\n## Undo\n' : null),
+    }
+    const v = await validateArtifact('release-plan.md', '# R\n\n## Steps\nx\n\n## Undo\nx\n', forked)
+    expect(v.ok).toBe(true)
+    expect(v.notes).toEqual([])
   })
 
   it('validates work-item required keys', async () => {

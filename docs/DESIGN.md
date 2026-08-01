@@ -278,6 +278,7 @@ are paid for repeatedly — once as output, then as input to every downstream re
 | `tasks/NN-slug.yaml` | Architect → one Implementer | scope, files expected to change, acceptance tests, dependencies |
 | `review-report.md` | Reviewer → Implementer, gate G2 | verdict, findings (severity-ranked, file:line), what was checked |
 | `verification-report.md` | Verifier → gate G2 | what was exercised, evidence (commands + output), gaps |
+| `release-plan.md` | Ops → gate G3 | CI health, release steps in order, rollback plan and its trigger, verification after release, blast radius |
 | `state.yaml` | Orchestrator → everyone | phase, task statuses, gate approvals, budgets |
 
 A run's artifacts live under `runs/<slug>/`, committed on the run's branch. See

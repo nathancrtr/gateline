@@ -78,7 +78,7 @@ describe('read routes', () => {
   it('GET /api/runs returns the portfolio', async () => {
     const { status, body } = await get('/api/runs')
     expect(status).toBe(200)
-    expect(body.runs).toHaveLength(13)
+    expect(body.runs).toHaveLength(14)
     const done = body.runs.find((r: { slug: string }) => r.slug === 'done-merged')
     expect(done.phase).toBe('done')
     expect(done.needsHuman).toBe(0)

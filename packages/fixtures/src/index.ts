@@ -283,6 +283,64 @@ Diff stayed inside the declared file_contact_surface.
 `
 
 /**
+ * The three rounds behind a round cap, one file per round — the other shape a
+ * run's reviews take on disk, and the one the round-cap comparison (#257) has
+ * to read across files.
+ *
+ * The arc is what a cap actually looks like: F1 raised in round 1 and raised
+ * again in every round after it (the finding that did not converge), F2 raised
+ * in round 1, carried in round 2, and closed in round 3, and F3 raised for the
+ * first time in the final round. The dispositions for F2 sit in later files
+ * than the finding they name, which is exactly the case `ReviewReport.
+ * dispositions` exists for.
+ */
+const capReview = (task: string, round: 1 | 2 | 3) => {
+  const f1 = `### F1 — blocking — retry loop can double-apply a migration
+- **Where:** \`src/migrate.py:88\`
+- **Failure scenario:** a step that times out after committing is retried, so the same ALTER runs twice and the second raises
+- **Requirement:** R2/AC2.1`
+  const rounds: Record<1 | 2 | 3, string> = {
+    1: `## Findings
+
+${f1}
+
+### F2 — minor — the dry-run banner prints after the plan
+- **Where:** \`src/migrate.py:12\`
+- **Failure scenario:** an operator skimming the top of the output reads the plan as live
+- **Requirement:** R1/AC1.2`,
+    2: `## Findings
+
+${f1}
+
+- **F2 — stands (round 2):** the banner moved but still prints inside the plan block.`,
+    3: `## Findings
+
+${f1}
+
+### F3 — minor — the rollback path is untested
+- **Where:** \`tests/test_migrate.py\`
+- **Failure scenario:** a failed step leaves the schema half-applied and nothing exercises the undo
+- **Requirement:** R3/AC3.1
+
+- **F2 — resolved (round 3):** the banner is the first line of output.`,
+  }
+  return `# Review Report: ${task}
+
+**Verdict:** request-changes
+**Round:** ${round} of 3
+**Diff reviewed:** run branch tip
+
+${rounds[round]}
+
+## Coverage
+Requirement coverage R1–R3 checked; the retry path is read, not exercised.
+
+## Boundary check
+Diff stayed inside the declared file_contact_surface.
+`
+}
+
+/**
  * A report that took two rounds, which is what a task carrying
  * `review_rounds: 2` actually looks like on disk: rounds APPEND to one file
  * (roles/reviewer.md — never overwrite an earlier round), a finding raised in
@@ -391,15 +449,49 @@ None recorded.
 
 const releasePlan = () => `# Release Plan: run
 
+**Change released:** \`run/g3-pending\` at \`4c1f9a2\` (PR #14, base \`main\`)
+**Environment:** the published package on the public registry; no infrastructure changes
+
+## CI health
+
+The pipeline is green on the merge commit. \`npm test\` and \`npm run build\` both
+passed on the latest run of the release workflow.
+
 ## Release steps
-1. Tag the merge commit.
-2. Publish via the existing workflow.
+
+1. Tag the merge commit \`v0.4.0\`.
+2. Publish via the existing release workflow.
 
 ## Rollback plan
-Re-point the tag at the previous release; no data migrations involved.
+
+**Rollback trigger:** the published artifact fails its smoke run, or an install of the
+new version reports a missing entrypoint.
+**Rollback exercised:** yes — re-pointed the tag on a scratch clone and re-published to
+the local registry mirror.
+
+Re-point the tag at the previous release and re-publish. Nothing writes data under the
+new version, so there is no state to unwind.
 
 ## Verification after release
-Smoke-run the published artifact against sample.txt.
+
+The published version installs and runs. Watch two signals:
+
+- the smoke run against \`sample.txt\` prints the documented output;
+- no install failures appear in the registry's download log within an hour.
+
+## Blast radius
+
+Consumers who install the new version while it is broken. Nothing else depends on this
+package, and the previous version stays installable throughout.
+`
+
+/** A release plan missing the sections its contract requires — the bounce view
+ *  at G3 (#260), which had no checkable packet until the contract existed. */
+const malformedReleasePlan = () => `# Release Plan: run
+
+## Release steps
+
+1. Ship it.
 `
 
 // state.yaml builder — carries the contract's comments so fixture files
@@ -839,9 +931,9 @@ export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts 
         'spec.md': spec('schema migrator'),
         'plan.md': plan('schema migrator'),
         'tasks/01-core.yaml': workItem('01-core', 'R1', 'in-review'),
-        'review-01.md': review('01-core', 1, 'request-changes'),
-        'review-02.md': review('01-core', 2, 'request-changes'),
-        'review-03.md': review('01-core', 3, 'request-changes'),
+        'review-01.md': capReview('01-core', 1),
+        'review-02.md': capReview('01-core', 2),
+        'review-03.md': capReview('01-core', 3),
         'state.yaml': stateYaml({
           slug: 'round-cap',
           phase: 'implement',
@@ -940,6 +1032,32 @@ export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts 
         'intent-brief.md': brief('webhook relay'),
         'spec.md': malformedSpec('webhook relay'),
         'state.yaml': stateYaml({ slug: 'malformed-spec', phase: 'spec', gates: {} }),
+      },
+    },
+    {
+      // G3's bounce view (#260). Until release-plan.md had a contract, this
+      // run passed its gate on presence alone — the one gate where a packet
+      // could say nothing and still be called ready.
+      slug: 'malformed-release',
+      age: 2,
+      files: {
+        'intent-brief.md': brief('cache warmer'),
+        'spec.md': spec('cache warmer'),
+        'plan.md': plan('cache warmer'),
+        'tasks/01-core.yaml': workItem('01-core', 'R1', 'done'),
+        'review-01.md': review('01-core', 1, 'approve'),
+        'verification-report.md': verification(),
+        'release-plan.md': malformedReleasePlan(),
+        'state.yaml': stateYaml({
+          slug: 'malformed-release',
+          phase: 'release',
+          gates: {
+            G0: { by: 'operator', at: '2026-06-28T09:00:00Z', burden: 'confirmation' },
+            G1: { by: 'operator', at: '2026-06-29T09:00:00Z', burden: 'confirmation' },
+            G2: { by: 'operator', at: '2026-07-01T09:00:00Z', burden: 'confirmation' },
+          },
+          tasks: [{ id: '01-core', status: 'done', rounds: 1 }],
+        }),
       },
     },
     {

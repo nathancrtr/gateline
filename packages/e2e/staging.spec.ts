@@ -140,6 +140,10 @@ test('a staged run renders distinctly and offers only Arm, never Resume (AC6.1/A
   // <name>" provenance line regardless of current phase.
   const phaseChip = page.locator('header [data-phase-chip]')
   await expect(phaseChip).toHaveText('staged')
+  // …and the spine says where that rest state is standing (#254): a staged run
+  // sits at the first phase of its profile with no gate on the table.
+  await expect(page.locator('[data-spine]')).toHaveAttribute('data-rest', 'staged')
+  await expect(page.locator('[data-spine] [data-spine-gate][data-state="pending"]')).toHaveCount(0)
 
   const card = page.locator('[data-needs-card]').first()
   await expect(card.locator('[data-decide="arm"]')).toHaveCount(1)
@@ -160,8 +164,11 @@ test('arm commits "armed by" and clears the staged treatment (AC5.1)', async ({ 
   expect(state).not.toContain('phase: paused')
 
   await page.reload()
-  const phaseChip = page.locator('header [data-phase-chip]')
-  await expect(phaseChip).not.toHaveText('staged')
+  // The chip is a rest-state overlay now (#254), so an armed run has none at
+  // all: the spine alone carries the phase, and carries it once.
+  await expect(page.locator('header [data-phase-chip]')).toHaveCount(0)
+  await expect(page.locator('[data-spine]')).not.toHaveAttribute('data-rest', 'staged')
+  await expect(page.locator('[data-spine] [data-spine-phase][data-state="current"]')).toHaveCount(1)
 })
 
 test('replaying the same client key reports "already staged", no second commit (AC8.1)', async ({ page }) => {

@@ -297,6 +297,67 @@ view unchanged. Where the plan carries no mapping table, or the work items follo
 grammar this parser does not read, the affected half withholds itself and names the
 shape it looked for — the contracts' bounce rule, turned on the UI.
 
+### 4.4 The round-cap surface (#257)
+
+A round cap asks one narrow question: three rounds, still not converged, so which
+finding keeps coming back? The surface answers it by comparing the last two rounds
+rather than by listing the files they live in.
+
+DESIGN.md §4 says the answer is usually a spec ambiguity rather than an implementation
+defect. That is a claim a human can only test by holding two rounds side by side, and
+the card that preceded this offered five filename chips into a one-at-a-time reader —
+a memory exercise at the one decision whose whole question is a comparison.
+
+The comparison groups findings by `F<n>` and rounds by their `**Round:**` number, so
+it reads both shapes a run's reviews take: rounds appended to one file, as
+`roles/reviewer.md` directs, and a file per round. Findings still open in both rounds
+lead, findings new in the final round follow, and findings a reviewer's disposition
+closed are folded.
+
+Two limits are deliberate:
+
+- **Absence is not resolution.** A finding the later round did not mention is reported
+  as not mentioned. Only a disposition line the reviewer actually wrote closes one.
+- **No convergence score.** The headings state what the record contains, in its own
+  words. Nothing here counts rounds into a verdict.
+
+Reading dispositions across files is what added `ReviewReport.dispositions` to the
+typed parse: where a run keeps a file per round, round 3's "F2 — resolved" names a
+finding round 2's file raised, and the earlier parse dropped it — making a decided part
+of the record unreachable, which no view here may do.
+
+### 4.5 The run header's phase spine (#254)
+
+The header shows a run's position as one sequence: the profile's phases left to right,
+with its gates drawn as the transitions between them. A gate is what moves a run from
+one phase to the next, and the header now says so in its arrangement rather than in
+prose.
+
+What that replaced said the same four facts three times — an eyebrow reading
+"IMPLEMENT PHASE · FULL PROFILE", a phase chip, a detached strip of four gate boxes,
+and a GATES column in the rail below. None of them said that gates are the
+transitions, so the page had to spell out in words what it could not show in shape.
+
+Four rules keep the spine a rendering of the record rather than a reading of it:
+
+- **The profile is the shape.** `patch` shows four phases and two gates; `full` shows
+  six and four. A gate absent from the profile is absent from the spine — never an
+  empty cell, and never an auto-approved one.
+- **Each gate carries the question it asks**, quoted from `GATE_QUESTIONS`, as its
+  hover text and its accessible name. That is the one thing `G2` alone cannot tell
+  someone new to the framework.
+- **Decided gates carry their approver and date in the open**, which is why the rail
+  below no longer needs a Gates column. The rail keeps only what the spine cannot say:
+  budget, rounds, divergence, freshness.
+- **`paused` and `staged` are overlaid, never positions.** A run at rest still stands
+  somewhere, so the spine marks where — the phase of its first unapproved gate — and
+  the chip beside it says why it is not moving. Nothing is on the table while a run is
+  at rest, so no gate reads as pending.
+
+The header is also laid out for the 800–1000px band rather than degrading into it: the
+spine fills the width it is given, and the rail's columns grow instead of stacking into
+the left half of the viewport.
+
 ## 5. The dashboard question
 
 **For one operator running one pipeline, a dashboard is overhead — Claude Code plus

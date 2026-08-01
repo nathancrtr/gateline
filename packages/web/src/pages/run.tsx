@@ -14,8 +14,8 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { readIntake } from '@gateline/core/record'
 import { useKeys } from '../use-keys.ts'
 import { DIFF_SELECTION, decideTargetIndex, landingArtifact, resolveSurface, type Surface } from '../landing.ts'
-import { PROFILE_GATES, api, formatAge, formatWhen, type InboxItem, type Profile, type RunDetailResponse, type RunSummary } from '../api.ts'
-import { AgeBadge, BudgetMeter, GateLedger, KindChip, PhaseChip, ValidationBadge } from '../components/chips.tsx'
+import { PROFILE_PHASES, api, formatAge, formatWhen, type InboxItem, type Phase, type RunDetailResponse, type RunSummary } from '../api.ts'
+import { AgeBadge, BudgetMeter, KindChip, PhaseChip, PhaseSpine, ValidationBadge } from '../components/chips.tsx'
 import { DecidePanel } from '../components/decide.tsx'
 import { DiffView } from '../components/diff-view.tsx'
 import { EvidenceRollupPanel, G2Packet } from '../components/evidence.tsx'
@@ -119,13 +119,17 @@ export function RunPage() {
   const decideIndex = decideTargetIndex(params.get('decide'), items)
   const primaryIndex = decideIndex >= 0 ? decideIndex : items.findIndex((x) => x.reviewable)
 
+  // Phase, profile and gates are the spine's job now (#254), so the eyebrow
+  // states only what the spine cannot: that something is waiting on a human.
+  // A run at rest — paused, staged, or one whose phase names no position at all
+  // — keeps its chip beside the spine, because "not moving" is not a position
+  // in the sequence and must not be drawn as one.
+  const atRest = summary.phase === 'paused' || !PROFILE_PHASES[summary.profile].includes(summary.phase as Phase)
+
   const header = (
     <header className="mb-6">
-      <div className="font-mono text-[12px] tracking-[0.14em] uppercase text-accent-deep">
-        {summary.phase} phase · {summary.profile} profile
-        {busy ? ' · needs you' : ''}
-      </div>
-      <h1 className="mt-2 mb-1.5 font-sans text-[46px] font-semibold leading-[1.06] tracking-[-0.02em]">{summary.slug}</h1>
+      {busy && <div className="font-mono text-[12px] tracking-[0.14em] uppercase text-accent-deep">needs you</div>}
+      <h1 className={`${busy ? 'mt-2' : ''} mb-1.5 font-sans text-[46px] font-semibold leading-[1.06] tracking-[-0.02em]`}>{summary.slug}</h1>
       <p className="font-mono text-[12.5px] text-muted leading-[1.6]">
         {genesisIntake && genesisCommit && (
           <>
@@ -141,9 +145,9 @@ export function RunPage() {
         )}
         <BranchRef refName={summary.ref} kind={summary.kind} url={detail.branchUrl} />
       </p>
-      <div className="flex items-center gap-3.5 flex-wrap mt-[18px]">
-        <PhaseChip phase={summary.phase} pausedReason={summary.pausedReason} />
-        <GateLedger gates={summary.gates} profile={summary.profile} />
+      <div className="mt-[18px] flex flex-col items-start gap-2.5">
+        {atRest && <PhaseChip phase={summary.phase} pausedReason={summary.pausedReason} />}
+        <PhaseSpine summary={summary} />
       </div>
     </header>
   )
@@ -244,25 +248,24 @@ function SurfaceTab({
 }
 
 /**
- * The run's standing facts, in one form (#258). This block and the busy-mode
- * `RunFacts` rail used to say most of the same things in two different shapes,
- * because the page had two layouts to fill; with one layout there is one block.
+ * The run's standing facts, in one form (#258), and only the ones nothing else
+ * on the page already carries (#254).
  *
- * What the header already says is not repeated here: the phase and profile are
- * the header's eyebrow, the gate glyphs are its ledger strip, and how many
- * things need a human is the Decide surface's own count. Gate *provenance* —
- * who decided each one and when — is the part the ledger strip only carries in
- * a tooltip, so it stays.
+ * The Gates column used to live here because the header's ledger strip had gate
+ * provenance in a tooltip and nowhere else. The spine carries approver and date
+ * in the open, so the column went with it — leaving budget, rounds, divergence
+ * and freshness, which the spine genuinely cannot say.
+ *
+ * The columns size themselves rather than being pinned at 300px each: the old
+ * three fixed widths wrapped in the 800–1000px band and left the right half of
+ * the viewport empty under a header that was already the tallest thing on the
+ * page.
  */
 function RunMetadata({ summary, board }: { summary: RunSummary; board: React.ReactNode }) {
   return (
-    <div className="flex flex-wrap items-start gap-x-14 gap-y-7 text-[13px]">
-      <section className="w-[300px]">
-        <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted pb-1.5">Gates</div>
-        <GateLines gates={summary.gates} profile={summary.profile} />
-      </section>
-      {board && <div className="w-[300px]">{board}</div>}
-      <section className="w-[230px]">
+    <div data-run-metadata className="flex flex-wrap items-start gap-x-14 gap-y-7 text-[13px]">
+      {board && <div className="min-w-0 max-w-[420px] flex-1 basis-[230px]">{board}</div>}
+      <section className="min-w-0 max-w-[420px] flex-1 basis-[230px]">
         <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted pb-1.5">Vitals</div>
         <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
           <span className="text-[12.5px] text-muted">Budget</span>
@@ -410,31 +413,6 @@ function NeedsYouCard({
         <DecidePanel item={item} profile={detail.summary.profile} primary={primary} sentHere={sentHere} chips={chips} />
       </div>
     </section>
-  )
-}
-
-/** Gate provenance lines — who decided each gate, and when. One form now
- * (#258): the `rows` prop existed to serve the busy layout's right-aligned
- * rail alongside the quiet layout's hairline rows, and there is one layout. */
-function GateLines({ gates, profile }: { gates: RunSummary['gates']; profile: Profile }) {
-  return (
-    <>
-      {PROFILE_GATES[profile].map((g) => {
-        const c = gates[g]
-        if (!c) return null
-        const toneCls = c.approved ? 'text-ok' : c.decided ? 'text-bad' : 'text-warn'
-        return (
-          <span key={g} className={`block border-t border-line py-[7px] text-[12px] font-mono tabular-nums ${toneCls}`}>
-            {g} {c.approved ? '✓' : c.decided ? '✕' : '·'}
-            {c.decided ? (
-              <span className="text-muted"> {c.by ?? '—'}{c.at ? ` · ${String(c.at).slice(0, 10)}` : ''}</span>
-            ) : (
-              <span className="text-faint"> pending</span>
-            )}
-          </span>
-        )
-      })}
-    </>
   )
 }
 

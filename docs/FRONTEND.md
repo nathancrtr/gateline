@@ -261,6 +261,38 @@ symptom of not being able to predict what a state needs; #249 closed the gate an
 profile vocabulary, so the prediction moved into the surface and one layout serves
 both.
 
+### 4.3 The run header's phase spine (#254)
+
+The header shows a run's position as one sequence: the profile's phases left to right,
+with its gates drawn as the transitions between them. A gate is what moves a run from
+one phase to the next, and the header now says so in its arrangement rather than in
+prose.
+
+What that replaced said the same four facts three times — an eyebrow reading
+"IMPLEMENT PHASE · FULL PROFILE", a phase chip, a detached strip of four gate boxes,
+and a GATES column in the rail below. None of them said that gates are the
+transitions, so the page had to spell out in words what it could not show in shape.
+
+Four rules keep the spine a rendering of the record rather than a reading of it:
+
+- **The profile is the shape.** `patch` shows four phases and two gates; `full` shows
+  six and four. A gate absent from the profile is absent from the spine — never an
+  empty cell, and never an auto-approved one.
+- **Each gate carries the question it asks**, quoted from `GATE_QUESTIONS`, as its
+  hover text and its accessible name. That is the one thing `G2` alone cannot tell
+  someone new to the framework.
+- **Decided gates carry their approver and date in the open**, which is why the rail
+  below no longer needs a Gates column. The rail keeps only what the spine cannot say:
+  budget, rounds, divergence, freshness.
+- **`paused` and `staged` are overlaid, never positions.** A run at rest still stands
+  somewhere, so the spine marks where — the phase of its first unapproved gate — and
+  the chip beside it says why it is not moving. Nothing is on the table while a run is
+  at rest, so no gate reads as pending.
+
+The header is also laid out for the 800–1000px band rather than degrading into it: the
+spine fills the width it is given, and the rail's columns grow instead of stacking into
+the left half of the viewport.
+
 ## 5. The dashboard question
 
 **For one operator running one pipeline, a dashboard is overhead — Claude Code plus

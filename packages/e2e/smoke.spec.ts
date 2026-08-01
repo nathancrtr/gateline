@@ -354,6 +354,97 @@ test('surfaces (#258): the change reads inside Record, and every artifact stays 
   await expect(page.locator('.prose-artifact')).toBeVisible()
 })
 
+test('phase spine (#254): the profile is shape, not prose', async ({ page }) => {
+  // AC1 — a full run shows six phases and four gate transitions, interleaved.
+  await page.goto('/runs/' + sourceId() + '/g3-pending')
+  const spine = page.locator('[data-spine]')
+  await expect(spine.locator('[data-spine-phase]')).toHaveCount(6)
+  await expect(spine.locator('[data-spine-gate]')).toHaveCount(4)
+  await expect(spine.locator('[data-spine-phase="release"]')).toHaveAttribute('data-state', 'current')
+
+  // AC2 — decided gates carry their approver and date; the gate on the table
+  // says so, and nothing beyond it is drawn as waiting.
+  await expect(spine.locator('[data-spine-gate="G0"]')).toHaveAttribute('data-state', 'approved')
+  await expect(spine.locator('[data-spine-gate="G0"]')).toContainText('operator · 2026-06-28')
+  await expect(spine.locator('[data-spine-gate="G2"]')).toContainText('operator · 2026-07-01')
+  await expect(spine.locator('[data-spine-gate="G3"]')).toHaveAttribute('data-state', 'pending')
+  await expect(spine.locator('[data-spine-gate="G3"]')).toContainText('on the table')
+
+  // AC3 — each gate exposes its question, on hover and to a screen reader.
+  await expect(spine.locator('[data-spine-gate="G3"] [title]')).toHaveAttribute('title', /G3 — Ship it\? — pending/)
+  await expect(spine.locator('[data-spine-gate="G2"]')).toContainText('Does the evidence support merging?')
+
+  // AC5 — the header states phase and profile in exactly one place: the spine.
+  // The retired eyebrow said both again, and the retired GATES rail said the
+  // gates a third time.
+  const header = page.locator('header')
+  await expect(header).not.toContainText('release phase')
+  await expect(header).not.toContainText('full profile')
+  await expect(page.getByText('Gates', { exact: true })).toHaveCount(0)
+})
+
+test('phase spine (#254): a reduced profile has fewer cells, not empty ones', async ({ page }) => {
+  // AC1 — patch shows four phases and two gates, with no G0 or G3 cell at all.
+  await page.goto('/runs/' + sourceId() + '/patch-g1-pending')
+  const spine = page.locator('[data-spine]')
+  await expect(spine.locator('[data-spine-phase]')).toHaveCount(4)
+  await expect(spine.locator('[data-spine-gate]')).toHaveCount(2)
+  await expect(spine.locator('[data-spine-gate="G0"]')).toHaveCount(0)
+  await expect(spine.locator('[data-spine-gate="G3"]')).toHaveCount(0)
+  await expect(spine.locator('[data-spine-phase="spec"]')).toHaveCount(0)
+
+  // A patch run's G1 absorbs the G0 question — quoted, never paraphrased.
+  await expect(spine.locator('[data-spine-gate="G1"]')).toContainText('Is this the change we want, scoped this way?')
+})
+
+test('phase spine (#254): a paused run is placed, not parked at the start', async ({ page }) => {
+  // AC4 — rest states stay distinguishable from any live phase and from each
+  // other: the spine says where the run stands, the chip says it is not moving.
+  await page.goto('/runs/' + sourceId() + '/paused-budget')
+  const spine = page.locator('[data-spine]')
+  await expect(spine).toHaveAttribute('data-rest', 'paused')
+  await expect(spine.locator('[data-spine-phase="plan"]')).toHaveAttribute('data-state', 'current')
+  await expect(page.locator('header [data-phase-chip]')).toContainText('budget-exhausted')
+  // Nothing is on the table while a run is at rest.
+  await expect(spine.locator('[data-spine-gate][data-state="pending"]')).toHaveCount(0)
+
+  // A moving run carries no rest chip at all — that is what makes the chip mean
+  // something when it is there.
+  await page.goto('/runs/' + sourceId() + '/g3-pending')
+  await expect(page.locator('header [data-phase-chip]')).toHaveCount(0)
+})
+
+test('phase spine (#254): the header lays out full-width at 900px', async ({ page }) => {
+  // The 2026-07-31 design review: in the 800–1000px band the header's fixed
+  // columns stacked into the left half and left the right half empty, above the
+  // decide surface they were supposed to introduce.
+  await page.setViewportSize({ width: 900, height: 1000 })
+  await page.goto('/runs/' + sourceId() + '/g2-pending')
+  const header = (await page.locator('header').boundingBox())!
+
+  // The spine uses the band rather than hugging the left edge: a full run's ten
+  // cells take at most two rows here, and any row that is not the last one runs
+  // the width of the header.
+  const spine = page.locator('[data-spine]')
+  expect((await spine.boundingBox())!.width).toBeGreaterThan(header.width * 0.9)
+  const cells = await spine.locator('[data-spine-phase], [data-spine-gate]').all()
+  const boxes = await Promise.all(cells.map(async (c) => (await c.boundingBox())!))
+  const rows = new Map<number, number>()
+  for (const b of boxes) rows.set(b.y, Math.max(rows.get(b.y) ?? 0, b.x + b.width))
+  expect(rows.size).toBeLessThanOrEqual(2)
+  const rights = [...rows.entries()].sort((a, b) => a[0] - b[0]).map(([, right]) => right)
+  for (const right of rights.slice(0, -1)) expect(right).toBeGreaterThan(header.x + header.width * 0.85)
+
+  // …and the columns below reach the right edge instead of stacking into the
+  // left half under a header taller than the surface it introduces.
+  const meta = (await page.locator('[data-run-metadata]').boundingBox())!
+  const columns = await page.locator('[data-run-metadata] > *').all()
+  const columnBoxes = await Promise.all(columns.map(async (c) => (await c.boundingBox())!))
+  const rightmost = Math.max(...columnBoxes.map((b) => b.x + b.width))
+  expect(rightmost).toBeGreaterThan(meta.x + meta.width * 0.85)
+  expect(new Set(columnBoxes.map((b) => b.y)).size).toBe(1)
+})
+
 function sourceId(): string {
   return fixtureDir.replace(/\/+$/, '').split('/').pop()!
 }

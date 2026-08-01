@@ -47,6 +47,7 @@ export const BUILTIN_SECTIONS: Record<string, string[]> = {
   'plan.md': ['Approach', 'Interface contracts', 'Decisions (ADRs)', 'Requirement → task mapping', 'Risks'],
   'review-report.md': ['Findings', 'Coverage', 'Boundary check'],
   'verification-report.md': ['Results', 'Beyond the happy path', 'Gaps'],
+  'release-plan.md': ['CI health', 'Release steps', 'Rollback plan', 'Verification after release', 'Blast radius'],
 }
 
 export const BUILTIN_WORK_ITEM_KEYS = [
@@ -69,9 +70,13 @@ export function contractFor(path: string): string | null {
   if (base === 'plan.md') return 'plan.md'
   if (/^review-\d+.*\.md$/.test(base)) return 'review-report.md'
   if (base === 'verification-report.md') return 'verification-report.md'
+  // G3's packet is checkable as of #260. Before that it was bare presence: a
+  // release plan of one sentence passed exactly as one carrying a rollback,
+  // and G3 was the one gate no structured surface could be built for.
+  if (base === 'release-plan.md') return 'release-plan.md'
   if (base === 'state.yaml') return 'state.yaml'
   if (path.startsWith('tasks/') && base.endsWith('.yaml')) return 'work-item.yaml'
-  return null // e.g. release-plan.md, retro.md — presence-only today
+  return null // e.g. retro.md — presence-only, and human-authored
 }
 
 export interface ContractTemplates {

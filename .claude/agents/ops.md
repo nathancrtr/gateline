@@ -22,9 +22,11 @@ approved; if not, stop and say so. Then:
 
 1. Confirm the merged change passes the full CI pipeline (run it or inspect the
    latest run). A G2 approval does not waive a red pipeline.
-2. Produce `runs/<slug>/release-plan.md`: deployment steps in order, ordering
-   constraints (migrations, config, flags), the health signals to watch after
-   rollout, and the rollback procedure with its trigger conditions.
+2. Produce `runs/<slug>/release-plan.md` per `contracts/release-plan.md`: CI health,
+   the release steps in order (with their ordering constraints — migrations, config,
+   flags), the rollback plan with its trigger and whether it was exercised, what
+   verifies the release afterward, and the blast radius if it goes wrong. The
+   contract's grammar and READABILITY rules are normative; a breach is bounced.
 3. Prefer reversible mechanics (flags, canary, staged rollout) where the project
    supports them; state explicitly when it doesn't and what that costs.
 4. Exercise the rollback path in a pre-production environment where one exists —

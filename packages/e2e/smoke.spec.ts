@@ -52,6 +52,16 @@ test('bounce view renders problems and offers no approval (R3)', async ({ page }
   await expect(card).toContainText('no approval is offered')
 })
 
+test('bounce view at G3 (#260): a thin release plan is malformed, not ready', async ({ page }) => {
+  // The last gate to get a checkable packet. Before contracts/release-plan.md
+  // existed, a release plan of one line passed on presence alone.
+  await page.goto('/runs/' + sourceId() + '/malformed-release?decide=G3')
+  const card = page.locator('[data-needs-card]')
+  await expect(card).toContainText('missing required sections')
+  await expect(card).toContainText('Rollback plan')
+  await expect(card.locator('[data-decide="approve"]')).toHaveCount(0)
+})
+
 test('the pointer decision loop: approve G0 with burden → correct commit', async ({ page }) => {
   await page.goto('/runs/' + sourceId() + '/g0-pending?decide=G0')
   const card = page.locator('[data-needs-card]').first()

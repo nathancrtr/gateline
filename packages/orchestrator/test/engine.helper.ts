@@ -50,7 +50,10 @@ export const PLAN =
 export const REVIEW = (task: string, verdict: string, round = 1) =>
   `# Review Report: ${task}\n\n**Verdict:** ${verdict}\n**Round:** ${round} of 3\n\n## Findings\n${verdict === 'approve' ? 'None.' : '### F1 — major — bug\n- **Where:** src\n'}\n## Coverage\nR1.\n\n## Boundary check\nInside surface.\n`
 export const VERIFICATION = '# Verification Report: toy\n\n**Change verified:** tip\n\n## Results\n| AC1.1 | verified | E1 |\n\n## Beyond the happy path\nProbed.\n\n## Gaps\nNone.\n'
-export const RELEASE_PLAN = '# Release Plan: toy\n\n## Release steps\n1. Tag.\n\n## Rollback plan\nRe-point.\n'
+// Carries contracts/release-plan.md's sections (#260): G3's packet is checked
+// like every other gate's now, so a toy plan that skipped them would bounce.
+export const RELEASE_PLAN =
+  '# Release Plan: toy\n\n## CI health\nGreen.\n\n## Release steps\n1. Tag.\n\n## Rollback plan\n**Rollback trigger:** the smoke run fails.\n**Rollback exercised:** yes.\n\nRe-point the tag.\n\n## Verification after release\nSmoke run passes.\n\n## Blast radius\nNothing else depends on the toy.\n'
 
 export const taskYaml = (id: string, surface: string, deps: string[] = [], notes = ''): string =>
   `id: ${id}\ntitle: ${id}\nrequirements: [R1]\nscope: |\n  Build ${id}.\nfile_contact_surface:\n  - ${surface}\nacceptance_tests:\n  - AC1.1\ndepends_on: [${deps.join(', ')}]\nstatus: pending\nnotes: |\n  ${notes}\n`

@@ -364,15 +364,49 @@ None recorded.
 
 const releasePlan = () => `# Release Plan: run
 
+**Change released:** \`run/g3-pending\` at \`4c1f9a2\` (PR #14, base \`main\`)
+**Environment:** the published package on the public registry; no infrastructure changes
+
+## CI health
+
+The pipeline is green on the merge commit. \`npm test\` and \`npm run build\` both
+passed on the latest run of the release workflow.
+
 ## Release steps
-1. Tag the merge commit.
-2. Publish via the existing workflow.
+
+1. Tag the merge commit \`v0.4.0\`.
+2. Publish via the existing release workflow.
 
 ## Rollback plan
-Re-point the tag at the previous release; no data migrations involved.
+
+**Rollback trigger:** the published artifact fails its smoke run, or an install of the
+new version reports a missing entrypoint.
+**Rollback exercised:** yes — re-pointed the tag on a scratch clone and re-published to
+the local registry mirror.
+
+Re-point the tag at the previous release and re-publish. Nothing writes data under the
+new version, so there is no state to unwind.
 
 ## Verification after release
-Smoke-run the published artifact against sample.txt.
+
+The published version installs and runs. Watch two signals:
+
+- the smoke run against \`sample.txt\` prints the documented output;
+- no install failures appear in the registry's download log within an hour.
+
+## Blast radius
+
+Consumers who install the new version while it is broken. Nothing else depends on this
+package, and the previous version stays installable throughout.
+`
+
+/** A release plan missing the sections its contract requires — the bounce view
+ *  at G3 (#260), which had no checkable packet until the contract existed. */
+const malformedReleasePlan = () => `# Release Plan: run
+
+## Release steps
+
+1. Ship it.
 `
 
 // state.yaml builder — carries the contract's comments so fixture files
@@ -908,6 +942,32 @@ export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts 
         'intent-brief.md': brief('webhook relay'),
         'spec.md': malformedSpec('webhook relay'),
         'state.yaml': stateYaml({ slug: 'malformed-spec', phase: 'spec', gates: {} }),
+      },
+    },
+    {
+      // G3's bounce view (#260). Until release-plan.md had a contract, this
+      // run passed its gate on presence alone — the one gate where a packet
+      // could say nothing and still be called ready.
+      slug: 'malformed-release',
+      age: 2,
+      files: {
+        'intent-brief.md': brief('cache warmer'),
+        'spec.md': spec('cache warmer'),
+        'plan.md': plan('cache warmer'),
+        'tasks/01-core.yaml': workItem('01-core', 'R1', 'done'),
+        'review-01.md': review('01-core', 1, 'approve'),
+        'verification-report.md': verification(),
+        'release-plan.md': malformedReleasePlan(),
+        'state.yaml': stateYaml({
+          slug: 'malformed-release',
+          phase: 'release',
+          gates: {
+            G0: { by: 'operator', at: '2026-06-28T09:00:00Z', burden: 'confirmation' },
+            G1: { by: 'operator', at: '2026-06-29T09:00:00Z', burden: 'confirmation' },
+            G2: { by: 'operator', at: '2026-07-01T09:00:00Z', burden: 'confirmation' },
+          },
+          tasks: [{ id: '01-core', status: 'done', rounds: 1 }],
+        }),
       },
     },
     {

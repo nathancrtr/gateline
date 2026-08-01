@@ -354,6 +354,54 @@ test('surfaces (#258): the change reads inside Record, and every artifact stays 
   await expect(page.locator('.prose-artifact')).toBeVisible()
 })
 
+test('round cap (#257): the surface compares the last two rounds, not a file list', async ({ page }) => {
+  await page.goto('/runs/' + sourceId() + '/round-cap')
+  const panel = page.locator('[data-round-cap]')
+  await expect(panel).toBeVisible()
+
+  // AC1 — round 2 against round 3, with the finding that kept coming back first.
+  await expect(panel).toContainText('Round 2 against round 3')
+  const standing = panel.locator('[data-round-group="standing"] [data-finding]')
+  await expect(standing).toHaveCount(1)
+  await expect(standing.first()).toHaveAttribute('data-finding', 'F1')
+  await expect(standing.first()).toContainText('raised again')
+  await expect(standing.first()).toContainText('rounds 1, 2, 3')
+  // Verbatim from the report, not paraphrased.
+  await expect(standing.first()).toContainText('retry loop can double-apply a migration')
+
+  // AC3 — the requirement it cites resolves through the lexicon, because that
+  // is where the suspected ambiguity lives.
+  await expect(standing.first().locator('.lex-ref').first()).toBeVisible()
+
+  // A finding first raised in the final round is new, not persisting.
+  const fresh = panel.locator('[data-round-group="fresh"] [data-finding]')
+  await expect(fresh).toHaveCount(1)
+  await expect(fresh.first()).toHaveAttribute('data-finding', 'F3')
+
+  // AC2 — a finding resolved between the rounds renders folded, and expanding
+  // it shows the artifact's own words. The disposition lives in a later file
+  // than the finding it names, which is the case core's `dispositions` covers.
+  const resolved = panel.locator('[data-round-group="resolved"] [data-finding]')
+  await expect(resolved).toHaveCount(1)
+  await expect(resolved.first()).toHaveAttribute('data-finding', 'F2')
+  await expect(resolved.first()).not.toContainText('the banner is the first line')
+  await resolved.first().getByRole('button').click()
+  await expect(resolved.first()).toContainText('the banner is the first line')
+
+  // Every report stays one click away — folding is never truncation.
+  for (const path of ['review-01.md', 'review-02.md', 'review-03.md']) {
+    await expect(panel.getByRole('link', { name: path })).toHaveCount(1)
+  }
+})
+
+test('round cap (#257): a single-round record offers no comparison and says why', async ({ page }) => {
+  // AC4 — g2-pending's task carries one numbered round in its own file; the
+  // panel is not offered there at all, and where it is offered on a record it
+  // cannot compare, it withholds itself in words rather than showing nothing.
+  await page.goto('/runs/' + sourceId() + '/g2-pending')
+  await expect(page.locator('[data-round-cap]')).toHaveCount(0)
+})
+
 test('phase spine (#254): the profile is shape, not prose', async ({ page }) => {
   // AC1 — a full run shows six phases and four gate transitions, interleaved.
   await page.goto('/runs/' + sourceId() + '/g3-pending')

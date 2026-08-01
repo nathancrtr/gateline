@@ -70,6 +70,12 @@ export interface ReviewRound {
   line: number
 }
 
+/** A disposition line, with the finding it names — including one whose finding
+ *  was raised in a different file (see `ReviewReport.dispositions`). */
+export interface ReviewDisposition extends ReviewResolution {
+  id: string
+}
+
 export interface ReviewReport {
   /** Run-relative artifact path. */
   path: string
@@ -78,6 +84,18 @@ export interface ReviewReport {
   rounds: ReviewRound[]
   /** Findings in document order. Callers sort; the record's order is kept here. */
   findings: ReviewFinding[]
+  /**
+   * Every `- **F<n> — resolved|stands ...**` line in this report, in document
+   * order, whether or not it names a finding this file raised.
+   *
+   * `finding.resolution` can only carry the ones that attach within the file,
+   * which is the whole story when rounds append to one report as
+   * `roles/reviewer.md` directs. Where a run instead keeps a file per round,
+   * round 3's "F2 — resolved" names a finding round 2's file raised, and
+   * dropping it would make a decided part of the record unreachable — the one
+   * thing no view here is allowed to do (#261).
+   */
+  dispositions: ReviewDisposition[]
   /** The verdict in force: the last round's. */
   verdict: Verdict | null
 }
@@ -178,6 +196,7 @@ export function parseReview(path: string, content: string): ReviewReport {
 
   const rounds: ReviewRound[] = []
   const findings: ReviewFinding[] = []
+  const dispositions: ReviewDisposition[] = []
   const byId = new Map<string, ReviewFinding>()
 
   // A round begins at each Verdict line. Anything before the first one is a
@@ -215,15 +234,16 @@ export function parseReview(path: string, content: string): ReviewReport {
 
     const resolution = RESOLUTION.exec(line.text)
     if (resolution) {
-      const target = byId.get(resolution[1]!)
-      if (target) {
-        target.resolution = {
-          state: resolution[2]!.toLowerCase() as 'resolved' | 'stands',
-          round: round?.round ?? null,
-          text: itemFrom(lines, i).join('\n').trim(),
-          line: line.n,
-        }
+      const entry: ReviewDisposition = {
+        id: resolution[1]!,
+        state: resolution[2]!.toLowerCase() as 'resolved' | 'stands',
+        round: round?.round ?? null,
+        text: itemFrom(lines, i).join('\n').trim(),
+        line: line.n,
       }
+      dispositions.push(entry)
+      const target = byId.get(entry.id)
+      if (target) target.resolution = { state: entry.state, round: entry.round, text: entry.text, line: entry.line }
       continue
     }
 
@@ -264,7 +284,7 @@ export function parseReview(path: string, content: string): ReviewReport {
     byId.set(id, finding)
   }
 
-  return { path, task, rounds, findings, verdict: rounds.at(-1)?.verdict ?? null }
+  return { path, task, rounds, findings, dispositions, verdict: rounds.at(-1)?.verdict ?? null }
 }
 
 /** Findings ordered as the contract ranks them: blocking first, then by id. */

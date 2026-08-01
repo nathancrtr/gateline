@@ -261,7 +261,36 @@ symptom of not being able to predict what a state needs; #249 closed the gate an
 profile vocabulary, so the prediction moved into the surface and one layout serves
 both.
 
-### 4.3 The run header's phase spine (#254)
+### 4.3 The round-cap surface (#257)
+
+A round cap asks one narrow question: three rounds, still not converged, so which
+finding keeps coming back? The surface answers it by comparing the last two rounds
+rather than by listing the files they live in.
+
+DESIGN.md §4 says the answer is usually a spec ambiguity rather than an implementation
+defect. That is a claim a human can only test by holding two rounds side by side, and
+the card that preceded this offered five filename chips into a one-at-a-time reader —
+a memory exercise at the one decision whose whole question is a comparison.
+
+The comparison groups findings by `F<n>` and rounds by their `**Round:**` number, so
+it reads both shapes a run's reviews take: rounds appended to one file, as
+`roles/reviewer.md` directs, and a file per round. Findings still open in both rounds
+lead, findings new in the final round follow, and findings a reviewer's disposition
+closed are folded.
+
+Two limits are deliberate:
+
+- **Absence is not resolution.** A finding the later round did not mention is reported
+  as not mentioned. Only a disposition line the reviewer actually wrote closes one.
+- **No convergence score.** The headings state what the record contains, in its own
+  words. Nothing here counts rounds into a verdict.
+
+Reading dispositions across files is what added `ReviewReport.dispositions` to the
+typed parse: where a run keeps a file per round, round 3's "F2 — resolved" names a
+finding round 2's file raised, and the earlier parse dropped it — making a decided part
+of the record unreachable, which no view here may do.
+
+### 4.4 The run header's phase spine (#254)
 
 The header shows a run's position as one sequence: the profile's phases left to right,
 with its gates drawn as the transitions between them. A gate is what moves a run from

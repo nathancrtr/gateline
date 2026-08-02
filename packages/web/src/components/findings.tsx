@@ -102,27 +102,46 @@ export function FindingCard({
         {source && <span className="shrink-0 font-mono text-[10.5px] text-faint">{source}</span>}
         {finding.round !== null && <span className="shrink-0 font-mono text-[10.5px] text-faint">round {finding.round}</span>}
         {note}
-        <span className={`min-w-0 flex-1 text-[12.5px] ${resolved ? 'text-muted line-through decoration-faint' : 'text-ink'}`}>
-          {finding.title}
-        </span>
-        {collapsible && (
-          <button
-            onClick={() => setOpen((v) => !v)}
-            className={`shrink-0 rounded-full border px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none ${
-              finding.resolution === null
-                ? 'border-line bg-surface text-muted'
-                : resolved
-                  ? 'border-ok-line bg-ok-bg text-ok'
-                  : 'border-warn-line bg-warn-bg text-warn'
-            }`}
-            title={finding.resolution?.text}
+        {/* The words, and the control that folds them, travel together (#296).
+            Everything above is `shrink-0`, so while the title was a bare
+            `min-w-0 flex-1` item it was the only thing the row could squeeze:
+            as the metadata grew (round-cap adds a note pill and a rounds list)
+            the title kept its place on the line and collapsed into a sliver,
+            rendering one word per line beside empty row space. `flex-wrap`
+            never rescued it, because an item that can shrink to zero always
+            "fits" — the wrap the row already had could not fire for it.
+            The fix is a floor. A min-width raises this group's hypothetical
+            main size, which is what flexbox breaks lines on, so once 24ch no
+            longer fits the group drops to its own line — with the disposition
+            button, which is why the two are one item and not two. The
+            `min(…,100%)` guard keeps the floor from overflowing a container
+            narrower than the floor itself. */}
+        <span className="flex min-w-[min(24ch,100%)] flex-1 flex-wrap items-baseline gap-x-2 gap-y-1">
+          <span
+            className={`min-w-[min(24ch,100%)] flex-1 text-[12.5px] ${resolved ? 'text-muted line-through decoration-faint' : 'text-ink'}`}
+            data-finding-title
           >
-            {finding.resolution === null
-              ? 'details'
-              : `${finding.resolution.state}${finding.resolution.round !== null ? ` (round ${finding.resolution.round})` : ''}`}
-            {open ? ' ▾' : ' ▸'}
-          </button>
-        )}
+            {finding.title}
+          </span>
+          {collapsible && (
+            <button
+              onClick={() => setOpen((v) => !v)}
+              className={`shrink-0 rounded-full border px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none ${
+                finding.resolution === null
+                  ? 'border-line bg-surface text-muted'
+                  : resolved
+                    ? 'border-ok-line bg-ok-bg text-ok'
+                    : 'border-warn-line bg-warn-bg text-warn'
+              }`}
+              title={finding.resolution?.text}
+            >
+              {finding.resolution === null
+                ? 'details'
+                : `${finding.resolution.state}${finding.resolution.round !== null ? ` (round ${finding.resolution.round})` : ''}`}
+              {open ? ' ▾' : ' ▸'}
+            </button>
+          )}
+        </span>
       </div>
       {open && (
         <dl className="mt-1.5 flex flex-col gap-1 text-[12px] leading-[1.5]">

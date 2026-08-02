@@ -30,22 +30,11 @@ export function RoundCapPanel({ src, slug, task }: { src: string; slug: string; 
   const scoped = reportsForTask(reports, task)
   const comparison = compareRounds(scoped)
 
-  const reportLinks = (
-    <span className="flex flex-wrap gap-1.5">
-      {scoped.map((r) => (
-        <Link
-          key={r.path}
-          to={artifactLink(src, slug, r.path)}
-          className="rounded-xs border border-line-cool bg-surface px-2 py-0.5 font-mono text-[11px] text-muted hover:border-accent hover:text-accent-deep"
-        >
-          {r.path}
-        </Link>
-      ))}
-    </span>
-  )
-
   // A forked grammar, or a single round: say which and stand down. The reports
-  // are the answer in both cases, so they are what the panel offers.
+  // are the answer in both cases, so they are what the panel offers. This is
+  // the one branch that still lists them itself (#296): the panel withheld its
+  // comparison, so the decide card around it may carry no report chips at all,
+  // and "every report one click away" has nowhere else to live.
   if (!comparison.ok) {
     return (
       <section className="mt-3.5 rounded-[5px] border border-line bg-inset px-3 py-2.5" data-round-cap>
@@ -53,7 +42,19 @@ export function RoundCapPanel({ src, slug, task }: { src: string; slug: string; 
         <p className="mt-2 rounded-[4px] border border-warn-line bg-warn-bg px-2.5 py-2 text-[12px] leading-[1.5] text-warn" data-rounds-withheld>
           Round comparison withheld — {comparison.reason}.
         </p>
-        <div className="mt-2">{reportLinks}</div>
+        <div className="mt-2" data-round-reports>
+          <span className="flex flex-wrap gap-1.5">
+            {scoped.map((r) => (
+              <Link
+                key={r.path}
+                to={artifactLink(src, slug, r.path)}
+                className="rounded-xs border border-line-cool bg-surface px-2 py-0.5 font-mono text-[11px] text-muted hover:border-accent hover:text-accent-deep"
+              >
+                {r.path}
+              </Link>
+            ))}
+          </span>
+        </div>
       </section>
     )
   }
@@ -92,11 +93,12 @@ export function RoundCapPanel({ src, slug, task }: { src: string; slug: string; 
           kind="resolved"
         />
       )}
-
-      <div className="mt-2.5 border-t border-line pt-2">
-        <p className="mb-1.5 font-mono text-[10.5px] uppercase tracking-[0.06em] text-faint">The reports, in full</p>
-        {reportLinks}
-      </div>
+      {/* No "The reports, in full" row here (#296). The panel only ever renders
+          inside the decide card, whose own artifact chips sit some 40px below
+          it and list the same files carrying their verdicts — so this row was
+          the weaker of two identical affordances stacked on top of each other.
+          Every report is still one click away; it is one click away from the
+          chips, which is where the reader was already going to look. */}
     </section>
   )
 }

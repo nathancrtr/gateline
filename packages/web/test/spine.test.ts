@@ -22,7 +22,7 @@ import {
   type Profile,
   type RunSummary,
 } from '../src/api.ts'
-import { phaseSpine, type GateCell, type PhaseCell } from '../src/spine.ts'
+import { SPINE_NOTE_RUNGS, gateNote, noteRung, phaseSpine, spineFit, type GateCell, type PhaseCell } from '../src/spine.ts'
 
 type Ledger = RunSummary['gates']
 
@@ -194,6 +194,131 @@ describe('rest states are overlaid, never a position in the sequence', () => {
   it('a run whose gates are all approved rests at the end', () => {
     const all = ledger({ G0: approved('o', 'x'), G1: approved('o', 'x'), G2: approved('o', 'x'), G3: approved('o', 'x') })
     expect(run({ phase: 'paused', pausedReason: 'escalation', gates: all }).position).toBe('done')
+  })
+})
+
+// The width the run header actually gives the spine, at a given viewport: the
+// app shell is a 192px sidebar (md and up) plus `px-6` on <main>, inside a
+// `max-w-5xl` (1024px) column. These are the three widths #295 reproduces on
+// plus the wide case, translated once here so the assertions below read in
+// viewport terms.
+const spineWidthAt = (viewport: number) => Math.min(1024, viewport - 192 - 48)
+const AT_800 = spineWidthAt(800) // 560
+const AT_900 = spineWidthAt(900) // 660
+const AT_1000 = spineWidthAt(1000) // 760
+const AT_1280 = spineWidthAt(1280) // 1024
+
+/** The spine keeps its notes in the open at this container width. */
+const notesShownAt = (spine: ReturnType<typeof phaseSpine>, width: number) => width >= noteRung(spine)
+
+describe('the under-cell note is the record, not a gloss (#295)', () => {
+  it('a gate on the table says so; a decided one gives approver over date', () => {
+    const spine = run({ phase: 'implement', gates: ledger({ G0: approved('operator', '2026-07-12T09:00:00Z'), G1: approved('operator', 'x') }) })
+    expect(gateNote(gateCell(spine, 'G0')!)).toEqual(['operator', '2026-07-12'])
+    expect(gateNote(gateCell(spine, 'G2')!)).toEqual(['on the table'])
+  })
+
+  it('a gate the run has not reached has nothing to say', () => {
+    expect(gateNote(gateCell(run({ phase: 'spec' }), 'G3')!)).toBeNull()
+  })
+
+  it('a declined gate is provenance too — the note is about decidedness, not approval', () => {
+    const spine = run({ phase: 'plan', gates: ledger({ G1: declined('operator', '2026-07-20T08:00:00Z') }) })
+    expect(gateNote(gateCell(spine, 'G1')!)).toEqual(['operator', '2026-07-20'])
+  })
+})
+
+// #295: the spine wrapped in the 800–1000px band, and a wrapped sequence is not
+// the shape the spine exists to show. It now never wraps, so what is left to get
+// right is *when* it demotes the under-cell notes to the tooltip — early enough
+// that the sequence still fits, late enough that #254's decision to carry
+// provenance in the open survives at the widths it was made for.
+describe('the fit decides when provenance is demoted', () => {
+  // The three demo states #295 reproduces the wrap on. Checked together rather
+  // than one at a time: the density work this page has been through failed
+  // twice by fixing the state under review and breaking a different one.
+  const g2Pending = () =>
+    run({ phase: 'implement', gates: ledger({ G0: approved('operator', '2026-07-12T09:00:00Z'), G1: approved('operator', '2026-07-14T11:30:00Z') }) })
+  const doneMerged = () =>
+    run({
+      phase: 'done',
+      gates: ledger({
+        G0: approved('operator', '2026-06-28T09:00:00Z'),
+        G1: approved('operator', '2026-06-30T09:00:00Z'),
+        G2: approved('operator', '2026-07-01T09:00:00Z'),
+        G3: approved('operator', '2026-07-02T09:00:00Z'),
+      }),
+    })
+  const closedDelivered = () =>
+    run({
+      phase: 'closed',
+      gates: ledger({ G0: approved('operator', '2026-06-28T09:00:00Z'), G1: approved('operator', '2026-06-30T09:00:00Z') }),
+    })
+  const fullProfileStates = () => [g2Pending(), doneMerged(), closedDelivered()]
+
+  it('a full profile keeps its notes at 1280px and gives them up through the wrapping band', () => {
+    for (const spine of fullProfileStates()) {
+      expect(notesShownAt(spine, AT_1280)).toBe(true)
+      expect(notesShownAt(spine, AT_1000)).toBe(false)
+      expect(notesShownAt(spine, AT_900)).toBe(false)
+      expect(notesShownAt(spine, AT_800)).toBe(false)
+    }
+  })
+
+  it('demoting them is what buys the fit — a dense full spine is inside the 900px band', () => {
+    // Not merely tidier: at 900px the notes were the difference between one row
+    // and two, and dropping them (with the gaps, so the connectors touch the
+    // pills they join) has to actually clear the width. Below that the row
+    // crops and scrolls, which is still one sequence; wrapping is not.
+    for (const spine of fullProfileStates()) {
+      const { withNotes, dense } = spineFit(spine)
+      expect(withNotes).toBeGreaterThan(AT_1000)
+      expect(dense).toBeLessThanOrEqual(AT_1000)
+      expect(dense).toBeLessThanOrEqual(AT_900)
+    }
+  })
+
+  it('patch keeps its provenance at every width the header offers — it always fitted', () => {
+    const patch = run({ profile: 'patch', phase: 'implement', gates: ledger({ G1: approved('operator', '2026-07-14T11:30:00Z') }) })
+    for (const width of [AT_800, AT_900, AT_1000, AT_1280]) expect(notesShownAt(patch, width)).toBe(true)
+  })
+
+  it('standard keeps its provenance at 900px and above, and yields only at 800', () => {
+    const standard = run({
+      profile: 'standard',
+      phase: 'implement',
+      gates: ledger({ G0: approved('operator', '2026-07-12T09:00:00Z'), G1: approved('operator', '2026-07-14T11:30:00Z') }),
+    })
+    expect(notesShownAt(standard, AT_1280)).toBe(true)
+    expect(notesShownAt(standard, AT_1000)).toBe(true)
+    expect(notesShownAt(standard, AT_900)).toBe(true)
+    expect(notesShownAt(standard, AT_800)).toBe(false)
+  })
+
+  it('a lighter profile never asks for more room than a heavier one', () => {
+    const g = ledger({ G0: approved('operator', '2026-07-12T09:00:00Z'), G1: approved('operator', '2026-07-14T11:30:00Z') })
+    const widths = (['patch', 'standard', 'full'] as Profile[]).map((profile) => spineFit(run({ profile, phase: 'implement', gates: g })).withNotes)
+    expect(widths).toEqual([...widths].sort((a, b) => a - b))
+  })
+
+  it('a long approver name asks for more room rather than pushing the sequence into a second row', () => {
+    const short = run({ phase: 'implement', gates: ledger({ G0: approved('op', 'x'), G1: approved('op', 'x') }) })
+    const long = run({ phase: 'implement', gates: ledger({ G0: approved('nathan.andrew.carter', 'x'), G1: approved('op', 'x') }) })
+    expect(spineFit(long).withNotes).toBeGreaterThan(spineFit(short).withNotes)
+    // …and the pill row is the same width either way: the note is what grew.
+    expect(spineFit(long).dense).toBe(spineFit(short).dense)
+  })
+
+  it('every rung is a width the header can actually reach, so provenance is never unreachable in the open', () => {
+    expect([...SPINE_NOTE_RUNGS]).toEqual([...SPINE_NOTE_RUNGS].sort((a, b) => a - b))
+    expect(SPINE_NOTE_RUNGS[SPINE_NOTE_RUNGS.length - 1]).toBeLessThanOrEqual(AT_1280)
+  })
+
+  it('the rung is rounded up, so at the rung itself the notes provably fit', () => {
+    for (const profile of ['patch', 'standard', 'full'] as Profile[]) {
+      const spine = run({ profile, phase: 'implement', gates: ledger({ G0: approved('operator', 'x'), G1: approved('operator', 'x') }) })
+      expect(noteRung(spine)).toBeGreaterThanOrEqual(spineFit(spine).withNotes)
+    }
   })
 })
 

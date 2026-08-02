@@ -157,3 +157,98 @@ export function phaseSpine(run: SpineInput): Spine {
 
   return { cells, rest, position }
 }
+
+/**
+ * The under-cell note lines: "on the table" while a gate is up, approver over
+ * date once it is decided, nothing for a gate the run has not reached.
+ *
+ * Approver over date rather than beside it — a gate cell as wide as
+ * `operator · 2026-06-28` is wider than three phase pills, and the sequence is
+ * what the spine is for. It lives here rather than in the renderer because the
+ * fit arithmetic below has to measure the same strings the renderer draws.
+ */
+export function gateNote(cell: GateCell): string[] | null {
+  if (cell.state === 'pending') return ['on the table']
+  if (cell.by === null && cell.at === null) return null
+  return [cell.by ?? '—', cell.at ? String(cell.at).slice(0, 10) : '']
+}
+
+// --- Fit (#295) ---------------------------------------------------------
+//
+// The spine never wraps: a wrapped sequence is not one shape, its wrap point is
+// an accident of label widths, and its connectors dangle at row ends meaning
+// nothing. So the row is `nowrap` and scrolls, and the only question left is how
+// much of itself it can show in the open before it has to crop.
+//
+// The answer is arithmetic on the cells, because a container query needs a
+// literal width in the stylesheet and CSS cannot measure text for us. The
+// numbers below are deliberately approximate — they decide only *when* the
+// under-cell notes are demoted to the tooltip, never whether the record stays
+// reachable (the cell's `title` and accessible name carry it at every width) and
+// never whether the row stays a single line (`overflow-x-auto` does that).
+
+/** `gap-x-1.5` between every item in the row. */
+const CELL_GAP = 6
+/** Connectors compress to this before anything else yields (`min-w-[8px]`). */
+const CONNECTOR_MIN = 8
+/** `px-2.5` plus the 1px border of a phase pill. */
+const PHASE_CHROME = 22
+/** `px-2`, the border, the `gap-1`, and the state glyph of a gate pill. */
+const GATE_CHROME = 29
+/** One character's advance: Inter at 12px and JetBrains Mono at 10.5px both sit near this. */
+const CHAR = 6.4
+
+const textWidth = (s: string): number => s.length * CHAR
+
+function pillWidth(cell: SpineCell): number {
+  return cell.kind === 'phase' ? PHASE_CHROME + textWidth(cell.phase) : GATE_CHROME + textWidth(cell.gate)
+}
+
+function cellWidth(cell: SpineCell): number {
+  const pill = pillWidth(cell)
+  if (cell.kind === 'phase') return pill
+  const note = gateNote(cell)
+  return note ? Math.max(pill, ...note.map(textWidth)) : pill
+}
+
+export interface SpineFit {
+  /** px the row needs with its notes in the open and its connectors at minimum. */
+  withNotes: number
+  /** px it needs once the notes are demoted to the tooltip and the gaps close. */
+  dense: number
+}
+
+/** How wide this spine needs to be, with its notes and without them. */
+export function spineFit(spine: Spine): SpineFit {
+  const cells = spine.cells
+  if (cells.length === 0) return { withNotes: 0, dense: 0 }
+  const connectors = cells.length - 1
+  const between = connectors * CONNECTOR_MIN
+  const gaps = (cells.length + connectors - 1) * CELL_GAP
+  const pills = cells.reduce((w, c) => w + pillWidth(c), 0)
+  const widest = cells.reduce((w, c) => w + cellWidth(c), 0)
+  // Dense drops the gaps too: with nothing under the cells, a connector that
+  // touches the pills it joins reads as "flows into" better than a floating dash.
+  return { withNotes: Math.ceil(widest + gaps + between), dense: Math.ceil(pills + between) }
+}
+
+/**
+ * The widths a note breakpoint may land on. A container query needs a literal
+ * width in the stylesheet, so the fit is rounded up to one of these rather than
+ * emitted per run — `chips.tsx` maps each rung to a static Tailwind variant.
+ */
+export const SPINE_NOTE_RUNGS = [500, 580, 660, 740, 820, 900, 980] as const
+export type SpineNoteRung = (typeof SPINE_NOTE_RUNGS)[number]
+
+/**
+ * The container width at or above which this spine keeps its notes in the open.
+ *
+ * Rounded *up*, so at the rung itself the notes provably fit; below it they are
+ * demoted to the tooltip rather than allowed to push the sequence into a second
+ * row. A reduced profile asks for a lower rung because it has fewer cells to
+ * fit, which is why `patch` keeps its provenance at widths where `full` cannot.
+ */
+export function noteRung(spine: Spine): SpineNoteRung {
+  const { withNotes } = spineFit(spine)
+  return SPINE_NOTE_RUNGS.find((r) => r >= withNotes) ?? SPINE_NOTE_RUNGS[SPINE_NOTE_RUNGS.length - 1]!
+}

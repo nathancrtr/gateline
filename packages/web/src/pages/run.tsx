@@ -29,6 +29,34 @@ import { PageStatus } from './inbox.tsx'
 
 const isReviewPath = (p: string) => /^review-\d+.*\.md$/.test(p)
 
+/** Bare grammar — words that carry no fact of their own, so a sentence built
+ *  only from these plus words already on screen adds nothing to the screen. */
+const GRAMMAR = new Set([
+  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from', 'in', 'is', 'it', 'its',
+  'of', 'on', 'or', 'that', 'the', 'this', 'to', 'was', 'were', 'with',
+])
+
+const words = (s: string) => s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
+
+/**
+ * Does `line` say only what `shown` has already said? (#294)
+ *
+ * This decides whether a decision card renders its subtitle. It is a plain
+ * containment check over words and never a paraphrase check: if every word of
+ * the line beyond bare grammar already appears in the text rendered above it,
+ * the line is a restatement and is dropped. One new word anywhere — an
+ * escalation's reason, a bounce's "Packet malformed", a paused run's "Resume" —
+ * and the whole line renders verbatim, as it always did.
+ *
+ * Nothing becomes unreachable this way. The suppressed words are, by the test's
+ * own definition, still on the page a few pixels above.
+ */
+export function restatesWhatIsShown(line: string, shown: string): boolean {
+  const vocabulary = new Set(words(shown))
+  const carried = words(line).filter((w) => !GRAMMAR.has(w))
+  return carried.length > 0 && carried.every((w) => vocabulary.has(w))
+}
+
 export function RunPage() {
   const { src, slug } = useParams<{ src: string; slug: string }>()
   const [params, setParams] = useSearchParams()
@@ -121,18 +149,21 @@ export function RunPage() {
   const decideIndex = decideTargetIndex(params.get('decide'), items)
   const primaryIndex = decideIndex >= 0 ? decideIndex : items.findIndex((x) => x.reviewable)
 
-  // Phase, profile and gates are the spine's job now (#254), so the eyebrow
-  // states only what the spine cannot: that something is waiting on a human.
   // A run at rest — paused, staged, or one whose phase names no position at all
   // — keeps its chip beside the spine, because "not moving" is not a position
   // in the sequence and must not be drawn as one.
   const atRest =
     summary.phase === 'paused' || summary.phase === 'closed' || !PROFILE_PHASES[summary.profile].includes(summary.phase as Phase)
 
+  // The `needs you` eyebrow that used to open this header is gone (#294). It
+  // predates the spine, and its own justification — stating what the spine
+  // cannot — stopped being true when #254 landed a spine that draws the gate on
+  // the table. Between that spine, the `Decide` tab count and the card's own
+  // chip, the fact had four voices above the fold and the eyebrow was the one
+  // carrying no other content.
   const header = (
     <header className="mb-6">
-      {busy && <div className="font-mono text-[12px] tracking-[0.14em] uppercase text-accent-deep">needs you</div>}
-      <h1 className={`${busy ? 'mt-2' : ''} mb-1.5 font-sans text-[46px] font-semibold leading-[1.06] tracking-[-0.02em]`}>{summary.slug}</h1>
+      <h1 className="mb-1.5 font-sans text-[46px] font-semibold leading-[1.06] tracking-[-0.02em]">{summary.slug}</h1>
       <p className="font-mono text-[12.5px] text-muted leading-[1.6]">
         {genesisIntake && genesisCommit && (
           <>
@@ -150,7 +181,18 @@ export function RunPage() {
       </p>
       <div className="mt-[18px] flex flex-col items-start gap-2.5">
         {atRest && <PhaseChip phase={summary.phase} pausedReason={summary.pausedReason} closure={summary.closure} />}
-        <PhaseSpine summary={summary} />
+        {/* No sequence on an unreadable record (#294). Every cell of the spine
+            is derived from `state.yaml`; when it will not parse, the summary
+            falls back to defaults and the spine draws a confident full-profile
+            nine-cell run that has not started — which is a claim, not a
+            reading. The `unknown` chip and the error block below say the true
+            thing, so the spine stands down rather than contradict them. #254
+            landed after the malformed-state treatment and never met it. */}
+        {detail.stateError ? (
+          <p data-spine-unknown className="font-mono text-[11.5px] text-muted">sequence unknown — state.yaml unreadable</p>
+        ) : (
+          <PhaseSpine summary={summary} />
+        )}
       </div>
     </header>
   )
@@ -265,39 +307,78 @@ function SurfaceTab({
  * three fixed widths wrapped in the 800–1000px band and left the right half of
  * the viewport empty under a header that was already the tallest thing on the
  * page.
+ *
+ * Vitals is one strip rather than a stack of label/value rows (#294). Three
+ * hairline rows spent ~110px of the band above the fold on about forty
+ * characters of fact, and on the run that most needs the space — a gate on the
+ * table — that band is the last thing between the reader and the evidence.
+ * Every fact is still here, in the same words: only the row scaffolding went.
+ * The task board keeps its rows; tasks are the one thing in this band with
+ * depth, and their count is what should set the band's height.
  */
 function RunMetadata({ summary, board }: { summary: RunSummary; board: React.ReactNode }) {
+  const diverged = summary.aheadOfOrigin != null && summary.aheadOfOrigin > 0
   return (
     <div data-run-metadata className="flex flex-wrap items-start gap-x-14 gap-y-7 text-[13px]">
       {board && <div className="min-w-0 max-w-[420px] flex-1 basis-[230px]">{board}</div>}
-      <section className="min-w-0 max-w-[420px] flex-1 basis-[230px]">
+      {/* No 420px cap on this one: a strip wants the width a column did not,
+          and the facts fit on one line only if it may take what the board
+          leaves. Below about 1000px it wraps to two, which is the same
+          graceful thing the rest of this band does. */}
+      <section className="min-w-0 flex-1 basis-[340px]">
         <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted pb-1.5">Vitals</div>
-        <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-          <span className="text-[12.5px] text-muted">Budget</span>
-          <span className="text-right">
+        <div
+          data-vitals
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-line py-[7px] font-mono text-[12.5px] text-muted"
+        >
+          {/* The meter is built as a column — bar over words — for the row it
+              used to sit in. In a text strip that hangs its words below the
+              line, so it is laid on its side here. A presentational override at
+              the call site: the shared component the inbox and portfolio also
+              render is untouched, and if its markup ever changes this simply
+              stops applying. */}
+          <span className="inline-flex items-center gap-1.5 [&>span]:flex-row [&>span]:items-center [&>span]:gap-1.5">
+            {/* A run with no budget recorded reads "no budget", which is a
+                sentence, not a value — labelling it "Budget no budget" is the
+                one thing the strip can say that the two-column row could not. */}
+            {summary.budget.limit !== null && 'Budget'}
             <BudgetMeter limit={summary.budget.limit} spent={summary.budget.spent} />
           </span>
-        </div>
-        <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-          <span className="text-[12.5px] text-muted">Max rounds</span>
-          <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">{summary.tasks.maxRounds}</span>
-        </div>
-        {summary.aheadOfOrigin != null && summary.aheadOfOrigin > 0 && (
-          <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-            <span className="text-[12.5px] text-muted">Divergence</span>
-            <span className={`text-[12.5px] font-mono tabular-nums text-right ${(summary.behindOrigin ?? 0) > 0 ? 'text-bad' : 'text-warn'}`}>
-              ↑{summary.aheadOfOrigin}{(summary.behindOrigin ?? 0) > 0 && <>↓{summary.behindOrigin}</>}
+          <Sep />
+          <span>
+            Max rounds <span className="tabular-nums text-ink">{summary.tasks.maxRounds}</span>
+          </span>
+          {diverged && (
+            <>
+              <Sep />
+              <span>
+                Divergence{' '}
+                <span className={`tabular-nums ${(summary.behindOrigin ?? 0) > 0 ? 'text-bad' : 'text-warn'}`}>
+                  ↑{summary.aheadOfOrigin}{(summary.behindOrigin ?? 0) > 0 && <>↓{summary.behindOrigin}</>}
+                </span>
+              </span>
+            </>
+          )}
+          <Sep />
+          <span>
+            Updated{' '}
+            <span className="tabular-nums text-ink">
+              {summary.updatedAt ? formatAge(summary.updatedAt, Date.now() / 1000) + ' ago' : '—'}
             </span>
-          </div>
-        )}
-        <div className="flex justify-between items-center gap-3 py-[7px] border-t border-line">
-          <span className="text-[12.5px] text-muted">Updated</span>
-          <span className="text-[12.5px] text-ink font-mono tabular-nums text-right">
-            {summary.updatedAt ? formatAge(summary.updatedAt, Date.now() / 1000) + ' ago' : '—'}
           </span>
         </div>
       </section>
     </div>
+  )
+}
+
+/** The strip's divider. Decorative, so it is hidden from the reading order —
+ *  a screen reader hears the facts, not the punctuation between them. */
+function Sep() {
+  return (
+    <span aria-hidden="true" className="text-faint">
+      ·
+    </span>
   )
 }
 
@@ -318,6 +399,12 @@ function NeedsYouCard({
   sentHere?: boolean
 }) {
   const urgent = item.since !== null && now - item.since > 3 * 86_400
+  const ageLabel = `waiting ${formatAge(item.since, now)}`
+  // `item.detail` is written for an inbox row, where "<slug> is waiting on G2"
+  // is what tells you which run you are looking at. Here the slug is the H1, the
+  // gate is in the chip, "waiting" is in the badge on the same line, and the
+  // question is the title — so the line is words the reader has already read.
+  const restated = restatesWhatIsShown(item.detail, `${item.title} ${item.slug} ${ageLabel}`)
   // Arriving from an inbox link: bring the named card into view and give it
   // focus, so the decision is where the eye and the keyboard already are.
   const cardRef = useRef<HTMLElement>(null)
@@ -380,17 +467,25 @@ function NeedsYouCard({
             <span className="inline-block w-[7px] h-[7px] rounded-full bg-accent" />
             Needs you{item.gate ? ` · ${item.gate}` : ''}
           </span>
-          <KindChip item={item} />
+          {/* On a gate the KindChip says `● G2` eight pixels from a chip that
+              already says `NEEDS YOU · G2` (#294) — two markers, one fact. Every
+              other kind names something the chip beside it does not: escalation,
+              round-cap, paused, malformed, staged. The chip itself is unchanged
+              and still earns its place in the inbox, where rows carry no gate
+              label of their own. */}
+          {item.kind !== 'gate' && <KindChip item={item} />}
           <span className="ml-auto">
-            <AgeBadge label={`waiting ${formatAge(item.since, now)}`} urgent={urgent} />
+            <AgeBadge label={ageLabel} urgent={urgent} />
           </span>
         </div>
         <h2 className="mt-2 mb-1.5 font-sans text-[24px] font-semibold leading-[1.2] tracking-[-0.015em] text-ink">
           <CitedText>{item.title}</CitedText>
         </h2>
-        <p className="max-w-[76ch] text-[14.5px] text-[#4d4742] leading-[1.55]">
-          <CitedText>{item.detail}</CitedText>
-        </p>
+        {!restated && (
+          <p className="max-w-[76ch] text-[14.5px] text-[#4d4742] leading-[1.55]">
+            <CitedText>{item.detail}</CitedText>
+          </p>
+        )}
         {mentionedTask && (
           <p className="mt-1.5 font-mono text-[12px] text-muted">
             {mentionedTask.id} · {mentionedTask.status} · review round {mentionedTask.review_rounds}/3

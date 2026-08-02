@@ -1,7 +1,8 @@
 // I6: every run × source at a glance.
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { api, formatAge } from '../api.ts'
+import { api, formatAge, type RunSummary } from '../api.ts'
 import { BudgetMeter, GateLedger, PhaseChip } from '../components/chips.tsx'
 import { PageStatus } from './inbox.tsx'
 
@@ -10,6 +11,148 @@ const TH =
   'text-left font-sans font-medium text-[11px] tracking-[0.1em] uppercase text-muted px-3 py-3.5 border-b border-line whitespace-nowrap'
 const TD = 'px-3 py-[14px]'
 const NUM = 'px-3 py-[14px] text-right font-mono text-[12.5px] tabular-nums text-[#4d4742]'
+
+/**
+ * What the mark at the left edge of a run row says (#297).
+ *
+ * This used to be the last cell of the last column, which is the one place it
+ * could not survive: the table is wider than its wrapper from about 1000px
+ * down, so the column the page exists for was the first thing clipped — and
+ * clipped silently. Deciding the mark here rather than inline keeps the
+ * precedence testable: readiness first (it already counts escalations that
+ * have become someone's move), then escalations that have not, then quiet.
+ */
+export type NeedsYouMark =
+  | { kind: 'needs'; count: number; label: string }
+  | { kind: 'escalation'; count: number; label: string }
+  | { kind: 'quiet'; count: 0; label: string }
+
+export function needsYouMark(run: Pick<RunSummary, 'needsHuman' | 'escalationsOpen'>): NeedsYouMark {
+  if (run.needsHuman > 0) {
+    const n = run.needsHuman
+    return { kind: 'needs', count: n, label: `${n} ${n === 1 ? 'item needs' : 'items need'} you` }
+  }
+  if (run.escalationsOpen > 0) {
+    const n = run.escalationsOpen
+    return { kind: 'escalation', count: n, label: `${n} open escalation${n === 1 ? '' : 's'}` }
+  }
+  return { kind: 'quiet', count: 0, label: 'nothing needs you' }
+}
+
+/** Which edges of a horizontally scrollable pane have content beyond them. */
+export interface ScrollCue {
+  left: boolean
+  right: boolean
+}
+
+/**
+ * Whether a clipped table should announce itself, and on which edge (#297).
+ *
+ * The overflow containment here is right — it never escapes to the page body —
+ * but a scroll the user cannot see is a scroll the user will not perform, and
+ * the platform scrollbar stays hidden until they interact. One pixel of slack
+ * absorbs sub-pixel layout so a table that exactly fits does not claim to be
+ * cut off.
+ */
+export function scrollCue(pane: { scrollLeft: number; scrollWidth: number; clientWidth: number }): ScrollCue {
+  const slack = 1
+  return {
+    left: pane.scrollLeft > slack,
+    right: pane.scrollWidth - pane.clientWidth - pane.scrollLeft > slack,
+  }
+}
+
+/**
+ * The table's pane: the same contained horizontal scroll as before, plus the
+ * cue that says it is scrolling. The fade sits above the rows rather than in
+ * the pane's background, so a tinted row (a malformed run) cannot paint over
+ * it, and the hint line spells out in words what the fade only implies.
+ */
+function ScrollPane({ children, label }: { children: ReactNode; label: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [cue, setCue] = useState<ScrollCue>({ left: false, right: false })
+
+  useEffect(() => {
+    const pane = ref.current
+    if (!pane) return
+    const measure = () => {
+      const next = scrollCue(pane)
+      setCue((prev) => (prev.left === next.left && prev.right === next.right ? prev : next))
+    }
+    measure()
+    pane.addEventListener('scroll', measure, { passive: true })
+    // Re-measure on width changes and on content changes (a run appearing or a
+    // longer phase label both move the boundary), not just on scroll.
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
+    ro?.observe(pane)
+    if (pane.firstElementChild) ro?.observe(pane.firstElementChild)
+    return () => {
+      pane.removeEventListener('scroll', measure)
+      ro?.disconnect()
+    }
+  }, [])
+
+  const clipped = cue.left || cue.right
+  return (
+    <div className="mt-[30px]">
+      <div className="relative">
+        <div
+          ref={ref}
+          className="overflow-x-auto rounded-lg border border-line bg-inset p-[6px]"
+          {...(clipped ? { role: 'region', 'aria-label': label, tabIndex: 0 } : {})}
+        >
+          {children}
+        </div>
+        {cue.left && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-px left-px w-[30px] rounded-l-lg"
+            style={{ background: 'linear-gradient(to right, rgba(36, 32, 28, 0.13), rgba(36, 32, 28, 0))' }}
+          />
+        )}
+        {cue.right && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-px right-px w-[38px] rounded-r-lg"
+            style={{ background: 'linear-gradient(to left, rgba(36, 32, 28, 0.13), rgba(36, 32, 28, 0))' }}
+          />
+        )}
+      </div>
+      {clipped && (
+        <p className="mt-[7px] text-[11.5px] text-muted">
+          Wider than the pane — scroll sideways for the remaining columns.
+        </p>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The left-edge mark. Fixed width so every slug starts at the same x: the
+ * marks then read as a rail down the left edge, which is the scan the page
+ * exists for. A quiet run leaves the slot empty — absence says it, and a
+ * dashed placeholder on every calm row was noise competing with the badges.
+ */
+function NeedsYou({ mark }: { mark: NeedsYouMark }) {
+  if (mark.kind === 'quiet') return <span aria-hidden="true" className="w-[38px] shrink-0" />
+  if (mark.kind === 'escalation') {
+    return (
+      <span
+        className="mt-[3px] w-[38px] shrink-0 whitespace-nowrap font-mono text-[11px] font-semibold text-bad"
+        title={mark.label}
+      >
+        {mark.count} esc
+      </span>
+    )
+  }
+  return (
+    <span className="mt-px w-[38px] shrink-0" title={mark.label}>
+      <span className="inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-full border border-[#8a3a1e] bg-accent px-[6px] font-sans text-[12px] font-bold tabular-nums text-white">
+        {mark.count}
+      </span>
+    </span>
+  )
+}
 
 export function PortfolioPage() {
   const { data, isLoading, error } = useQuery({ queryKey: ['runs'], queryFn: api.runs })
@@ -20,6 +163,7 @@ export function PortfolioPage() {
         <div className="overflow-hidden rounded-lg border border-line bg-inset p-[6px]">
           {[130, 110, 150].map((w, i) => (
             <div key={i} className="flex items-center gap-4 border-b border-line px-3 py-[14px] last:border-b-0">
+              <span className="skel h-[22px] w-[22px] rounded-full" />
               <span className="skel h-[14px]" style={{ width: w }} />
               <span className="skel h-[14px] w-[60px]" />
               <span className="skel h-[22px] w-[120px]" />
@@ -119,18 +263,17 @@ export function PortfolioPage() {
           </Link>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-line bg-inset p-[6px] mt-[30px]">
-          <table className="w-full min-w-[820px] border-separate border-spacing-0 text-[13.5px]">
+        <ScrollPane label="Runs, by source">
+          <table className="w-full min-w-[780px] border-separate border-spacing-0 text-[13.5px]">
             <thead>
               <tr>
-                <th className={TH}>Run</th>
+                <th className={TH}>Needs you · Run</th>
                 <th className={TH}>Phase</th>
                 <th className={TH}>Gates</th>
                 <th className={`${TH} text-right`}>Tasks</th>
                 <th className={`${TH} text-right`}>Rounds</th>
                 <th className={TH}>Budget</th>
                 <th className={`${TH} text-right`}>Updated</th>
-                <th className={`${TH} text-right`}>Needs you</th>
               </tr>
             </thead>
             <tbody>
@@ -141,36 +284,41 @@ export function PortfolioPage() {
                     run.malformed ? 'bg-[#fbf3ed]' : ''
                   }`}
                 >
-                  <td className={`${TD} min-w-[200px]`}>
-                    <Link
-                      to={`/runs/${run.source}/${run.slug}`}
-                      className="font-mono text-[13.5px] font-medium text-ink hover:underline"
-                    >
-                      {run.slug}
-                    </Link>
-                    <div className="font-mono text-[11.5px] text-muted mt-[2px]">
-                      {run.source}
-                    </div>
-                    {run.malformed && (
-                      <div className="font-mono text-[11.5px] text-bad mt-[3px] before:content-['✕_']">
-                        {run.malformed}
+                  <td className={`${TD} min-w-[190px]`}>
+                    <div className="flex items-start gap-[9px]">
+                      <NeedsYou mark={needsYouMark(run)} />
+                      <div className="min-w-0">
+                        <Link
+                          to={`/runs/${run.source}/${run.slug}`}
+                          className="font-mono text-[13.5px] font-medium text-ink hover:underline"
+                        >
+                          {run.slug}
+                        </Link>
+                        <div className="font-mono text-[11.5px] text-muted mt-[2px]">
+                          {run.source}
+                        </div>
+                        {run.malformed && (
+                          <div className="font-mono text-[11.5px] text-bad mt-[3px] before:content-['✕_']">
+                            {run.malformed}
+                          </div>
+                        )}
+                        {run.aheadOfOrigin != null && run.aheadOfOrigin > 0 && (run.behindOrigin ?? 0) > 0 ? (
+                          <span
+                            className="mt-1 inline-flex font-mono text-[11.5px] font-semibold px-[7px] py-[2px] rounded-sm border border-bad-line bg-bad-bg text-bad"
+                            title={`${run.ref} has diverged from origin: ${run.aheadOfOrigin} local-only commit(s), ${run.behindOrigin} on origin only — reconcile the branch (#99)`}
+                          >
+                            ↑{run.aheadOfOrigin}↓{run.behindOrigin}
+                          </span>
+                        ) : run.aheadOfOrigin != null && run.aheadOfOrigin > 0 ? (
+                          <span
+                            className="mt-1 inline-flex font-mono text-[11.5px] font-semibold px-[7px] py-[2px] rounded-sm border border-warn-line bg-warn-bg text-warn"
+                            title={`${run.aheadOfOrigin} commit(s) on ${run.ref} not yet pushed — origin consumers see an older run`}
+                          >
+                            ↑{run.aheadOfOrigin}
+                          </span>
+                        ) : null}
                       </div>
-                    )}
-                    {run.aheadOfOrigin != null && run.aheadOfOrigin > 0 && (run.behindOrigin ?? 0) > 0 ? (
-                      <span
-                        className="mt-1 inline-flex font-mono text-[11.5px] font-semibold px-[7px] py-[2px] rounded-sm border border-bad-line bg-bad-bg text-bad"
-                        title={`${run.ref} has diverged from origin: ${run.aheadOfOrigin} local-only commit(s), ${run.behindOrigin} on origin only — reconcile the branch (#99)`}
-                      >
-                        ↑{run.aheadOfOrigin}↓{run.behindOrigin}
-                      </span>
-                    ) : run.aheadOfOrigin != null && run.aheadOfOrigin > 0 ? (
-                      <span
-                        className="mt-1 inline-flex font-mono text-[11.5px] font-semibold px-[7px] py-[2px] rounded-sm border border-warn-line bg-warn-bg text-warn"
-                        title={`${run.aheadOfOrigin} commit(s) on ${run.ref} not yet pushed — origin consumers see an older run`}
-                      >
-                        ↑{run.aheadOfOrigin}
-                      </span>
-                    ) : null}
+                    </div>
                   </td>
                   <td className={TD}>
                     <PhaseChip phase={run.phase} pausedReason={run.pausedReason} closure={run.closure} />
@@ -201,26 +349,11 @@ export function PortfolioPage() {
                   <td className={`${NUM} text-muted text-[12.5px]`}>
                     {formatAge(run.updatedAt, now)}
                   </td>
-                  <td className="px-3 py-[14px] text-right">
-                    {run.needsHuman > 0 ? (
-                      <span className="inline-flex items-center gap-[6px] font-sans text-[12px] font-bold px-[9px] py-[4px] rounded-full bg-accent text-white border border-[#8a3a1e] tabular-nums">
-                        {run.needsHuman}
-                      </span>
-                    ) : run.escalationsOpen > 0 ? (
-                      <span className="font-mono text-[11px] font-semibold text-bad">
-                        {run.escalationsOpen} esc
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-[6px] font-sans text-[12px] font-medium px-[9px] py-[4px] rounded-full bg-transparent text-faint border border-dashed border-line-cool tabular-nums">
-                        —
-                      </span>
-                    )}
-                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </ScrollPane>
       )}
     </div>
   )

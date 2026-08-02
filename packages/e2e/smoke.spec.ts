@@ -445,10 +445,14 @@ test('round cap (#257): the surface compares the last two rounds, not a file lis
   await resolved.first().getByRole('button').click()
   await expect(resolved.first()).toContainText('the banner is the first line')
 
-  // Every report stays one click away — folding is never truncation.
+  // Every report stays one click away — folding is never truncation. The link
+  // is the decide card's own packet chip, which carries the verdict too; the
+  // panel no longer repeats that row 40px above it (#296).
+  const card = page.locator('[data-needs-card]').first()
   for (const path of ['review-01.md', 'review-02.md', 'review-03.md']) {
-    await expect(panel.getByRole('link', { name: path })).toHaveCount(1)
+    await expect(card.getByRole('link', { name: new RegExp(`^${path}`) })).toHaveCount(1)
   }
+  await expect(panel.getByRole('link', { name: /review-0\d\.md/ })).toHaveCount(0)
 })
 
 test('round cap (#257): a single-round record offers no comparison and says why', async ({ page }) => {

@@ -3,7 +3,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { Git, planDecision, parseRunState, DecisionError, type Disposition, type RunRef } from '../src/index.ts'
+import { Git, planDecision, parseRunState, DecisionError, type Closure, type Disposition, type RunRef } from '../src/index.ts'
 import { dropFixture, makeFixture, type FixtureContext } from './fixture.helper.ts'
 
 let ctx: FixtureContext
@@ -293,5 +293,127 @@ describe('decision legality (planDecision)', () => {
     const after = await ctx.source.readState(ref)
     expect(after.state!.phase).toBe('plan')
     expect(after.state!.paused_reason).toBeNull()
+  })
+})
+
+// #200: the terminal state a run reaches by decision rather than by finishing.
+describe('close and reopen (the run terminal state, #200)', () => {
+  it('closes a paused run with a typed disposition, and the record carries who/when/why', async () => {
+    const ref = await refFor('paused-budget')
+    const { state } = await ctx.source.readState(ref)
+    const planned = planDecision(
+      state!,
+      { action: 'close', closure: 'already-delivered', notes: 'Work landed via another PR; nothing left to retry.' },
+      who,
+    )
+    expect(planned.message).toBe('state(paused-budget): closed by Fixture Operator [disposition: already-delivered]')
+    expect(planned.summary).toBe('Close paused-budget as "already-delivered"')
+
+    const result = await ctx.source.writeState(ref, planned.mutate, planned.message)
+    expect(result.ok).toBe(true)
+    const after = await ctx.source.readState(ref)
+    expect(after.state!.phase).toBe('closed')
+    expect(after.state!.paused_reason).toBeNull()
+    expect(after.state!.closure).toMatchObject({
+      as: 'already-delivered',
+      by: 'Fixture Operator',
+      reason: 'Work landed via another PR; nothing left to retry.',
+    })
+    expect(after.state!.closure!.at).toMatch(/^\d{4}-\d{2}-\d{2}T/)
+    // Comment preservation is the same contract as every other write.
+    expect(after.raw).toContain('# a gate entry is written ONLY by the named human')
+  })
+
+  it('closes a run that is still mid-flight — closing is not a pause-only affordance', async () => {
+    const ref = await refFor('g0-pending')
+    const { state } = await ctx.source.readState(ref)
+    expect(state!.phase).toBe('spec')
+    const planned = planDecision(state!, { action: 'close', closure: 'obsolete', notes: 'the need went away' }, who)
+    await ctx.source.writeState(ref, planned.mutate, planned.message)
+    const after = await ctx.source.readState(ref)
+    expect(after.state!.phase).toBe('closed')
+    expect(after.state!.closure!.as).toBe('obsolete')
+  })
+
+  it.each(['already-delivered', 'superseded', 'obsolete', 'abandoned'] as const)('accepts %s as a disposition', async (as) => {
+    const ref = await refFor('paused-budget')
+    const { state } = await ctx.source.readState(ref)
+    const planned = planDecision(state!, { action: 'close', closure: as, notes: 'reason' }, who)
+    await ctx.source.writeState(ref, planned.mutate, planned.message)
+    const after = await ctx.source.readState(ref)
+    expect(after.state!.closure!.as).toBe(as)
+  })
+
+  it('refuses a closure with no disposition — an untyped terminal state is the thing this prevents', async () => {
+    const ref = await refFor('paused-budget')
+    const { state } = await ctx.source.readState(ref)
+    expect(() => planDecision(state!, { action: 'close', notes: 'just close it' }, who)).toThrow(DecisionError)
+    expect(() => planDecision(state!, { action: 'close', notes: 'just close it' }, who)).toThrow(/requires a disposition/)
+  })
+
+  it('refuses a junk disposition', async () => {
+    const ref = await refFor('paused-budget')
+    const { state } = await ctx.source.readState(ref)
+    expect(() => planDecision(state!, { action: 'close', closure: 'sure-whatever' as Closure, notes: 'x' }, who)).toThrow(/requires a disposition/)
+  })
+
+  it('refuses a closure with no reason', async () => {
+    const ref = await refFor('paused-budget')
+    const { state } = await ctx.source.readState(ref)
+    expect(() => planDecision(state!, { action: 'close', closure: 'abandoned' }, who)).toThrow(/requires a reason/)
+  })
+
+  it('refuses to close a done run — a finished run is already its own record', async () => {
+    const ref = await refFor('done-merged')
+    const { state } = await ctx.source.readState(ref)
+    expect(state!.phase).toBe('done')
+    expect(() => planDecision(state!, { action: 'close', closure: 'abandoned', notes: 'no' }, who)).toThrow(/already its own record/)
+  })
+
+  it('refuses to close an already-closed run, naming the disposition it already carries', async () => {
+    const ref = await refFor('closed-delivered')
+    const { state } = await ctx.source.readState(ref)
+    expect(() => planDecision(state!, { action: 'close', closure: 'abandoned', notes: 'again' }, who)).toThrow(/already closed as "already-delivered"/)
+  })
+
+  it('refuses every other decision on a closed run, and names reopen as the way back', async () => {
+    const ref = await refFor('closed-delivered')
+    const { state } = await ctx.source.readState(ref)
+    for (const input of [
+      { action: 'resume' as const },
+      { action: 'pause' as const, pauseReason: 'escalation' },
+      { action: 'arm' as const },
+      { action: 'approve' as const, gate: 'G1' as const, burden: 'confirmation' as const },
+      { action: 'decline' as const, gate: 'G1' as const, notes: 'no' },
+      { action: 'resolve-escalation' as const, escalationIndex: 0, notes: 'x' },
+    ]) {
+      expect(() => planDecision(state!, input, who)).toThrow(/reopen it before deciding anything else/)
+    }
+  })
+
+  it('reopen clears the closure and returns the run to the phase its ledger derives', async () => {
+    const ref = await refFor('closed-delivered')
+    const { state } = await ctx.source.readState(ref)
+    const planned = planDecision(state!, { action: 'reopen' }, who)
+    expect(planned.message).toBe('state(closed-delivered): reopened to plan by Fixture Operator (was closed as already-delivered)')
+    expect(planned.summary).toBe('Reopen closed-delivered at phase "plan"')
+    await ctx.source.writeState(ref, planned.mutate, planned.message)
+    const after = await ctx.source.readState(ref)
+    expect(after.state!.phase).toBe('plan') // G0 approved, G1 not
+    expect(after.state!.closure).toBeNull()
+    expect(after.state!.paused_reason).toBeNull()
+  })
+
+  it('refuses reopen on a run that is not closed', async () => {
+    const ref = await refFor('paused-budget')
+    const { state } = await ctx.source.readState(ref)
+    expect(() => planDecision(state!, { action: 'reopen' }, who)).toThrow(/is not closed/)
+  })
+
+  it('a closed run whose closure block is missing is malformed, never silently closed-for-no-reason', () => {
+    const raw = 'run: x\nbranch: run/x\nphase: closed\ngates:\n  G0: {approved: false, by: null, at: null, notes: null}\n  G1: {approved: false, by: null, at: null, notes: null}\n  G2: {approved: false, by: null, at: null, notes: null}\n  G3: {approved: false, by: null, at: null, notes: null}\n'
+    const { state, error } = parseRunState(raw)
+    expect(state).toBeNull()
+    expect(error).toMatch(/closure: required when phase is closed/)
   })
 })

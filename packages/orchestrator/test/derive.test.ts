@@ -75,6 +75,39 @@ describe('the derivation table, one rule per row', () => {
     expect(deriveAction(obs({ state: state({ phase: 'done' }) }))).toMatchObject({ kind: 'rest', rule: 'D1' })
   })
 
+  it('D1 — a closed run rests, and the rest names the disposition (#200)', () => {
+    const s = state({
+      phase: 'closed',
+      closure: { as: 'already-delivered', by: 'Nathan Carter', at: '2026-08-01T00:00:00Z', reason: 'shipped elsewhere' },
+    } as Partial<RunState>)
+    const a = deriveAction(obs({ state: s }))
+    expect(a).toMatchObject({ kind: 'rest', rule: 'D1' })
+    expect(a.why).toContain('already-delivered')
+  })
+
+  it('D1 — a closed run rests ahead of the escalation and round-cap rules, not after them (#200)', () => {
+    // The same facts on a live run would escalate (D3) or cap (D4). A closure
+    // answers them wholesale, so neither may fire on a run a human has ended.
+    const s = state({
+      phase: 'closed',
+      closure: { as: 'abandoned', by: 'Nathan Carter', at: '2026-08-01T00:00:00Z', reason: 'walked away' },
+      escalations: [{ at: null, from_role: 'orchestrator', reason: 'failed twice', resolved: false, resolved_by: null, resolved_at: null, resolution: null, disposition: null }],
+      tasks: [{ id: '01-core', status: 'in-review', review_rounds: 5 }],
+    } as Partial<RunState>)
+    expect(deriveAction(obs({ state: s }))).toMatchObject({ kind: 'rest', rule: 'D1' })
+  })
+
+  it('D21 — closed is a legal phase in every profile, so it never trips the profile invariant (#200)', () => {
+    for (const profile of PROFILES) {
+      const s = state({
+        phase: 'closed',
+        profile,
+        closure: { as: 'obsolete', by: 'Nathan Carter', at: '2026-08-01T00:00:00Z', reason: 'need went away' },
+      } as Partial<RunState>)
+      expect(deriveAction(obs({ state: s }))).toMatchObject({ kind: 'rest', rule: 'D1' })
+    }
+  })
+
   it('D2 — paused rests; resume is a human decision', () => {
     const a = deriveAction(obs({ state: state({ phase: 'paused', paused_reason: 'budget-exhausted' }) }))
     expect(a).toMatchObject({ kind: 'rest', rule: 'D2' })

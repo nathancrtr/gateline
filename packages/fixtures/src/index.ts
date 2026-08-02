@@ -502,6 +502,8 @@ interface StateOpts {
   /** Run profile (DESIGN.md §4.1); omitted → full. The gates section carries exactly the profile's gates. */
   profile?: 'patch' | 'standard' | 'full'
   pausedReason?: string
+  /** The closure record a `closed` run carries (#200). */
+  closure?: { as: string; by: string; at: string; reason: string }
   gates: Partial<Record<'G0' | 'G1' | 'G2' | 'G3', { by: string; at: string; notes?: string; burden?: string; approved?: boolean }>>
   tasks?: { id: string; status: string; rounds: number }[]
   escalations?: { at: string; from: string; reason: string; resolved: boolean }[]
@@ -554,8 +556,9 @@ function stateYaml(o: StateOpts): string {
 
 run: ${o.slug}
 branch: run/${o.slug}
-phase: ${o.phase}               # spec | plan | implement | integrate | release | done | paused
+phase: ${o.phase}               # spec | plan | implement | integrate | release | done | paused | closed
 ${o.profile ? `profile: ${o.profile}           # patch | standard | full (DESIGN.md §4.1)\n` : ''}paused_reason: ${o.pausedReason ?? 'null'}
+${o.closure ? `closure: {as: ${o.closure.as}, by: ${o.closure.by}, at: ${o.closure.at}, reason: ${JSON.stringify(o.closure.reason)}}\n` : ''}
 
 budget:
   cost_limit_usd: ${budget.limit}      # exhaustion pauses the run; it never silently degrades
@@ -957,6 +960,31 @@ export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts 
           pausedReason: 'budget-exhausted',
           gates: { G0: { by: 'operator', at: '2026-06-27T09:00:00Z', burden: 'confirmation' } },
           budget: { limit: 10, spent: 10.4 },
+        }),
+      },
+    },
+    // A run a human closed out (#200). It carries an UNRESOLVED escalation on
+    // purpose: a closure answers everything inside the run at once, so this is
+    // the fixture that proves readiness stops asking rather than falling
+    // through to the escalation rule.
+    {
+      slug: 'closed-delivered',
+      age: 4,
+      files: {
+        'intent-brief.md': brief('inbox decide link'),
+        'spec.md': spec('inbox decide link'),
+        'state.yaml': stateYaml({
+          slug: 'closed-delivered',
+          phase: 'closed',
+          closure: {
+            as: 'already-delivered',
+            by: 'operator',
+            at: '2026-06-29T11:00:00Z',
+            reason: 'The work landed by another path; this record closes to match reality.',
+          },
+          gates: { G0: { by: 'operator', at: '2026-06-27T09:00:00Z', burden: 'confirmation' } },
+          tasks: [{ id: '01-core', status: 'failed', rounds: 0 }],
+          escalations: [{ at: '2026-06-28T09:00:00Z', from: 'orchestrator', reason: 'implementer failed twice', resolved: false }],
         }),
       },
     },

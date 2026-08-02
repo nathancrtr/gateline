@@ -17,6 +17,7 @@ import { DIFF_SELECTION, decideTargetIndex, landingArtifact, resolveSurface, typ
 import { PROFILE_PHASES, api, formatAge, formatWhen, type InboxItem, type Phase, type RunDetailResponse, type RunSummary } from '../api.ts'
 import { AgeBadge, BudgetMeter, KindChip, PhaseChip, PhaseSpine, ValidationBadge } from '../components/chips.tsx'
 import { DecidePanel } from '../components/decide.tsx'
+import { CloseRunPanel, ClosureRecordBlock } from '../components/close-run.tsx'
 import { DiffView } from '../components/diff-view.tsx'
 import { EvidenceRollupPanel, G2Packet } from '../components/evidence.tsx'
 import { G1Packet } from '../components/g1.tsx'
@@ -125,7 +126,8 @@ export function RunPage() {
   // A run at rest — paused, staged, or one whose phase names no position at all
   // — keeps its chip beside the spine, because "not moving" is not a position
   // in the sequence and must not be drawn as one.
-  const atRest = summary.phase === 'paused' || !PROFILE_PHASES[summary.profile].includes(summary.phase as Phase)
+  const atRest =
+    summary.phase === 'paused' || summary.phase === 'closed' || !PROFILE_PHASES[summary.profile].includes(summary.phase as Phase)
 
   const header = (
     <header className="mb-6">
@@ -147,7 +149,7 @@ export function RunPage() {
         <BranchRef refName={summary.ref} kind={summary.kind} url={detail.branchUrl} />
       </p>
       <div className="mt-[18px] flex flex-col items-start gap-2.5">
-        {atRest && <PhaseChip phase={summary.phase} pausedReason={summary.pausedReason} />}
+        {atRest && <PhaseChip phase={summary.phase} pausedReason={summary.pausedReason} closure={summary.closure} />}
         <PhaseSpine summary={summary} />
       </div>
     </header>
@@ -173,6 +175,7 @@ export function RunPage() {
         <div className="border-b border-line pb-7">
           {header}
           {stateErrorBlock}
+          {summary.phase === 'closed' && <ClosureRecordBlock source={src!} slug={slug!} closure={summary.closure} />}
           <RunMetadata summary={summary} board={board} />
         </div>
 
@@ -212,6 +215,7 @@ export function RunPage() {
           />
         )}
         {route.surface === 'history' && <HistoryTab history={detail.history} src={src!} slug={slug!} />}
+        <CloseRunPanel source={src!} slug={slug!} phase={summary.phase} />
       </div>
     </LexiconProvider>
   )
@@ -669,7 +673,7 @@ const LEDGER_TONE: Record<string, string> = {
 }
 
 /** Verbs that carry a decision, and so earn a filled marker on the spine. */
-const DECISION_KINDS = new Set(['gate-approved', 'gate-declined', 'escalation-resolved', 'paused', 'resumed', 'armed', 'staged'])
+const DECISION_KINDS = new Set(['gate-approved', 'gate-declined', 'escalation-resolved', 'paused', 'resumed', 'armed', 'staged', 'closed', 'reopened'])
 
 /**
  * The decision ledger (#268): `state.yaml`'s history read as the decisions and

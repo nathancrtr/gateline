@@ -137,6 +137,12 @@ which roles run and which gates exist. Three profiles, fixed sets, heaviest last
 | `standard` | Analyst, Architect, Implementer, Reviewer, Verifier | G0, G1, G2 | `spec → plan → implement → integrate → done` |
 | `full` | all eight | G0, G1, G2, G3 | `spec → plan → implement → integrate → release → done` |
 
+Any run of any profile can also end at `closed` — the terminal state for a run a human
+ends short of `done`, carrying a typed disposition
+(`already-delivered | superseded | obsolete | abandoned`) and a reason. It is a rest
+state overlaid on the sequence rather than a step in it: nothing derives from a closed
+run, and closing deletes nothing (ORCHESTRATOR.md §4.5).
+
 - **`patch`** — bug fixes and small bounded changes. The human authors the intent
   brief *and* a single work item (`tasks/01-*.yaml`) at init: the analyst/architect
   judgment being skipped is the human's to supply, not the engine's to improvise.

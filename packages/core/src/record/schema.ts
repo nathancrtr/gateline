@@ -13,8 +13,11 @@ export interface Identity {
   email: string
 }
 
-export const PHASES = ['spec', 'plan', 'implement', 'integrate', 'release', 'done', 'paused'] as const
+export const PHASES = ['spec', 'plan', 'implement', 'integrate', 'release', 'done', 'paused', 'closed'] as const
 export type Phase = (typeof PHASES)[number]
+
+/** Phases from which nothing further derives: the run's record is final. */
+export const TERMINAL_PHASES = ['done', 'closed'] as const
 
 export const PAUSED_REASONS = ['budget-exhausted', 'round-cap', 'escalation', 'gate-declined', 'staged'] as const
 export type PausedReason = (typeof PAUSED_REASONS)[number]
@@ -27,6 +30,41 @@ export const STAGED_REASON = 'staged' as const
 /** A run at rest because a human declined its gate — a decided run, not a
  * pending one (#200). Exported so no caller inlines the literal twice. */
 export const DECLINED_REASON = 'gate-declined' as const
+
+/**
+ * A run a human closed out before it reached `done` (#200) — a real phase, not
+ * another `paused_reason`.
+ *
+ * `staged` took the `paused_reason` route (ADR-1) and that was right: staging
+ * says only *that* the run is at rest. A closure also has to say *why*, and
+ * #263 proved a reason field cannot carry both — it holds one fact at a time,
+ * and a disposition hung off it would encode paused-ness and why-closed in one
+ * enum. The disposition is a property of a closed run, so the run gets a phase
+ * and the phase gets a record.
+ */
+export const CLOSED_PHASE = 'closed' as const
+
+/**
+ * Why a run was closed. Typed rather than free text because the distinction
+ * lives in the human's head at closing time and nowhere in the record: a
+ * disposition-less terminal state can never be re-derived into these
+ * categories later.
+ *
+ * `already-delivered` is emphatically not `abandoned`. A run whose work shipped
+ * by another path succeeded; recording that as the state four walked-away runs
+ * share would flatten it into "gave up" in the one place the project treats as
+ * its audit trail.
+ */
+export const CLOSURES = ['already-delivered', 'superseded', 'obsolete', 'abandoned'] as const
+export type Closure = (typeof CLOSURES)[number]
+
+/** What each disposition asserts, for the surfaces that have room to say it. */
+export const CLOSURE_MEANINGS: Record<Closure, string> = {
+  'already-delivered': 'the work shipped by another path; this record closes to match reality',
+  superseded: 'later work overtook it; nothing here is wanted anymore',
+  obsolete: 'the need itself went away',
+  abandoned: 'a deliberate walk-away mid-flight',
+}
 
 export const GATE_IDS = ['G0', 'G1', 'G2', 'G3'] as const
 export type GateId = (typeof GATE_IDS)[number]
@@ -45,10 +83,14 @@ export const PROFILE_GATES: Record<Profile, GateId[]> = {
   full: ['G0', 'G1', 'G2', 'G3'],
 }
 
-/** Which phases a run of each profile can legitimately be in. */
+/**
+ * Which phases a run of each profile can legitimately be in. `paused` and
+ * `closed` are rest states every profile can reach, not steps in the sequence —
+ * the spine filters both out rather than drawing them as positions.
+ */
 export const PROFILE_PHASES: Record<Profile, Phase[]> = {
-  patch: ['plan', 'implement', 'integrate', 'done', 'paused'],
-  standard: ['spec', 'plan', 'implement', 'integrate', 'done', 'paused'],
+  patch: ['plan', 'implement', 'integrate', 'done', 'paused', 'closed'],
+  standard: ['spec', 'plan', 'implement', 'integrate', 'done', 'paused', 'closed'],
   full: [...PHASES],
 }
 
@@ -114,6 +156,17 @@ const escalationSchema = z
   })
   .passthrough()
 
+// Written once, when a human closes the run; the counterpart of a gate entry
+// for a decision about the whole run rather than one artifact.
+const closureSchema = z
+  .object({
+    as: z.enum(CLOSURES),
+    by: yamlScalarToString.nullish().transform((v) => v ?? null),
+    at: yamlScalarToString.nullish().transform((v) => v ?? null),
+    reason: yamlScalarToString.nullish().transform((v) => v ?? null),
+  })
+  .passthrough()
+
 const budgetSchema = z
   .object({
     cost_limit_usd: z.number().nullish().transform((v) => v ?? null),
@@ -134,6 +187,7 @@ export const runStateSchema = z
       .nullish()
       .transform((v) => v ?? ('full' as Profile)),
     paused_reason: z.string().nullish().transform((v) => v ?? null),
+    closure: closureSchema.nullish().transform((v) => v ?? null),
     budget: budgetSchema.nullish().transform((v) => v ?? null),
     gates: z.object({
       G0: gateEntrySchema.optional(),
@@ -152,6 +206,11 @@ export const runStateSchema = z
       if (s.gates[gate] === undefined)
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['gates', gate], message: `required by profile ${s.profile}` })
     }
+    // A closed run without its closure record is malformed, not "closed for
+    // some reason": the disposition is the whole point of the phase, and a
+    // reader that guessed one would invent the fact the record exists to keep.
+    if (s.phase === CLOSED_PHASE && !s.closure)
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['closure'], message: `required when phase is ${CLOSED_PHASE}` })
   })
   .transform((s) => ({
     ...s,
@@ -167,6 +226,7 @@ export const runStateSchema = z
 
 export type GateEntry = z.infer<typeof gateEntrySchema>
 export type TaskEntry = z.infer<typeof taskEntrySchema>
+export type ClosureRecord = z.infer<typeof closureSchema>
 export type Escalation = z.infer<typeof escalationSchema>
 export type RunState = z.infer<typeof runStateSchema>
 

@@ -112,8 +112,9 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   fold new lessons into roles, contracts, or docs — and do not delete or rewrite
   `run/*` branches: frontend CI checks out full history, and the core/shadow tests
   walk finished runs.
-* **The orchestrator never writes `gates.*`.** Gate entries and the human decision
-  grammar (`G<N> approved by <name>`) are reserved for named humans; the
+* **The orchestrator never writes `gates.*` or `closure`.** Gate entries, the run's
+  closure record, and the human decision grammar (`G<N> approved by <name>`,
+  `closed by <name>`) are reserved for named humans; the
   orchestrator commits under its own bot identity and verbs
   (`dispatched | bounced | advanced | escalated | paused | metered | harvested`).
   Anything touching `state.yaml` follows the co-writer contract: compare-and-swap
@@ -139,6 +140,8 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   `gateline`):
   * inspect — `status`, `inbox`, `show <slug> [artifact]`
   * decide — `approve`, `decline`, `resolve-escalation`, `pause`, `resume`, `sync`
+  * end a run short of `done` — `close <slug> --as <disposition> --reason <text>`
+    (`already-delivered | superseded | obsolete | abandoned`); `reopen` undoes it
   * create a run — `new` stages `runs/<slug>/` on its branch; `arm <slug>` starts it
   * serve — `up [--repo <path>]` (Gatehouse + engine over one clone, the blessed
     topology), `ui` (viewer only), `upgrade` (pull + rebuild the web dist, then let

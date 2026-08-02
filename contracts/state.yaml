@@ -14,13 +14,18 @@
 #         state(<slug>): staged by <name> [client-key: <key>]
 #           (client-key suffix present only when a key was supplied at staging)
 #         state(<slug>): armed by <name>
+#         state(<slug>): closed by <name> [disposition: already-delivered]
+#         state(<slug>): reopened to <phase> by <name> (was closed as <disposition>)
 #       orchestrator bookkeeping verbs (bot identity only):
 #         state(<slug>): dispatched|bounced|advanced|escalated|paused|metered …
 
 run: example-slug
 branch: run/example-slug
-phase: spec               # spec | plan | implement | integrate | release | done | paused
+phase: spec               # spec | plan | implement | integrate | release | done | paused | closed
                           # (reduced profiles skip phases: see `profile` below)
+                          # `done` and `closed` are both terminal: `done` is a run
+                          # that finished its pipeline, `closed` one a human ended
+                          # short of it. Nothing derives from either.
 profile: full             # patch | standard | full — which roles run and which
                           # gates exist (DESIGN.md §4.1). Absent → full, so every
                           # pre-profile run record keeps its meaning. Recorded at
@@ -29,6 +34,28 @@ profile: full             # patch | standard | full — which roles run and whic
                           # escalates on a downgrade rather than guessing.
 paused_reason: null       # set when phase=paused: budget-exhausted | round-cap | escalation | gate-declined | staged
                           # (staged: a staged-but-unarmed run; `gateline arm` starts it)
+
+# closure:                # REQUIRED when phase=closed, absent otherwise. Written
+#                          # only by the named human who closed the run — the
+#                          # orchestrator never ends a run, it only pauses one.
+#   as: already-delivered  # already-delivered | superseded | obsolete | abandoned
+#                          #   already-delivered — the work shipped by another
+#                          #     path; this record closes to match reality
+#                          #   superseded — later work overtook it
+#                          #   obsolete — the need itself went away
+#                          #   abandoned — a deliberate walk-away mid-flight
+#                          # Typed, not free text: which of these a closure meant
+#                          # lives in the human's head at closing time and nowhere
+#                          # in the record, so an untyped closure can never be
+#                          # re-derived into a category later.
+#   by: someone            # the named human; never a bot identity
+#   at: 2026-01-01T00:00:00Z   # ISO-8601
+#   reason: "…"            # required — the comment on the disposition
+#
+# Closing decides a run; it deletes nothing. The branch, the run directory and
+# every artifact stay put, per the "completed runs are historical records"
+# invariant. A closure is reversible by `gateline reopen`, which clears this
+# block in a commit of its own.
 
 # intake:                 # optional; present only on runs created via the staging
 #                          # seam. Source-agnostic staging provenance — written once

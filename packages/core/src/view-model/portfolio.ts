@@ -1,7 +1,7 @@
 // Portfolio rows (interaction I6) and the cross-source inbox: pure
 // derivations over RunSource reads — nothing here is stored (rule R1).
 import { deriveReadiness, type InboxItem } from './readiness.ts'
-import type { GateEntry, Profile, RunState } from '../record/schema.ts'
+import type { ClosureRecord, GateEntry, Profile, RunState } from '../record/schema.ts'
 import type { RunRef, RunSource } from '../sources/source.ts'
 
 export interface GateLedgerCell {
@@ -18,6 +18,13 @@ export interface RunSummary {
   kind: RunRef['kind']
   phase: string
   pausedReason: string | null
+  /**
+   * Why the run was closed (#200), when it was. Carried on the summary rather
+   * than looked up per surface: every layer that renders `phase: closed` needs
+   * the disposition in the same breath, since "closed" alone is the untyped
+   * state the phase exists to avoid.
+   */
+  closure: ClosureRecord | null
   malformed: string | null
   /** Run profile (DESIGN.md §4.1); display layers filter the gate ledger through PROFILE_GATES. */
   profile: Profile
@@ -64,6 +71,7 @@ export async function summarizeRun(
         kind: ref.kind,
         phase: 'unknown',
         pausedReason: null,
+        closure: null,
         malformed: error ?? 'state.yaml unreadable',
         profile: 'full',
         gates: emptyLedger(),
@@ -87,6 +95,7 @@ export async function summarizeRun(
       kind: ref.kind,
       phase: state.phase,
       pausedReason: state.paused_reason,
+      closure: state.closure,
       malformed: null,
       profile: state.profile,
       gates: {

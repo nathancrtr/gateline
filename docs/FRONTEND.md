@@ -27,7 +27,7 @@ their contractual interactions with the pipeline. Enumerating those interactions
 | I1 | Author an intent brief | input | write `intent-brief.md` by hand |
 | I2 | Approve/decline gates G0–G3 | decision | read artifacts, edit `state.yaml` |
 | I3 | Resolve escalations (round-cap, ambiguity, `unverifiable`) | decision | notice them, somehow |
-| I4 | Resume/kill budget- or gate-paused runs | decision | edit `state.yaml` |
+| I4 | Resume paused runs, or close a run that ends short of `done` | decision | edit `state.yaml` |
 | I5 | Watch in-flight runs; steer/restart a bad dispatch | awareness | watch the harness session |
 | I6 | Portfolio view across runs (later: across teams/repos) | awareness | `ls runs/` |
 | I7 | Dispatch agents (v0 human orchestrator only) | operation | Claude Code session |
@@ -349,10 +349,32 @@ Four rules keep the spine a rendering of the record rather than a reading of it:
 - **Decided gates carry their approver and date in the open**, which is why the rail
   below no longer needs a Gates column. The rail keeps only what the spine cannot say:
   budget, rounds, divergence, freshness.
-- **`paused` and `staged` are overlaid, never positions.** A run at rest still stands
-  somewhere, so the spine marks where — the phase of its first unapproved gate — and
-  the chip beside it says why it is not moving. Nothing is on the table while a run is
-  at rest, so no gate reads as pending.
+- **`paused`, `staged` and `closed` are overlaid, never positions.** A run at rest
+  still stands somewhere, so the spine marks where — the phase of its first unapproved
+  gate — and the chip beside it says why it is not moving. Nothing is on the table
+  while a run is at rest, so no gate reads as pending. A closed run's chip carries its
+  disposition rather than the bare word "closed": the terminal phase exists precisely
+  so the record says why, and a chip that only said "closed" would put the untyped
+  state back on the screen.
+
+### 4.6 Closing a run (#200)
+
+Every other decision affordance hangs off an inbox item, because every other decision
+answers a question the run is asking. Closing answers none: it is the human deciding
+the run has stopped being worth asking about, and a run can reach that point with an
+empty inbox. So **close is a run-level affordance**, reachable from the run page
+whenever the run is neither `done` nor already closed — not a button on a card.
+
+The form requires both halves of the record: a typed disposition
+(`already-delivered | superseded | obsolete | abandoned`, each shown with what it
+asserts) and a reason. Neither is optional, and the confirm button names the
+disposition it is about to write. A closed run shows the closure record in its place
+— who closed it, when, why — with `Reopen this run…` beneath it, because a closure is
+a decision rather than a deletion and reversing it is another commit, not an undo.
+
+The panel says what closing does *not* do, because that is the question a destructive-
+looking control raises: the branch, the run directory, and every artifact stay exactly
+where they are.
 
 The header is also laid out for the 800–1000px band rather than degrading into it: the
 spine fills the width it is given, and the rail's columns grow instead of stacking into

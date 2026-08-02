@@ -67,6 +67,7 @@ describe('run discovery', () => {
     const slugs = [...refs.keys()].sort()
     expect(slugs).toEqual([
       'bad-state',
+      'closed-delivered',
       'done-merged',
       'escalated',
       'forked-contract',
@@ -212,6 +213,29 @@ describe('readiness derivation (§2.3, one row per test)', () => {
     const row = runs.find((r) => r.slug === 'paused-declined')
     expect(row).toMatchObject({ phase: 'paused', pausedReason: 'gate-declined', needsHuman: 0 })
     expect(inbox.some((i) => i.slug === 'paused-declined')).toBe(false)
+  })
+
+  it('closed: phase=closed needs nothing, even with an unresolved escalation on the run (#200)', async () => {
+    // The fixture carries an open escalation and a failed task. Both would
+    // raise items on any other run; a closure answers them wholesale, so the
+    // rule short-circuits ahead of every other row rather than after them.
+    expect(await gateItem('closed-delivered')).toEqual([])
+  })
+
+  it('closed runs keep their disposition on the portfolio row and stay off the inbox (#200)', async () => {
+    const { runs, inbox } = await buildPortfolio([ctx.source])
+    const row = runs.find((r) => r.slug === 'closed-delivered')
+    expect(row).toMatchObject({ phase: 'closed', needsHuman: 0 })
+    // The disposition rides on the summary: every surface that renders
+    // "closed" needs to say why in the same breath.
+    expect(row!.closure).toMatchObject({ as: 'already-delivered', by: 'operator' })
+    expect(row!.closure!.reason).toMatch(/landed by another path/)
+    expect(inbox.some((i) => i.slug === 'closed-delivered')).toBe(false)
+  })
+
+  it('the paused card offers closing rather than telling the human to decline a gate (#200)', async () => {
+    const items = await gateItem('paused-budget')
+    expect(items[0]!.detail).toBe('Resume the run, or close it with a disposition saying why it ends here')
   })
 
   it('a run paused FOR an escalation shows the escalation, not a second card restating it', async () => {

@@ -268,6 +268,34 @@ watcher turns that commit into a tick. **`state.yaml` is the entire control plan
 in both directions** — there is no orchestrator API, config channel, or command
 queue to keep consistent with it.
 
+#### Closing a run (#200)
+
+Pausing says "not now." Closing says "not at all." A run that stops short of `done`
+reaches `phase: closed` and carries a `closure` block naming a typed disposition:
+`already-delivered`, `superseded`, `obsolete`, or `abandoned`, plus a required
+reason and the named human who decided it.
+
+The disposition is typed rather than free text because the distinction lives in the
+human's head at closing time and nowhere in the record. A run whose work shipped by
+another path succeeded; recording that in the same state as a run someone walked
+away from would flatten it into "gave up" in the one place the project treats as its
+audit trail. An untyped closure can never be re-derived into these categories later.
+
+Three rules follow from it:
+
+* **The engine never closes a run.** Closing is a human decision, so `closure` joins
+  `gates.*` on the list of things the orchestrator only reads. The engine's own
+  terminal move is still `pause`, which asks for a human rather than answering for
+  one.
+* **A closed run rests under D1**, ahead of the escalation and round-cap rules. A
+  closure answers everything inside the run at once, so a closed run with an open
+  escalation raises nothing — asking a human to resolve an escalation on a run they
+  just ended would be asking them to repeat themselves.
+* **Closing decides a run; it deletes nothing.** The branch, the run directory, and
+  every artifact stay put, per the "completed runs are historical records"
+  invariant. `gateline reopen` undoes a closure in a commit of its own, returning
+  the run to the phase its gate ledger derives.
+
 ### 4.6 Scheduled roles: the Historian sweep
 
 Some roles are periodic, not gate-driven — the Historian (DESIGN.md §3) sweeps the

@@ -33,6 +33,7 @@ import {
   summarizeRun,
   validateArtifact,
   type Burden,
+  type Closure,
   type DecisionAction,
   type Disposition,
   type GateId,
@@ -485,6 +486,7 @@ export function createApp(deps: AppDeps): Hono {
       burden?: Burden
       escalationIndex?: number
       disposition?: Disposition
+      closure?: Closure
       pauseReason?: string
       resumePhase?: Phase
       hold?: boolean

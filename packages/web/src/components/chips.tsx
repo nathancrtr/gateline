@@ -1,7 +1,7 @@
 // The fixed status vocabulary: phases, gate states, inbox kinds, validation.
 // Used identically everywhere — status is encoded in form, not just color.
 import { Fragment } from 'react'
-import { PROFILE_GATES, type GateId, type InboxItem, type Profile, type RunSummary } from '../api.ts'
+import { PROFILE_GATES, type ClosureRecord, type GateId, type InboxItem, type Profile, type RunSummary } from '../api.ts'
 import { phaseSpine, type GateCell, type PhaseCell } from '../spine.ts'
 
 const PHASE_TONE: Record<string, { chip: string; mark: string }> = {
@@ -13,10 +13,33 @@ const PHASE_TONE: Record<string, { chip: string; mark: string }> = {
   done:       { chip: 'bg-ok-bg text-ok border-ok-line', mark: 'border-[1.5px] border-current bg-transparent' },
   paused:     { chip: 'bg-warn-bg text-warn border-warn-line', mark: 'border-[1.5px] border-current bg-transparent rounded-[2px]' },
   staged:     { chip: 'bg-transparent text-[#6f5a3a] border-dashed border-[#c9bfa9]', mark: 'border-[1.5px] border-current bg-transparent' },
+  closed:     { chip: 'bg-[#eeecea] text-[#5f5a54] border-[#d6d1ca]', mark: 'border-[1.5px] border-current bg-transparent rotate-45 rounded-[1px]' },
   unknown:    { chip: 'bg-bad-bg text-bad border-bad-line', mark: 'bg-current' },
 }
 
-export function PhaseChip({ phase, pausedReason }: { phase: string; pausedReason?: string | null }) {
+export function PhaseChip({
+  phase,
+  pausedReason,
+  closure,
+}: {
+  phase: string
+  pausedReason?: string | null
+  /** The closure record when phase is `closed` — the chip reads as its disposition (#200). */
+  closure?: ClosureRecord | null
+}) {
+  // A closed run is labelled by its disposition, not by the word "closed": the
+  // phase exists precisely so the record says why, and a chip reading "closed"
+  // alone would put the untyped terminal state back on the screen.
+  if (phase === 'closed') {
+    const t = PHASE_TONE.closed!
+    return (
+      <span data-phase-chip className={`inline-flex items-center gap-[6px] whitespace-nowrap rounded-md border px-[10px] py-[4px] text-[12.5px] font-semibold leading-none ${t.chip}`}>
+        <span className={`inline-block h-[9px] w-[9px] shrink-0 ${t.mark}`} />
+        <span>closed</span>
+        <span className="opacity-80">· {closure?.as ?? 'no disposition'}</span>
+      </span>
+    )
+  }
   // staged is a rest state — hollow ring marker, dashed chip, its own label.
   if (phase === 'paused' && pausedReason === 'staged') {
     const t = PHASE_TONE.staged!

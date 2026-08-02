@@ -12,20 +12,36 @@
 //                ∧ nothing else already speaks for the run
 //   Staged       phase=paused ∧ paused_reason = staged — awaiting arm, not resume/kill
 //   Declined     phase=paused ∧ paused_reason = gate-declined — no item at all
+//   Closed       phase=closed — no item at all, whatever else the record holds
 //
-// The last two rows are #200's surgical half. A `gate-declined` run is a
-// DECIDED run: the human already answered the gate, and the card it used to
-// show told them to "decline the pending gate to end the run" — the very thing
-// they had just done. It stays visible in the portfolio; it stops claiming to
-// need a decision. The known limit, and why #200 stays open: the record cannot
-// distinguish a decline that is a correction awaiting revival from one that is
-// a walk-away, because decline carries no typed disposition. #200's terminal
-// state with `already-delivered | superseded | obsolete | abandoned` is the
-// real fix; until it lands, a declined run at rest reads as at rest.
+// The last three rows are #200. A `gate-declined` run is a DECIDED run: the
+// human already answered the gate, and the card it used to show told them to
+// "decline the pending gate to end the run" — the very thing they had just
+// done. It stays visible in the portfolio; it stops claiming to need a
+// decision.
+//
+// `closed` is the other half, and it answers what a decline could not say: the
+// record now distinguishes a pause that awaits revival from a walk-away,
+// because a closure carries a typed disposition
+// (already-delivered | superseded | obsolete | abandoned). It short-circuits
+// before every other rule, including escalations — a human who closed a run
+// has answered everything inside it, and asking them to resolve an escalation
+// on a run they ended would be asking them to repeat themselves in the same
+// way the declined card once did.
 //
 // A gate whose packet is present but malformed yields a NON-reviewable item —
 // the bounce view (rule R3) — never a reviewable card.
-import { DECLINED_REASON, G2_COMPLETE_STATUSES, gateUndecided, GATE_PHASES, PROFILE_GATES, STAGED_REASON, type GateId, type RunState } from '../record/schema.ts'
+import {
+  CLOSED_PHASE,
+  DECLINED_REASON,
+  G2_COMPLETE_STATUSES,
+  gateUndecided,
+  GATE_PHASES,
+  PROFILE_GATES,
+  STAGED_REASON,
+  type GateId,
+  type RunState,
+} from '../record/schema.ts'
 import { validateArtifact, type Validation } from '../record/validate.ts'
 import type { RunRef, RunSource } from '../sources/source.ts'
 
@@ -106,6 +122,10 @@ export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<R
       validations,
     }
   }
+
+  // A closed run needs nothing from anyone — including the escalations and
+  // round caps below, which a closure answers wholesale rather than one by one.
+  if (state.phase === CLOSED_PHASE) return { items, validations }
 
   const artifacts = await source.listArtifacts(ref)
   const has = (p: string) => artifacts.includes(p)
@@ -191,7 +211,7 @@ export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<R
       source: ref.source,
       slug: ref.slug,
       title: `Run paused: ${state.paused_reason ?? 'no reason recorded'}`,
-      detail: 'Resume, or decline the pending gate to end the run',
+      detail: 'Resume the run, or close it with a disposition saying why it ends here',
       since: touched?.time ?? null,
       reviewable: true,
       problems: [],

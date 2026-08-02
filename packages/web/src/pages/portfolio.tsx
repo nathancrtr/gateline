@@ -173,7 +173,7 @@ export function PortfolioPage() {
                     ) : null}
                   </td>
                   <td className={TD}>
-                    <PhaseChip phase={run.phase} pausedReason={run.pausedReason} />
+                    <PhaseChip phase={run.phase} pausedReason={run.pausedReason} closure={run.closure} />
                   </td>
                   <td className={TD}>
                     <GateLedger gates={run.gates} profile={run.profile} />

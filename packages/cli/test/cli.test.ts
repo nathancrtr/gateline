@@ -126,6 +126,44 @@ describe('gateline CLI', () => {
     expect(paused.state!.phase).toBe('plan')
   })
 
+  it('close requires --as and --reason, then ends the run with a typed disposition (#200)', async () => {
+    const noDisposition = await run(['close', 'round-cap', '--reason', 'shipped elsewhere'], true)
+    expect(noDisposition.code).not.toBe(0)
+    expect(noDisposition.stderr).toMatch(/--as/)
+
+    const noReason = await run(['close', 'round-cap', '--as', 'already-delivered'], true)
+    expect(noReason.code).not.toBe(0)
+    expect(noReason.stderr).toMatch(/--reason/)
+
+    const junk = await run(['close', 'round-cap', '--as', 'whatever', '--reason', 'x'], true)
+    expect(junk.code).toBe(1)
+    expect(junk.stderr).toMatch(/--as must be one of/)
+
+    const { stdout } = await run(['close', 'round-cap', '--as', 'already-delivered', '--reason', 'Work landed via another PR.'])
+    expect(stdout).toMatch(/Close round-cap as "already-delivered"/)
+
+    const source = new LocalGitSource('fixture', fixture.dir)
+    const ref = (await source.listRuns()).find((r) => r.slug === 'round-cap')!
+    const { state } = await source.readState(ref)
+    expect(state!.phase).toBe('closed')
+    expect(state!.closure).toMatchObject({ as: 'already-delivered', by: 'Fixture Operator', reason: 'Work landed via another PR.' })
+  })
+
+  it('a closed run leaves the inbox, shows its disposition in status, and reopen puts it back (#200)', async () => {
+    const inbox = await run(['inbox'])
+    expect(inbox.stdout).not.toMatch(/round-cap/)
+
+    const status = await run(['status'])
+    expect(status.stdout).toMatch(/closed \(already-delivered\)/)
+
+    await run(['reopen', 'round-cap'])
+    const source = new LocalGitSource('fixture', fixture.dir)
+    const ref = (await source.listRuns()).find((r) => r.slug === 'round-cap')!
+    const { state } = await source.readState(ref)
+    expect(state!.phase).not.toBe('closed')
+    expect(state!.closure).toBeNull()
+  })
+
   it('refuses decisions on unknown runs', async () => {
     const { code, stderr } = await run(['approve', 'nope', 'G0', '--burden', 'confirmation'], true)
     expect(code).toBe(1)

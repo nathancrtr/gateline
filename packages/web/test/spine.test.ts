@@ -6,9 +6,22 @@ import {
   GATE_PHASES as CORE_GATE_PHASES,
   PROFILE_GATES as CORE_PROFILE_GATES,
   PROFILE_PHASES as CORE_PROFILE_PHASES,
+  CLOSURES as CORE_CLOSURES,
+  CLOSURE_MEANINGS as CORE_CLOSURE_MEANINGS,
 } from '@gateline/core/record'
 import { GATE_QUESTIONS as CORE_GATE_QUESTIONS, PATCH_G1_QUESTION as CORE_PATCH_G1_QUESTION } from '@gateline/core/view-model'
-import { GATE_PHASES, GATE_QUESTIONS, PATCH_G1_QUESTION, PROFILE_GATES, PROFILE_PHASES, type GateId, type Profile, type RunSummary } from '../src/api.ts'
+import {
+  CLOSURES,
+  CLOSURE_MEANINGS,
+  GATE_PHASES,
+  GATE_QUESTIONS,
+  PATCH_G1_QUESTION,
+  PROFILE_GATES,
+  PROFILE_PHASES,
+  type GateId,
+  type Profile,
+  type RunSummary,
+} from '../src/api.ts'
 import { phaseSpine, type GateCell, type PhaseCell } from '../src/spine.ts'
 
 type Ledger = RunSummary['gates']
@@ -46,6 +59,11 @@ describe('the mirrored vocabulary matches core', () => {
     expect(PROFILE_GATES).toEqual(CORE_PROFILE_GATES)
     expect(PROFILE_PHASES).toEqual(CORE_PROFILE_PHASES)
     expect(GATE_PHASES).toEqual(CORE_GATE_PHASES)
+  })
+
+  it('the closure vocabulary matches core — the disposition set is the record’s, not the UI’s (#200)', () => {
+    expect(CLOSURES).toEqual([...CORE_CLOSURES])
+    expect(CLOSURE_MEANINGS).toEqual(CORE_CLOSURE_MEANINGS)
   })
 
   it('the gate questions are quoted, not paraphrased', () => {
@@ -162,6 +180,15 @@ describe('rest states are overlaid, never a position in the sequence', () => {
 
   it('a moving run is never at rest', () => {
     expect(run({ phase: 'implement' }).rest).toBeNull()
+  })
+
+  it('closed rests where the run stopped and is never drawn as a position of its own (#200)', () => {
+    const spine = run({ phase: 'closed', gates: ledger({ G0: approved('operator', 'x') }) })
+    expect(spine.rest).toBe('closed')
+    expect(spine.position).toBe('plan') // G0 approved, G1 not
+    // The sequence is the profile's phases; `closed` is not one of its steps.
+    expect(phases(spine.cells)).not.toContain('closed')
+    expect(phaseCell(spine, 'plan')!.state).toBe('current')
   })
 
   it('a run whose gates are all approved rests at the end', () => {

@@ -3,7 +3,7 @@
 // storage locations: the tab bar this replaced was `Artifacts | Diff | History`,
 // a filesystem hierarchy standing in for the human's job at a gate.
 // Decision affordances live in the cards (M2 wires them to POST /api/decisions).
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 // genesis-preview candidate (state.yaml gates.G1.notes): the run header's
@@ -634,55 +634,43 @@ function RecordSurface({
     return <VerdictChip verdicts={report.rounds.map((r) => r.verdict)} compact />
   }
   return (
-    <div className="grid grid-cols-[280px_1fr] gap-0 max-md:flex max-md:flex-col border-b border-line">
-      <nav className="border-r border-line bg-surface py-[18px] max-md:w-full max-md:border-r-0">
-        <div className="font-mono text-[10.5px] tracking-[0.12em] uppercase text-muted px-[18px] pb-2.5">
-          Artifacts · runs/{detail.summary.slug}/
-        </div>
-        <ul className="flex flex-col max-md:flex-row max-md:flex-wrap">
-          {paths.map((p) => {
-            const v = detail.validations[p]
-            return (
-              <li key={p}>
-                <button
-                  onClick={() => onSelect(p)}
-                  data-artifact-entry={p}
-                  data-selected={!showDiff && p === current ? 'true' : undefined}
-                  className={`flex w-full items-center gap-2.5 px-[18px] py-2.5 text-left font-mono text-[12.5px] border-l-2 transition-colors ${
-                    !showDiff && p === current
-                      ? 'bg-accent-tint border-l-accent text-accent-deep font-semibold'
-                      : 'border-l-transparent text-[#4d4742] hover:bg-inset hover:text-ink'
-                  }`}
-                >
-                  {v && <ValidationBadge ok={v.ok} missing={v.missing} />}
-                  <span className="truncate">{p}</span>
-                  {verdictsFor(p) && <span className="ml-auto">{verdictsFor(p)}</span>}
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-        <div className="mt-3.5 border-t border-line pt-3.5">
-          <div className="font-mono text-[10.5px] tracking-[0.12em] uppercase text-muted px-[18px] pb-2.5">The change</div>
-          <button
-            onClick={() => onSelect(DIFF_SELECTION)}
-            data-select-diff
-            className={`flex w-full items-center gap-2.5 px-[18px] py-2.5 text-left font-mono text-[12.5px] border-l-2 transition-colors ${
-              showDiff
-                ? 'bg-accent-tint border-l-accent text-accent-deep font-semibold'
-                : 'border-l-transparent text-[#4d4742] hover:bg-inset hover:text-ink'
-            }`}
-          >
-            <span className="truncate">diff by surface</span>
-          </button>
+    <div className="grid grid-cols-[280px_1fr] gap-0 max-lg:flex max-lg:flex-col border-b border-line">
+      <nav className="border-r border-line bg-surface py-[18px] max-lg:w-full max-lg:border-r-0 max-lg:border-b max-lg:py-2.5">
+        <div className={`${NAV_LABEL} max-lg:px-3 max-lg:pb-1`}>Artifacts · runs/{detail.summary.slug}/</div>
+        <div className="max-lg:flex max-lg:flex-wrap max-lg:items-center max-lg:gap-x-1 max-lg:px-3">
+          <ul className="flex flex-col max-lg:contents">
+            {paths.map((p) => {
+              const v = detail.validations[p]
+              return (
+                <li key={p} className="max-lg:min-w-0">
+                  <button
+                    onClick={() => onSelect(p)}
+                    data-artifact-entry={p}
+                    data-selected={!showDiff && p === current ? 'true' : undefined}
+                    className={navEntryClass(!showDiff && p === current)}
+                  >
+                    {v && <ValidationBadge ok={v.ok} missing={v.missing} />}
+                    <span className="truncate">{p}</span>
+                    {verdictsFor(p) && <span className="ml-auto max-lg:ml-1">{verdictsFor(p)}</span>}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          <div className="mt-3.5 border-t border-line pt-3.5 max-lg:mt-0 max-lg:flex max-lg:items-center max-lg:border-t-0 max-lg:pt-0">
+            <div className={`${NAV_LABEL} max-lg:px-2 max-lg:pb-0 max-lg:py-1.5 max-lg:shrink-0`}>The change</div>
+            <button onClick={() => onSelect(DIFF_SELECTION)} data-select-diff className={navEntryClass(showDiff)}>
+              <span className="truncate">diff by surface</span>
+            </button>
+          </div>
         </div>
         {!showDiff && current && detail.validations[current] && !detail.validations[current].ok && (
-          <div className="mx-[18px] mt-3.5 rounded-sm border border-bad-line bg-bad-bg px-3 py-2.5 text-[12px] text-bad">
+          <div className="mx-[18px] mt-3.5 rounded-sm border border-bad-line bg-bad-bg px-3 py-2.5 text-[12px] text-bad max-lg:mt-2.5">
             Fails its {detail.validations[current].contract} contract — missing: {detail.validations[current].missing.join(', ')}
           </div>
         )}
       </nav>
-      <div className="min-w-0">
+      <ReaderPane>
         {showDiff ? (
           <DiffPane src={detail.summary.source} slug={detail.summary.slug} />
         ) : current ? (
@@ -690,9 +678,50 @@ function RecordSurface({
         ) : (
           <PageStatus text="No artifacts yet." />
         )}
-      </div>
+      </ReaderPane>
     </div>
   )
+}
+
+/** The picker's two section labels. Full-width rail below, an inline caption in
+ *  the strip above the reader. */
+const NAV_LABEL = 'font-mono text-[10.5px] tracking-[0.12em] uppercase text-muted px-[18px] pb-2.5'
+
+/**
+ * One picker entry, in both of the picker's shapes — and the artifact entries
+ * and the diff entry share it, so the two can no longer drift apart. Below `lg`
+ * the rail becomes a wrapping strip, so the selected mark moves from the left
+ * edge to the bottom edge: a left rule reads as a rail only when the entries are
+ * stacked. Only the mark and the tint depend on `active`; the shape never does.
+ */
+export const RECORD_ENTRY_SHAPE =
+  'flex w-full items-center gap-2.5 px-[18px] py-2.5 text-left font-mono text-[12.5px] border-l-2 transition-colors ' +
+  'max-lg:w-auto max-lg:max-w-full max-lg:border-l-0 max-lg:border-b-2 max-lg:px-2 max-lg:py-1.5'
+
+export function navEntryClass(active: boolean) {
+  return active
+    ? `${RECORD_ENTRY_SHAPE} bg-accent-tint border-l-accent border-b-accent text-accent-deep font-semibold`
+    : `${RECORD_ENTRY_SHAPE} border-l-transparent border-b-transparent text-[#4d4742] hover:bg-inset hover:text-ink`
+}
+
+/**
+ * The reader's own scroll container (#281). Whatever an artifact turns out to
+ * contain — a results table wider than the measure, a long command in a code
+ * block, a lexicon card hanging off the right of the reference it belongs to —
+ * stops here instead of widening the page body. Containment is the point: a page
+ * that scrolls sideways drags the header and the picker along with it, and below
+ * `lg` the reader is the column that keeps its width — the picker is the one
+ * that gives width up.
+ *
+ * No scroll cue rides along yet, unlike the portfolio table's pane (#297). It
+ * would lie: an idle lexicon card is `visibility: hidden`, not `display: none`,
+ * so it is still laid out 416px wide beside its reference and shows up in this
+ * pane's `scrollWidth` — 12px of phantom overflow at 1024px on the g2-pending
+ * fixture, with nothing to scroll to. The cue is worth adding once the card
+ * stops occupying layout while hidden.
+ */
+function ReaderPane({ children }: { children: ReactNode }) {
+  return <div className="min-w-0 overflow-x-auto">{children}</div>
 }
 
 function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: string }) {
@@ -711,11 +740,11 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
   if (error) return <PageStatus text={(error as Error).message} bad />
   const { content, validation } = data!
   return (
-    <article className="bg-reading-bg py-10 px-14 relative min-h-0">
+    <article className="bg-reading-bg py-10 px-14 relative min-h-0 max-lg:px-6 max-lg:py-7">
       <div className="mx-auto max-w-[76ch]">
-        <div className="flex items-center gap-2.5 font-mono text-[11.5px] text-muted pb-[18px] border-b border-line mb-[30px]">
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 font-mono text-[11.5px] text-muted pb-[18px] border-b border-line mb-[30px]">
           <span className="text-[#4d4742]">runs/{slug}/{path}</span>
-          <span className="ml-auto font-semibold">
+          <span className="ml-auto max-lg:ml-0 font-semibold">
             {validation.ok ? (
               <span className="text-ok"><span className="mr-1">✓</span>passes {validation.contract} contract</span>
             ) : (

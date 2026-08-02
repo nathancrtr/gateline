@@ -3,6 +3,42 @@
 import { Fragment, useEffect, useRef } from 'react'
 import { PROFILE_GATES, type ClosureRecord, type GateId, type InboxItem, type Profile, type RunSummary } from '../api.ts'
 import { gateNote, noteRung, phaseSpine, type GateCell, type PhaseCell, type SpineNoteRung } from '../spine.ts'
+import type { KeyHint } from '../use-keys.ts'
+
+/**
+ * The keyboard loop, said out loud (#284).
+ *
+ * Quiet by construction: mono, 10.5px, faint verbs — the register of the
+ * sidebar's "The repo is the database.", deliberately below every other line on
+ * the surface it sits on. It states keys and nothing else, so it can never grow
+ * into a second voice arguing with the decision card.
+ *
+ * The keys themselves are `<kbd>` in a hairline box. That is the one place the
+ * component spends contrast, and it earns it: without a frame `a approve · x
+ * decline` reads as prose, and the reader has to work out which words are the
+ * keystrokes.
+ *
+ * Callers decide *when* — most importantly `decide.tsx`, which shows its hints
+ * only while the card is idle, since inside a form `a` and `1` are characters.
+ */
+export function KeyHints({ hints, className = '' }: { hints: readonly KeyHint[]; className?: string }) {
+  if (hints.length === 0) return null
+  return (
+    <p data-key-hints className={`font-mono text-[10.5px] leading-[1.7] text-faint ${className}`}>
+      {hints.map(([key, verb], i) => (
+        <Fragment key={key}>
+          {i > 0 && (
+            <span aria-hidden="true" className="px-[5px] opacity-60">
+              ·
+            </span>
+          )}
+          <kbd className="rounded-[3px] border border-line bg-inset px-[4px] py-px font-mono text-[10px] text-muted">{key}</kbd>{' '}
+          {verb}
+        </Fragment>
+      ))}
+    </p>
+  )
+}
 
 const PHASE_TONE: Record<string, { chip: string; mark: string }> = {
   spec:       { chip: 'bg-[#f3eee5] text-[#6f5a3a] border-[#e2d6bd]', mark: 'bg-current' },
@@ -104,17 +140,23 @@ export function KindChip({ item }: { item: InboxItem }) {
   )
 }
 
+/** The clock glyph is a mark, not a letter, so it takes a word space rather
+ *  than the letter-spacing 2px gave it — set solid against "waiting" it read as
+ *  one malformed token (#285/7). The ≥3-day threshold it appears at is
+ *  unchanged. */
+const AGE_GLYPH = 'mr-[4px]'
+
 export function AgeBadge({ label, urgent, stale }: { label: string; urgent: boolean; stale?: boolean }) {
   if (stale) {
     return (
       <span className="shrink-0 font-mono text-[13px] font-bold leading-none tabular-nums text-bad" title="waiting since">
-        <span className="mr-[2px]">⏱</span>{label}
+        <span className={AGE_GLYPH}>⏱</span>{label}
       </span>
     )
   }
   return (
     <span className={`shrink-0 font-mono text-[13px] leading-none tabular-nums ${urgent ? 'font-semibold text-warn' : 'text-muted'}`} title="waiting since">
-      {urgent && <span className="mr-[2px]">⏱</span>}{label}
+      {urgent && <span className={AGE_GLYPH}>⏱</span>}{label}
     </span>
   )
 }
@@ -382,16 +424,25 @@ export function BudgetMeter({ limit, spent }: { limit: number | null; spent: num
   const used = spent ?? 0
   const over = used > limit
   const pct = Math.min(100, (used / limit) * 100)
+  // Nothing spent, so there is nothing to meter: the word alone (#285/5). The
+  // bar used to draw anyway, and because a 0%-wide fill is invisible it was
+  // floored at 4% — a tick that looks like a reading and is not one. The limit
+  // it was standing in for is still here, in the same tooltip the metered bar
+  // carries, and it comes back as a bar the moment a dispatch spends anything.
+  if (used === 0) {
+    return (
+      <span className="font-mono text-[11.5px] tabular-nums text-muted" title={`$0.00 of $${limit.toFixed(2)}`}>
+        unmetered
+      </span>
+    )
+  }
   return (
     <span className="inline-flex flex-col items-end gap-[3px]" title={`$${used.toFixed(2)} of $${limit.toFixed(2)}`}>
       <span className="h-[5px] w-[90px] overflow-hidden rounded-full border border-line bg-raised">
-        <span
-          className={`block h-full rounded-full ${over ? 'bg-bad' : used === 0 ? 'bg-faint' : 'bg-accent'}`}
-          style={{ width: `${used === 0 ? 4 : pct}%` }}
-        />
+        <span className={`block h-full rounded-full ${over ? 'bg-bad' : 'bg-accent'}`} style={{ width: `${pct}%` }} />
       </span>
       <span className={`font-mono text-[11.5px] tabular-nums ${over ? 'font-semibold text-bad' : 'text-muted'}`}>
-        {used === 0 ? 'unmetered' : `$${used.toFixed(0)} / $${limit.toFixed(0)}${over ? ' · over' : ''}`}
+        ${used.toFixed(0)} / ${limit.toFixed(0)}{over ? ' · over' : ''}
       </span>
     </span>
   )

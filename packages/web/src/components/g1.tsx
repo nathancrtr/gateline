@@ -102,16 +102,27 @@ function Coverage({ packet, src, slug }: { packet: G1PacketData; src: string; sl
               plan's mapping table.
             </p>
           )}
+          {/* The other direction of the same check, so it is boxed in the same
+              list (#285/8). It shipped as a bare line under the list and read
+              as leftover debug output: mono, unboxed, in the register of a
+              section label, attached to nothing — and sitting between the last
+              coverage box and the next group's heading, which is the one place
+              on this card that belongs to neither. A work item no mapping row
+              names is a coverage fact, so it is a row of the coverage list,
+              sibling to the requirement that names no task. */}
           <ul className="mt-1.5 flex flex-col gap-1">
             {[...uncovered, ...rest].map((row) => (
               <CoverageEntry key={row.id} row={row} />
             ))}
+            {packet.unmappedTasks.length > 0 && (
+              <li
+                className="rounded-[5px] border border-line bg-surface px-3 py-2 font-mono text-[11.5px] leading-[1.5] text-muted"
+                data-unmapped-tasks
+              >
+                no mapping row names: {packet.unmappedTasks.join(', ')}
+              </li>
+            )}
           </ul>
-          {packet.unmappedTasks.length > 0 && (
-            <p className="mt-1.5 font-mono text-[11.5px] text-muted" data-unmapped-tasks>
-              no mapping row names: {packet.unmappedTasks.join(', ')}
-            </p>
-          )}
         </>
       )}
     </div>

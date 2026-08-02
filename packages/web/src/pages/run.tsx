@@ -12,11 +12,11 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 // detail.state, and the genesis commit is the oldest entry already in
 // detail.history. No new server data (ADR-6 rider, ADR-7).
 import { readIntake } from '@gateline/core/record'
-import { useKeys } from '../use-keys.ts'
+import { useKeys, type KeyHint } from '../use-keys.ts'
 import { DIFF_SELECTION, decideTargetIndex, landingArtifact, resolveSurface, type Surface } from '../landing.ts'
 import { PROFILE_PHASES, api, formatAge, formatWhen, type InboxItem, type Phase, type RunDetailResponse, type RunSummary } from '../api.ts'
-import { AgeBadge, BudgetMeter, KindChip, PhaseChip, PhaseSpine, ValidationBadge } from '../components/chips.tsx'
-import { DecidePanel } from '../components/decide.tsx'
+import { AgeBadge, BudgetMeter, KeyHints, KindChip, PhaseChip, PhaseSpine, ValidationBadge } from '../components/chips.tsx'
+import { BOUNCED_INSTRUCTION, DecidePanel, ROUND_CAP_INSTRUCTION } from '../components/decide.tsx'
 import { CloseRunPanel, ClosureRecordBlock } from '../components/close-run.tsx'
 import { DiffView } from '../components/diff-view.tsx'
 import { EvidenceRollupPanel, G2Packet } from '../components/evidence.tsx'
@@ -28,6 +28,37 @@ import { RoundCapPanel } from '../components/rounds.tsx'
 import { PageStatus } from './inbox.tsx'
 
 const isReviewPath = (p: string) => /^review-\d+.*\.md$/.test(p)
+
+/**
+ * The record, in the order the pipeline wrote it (#285/4).
+ *
+ * The picker was alphabetical, which is not an order — it is the absence of
+ * one, and it put `review-01.md` above `spec.md` so the run's narrative came
+ * out as an accident of naming. Reading top to bottom is how anyone catches up
+ * on a run they did not watch happen, so the list reads the way the run went:
+ * brief, spec, plan, the work items, the reviews of them, the verification, the
+ * release plan, and `state.yaml` last as the ledger that records all of it.
+ *
+ * Ranks, not a comparator table: a file the framework has not met yet lands
+ * between the phases and the ledger rather than at an arbitrary end, and ties
+ * inside a rank stay alphabetical, which is the right order for `tasks/*` and
+ * `review-*` because their names are numbered.
+ */
+export function artifactRank(path: string): number {
+  if (path === 'intent-brief.md') return 0
+  if (path === 'spec.md') return 1
+  if (path === 'plan.md') return 2
+  if (path.startsWith('tasks/')) return 3
+  if (isReviewPath(path)) return 4
+  if (path === 'verification-report.md') return 5
+  if (path === 'release-plan.md') return 6
+  if (path === 'state.yaml') return 8
+  return 7
+}
+
+export function orderArtifacts(paths: readonly string[]): string[] {
+  return [...paths].sort((a, b) => artifactRank(a) - artifactRank(b) || a.localeCompare(b))
+}
 
 /** Bare grammar — words that carry no fact of their own, so a sentence built
  *  only from these plus words already on screen adds nothing to the screen. */
@@ -55,6 +86,67 @@ export function restatesWhatIsShown(line: string, shown: string): boolean {
   const vocabulary = new Set(words(shown))
   const carried = words(line).filter((w) => !GRAMMAR.has(w))
   return carried.length > 0 && carried.every((w) => vocabulary.has(w))
+}
+
+/**
+ * A decision card's problems, minus the ones its description has already said
+ * (#285/1).
+ *
+ * The malformed-state card carried the YAML parse error twice — once as
+ * `detail`, once as its single `problem` — because core writes the same string
+ * into both, and the card rendered both slots without ever comparing them.
+ * Byte equality is the whole test: a bounced gate's problems name the missing
+ * contract sections, which appear nowhere in its description, and every one of
+ * them still renders.
+ */
+export function visibleProblems(item: InboxItem): string[] {
+  return item.problems.filter((p) => p.trim() !== item.detail.trim())
+}
+
+/**
+ * The instruction a card with no button has to give, for the description slot
+ * (#285/6).
+ *
+ * Round-cap and bounce are the two decisions Gatehouse cannot offer a control
+ * for — one needs a spec edit, the other needs the artifacts fixed — so the
+ * sentence saying what to do instead *is* their affordance. It used to render
+ * where the buttons would have gone, at the card foot, right-aligned and small,
+ * which is the treatment for a footnote. Every other kind returns null and is
+ * unchanged: its instruction is a button.
+ */
+export function cardInstruction(item: InboxItem): { text: string; tone: string } | null {
+  if (item.kind === 'round-cap') return { text: ROUND_CAP_INSTRUCTION, tone: 'text-[#4d4742]' }
+  if (item.kind === 'gate' && !item.reviewable) return { text: BOUNCED_INSTRUCTION, tone: 'font-medium text-bad' }
+  return null
+}
+
+/**
+ * Whether a ledger row still needs its burden pill (#285/2).
+ *
+ * The row reads `G1 approved by operator [burden: light-correction]` — the
+ * commit subject, verbatim — and then drew a `light-correction` pill eight
+ * pixels to its right, which is the same fact from a second source rather than
+ * a second fact. The pill earns its place only where the subject does not carry
+ * the word: the v0 runs (wordfreq/mdtoc/dupefind) predate the bracketed grammar
+ * entirely, and there the decisions endpoint reading `state.yaml` is the only
+ * place the burden exists.
+ */
+export function burdenPillNeeded(detail: string, burden: string): boolean {
+  return !detail.includes(burden)
+}
+
+/**
+ * The highest review-round count across the run's tasks — or an em dash when
+ * there are no tasks to have a highest of (#285/5).
+ *
+ * `maxRounds` is a `reduce` over the task list seeded at 0, so a run with no
+ * plan yet reported the seed and the strip read "Max rounds 0", which is a
+ * broken-looking value standing where a fact should be. Zero *with* tasks is a
+ * true count — nothing has been reviewed yet — and stays printed, which is also
+ * what the portfolio's column has always done with the same number.
+ */
+export function maxRoundsLabel(tasks: RunSummary['tasks']): string {
+  return tasks.total > 0 ? String(tasks.maxRounds) : '—'
 }
 
 export function RunPage() {
@@ -92,7 +184,9 @@ export function RunPage() {
   const keyHandlers = useMemo(
     () => ({
       e: () => {
-        const paths = data?.artifacts ?? []
+        // The same order the picker is in, so `e` walks the list the reader is
+        // looking at rather than the alphabet behind it (#285/4).
+        const paths = orderArtifacts(data?.artifacts ?? [])
         if (!paths.length) return
         const current = new URLSearchParams(window.location.search).get('artifact')
         const idx = current ? paths.indexOf(current) : -1
@@ -149,6 +243,20 @@ export function RunPage() {
   const decideIndex = decideTargetIndex(params.get('decide'), items)
   const primaryIndex = decideIndex >= 0 ? decideIndex : items.findIndex((x) => x.reviewable)
 
+  // The run page's half of the keyboard loop, advertised (#284). `e` is only
+  // offered when there is something for it to cycle, and `esc` says where it
+  // actually goes rather than the vaguer "back": from an idle run page it is
+  // the inbox, and the only case where it means something else — closing an
+  // open decision form — is the case in which no hint is on screen at all.
+  const pageHints: KeyHint[] = [
+    ...(detail.artifacts.length > 0 ? ([['e', 'next artifact']] as KeyHint[]) : []),
+    ['esc', 'inbox'],
+  ]
+  // Whether a decision card is showing them for us. `DecidePanel` renders the
+  // hints for the primary card so they can vanish with the card's idle mode;
+  // that only happens on the Decide surface, and only when a card is primary.
+  const primaryCardHints = route.surface === 'decide' && primaryIndex >= 0
+
   // A run at rest — paused, staged, or one whose phase names no position at all
   // — keeps its chip beside the spine, because "not moving" is not a position
   // in the sequence and must not be drawn as one.
@@ -191,18 +299,34 @@ export function RunPage() {
         {detail.stateError ? (
           <p data-spine-unknown className="font-mono text-[11.5px] text-muted">sequence unknown — state.yaml unreadable</p>
         ) : (
-          <PhaseSpine summary={summary} />
+          // `items` is what switches on the bounced-gate tooltip (#285/9).
+          // #295 built the prop and could not turn it on: whether a packet is
+          // malformed lives on the inbox item's `reviewable` flag, never on
+          // `RunSummary`, so the spine can only learn it from the call site —
+          // and the call site is here.
+          <PhaseSpine summary={summary} items={items} />
         )}
       </div>
     </header>
   )
 
+  // The banner marks the state and shows the bytes; the parse error itself is
+  // said once, by the card (#285/1). All three of `stateError`, the card's
+  // `detail` and the card's single `problem` are the same string byte for byte,
+  // and this page rendered all three — the reader met one parse error three
+  // times before reaching the file it is about. Nothing is lost: the words are
+  // in the card a few hundred pixels down, and the excerpt they refer to is
+  // here — carrying the parse error as its hover text, so the diagnosis stays
+  // one gesture away on the Record and History surfaces too, where the card is
+  // a tab click rather than a scroll.
   const stateErrorBlock = detail.stateError ? (
     <div className="mb-6 rounded-md border border-bad-line bg-bad-bg px-3.5 py-3">
       <p className="text-[13px] font-semibold text-bad">Malformed run state</p>
-      <p className="mt-1 text-xs text-muted">{detail.stateError}</p>
       {detail.stateRaw && (
-        <pre className="mt-2.5 overflow-x-auto rounded-[4px] bg-inset p-2.5 font-mono text-[11.5px] leading-[1.5] text-ink">{detail.stateRaw}</pre>
+        <pre
+          title={detail.stateError}
+          className="mt-2.5 overflow-x-auto rounded-[4px] bg-inset p-2.5 font-mono text-[11.5px] leading-[1.5] text-ink"
+        >{detail.stateRaw}</pre>
       )}
     </div>
   ) : null
@@ -239,6 +363,7 @@ export function RunPage() {
                 detail={detail}
                 primary={i === primaryIndex}
                 sentHere={i === decideIndex}
+                pageHints={pageHints}
               />
             ))}
           </section>
@@ -257,6 +382,12 @@ export function RunPage() {
           />
         )}
         {route.surface === 'history' && <HistoryTab history={detail.history} src={src!} slug={slug!} />}
+        {/* The page's own keys, wherever the primary card is not already
+            carrying them (#284) — a surface with no decision on it, or one
+            whose cards are all bounced and drive no keyboard loop. Above the
+            close-run affordance, because a hint belongs with what it is a hint
+            about and not under the one destructive control on the page. */}
+        {!primaryCardHints && <KeyHints hints={pageHints} className="mt-3.5 text-right" />}
         <CloseRunPanel source={src!} slug={slug!} phase={summary.phase} />
       </div>
     </LexiconProvider>
@@ -346,7 +477,7 @@ function RunMetadata({ summary, board }: { summary: RunSummary; board: React.Rea
           </span>
           <Sep />
           <span>
-            Max rounds <span className="tabular-nums text-ink">{summary.tasks.maxRounds}</span>
+            Max rounds <span className="tabular-nums text-ink">{maxRoundsLabel(summary.tasks)}</span>
           </span>
           {diverged && (
             <>
@@ -391,12 +522,14 @@ function NeedsYouCard({
   detail,
   primary,
   sentHere,
+  pageHints,
 }: {
   item: InboxItem
   now: number
   detail: RunDetailResponse
   primary?: boolean
   sentHere?: boolean
+  pageHints?: readonly KeyHint[]
 }) {
   const urgent = item.since !== null && now - item.since > 3 * 86_400
   const ageLabel = `waiting ${formatAge(item.since, now)}`
@@ -405,6 +538,15 @@ function NeedsYouCard({
   // gate is in the chip, "waiting" is in the badge on the same line, and the
   // question is the title — so the line is words the reader has already read.
   const restated = restatesWhatIsShown(item.detail, `${item.title} ${item.slug} ${ageLabel}`)
+  // A malformed-state `detail` is a parser's diagnostic, not a sentence: a
+  // message, a blank line, the offending source line, and a caret under the
+  // column it failed at. Flowed as prose that caret wraps to wherever the
+  // measure happens to break and points at nothing — the "dangling caret" of
+  // #285/1. Mono and pre-wrap put it back under the character it names, and
+  // the string is still rendered byte for byte.
+  const diagnostic = item.detail.includes('\n')
+  const problems = visibleProblems(item)
+  const instruction = cardInstruction(item)
   // Arriving from an inbox link: bring the named card into view and give it
   // focus, so the decision is where the eye and the keyboard already are.
   const cardRef = useRef<HTMLElement>(null)
@@ -481,9 +623,19 @@ function NeedsYouCard({
         <h2 className="mt-2 mb-1.5 font-sans text-[24px] font-semibold leading-[1.2] tracking-[-0.015em] text-ink">
           <CitedText>{item.title}</CitedText>
         </h2>
-        {!restated && (
-          <p className="max-w-[76ch] text-[14.5px] text-[#4d4742] leading-[1.55]">
-            <CitedText>{item.detail}</CitedText>
+        {!restated &&
+          (diagnostic ? (
+            <pre className="max-w-[76ch] overflow-x-auto whitespace-pre-wrap font-mono text-[12.5px] leading-[1.55] text-[#4d4742]">
+              {item.detail}
+            </pre>
+          ) : (
+            <p className="max-w-[76ch] text-[14.5px] text-[#4d4742] leading-[1.55]">
+              <CitedText>{item.detail}</CitedText>
+            </p>
+          ))}
+        {instruction && (
+          <p data-card-instruction className={`mt-1.5 max-w-[76ch] text-[14.5px] leading-[1.55] ${instruction.tone}`}>
+            {instruction.text}
           </p>
         )}
         {mentionedTask && (
@@ -491,9 +643,9 @@ function NeedsYouCard({
             {mentionedTask.id} · {mentionedTask.status} · review round {mentionedTask.review_rounds}/3
           </p>
         )}
-        {item.problems.length > 0 && (
+        {problems.length > 0 && (
           <ul className="mt-2 flex flex-col gap-1">
-            {item.problems.map((p) => (
+            {problems.map((p) => (
               <li key={p} className="font-mono text-[12px] text-bad">
                 ✕ {p}
               </li>
@@ -516,7 +668,14 @@ function NeedsYouCard({
             rounds at once (#257). The chip list below still offers every report;
             this is the comparison the chips could not be. */}
         {item.kind === 'round-cap' && <RoundCapPanel src={item.source} slug={item.slug} task={mentionedTask?.id ?? null} />}
-        <DecidePanel item={item} profile={detail.summary.profile} primary={primary} sentHere={sentHere} chips={chips} />
+        <DecidePanel
+          item={item}
+          profile={detail.summary.profile}
+          primary={primary}
+          sentHere={sentHere}
+          chips={chips}
+          pageHints={pageHints}
+        />
       </div>
     </section>
   )
@@ -614,7 +773,7 @@ function RecordSurface({
   selected: string | null
   onSelect: (path: string) => void
 }) {
-  const paths = detail.artifacts
+  const paths = orderArtifacts(detail.artifacts)
   const showDiff = selected === DIFF_SELECTION
   // An explicit selection always wins; otherwise the pending gate's own packet
   // decides what opens (#250), and only then does filename order get a say.
@@ -724,6 +883,27 @@ function ReaderPane({ children }: { children: ReactNode }) {
   return <div className="min-w-0 overflow-x-auto">{children}</div>
 }
 
+/**
+ * The contract's name in the reader's badge — and nothing when the badge would
+ * only be echoing the filename beside it (#285/3).
+ *
+ * "runs/g2-pending/verification-report.md ✓ passes verification-report.md
+ * contract" says one filename twice in one strip, and the second one is what
+ * pushed the badge onto its own line in the narrow band. The path is already
+ * naming the file, which is the reviewer's argument, and it applies exactly
+ * where the two strings are the same string — `review-01.md` is checked against
+ * `review-report.md`, and naming that is the badge telling the reader something
+ * the path did not. Either way the full sentence is in the badge's hover text.
+ *
+ * A `null` contract — `retro.md` and anything else the framework checks for
+ * presence only — has no name to print, and printing it left a double space
+ * mid-sentence.
+ */
+export function contractBadgeName(path: string, contract: string | null): string {
+  if (contract === null || contract === path.split('/').pop()) return ''
+  return `${contract} `
+}
+
 function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: string }) {
   const { data, isLoading, error } = useQuery({
     queryKey: ['artifact', src, slug, path],
@@ -744,12 +924,14 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
       <div className="mx-auto max-w-[76ch]">
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 font-mono text-[11.5px] text-muted pb-[18px] border-b border-line mb-[30px]">
           <span className="text-[#4d4742]">runs/{slug}/{path}</span>
-          <span className="ml-auto max-lg:ml-0 font-semibold">
-            {validation.ok ? (
-              <span className="text-ok"><span className="mr-1">✓</span>passes {validation.contract} contract</span>
-            ) : (
-              <span className="text-bad"><span className="mr-1">✕</span>fails {validation.contract} contract</span>
-            )}
+          <span
+            className="ml-auto max-lg:ml-0 font-semibold"
+            title={validation.contract ? `${validation.ok ? 'passes' : 'fails'} the ${validation.contract} contract` : undefined}
+          >
+            <span className={validation.ok ? 'text-ok' : 'text-bad'}>
+              <span className="mr-1">{validation.ok ? '✓' : '✕'}</span>
+              {validation.ok ? 'passes' : 'fails'} {contractBadgeName(path, validation.contract)}contract
+            </span>
           </span>
         </div>
         {!validation.ok && (
@@ -875,8 +1057,15 @@ function HistoryTab({ history, src, slug }: { history: RunDetailResponse['histor
               <span className={`min-w-0 flex-1 truncate text-[13px] ${LEDGER_TONE[e.actor] ?? ''}`} title={h.subject}>
                 {e.detail}
               </span>
-              {/* Burden and notes come from the decisions endpoint, quoted, never scored. */}
-              {extra?.burden && (
+              {/* Burden and notes come from the decisions endpoint, quoted,
+                  never scored — and the pill is dropped when the commit
+                  subject beside it already says the same word (#285/2). The
+                  modern grammar writes `G1 approved by operator [burden:
+                  light-correction]`, so on those rows the pill was the fact
+                  restated eight pixels to its right. It still earns its place
+                  on the v0 runs, whose subjects predate the bracketed form and
+                  where the endpoint reading `state.yaml` is the only source. */}
+              {extra?.burden && burdenPillNeeded(e.detail, extra.burden) && (
                 <span className="shrink-0 rounded-xs border border-line px-1.5 py-px font-mono text-[10.5px] text-muted">{extra.burden}</span>
               )}
               {e.actor === 'orchestrator' && (

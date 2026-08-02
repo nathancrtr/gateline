@@ -1,0 +1,14 @@
+# Sweep dispatch marker — written by the orchestrator (schedule.ts); the
+# sweep's one-entry ledger. Merging this branch is the human approval and
+# makes this marker the next sweep's interval cutoff.
+sweep: historian-2026-08-02
+role: historian
+every: 7d
+at: 2026-08-02T02:07:47.641Z
+covering_since: 2026-07-25T20:42:14.706Z
+adapter: claude-code
+model: anthropic/claude-haiku-4-5
+cost_limit_usd: 5
+tokens_in: null
+tokens_out: null
+cost_usd: null

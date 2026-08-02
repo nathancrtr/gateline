@@ -19,6 +19,7 @@ import { AgeBadge, BudgetMeter, KindChip, PhaseChip, PhaseSpine, ValidationBadge
 import { DecidePanel } from '../components/decide.tsx'
 import { DiffView } from '../components/diff-view.tsx'
 import { EvidenceRollupPanel, G2Packet } from '../components/evidence.tsx'
+import { G1Packet } from '../components/g1.tsx'
 import { FindingsPanel, VerdictChip, useReviews } from '../components/findings.tsx'
 import { CitedObjects, CitedText, LexiconProvider, useRunLexicon } from '../components/lexicon.tsx'
 import { Markdown } from '../components/markdown.tsx'
@@ -403,6 +404,12 @@ function NeedsYouCard({
         {/* G2's packet, composed in criterion order (#256). The one-line
             citation map this replaced still renders on verification-report.md
             itself, where the report's own markdown is already on screen. */}
+        {/* G1's packet (#255): coverage against the plan's own mapping table,
+            and the surface overlaps no dependency orders. A patch run has no
+            plan.md and no spec, so its G1 keeps the brief-plus-work-item view. */}
+        {item.kind === 'gate' && item.gate === 'G1' && detail.summary.profile !== 'patch' && (
+          <G1Packet src={item.source} slug={item.slug} />
+        )}
         {item.kind === 'gate' && item.gate === 'G2' && (
           <G2Packet src={item.source} slug={item.slug} profile={detail.summary.profile} />
         )}

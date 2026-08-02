@@ -261,7 +261,43 @@ symptom of not being able to predict what a state needs; #249 closed the gate an
 profile vocabulary, so the prediction moved into the surface and one layout serves
 both.
 
-### 4.3 The round-cap surface (#257)
+### 4.3 The G1 surface (#255)
+
+G1 asks whether a change is built the way we'd want it, cut into safe parallel
+pieces. That is two claims, and the page helped check neither: `plan.md` and N task
+files rendered as sibling entries in an alphabetical list, opened one at a time.
+
+Both claims are mechanically checkable from committed state, and this is the check no
+external tool can do — only Gatehouse holds the work items and the spec together.
+
+- **Coverage.** `contracts/plan.md` mandates the Requirement → task mapping and says
+  an uncovered requirement is a malformed plan. Gatehouse has held both sides — the
+  spec's `R<n>` set and the mapping table — since it first had a lexicon, and never
+  compared them. A requirement no row names now leads the surface.
+- **Parallel safety.** `file_contact_surface` and `depends_on` are required work-item
+  keys. Two tasks with no dependency between them and an overlapping surface are the
+  decomposition defect G1 exists to catch: two implementers dispatched at once onto
+  one file.
+- **Decisions.** The ADR cards, elided by `buildLexicon` to the `**Choice:**` line
+  that is the decision in force, with the argument one click away and byte-identical.
+  An amended ADR carries its qualifier, which is how the record says which of two
+  same-numbered decisions is live.
+
+Coverage reports three independent statements about a requirement side by side rather
+than reconciling them: the spec defines it, the plan's table maps it to tasks, and a
+work item claims it. A requirement a task claims but the table omits is a different
+fact from one nothing mentions, and flattening them would hide the difference.
+
+Presence, not verdicts, as for G2. No coverage percentage and no plan score. An
+overlap a `depends_on` orders is shown as ordered rather than hidden — two tasks may
+touch one file by design, and that call is the approver's.
+
+A `patch` run has no `plan.md` and no spec, so its G1 keeps the brief-plus-work-item
+view unchanged. Where the plan carries no mapping table, or the work items follow a
+grammar this parser does not read, the affected half withholds itself and names the
+shape it looked for — the contracts' bounce rule, turned on the UI.
+
+### 4.4 The round-cap surface (#257)
 
 A round cap asks one narrow question: three rounds, still not converged, so which
 finding keeps coming back? The surface answers it by comparing the last two rounds
@@ -290,7 +326,7 @@ typed parse: where a run keeps a file per round, round 3's "F2 — resolved" nam
 finding round 2's file raised, and the earlier parse dropped it — making a decided part
 of the record unreachable, which no view here may do.
 
-### 4.4 The run header's phase spine (#254)
+### 4.5 The run header's phase spine (#254)
 
 The header shows a run's position as one sequence: the profile's phases left to right,
 with its gates drawn as the transitions between them. A gate is what moves a run from

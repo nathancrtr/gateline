@@ -130,6 +130,28 @@ describe('read routes', () => {
     expect(ac22.gap).toContain('no oversized sample')
   })
 
+  it('GET g1 returns coverage against the plan’s mapping and the surface overlaps (#255)', async () => {
+    const { status, body } = await get('/api/runs/fixture/g1-pending/g1')
+    expect(status).toBe(200)
+    expect(body.mappingWithheld).toBeNull()
+    expect(body.tasksWithheld).toBeNull()
+    // Every requirement the spec defines has a row; R3 is in no mapping row.
+    expect(body.coverage.map((r: { id: string }) => r.id)).toEqual(['R1', 'R2', 'R3'])
+    expect(body.coverage.find((r: { id: string }) => r.id === 'R3').mapped).toEqual([])
+    expect(body.coverage.find((r: { id: string }) => r.id === 'R1').mapped).toEqual(['01-core'])
+    // The pair nothing orders leads; the pair depends_on orders is marked, not dropped.
+    expect(body.overlaps[0]).toMatchObject({ a: '01-core', b: '02-errors', ordered: false })
+    expect(body.overlaps.find((o: { b: string }) => o.b === '03-cli')).toMatchObject({ ordered: true })
+    expect(body.unmappedTasks).toEqual(['03-cli'])
+  })
+
+  it('GET g1 withholds both halves on a run with no plan and no tasks (#255)', async () => {
+    const { body } = await get('/api/runs/fixture/g0-pending/g1')
+    expect(body.mappingWithheld).toContain('no `plan.md`')
+    expect(body.tasksWithheld).toContain('no `tasks/*.yaml`')
+    expect(body.overlaps).toEqual([])
+  })
+
   it('GET diff returns parsed hunks for a branch run and merged flag for done', async () => {
     const branch = await get('/api/runs/fixture/g2-pending/diff')
     expect(branch.status).toBe(200)

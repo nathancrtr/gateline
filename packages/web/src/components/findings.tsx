@@ -9,12 +9,105 @@
 // Severity ordering quotes the report's own severity cell — it does not judge
 // the finding. Nothing here computes a score, a count-based verdict, or a
 // pass/fail rollup, matching the line evidence.tsx draws for G2.
+//
+// This is also the module the three decide-packet surfaces (evidence.tsx,
+// g1.tsx, rounds.tsx) share: `FindingCard` is the row all three render, and
+// `Inline` and `PacketSweep` are the two pieces of quoting chrome all three
+// need. Chrome that only one surface uses stays in that surface's own file.
 import { useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api, type ReviewFinding, type ReviewReport, type Severity, type Verdict } from '../api.ts'
 import { CitedText } from './lexicon.tsx'
 
 const SEVERITY_RANK: Record<Severity, number> = { blocking: 0, major: 1, minor: 2, unknown: 3 }
+
+// ---------------------------------------------------------------------------
+// Quoting chrome shared by the packet surfaces.
+
+/**
+ * Inline markdown inside a quoted line (#282).
+ *
+ * A quoted slice of an artifact arrives as markdown, so `**…**` and `` `…` ``
+ * are syntax rather than words. Dropping the slice into a text node printed
+ * the marks themselves — a finding's disposition read `- **F2 — stands (round
+ * 2):** …`, asterisks and all — which is the packet disagreeing with the
+ * Record reader about the same bytes. Verbatim is still the rule: every word
+ * survives byte-identical, and only the marks around them stop being content.
+ *
+ * Two marks, because two are what the contracts' grammar actually uses. Text
+ * outside them still runs through the lexicon, so a finding that cites AC2.1
+ * resolves it where it stands.
+ */
+export function Inline({ children }: { children: string }) {
+  const re = /\*\*([^*]+?)\*\*|`([^`]+?)`/g
+  const parts: ReactNode[] = []
+  let last = 0
+  let key = 0
+  let m: RegExpExecArray | null
+  while ((m = re.exec(children))) {
+    if (m.index > last) parts.push(<CitedText key={key++}>{children.slice(last, m.index)}</CitedText>)
+    parts.push(
+      m[1] !== undefined ? (
+        <strong key={key++} className="font-semibold text-ink">
+          <CitedText>{m[1]}</CitedText>
+        </strong>
+      ) : (
+        <code key={key++} className="rounded-xs bg-inset px-1 font-mono text-[11px] text-accent-deep">
+          {m[2]}
+        </code>
+      ),
+    )
+    last = m.index + m[0].length
+  }
+  if (parts.length === 0) return <CitedText>{children}</CitedText>
+  if (last < children.length) parts.push(<CitedText key={key++}>{children.slice(last)}</CitedText>)
+  return <>{parts}</>
+}
+
+/** A disposition is quoted out of a markdown list, so it arrives carrying its
+ *  bullet. The bullet is the list's syntax, not the reviewer's word. */
+export const unbulleted = (text: string) => text.replace(/^\s*[-*]\s+/, '')
+
+/** The same line where markup cannot go — a `title` attribute holds text and
+ *  nothing else, so the marks come off there rather than being shown raw. */
+export const plainQuote = (text: string) =>
+  unbulleted(text).replace(/\*\*([^*]+?)\*\*|`([^`]+?)`/g, (_m, bold?: string, code?: string) => bold ?? code ?? '')
+
+/** The frame every decide packet draws itself in, and the label it hangs on
+ *  the frame. Shared so the pending state and the loaded state of one packet
+ *  cannot drift apart — the whole point of #299 is that they are one card. */
+export const PACKET_FRAME = 'mt-3.5 rounded-[5px] border border-line bg-inset px-3 py-2.5'
+export const PACKET_LABEL = 'font-mono text-[11px] uppercase tracking-wide text-muted'
+
+/**
+ * The in-flight body of a decide packet (#299).
+ *
+ * Every packet used to render nothing until its query resolved, so a gate card
+ * painted in a shape byte-identical to the legitimately packet-less G0 and G3
+ * cards and then shifted when the evidence arrived. The packet was the only
+ * part of the card with no loading representation — artifact reads already had
+ * one — and it is the card's reason to exist. Sweep lines inside the frame say
+ * "not here yet"; no frame at all says "there is none". Those are different
+ * facts and the operator is entitled to both.
+ *
+ * Approve/Decline stay enabled behind this: the point is honesty about pending
+ * content, not gating the human.
+ *
+ * The frame carries `aria-busy` and these lines are hidden from the tree — a
+ * sweep is a visual placeholder with nothing to read. Deliberately not a
+ * `role="status"` region: this renders inside the decide card, which already
+ * has one for the commit result, and a second would make "the card's status"
+ * ambiguous to a screen reader and to anything else asking for it.
+ */
+export function PacketSweep() {
+  return (
+    <div className="mt-2 flex flex-col gap-2" data-packet-pending aria-hidden="true">
+      <span className="skel block h-3.5 w-[70%]" />
+      <span className="skel block h-3.5 w-[90%]" />
+      <span className="skel block h-3.5 w-[60%]" />
+    </div>
+  )
+}
 
 const SEVERITY_TONE: Record<Severity, string> = {
   blocking: 'border-bad-line bg-bad-bg text-bad',
@@ -133,7 +226,7 @@ export function FindingCard({
                     ? 'border-ok-line bg-ok-bg text-ok'
                     : 'border-warn-line bg-warn-bg text-warn'
               }`}
-              title={finding.resolution?.text}
+              title={finding.resolution ? plainQuote(finding.resolution.text) : undefined}
             >
               {finding.resolution === null
                 ? 'details'
@@ -148,7 +241,12 @@ export function FindingCard({
           {finding.where && <Field label="Where">{finding.where}</Field>}
           {finding.failureScenario && <Field label="Failure scenario">{finding.failureScenario}</Field>}
           {finding.requirement && <Field label="Requirement">{finding.requirement}</Field>}
-          {finding.resolution && <Field label={`Round ${finding.resolution.round ?? '?'}`}>{finding.resolution.text}</Field>}
+          {/* The disposition is a list item in the report — `- **F2 — stands
+              (round 2):** …` — so it arrives with its bullet and its bold run
+              intact (#282). Both are markup; the words after them are not. */}
+          {finding.resolution && (
+            <Field label={`Round ${finding.resolution.round ?? '?'}`}>{unbulleted(finding.resolution.text)}</Field>
+          )}
           {extra}
         </dl>
       )}
@@ -158,13 +256,15 @@ export function FindingCard({
 
 /** Field values run through the lexicon (#252): a finding that cites R2/AC2.1
  *  resolves it where it stands, which is the whole point at a round cap — the
- *  requirement is where the suspected ambiguity lives. */
+ *  requirement is where the suspected ambiguity lives. They are quoted out of
+ *  markdown, so they run through `Inline` on the way (#282) — a Where cell is
+ *  usually a path in backticks, and backticks are not part of the path. */
 function Field({ label, children }: { label: string; children: string }) {
   return (
     <div className="flex flex-wrap gap-x-2">
       <dt className="shrink-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-faint">{label}</dt>
       <dd className="min-w-0 flex-1 text-muted">
-        <CitedText>{children}</CitedText>
+        <Inline>{children}</Inline>
       </dd>
     </div>
   )
@@ -177,9 +277,16 @@ function ranked(findings: ReviewFinding[]): ReviewFinding[] {
   )
 }
 
+/** The typed reports, with the read's own in-flight state. A packet has to tell
+ *  "no reports yet" from "no reports at all" (#299); every other caller only
+ *  ever wanted the reports, and keeps `useReviews`. */
+export function useReviewsQuery(src: string, slug: string): { reports: ReviewReport[] | undefined; pending: boolean } {
+  const { data, isPending } = useQuery({ queryKey: ['reviews', src, slug], queryFn: () => api.reviews(src, slug) })
+  return { reports: data?.reports, pending: isPending }
+}
+
 export function useReviews(src: string, slug: string): ReviewReport[] | undefined {
-  const { data } = useQuery({ queryKey: ['reviews', src, slug], queryFn: () => api.reviews(src, slug) })
-  return data?.reports
+  return useReviewsQuery(src, slug).reports
 }
 
 /** The findings panel above a review artifact's own markdown. */

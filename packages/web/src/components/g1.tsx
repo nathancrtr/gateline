@@ -24,18 +24,30 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { api, type CoverageRow, type G1Packet as G1PacketData, type SurfaceOverlap, type WorkItem } from '../api.ts'
+import { PACKET_FRAME, PACKET_LABEL, PacketSweep } from './findings.tsx'
 import { CitedText, useLexicon } from './lexicon.tsx'
 
 const artifactLink = (src: string, slug: string, path: string) =>
   `/runs/${src}/${slug}?tab=record&artifact=${encodeURIComponent(path)}`
 
 export function G1Packet({ src, slug }: { src: string; slug: string }) {
-  const { data } = useQuery({ queryKey: ['g1', src, slug], queryFn: () => api.g1(src, slug) })
+  const { data, isPending } = useQuery({ queryKey: ['g1', src, slug], queryFn: () => api.g1(src, slug) })
+  // Frame and label first, content when it arrives (#299). Rendering nothing
+  // while the read is in flight made this card indistinguishable from a gate
+  // that has no packet at all, and then shifted the buttons under the cursor.
+  if (isPending) {
+    return (
+      <section className={PACKET_FRAME} data-g1-packet aria-busy="true">
+        <p className={PACKET_LABEL}>G1 packet — composed from the record</p>
+        <PacketSweep />
+      </section>
+    )
+  }
   if (!data) return null
   const packet: G1PacketData = data
   return (
-    <section className="mt-3.5 rounded-[5px] border border-line bg-inset px-3 py-2.5" data-g1-packet>
-      <p className="font-mono text-[11px] uppercase tracking-wide text-muted">G1 packet — composed from the record</p>
+    <section className={PACKET_FRAME} data-g1-packet>
+      <p className={PACKET_LABEL}>G1 packet — composed from the record</p>
       <Coverage packet={packet} src={src} slug={slug} />
       <ParallelSafety packet={packet} src={src} slug={slug} />
       <Decisions src={src} slug={slug} />

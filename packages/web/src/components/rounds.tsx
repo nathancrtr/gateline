@@ -11,7 +11,17 @@
 // as not mentioned, never as resolved.
 import { Link } from 'react-router-dom'
 import { compareRounds, reportsForTask, type RoundFinding, type RoundSide } from '../rounds.ts'
-import { FindingCard, VerdictChip, useReviews } from './findings.tsx'
+import {
+  FindingCard,
+  Inline,
+  PACKET_FRAME,
+  PACKET_LABEL,
+  PacketSweep,
+  VerdictChip,
+  plainQuote,
+  unbulleted,
+  useReviewsQuery,
+} from './findings.tsx'
 
 const artifactLink = (src: string, slug: string, path: string) =>
   `/runs/${src}/${slug}?tab=record&artifact=${encodeURIComponent(path)}`
@@ -25,7 +35,17 @@ const NOTE_TONE: Record<RoundFinding['note'], string> = {
 }
 
 export function RoundCapPanel({ src, slug, task }: { src: string; slug: string; task: string | null }) {
-  const reports = useReviews(src, slug)
+  const { reports, pending } = useReviewsQuery(src, slug)
+  // "Not read yet" and "no reports in this record" are different facts (#299),
+  // and the second is the one an empty card already states. Say the first.
+  if (pending) {
+    return (
+      <section className={PACKET_FRAME} data-round-cap aria-busy="true">
+        <p className={PACKET_LABEL}>Rounds — composed from the record</p>
+        <PacketSweep />
+      </section>
+    )
+  }
   if (!reports || reports.length === 0) return null
   const scoped = reportsForTask(reports, task)
   const comparison = compareRounds(scoped)
@@ -37,8 +57,8 @@ export function RoundCapPanel({ src, slug, task }: { src: string; slug: string; 
   // and "every report one click away" has nowhere else to live.
   if (!comparison.ok) {
     return (
-      <section className="mt-3.5 rounded-[5px] border border-line bg-inset px-3 py-2.5" data-round-cap>
-        <p className="font-mono text-[11px] uppercase tracking-wide text-muted">Rounds — composed from the record</p>
+      <section className={PACKET_FRAME} data-round-cap>
+        <p className={PACKET_LABEL}>Rounds — composed from the record</p>
         <p className="mt-2 rounded-[4px] border border-warn-line bg-warn-bg px-2.5 py-2 text-[12px] leading-[1.5] text-warn" data-rounds-withheld>
           Round comparison withheld — {comparison.reason}.
         </p>
@@ -61,9 +81,9 @@ export function RoundCapPanel({ src, slug, task }: { src: string; slug: string; 
 
   const { earlier, later, standing, fresh, resolved } = comparison
   return (
-    <section className="mt-3.5 rounded-[5px] border border-line bg-inset px-3 py-2.5" data-round-cap>
+    <section className={PACKET_FRAME} data-round-cap>
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-        <p className="font-mono text-[11px] uppercase tracking-wide text-muted">
+        <p className={PACKET_LABEL}>
           Round {earlier.round} against round {later.round}
           {task ? ` · ${task}` : ''}
         </p>
@@ -146,7 +166,7 @@ function Group({
                 <span className="contents">
                   <span
                     className={`shrink-0 rounded-full border px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none ${NOTE_TONE[item.note]}`}
-                    title={item.disposition ?? undefined}
+                    title={item.disposition ? plainQuote(item.disposition) : undefined}
                   >
                     {item.note}
                   </span>
@@ -170,12 +190,16 @@ function Group({
 }
 
 /** A disposition written in a different file from the finding it names — the
- *  file-per-round shape. The card would otherwise have nowhere to show it. */
+ *  file-per-round shape. The card would otherwise have nowhere to show it.
+ *  Same bytes as the in-file case, so the same quoting: the bullet and the bold
+ *  run are the report's markdown, not the reviewer's words (#282). */
 function ExtraDisposition({ text }: { text: string }) {
   return (
     <div className="flex flex-wrap gap-x-2">
       <dt className="shrink-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-faint">Disposition</dt>
-      <dd className="min-w-0 flex-1 text-muted">{text}</dd>
+      <dd className="min-w-0 flex-1 text-muted">
+        <Inline>{unbulleted(text)}</Inline>
+      </dd>
     </div>
   )
 }

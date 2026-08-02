@@ -275,15 +275,26 @@ body {
 .lex-ref-missing {
   @apply text-warn;
 }
+/* Idle is `display: none`, not `visibility: hidden` (#308). Hidden-but-laid-out
+   hung a 416px box off `left: 0; top: 100%` of every reference on the page, and
+   an absolutely positioned box still counts toward an ancestor's `scrollWidth`
+   — so any page citing an id reported horizontal overflow with nothing to
+   scroll to, and any scroll cue driven off that number would have lied.
+   `display: none` costs nothing here: an idle card is unreachable either way
+   (`visibility: hidden` subtrees are no more focusable than absent ones), so
+   the keyboard path is unchanged — the reference itself carries `tabindex=0`,
+   focusing it displays the card, and only then does the jump link inside enter
+   the tab order, where `:focus-within` holds the card open.
+   The reveal must restore `display: flex`, not `block`: the card is a column. */
 .lex-card {
-  @apply invisible absolute left-0 top-full z-40 mt-1 flex w-[26rem] max-w-[80vw] flex-col gap-1.5 rounded-[5px] border border-line bg-surface px-3 py-2.5 text-left font-sans text-xs font-normal normal-case tracking-normal text-ink;
+  @apply absolute left-0 top-full z-40 mt-1 hidden w-[26rem] max-w-[80vw] flex-col gap-1.5 rounded-[5px] border border-line bg-surface px-3 py-2.5 text-left font-sans text-xs font-normal normal-case tracking-normal text-ink;
   box-shadow: var(--shadow-lift);
   white-space: normal;
 }
 .lex-ref:hover > .lex-card,
 .lex-ref:focus-within > .lex-card,
 .lex-ref:focus > .lex-card {
-  visibility: visible;
+  @apply flex;
 }
 .lex-card-head {
   @apply flex flex-wrap items-baseline gap-x-2 gap-y-0.5;

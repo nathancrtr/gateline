@@ -57,7 +57,12 @@ interface KnownBroken {
   invariant: InvariantId
 }
 
-type InvariantId = 'no-sideways-scroll' | 'one-row-spine' | 'finding-title-floor' | 'needs-you-visible'
+type InvariantId =
+  | 'no-sideways-scroll'
+  | 'one-row-spine'
+  | 'finding-title-floor'
+  | 'needs-you-visible'
+  | 'idle-card-collapsed'
 
 interface SweepState {
   name: string
@@ -81,44 +86,34 @@ interface SweepState {
 }
 
 /**
- * Why the page body currently scrolls sideways in the 800–1000 band, in the two
- * causes the sweep could separate — and it is worth being precise, because the
- * attribution turned out not to match the issues that filed the symptoms.
+ * The table is empty, and that is the finding.
  *
- * **#308 — the idle lexicon hover card.** `.lex-card` is `invisible absolute
- * left-0 top-full w-[26rem]`, and `visibility: hidden` still takes part in
- * layout (`display: none` would not). Every R/AC/ADR reference on the page
- * therefore hangs a 416px box off its own left edge, and a reference right of
- * centre pushes the page body — while showing nothing. The tell is a *constant*
- * measurement rather than a viewport-dependent one: the number is set by the
- * rightmost reference, so it reads the same at 800, 900 and 1000px.
+ * This file shipped declaring 17 broken combinations against two causes, and
+ * both are now closed — so every declaration was re-measured and removed rather
+ * than left standing. What they were, because the attribution is the part worth
+ * keeping:
  *
- * Suppressing `.lex-card` in the browser drops every state declared below to
- * exactly the viewport width, with one exception.
+ * **#308 — the idle lexicon hover card**, which owned 16 of the 17. `.lex-card`
+ * was `invisible absolute left-0 top-full w-[26rem]`, and `visibility: hidden`
+ * still takes part in layout (`display: none` does not). Every R/AC/ADR
+ * reference hung a 416px box off its own left edge, and a reference right of
+ * centre pushed the page body while showing nothing. The tell was a *constant*
+ * measurement rather than a viewport-dependent one: the number was set by the
+ * rightmost reference, so it read the same at 800, 900 and 1000px. The idle card
+ * is `display: none` now.
  *
- * **#281 — the Record pane.** That exception: with the card suppressed,
- * `verification-report.md` at 800px still measures 813px, a markdown table
- * escaping a reader that never decided what yields. That is #281's own
- * diagnosis, and stacking the picker plus an `overflow-x` guard is what closes
- * it. Note for anyone reading #281's filed table: its headline 1012px at all
- * three widths is #308's card, not the grid — 13px of that number is the pane.
+ * **#281 — the Record pane** owned the other one: with the card suppressed,
+ * `verification-report.md` at 800px still measured 813px, a markdown table
+ * escaping a reader that never decided what yields. Stacking the picker and
+ * making the reader its own `overflow-x` container closed it.
+ *
+ * These declarations were written before #281's fix landed, and re-running them
+ * after it showed 15 of the 16 #308 combinations already passing — not because
+ * the card had stopped being laid out, but because the reader pane now contains
+ * it. That containment is what `idle-card-collapsed` below exists for: on the
+ * Record tab a returning #308 would no longer reach the page body, so the
+ * sideways-scroll rule would never see it again.
  */
-const LEX_CARD = (widths: readonly number[]): KnownBroken => ({
-  issue: 308,
-  why: 'the idle .lex-card is laid out and hangs past the right edge; same measurement at every width in the band',
-  widths,
-  invariant: 'no-sideways-scroll',
-})
-
-const RECORD_PANE: KnownBroken = {
-  issue: 281,
-  why: 'a markdown table escapes the reader pane — 813px at 800px with .lex-card suppressed, so this part is the grid',
-  widths: [800],
-  invariant: 'no-sideways-scroll',
-}
-
-/** The band #308 reproduces in on the states below. */
-const BAND = [800, 900, 1000] as const
 
 /**
  * Every state worth laying out. The run surfaces are enumerated explicitly
@@ -136,12 +131,7 @@ const STATES: SweepState[] = [
 
   { name: 'g1-pending · decide', path: (s) => `/runs/${s}/g1-pending?decide=G1`, ready: '[data-g1-packet]' },
 
-  {
-    name: 'g2-pending · decide',
-    path: (s) => `/runs/${s}/g2-pending?decide=G2`,
-    ready: '[data-needs-card]',
-    broken: [LEX_CARD([800])],
-  },
+  { name: 'g2-pending · decide', path: (s) => `/runs/${s}/g2-pending?decide=G2`, ready: '[data-needs-card]' },
   { name: 'g2-pending · history', path: (s) => `/runs/${s}/g2-pending?tab=history`, ready: '[data-spine]' },
 
   { name: 'g3-pending · decide', path: (s) => `/runs/${s}/g3-pending?decide=G3`, ready: '[data-needs-card]' },
@@ -153,12 +143,7 @@ const STATES: SweepState[] = [
   { name: 'done-merged', path: (s) => `/runs/${s}/done-merged`, ready: '[data-spine]' },
   { name: 'patch-g1-pending', path: (s) => `/runs/${s}/patch-g1-pending?decide=G1`, ready: '[data-spine]' },
   { name: 'patch-g2-pending', path: (s) => `/runs/${s}/patch-g2-pending`, ready: '[data-spine]' },
-  {
-    name: 'forked-contract',
-    path: (s) => `/runs/${s}/forked-contract`,
-    ready: '[data-spine]',
-    broken: [LEX_CARD([800])],
-  },
+  { name: 'forked-contract', path: (s) => `/runs/${s}/forked-contract`, ready: '[data-spine]' },
   { name: 'malformed-spec · bounce', path: (s) => `/runs/${s}/malformed-spec?decide=G0`, ready: '[data-needs-card]' },
   { name: 'malformed-release · bounce', path: (s) => `/runs/${s}/malformed-release?decide=G3`, ready: '[data-needs-card]' },
   { name: 'bad-state', path: (s) => `/runs/${s}/bad-state`, ready: 'main' },
@@ -169,13 +154,14 @@ const STATES: SweepState[] = [
   // `?artifact=` rather than left to the landing rule, so the sweep cannot
   // quietly stop covering the wide ones when that rule changes.
   //
-  // The artifacts carrying R/AC/ADR references are the ones #308 reaches.
-  ...recordStates('g2-pending', ['verification-report.md'], [LEX_CARD(BAND), RECORD_PANE]),
-  ...recordStates('g2-pending', ['plan.md'], [LEX_CARD(BAND)]),
-  ...recordStates('round-cap', ['review-01.md', 'review-02.md'], [LEX_CARD(BAND)]),
-  ...recordStates('g1-pending', ['plan.md'], [LEX_CARD(BAND)]),
-  // …and these hold up as they are, which is what makes the list above a
-  // statement about those artifacts rather than about the Record tab.
+  // The first four carry R/AC/ADR references and were where #308 reproduced;
+  // `verification-report.md` is also the markdown table #281 was filed on. Kept
+  // named and separate now that both are closed, because they are the artifacts
+  // that put the most pressure on the reader.
+  ...recordStates('g2-pending', ['verification-report.md']),
+  ...recordStates('g2-pending', ['plan.md']),
+  ...recordStates('round-cap', ['review-01.md', 'review-02.md']),
+  ...recordStates('g1-pending', ['plan.md']),
   ...recordStates('g2-pending', ['spec.md', 'state.yaml', 'tasks/01-core.yaml']),
   ...recordStates('g1-pending', ['tasks/02-errors.yaml']),
   ...recordStates('malformed-spec', ['spec.md']),
@@ -208,6 +194,9 @@ interface Measurement {
   spineCells: number
   findingTitles: { id: string; width: number; floor: number }[]
   needsYou: { slug: string; overflowLeft: number; overflowRight: number }[]
+  /** Lexicon hover cards on the page. The sweep hovers and focuses nothing, so
+   *  every one of them is idle, and `laidOut` is how many still have a box. */
+  lexCards: { total: number; laidOut: number }
 }
 
 let fixtureDir: string
@@ -345,6 +334,20 @@ async function measure(p: Page): Promise<Omit<Measurement, 'state' | 'width'>> {
       }
     }
 
+    // Idle hover cards (#308). Asked of the box rather than of `display`, so
+    // the rule survives the fix being written another way — a zero-size
+    // wrapper, `content-visibility`, anything: what must be true is that an
+    // unrevealed card occupies no space, not that one particular property has
+    // one particular value.
+    const cards = [...document.querySelectorAll<HTMLElement>('.lex-card')]
+    const lexCards = {
+      total: cards.length,
+      laidOut: cards.filter((c) => {
+        const box = c.getBoundingClientRect()
+        return box.width > 0 || box.height > 0
+      }).length,
+    }
+
     // Only worth computing when there is something to explain. An element
     // under a scroll container is allowed past the edge — that containment is
     // the fix, not the bug — so anything with a non-visible `overflow-x`
@@ -381,6 +384,7 @@ async function measure(p: Page): Promise<Omit<Measurement, 'state' | 'width'>> {
       spineCells: spineCells.length,
       findingTitles,
       needsYou,
+      lexCards,
     }
   })
 }
@@ -438,6 +442,23 @@ const CHECKS: Record<InvariantId, (m: Measurement) => string | null> = {
       ? null
       : clipped.map((n) => `${n.slug} clipped by ${n.overflowLeft || n.overflowRight}px`).join('; ')
   },
+
+  /**
+   * #308: a hidden thing that is still laid out is a phantom. The idle lexicon
+   * card was `visibility: hidden`, so 416px of it sat beside every reference,
+   * pushing page width and poisoning every `scrollWidth` above it.
+   *
+   * Stated separately rather than left to `no-sideways-scroll`, because that
+   * rule can no longer see this defect where it started: the Record reader is
+   * an `overflow-x` container since #281, so a card returning to layout inside
+   * it would widen the reader's scroll extent — a cue with nothing to scroll
+   * to — without ever reaching the page body. The sideways rule caught 16
+   * combinations before #281's fix and would catch two after it.
+   */
+  'idle-card-collapsed': (m) =>
+    m.lexCards.laidOut > 0
+      ? `${m.lexCards.laidOut} of ${m.lexCards.total} idle .lex-card boxes still occupy layout`
+      : null,
 }
 
 /** The declarations, if any, that own this combination. */
@@ -489,31 +510,21 @@ test("the portfolio's needs-you mark is inside the visible pane at every width",
   expect(failures, `needs-you marks outside the pane:\n${failures.join('\n')}`).toEqual([])
 })
 
-/**
- * The debt, asserted rather than assumed.
- *
- * Every combination the table above declares broken is re-checked here under
- * the same rule. It is `fixme` because it fails today; drop the annotation once
- * #308 and #281 are both closed, and this becomes the proof that they are.
- * Keeping the excluded set inside a test — rather than as a quiet `continue` —
- * is what stops it growing without anyone noticing.
- */
-test.fixme('the states #281 and #308 own hold their invariants too', () => {
-  const declared = measurements.flatMap((m) =>
-    (Object.keys(CHECKS) as InvariantId[])
-      .filter((id) => declaredBroken(m.state, m.width, id).length > 0)
-      .map((id) => ({ m, id })),
-  )
-  expect(declared.length).toBeGreaterThan(0)
-  const failures = declared
-    .map(({ m, id }) => {
-      const problem = CHECKS[id](m)
-      if (problem === null) return null
-      const owners = declaredBroken(m.state, m.width, id)
-        .map((o) => `#${o.issue} — ${o.why}`)
-        .join('\n    ')
-      return `${m.state} @ ${m.width}px — ${problem}\n    ${owners}`
-    })
-    .filter((f): f is string => f !== null)
-  expect(failures, `declared-broken states still breaching:\n${failures.join('\n')}`).toEqual([])
+test('no idle lexicon hover card occupies layout at any width', () => {
+  // Non-vacuity: if the fixture ever stops citing ids, this rule quietly stops
+  // testing anything, and the defect it guards is exactly the kind that comes
+  // back in a refactor.
+  const cards = measurements.reduce((n, m) => n + m.lexCards.total, 0)
+  expect(cards, 'no .lex-card rendered anywhere in the sweep').toBeGreaterThan(100)
+  const failures = sweep('idle-card-collapsed')
+  expect(failures, `idle hover cards still laid out:\n${failures.join('\n')}`).toEqual([])
 })
+
+// The `test.fixme` that used to close this file is gone, and so is everything it
+// re-asserted. It existed to hold #281 and #308 declared-but-unfixed; both are
+// closed, the `broken` table above is empty, and all five rules now run against
+// every state at every width with nothing excluded. The mechanism stays —
+// `KnownBroken`, `declaredBroken`, the `broken` field — because the next defect
+// found this way should be declared in the table with an owner rather than
+// absorbed into a weakened assertion. Re-add the fixme alongside the first entry
+// that needs it.

@@ -159,6 +159,37 @@ test('run lexicon (#163): ids resolve to verbatim hover cards and jump to their 
   await expect(page.locator('.prose-artifact li .lex-ref', { hasText: 'AC1.1' })).toHaveCount(0)
 })
 
+test('run lexicon (#308): the idle card takes no space, and the keyboard still opens it', async ({ page }) => {
+  // #308 made the idle card `display: none` instead of `visibility: hidden`,
+  // which had left 416px of nothing laid out beside every reference on the page.
+  // The reachability question that made it more than a one-liner: a
+  // `display: none` subtree is not focusable, so if the keyboard reached the
+  // card by tabbing *into* it the toggle would have locked it out. It does not
+  // — the reference itself carries the tabindex, focusing it displays the card,
+  // and only then does the jump link enter the tab order. This test is that
+  // sequence, in order, because each step depends on the one before.
+  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=verification-report.md')
+  const ref = page.locator('.prose-artifact .lex-ref', { hasText: 'AC1.1' }).first()
+  await expect(ref).toBeVisible()
+  const card = ref.locator('.lex-card')
+  // Idle: hidden *and* occupying nothing. `toBeHidden` alone passed on the
+  // phantom, which is why the defect survived to a design review.
+  await expect(card).toBeHidden()
+  expect(await card.evaluate((el) => el.getBoundingClientRect().width)).toBe(0)
+
+  await ref.focus()
+  await expect(card).toBeVisible()
+  // A column, not a block: the card is `flex-col`, so the reveal has to restore
+  // `display: flex` — `block` would stack its rows with the wrong box model.
+  expect(await card.evaluate((el) => getComputedStyle(el).display)).toBe('flex')
+
+  await page.keyboard.press('Tab')
+  await expect(page.locator('.lex-card-jump:focus')).toHaveCount(1)
+  await expect(card).toBeVisible() // :focus-within holds it open
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/artifact=spec\.md/)
+})
+
 test('evidence rollup (#165): uncited criteria are the headline; anchors jump to the evidence block', async ({ page }) => {
   // The one-line citation map now lives where the report itself is on screen;
   // G2's decision card carries the composed packet instead (#256).

@@ -143,6 +143,11 @@ export function deriveAction(obs: RunObservation): DerivedAction {
   const { state } = obs
   if (!state) return rest('D0', `state.yaml malformed — a human owns it (${obs.stateError ?? 'unreadable'})`)
   if (state.phase === 'done') return rest('D1', 'run complete')
+  // A closure is a human's decision that the run ends here (#200) — the engine
+  // rests on it exactly as it rests on `done`, and ahead of the escalation and
+  // round-cap checks below, which a closure answers wholesale.
+  if (state.phase === 'closed')
+    return rest('D1', `closed as ${state.closure?.as ?? 'unknown'} by ${state.closure?.by ?? 'a human'} — the run's record is final`)
   if (state.phase === 'paused')
     return rest('D2', `paused (${state.paused_reason ?? 'no reason recorded'}) — resume is a human decision`)
   if (state.escalations.some((e) => !e.resolved)) return rest('D3', 'unresolved escalation — the run has a human’s attention')

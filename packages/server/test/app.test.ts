@@ -78,7 +78,7 @@ describe('read routes', () => {
   it('GET /api/runs returns the portfolio', async () => {
     const { status, body } = await get('/api/runs')
     expect(status).toBe(200)
-    expect(body.runs).toHaveLength(14)
+    expect(body.runs).toHaveLength(15)
     const done = body.runs.find((r: { slug: string }) => r.slug === 'done-merged')
     expect(done.phase).toBe('done')
     expect(done.needsHuman).toBe(0)
@@ -391,6 +391,33 @@ Everything else.
     const { status, body } = await postJson('/api/decisions', { source: 'fixture', slug: 'g0-pending', action: 'arm' })
     expect(status).toBe(400)
     expect(body.error).toMatch(/not staged/)
+  })
+
+  it('closes a run over the existing decision path — no new route (#200)', async () => {
+    const { status, body } = await postJson('/api/decisions', {
+      source: 'fixture',
+      slug: 'paused-budget',
+      action: 'close',
+      closure: 'superseded',
+      notes: 'later work overtook this',
+    })
+    expect(status).toBe(200)
+    expect(body.summary).toBe('Close paused-budget as "superseded"')
+    const subject = git(['log', '-1', '--format=%s', 'run/paused-budget']).trim()
+    expect(subject).toBe('state(paused-budget): closed by Fixture Operator [disposition: superseded]')
+  })
+
+  it('refuses a closure with no disposition — the body field is required, not defaulted (#200)', async () => {
+    const { status, body } = await postJson('/api/decisions', { source: 'fixture', slug: 'g0-pending', action: 'close', notes: 'just close it' })
+    expect(status).toBe(400)
+    expect(body.error).toMatch(/requires a disposition/)
+  })
+
+  it('reopens a closed run over the same path (#200)', async () => {
+    const { status } = await postJson('/api/decisions', { source: 'fixture', slug: 'closed-delivered', action: 'reopen' })
+    expect(status).toBe(200)
+    const subject = git(['log', '-1', '--format=%s', 'run/closed-delivered']).trim()
+    expect(subject).toMatch(/^state\(closed-delivered\): reopened to \S+ by Fixture Operator \(was closed as already-delivered\)$/)
   })
 
   it('refuses staging with the no-identity message stageRun already returns, and creates no branch (AC4.1)', async () => {

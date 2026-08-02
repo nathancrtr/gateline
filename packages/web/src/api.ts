@@ -7,6 +7,8 @@
 // type-only; the exception is scoped to that one subpath and that one page.
 import type {
   Burden,
+  Closure,
+  ClosureRecord,
   DecisionAction,
   Disposition,
   DiffFile,
@@ -38,6 +40,8 @@ import type {
 
 export type {
   Burden,
+  Closure,
+  ClosureRecord,
   CriterionEvidence,
   DiffFile,
   Disposition,
@@ -81,9 +85,9 @@ export const PROFILE_GATES: Record<Profile, GateId[]> = {
 
 /** Which phases a run of each profile passes through — the spine's sequence (#254). */
 export const PROFILE_PHASES: Record<Profile, Phase[]> = {
-  patch: ['plan', 'implement', 'integrate', 'done', 'paused'],
-  standard: ['spec', 'plan', 'implement', 'integrate', 'done', 'paused'],
-  full: ['spec', 'plan', 'implement', 'integrate', 'release', 'done', 'paused'],
+  patch: ['plan', 'implement', 'integrate', 'done', 'paused', 'closed'],
+  standard: ['spec', 'plan', 'implement', 'integrate', 'done', 'paused', 'closed'],
+  full: ['spec', 'plan', 'implement', 'integrate', 'release', 'done', 'paused', 'closed'],
 }
 
 /** The phases in which each gate's decision is on the table. */
@@ -104,6 +108,17 @@ export const GATE_QUESTIONS: Record<GateId, string> = {
 
 /** In a patch run G1 absorbs the G0 question — brief and work item are approved together. */
 export const PATCH_G1_QUESTION = 'Is this the change we want, scoped this way?'
+
+/** Why a run was closed short of `done` (#200) — mirror of core's CLOSURES. */
+export const CLOSURES: Closure[] = ['already-delivered', 'superseded', 'obsolete', 'abandoned']
+
+/** What each disposition asserts — mirror of core's CLOSURE_MEANINGS. */
+export const CLOSURE_MEANINGS: Record<Closure, string> = {
+  'already-delivered': 'the work shipped by another path; this record closes to match reality',
+  superseded: 'later work overtook it; nothing here is wanted anymore',
+  obsolete: 'the need itself went away',
+  abandoned: 'a deliberate walk-away mid-flight',
+}
 
 /** Typed review reports for a run (#214), keyed by artifact path. */
 export interface ReviewsResponse {
@@ -245,6 +260,7 @@ export interface DecisionRequest {
   burden?: Burden
   escalationIndex?: number
   disposition?: Disposition
+  closure?: Closure
   pauseReason?: string
   resumePhase?: Phase
   hold?: boolean

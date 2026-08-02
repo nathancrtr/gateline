@@ -45,15 +45,17 @@ function readStateBits(raw: string | null): {
   profile: Profile | null
   phase: string | null
   pausedReason: string | null
+  closure: { as: string; by: string | null; reason: string | null } | null
   gates: { id: string; approved: boolean }[]
 } {
-  if (raw === null) return { profile: null, phase: null, pausedReason: null, gates: [] }
+  if (raw === null) return { profile: null, phase: null, pausedReason: null, closure: null, gates: [] }
   const state = parseRunState(raw).state
   if (state) {
     return {
       profile: state.profile,
       phase: state.phase,
       pausedReason: state.paused_reason,
+      closure: state.closure ? { as: state.closure.as, by: state.closure.by, reason: state.closure.reason } : null,
       gates: Object.entries(state.gates).map(([id, gate]) => ({ id, approved: gate.approved })),
     }
   }
@@ -64,6 +66,9 @@ function readStateBits(raw: string | null): {
     profile: profileMatch && (PROFILES as readonly string[]).includes(profileMatch[1]!) ? (profileMatch[1] as Profile) : null,
     phase: phaseMatch ? phaseMatch[1]! : null,
     pausedReason: pausedMatch ? pausedMatch[1]! : null,
+    // A state file too broken to validate keeps its phase but loses the
+    // structured closure; the banner thins rather than guessing a disposition.
+    closure: null,
     gates: [],
   }
 }

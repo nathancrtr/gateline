@@ -37,6 +37,8 @@ export type LedgerKind =
   | 'resumed'
   | 'armed'
   | 'staged'
+  | 'closed'
+  | 'reopened'
   // Orchestrator verbs — orchestrator/src/engine.ts.
   | 'dispatched'
   | 'bounced'
@@ -151,6 +153,16 @@ export function parseLedgerSubject(subject: string): LedgerEntry {
   // `staged by Nathan Carter [client-key: …]`
   const staged = /^staged by (.+?)(?: \[client-key: [^\]]*\])?$/.exec(detail)
   if (staged) return { ...base, kind: 'staged', actor: 'human', verb: 'staged', by: staged[1] ?? null }
+
+  // `closed by Nathan Carter [disposition: already-delivered]` (#200). The
+  // disposition is not lifted into a field: `detail` is rendered verbatim, so
+  // the record's own words already carry it.
+  const closed = /^closed by (.+?)(?: \[disposition: [^\]]*\])?$/.exec(detail)
+  if (closed) return { ...base, kind: 'closed', actor: 'human', verb: 'closed', by: closed[1] ?? null }
+
+  // `reopened to implement by Nathan Carter (was closed as abandoned)`
+  const reopened = /^reopened to \S+ by (.+?)(?: \(was closed as .*\))?$/.exec(detail)
+  if (reopened) return { ...base, kind: 'reopened', actor: 'human', verb: 'reopened', by: reopened[1] ?? null }
 
   // --- Orchestrator verbs ----------------------------------------------
   // Checked after the human set so that a run slugged e.g. "dispatched" cannot

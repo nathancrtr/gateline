@@ -14,6 +14,8 @@ import {
   buildLexicon,
   buildPortfolio,
   BURDENS,
+  CLOSURE_MEANINGS,
+  CLOSURES,
   DecisionError,
   DISPOSITIONS,
   ensureDraftPr,
@@ -33,6 +35,7 @@ import {
   SLUG_PATTERN,
   SUPERSEDE_EXIT_CODE,
   type Burden,
+  type Closure,
   type DecisionInput,
   type Disposition,
   type GateId,
@@ -117,7 +120,9 @@ program
     if (runs.length === 0) return console.log('no runs found')
     const rows = runs.map((r) => ({
       run: `${r.source}/${r.slug}`,
-      phase: r.phase + (r.pausedReason ? ` (${r.pausedReason})` : ''),
+      // A closed run reads as its disposition, never bare "closed": the whole
+      // point of the phase is that it says why (#200).
+      phase: r.phase + (r.closure ? ` (${r.closure.as})` : r.pausedReason ? ` (${r.pausedReason})` : ''),
       gates: PROFILE_GATES[r.profile].map((g) => GATE_GLYPH(r.gates[g].approved, r.gates[g].decided)).join(' '),
       tasks: r.tasks.total ? `${r.tasks.done}/${r.tasks.total}` : '—',
       updated: age(r.updatedAt),
@@ -352,6 +357,30 @@ program
   .option('--source <id>')
   .action(async (slug: string, flags: DecideFlags) => {
     await decide(slug, flags, { action: 'resume', resumePhase: flags.phase as Phase | undefined })
+  })
+
+program
+  .command('close')
+  .description('close a run that ends short of done, with a typed disposition (#200)')
+  .argument('<slug>', 'run slug')
+  .requiredOption('--as <disposition>', CLOSURES.map((c) => `${c} — ${CLOSURE_MEANINGS[c]}`).join('; '))
+  .requiredOption('--reason <text>', 'the comment on the disposition — why this run ends here')
+  .option('--source <id>')
+  .action(async (slug: string, flags: DecideFlags & { as: string }) => {
+    if (!(CLOSURES as readonly string[]).includes(flags.as)) {
+      console.error(`--as must be one of: ${CLOSURES.join(' | ')}`)
+      process.exit(1)
+    }
+    await decide(slug, flags, { action: 'close', closure: flags.as as Closure, notes: flags.reason })
+  })
+
+program
+  .command('reopen')
+  .description('undo a closure — the run returns to the phase its gate ledger derives')
+  .argument('<slug>', 'run slug')
+  .option('--source <id>')
+  .action(async (slug: string, flags: DecideFlags) => {
+    await decide(slug, flags, { action: 'reopen' })
   })
 
 // --- new / arm (the run-creation seam) --------------------------------------

@@ -30,6 +30,8 @@ export interface RunDescriptionInput {
   profile: Profile | null
   /** The run's phase, for the in-flight banner; null when state is unreadable. */
   phase: string | null
+  /** The closure record when the run was closed short of `done` (#200). */
+  closure?: { as: string; by: string | null; reason: string | null } | null
   /** Gate ledger in profile order, for the banner's progress line. */
   gates: { id: string; approved: boolean }[]
   /** `runs/<slug>/intent-brief.md`, or null when unreadable. */
@@ -156,15 +158,25 @@ function banner(input: RunDescriptionInput): string[] {
     .join(' ')
   const where = [input.phase ? `phase \`${input.phase}\`` : null, ledger ? `gates ${ledger}` : null].filter(Boolean).join(' · ')
 
-  // A finished run is exactly what this PR is for — say so instead of warning.
+  // Three states, three things worth saying. A finished run is exactly what
+  // this PR is for. A closed run (#200) stopped short by decision, so the
+  // banner names the disposition rather than warning about work still coming:
+  // the reader's question is no longer "is this ready?" but "why did it end?".
+  const closure = input.phase === 'closed' ? input.closure : null
   const quoted =
     input.phase === 'done'
       ? ['> **Run complete.** All gates are signed and the record is final.', where && `> ${where}`]
-      : [
-          '> ⚠️ **Run in flight — do not merge.**',
-          where && `> ${where}`,
-          '> Merging now lands an incomplete run record and leaves the run with no review surface.',
-        ]
+      : input.phase === 'closed'
+        ? [
+            `> **Run closed — ${closure?.as ?? 'no disposition recorded'}.** It ended short of \`done\` by decision${closure?.by ? `, closed by ${closure.by}` : ''}.`,
+            closure?.reason && `> ${closure.reason}`,
+            where && `> ${where}`,
+          ]
+        : [
+            '> ⚠️ **Run in flight — do not merge.**',
+            where && `> ${where}`,
+            '> Merging now lands an incomplete run record and leaves the run with no review surface.',
+          ]
   // No blank line may fall inside the quote or markdown splits it in two.
   return [...quoted.filter((l): l is string => Boolean(l)), '']
 }

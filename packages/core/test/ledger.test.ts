@@ -64,6 +64,18 @@ describe('parseLedgerSubject — human decisions', () => {
       by: 'Nathan Carter',
     })
     expect(parseLedgerSubject('state(x): armed by Nathan Carter')).toMatchObject({ kind: 'armed', by: 'Nathan Carter' })
+    // #200 — a closure and its undo are human decisions, not `other`.
+    expect(parseLedgerSubject('state(x): closed by Nathan Carter [disposition: already-delivered]')).toMatchObject({
+      kind: 'closed',
+      actor: 'human',
+      verb: 'closed',
+      by: 'Nathan Carter',
+    })
+    expect(parseLedgerSubject('state(x): reopened to implement by Nathan Carter (was closed as abandoned)')).toMatchObject({
+      kind: 'reopened',
+      actor: 'human',
+      by: 'Nathan Carter',
+    })
     expect(parseLedgerSubject('state(x): staged by Nathan Carter [client-key: abc123]')).toMatchObject({
       kind: 'staged',
       by: 'Nathan Carter',

@@ -13,10 +13,12 @@
 //
 //   * A gate absent from the profile is absent from the spine — never an empty
 //     cell, never an auto-approved one.
-//   * A run at rest has no gate on the table. `paused` and `staged` are rest
-//     states overlaid on the sequence (ADR-1: `staged` is `phase: paused` with a
-//     reason, not a seventh phase), so the spine shows where such a run stands
-//     and the phase chip beside it says that it is not moving.
+//   * A run at rest has no gate on the table. `paused`, `staged` and `closed`
+//     are rest states overlaid on the sequence (ADR-1: `staged` is `phase:
+//     paused` with a reason, not a seventh phase; `closed` is a real phase but
+//     not a step, since a run ends *at* a position rather than moving to one),
+//     so the spine shows where such a run stands and the phase chip beside it
+//     says that it is not moving.
 //
 // Pure and type-only by design, so it is unit-testable without a DOM and carries
 // no React or core-runtime weight into the bundle — same contract as landing.ts.
@@ -58,7 +60,7 @@ export interface Spine {
   /** Phases and gates interleaved, left to right, in the profile's own order. */
   cells: SpineCell[]
   /** A rest state overlaid on the sequence, or null while the run is moving. */
-  rest: 'paused' | 'staged' | null
+  rest: 'paused' | 'staged' | 'closed' | null
   /** The phase the run stands at, or null when its phase names no position (a malformed record). */
   position: Phase | null
 }
@@ -70,9 +72,9 @@ export interface SpineInput {
   gates: RunSummary['gates']
 }
 
-/** The profile's phase sequence. `paused` is a rest state, not a step in it. */
+/** The profile's phase sequence. `paused` and `closed` are rest states, not steps in it. */
 function sequenceOf(profile: Profile): Phase[] {
-  return PROFILE_PHASES[profile].filter((p) => p !== 'paused')
+  return PROFILE_PHASES[profile].filter((p) => p !== 'paused' && p !== 'closed')
 }
 
 /**
@@ -118,7 +120,11 @@ export function phaseSpine(run: SpineInput): Spine {
     if (last) closedBy.set(last, gate)
   }
 
-  const rest = run.phase === 'paused' ? (run.pausedReason === 'staged' ? 'staged' : 'paused') : null
+  // A closed run is at rest the same way a paused one is — overlaid on the
+  // sequence at the phase it stopped in, never drawn as a position of its own
+  // (#200). The spine says where it got to; the chip beside it says it ended.
+  const rest: Spine['rest'] =
+    run.phase === 'closed' ? 'closed' : run.phase === 'paused' ? (run.pausedReason === 'staged' ? 'staged' : 'paused') : null
   // A phase outside the profile's sequence names no position — the malformed
   // case (`phase: unknown`), where the state block above the spine says so.
   const position = rest

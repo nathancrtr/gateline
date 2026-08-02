@@ -5,6 +5,8 @@
 import type { Document } from 'yaml'
 import {
   BURDENS,
+  CLOSED_PHASE,
+  CLOSURES,
   deriveResumePhase,
   DISPOSITIONS,
   gateUndecided,
@@ -14,6 +16,7 @@ import {
   PROFILE_PHASES,
   STAGED_REASON,
   type Burden,
+  type Closure,
   type Disposition,
   type GateId,
   type Phase,
@@ -22,7 +25,7 @@ import {
   type StateDocMutation,
 } from './schema.ts'
 
-export type DecisionAction = 'approve' | 'decline' | 'resolve-escalation' | 'pause' | 'resume' | 'arm'
+export type DecisionAction = 'approve' | 'decline' | 'resolve-escalation' | 'pause' | 'resume' | 'arm' | 'close' | 'reopen'
 
 export interface DecisionInput {
   action: DecisionAction
@@ -54,6 +57,12 @@ export interface DecisionInput {
   pauseReason?: string
   /** resume: target phase; derived from the gate ledger when omitted. */
   resumePhase?: Phase
+  /**
+   * close: why the run is ending short of `done` (#200). Required — a closure
+   * with no disposition is the untyped terminal state the record can never be
+   * re-derived out of.
+   */
+  closure?: Closure
 }
 
 export interface PlannedDecision {
@@ -74,6 +83,13 @@ const nowIso = () => new Date().toISOString()
 
 export function planDecision(state: RunState, input: DecisionInput, who: Identity): PlannedDecision {
   const slug = state.run
+  // A closed run is at rest by decision, not by circumstance. Every other verb
+  // would edit a record a human declared final, so each is refused once here
+  // and pointed at the one action that undoes a closure.
+  if (state.phase === CLOSED_PHASE && input.action !== 'close' && input.action !== 'reopen')
+    throw new DecisionError(
+      `${slug} was closed as "${state.closure?.as ?? 'unknown'}" by ${state.closure?.by ?? 'someone'} — reopen it before deciding anything else`,
+    )
   switch (input.action) {
     case 'approve': {
       const gate = requireGate(state, input)
@@ -213,6 +229,48 @@ export function planDecision(state: RunState, input: DecisionInput, who: Identit
         },
         message: `state(${slug}): armed by ${who.name}`,
         summary: `Arm ${slug} into phase "${target}"`,
+      }
+    }
+    case 'close': {
+      // `done` is not closable: a run that finished its pipeline already has
+      // the record it earned, and overwriting the phase would trade "this
+      // completed" for "someone stopped it" — the exact flattening the typed
+      // disposition exists to prevent.
+      if (state.phase === 'done')
+        throw new DecisionError(`${slug} reached done — a completed run is already its own record; closing is for runs that stop short`)
+      if (state.phase === CLOSED_PHASE)
+        throw new DecisionError(`${slug} is already closed as "${state.closure?.as}" by ${state.closure?.by ?? 'someone'}`)
+      const closure = input.closure
+      if (!closure || !CLOSURES.includes(closure))
+        throw new DecisionError(`close requires a disposition (${CLOSURES.join(' | ')}) — an untyped closure can never be re-derived into one`)
+      const reason = input.notes?.trim()
+      if (!reason) throw new DecisionError('close requires a reason — it is the comment on the disposition, and the only account of why the run ends here')
+      const at = nowIso()
+      return {
+        mutate: (doc: Document) => {
+          doc.setIn(['phase'], CLOSED_PHASE)
+          doc.setIn(['paused_reason'], null)
+          doc.setIn(['closure'], { as: closure, by: who.name, at, reason })
+        },
+        message: `state(${slug}): closed by ${who.name} [disposition: ${closure}]`,
+        summary: `Close ${slug} as "${closure}"`,
+      }
+    }
+    case 'reopen': {
+      // Closing is a decision, not a deletion, so it is reversible — and the
+      // reversal is a commit of its own, which is what keeps the audit trail
+      // honest about a closure someone changed their mind about.
+      if (state.phase !== CLOSED_PHASE) throw new DecisionError(`${slug} is not closed (phase: ${state.phase})`)
+      const target = deriveResumePhase(state)
+      const was = state.closure?.as ?? 'unknown'
+      return {
+        mutate: (doc: Document) => {
+          doc.setIn(['phase'], target)
+          doc.setIn(['paused_reason'], null)
+          doc.setIn(['closure'], null)
+        },
+        message: `state(${slug}): reopened to ${target} by ${who.name} (was closed as ${was})`,
+        summary: `Reopen ${slug} at phase "${target}"`,
       }
     }
   }

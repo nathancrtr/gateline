@@ -6,7 +6,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { api, type CriterionEvidence, type EvidenceRollup, type Profile, type ReviewFinding, type ReviewReport } from '../api.ts'
-import { FindingCard, VerdictChip, useReviews } from './findings.tsx'
+import { FindingCard, Inline, PACKET_FRAME, PACKET_LABEL, PacketSweep, VerdictChip, useReviews } from './findings.tsx'
 import { useLexicon } from './lexicon.tsx'
 import { DIFF_SELECTION } from '../landing.ts'
 import { boundaryLine, fileLabel } from '../surface.ts'
@@ -165,6 +165,89 @@ function ResultLine({ result }: { result: NonNullable<CriterionEvidence['result'
   )
 }
 
+// ---------------------------------------------------------------------------
+// Quoting an evidence block (#282).
+
+const FENCE = /^\s*(?:```|~~~)/
+const HEADING_MARK = /^#{1,6}\s*/
+
+interface BlockSegment {
+  kind: 'code' | 'text'
+  text: string
+}
+
+/**
+ * Split an evidence block into the pieces it is actually made of.
+ *
+ * `EvidenceBlock.block` is a byte-identical slice of verification-report.md,
+ * which means it arrives as markdown: a `### E<k> — AC<n>.<m>` heading and one
+ * or more fenced blocks holding the command that was run. Dropping the whole
+ * thing into a `<pre>` printed the fence rows as content — a literal ``` line
+ * above and below every command — and the heading's `###` with them. The
+ * Record reader renders the same bytes as a real code block, so the defect was
+ * never in the artifact; it was this layer showing syntax where the reader
+ * shows structure.
+ *
+ * Segmented rather than run through `Markdown`: `prose-artifact` is a 16.5px
+ * serif reading surface with 26px heading margins, and this sits inside an
+ * 11.5px card. The words are identical either way; only the chrome differs.
+ *
+ * `restated` is the heading this block would carry if it said nothing beyond
+ * its own label and criterion — both of which the card already shows verbatim,
+ * in the summary above and in the criterion id. When that is all the heading
+ * says it is dropped; when the reviewer wrote more, the extra words are kept
+ * and only the `#` marks go.
+ */
+function evidenceSegments(block: string, restated?: string): BlockSegment[] {
+  const lines = block.split('\n')
+  const first = lines[0]
+  if (first !== undefined && HEADING_MARK.test(first)) {
+    const words = first.replace(HEADING_MARK, '').trim()
+    lines[0] = words.replace(/\s+/g, ' ') === restated ? '' : words
+  }
+  const segments: BlockSegment[] = []
+  let buffer: string[] = []
+  let kind: BlockSegment['kind'] = 'text'
+  const flush = () => {
+    while (buffer.length > 0 && buffer[0]!.trim() === '') buffer.shift()
+    while (buffer.length > 0 && buffer[buffer.length - 1]!.trim() === '') buffer.pop()
+    if (buffer.length > 0) segments.push({ kind, text: buffer.join('\n') })
+    buffer = []
+  }
+  for (const line of lines) {
+    if (FENCE.test(line)) {
+      flush()
+      kind = kind === 'code' ? 'text' : 'code'
+      continue
+    }
+    buffer.push(line)
+  }
+  flush()
+  return segments
+}
+
+/** The proof itself: the command as a code block, the reviewer's prose as prose. */
+function EvidenceBody({ block, restated }: { block: string; restated: string }) {
+  return (
+    <>
+      {evidenceSegments(block, restated).map((segment, i) =>
+        segment.kind === 'code' ? (
+          <pre
+            key={i}
+            className="mt-1 overflow-x-auto rounded-[4px] border border-line bg-inset p-2 font-mono text-[11.5px] leading-[1.5] text-ink"
+          >
+            {segment.text}
+          </pre>
+        ) : (
+          <p key={i} className="mt-1 whitespace-pre-wrap text-[12px] leading-[1.5] text-muted">
+            <Inline>{segment.text}</Inline>
+          </p>
+        ),
+      )}
+    </>
+  )
+}
+
 /** One criterion: the spec's words, the report's words, the proof, the findings. */
 function CriterionPacket({
   c,
@@ -234,9 +317,7 @@ function CriterionPacket({
               {a.artifact}:{a.line}
             </Link>
           </summary>
-          <pre className="mt-1 overflow-x-auto rounded-[4px] border border-line bg-inset p-2 font-mono text-[11.5px] leading-[1.5] text-ink">
-            {a.block}
-          </pre>
+          <EvidenceBody block={a.block} restated={`${a.label} — ${c.id}`} />
         </details>
       ))}
 
@@ -339,8 +420,20 @@ function ReportsPacket({ reports, src, slug }: { reports: ReviewReport[]; src: s
  * grammar withholds the structured view and says so rather than guessing.
  */
 export function G2Packet({ src, slug, profile }: { src: string; slug: string; profile: Profile }) {
-  const { data } = useQuery({ queryKey: ['evidence', src, slug], queryFn: () => api.evidence(src, slug) })
+  const { data, isPending } = useQuery({ queryKey: ['evidence', src, slug], queryFn: () => api.evidence(src, slug) })
   const reports = useReviews(src, slug)
+  // The frame and its label do not depend on the read, so they render now
+  // (#299) — what is pending is the packet's content, not its identity. A G2
+  // card that renders nothing here is shaped exactly like a G0 card, which has
+  // no packet at all, and the operator cannot tell the two apart.
+  if (isPending) {
+    return (
+      <section className={PACKET_FRAME} data-g2-packet>
+        <p className={PACKET_LABEL}>G2 packet — composed from the record</p>
+        <PacketSweep />
+      </section>
+    )
+  }
   if (!data) return null
 
   const rollup: EvidenceRollup = data
@@ -356,7 +449,7 @@ export function G2Packet({ src, slug, profile }: { src: string; slug: string; pr
 
   const header = (
     <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-      <p className="font-mono text-[11px] uppercase tracking-wide text-muted">G2 packet — composed from the record</p>
+      <p className={PACKET_LABEL}>G2 packet — composed from the record</p>
       {!rollup.hasVerification && (
         <span className="font-mono text-[11px] text-faint">
           {profile === 'patch' ? 'patch profile runs no verifier — the reviews are the packet' : 'no verification report in the record'}
@@ -366,7 +459,7 @@ export function G2Packet({ src, slug, profile }: { src: string; slug: string; pr
   )
 
   return (
-    <section className="mt-3.5 rounded-[5px] border border-line bg-inset px-3 py-2.5" data-g2-packet>
+    <section className={PACKET_FRAME} data-g2-packet>
       {header}
       {/* Contracts are forkable; the parser is not the authority on them. When
           the grammar does not match, say which grammar and stand down — the

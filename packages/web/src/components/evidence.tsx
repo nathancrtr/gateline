@@ -428,7 +428,7 @@ export function G2Packet({ src, slug, profile }: { src: string; slug: string; pr
   // no packet at all, and the operator cannot tell the two apart.
   if (isPending) {
     return (
-      <section className={PACKET_FRAME} data-g2-packet>
+      <section className={PACKET_FRAME} data-g2-packet aria-busy="true">
         <p className={PACKET_LABEL}>G2 packet — composed from the record</p>
         <PacketSweep />
       </section>

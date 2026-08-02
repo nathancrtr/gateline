@@ -37,7 +37,7 @@ export function G1Packet({ src, slug }: { src: string; slug: string }) {
   // that has no packet at all, and then shifted the buttons under the cursor.
   if (isPending) {
     return (
-      <section className={PACKET_FRAME} data-g1-packet>
+      <section className={PACKET_FRAME} data-g1-packet aria-busy="true">
         <p className={PACKET_LABEL}>G1 packet — composed from the record</p>
         <PacketSweep />
       </section>

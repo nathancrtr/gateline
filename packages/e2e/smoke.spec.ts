@@ -198,9 +198,25 @@ test('G2 packet (#256): the gate opens on a criterion-ordered surface, not a fil
   const ac11 = criteria.nth(1)
   await expect(ac11).toContainText('verification-report.md states')
   await expect(ac11).toContainText('“verified”')
+  // The block is quoted as what its markdown encodes, not as its markdown
+  // (#282): the transcript is a code block, and the fence rows that delimit it
+  // are syntax rather than content.
   const block = ac11.locator('[data-evidence-block="E1"]')
-  await expect(block).toContainText('### E1 — AC1.1')
+  await expect(block.locator('pre')).toBeVisible()
+  await expect(block).toContainText('$ tool sample.txt')
   await expect(block).toContainText('ok (3 records)')
+  await expect(block).not.toContainText('```')
+  // `### E1 — AC1.1` restates the two things this card already carries verbatim
+  // — the block's own label and the criterion it proves — so the heading is
+  // dropped rather than printed. What makes that a fold and not a deletion is
+  // that both are still on screen, which is asserted here and not assumed. A
+  // heading saying anything beyond the restatement keeps the extra words (minus
+  // its hashes); this fixture writes neither E-heading that way, so that
+  // direction is covered by packages/web/test/packet.test.ts instead.
+  await expect(block).not.toContainText('###')
+  await expect(block).not.toContainText('E1 — AC1.1')
+  await expect(block.locator('summary')).toContainText('E1')
+  await expect(ac11).toHaveAttribute('data-criterion', 'AC1.1')
 
   // AC2.1 — the findings that cite it, in the reports' own severity order, and
   // a resolved finding still present rather than dropped.

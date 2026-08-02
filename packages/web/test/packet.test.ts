@@ -234,6 +234,17 @@ describe('decide packets while their read is in flight (#299)', () => {
       // Three sweep lines, the same treatment every artifact read already got.
       expect(markup.match(/class="skel /g) ?? []).toHaveLength(3)
     })
+
+    it(`${name}: marks the frame busy without minting a second status region`, () => {
+      // The packet renders inside the decide card, which already has a
+      // role="status" for the commit result. A second one would make "the
+      // card's status" ambiguous — to a screen reader, and to any query that
+      // asks a card for its status.
+      expect(markup).toContain('aria-busy="true"')
+      expect(markup).not.toContain('role="status"')
+      // A sweep has nothing to read, so it stays out of the tree entirely.
+      expect(markup).toContain('aria-hidden="true"')
+    })
   }
 
   it('renders no frame at all once the read says the record has no packet', () => {

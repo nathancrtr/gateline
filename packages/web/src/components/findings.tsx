@@ -92,18 +92,19 @@ export const PACKET_LABEL = 'font-mono text-[11px] uppercase tracking-wide text-
  *
  * Approve/Decline stay enabled behind this: the point is honesty about pending
  * content, not gating the human.
+ *
+ * The frame carries `aria-busy` and these lines are hidden from the tree — a
+ * sweep is a visual placeholder with nothing to read. Deliberately not a
+ * `role="status"` region: this renders inside the decide card, which already
+ * has one for the commit result, and a second would make "the card's status"
+ * ambiguous to a screen reader and to anything else asking for it.
  */
 export function PacketSweep() {
   return (
-    <div
-      className="mt-2 flex flex-col gap-2"
-      data-packet-pending
-      role="status"
-      aria-label="composing the packet from the record"
-    >
-      <span className="skel block h-3.5 w-[70%]" aria-hidden="true" />
-      <span className="skel block h-3.5 w-[90%]" aria-hidden="true" />
-      <span className="skel block h-3.5 w-[60%]" aria-hidden="true" />
+    <div className="mt-2 flex flex-col gap-2" data-packet-pending aria-hidden="true">
+      <span className="skel block h-3.5 w-[70%]" />
+      <span className="skel block h-3.5 w-[90%]" />
+      <span className="skel block h-3.5 w-[60%]" />
     </div>
   )
 }

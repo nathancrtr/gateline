@@ -40,7 +40,7 @@ export function RoundCapPanel({ src, slug, task }: { src: string; slug: string; 
   // and the second is the one an empty card already states. Say the first.
   if (pending) {
     return (
-      <section className={PACKET_FRAME} data-round-cap>
+      <section className={PACKET_FRAME} data-round-cap aria-busy="true">
         <p className={PACKET_LABEL}>Rounds — composed from the record</p>
         <PacketSweep />
       </section>

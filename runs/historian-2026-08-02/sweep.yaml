@@ -9,6 +9,6 @@ covering_since: 2026-07-25T20:42:14.706Z
 adapter: claude-code
 model: anthropic/claude-haiku-4-5
 cost_limit_usd: 5
-tokens_in: null
-tokens_out: null
-cost_usd: null
+tokens_in: 13
+tokens_out: 5915
+cost_usd: 0.8311487

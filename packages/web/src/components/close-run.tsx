@@ -19,6 +19,52 @@ import { ApiError, api, CLOSURES, CLOSURE_MEANINGS, type Closure, type ClosureRe
 /** What a closure is *not*: closing never touches the branch or the artifacts. */
 const KEEPS_THE_RECORD = 'The branch, the run directory, and every artifact stay exactly where they are — closing decides the run, it does not delete it.'
 
+/** Stand-ins for the parts of a closure the record can be missing. Absence is
+ *  stated rather than left blank, the way the provenance line already states an
+ *  unrecorded closer: a silent gap reads as a UI that forgot. */
+const NO_DISPOSITION = 'no disposition recorded'
+const MALFORMED = 'The record says the run is closed but not why; that state is malformed.'
+const NO_REASON = 'no reason recorded'
+
+export interface ClosureRecordView {
+  /** The disposition name, or the stand-in when the record carries none. */
+  disposition: string
+  /** The stock meaning of that disposition — a tooltip, never a line of its own. */
+  gloss: string | null
+  /** Said out loud only when there is no disposition to gloss. */
+  malformed: string | null
+  /** The operator's own words, byte-for-byte, or null when there are none. */
+  reason: string | null
+  /** Who closed it and when, in one line. */
+  provenance: string
+}
+
+/** What the closure record states, resolved before any markup touches it (#298).
+ *
+ *  The split that matters is between vocabulary and record. The disposition name
+ *  and its `CLOSURE_MEANINGS` gloss are vocabulary — the same four sentences on
+ *  every closed run, and already on screen verbatim in the close form at the
+ *  moment the choice is made. `reason` is the one line of human judgment in the
+ *  whole record. Rendering them as adjacent unlabelled lines made them
+ *  indistinguishable, so the gloss becomes a tooltip on the name it belongs to
+ *  and the reason gets a label of its own. Nothing leaves the record; the gloss
+ *  is still reachable on hover and to a screen reader.
+ */
+export function closureRecordView(closure: ClosureRecord | null): ClosureRecordView {
+  const as = closure?.as ?? null
+  const gloss = as !== null && as in CLOSURE_MEANINGS ? CLOSURE_MEANINGS[as as Closure] : null
+  return {
+    disposition: as ?? NO_DISPOSITION,
+    gloss,
+    malformed: gloss === null ? MALFORMED : null,
+    // Trimmed to decide whether there is a reason at all; rendered untrimmed,
+    // because the record's words are the record's words.
+    reason: closure?.reason?.trim() ? closure.reason : null,
+    provenance:
+      (closure?.by ? `closed by ${closure.by}` : 'closed by someone unrecorded') + (closure?.at ? ` · ${closure.at}` : ''),
+  }
+}
+
 export function ClosureRecordBlock({
   source,
   slug,
@@ -41,19 +87,31 @@ export function ClosureRecordBlock({
     onError: (e) => setFlash(e instanceof ApiError && e.status === 409 ? 'The run moved while you were deciding — re-read and try again.' : (e as Error).message),
   })
 
+  const view = closureRecordView(closure)
+
   return (
     <div className="mb-6 rounded-md border border-line bg-inset px-3.5 py-3" data-closure-record>
       <p className="text-[13px] font-semibold text-ink">
-        Run closed — {closure?.as ?? 'no disposition recorded'}
+        Run closed —{' '}
+        {view.gloss === null ? (
+          view.disposition
+        ) : (
+          <span title={view.gloss} className="cursor-help underline decoration-dotted decoration-faint underline-offset-[3px]" data-closure-disposition>
+            {view.disposition}
+            <span className="sr-only"> — {view.gloss}</span>
+          </span>
+        )}
       </p>
-      <p className="mt-1 text-xs text-muted">
-        {closure?.as ? CLOSURE_MEANINGS[closure.as as Closure] : 'The record says the run is closed but not why; that state is malformed.'}
-      </p>
-      {closure?.reason && <p className="mt-2 text-[13px] leading-[1.6] text-ink">{closure.reason}</p>}
-      <p className="mt-2 font-mono text-[11.5px] text-faint">
-        {closure?.by ? `closed by ${closure.by}` : 'closed by someone unrecorded'}
-        {closure?.at ? ` · ${closure.at}` : ''}
-      </p>
+      {view.malformed && <p className="mt-1 text-xs text-muted">{view.malformed}</p>}
+      <dl className="mt-2 flex flex-wrap items-baseline gap-x-2 text-[13px] leading-[1.6]">
+        <dt className="shrink-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-faint">
+          Why <span aria-hidden="true">·</span>
+        </dt>
+        <dd className={`min-w-0 flex-1 ${view.reason === null ? 'text-faint' : 'text-ink'}`} data-closure-reason>
+          {view.reason ?? NO_REASON}
+        </dd>
+      </dl>
+      <p className="mt-2 font-mono text-[11.5px] text-faint">{view.provenance}</p>
       {flash && <p className="mt-2 text-xs font-semibold text-bad">{flash}</p>}
       <div className="mt-3">
         {confirming ? (

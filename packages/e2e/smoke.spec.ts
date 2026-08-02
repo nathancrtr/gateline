@@ -547,18 +547,23 @@ test('phase spine (#254): the header lays out full-width at 900px', async ({ pag
   await page.goto('/runs/' + sourceId() + '/g2-pending')
   const header = (await page.locator('header').boundingBox())!
 
-  // The spine uses the band rather than hugging the left edge: a full run's ten
-  // cells take at most two rows here, and any row that is not the last one runs
-  // the width of the header.
+  // The spine uses the band rather than hugging the left edge, and a full run's
+  // ten cells occupy exactly one row.
+  //
+  // This assertion used to read `rows.size <= 2`, and #301 was filed on it: the
+  // one narrow-viewport test in the suite, written in response to a design
+  // review, permitting the very shape the next review called the defect. #295
+  // settled it — a wrapped sequence stops reading as a sequence, the wrap point
+  // is an accident of label widths rather than anything about the run, and the
+  // connectors, which mean "flows into", dangle at row ends meaning nothing. So
+  // the row is nowrap and crops. Ten cells is more than fits at 900px, which is
+  // what makes one row the interesting answer here rather than a free pass.
   const spine = page.locator('[data-spine]')
   expect((await spine.boundingBox())!.width).toBeGreaterThan(header.width * 0.9)
   const cells = await spine.locator('[data-spine-phase], [data-spine-gate]').all()
   const boxes = await Promise.all(cells.map(async (c) => (await c.boundingBox())!))
-  const rows = new Map<number, number>()
-  for (const b of boxes) rows.set(b.y, Math.max(rows.get(b.y) ?? 0, b.x + b.width))
-  expect(rows.size).toBeLessThanOrEqual(2)
-  const rights = [...rows.entries()].sort((a, b) => a[0] - b[0]).map(([, right]) => right)
-  for (const right of rights.slice(0, -1)) expect(right).toBeGreaterThan(header.x + header.width * 0.85)
+  expect(boxes.length).toBe(10)
+  expect(new Set(boxes.map((b) => Math.round(b.y))).size).toBe(1)
 
   // …and the columns below reach the right edge instead of stacking into the
   // left half under a header taller than the surface it introduces.

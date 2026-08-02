@@ -128,6 +128,15 @@ npm run dev            # API server; pair with: npm run dev -w @gateline/web
 pending, an escalation, a round-cap breach, a paused run, malformed artifacts,
 a merged run. Tests, Playwright, and `--demo` all use it.
 
+Three test layers, and picking the wrong one is how a defect goes uncaught
+(#301). Pure derivation modules are the default and take no DOM. A component's
+*structure* is testable from a plain `.ts` test through `renderToStaticMarkup`
+— no jsdom, no `@testing-library`, no new dependency — see
+`web/test/findings.test.ts`. **Geometry** (wrap, overflow, width, visibility) is
+Playwright's alone, because nothing else lays out: `e2e/geometry.spec.ts` sweeps
+every fixture state at 800/900/1000/1280. The full rationale, and when a DOM
+environment would actually be warranted, is at the head of `vitest.config.ts`.
+
 Layout: `packages/core` (schema, discovery, readiness, validation, write path,
 metrics — zero UI deps) · `packages/cli` · `packages/server` (Hono) ·
 `packages/web` (React 19 + Vite + Tailwind v4). Dependency posture is lean and

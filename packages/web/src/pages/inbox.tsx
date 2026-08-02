@@ -3,11 +3,20 @@ import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, formatAge, type InboxItem } from '../api.ts'
-import { AgeBadge, KindChip } from '../components/chips.tsx'
-import { useKeys } from '../use-keys.ts'
+import { AgeBadge, KeyHints, KindChip } from '../components/chips.tsx'
+import { useKeys, type KeyHint } from '../use-keys.ts'
 
 const STALE_SECONDS = 3 * 86_400 // aging turns urgent at 3 days
 const STALE_DAYS = 7 * 86_400 // aging turns stale at 7 days
+
+/** The reading queue's own loop, advertised under the queue (#284). Written
+ *  beside the handlers below so the two cannot drift; `enter` is spelled the
+ *  way a keyboard is labelled rather than the way `KeyboardEvent` spells it. */
+const INBOX_HINTS: KeyHint[] = [
+  ['j', 'down'],
+  ['k', 'up'],
+  ['enter', 'open'],
+]
 
 type KindFilterKey = InboxItem['kind'] | null
 
@@ -238,16 +247,23 @@ export function InboxPage() {
           </div>
         </div>
       ) : (
-        <ul className="mt-6 rounded-lg border border-line bg-surface overflow-hidden">
-          {filteredItems!.map((item, i) => (
-            <InboxRow
-              key={`${item.source}/${item.slug}/${item.kind}/${item.gate ?? item.escalationIndex ?? i}`}
-              item={item}
-              now={now}
-              selected={i === cursor}
-            />
-          ))}
-        </ul>
+        <>
+          <ul className="mt-6 rounded-lg border border-line bg-surface overflow-hidden">
+            {filteredItems!.map((item, i) => (
+              <InboxRow
+                key={`${item.source}/${item.slug}/${item.kind}/${item.gate ?? item.escalationIndex ?? i}`}
+                item={item}
+                now={now}
+                selected={i === cursor}
+              />
+            ))}
+          </ul>
+          {/* Under the queue, not over it: the row cursor is visible before
+              the hint explains what moves it, which is the order a reader
+              works it out in anyway. Nothing to move through, no hint —
+              `useKeys` is disabled on the same condition. */}
+          <KeyHints hints={INBOX_HINTS} className="mt-2.5 text-right" />
+        </>
       )}
     </div>
   )

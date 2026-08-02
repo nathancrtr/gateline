@@ -5,7 +5,47 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ApiError, api, type Burden, type Disposition, type GateId, type InboxItem, type Profile } from '../api.ts'
-import { useKeys } from '../use-keys.ts'
+import { KeyHints } from './chips.tsx'
+import { useKeys, type KeyHint } from '../use-keys.ts'
+
+/**
+ * The two cards whose only affordance is a sentence (#285/6).
+ *
+ * They live here, with the buttons they stand in for, and are rendered by the
+ * card in its description slot — because that sentence *is* the card's job, and
+ * the card foot is where an affordance goes, not where the instruction goes. A
+ * round cap and a bounce have no button to put there, and the foot demoted the
+ * one thing either card had to say into right-aligned small print beside the
+ * evidence chips. #296 removed the round-cap panel's duplicate report row,
+ * which left this sentence as that card's only instruction and settled the
+ * question: promote it, do not restyle it.
+ */
+export const BOUNCED_INSTRUCTION =
+  'Bounced — fix the artifacts (or the contract) and the card returns; no approval is offered for a malformed packet.'
+
+export const ROUND_CAP_INSTRUCTION =
+  'Read both sides, then unblock: decline the pending gate with direction, or edit the spec/plan and let the loop retry.'
+
+/**
+ * What the keyboard can do to *this* card, in the words the card uses (#284).
+ *
+ * Derived from the same two facts the handlers below branch on, so a card that
+ * cannot be approved never advertises `a`. Kinds whose only affordance is a
+ * button — paused, staged — and kinds with no affordance at all get nothing;
+ * the run page's own `e`/`esc` hints carry those, and a hint list that says
+ * only what the page already said is noise.
+ */
+export function decideHints(item: InboxItem): KeyHint[] {
+  if (item.kind === 'gate' && item.reviewable) {
+    return [
+      ['a', 'approve'],
+      ['x', 'decline'],
+      ['1/2/3', 'burden'],
+    ]
+  }
+  if (item.kind === 'escalation') return [['a', 'resolve']]
+  return []
+}
 
 const BURDEN_OPTIONS: { value: Burden; key: string; label: string; hint: string }[] = [
   { value: 'confirmation', key: '1', label: 'Confirmation', hint: 'looked right as delivered' },
@@ -51,6 +91,7 @@ export function DecidePanel({
   primary = false,
   sentHere = false,
   chips = null,
+  pageHints = [],
 }: {
   item: InboxItem
   /** The run's profile — decides where a decline sends the run (#253). */
@@ -59,6 +100,13 @@ export function DecidePanel({
   /** Arrived here from an inbox link naming this decision (#216). */
   sentHere?: boolean
   chips?: React.ReactNode
+  /**
+   * The run page's own keys (#284), hinted here rather than at the page foot
+   * whenever this card is the primary one — so the whole loop reads as one
+   * line, and so it disappears together the moment a form opens and the keys
+   * stop meaning what the line says.
+   */
+  pageHints?: readonly KeyHint[]
 }) {
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<Mode>('idle')
@@ -176,6 +224,10 @@ export function DecidePanel({
   // the left, the decision affordance on the right. Expanded modes keep the
   // chips row and open the form below it at full width.
   const chipRow = chips ? <div className="flex min-w-0 flex-wrap items-center gap-1.5">{chips}</div> : null
+  // Only the card the keyboard actually drives says so, and only while it is
+  // idle: `useKeys` above is enabled on `primary`, and in every other mode `a`,
+  // `x` and the digits are characters someone is typing (#284).
+  const hints = primary ? [...decideHints(item), ...pageHints] : []
 
   return (
     <div className="mt-3 border-t border-line pt-3" data-decide-panel>
@@ -195,9 +247,6 @@ export function DecidePanel({
                 </Button>
               </>
             )}
-            {item.kind === 'gate' && !item.reviewable && (
-              <p className="text-[12.5px] font-semibold text-bad">Bounced — fix the artifacts (or the contract) and the card returns; no approval is offered for a malformed packet.</p>
-            )}
             {item.kind === 'escalation' && (
               <Button primary onClick={() => setMode('resolve')} data-decide="resolve">
                 Resolve…
@@ -213,14 +262,11 @@ export function DecidePanel({
                 Arm run…
               </Button>
             )}
-            {item.kind === 'round-cap' && (
-              <p className="text-xs text-muted">
-                Read both sides, then unblock: decline the pending gate with direction, or edit the spec/plan and let the loop retry.
-              </p>
-            )}
           </div>
         </div>
       )}
+
+      {mode === 'idle' && <KeyHints hints={hints} className="mt-2.5" />}
 
       {mode !== 'idle' && chipRow && <div className="mb-3">{chipRow}</div>}
 

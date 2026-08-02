@@ -1,8 +1,8 @@
 // The fixed status vocabulary: phases, gate states, inbox kinds, validation.
 // Used identically everywhere — status is encoded in form, not just color.
-import { Fragment } from 'react'
+import { Fragment, useEffect, useRef } from 'react'
 import { PROFILE_GATES, type ClosureRecord, type GateId, type InboxItem, type Profile, type RunSummary } from '../api.ts'
-import { phaseSpine, type GateCell, type PhaseCell } from '../spine.ts'
+import { gateNote, noteRung, phaseSpine, type GateCell, type PhaseCell, type SpineNoteRung } from '../spine.ts'
 
 const PHASE_TONE: Record<string, { chip: string; mark: string }> = {
   spec:       { chip: 'bg-[#f3eee5] text-[#6f5a3a] border-[#e2d6bd]', mark: 'bg-current' },
@@ -162,19 +162,125 @@ export function GateLedger({ gates, profile = 'full' }: { gates: RunSummary['gat
  * The connectors are flex-grown rather than fixed, so the spine fills whatever
  * width it is given — a run header at 900px is a first-class layout, not a
  * degraded wide one.
+ *
+ * It never wraps (#295). #254 shipped it as a `flex-wrap` row, and in the
+ * 800–1000px band a full profile spent its two widest cells — the 24px
+ * provenance notes under approved gates — on a second line. That abandons the
+ * one thing the spine is for: a wrapped sequence is not one shape, its wrap
+ * point is an accident of label widths rather than anything about the run, and
+ * the connectors, which mean "flows into", dangle at row ends meaning nothing.
+ * So the row is `nowrap`, and it yields in this order:
+ *
+ *   1. connectors compress to their 8px minimum;
+ *   2. below `noteRung` — the width at which this spine's notes provably fit —
+ *      the notes are demoted to the cell's tooltip and the gaps close;
+ *   3. past that, it crops and scrolls, with the gate on the table scrolled
+ *      into view. A cropped sequence still reads as a sequence.
+ *
+ * Step 2 is a narrow-band behaviour, not a reversal of #254's decision to carry
+ * provenance in the open — above the rung it is exactly as it was, and approver
+ * and date stay reachable at every width through `title` and the accessible
+ * name, which quote them verbatim.
  */
-export function PhaseSpine({ summary }: { summary: RunSummary }) {
+export function PhaseSpine({ summary, items }: { summary: RunSummary; items?: InboxItem[] }) {
   const spine = phaseSpine(summary)
-  return (
-    <ol data-spine data-rest={spine.rest ?? undefined} className="flex w-full flex-wrap items-start gap-x-1.5 gap-y-2.5">
-      {spine.cells.map((cell, i) => (
-        <Fragment key={cell.kind === 'phase' ? `p-${cell.phase}` : `g-${cell.gate}`}>
-          {i > 0 && <li aria-hidden="true" className="mt-[11px] h-px min-w-[8px] max-w-[72px] flex-1 bg-line" />}
-          {cell.kind === 'phase' ? <SpinePhase cell={cell} atRest={spine.rest !== null} /> : <SpineGate cell={cell} />}
-        </Fragment>
-      ))}
-    </ol>
+  const rung = noteRung(spine)
+  // A gate whose packet was bounced is on the table but offers no approval
+  // (core's readiness rule R3); the cell must not tell the reader otherwise.
+  const bounced = new Set(
+    (items ?? []).filter((i) => i.kind === 'gate' && !i.reviewable && i.gate !== null).map((i) => i.gate as GateId),
   )
+  const pending = spine.cells.find((c) => c.kind === 'gate' && c.state === 'pending')
+  const focus = pending?.kind === 'gate' ? pending.gate : (spine.position ?? null)
+  const ref = useScrollIntoView(focus)
+  return (
+    <div className="@container w-full">
+      <ol
+        ref={ref}
+        data-spine
+        data-rest={spine.rest ?? undefined}
+        data-spine-rung={rung}
+        className={`flex w-full items-start overflow-x-auto overscroll-x-contain ${NOTE_RUNG_ROW[rung]}`}
+      >
+        {spine.cells.map((cell, i) => (
+          <Fragment key={cell.kind === 'phase' ? `p-${cell.phase}` : `g-${cell.gate}`}>
+            {i > 0 && <li aria-hidden="true" className="mt-[11px] h-px min-w-[8px] max-w-[72px] flex-1 bg-line" />}
+            {cell.kind === 'phase' ? (
+              <SpinePhase cell={cell} atRest={spine.rest !== null} noteClass={NOTE_RUNG_NOTE[rung]} />
+            ) : (
+              <SpineGate cell={cell} bounced={bounced.has(cell.gate)} noteClass={NOTE_RUNG_NOTE[rung]} />
+            )}
+          </Fragment>
+        ))}
+      </ol>
+    </div>
+  )
+}
+
+/**
+ * Keeps the cell the run is standing at inside the crop when the spine has to
+ * scroll. Scrolling the row itself rather than calling `scrollIntoView` — that
+ * would take the page with it, and the reader did not ask to be moved.
+ */
+function useScrollIntoView(focus: string | null) {
+  const ref = useRef<HTMLOListElement>(null)
+  useEffect(() => {
+    const row = ref.current
+    if (!row || focus === null) return
+    const center = () => {
+      if (row.scrollWidth <= row.clientWidth) return
+      // The gate on the table first, then where the run stands: a comma
+      // selector would hand back whichever came first in the row, and the
+      // current phase always precedes the gate that closes it.
+      const target =
+        row.querySelector<HTMLElement>('[data-spine-gate][data-state="pending"]') ??
+        row.querySelector<HTMLElement>('[data-spine-phase][data-state="current"]')
+      if (!target) return
+      const box = target.getBoundingClientRect()
+      const rowBox = row.getBoundingClientRect()
+      row.scrollLeft += box.left - rowBox.left - (row.clientWidth - box.width) / 2
+    }
+    center()
+    // A window resize can crop what was in the open a moment ago; a resize is
+    // not the reader scrolling, so re-centring on it is not taking the row away
+    // from them.
+    if (typeof ResizeObserver === 'undefined') return
+    let last = row.clientWidth
+    const observer = new ResizeObserver(() => {
+      if (row.clientWidth === last) return
+      last = row.clientWidth
+      center()
+    })
+    observer.observe(row)
+    return () => observer.disconnect()
+  }, [focus])
+  return ref
+}
+
+// One rung, two effects, both needing the literal width in the stylesheet:
+// above it the notes are in the open and the row is gapped as #254 drew it;
+// below it the notes go to the tooltip and the gap closes, so the connector
+// touches the pills it joins and the sequence buys back ~100px before it has to
+// crop. Written out rather than composed, because Tailwind only emits classes
+// it can see whole in the source.
+const NOTE_RUNG_NOTE: Record<SpineNoteRung, string> = {
+  500: 'hidden @min-[500px]:block',
+  580: 'hidden @min-[580px]:block',
+  660: 'hidden @min-[660px]:block',
+  740: 'hidden @min-[740px]:block',
+  820: 'hidden @min-[820px]:block',
+  900: 'hidden @min-[900px]:block',
+  980: 'hidden @min-[980px]:block',
+}
+
+const NOTE_RUNG_ROW: Record<SpineNoteRung, string> = {
+  500: 'gap-x-0 @min-[500px]:gap-x-1.5',
+  580: 'gap-x-0 @min-[580px]:gap-x-1.5',
+  660: 'gap-x-0 @min-[660px]:gap-x-1.5',
+  740: 'gap-x-0 @min-[740px]:gap-x-1.5',
+  820: 'gap-x-0 @min-[820px]:gap-x-1.5',
+  900: 'gap-x-0 @min-[900px]:gap-x-1.5',
+  980: 'gap-x-0 @min-[980px]:gap-x-1.5',
 }
 
 const PHASE_STATE_TONE: Record<PhaseCell['state'], string> = {
@@ -183,7 +289,7 @@ const PHASE_STATE_TONE: Record<PhaseCell['state'], string> = {
   future: 'border-dashed border-line bg-transparent text-faint',
 }
 
-function SpinePhase({ cell, atRest }: { cell: PhaseCell; atRest: boolean }) {
+function SpinePhase({ cell, atRest, noteClass }: { cell: PhaseCell; atRest: boolean; noteClass: string }) {
   // At rest the run still stands somewhere; the ring goes dashed to say it is
   // standing there rather than moving through, and the phase chip beside the
   // spine names the reason.
@@ -191,7 +297,9 @@ function SpinePhase({ cell, atRest }: { cell: PhaseCell; atRest: boolean }) {
   return (
     <li data-spine-phase={cell.phase} data-state={cell.state} className="flex shrink-0 flex-col items-center gap-[3px]">
       <span className={`inline-flex h-[22px] items-center rounded-full border px-2.5 text-[12px] leading-none ${tone}`}>{cell.phase}</span>
-      <span className="h-[24px]" />
+      {/* The gutter the gate notes sit in. It goes with them, so a spine with
+          no notes in the open is not 24px of empty header. */}
+      <span aria-hidden="true" className={`h-[24px] ${noteClass}`} />
     </li>
   )
 }
@@ -211,17 +319,26 @@ const GATE_STATE_WORD: Record<GateCell['state'], string> = {
   future: 'not yet reached',
 }
 
+/**
+ * A bounced gate is up but offers no decision: the packet is present and fails
+ * its contract, so core hands the reader a bounce view rather than an approval
+ * (readiness rule R3). "Pending your decision" is the one thing the cell must
+ * not say there, since the card below it is already saying the opposite.
+ */
+const GATE_BOUNCED_WORD = 'on the table — packet bounced'
+
 /** One gate, as the transition it is. Its question is what `G2` alone cannot
  *  say, so it is the accessible name and the hover text — never inferred, always
- *  the fixed GATE_QUESTIONS string for the profile it is asked in. */
-function SpineGate({ cell }: { cell: GateCell }) {
+ *  the fixed GATE_QUESTIONS string for the profile it is asked in.
+ *
+ *  Below `noteRung` the note under the cell is hidden and this text is the only
+ *  place provenance is shown — which is why it has always carried it verbatim. */
+function SpineGate({ cell, bounced, noteClass }: { cell: GateCell; bounced: boolean; noteClass: string }) {
   const decided = cell.by !== null || cell.at !== null
   const provenance = decided ? `${cell.by ?? '—'}${cell.at ? ` · ${String(cell.at).slice(0, 10)}` : ''}` : null
-  // Approver over date rather than beside it: a gate cell as wide as
-  // `operator · 2026-06-28` wraps the whole spine on a laptop, and the sequence
-  // is what the spine is for.
-  const note = cell.state === 'pending' ? <>on the table</> : decided ? <>{cell.by ?? '—'}<br />{cell.at ? String(cell.at).slice(0, 10) : ''}</> : null
-  const label = `${cell.gate} — ${cell.question} — ${GATE_STATE_WORD[cell.state]}${provenance ? ` by ${provenance}` : ''}`
+  const note = gateNote(cell)
+  const word = bounced && cell.state === 'pending' ? GATE_BOUNCED_WORD : GATE_STATE_WORD[cell.state]
+  const label = `${cell.gate} — ${cell.question} — ${word}${provenance ? ` by ${provenance}` : ''}`
   return (
     <li data-spine-gate={cell.gate} data-state={cell.state} className="flex shrink-0 flex-col items-center gap-[3px]">
       <span
@@ -236,7 +353,17 @@ function SpineGate({ cell }: { cell: GateCell }) {
         </span>
         <span className="sr-only">{label}</span>
       </span>
-      <span className="h-[24px] whitespace-nowrap text-center font-mono text-[10.5px] leading-[12px] text-muted">{note}</span>
+      <span
+        aria-hidden="true"
+        className={`h-[24px] whitespace-nowrap text-center font-mono text-[10.5px] leading-[12px] text-muted ${noteClass}`}
+      >
+        {note?.map((line, i) => (
+          <Fragment key={i}>
+            {i > 0 && <br />}
+            {line}
+          </Fragment>
+        ))}
+      </span>
     </li>
   )
 }

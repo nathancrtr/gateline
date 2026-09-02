@@ -1,12 +1,46 @@
 # gateline
 
-**gateline** is a design + runnable skeleton for a team of SDLC agents: roles defined as portable
-contracts, models and runtimes attached as swappable bindings, humans approving at
-phase gates. Built for a team of senior engineers moving from single-conversation AI
-pair-programming to multi-agent development.
+Run the software development lifecycle as a team of agents that hand off
+**typed artifacts in git, not chat** — roles defined as portable contracts,
+models and runtimes attached as swappable bindings, and a human approving at
+each phase gate from a cockpit that reads nothing but the repository. Built for
+senior engineers moving from single-conversation AI pair-programming to
+multi-agent development.
+
+![Gatehouse, the cockpit: the decision inbox, the portfolio's gate ledger, a run paused on an escalation, a finished run's artifact record, and the metrics computed from state history](docs/images/gatehouse.gif)
+
+## Why it is built this way
+
+- **Agents never share a conversation.** A role consumes files and produces
+  files — spec, plan, tasks, reviews, evidence — validated against contracts
+  the host repo owns. Any agent can be replaced mid-run; models swap in a
+  one-file registry; a new runtime is a thin adapter over the same role specs.
+- **The repo is the only database.** Every view in the cockpit is recomputed
+  from git; delete the app and nothing is lost. There is exactly one write
+  path — a compare-and-swap commit to one run's `state.yaml` — and a malformed
+  packet never renders as approvable, in the web, the CLI or the API.
+- **Humans decide at gates, and only at gates.** Up to four (spec, plan,
+  change, release) depending on the run's profile, plus escalations. The
+  frontend does not dispatch, steer or chat; the harness you already use is
+  the cockpit for that.
+- **Money is metered per run.** No cost ceiling, no dispatch; every run shows
+  what it has spent against its limit, and a run that crosses it says so.
+- **The gates measure themselves.** Approval rates, burden mix and review
+  rounds are computed from the state history, and a gate that approves
+  everything is flagged as over-triggering — the signal to move its scope down
+  the tier ladder.
+
+<p align="center">
+  <img src="docs/images/portfolio.png" alt="The portfolio: every run's progress through its gates, recomputed live from its branch" width="49%">
+  <img src="docs/images/run-escalation.png" alt="A run page: the phase spine, the task board, the budget, and an escalation waiting for a human" width="49%">
+</p>
 
 **Start here → [`docs/DESIGN.md`](docs/DESIGN.md)** · then run the toy pipeline:
 [`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md)
+
+The screenshots show this repository's own run history — gateline develops
+itself through its own gates. They were captured with no orchestrator
+running, so the cockpit's "not running" banner is hidden in them.
 
 ## Repo map
 

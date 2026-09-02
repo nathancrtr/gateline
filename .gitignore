@@ -5,3 +5,6 @@ __pycache__/
 /fly.toml
 # local API keys / secrets (e.g. OPENROUTER_API_KEY); never commit
 /.env
+
+# Playwright leaves this behind after a run; it is a scratch file, not evidence.
+/test-results/

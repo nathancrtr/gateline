@@ -1,12 +1,51 @@
 # gateline
 
-**gateline** is a design + runnable skeleton for a team of SDLC agents: roles defined as portable
-contracts, models and runtimes attached as swappable bindings, humans approving at
-phase gates. Built for a team of senior engineers moving from single-conversation AI
-pair-programming to multi-agent development.
+Run the software development lifecycle as a team of agents that hand off
+**typed artifacts in git, not chat** — roles defined as portable contracts,
+models and runtimes attached as swappable bindings, and a human approving at
+each phase gate from a cockpit that reads nothing but the repository. Built for
+senior engineers moving from single-conversation AI pair-programming to
+multi-agent development.
 
-**Start here → [`docs/DESIGN.md`](docs/DESIGN.md)** · then run the toy pipeline:
-[`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md)
+![Gatehouse, gateline's cockpit, in five screens: the Inbox with four decisions waiting, one of them a bounced malformed packet; the Portfolio's gate ledger across nineteen runs; the run csvpeek paused on an escalation with its budget over the limit; the finished run fleetview-design and its artifact record; and Metrics flagging gates G1 and G2 as over-triggering.](docs/images/gatehouse.gif)
+
+## The one idea
+
+Agents never share a conversation; they share **typed artifacts in git**. A role
+consumes files, produces files, and a human approves at up to four gates (spec, plan,
+change, release — how many depends on the run's profile). Because roles are contracts
+over files, any agent can be replaced mid-run, models swap via a one-file registry
+edit, and new runtimes attach by writing a thin adapter — which is how the
+cross-vendor requirement and "flexibility over customizability" are both satisfied by
+the same mechanism.
+
+## What falls out of it
+
+- **The repo is the only database.** Every view in the cockpit is recomputed
+  from git; delete the app and nothing is lost. There is exactly one write
+  path — a compare-and-swap commit to one run's `state.yaml` — and a malformed
+  packet never renders as approvable, in the web, the CLI or the API.
+- **Humans approve at gates, and only at gates** — plus escalations, when an
+  agent is stuck. The cockpit's other writes are the run's own switches (arm,
+  pause, resume, close); it does not dispatch, steer or chat, and that stays in
+  the harness you already use.
+- **Money is metered per run.** By default a run with no cost ceiling gets no
+  dispatch; every run shows what it has spent against its limit, and one that
+  crosses it is marked over, on its page and in the ledger.
+- **The gates measure themselves.** Approval rates, burden mix and review
+  rounds are computed from the state history, and a gate with sustained
+  approval above 90% is flagged as over-triggering — the signal to move its
+  scope down the tier ladder.
+
+![The run page for csvpeek, paused on an escalation: the phase spine with G0 and G1 approved and the implement phase current; a task board of four items; the budget reading $31 of $30, marked over; and an escalation card from the orchestrator, waiting 37 days, with its artifacts and a Resolve button.](docs/images/run-escalation-detail.png)
+
+*Every screenshot is Gatehouse, the cockpit, over this repository's own runs —
+gateline develops itself through its own gates — captured with the
+orchestrator stopped and its "not running" banner hidden.*
+
+**Start here → [`docs/DESIGN.md`](docs/DESIGN.md)** · then drive the toy
+pipeline by hand: [`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md) · then put it
+over a real repository: [Setup](#setup), below.
 
 ## Repo map
 
@@ -28,17 +67,7 @@ pair-programming to multi-agent development.
 | [`.github/agents/`](.github/agents/) | The rendered custom agents (runnable in Copilot CLI today) | per-runtime |
 | [`adapters/opencode/`](adapters/opencode/) | Third runtime binding: role specs → `.opencode/agents/*.md` agents | per-runtime |
 | [`.opencode/agents/`](.opencode/agents/) | The rendered opencode agents (any-provider model bindings) | per-runtime |
-| [`runs/`](runs/) | One directory per pipeline run — the pipeline state lives in git | working area |
-
-## The one idea
-
-Agents never share a conversation; they share **typed artifacts in git**. A role
-consumes files, produces files, and a human approves at up to four gates (spec, plan,
-change, release — how many depends on the run's profile). Because roles are contracts
-over files, any agent can be replaced mid-run, models swap via a one-file registry
-edit, and new runtimes attach by writing a thin adapter — which is how the
-cross-vendor requirement and "flexibility over customizability" are both satisfied by
-the same mechanism.
+| [`runs/`](runs/) | One directory per pipeline run; a run in flight lives on its `run/<slug>` branch until it lands — the pipeline state lives in git | working area |
 
 ## Setup
 

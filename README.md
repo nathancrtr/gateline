@@ -25,15 +25,17 @@ the same mechanism.
   from git; delete the app and nothing is lost. There is exactly one write
   path — a compare-and-swap commit to one run's `state.yaml` — and a malformed
   packet never renders as approvable, in the web, the CLI or the API.
-- **Humans decide at gates, and only at gates** — plus escalations, when an
-  agent is stuck. The cockpit does not dispatch, steer or chat; that stays in
+- **Humans approve at gates, and only at gates** — plus escalations, when an
+  agent is stuck. The cockpit's other writes are the run's own switches (arm,
+  pause, resume, close); it does not dispatch, steer or chat, and that stays in
   the harness you already use.
-- **Money is metered per run.** No cost ceiling, no dispatch; every run shows
-  what it has spent against its limit, and a run that crosses it says so.
+- **Money is metered per run.** By default a run with no cost ceiling gets no
+  dispatch; every run shows what it has spent against its limit, and one that
+  crosses it is marked over, on its page and in the ledger.
 - **The gates measure themselves.** Approval rates, burden mix and review
-  rounds are computed from the state history, and a gate that approves
-  everything is flagged as over-triggering — the signal to move its scope down
-  the tier ladder.
+  rounds are computed from the state history, and a gate with sustained
+  approval above 90% is flagged as over-triggering — the signal to move its
+  scope down the tier ladder.
 
 ![The run page for csvpeek, paused on an escalation: the phase spine with G0 and G1 approved and the implement phase current; a task board of four items; the budget reading $31 of $30, marked over; and an escalation card from the orchestrator, waiting 37 days, with its artifacts and a Resolve button.](docs/images/run-escalation-detail.png)
 
@@ -65,7 +67,7 @@ over a real repository: [Setup](#setup), below.
 | [`.github/agents/`](.github/agents/) | The rendered custom agents (runnable in Copilot CLI today) | per-runtime |
 | [`adapters/opencode/`](adapters/opencode/) | Third runtime binding: role specs → `.opencode/agents/*.md` agents | per-runtime |
 | [`.opencode/agents/`](.opencode/agents/) | The rendered opencode agents (any-provider model bindings) | per-runtime |
-| [`runs/`](runs/) | One directory per pipeline run — the pipeline state lives in git | working area |
+| [`runs/`](runs/) | One directory per pipeline run; a run in flight lives on its `run/<slug>` branch until it lands — the pipeline state lives in git | working area |
 
 ## Setup
 

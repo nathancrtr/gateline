@@ -7,22 +7,27 @@ each phase gate from a cockpit that reads nothing but the repository. Built for
 senior engineers moving from single-conversation AI pair-programming to
 multi-agent development.
 
-![Gatehouse, the cockpit: the decision inbox, the portfolio's gate ledger, a run paused on an escalation, a finished run's artifact record, and the metrics computed from state history](docs/images/gatehouse.gif)
+![Gatehouse, gateline's cockpit, in five screens: the Inbox with four decisions waiting, one of them a bounced malformed packet; the Portfolio's gate ledger across nineteen runs; the run csvpeek paused on an escalation with its budget over the limit; the finished run fleetview-design and its artifact record; and Metrics flagging gates G1 and G2 as over-triggering.](docs/images/gatehouse.gif)
 
-## Why it is built this way
+## The one idea
 
-- **Agents never share a conversation.** A role consumes files and produces
-  files — spec, plan, tasks, reviews, evidence — validated against contracts
-  the host repo owns. Any agent can be replaced mid-run; models swap in a
-  one-file registry; a new runtime is a thin adapter over the same role specs.
+Agents never share a conversation; they share **typed artifacts in git**. A role
+consumes files, produces files, and a human approves at up to four gates (spec, plan,
+change, release — how many depends on the run's profile). Because roles are contracts
+over files, any agent can be replaced mid-run, models swap via a one-file registry
+edit, and new runtimes attach by writing a thin adapter — which is how the
+cross-vendor requirement and "flexibility over customizability" are both satisfied by
+the same mechanism.
+
+## What falls out of it
+
 - **The repo is the only database.** Every view in the cockpit is recomputed
   from git; delete the app and nothing is lost. There is exactly one write
   path — a compare-and-swap commit to one run's `state.yaml` — and a malformed
   packet never renders as approvable, in the web, the CLI or the API.
-- **Humans decide at gates, and only at gates.** Up to four (spec, plan,
-  change, release) depending on the run's profile, plus escalations. The
-  frontend does not dispatch, steer or chat; the harness you already use is
-  the cockpit for that.
+- **Humans decide at gates, and only at gates** — plus escalations, when an
+  agent is stuck. The cockpit does not dispatch, steer or chat; that stays in
+  the harness you already use.
 - **Money is metered per run.** No cost ceiling, no dispatch; every run shows
   what it has spent against its limit, and a run that crosses it says so.
 - **The gates measure themselves.** Approval rates, burden mix and review
@@ -30,17 +35,15 @@ multi-agent development.
   everything is flagged as over-triggering — the signal to move its scope down
   the tier ladder.
 
-<p align="center">
-  <img src="docs/images/portfolio.png" alt="The portfolio: every run's progress through its gates, recomputed live from its branch" width="49%">
-  <img src="docs/images/run-escalation.png" alt="A run page: the phase spine, the task board, the budget, and an escalation waiting for a human" width="49%">
-</p>
+![The run page for csvpeek, paused on an escalation: the phase spine with G0 and G1 approved and the implement phase current; a task board of four items; the budget reading $31 of $30, marked over; and an escalation card from the orchestrator, waiting 37 days, with its artifacts and a Resolve button.](docs/images/run-escalation-detail.png)
 
-**Start here → [`docs/DESIGN.md`](docs/DESIGN.md)** · then run the toy pipeline:
-[`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md)
+*Every screenshot is Gatehouse, the cockpit, over this repository's own runs —
+gateline develops itself through its own gates — captured with the
+orchestrator stopped and its "not running" banner hidden.*
 
-The screenshots show this repository's own run history — gateline develops
-itself through its own gates. They were captured with no orchestrator
-running, so the cockpit's "not running" banner is hidden in them.
+**Start here → [`docs/DESIGN.md`](docs/DESIGN.md)** · then drive the toy
+pipeline by hand: [`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md) · then put it
+over a real repository: [Setup](#setup), below.
 
 ## Repo map
 
@@ -63,16 +66,6 @@ running, so the cockpit's "not running" banner is hidden in them.
 | [`adapters/opencode/`](adapters/opencode/) | Third runtime binding: role specs → `.opencode/agents/*.md` agents | per-runtime |
 | [`.opencode/agents/`](.opencode/agents/) | The rendered opencode agents (any-provider model bindings) | per-runtime |
 | [`runs/`](runs/) | One directory per pipeline run — the pipeline state lives in git | working area |
-
-## The one idea
-
-Agents never share a conversation; they share **typed artifacts in git**. A role
-consumes files, produces files, and a human approves at up to four gates (spec, plan,
-change, release — how many depends on the run's profile). Because roles are contracts
-over files, any agent can be replaced mid-run, models swap via a one-file registry
-edit, and new runtimes attach by writing a thin adapter — which is how the
-cross-vendor requirement and "flexibility over customizability" are both satisfied by
-the same mechanism.
 
 ## Setup
 

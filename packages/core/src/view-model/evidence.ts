@@ -14,6 +14,7 @@
 // Ordering findings by the report's own severity label is quoting; computing a
 // verified/unverified ratio would not be, and is out of scope permanently.
 import { type Lexicon } from './lexicon.ts'
+import { verdictLines } from '../record/validate.ts'
 import { SEVERITY_RANK, parseReview, type ReviewFinding } from './review.ts'
 
 export interface EvidenceAnchor {
@@ -66,6 +67,11 @@ export interface CriterionEvidence {
 
 export interface EvidenceRollup {
   hasVerification: boolean
+  /**
+   * The report's overall `**Verdict:**` line, verbatim (#152) — quoted and
+   * attributed, never computed. Null when the report predates the line.
+   */
+  verdict: string | null
   /** Spec-defined criteria in definition order, then unknown citations. */
   criteria: CriterionEvidence[]
   /**
@@ -129,6 +135,9 @@ export function buildEvidenceRollup(input: {
 
   let blocks = 0
   let rows = 0
+  // The report's own verdict line, through the parser the orchestrator reads
+  // it with (#152) — the last line outside a fence is the one in force.
+  const verdict: string | null = input.verification ? (verdictLines(input.verification).at(-1) ?? null) : null
   if (input.verification) {
     const lines = toLines(input.verification)
     let section = ''
@@ -199,6 +208,7 @@ export function buildEvidenceRollup(input: {
   // which is exactly right; spec-defined ids stay first, in spec order.
   return {
     hasVerification: input.verification !== null,
+    verdict,
     criteria: order.map((id) => byId.get(id)!),
     withheld:
       input.verification !== null && blocks === 0 && rows === 0

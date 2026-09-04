@@ -151,6 +151,13 @@ Read `verification-report.md`. Every acceptance criterion should have a verdict 
 pasted command output. `failed` rows go back to step 3; `unverifiable` rows are a G2
 judgment call for you.
 
+The report ends with one overall `**Verdict:** pass | fail | escalate` line (the
+word alone). `escalate` is the verifier's escalation channel: a failure that
+traces to the spec or plan, not the code. Treat it exactly like a reviewer's
+`escalate` — resolve it before deciding G2, and expect the v1 orchestrator to
+pause on it (rule D24). `fail` does not pause; it is yours to weigh at G2, and
+Gatehouse quotes the verdict and the non-verified rows on the card.
+
 ## 5. G2 — merge
 
 You now hold: the diff, a review report with a coverage statement, and a verification

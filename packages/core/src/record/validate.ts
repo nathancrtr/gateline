@@ -76,6 +76,35 @@ export function missingSections(content: string, required: string[]): string[] {
   return required.filter((s) => !have.has(normalize(s)))
 }
 
+/** The verification report's overall verdict vocabulary (#152). */
+export const VERIFICATION_VERDICTS = ['pass', 'fail', 'escalate'] as const
+export type VerificationVerdict = (typeof VERIFICATION_VERDICTS)[number]
+
+/**
+ * Every `**Verdict:** <text>` line outside a code fence, verbatim after the
+ * label, in order (#152). One parser for the orchestrator and Gatehouse, so
+ * the two can never disagree about what a report says. A re-verification
+ * appended to the report adds a line; the LAST one is the verdict in force,
+ * the same reading the reviewer's rounds get.
+ */
+export function verdictLines(markdown: string): string[] {
+  const out: string[] = []
+  let inFence = false
+  for (const line of markdown.split('\n')) {
+    if (/^\s*(```|~~~)/.test(line)) inFence = !inFence
+    if (inFence) continue
+    const m = /^\*{2}Verdict:\*{2}\s*(.*?)\s*$/.exec(line)
+    if (m) out.push(m[1]!)
+  }
+  return out
+}
+
+/** The verdict word a line carries, or null when the line is anything but exactly one of the three. */
+export function verificationVerdict(line: string | null | undefined): VerificationVerdict | null {
+  const word = line?.trim().toLowerCase()
+  return word && (VERIFICATION_VERDICTS as readonly string[]).includes(word) ? (word as VerificationVerdict) : null
+}
+
 /** Built-in section lists, mirroring contracts/ at the time of writing. */
 export const BUILTIN_SECTIONS: Record<string, string[]> = {
   'intent-brief.md': ['Problem', 'Motivation', 'Constraints', 'Out of scope'],
@@ -176,5 +205,12 @@ export async function validateArtifact(
   }
   const have = new Set(extractSections(content).map(normalize))
   const missing = required.filter((s) => !have.has(normalize(s)))
+  // A verdict line that is present but not one of the three words is a
+  // deviation from the grammar, and bounces like one (#152). Absence is not:
+  // every report written before the line exists is a finished run's record.
+  if (contract === 'verification-report.md') {
+    const last = verdictLines(content).at(-1)
+    if (last !== undefined && verificationVerdict(last) === null) missing.push('Verdict: pass | fail | escalate')
+  }
   return { contract, ok: missing.length === 0, missing, notes, audit }
 }

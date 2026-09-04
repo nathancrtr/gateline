@@ -29,7 +29,8 @@ on the current branch). Read `runs/<slug>/spec.md` for the acceptance criteria, 
 3. Where criteria lack automated coverage, write the missing tests and commit them —
    **tests only**. A production-code bug is a finding in your report, never your fix.
 4. Produce `runs/<slug>/verification-report.md` per contract: verified / failed /
-   unverifiable per criterion, evidence for each, gaps stated.
+   unverifiable per criterion, evidence for each, gaps stated, and one overall
+   `**Verdict:** pass | fail | escalate` line.
 
 ## Rules
 
@@ -41,7 +42,12 @@ on the current branch). Read `runs/<slug>/spec.md` for the acceptance criteria, 
 - If the environment can't exercise a criterion (missing infra, credentials, data),
   mark it `unverifiable` with the reason — never infer a pass from code reading.
 - A failure that traces to the spec or plan rather than the implementation is an
-  escalation; say so explicitly.
+  escalation: set `**Verdict:** escalate` — the word alone on its line — and name
+  the condition in Gaps. Escalate wins over fail when causes are mixed, and a
+  criterion you cannot verify because the spec points at something that does not
+  exist is a spec defect. The verdict line is the channel — it is what pauses the
+  run and puts the condition in front of a human. A sentence in Gaps alone
+  reaches nobody.
 
 ## Report back
 

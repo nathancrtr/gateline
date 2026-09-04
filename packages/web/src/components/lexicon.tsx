@@ -150,14 +150,49 @@ export const lexiconRehype = (pattern: string, sourcePath?: string) => () => (tr
 // ---------------------------------------------------------------------------
 // The reference itself: dotted id, hover/focus opens the verbatim card.
 
+/** The card's designed width (`w-[26rem]`) and the breathing room it keeps from the pane's edges. */
+export const CARD_WIDTH = 416
+export const CARD_GUTTER = 8
+
+/**
+ * Where a card opens (#311). The card is positioned off its reference, and a
+ * reference in the right third of a narrow reader used to open a card that
+ * ran past the pane's edge — clipped, since #281 made the reader an
+ * `overflow-x` container. The rule: the card is as wide as designed or as
+ * wide as the pane allows, and its left edge slides inward exactly as far as
+ * it must to stay inside the pane. A reference near the right edge therefore
+ * opens leftward; one near the left opens as before; a pane narrower than the
+ * card gets a narrower card. Pure, so it is testable without layout.
+ */
+export function cardPlacement(anchorLeft: number, pane: { left: number; right: number }, width = CARD_WIDTH, gutter = CARD_GUTTER): { left: number; maxWidth: number } {
+  const room = Math.max(0, pane.right - pane.left - 2 * gutter)
+  const maxWidth = Math.min(width, room)
+  const left = Math.min(Math.max(anchorLeft, pane.left + gutter), pane.right - gutter - maxWidth)
+  return { left: left - anchorLeft, maxWidth }
+}
+
+/** On reveal, measure the reference against its clipping pane and place the card. */
+function placeCard(ref: HTMLElement): void {
+  const card = ref.querySelector<HTMLElement>(':scope > .lex-card')
+  if (!card) return
+  // The nearest ancestor that clips — the Record reader since #281 — else the viewport.
+  let pane: HTMLElement | null = ref.parentElement
+  while (pane && getComputedStyle(pane).overflowX === 'visible') pane = pane.parentElement
+  const bound = pane ? pane.getBoundingClientRect() : { left: 0, right: document.documentElement.clientWidth }
+  const { left, maxWidth } = cardPlacement(ref.getBoundingClientRect().left, bound)
+  card.style.left = `${left}px`
+  card.style.maxWidth = `${maxWidth}px`
+}
+
 export function LexRef({ children }: { children?: ReactNode }) {
   const lex = useLexicon()
   const id = typeof children === 'string' ? children : Array.isArray(children) ? children.join('') : ''
   if (!lex || !id) return <>{children}</>
   const defs = lex.byId.get(id)
   const entry = defs?.at(-1)
+  const reveal = (e: { currentTarget: HTMLElement }) => placeCard(e.currentTarget)
   return (
-    <span className={`lex-ref ${entry ? '' : 'lex-ref-missing'}`} tabIndex={0}>
+    <span className={`lex-ref ${entry ? '' : 'lex-ref-missing'}`} tabIndex={0} onMouseEnter={reveal} onFocus={reveal}>
       {id}
       <span className="lex-card" role="tooltip">
         <span className="lex-card-head">

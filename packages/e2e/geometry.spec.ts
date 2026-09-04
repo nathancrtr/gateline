@@ -63,6 +63,7 @@ type InvariantId =
   | 'finding-title-floor'
   | 'needs-you-visible'
   | 'idle-card-collapsed'
+  | 'inbox-rows-contained'
 
 interface SweepState {
   name: string
@@ -197,6 +198,9 @@ interface Measurement {
   /** Lexicon hover cards on the page. The sweep hovers and focuses nothing, so
    *  every one of them is idle, and `laidOut` is how many still have a box. */
   lexCards: { total: number; laidOut: number }
+  /** Inbox rows whose text cell paints past its own box (#280): the slug that
+   *  ran across the time column. `over` is how far, in px. */
+  inboxRows: { slug: string; over: number }[]
 }
 
 let fixtureDir: string
@@ -374,6 +378,25 @@ async function measure(p: Page): Promise<Omit<Measurement, 'state' | 'width'>> {
       culprits.sort((a, b) => b.right - a.right)
     }
 
+    // Inbox rows (#280). The text cell is `min-width: 0` inside its grid
+    // column, and each line in it truncates; the rule is that nothing inside
+    // it reaches past its own right edge, where the time column begins. Asked
+    // of the cell's descendants rather than of `overflow`, so it survives the
+    // fix being written another way — a `text-overflow`, a `contain`, an
+    // `overflow: hidden` on the cell would all satisfy it.
+    const inboxRows = [...document.querySelectorAll<HTMLElement>('[data-inbox-row]')].map((row) => {
+      const cell = row.querySelector<HTMLElement>('[data-inbox-text]')
+      const cellBox = cell?.getBoundingClientRect()
+      let over = 0
+      if (cell && cellBox) {
+        for (const el of cell.querySelectorAll<HTMLElement>('*')) {
+          const box = el.getBoundingClientRect()
+          if (box.width > 0) over = Math.max(over, box.right - cellBox.right)
+        }
+      }
+      return { slug: cell?.querySelector('.font-mono')?.textContent ?? '?', over: round(over) }
+    })
+
     return {
       bodyScrollWidth: round(document.body.scrollWidth),
       docScrollWidth: round(document.documentElement.scrollWidth),
@@ -385,6 +408,7 @@ async function measure(p: Page): Promise<Omit<Measurement, 'state' | 'width'>> {
       findingTitles,
       needsYou,
       lexCards,
+      inboxRows,
     }
   })
 }
@@ -459,6 +483,17 @@ const CHECKS: Record<InvariantId, (m: Measurement) => string | null> = {
     m.lexCards.laidOut > 0
       ? `${m.lexCards.laidOut} of ${m.lexCards.total} idle .lex-card boxes still occupy layout`
       : null,
+
+  /**
+   * #280: the run slug was the one `shrink-0` item in a cell whose title
+   * truncated, so at 800px it wrapped to its own line and ran straight across
+   * the time column, text over the clock chip. Title and slug follow one
+   * overflow rule now; this is the assertion that the cell keeps its contents.
+   */
+  'inbox-rows-contained': (m) => {
+    const spilled = m.inboxRows.filter((r) => r.over > 0.5)
+    return spilled.length === 0 ? null : spilled.map((r) => `${r.slug} paints ${r.over}px past its cell`).join('; ')
+  },
 }
 
 /** The declarations, if any, that own this combination. */
@@ -520,9 +555,15 @@ test('no idle lexicon hover card occupies layout at any width', () => {
   expect(failures, `idle hover cards still laid out:\n${failures.join('\n')}`).toEqual([])
 })
 
+test('no inbox row paints its text past its own cell at any width', () => {
+  expect(measurements.filter((m) => m.state === 'inbox').flatMap((m) => m.inboxRows).length).toBeGreaterThan(20)
+  const failures = sweep('inbox-rows-contained')
+  expect(failures, `inbox rows whose text reaches into the time column:\n${failures.join('\n')}`).toEqual([])
+})
+
 // The `test.fixme` that used to close this file is gone, and so is everything it
 // re-asserted. It existed to hold #281 and #308 declared-but-unfixed; both are
-// closed, the `broken` table above is empty, and all five rules now run against
+// closed, the `broken` table above is empty, and all six rules now run against
 // every state at every width with nothing excluded. The mechanism stays —
 // `KnownBroken`, `declaredBroken`, the `broken` field — because the next defect
 // found this way should be declared in the table with an owner rather than

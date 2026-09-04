@@ -106,3 +106,17 @@ describe('validateArtifact', () => {
     expect(v.notes.join(' ')).toMatch(/not valid YAML/)
   })
 })
+
+describe('verification verdict line (#152)', () => {
+  const body = (verdict: string) => `# Verification Report: run\n\n**Verdict:** ${verdict}\n\n## Results\n\n## Beyond the happy path\n\n## Gaps\n`
+  it('a present line must be exactly one of the three words, or the report is malformed', async () => {
+    expect((await validateArtifact('verification-report.md', body('escalate'), noTemplates)).ok).toBe(true)
+    const bad = await validateArtifact('verification-report.md', body('fail — escalating AC3.2'), noTemplates)
+    expect(bad.ok).toBe(false)
+    expect(bad.missing).toEqual(['Verdict: pass | fail | escalate'])
+  })
+  it('an absent line is not a deviation: reports written before it stay valid', async () => {
+    const legacy = '# Verification Report: run\n\n## Results\n\n## Beyond the happy path\n\n## Gaps\n'
+    expect((await validateArtifact('verification-report.md', legacy, noTemplates)).ok).toBe(true)
+  })
+})

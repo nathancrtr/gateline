@@ -3,7 +3,7 @@
 // directly so each row is exercised in isolation.
 import { describe, expect, it } from 'vitest'
 import { PROFILES, STAGED_REASON, type GateEntry, type RunState, type Validation } from '@gateline/core'
-import { deriveAction, DEFAULT_ESTIMATE_USD } from '../src/derive.ts'
+import { deriveAction, DEFAULT_ESTIMATE_USD, VERIFIER_ESCALATION_REASON } from '../src/derive.ts'
 import type { LedgerEntry, RunObservation, TaskFileInfo } from '../src/observe.ts'
 import type { ReviewInfo } from '../src/review-report.ts'
 
@@ -32,6 +32,7 @@ const obs = (over: Partial<RunObservation> = {}): RunObservation => ({
   artifacts: ['intent-brief.md'],
   validations: {},
   reviews: [],
+  verification: null,
   lastTouched: {},
   lastNonStateCommit: null,
   declineEvents: {},
@@ -1130,5 +1131,72 @@ describe('profile-parameterized derivation', () => {
     })
     const a = deriveAction(obs({ state: s, artifacts: ['intent-brief.md', 'tasks/01-fix.yaml'] }))
     expect(a).toMatchObject({ kind: 'dispatch', rule: 'D6', dispatches: [{ role: 'analyst' }] })
+  })
+})
+
+describe('D24 — the verifier\'s escalation channel (#152)', () => {
+  const verified = () =>
+    obs({
+      state: state({ phase: 'implement', tasks: [{ id: '01-a', status: 'review-approved', review_rounds: 1 }] }),
+      taskFiles: new Map([taskFile('01-a')]),
+      artifacts: ['spec.md', 'plan.md', 'tasks/01-a.yaml', 'review-01.md', 'verification-report.md'],
+      validations: { 'verification-report.md': { contract: 'verification-report.md', ok: true, missing: [], notes: [] } },
+    })
+
+  it('an escalate verdict escalates and pauses, naming the report', () => {
+    const o = verified()
+    o.verification = { verdict: 'escalate', raw: 'escalate', lastTouched: 500 }
+    expect(deriveAction(o)).toMatchObject({ kind: 'escalate', rule: 'D24', pause: 'escalation', reason: VERIFIER_ESCALATION_REASON })
+  })
+
+  it('a resolution newer than the report returns the packet to the table (D10), failed rows and all', () => {
+    const o = verified()
+    o.verification = { verdict: 'escalate', raw: 'escalate', lastTouched: 500 }
+    o.state!.escalations = [
+      {
+        at: null,
+        from_role: 'orchestrator',
+        reason: VERIFIER_ESCALATION_REASON,
+        resolved: true,
+        resolved_by: 'op',
+        resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600 > lastTouched 500
+        resolution: 'spec amended; the G2 human will weigh the failed row',
+        disposition: null,
+      },
+    ]
+    expect(deriveAction(o)).toMatchObject({ kind: 'rest', rule: 'D10' })
+  })
+
+  it('a resolution older than the report still escalates — the report is the newer fact', () => {
+    const o = verified()
+    o.verification = { verdict: 'escalate', raw: 'escalate', lastTouched: 500 }
+    o.state!.escalations = [
+      {
+        at: null,
+        from_role: 'orchestrator',
+        reason: VERIFIER_ESCALATION_REASON,
+        resolved: true,
+        resolved_by: 'op',
+        resolved_at: '1970-01-01T00:05:00.000Z', // epoch 300 < 500
+        resolution: 'an earlier report',
+        disposition: null,
+      },
+    ]
+    expect(deriveAction(o)).toMatchObject({ kind: 'escalate', rule: 'D24' })
+  })
+
+  it('pass, fail, and a report without the line all leave G2 on the table — fail is the human\'s to weigh', () => {
+    for (const verdict of ['pass', 'fail', null] as const) {
+      const o = verified()
+      o.verification = { verdict, raw: verdict, lastTouched: 500 }
+      expect(deriveAction(o), String(verdict)).toMatchObject({ kind: 'rest', rule: 'D10' })
+    }
+  })
+
+  it('a malformed report bounces before its verdict is read', () => {
+    const o = verified()
+    o.verification = { verdict: 'escalate', raw: 'escalate', lastTouched: 500 }
+    o.validations['verification-report.md'] = { contract: 'verification-report.md', ok: false, missing: ['Gaps'], notes: [] }
+    expect(deriveAction(o)).toMatchObject({ rule: 'D7' })
   })
 })

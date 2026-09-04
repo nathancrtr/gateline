@@ -19,7 +19,7 @@ export type Phase = (typeof PHASES)[number]
 /** Phases from which nothing further derives: the run's record is final. */
 export const TERMINAL_PHASES = ['done', 'closed'] as const
 
-export const PAUSED_REASONS = ['budget-exhausted', 'round-cap', 'escalation', 'gate-declined', 'staged'] as const
+export const PAUSED_REASONS = ['budget-exhausted', 'round-cap', 'escalation', 'gate-declined', 'staged', 'slug-landed'] as const
 export type PausedReason = (typeof PAUSED_REASONS)[number]
 
 /** A staged-but-unarmed run: `phase: paused` reused (ADR-1) rather than a new
@@ -30,6 +30,18 @@ export const STAGED_REASON = 'staged' as const
 /** A run at rest because a human declined its gate — a decided run, not a
  * pending one (#200). Exported so no caller inlines the literal twice. */
 export const DECLINED_REASON = 'gate-declined' as const
+
+/** A run the orchestrator paused because its next dispatch would exceed
+ * `budget.cost_limit_usd` (or, under `--require-budget`, because it has none).
+ * A condition, not an event (#96): the deriver recomputes it from the same
+ * facts every tick, so the only resume that sticks is one that changes a
+ * fact — a higher limit, written in the same commit. */
+export const BUDGET_REASON = 'budget-exhausted' as const
+
+/** A run the orchestrator paused because `runs/<slug>/` already shipped on the
+ * default branch and the branch kept going (#213, rule LR). Nothing clears it:
+ * the remaining work needs a fresh slug, and this run a closing disposition. */
+export const LANDED_REASON = 'slug-landed' as const
 
 /**
  * A run a human closed out before it reached `done` (#200) — a real phase, not

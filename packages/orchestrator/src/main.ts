@@ -42,7 +42,12 @@ program
     '--local-only',
     'no push, no gh/GitHub API calls, no origin fetch (conflicts with --push); unset auto-detects off a missing origin remote',
   )
-  .option('--spend-limit-usd <usd>', 'refuse new dispatches when projected spend across all active runs exceeds this', parseFloat)
+  .option(
+    '--spend-limit-usd <usd>',
+    'defer new dispatches while projected spend across all active runs inside the window exceeds this (a rate limit, never a pause; #97)',
+    parseFloat,
+  )
+  .option('--spend-window <hours>', 'the rolling window --spend-limit-usd measures over (default 24)', parseFloat)
   .option('--require-budget', 'refuse dispatch on any run missing budget.cost_limit_usd')
   .option(
     '--no-budget-enforcement',
@@ -80,6 +85,7 @@ async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler:
     push?: boolean
     localOnly?: boolean
     spendLimitUsd?: number
+    spendWindow?: number
     requireBudget?: boolean
     budgetEnforcement?: boolean
     roleTimeout?: number
@@ -92,6 +98,7 @@ async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler:
     push: hosted.push,
     localOnly: hosted.localOnly,
     spendLimitUsd: hosted.spendLimitUsd ?? null,
+    spendWindowHours: hosted.spendWindow,
     requireBudget: hosted.requireBudget,
     budgetEnforcement: hosted.budgetEnforcement,
     roleTimeoutSeconds: hosted.roleTimeout,

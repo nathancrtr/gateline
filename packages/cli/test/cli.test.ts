@@ -144,13 +144,19 @@ describe('gateline CLI', () => {
 
   it('resolve-escalation and resume complete the loop', async () => {
     await run(['resolve-escalation', 'escalated', '0', '--note', 'sample data committed'])
-    await run(['resume', 'paused-budget'])
+    // A budget pause is a condition the engine recomputes (#96): a bare resume
+    // is refused with the remedy, and the one that sticks raises the limit.
+    const bare = await run(['resume', 'paused-budget'], true)
+    expect(bare.code).not.toBe(0)
+    expect(bare.stderr).toMatch(/re-pauses on the next tick/)
+    await run(['resume', 'paused-budget', '--cost-limit', '40'])
     const source = new LocalGitSource('fixture', fixture.dir)
     const refs = await source.listRuns()
     const esc = await source.readState(refs.find((r) => r.slug === 'escalated')!)
     expect(esc.state!.escalations[0]!.resolved).toBe(true)
     const paused = await source.readState(refs.find((r) => r.slug === 'paused-budget')!)
     expect(paused.state!.phase).toBe('plan')
+    expect(paused.state!.budget!.cost_limit_usd).toBe(40)
   })
 
   it('close requires --as and --reason, then ends the run with a typed disposition (#200)', async () => {

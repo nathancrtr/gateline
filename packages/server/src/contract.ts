@@ -144,6 +144,17 @@ export interface EngineHealthEntry {
   codeCause?: CodeTreeCause
   /** True while a dirty tree is also holding back a fast-forward the engine would restart onto (#222). */
   codeUpgradeBlocked?: boolean
+  /** Runs the engine is holding back without pausing them, and why (#97) — empty from engines too old to report it. */
+  deferrals?: EngineDeferral[]
+}
+
+/** One held-back run on the heartbeat (#97): a self-clearing ceiling's own words, at the host level. */
+export interface EngineDeferral {
+  slug: string
+  rule: string
+  reason: string
+  /** ISO timestamp of the first pass that deferred this run for this rule. */
+  since: string
 }
 
 export interface EngineHealthResponse {
@@ -293,6 +304,8 @@ export interface DecisionRequest {
   closure?: Closure
   pauseReason?: string
   resumePhase?: Phase
+  /** resume: a new budget.cost_limit_usd, required from a budget-exhausted pause (#96). */
+  costLimitUsd?: number
   hold?: boolean
   holdReason?: string
 }

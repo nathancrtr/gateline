@@ -70,6 +70,8 @@ export interface OrchestratorOptions {
   requireBudget?: boolean
   /** Host-wide spend ceiling across active runs. */
   spendLimitUsd?: number | null
+  /** The rolling window `spendLimitUsd` measures over, in hours (default 24, #97). */
+  spendWindowHours?: number
   /**
    * Budget *enforcement* switch (#109), default on: false disables the
    * DB/RB/HB pauses — for operators billed flat-rate, where dollar caps do
@@ -188,6 +190,7 @@ export async function assembleOrchestrator(
     ...common,
     dispatcher: remote ?? localDispatcher,
     spendLimitUsd: opts.spendLimitUsd ?? null,
+    spendWindowMs: opts.spendWindowHours !== undefined ? opts.spendWindowHours * 3_600_000 : undefined,
     requireBudget: opts.requireBudget,
     budgetEnforcement: opts.budgetEnforcement,
     roleTimeoutMs: opts.roleTimeoutSeconds !== undefined ? opts.roleTimeoutSeconds * 1000 : undefined,

@@ -95,6 +95,7 @@ if [ "${ORCH_ENABLED:-0}" = "1" ]; then
         --adapter "${ORCH_ADAPTER:-claude-code}" \
         --push "$ORCH_BUDGET_FLAG" \
         ${ORCH_SPEND_LIMIT_USD:+--spend-limit-usd "$ORCH_SPEND_LIMIT_USD"} \
+        ${ORCH_SPEND_WINDOW_HOURS:+--spend-window "$ORCH_SPEND_WINDOW_HOURS"} \
         watch --heartbeat "${ORCH_HEARTBEAT_SECONDS:-180}" || true
       echo "orchestrator exited; restarting in 10s" >&2
       sleep 10

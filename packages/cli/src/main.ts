@@ -382,9 +382,10 @@ program
   .description('resume a paused run (phase derived from the gate ledger unless --phase)')
   .argument('<slug>', 'run slug')
   .option('--phase <phase>', 'spec | plan | implement | integrate | release')
+  .option('--cost-limit <usd>', 'new budget.cost_limit_usd, written in the same commit; required from a budget-exhausted pause (#96)', parseFloat)
   .option('--source <id>')
-  .action(async (slug: string, flags: DecideFlags) => {
-    await decide(slug, flags, { action: 'resume', resumePhase: flags.phase as Phase | undefined })
+  .action(async (slug: string, flags: DecideFlags & { costLimit?: number }) => {
+    await decide(slug, flags, { action: 'resume', resumePhase: flags.phase as Phase | undefined, costLimitUsd: flags.costLimit })
   })
 
 program
@@ -842,7 +843,12 @@ program
     (value: string, acc: string[]) => [...acc, value],
     [] as string[],
   )
-  .option('--spend-limit-usd <usd>', 'refuse new dispatches when projected spend across all active runs exceeds this', parseFloat)
+  .option(
+    '--spend-limit-usd <usd>',
+    'defer new dispatches while projected spend across all active runs inside the window exceeds this (a rate limit, never a pause; #97)',
+    parseFloat,
+  )
+  .option('--spend-window <hours>', 'the rolling window --spend-limit-usd measures over (default 24)', parseFloat)
   .option(
     '--no-budget-enforcement',
     'meter spend but never pause on it: no per-run cap requirement, no cap pauses (for flat-rate-billed harnesses, #109)',
@@ -872,6 +878,7 @@ program
         open?: boolean
         adapter: string[]
         spendLimitUsd?: number
+        spendWindow?: number
         budgetEnforcement?: boolean
         push?: boolean
         localOnly?: boolean
@@ -967,6 +974,7 @@ program
         requireBudget: flags.budgetEnforcement !== false,
         budgetEnforcement: flags.budgetEnforcement,
         spendLimitUsd: flags.spendLimitUsd ?? null,
+        spendWindowHours: flags.spendWindow,
         roleTimeoutSeconds: flags.roleTimeout,
         maxConcurrentDispatches: flags.maxConcurrentDispatches,
         heartbeatSeconds: Number(flags.heartbeat),

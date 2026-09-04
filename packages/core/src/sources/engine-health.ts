@@ -47,6 +47,26 @@ export interface EngineHealth {
   codeCause?: CodeTreeCause
   /** True while a dirty tree is also holding back a clean fast-forward the engine would otherwise restart onto (#222). */
   codeUpgradeBlocked?: boolean
+  /**
+   * What the engine held back on its last pass without writing anything
+   * (#97): a self-clearing ceiling — the resource cap, the host spend
+   * window — defers a run rather than pausing it, so the run's own record
+   * says nothing about why it is not moving. Reported here, at the level
+   * the condition lives, so Gatehouse can show a host-level cause as a
+   * host-level chip instead of a per-run escalation pointing at a file
+   * that contains no such number. Optional so pre-#97 heartbeats parse.
+   */
+  deferrals?: EngineDeferral[]
+}
+
+export interface EngineDeferral {
+  slug: string
+  /** The engine rule that deferred it (MC, HB, …). */
+  rule: string
+  /** The rule's own words — the arithmetic and the flag, verbatim. */
+  reason: string
+  /** ISO timestamp of the first pass that deferred this run for this rule. */
+  since: string
 }
 
 /** Grace beyond the expected cadence before a heartbeat reads as stale. */

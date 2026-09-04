@@ -6,7 +6,7 @@
 import { watch, type FSWatcher } from 'node:fs'
 import { join } from 'node:path'
 import { Git, type CodeTreeMonitor, type CodeTreeState, type CodeTreeStatus, writeEngineHealth } from '@gateline/core/sources'
-import type { TickOutcome } from './engine.ts'
+import type { Deferral, TickOutcome } from './engine.ts'
 import type { Scheduler } from './schedule.ts'
 
 /**
@@ -21,6 +21,8 @@ export interface EngineLike {
   syncFromRemote(): Promise<void>
   inFlight(): number
   pushHealth(): ReadonlyMap<string, number>
+  /** Runs held back on the last pass and why (#97); optional for older engines and test doubles. */
+  deferrals?(): Deferral[]
   drain(): Promise<void>
   onSettled: (() => void) | null
 }
@@ -165,6 +167,7 @@ export async function runLoop(engine: EngineLike, repoDir: string, cfg: RunLoopC
         heartbeatMs: cfg.heartbeatMs ?? DEFAULT_HEARTBEAT_MS,
         inFlight: engine.inFlight(),
         pushRejections: Object.fromEntries(engine.pushHealth()),
+        deferrals: engine.deferrals?.() ?? [],
         ...codeFields,
       })
     } catch (e) {

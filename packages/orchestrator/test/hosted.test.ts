@@ -80,27 +80,127 @@ describe('--push: origin carries every orchestrator write', () => {
   })
 })
 
-describe('--spend-limit-usd: the host-wide ceiling (HB)', () => {
-  it('downgrades a dispatch to an escalation and pauses when the projection exceeds the cap', async () => {
+/** Seed one closed ledger entry on the toy run, opened `at`, so the host window has history to measure. */
+async function seedLedger(dir: string, at: string, costUsd: number): Promise<void> {
+  const human = new LocalGitSource('t', dir)
+  const ref = (await human.listRuns()).find((r) => r.slug === 'toy')!
+  const wrote = await human.writeState(
+    ref,
+    (doc) => doc.setIn(['budget', 'ledger', 0], { at, role: 'analyst', task: null, round: null, cost_usd: costUsd }),
+    'state(toy): seeded ledger',
+  )
+  expect(wrote.ok).toBe(true)
+}
+
+describe('--spend-limit-usd: the host-wide ceiling (HB, #97)', () => {
+  it('defers a dispatch that would cross the cap — nothing written, nothing paused, the reason on the heartbeat', async () => {
     const { dir } = toyRepo({ budget: 50 })
     const dispatcher = new FakeDispatcher(() => ({}))
-    // analyst estimate in TEST_REGISTRY is $2; a $1 host cap must refuse it.
-    const engine = makeEngine(dir, dispatcher, { spendLimitUsd: 1 })
+    const lines: string[] = []
+    // analyst estimate in TEST_REGISTRY is $2; a $1 host cap must hold it back.
+    const engine = makeEngine(dir, dispatcher, { spendLimitUsd: 1, log: (l) => lines.push(l) })
+
+    const source = new LocalGitSource('t', dir)
+    const ref = (await source.listRuns()).find((r) => r.slug === 'toy')!
+    const before = await source.git.revParse(ref.ref)
 
     const outcomes = await engine.tick()
     await engine.drain()
 
     const toy = outcomes.find((o) => o.slug === 'toy')!
-    expect(toy.action.kind).toBe('escalate')
+    expect(toy.action.kind).toBe('rest')
     expect(toy.action.rule).toBe('HB')
+    expect(toy.wrote).toBe(false)
     expect(dispatcher.calls.length).toBe(0)
-
-    const source = new LocalGitSource('t', dir)
-    const ref = (await source.listRuns()).find((r) => r.slug === 'toy')!
+    // The old shape paused the run and escalated a host-level condition into
+    // one run's record (#97): a resolve-and-resume changed none of the inputs
+    // and the next tick re-derived the same refusal. Now the run is untouched…
+    expect(await source.git.revParse(ref.ref)).toBe(before)
     const { state } = await source.readState(ref)
-    expect(state?.phase).toBe('paused')
-    expect(state?.paused_reason).toBe('budget-exhausted')
-    expect(state?.escalations?.[0]?.reason).toContain('host spend')
+    expect(state?.phase).toBe('spec')
+    expect(state?.escalations ?? []).toHaveLength(0)
+    // …and the condition is reported where it lives: the engine, for the heartbeat.
+    const deferrals = engine.deferrals()
+    expect(deferrals).toHaveLength(1)
+    expect(deferrals[0]).toMatchObject({ slug: 'toy', rule: 'HB' })
+    expect(deferrals[0]!.reason).toContain('--spend-limit-usd $1')
+    expect(deferrals[0]!.reason).toContain('over the last 24 hours')
+    expect(Date.parse(deferrals[0]!.since)).not.toBeNaN()
+    expect(lines.join('\n')).toContain('deferred, not paused')
+  })
+
+  it('measures a rolling window: spend outside it no longer counts, spend inside it does', async () => {
+    const now = new Date('2026-09-04T12:00:00Z')
+    const hourAgo = new Date(now.getTime() - 3_600_000).toISOString()
+    const twoDaysAgo = new Date(now.getTime() - 48 * 3_600_000).toISOString()
+
+    // $10 closed two days ago against a $5 cap: outside the 24h window, so the
+    // $2 analyst dispatch fits and goes out.
+    {
+      const { dir, clock } = toyRepo({ budget: 50 })
+      await seedLedger(dir, twoDaysAgo, 10)
+      const dispatcher = new FakeDispatcher((req) => {
+        agentCommit(req.cwd, clock as Clock, { 'runs/toy/spec.md': SPEC }, 'toy: spec')
+        return {}
+      })
+      const engine = makeEngine(dir, dispatcher, { spendLimitUsd: 5, now: () => now })
+      const outcomes = await engine.tick()
+      await engine.drain()
+      expect(outcomes.find((o) => o.slug === 'toy')?.launched).toBe(1)
+      expect(engine.deferrals()).toHaveLength(0)
+    }
+
+    // The same $10 an hour ago is inside the window: deferred.
+    {
+      const { dir } = toyRepo({ budget: 50 })
+      await seedLedger(dir, hourAgo, 10)
+      const dispatcher = new FakeDispatcher(() => ({}))
+      const engine = makeEngine(dir, dispatcher, { spendLimitUsd: 5, now: () => now })
+      const outcomes = await engine.tick()
+      await engine.drain()
+      expect(outcomes.find((o) => o.slug === 'toy')?.action.rule).toBe('HB')
+      expect(dispatcher.calls.length).toBe(0)
+      expect(engine.deferrals()[0]?.reason).toContain('ledger $10.00 in the window')
+    }
+
+    // A narrower window (--spend-window 0.5h) lets the hour-old spend age out.
+    {
+      const { dir, clock } = toyRepo({ budget: 50 })
+      await seedLedger(dir, hourAgo, 10)
+      const dispatcher = new FakeDispatcher((req) => {
+        agentCommit(req.cwd, clock as Clock, { 'runs/toy/spec.md': SPEC }, 'toy: spec')
+        return {}
+      })
+      const engine = makeEngine(dir, dispatcher, { spendLimitUsd: 5, spendWindowMs: 30 * 60_000, now: () => now })
+      const outcomes = await engine.tick()
+      await engine.drain()
+      expect(outcomes.find((o) => o.slug === 'toy')?.launched).toBe(1)
+    }
+  })
+
+  it('a deferral keeps its first-seen time across ticks and clears once the dispatch fits', async () => {
+    const now = new Date('2026-09-04T12:00:00Z')
+    const { dir, clock } = toyRepo({ budget: 50 })
+    await seedLedger(dir, new Date(now.getTime() - 3_600_000).toISOString(), 10)
+    const dispatcher = new FakeDispatcher((req) => {
+      agentCommit(req.cwd, clock as Clock, { 'runs/toy/spec.md': SPEC }, 'toy: spec')
+      return {}
+    })
+    let clockNow = now
+    const engine = makeEngine(dir, dispatcher, { spendLimitUsd: 5, now: () => clockNow })
+
+    await engine.tick()
+    const first = engine.deferrals()[0]!
+    clockNow = new Date(now.getTime() + 60_000)
+    await engine.tick()
+    expect(engine.deferrals()[0]).toMatchObject({ slug: 'toy', rule: 'HB', since: first.since })
+
+    // The window rolls past the seeded spend: the dispatch fits, the deferral is gone.
+    clockNow = new Date(now.getTime() + 25 * 3_600_000)
+    const outcomes = await engine.tick()
+    await engine.drain()
+    expect(outcomes.find((o) => o.slug === 'toy')?.launched).toBe(1)
+    expect(engine.deferrals()).toHaveLength(0)
   })
 
   it('dispatches normally when the projection fits under the cap', async () => {

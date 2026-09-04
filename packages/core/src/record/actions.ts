@@ -4,6 +4,7 @@
 // before any write is attempted.
 import type { Document } from 'yaml'
 import {
+  BUDGET_REASON,
   BURDENS,
   CLOSED_PHASE,
   CLOSURES,
@@ -57,6 +58,15 @@ export interface DecisionInput {
   pauseReason?: string
   /** resume: target phase; derived from the gate ledger when omitted. */
   resumePhase?: Phase
+  /**
+   * resume: a new `budget.cost_limit_usd`, written in the same commit as the
+   * phase restore. Required when the run is paused `budget-exhausted` (#96):
+   * the pause is a condition the engine recomputes from the ledger and the
+   * limit, so a resume that changes neither re-pauses on the next tick and
+   * burns two human decisions for nothing. Optional otherwise; must exceed
+   * the current limit whenever given.
+   */
+  costLimitUsd?: number
   /**
    * close: why the run is ending short of `done` (#200). Required — a closure
    * with no disposition is the untyped terminal state the record can never be
@@ -201,10 +211,30 @@ export function planDecision(state: RunState, input: DecisionInput, who: Identit
         state.paused_reason === 'gate-declined'
           ? PROFILE_GATES[state.profile].filter((g) => !state.gates[g].approved && state.gates[g].by !== null)
           : []
+      // A budget pause is a condition, not an event (#96): the engine reads
+      // {ledger, estimates, limit} and nothing a human says on the way back
+      // changes any of them. The one resume that sticks raises the limit in
+      // the same commit — so that is the only resume this path allows from
+      // budget-exhausted, and the error names the alternative (close).
+      const currentLimit = state.budget?.cost_limit_usd ?? null
+      const raise = input.costLimitUsd
+      if (raise !== undefined) {
+        if (typeof raise !== 'number' || !Number.isFinite(raise) || raise <= 0)
+          throw new DecisionError('cost_limit_usd must be a positive number of dollars')
+        if (currentLimit !== null && raise <= currentLimit)
+          throw new DecisionError(`cost_limit_usd is already $${currentLimit} — a new limit has to be higher, or the next tick re-pauses the run`)
+      }
+      if (state.paused_reason === BUDGET_REASON && raise === undefined)
+        throw new DecisionError(
+          `${slug} is paused budget-exhausted${currentLimit !== null ? ` at cost_limit_usd $${currentLimit}` : ' with no cost_limit_usd set'} — ` +
+            'resuming without a higher limit re-pauses on the next tick. Pass a new cost_limit_usd, or close the run with a disposition',
+        )
+      const limitNote = raise !== undefined ? `cost_limit_usd ${currentLimit !== null ? `$${currentLimit}` : 'unset'} → $${raise}` : null
       return {
         mutate: (doc: Document) => {
           doc.setIn(['phase'], target)
           doc.setIn(['paused_reason'], null)
+          if (raise !== undefined) doc.setIn(['budget', 'cost_limit_usd'], raise)
           for (const g of reopen) {
             doc.setIn(['gates', g, 'approved'], false)
             doc.setIn(['gates', g, 'by'], null)
@@ -212,8 +242,8 @@ export function planDecision(state: RunState, input: DecisionInput, who: Identit
             doc.setIn(['gates', g, 'notes'], null)
           }
         },
-        message: `state(${slug}): resumed to ${target} by ${who.name}${reopen.length ? ` (${reopen.join(', ')} re-opened)` : ''}`,
-        summary: `Resume ${slug} at phase "${target}"${reopen.length ? `, re-opening ${reopen.join(', ')}` : ''}`,
+        message: `state(${slug}): resumed to ${target} by ${who.name}${reopen.length ? ` (${reopen.join(', ')} re-opened)` : ''}${limitNote ? ` (${limitNote})` : ''}`,
+        summary: `Resume ${slug} at phase "${target}"${reopen.length ? `, re-opening ${reopen.join(', ')}` : ''}${limitNote ? `, ${limitNote}` : ''}`,
       }
     }
     case 'arm': {

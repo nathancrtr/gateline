@@ -34,9 +34,11 @@ gateline decline <slug> <gate>           --reason … (pauses the run as gate-de
 gateline resolve-escalation <slug> <n>   --note … (index shown by inbox)
 gateline pause <slug> [--reason …]
 gateline resume <slug> [--phase …]       phase derived from the gate ledger if omitted
+                                         [--cost-limit N] (required from a budget-exhausted pause)
 gateline sync [--live]                   copy approved PR reviews into undecided G2 entries
 gateline ui [--demo] [--port N]          serve the web app (no engine)
 gateline up [--spend-limit-usd N]        web app + the v1 orchestrator over one clone
+                                         [--spend-window H] (the limit is per rolling window, default 24h)
 ```
 
 Global: `--repo <path>` (repeatable) overrides source discovery;

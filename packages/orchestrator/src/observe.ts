@@ -3,7 +3,8 @@
 // (§4.2's first invariant). deriveAction() is then a pure function over this
 // snapshot — which is what makes one-test-per-row possible.
 import { parse as parseYaml } from 'yaml'
-import { validateArtifact, type GateId, type RunRef, type RunSource, type RunState, type Validation } from '@gateline/core'
+import { type GateId, type RunState, type Validation, validateArtifact } from '@gateline/core/record'
+import type { RunRef, RunSource } from '@gateline/core/sources'
 import { GATE_PRODUCER } from './derive.ts'
 import { parseReviewReport, type ReviewInfo } from './review-report.ts'
 

@@ -5,7 +5,8 @@
 // updates, comment-preserving YAML, the orchestrator's own commit verbs
 // (dispatched | bounced | advanced | escalated | paused | metered | harvested),
 // a bot identity, and — structurally — no code path that writes gates.*.
-import { ensureDraftPr, Git, LocalGitSource, type Identity, type RunRef, type WriteResult } from '@gateline/core'
+import type { Identity } from '@gateline/core/record'
+import { Git, LocalGitSource, ensureDraftPr, type RunRef, type WriteResult } from '@gateline/core/sources'
 import type { Document } from 'yaml'
 import { hasShell, loadRoleCapabilities } from './capabilities.ts'
 import { deriveAction, DEFAULT_ESTIMATE_USD, type Bookkeeping, type DerivedAction, type DispatchIntent } from './derive.ts'

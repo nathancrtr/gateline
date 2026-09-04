@@ -4,7 +4,7 @@
 // runner still costs one manifest, never orchestrator code.
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { resolveFrameworkRootsFromDisk } from '@gateline/core'
+import { resolveFrameworkRootsFromDisk } from '@gateline/core/sources'
 
 // Re-exported so a working-tree-only consumer (runner-agent/src/agent.ts,
 // which never imports @gateline/core directly) can resolve its own clone's

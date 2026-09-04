@@ -4,7 +4,7 @@
 // enforce at dispatch time, and the pricing/estimate maps that drive metering
 // and the pre-flight budget check.
 import { parse as parseYaml } from 'yaml'
-import { resolveFrameworkRoots, type Git } from '@gateline/core'
+import { resolveFrameworkRoots, type Git } from '@gateline/core/sources'
 
 export interface RegistryProfile {
   default: string

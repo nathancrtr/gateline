@@ -6,7 +6,13 @@ import { parse as parseYaml } from 'yaml'
 import { z } from 'zod'
 import { Git } from '../sources/git.ts'
 import { LocalGitSource, readFileIfExists, repoToplevel } from '../sources/local-source.ts'
+import { LocalOnlyPushConflictError } from '../sources/source.ts'
 import type { RunSource } from '../sources/source.ts'
+
+// Re-exported from its original home so `@gateline/core/view-model` and the
+// root export keep the same surface; the class itself now sits in the sources
+// layer, where push mode is decided (#132).
+export { LocalOnlyPushConflictError }
 
 const sourceEntrySchema = z.object({
   name: z.string().optional(),
@@ -36,21 +42,6 @@ export interface LoadedConfig {
   /** Where the config was read from, or null when defaulted. */
   configPath: string | null
   warnings: string[]
-}
-
-/**
- * Thrown by `loadSources` when a source requests local-only and an explicit
- * push in the same breath (plan mode-resolution table, rule 1) — at either
- * tier: `--local-only --push` on the CLI, or `local_only: true` with
- * `push: true` on a config entry. Caught by every `loadSources` caller
- * (`up`, `resolveSources`, `startServer` — ADR-5) as a startup refusal, never
- * silently resolved one way or the other.
- */
-export class LocalOnlyPushConflictError extends Error {
-  constructor(source: string) {
-    super(`source ${source}: local-only and push are both explicitly requested — they conflict (local-only forces push off); pick one`)
-    this.name = 'LocalOnlyPushConflictError'
-  }
 }
 
 export function defaultConfigPath(): string {

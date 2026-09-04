@@ -5,7 +5,7 @@
 // The ref-watch mirrors the frontend server's freshness watcher.
 import { watch, type FSWatcher } from 'node:fs'
 import { join } from 'node:path'
-import { Git, writeEngineHealth, type CodeTreeMonitor, type CodeTreeState, type CodeTreeStatus } from '@gateline/core'
+import { Git, type CodeTreeMonitor, type CodeTreeState, type CodeTreeStatus, writeEngineHealth } from '@gateline/core/sources'
 import type { TickOutcome } from './engine.ts'
 import type { Scheduler } from './schedule.ts'
 

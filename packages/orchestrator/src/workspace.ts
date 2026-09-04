@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto'
 import { access } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Git } from '@gateline/core'
+import { Git } from '@gateline/core/sources'
 
 // Parallel dispatches for one run share its checkout; single-flight the
 // worktree creation so concurrent jobs don't race `git worktree add`.

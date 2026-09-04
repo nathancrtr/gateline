@@ -3,7 +3,8 @@
 // a frontend can co-locate the engine over its own clone (`gateline up`) —
 // one deployment, one clone, one authority (docs/TOPOLOGY.md §3.1).
 import { stat } from 'node:fs/promises'
-import { CodeTreeMonitor, Git, LocalGitSource, LocalOnlyPushConflictError, resolveCodeRepo, type CodeTreeStatus, type Identity } from '@gateline/core'
+import type { Identity } from '@gateline/core/record'
+import { CodeTreeMonitor, Git, LocalGitSource, LocalOnlyPushConflictError, resolveCodeRepo, type CodeTreeStatus } from '@gateline/core/sources'
 import { Engine, type InFlightJob } from './engine.ts'
 import { headlessManifestPath, loadHeadlessManifest } from './manifest.ts'
 import { loadRegistry } from './registry.ts'

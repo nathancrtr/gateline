@@ -10,7 +10,7 @@
 // capabilities to a git-capable tool) is told the opposite: leave the files
 // in the working tree, because the engine harvest-commits them itself
 // (ORCHESTRATOR.md §4.4) before the checkout is ever removed.
-import type { Profile } from '@gateline/core'
+import type { Profile } from '@gateline/core/record'
 import type { DispatchIntent } from './derive.ts'
 
 const COMMIT_LINE = (slug: string, what: string) =>

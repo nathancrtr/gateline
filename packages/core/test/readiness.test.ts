@@ -58,6 +58,7 @@ beforeAll(async () => {
   addPausedRun(ctx.repo.dir, 'staged-run', 'staged')
   addPausedRun(ctx.repo.dir, 'paused-declined', 'gate-declined')
   addPausedRun(ctx.repo.dir, 'paused-other-reason', 'round-cap')
+  addPausedRun(ctx.repo.dir, 'paused-landed', 'slug-landed')
   refs = new Map((await ctx.source.listRuns()).map((r) => [r.slug, r]))
 })
 afterAll(() => dropFixture(ctx))
@@ -81,6 +82,7 @@ describe('run discovery', () => {
       'patch-g2-pending',
       'paused-budget',
       'paused-declined',
+      'paused-landed',
       'paused-other-reason',
       'round-cap',
       'staged-run',
@@ -184,6 +186,32 @@ describe('readiness derivation (§2.3, one row per test)', () => {
     expect(items[0]!.title).toContain('budget-exhausted')
   })
 
+  // #96: the card's instruction is the reason's. A budget pause is a condition
+  // the engine recomputes, so "resume" alone re-pauses; the card has to say
+  // what actually clears it and carry what the affordance needs to ask for it.
+  it('paused budget-exhausted: the card says raise the limit, and carries the current one', async () => {
+    const items = await gateItem('paused-budget')
+    expect(items[0]).toMatchObject({ kind: 'paused', pausedReason: 'budget-exhausted' })
+    expect(items[0]!.costLimitUsd).toBeTypeOf('number')
+    expect(items[0]!.detail).toContain(`cost_limit_usd $${items[0]!.costLimitUsd}`)
+    expect(items[0]!.detail).toContain('higher limit')
+    expect(items[0]!.detail).toContain('re-pauses')
+  })
+
+  it('paused slug-landed: the card says close and use a fresh slug — nothing to raise (#213)', async () => {
+    const items = await gateItem('paused-landed')
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ kind: 'paused', pausedReason: 'slug-landed' })
+    expect(items[0]!.detail).toContain('runs/paused-landed/')
+    expect(items[0]!.detail).toContain('fresh slug')
+    expect(items[0]!.detail).toContain('already-delivered')
+  })
+
+  it('paused for a human reason keeps the generic instruction', async () => {
+    const items = await gateItem('paused-other-reason')
+    expect(items[0]!.detail).toBe('Resume the run, or close it with a disposition saying why it ends here')
+  })
+
   it('staged: paused_reason=staged yields exactly one staged item, never a paused one (AC6.1, ADR-4)', async () => {
     const items = await gateItem('staged-run')
     expect(items).toHaveLength(1)
@@ -243,8 +271,11 @@ describe('readiness derivation (§2.3, one row per test)', () => {
   })
 
   it('the paused card offers closing rather than telling the human to decline a gate (#200)', async () => {
-    const items = await gateItem('paused-budget')
-    expect(items[0]!.detail).toBe('Resume the run, or close it with a disposition saying why it ends here')
+    for (const slug of ['paused-budget', 'paused-landed', 'paused-other-reason']) {
+      const items = await gateItem(slug)
+      expect(items[0]!.detail.toLowerCase()).toContain('close')
+      expect(items[0]!.detail.toLowerCase()).not.toContain('decline')
+    }
   })
 
   it('a run paused FOR an escalation shows the escalation, not a second card restating it', async () => {

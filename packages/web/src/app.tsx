@@ -128,6 +128,42 @@ function EngineDriftChip() {
   )
 }
 
+/**
+ * What the engine is holding back and why (#97). A ceiling that clears
+ * itself — the resource cap, the host spend window — defers a run rather
+ * than pausing it, so nothing in the run's record says why it is not
+ * moving; the heartbeat carries the reason instead. Rendered at the host
+ * level because that is where the condition lives: the old shape wrote a
+ * per-run escalation pointing at a state.yaml that contained no such
+ * number, and the human who resolved it got the same card back on the next
+ * tick. Warn tone, not alarm — nothing is wrong, the host is at its rate.
+ */
+function EngineDeferralChip() {
+  const health = useQuery({ queryKey: ['engine-health'], queryFn: api.engineHealth, refetchInterval: 60_000 })
+  const now = health.data?.now
+  const rows = (Object.entries(health.data?.engines ?? {}) as [string, EngineHealthEntry | null][]).flatMap(([id, h]) =>
+    (h?.deferrals ?? []).map((d) => ({ id, ...d })),
+  )
+  if (rows.length === 0 || now === undefined) return null
+  const showId = new Set(rows.map((r) => r.id)).size > 1
+  return (
+    <div className="mb-4 flex flex-col gap-2" data-deferrals>
+      {rows.map((d) => (
+        <span
+          key={`${d.id}:${d.slug}:${d.rule}`}
+          className="inline-flex items-start gap-1.5 rounded-[5px] border border-warn-line bg-warn-bg px-2.5 py-1 text-xs font-medium text-warn"
+        >
+          <span className="text-[9px] leading-[1.7] text-warn">●</span>
+          <span>
+            {showId ? <span className="text-muted">{d.id} · </span> : null}
+            engine holding back <b>{d.slug}</b> ({d.rule}) for {formatAge(Math.floor(Date.parse(d.since) / 1000), now)} — {d.reason}
+          </span>
+        </span>
+      ))}
+    </div>
+  )
+}
+
 export function App() {
   useLiveInvalidation()
   const inbox = useQuery({ queryKey: ['inbox'], queryFn: api.inbox })
@@ -179,6 +215,7 @@ export function App() {
       <main className="min-w-0 flex-1 px-6 py-6 max-md:pt-16">
         <EngineOutageBanner />
         <EngineDriftChip />
+        <EngineDeferralChip />
         <Outlet />
       </main>
     </div>

@@ -9,7 +9,10 @@
 //   Escalation   any escalations[] entry with resolved: false
 //   Round-cap    any task review_rounds ≥ 3 ∧ status not complete
 //   Paused       phase=paused ∧ paused_reason ∉ {staged, gate-declined}
-//                ∧ nothing else already speaks for the run
+//                ∧ nothing else already speaks for the run; the card's
+//                instruction is the reason's (#96): budget-exhausted says
+//                raise the limit, slug-landed says close — a bare "resume"
+//                on either re-pauses on the next tick
 //   Staged       phase=paused ∧ paused_reason = staged — awaiting arm, not resume/kill
 //   Declined     phase=paused ∧ paused_reason = gate-declined — no item at all
 //   Closed       phase=closed — no item at all, whatever else the record holds
@@ -32,8 +35,10 @@
 // A gate whose packet is present but malformed yields a NON-reviewable item —
 // the bounce view (rule R3) — never a reviewable card.
 import {
+  BUDGET_REASON,
   CLOSED_PHASE,
   DECLINED_REASON,
+  LANDED_REASON,
   G2_COMPLETE_STATUSES,
   gateUndecided,
   GATE_PHASES,
@@ -74,6 +79,10 @@ export interface InboxItem {
   packet: string[]
   /** Escalation index into state.escalations, when kind=escalation. */
   escalationIndex: number | null
+  /** kind=paused: the recorded reason, so the resume affordance can ask for what the reason needs (#96). */
+  pausedReason?: string | null
+  /** kind=paused: the run's current `budget.cost_limit_usd`, for a resume that must raise it (#96). */
+  costLimitUsd?: number | null
 }
 
 export interface RunReadiness {
@@ -95,6 +104,28 @@ export function pendingGate(state: RunState): GateId | null {
     if (GATE_PHASES[gate].includes(state.phase) && gateUndecided(state.gates[gate])) return gate
   }
   return null
+}
+
+/**
+ * What actually clears the pause (#96). The old card said "resume or decline"
+ * for every reason, and for the two reasons the orchestrator itself writes
+ * that advice was a closed loop: a budget pause is recomputed from the
+ * ledger and the limit, a landed-slug pause from the default branch, and a
+ * resume that changes neither re-pauses seconds later — each cycle costing
+ * two decisions and one more escalation entry.
+ */
+export function pausedInstruction(state: RunState): string {
+  const limit = state.budget?.cost_limit_usd ?? null
+  switch (state.paused_reason) {
+    case BUDGET_REASON:
+      return limit !== null
+        ? `Spend reached cost_limit_usd $${limit}. Resume with a higher limit, or close the run with a disposition — resuming without raising the limit re-pauses on the next tick`
+        : 'This orchestrator requires a per-run cost_limit_usd and the run has none. Resume with a limit, or close the run with a disposition'
+    case LANDED_REASON:
+      return `runs/${state.run}/ already shipped on the default branch and this branch moved on after the merge. Close the run with a disposition (already-delivered) and carry any remaining work on a fresh slug — resuming re-pauses on the next tick`
+    default:
+      return 'Resume the run, or close it with a disposition saying why it ends here'
+  }
 }
 
 export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<RunReadiness> {
@@ -212,12 +243,14 @@ export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<R
       source: ref.source,
       slug: ref.slug,
       title: `Run paused: ${state.paused_reason ?? 'no reason recorded'}`,
-      detail: 'Resume the run, or close it with a disposition saying why it ends here',
+      detail: pausedInstruction(state),
       since: touched?.time ?? null,
       reviewable: true,
       problems: [],
       packet: ['state.yaml'],
       escalationIndex: null,
+      pausedReason: state.paused_reason,
+      costLimitUsd: state.budget?.cost_limit_usd ?? null,
     })
     return { items, validations }
   }

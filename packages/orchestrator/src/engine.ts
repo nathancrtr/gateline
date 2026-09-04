@@ -45,6 +45,16 @@ export interface EngineConfig {
    * Per-run cost_limit_usd still applies; this bounds their sum.
    */
   spendLimitUsd?: number | null
+  /**
+   * The window the host ceiling measures over (#97), default 24 hours.
+   * `spendLimitUsd` bounds what this deployment spends *per window*, not
+   * over its lifetime: only closed ledger entries opened inside the window
+   * count, plus every open entry at its estimate. A lifetime sum only ever
+   * grows — under the repo's own convention of keeping run branches, a
+   * static cap was reached once and never left — whereas a window rolls, so
+   * the ceiling is a rate limit for an unattended host that clears itself.
+   */
+  spendWindowMs?: number
   /** Refuse dispatch on a run missing budget.cost_limit_usd (hosted mode): unattended dispatch needs a ceiling. */
   requireBudget?: boolean
   /**
@@ -85,6 +95,8 @@ export interface TickOutcome {
 
 const DEFAULT_ROLE_TIMEOUT_MS = 30 * 60 * 1000
 const DEFAULT_STALE_MS = 5 * 60 * 1000
+/** The host ceiling's rolling window (#97). */
+export const DEFAULT_SPEND_WINDOW_MS = 24 * 60 * 60 * 1000
 
 /**
  * Default resource ceiling (#227). Deliberately low: the blessed topology
@@ -129,6 +141,73 @@ const ensuredDraftPrs = new Map<string, string>()
  */
 const reapedTaskBranches = new Set<string>()
 
+/** Rules that hold a dispatch back without writing anything — see `Deferral`. */
+const DEFERRAL_RULES = new Set(['MC', 'HB'])
+
+/** The host window's spend as `tick` measures it once per pass (#97). */
+interface HostProjection {
+  /** Closed cost inside the window plus open estimates, plus what this tick has granted so far. */
+  projected: number
+  /** The closed-ledger share, for the deferral's own words. */
+  closed: number
+  windowMs: number
+}
+
+function describeWindow(ms: number): string {
+  const hours = ms / 3_600_000
+  if (hours >= 48 && hours % 24 === 0) return `${hours / 24} days`
+  if (hours >= 1 && Number.isInteger(hours)) return `${hours} hour${hours === 1 ? '' : 's'}`
+  return `${Math.round(ms / 60_000)} min`
+}
+
+/**
+ * The index of a resolved escalation carrying exactly this reason, when
+ * nothing has changed since it was resolved — no ledger entry opened and no
+ * commit outside state.yaml landed after `resolved_at`. Null otherwise: an
+ * unresolved match is D3's business, and a resolved one that predates new
+ * facts is a genuinely new occurrence.
+ */
+function alreadyResolved(obs: RunObservation, reason: string): number | null {
+  const state = obs.state
+  if (!state) return null
+  let found: number | null = null
+  let resolvedAt = Number.NaN
+  state.escalations.forEach((e, i) => {
+    if (e.reason !== reason || !e.resolved || !e.resolved_at) return
+    const t = Date.parse(e.resolved_at)
+    if (Number.isNaN(t)) return
+    if (found === null || t > resolvedAt) {
+      found = i
+      resolvedAt = t
+    }
+  })
+  if (found === null) return null
+  const newestLedger = obs.ledger.reduce((max, e) => {
+    const t = e.at ? Date.parse(e.at) : Number.NaN
+    return Number.isNaN(t) ? max : Math.max(max, t)
+  }, Number.NEGATIVE_INFINITY)
+  if (newestLedger > resolvedAt) return null
+  if (obs.lastNonStateCommit !== null && obs.lastNonStateCommit * 1000 > resolvedAt) return null
+  return found
+}
+
+/**
+ * A dispatch the engine is holding back without writing anything (#97): a
+ * ceiling that clears itself — the resource cap (MC), the host spend window
+ * (HB) — defers rather than pauses, so nothing in `state.yaml` says why the
+ * run is not moving. This is that why, kept as process ephemera and carried
+ * on the heartbeat so Gatehouse can show a host-level condition at the host
+ * level instead of a per-run escalation pointing at a file that holds no
+ * such number.
+ */
+export interface Deferral {
+  slug: string
+  rule: string
+  reason: string
+  /** ISO timestamp of the first tick that deferred this run for this rule. */
+  since: string
+}
+
 /** One in-flight dispatch, as reported to the operator during drain (#150). */
 export interface InFlightJob {
   slug: string
@@ -155,6 +234,8 @@ export class Engine {
   private readonly writeLocks = new Map<string, Promise<unknown>>()
   /** Fired each time a dispatch job settles — the completion trigger. */
   onSettled: (() => void) | null = null
+  /** Runs deferred on the last tick, by slug — see `Deferral`. */
+  private deferred = new Map<string, Deferral>()
 
   constructor(cfg: EngineConfig) {
     this.cfg = cfg
@@ -211,6 +292,11 @@ export class Engine {
   /** What is currently dispatched, for drain reporting (#150). */
   inFlightDetail(): InFlightJob[] {
     return [...this.jobMeta.values()]
+  }
+
+  /** What the last tick held back and why, for the heartbeat (#97). */
+  deferrals(): Deferral[] {
+    return [...this.deferred.values()]
   }
 
   /**
@@ -325,7 +411,8 @@ export class Engine {
     const refs = (await this.source.listRuns()).filter((r) => r.kind !== 'default') // merged runs are historical records
     // The host ceiling is measured once per tick across every active run's
     // ledger; dispatches granted within the tick add their estimates.
-    const host = this.enforcing() && this.cfg.spendLimitUsd != null ? { projected: await this.hostProjectedUsd(refs) } : null
+    const host = this.enforcing() && this.cfg.spendLimitUsd != null ? await this.hostProjectedUsd(refs) : null
+    const deferred = new Map<string, Deferral>()
     for (const ref of refs) {
       await this.sweepStale(ref)
       // Pin the tip: observe at this exact commit and CAS every write against
@@ -356,8 +443,19 @@ export class Engine {
       // host projection hostGuards accumulates across runs, or a deferral
       // here would spend budget headroom nothing consumed.
       const admitted = this.concurrencyGuard(ref, live)
-      outcomes.push(await this.execute(ref, tip, obs, this.hostGuards(obs, admitted, host)))
+      const final = this.hostGuards(obs, admitted, host)
+      if (final.kind === 'rest' && DEFERRAL_RULES.has(final.rule)) {
+        const prior = this.deferred.get(ref.slug)
+        deferred.set(ref.slug, {
+          slug: ref.slug,
+          rule: final.rule,
+          reason: final.why,
+          since: prior?.rule === final.rule ? prior.since : this.nowIso(),
+        })
+      }
+      outcomes.push(await this.execute(ref, tip, obs, final))
     }
+    this.deferred = deferred
     return outcomes
   }
 
@@ -393,11 +491,19 @@ export class Engine {
 
   /**
    * Hosted-mode guards wrapping the per-run derivation (§6's DB, lifted to
-   * the host): a dispatch is downgraded to an escalation when the run has no
-   * budget ceiling (RB) or the host-wide projection would exceed the global
-   * cap (HB). Pause rather than degrade, same as DB.
+   * the host). A run with no budget ceiling (RB) is downgraded to an
+   * escalation: only a human can supply the missing number, so pause and
+   * ask. The host-wide window (HB) is the other kind of ceiling (#97): it
+   * measures a rolling window, so it clears itself as the window moves —
+   * and a condition that clears itself is deferred like the resource cap
+   * (MC), never escalated. Escalating it was the #96/#97 dead loop: a
+   * human's resolve-and-resume changed none of the inputs, the next tick
+   * re-derived the same refusal, and the remedy — a process flag on the
+   * host — was nowhere the run's own record could reach. Deferring writes
+   * nothing to the run; the heartbeat carries the condition instead
+   * (`deferrals`), at the level it actually lives.
    */
-  private hostGuards(obs: RunObservation, action: DerivedAction, host: { projected: number } | null): DerivedAction {
+  private hostGuards(obs: RunObservation, action: DerivedAction, host: HostProjection | null): DerivedAction {
     if (action.kind !== 'dispatch') return action
     if (!this.enforcing()) return action // #109: enforcement off — meter, never pause
     if (this.cfg.requireBudget && (obs.state?.budget?.cost_limit_usd ?? null) === null) {
@@ -407,8 +513,12 @@ export class Engine {
     if (host && this.cfg.spendLimitUsd != null) {
       const add = action.dispatches.reduce((sum, d) => sum + (this.estimates()[d.role] ?? DEFAULT_ESTIMATE_USD), 0)
       if (host.projected + add > this.cfg.spendLimitUsd) {
-        const reason = `projected host spend $${(host.projected + add).toFixed(2)} across active runs exceeds --spend-limit-usd $${this.cfg.spendLimitUsd} — pausing rather than degrading`
-        return { kind: 'escalate', rule: 'HB', reason, pause: 'budget-exhausted', why: reason }
+        const why =
+          `projected host spend $${(host.projected + add).toFixed(2)} over the last ${describeWindow(host.windowMs)} ` +
+          `(ledger $${host.closed.toFixed(2)} in the window + $${(host.projected - host.closed + add).toFixed(2)} in flight and requested) ` +
+          `exceeds --spend-limit-usd $${this.cfg.spendLimitUsd} — deferred, not paused: the window rolls and the run re-derives`
+        this.log(`${obs.slug}: ${why}`)
+        return { kind: 'rest', rule: 'HB', why }
       }
       host.projected += add
     }
@@ -458,17 +568,32 @@ export class Engine {
     return { kind: 'escalate', rule: 'LR', reason, pause: 'slug-landed', why: reason }
   }
 
-  /** Spend committed or in flight across the given runs: closed ledger costs plus estimates for open entries. */
-  private async hostProjectedUsd(refs: RunRef[]): Promise<number> {
-    let total = 0
+  /**
+   * Spend inside the host window across the given runs (#97): closed ledger
+   * entries opened within the window at their real cost, plus every open
+   * entry at its estimate — in-flight work counts whenever it started. An
+   * entry with no readable `at` counts as inside the window: the ceiling
+   * exists to bound unattended spend, and a fact it cannot date is not a
+   * reason to spend more.
+   */
+  private async hostProjectedUsd(refs: RunRef[]): Promise<HostProjection> {
+    const windowMs = this.cfg.spendWindowMs ?? DEFAULT_SPEND_WINDOW_MS
+    const since = (this.cfg.now?.() ?? new Date()).getTime() - windowMs
+    let closed = 0
+    let open = 0
     for (const ref of refs) {
       const { state } = await this.source.readState(ref)
       if (!state) continue
       for (const entry of parseLedger(state)) {
-        total += entry.cost_usd ?? (entry.failed ? 0 : (this.estimates()[entry.role] ?? DEFAULT_ESTIMATE_USD))
+        if (entry.cost_usd === null) {
+          if (!entry.failed) open += this.estimates()[entry.role] ?? DEFAULT_ESTIMATE_USD
+          continue
+        }
+        const at = entry.at ? Date.parse(entry.at) : Number.NaN
+        if (Number.isNaN(at) || at >= since) closed += entry.cost_usd
       }
     }
-    return total
+    return { projected: closed + open, closed, windowMs }
   }
 
   /**
@@ -555,18 +680,35 @@ export class Engine {
 
       case 'escalate': {
         const at = this.nowIso()
+        // A standing condition re-fires with the same words after a human
+        // resolved it and resumed (#96): nothing they could say changed the
+        // facts the rule reads. Appending a fresh escalation each cycle
+        // grows the list by one per resolve-and-resume and asks the same
+        // question again. If an identical reason was resolved and nothing
+        // has happened since — no dispatch opened, no commit landed outside
+        // state.yaml — the escalation is already answered: re-pause without
+        // re-asking, and let the pause card (reason-aware since #96) say
+        // what actually clears it.
+        const answered = alreadyResolved(obs, action.reason)
+        if (answered !== null && !action.pause) {
+          return { ...base, wrote: false, detail: `escalation #${answered} already resolved and nothing changed since — not re-appended` }
+        }
         const result = await this.withLock(ref.slug, () =>
           this.source.writeState(
             ref,
             (doc) => {
-              const count = countSeq(doc, ['escalations'])
-              doc.setIn(['escalations', count], { at, from_role: 'orchestrator', reason: action.reason, resolved: false })
+              if (answered === null) {
+                const count = countSeq(doc, ['escalations'])
+                doc.setIn(['escalations', count], { at, from_role: 'orchestrator', reason: action.reason, resolved: false })
+              }
               if (action.pause) {
                 doc.setIn(['phase'], 'paused')
                 doc.setIn(['paused_reason'], action.pause)
               }
             },
-            `state(${ref.slug}): escalated${action.pause ? ` (paused: ${action.pause})` : ''} — ${truncate(action.reason, 80)}`,
+            answered === null
+              ? `state(${ref.slug}): escalated${action.pause ? ` (paused: ${action.pause})` : ''} — ${truncate(action.reason, 80)}`
+              : `state(${ref.slug}): paused (${action.pause}) — escalation #${answered} already resolved and nothing changed since; ${truncate(action.reason, 60)}`,
             cas,
           ),
         )
@@ -577,7 +719,14 @@ export class Engine {
           }
           this.notePushFailure(ref, result.pushFailed)
         } else if (result.ok) this.notePushAccepted(ref.branch)
-        return { ...base, wrote: result.ok, detail: writeDetail(result, action.reason) }
+        return {
+          ...base,
+          wrote: result.ok,
+          detail:
+            answered === null
+              ? writeDetail(result, action.reason)
+              : `escalation #${answered} already resolved and nothing changed since — re-paused (${action.pause}) without re-appending`,
+        }
       }
 
       case 'dispatch': {

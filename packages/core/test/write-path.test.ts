@@ -287,12 +287,63 @@ describe('decision legality (planDecision)', () => {
   it('resume derives the correct phase from the gate ledger', async () => {
     const ref = await refFor('paused-budget')
     const { state } = await ctx.source.readState(ref)
-    const planned = planDecision(state!, { action: 'resume' }, who)
+    const limit = state!.budget!.cost_limit_usd!
+    const planned = planDecision(state!, { action: 'resume', costLimitUsd: limit + 10 }, who)
     expect(planned.summary).toContain('"plan"') // G0 approved, G1 not → plan
     await ctx.source.writeState(ref, planned.mutate, planned.message)
     const after = await ctx.source.readState(ref)
     expect(after.state!.phase).toBe('plan')
     expect(after.state!.paused_reason).toBeNull()
+  })
+
+  // #96: a budget pause is a condition the engine recomputes from the ledger
+  // and the limit. A resume that changes neither re-pauses on the next tick,
+  // so the planner refuses it and the one that sticks writes the new limit in
+  // the same commit as the phase restore.
+  describe('resume from budget-exhausted carries the budget decision (#96)', () => {
+    it('refuses a bare resume, naming the limit and the alternative', async () => {
+      const ref = await refFor('paused-budget')
+      const { state } = await ctx.source.readState(ref)
+      expect(state!.paused_reason).toBe('budget-exhausted')
+      expect(() => planDecision(state!, { action: 'resume' }, who)).toThrow(/re-pauses on the next tick/)
+      expect(() => planDecision(state!, { action: 'resume' }, who)).toThrow(/close the run/)
+    })
+
+    it('refuses a limit that is not higher than the current one', async () => {
+      const ref = await refFor('paused-budget')
+      const { state } = await ctx.source.readState(ref)
+      const limit = state!.budget!.cost_limit_usd!
+      expect(() => planDecision(state!, { action: 'resume', costLimitUsd: limit }, who)).toThrow(/has to be higher/)
+      expect(() => planDecision(state!, { action: 'resume', costLimitUsd: -1 }, who)).toThrow(/positive number/)
+    })
+
+    it('writes the raised limit and the phase in one commit, and the subject says so', async () => {
+      const ref = await refFor('paused-budget')
+      const { state } = await ctx.source.readState(ref)
+      const limit = state!.budget!.cost_limit_usd!
+      const planned = planDecision(state!, { action: 'resume', costLimitUsd: limit * 2 }, who)
+      expect(planned.message).toContain(`cost_limit_usd $${limit} → $${limit * 2}`)
+      await ctx.source.writeState(ref, planned.mutate, planned.message)
+      const after = await ctx.source.readState(ref)
+      expect(after.state!.phase).not.toBe('paused')
+      expect(after.state!.budget!.cost_limit_usd).toBe(limit * 2)
+      const [head] = await ctx.source.git.log(ref.ref, [], { maxCount: 1 })
+      expect(head!.subject).toMatch(/^state\(paused-budget\): resumed to \w+ by Fixture Operator \(cost_limit_usd/)
+    })
+
+    it('a resume from any other reason may raise the limit too, but never lower it', async () => {
+      const ref = await refFor('g0-pending')
+      const { state } = await ctx.source.readState(ref)
+      const held = planDecision(state!, { action: 'approve', gate: 'G0', burden: 'confirmation', hold: true, holdReason: 'x' }, who)
+      await ctx.source.writeState(ref, held.mutate, held.message)
+      const mid = await ctx.source.readState(ref)
+      const limit = mid.state!.budget!.cost_limit_usd!
+      expect(() => planDecision(mid.state!, { action: 'resume', costLimitUsd: limit - 1 }, who)).toThrow(/has to be higher/)
+      const planned = planDecision(mid.state!, { action: 'resume', costLimitUsd: limit + 1 }, who)
+      await ctx.source.writeState(ref, planned.mutate, planned.message)
+      const after = await ctx.source.readState(ref)
+      expect(after.state!.budget!.cost_limit_usd).toBe(limit + 1)
+    })
   })
 })
 

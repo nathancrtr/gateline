@@ -83,7 +83,7 @@ const DISPOSITION_OPTIONS: { value: Disposition; label: string; hint: string }[]
   { value: 're-plan', label: 'Re-plan', hint: 'the fix needs the architect: amend the plan/task surfaces first' },
 ]
 
-type Mode = 'idle' | 'approve' | 'decline' | 'resolve' | 'arm'
+type Mode = 'idle' | 'approve' | 'decline' | 'resolve' | 'arm' | 'resume'
 
 export function DecidePanel({
   item,
@@ -115,6 +115,9 @@ export function DecidePanel({
   const [disposition, setDisposition] = useState<Disposition | null>(null)
   const [hold, setHold] = useState(false)
   const [holdReason, setHoldReason] = useState('')
+  // Resume from budget-exhausted has to carry a higher limit (#96); the
+  // field starts at the current one so the human edits a number, not a blank.
+  const [costLimit, setCostLimit] = useState(item.costLimitUsd != null ? String(item.costLimitUsd) : '')
   const [flash, setFlash] = useState<{ kind: 'ok' | 'conflict' | 'error'; text: string } | null>(null)
 
   // Keyboard loop for the page's primary card: a approve · x decline ·
@@ -212,7 +215,17 @@ export function DecidePanel({
       disposition: disposition ?? undefined,
     })
   }
+  // A budget pause is a condition the engine recomputes from the ledger and
+  // the limit (#96): a bare resume re-pauses on the next tick, so from that
+  // reason the button opens a form and the form's only field is the limit.
+  const budgetPaused = item.kind === 'paused' && item.pausedReason === 'budget-exhausted'
+  const parsedLimit = Number(costLimit)
+  const limitRaised = Number.isFinite(parsedLimit) && parsedLimit > 0 && (item.costLimitUsd == null || parsedLimit > item.costLimitUsd)
   const submitResume = () => mutation.mutate({ ...base, action: 'resume' })
+  const submitResumeWithLimit = () => {
+    if (!limitRaised) return
+    mutation.mutate({ ...base, action: 'resume', costLimitUsd: parsedLimit })
+  }
   // A staged run has never flown — arming, never resuming, is what starts it
   // (AC6.1). This is the only path in this component that issues 'arm', and
   // the staged branch below is the only one that can reach it.
@@ -252,7 +265,12 @@ export function DecidePanel({
                 Resolve…
               </Button>
             )}
-            {item.kind === 'paused' && (
+            {item.kind === 'paused' && budgetPaused && (
+              <Button primary onClick={() => setMode('resume')} data-decide="resume">
+                Raise the limit and resume…
+              </Button>
+            )}
+            {item.kind === 'paused' && !budgetPaused && (
               <Button primary onClick={submitResume} disabled={mutation.isPending} data-decide="resume">
                 {mutation.isPending ? 'Resuming…' : 'Resume run'}
               </Button>
@@ -381,6 +399,47 @@ export function DecidePanel({
           <div className="flex gap-2">
             <Button primary onClick={submitResolve} disabled={!notes.trim() || mutation.isPending} data-decide="resolve-confirm">
               {mutation.isPending ? 'Committing…' : 'Resolve escalation'}
+            </Button>
+            <Button onClick={() => setMode('idle')}>Cancel</Button>
+          </div>
+        </div>
+      )}
+
+      {mode === 'resume' && (
+        <div className="flex flex-col gap-3">
+          <p className="rounded-[5px] border border-line bg-inset px-[11px] py-[9px] text-sm leading-[1.6] text-muted">
+            <b className="text-ink">{item.slug}</b> stopped because its next dispatch would exceed{' '}
+            {item.costLimitUsd != null ? (
+              <>
+                <code className="font-mono">cost_limit_usd</code> ${item.costLimitUsd}
+              </>
+            ) : (
+              <>
+                a per-run limit it does not have
+              </>
+            )}
+            . The engine recomputes that from the ledger on every tick, so resuming at the same limit re-pauses at once. The new limit
+            is written in the same commit as the resume.
+          </p>
+          <label className="flex items-baseline gap-2 text-sm">
+            <span className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted">New cost_limit_usd</span>
+            <input
+              type="number"
+              min={0}
+              step={1}
+              value={costLimit}
+              onChange={(e) => setCostLimit(e.target.value)}
+              autoFocus
+              data-decide="cost-limit"
+              className="w-32 rounded-[5px] border border-line bg-inset px-[11px] py-[7px] font-mono text-sm tabular-nums"
+            />
+            {item.costLimitUsd != null && !limitRaised && costLimit !== '' && (
+              <span className="text-xs text-bad">must be above ${item.costLimitUsd}</span>
+            )}
+          </label>
+          <div className="flex gap-2">
+            <Button primary onClick={submitResumeWithLimit} disabled={!limitRaised || mutation.isPending} data-decide="resume-confirm">
+              {mutation.isPending ? 'Committing…' : `Resume ${item.slug} at $${Number.isFinite(parsedLimit) ? parsedLimit : '…'}`}
             </Button>
             <Button onClick={() => setMode('idle')}>Cancel</Button>
           </div>

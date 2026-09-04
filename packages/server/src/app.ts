@@ -189,6 +189,7 @@ export function createApp(deps: AppDeps): Hono {
             codeReason: health.codeReason,
             codeCause: health.codeCause,
             codeUpgradeBlocked: health.codeUpgradeBlocked,
+            deferrals: health.deferrals ?? [],
           }
         : null
     }

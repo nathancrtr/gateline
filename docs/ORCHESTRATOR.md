@@ -140,7 +140,8 @@ implementation time (one test per row, like the frontend's); its shape:
 | Disposition `re-plan` | Dispatch the architect in amendment mode, carrying the review report path and the resolution note (rule D22) — an architect already in flight rests instead, same as any other in-flight producer. Once the amendment lands (`plan.md` or a `tasks/*.yaml` touched newer than the resolution), the engine raises a *fresh* escalation naming `task <id>` and pauses for human acknowledgment (rule D23, issue #190) rather than acting on the widened surface unattended — the architect proposes, the human still disposes. That acknowledgment escalation's own resolution (typically `return-to-implement`) is just another resolution matching the same `task <id>` text, so the LATEST-matching-resolution rule above picks it up and routes through the ordinary machinery unchanged |
 | Verification verdict `escalate` (rule D24, #152) | Escalate; pause. The verifier's own channel, mirroring the reviewer's: `**Verdict:** escalate` on the verification report means a failure traces to the spec, the plan, or the gate process rather than the implementation. A resolution newer than the report returns the packet to the table for the G2 human, failed rows and all — there is no round to re-run, so no disposition routing applies. `pass` and `fail` never pause: `fail` is the G2 human's to weigh, and the gate surface quotes the report's verdict and its non-verified rows so a non-clean report never reads as a clean pass. Reports that predate the verdict line behave as before |
 | Implementer dispatch fails | Return the task to `pending` for its one retry; a second failure marks the task `failed` (nothing reads it as in-flight), escalates, and pauses. Resolving the escalation *after* the last failed attempt returns the task to `pending` — a fresh round supersedes the failure (issue #147) |
-| Budget pre-flight fails (§6) | Pause `budget-exhausted`; escalate |
+| Budget pre-flight fails (§6) | Pause `budget-exhausted`; escalate. The pause is a *condition* recomputed from the ledger and the limit, so the only resume that sticks is one that raises `cost_limit_usd` in the same commit — the frontend, the CLI and the decision planner all require it from this reason (#96). A standing condition that re-fires with the same words after its escalation was resolved re-pauses without appending a second escalation (#96) |
+| Host window exceeded (§6, rule `HB`) | Defer, like the resource cap: nothing is written, the run re-derives once the window has rolled, and the heartbeat carries the held-back runs for Gatehouse's engine chip (#97) |
 
 Two invariants govern every row: each action is derivable from committed files
 alone, and each action is **idempotent to re-derive** — a tick interrupted anywhere
@@ -264,12 +265,27 @@ is the only store (the frontend's R1, inherited).
 
 `phase: paused` — written by a human (frontend, CLI, hand edit) or by the
 orchestrator itself (caps) — means: no new dispatches. In-flight jobs run to
-completion and their artifacts land harmlessly on the run branch; only
-`budget-exhausted` kills in-flight work. Resume is a human writing `phase` back (the
-frontend's resume control already derives the phase from the gate ledger); the
-watcher turns that commit into a tick. **`state.yaml` is the entire control plane,
-in both directions** — there is no orchestrator API, config channel, or command
-queue to keep consistent with it.
+completion and their artifacts land harmlessly on the run branch, whatever the
+reason; a budget pause stops the *next* dispatch, never the one already paid
+for. Resume is a human writing `phase` back (the frontend's resume control
+already derives the phase from the gate ledger); the watcher turns that commit
+into a tick. **`state.yaml` is the entire control plane, in both directions** —
+there is no orchestrator API, config channel, or command queue to keep
+consistent with it.
+
+That sentence cuts both ways (#96). A pause the orchestrator wrote for a
+condition it recomputes every tick — `budget-exhausted` from the ledger and
+`cost_limit_usd`, `slug-landed` from the default branch — cannot be resumed out
+of by a human disposition alone, because the disposition changes no fact the
+rule reads: the next tick re-derives the same pause, and each cycle costs two
+decisions and one more escalation entry. So the resume from `budget-exhausted`
+*carries the budget decision*: a new `cost_limit_usd`, higher than the current
+one, written in the same CAS commit as the phase restore, and refused without
+it. The human changes the fact, not the rule. `slug-landed` has no fact to
+change — the run cannot become un-merged — so its card says the one thing that
+works: close the run with a disposition and carry the remaining work on a fresh
+slug. And the pause card's instruction follows the reason rather than reading
+"resume or decline" for all of them.
 
 #### Closing a run (#200)
 
@@ -422,7 +438,22 @@ autonomy multiplies the cost of a missing meter. The design:
   static per-role estimate (`dispatch_estimates_usd`; resolved question 2 — static
   for v1, trailing ledger averages a possible later upgrade) against
   `cost_limit_usd`; projected exceedance → pause `budget-exhausted` + escalation.
-  Pause-don't-degrade, unchanged.
+  Pause-don't-degrade, unchanged. Resuming from that pause requires a higher
+  `cost_limit_usd` in the same commit (§4.5, #96).
+- **The host ceiling is a rate, not a lifetime** (#97). `--spend-limit-usd`
+  bounds what the deployment spends per rolling window (`--spend-window`,
+  default 24 hours): closed ledger entries opened inside the window at their
+  real cost, plus every open entry at its estimate, across every active run.
+  A lifetime sum was the first shape, and it ratcheted: ledgers only grow and
+  a run leaves the sum only when its branch lands, so a static cap was reached
+  once and never left — the host was bricked by its own history, and the
+  binding number lived in a process flag no run's `state.yaml` could reach.
+  A window clears itself, which changes the guard's kind: rule `HB` *defers*
+  a dispatch that would cross it — nothing written, the run re-derived once
+  the window has moved — exactly as the resource cap does, instead of pausing
+  the run that happened to ask and escalating a host-level condition into one
+  run's record. The heartbeat carries the held-back runs (`deferrals`), and
+  Gatehouse shows them on the engine chip, at the level the condition lives.
 - **Enforcement is a switch; metering is not** (#109). `--no-budget-enforcement`
   disables the cap pauses — per-run, `--require-budget`, and `--spend-limit-usd`
   alike — for operators whose harness bills flat-rate, where dollar caps don't
@@ -542,7 +573,7 @@ Extends DESIGN.md §9 for the autonomous mode:
 |---|---|
 | Duplicate dispatch (two instances, crash-restart, racing ticks) | Commit-then-launch: intent is a CAS commit; heartbeat probes liveness before re-dispatching |
 | Orchestrator races a human decision | CAS refusal → re-tick; both writers already treat refusal as the designed outcome |
-| Runaway spend | Every model invocation flows through the metered seam; pre-flight cap; pause-don't-degrade |
+| Runaway spend | Every model invocation flows through the metered seam; pre-flight cap; pause-don't-degrade. Resume from the budget pause carries a higher limit or is refused (#96); the host ceiling is a per-window rate that defers rather than pauses (#97) |
 | Runaway *resource* use (the host, not the budget) | Dispatch concurrency cap across all runs (default 2; `--max-concurrent-dispatches`, `0` disables). Each dispatch carries an agent process, a cold dependency install, and a full suite run, so concurrency — not cost — is what exhausts the machine. Unlike a budget ceiling this never escalates: no human decision unblocks it and it clears itself as jobs finish, so a capped dispatch is deferred (rule `MC`), written nowhere, and re-derived on a later tick |
 | A run continuing past its own merge (slug reuse, #213) | A slug is used once. `runs/<slug>/` on the default branch means the run has shipped, so its record there is the durable one: the source classifies an identical record as historical — by ancestry for a merge commit, by record identity for a squash or rebase merge, which leaves no ancestry to find — and the engine refuses to dispatch or advance a branch that kept committing after its merge (rule `LR`), pausing it `slug-landed` for a human. Neither a ceiling to raise nor a condition that clears itself: the remaining work needs a fresh slug. Staging refuses the slug outright |
 | Hung or stuck dispatch job | Per-role wall-clock timeout (default 30 min; `--role-timeout`) → kill the harness's whole process group, re-dispatch once, then escalate. The group kill matters: a surviving child would keep spending and hold the stdio pipes open, delaying the closing commit |

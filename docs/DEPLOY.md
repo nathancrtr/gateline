@@ -88,7 +88,8 @@ re-presents rather than corrupting state.
 | `GITHUB_TOKEN` | no | — | Enables PR-approval sync on review webhooks (token needs Pull requests: Read). |
 | `ORCH_ENABLED` | no | `0` | `1` runs the v1 orchestrator against the same clone — the blessed topology, and the example config's default. Read the orchestrator section first. |
 | `ANTHROPIC_API_KEY` | with `ORCH_ENABLED=1` | — | Model auth for the claude-code dispatch harness. |
-| `ORCH_SPEND_LIMIT_USD` | recommended | — | Host-wide ceiling: refuse dispatch when projected spend across all active runs exceeds it. |
+| `ORCH_SPEND_LIMIT_USD` | recommended | — | Host-wide ceiling: defer dispatch while projected spend across all active runs inside the window exceeds it — a rate limit that clears as the window rolls, never a pause (#97). |
+| `ORCH_SPEND_WINDOW_HOURS` | no | `24` | The rolling window `ORCH_SPEND_LIMIT_USD` measures over. |
 | `ORCH_NO_BUDGET_ENFORCEMENT` | no | `0` | `1` replaces `--require-budget` with `--no-budget-enforcement`: meter spend but never pause on caps (flat-rate-billed harnesses, #109). |
 | `ORCH_HEARTBEAT_SECONDS` | no | `180` | Orchestrator heartbeat (stale-dispatch aging, missed-event sweep). |
 | `ORCH_ADAPTER` | no | `claude-code` | Headless adapter name (`adapters/<name>/manifest.json` in your repo). |
@@ -245,7 +246,11 @@ the orchestrator's watcher picks the change up within seconds.
 * `--require-budget` — a run without `budget.cost_limit_usd` escalates and
   pauses instead of dispatching. No ceiling, no dispatch.
 * `--spend-limit-usd $ORCH_SPEND_LIMIT_USD` — a host-wide cap across all
-  active runs, on top of the per-run caps. Set it.
+  active runs, on top of the per-run caps. Set it. It bounds what the host
+  spends per rolling window (`--spend-window`, default 24 hours), so a
+  dispatch that would cross it is deferred and re-derived once the window
+  has moved on — the engine never pauses a run for it, and Gatehouse shows
+  the held-back runs on the engine chip rather than as escalations (#97).
 
 If your harness bills through a flat subscription rather than per-token,
 `ORCH_NO_BUDGET_ENFORCEMENT=1` swaps `--require-budget` for

@@ -83,14 +83,41 @@ describe('CodeTreeMonitor (#141)', () => {
     expect(confirmed.codeHead).toBe(third)
   })
 
-  it('pauses with a reason when the working tree is dirty', async () => {
+  it('pauses with a reason that names the dirty paths (#222)', async () => {
     const dir = makeRepo()
     const monitor = await CodeTreeMonitor.create(dir)
     writeFileSync(join(dir, 'scratch.txt'), 'wip')
 
     const status = await monitor.check()
     expect(status.state).toBe('paused')
-    expect(status.reason).toBeTruthy()
+    expect(status.cause).toBe('dirty')
+    expect(status.reason).toBe('the working tree has uncommitted local changes (scratch.txt)')
+    expect(status.upgradeBlocked).toBeUndefined()
+  })
+
+  it('names the first three dirty paths and counts the rest (#222)', async () => {
+    const dir = makeRepo()
+    const monitor = await CodeTreeMonitor.create(dir)
+    for (const name of ['a.txt', 'b.txt', 'c.txt', 'd.txt', 'e.txt']) writeFileSync(join(dir, name), 'wip')
+
+    const status = await monitor.check()
+    expect(status.reason).toBe('the working tree has uncommitted local changes (a.txt, b.txt, c.txt, +2 more)')
+  })
+
+  it('a dirty tree over a clean fast-forward reports the upgrade queued behind it (#222)', async () => {
+    const dir = makeRepo()
+    const monitor = await CodeTreeMonitor.create(dir)
+    // The fetch landed (a fast-forward the engine would restart onto), then
+    // someone ran an install: the dirt short-circuits before supersede.
+    const next = commit(dir, 'second')
+    writeFileSync(join(dir, 'package-lock.json'), 'churn')
+
+    const status = await monitor.check()
+    expect(status).toMatchObject({ state: 'paused', cause: 'dirty', codeHead: next, upgradeBlocked: true })
+
+    // Cleaned up: the queued upgrade proceeds through the ordinary debounce.
+    rmSync(join(dir, 'package-lock.json'))
+    expect((await monitor.check()).state).toBe('superseded-pending')
   })
 
   it('pauses when HEAD moves backwards (non-fast-forward)', async () => {
@@ -117,6 +144,7 @@ describe('CodeTreeMonitor (#141)', () => {
 
     const status = await monitor.check()
     expect(status.state).toBe('paused')
+    expect(status.cause).toBe('detached')
     expect(status.reason).toContain('detached')
   })
 
@@ -128,6 +156,7 @@ describe('CodeTreeMonitor (#141)', () => {
 
     const status = await monitor.check()
     expect(status.state).toBe('paused')
+    expect(status.cause).toBe('off-default-branch')
   })
 
   it('recovers to fresh after resetting back to startHead', async () => {

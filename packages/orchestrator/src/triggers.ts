@@ -155,6 +155,8 @@ export async function runLoop(engine: EngineLike, repoDir: string, cfg: RunLoopC
             // and JSON.stringify drops undefined keys — which is what makes
             // the field self-clearing once the tree recovers to fresh.
             codeReason: lastStatus?.reason,
+            codeCause: lastStatus?.cause,
+            codeUpgradeBlocked: lastStatus?.upgradeBlocked,
           }
         : {}
       await writeEngineHealth(repoDir, {

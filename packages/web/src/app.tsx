@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { NavLink, Outlet } from 'react-router-dom'
 import { api, formatAge, type EngineHealthEntry } from './api.ts'
+import { pauseVoice } from './drift.ts'
 import { useLiveInvalidation } from './use-live.ts'
 
 function NavItem({ to, label, badge, end }: { to: string; label: string; badge?: number; end?: boolean }) {
@@ -77,30 +78,44 @@ function EngineDriftChip() {
       {drifted.map(([id, h]) => {
         const entry = h as EngineHealthEntry
         const paused = entry.codeState === 'paused'
+        // Tone follows the cause, not the state (#222): a dirty tree is the
+        // warn voice; the topology family, and an engine too old to say,
+        // stay red.
+        const voice = paused ? pauseVoice(entry) : null
+        const alarmed = voice?.tone === 'bad'
         return (
           <span
             key={id}
+            data-pause-tone={voice?.tone}
             className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-              paused ? 'border-bad-line bg-bad-bg text-bad' : 'border-line bg-surface text-ink'
+              paused ? (alarmed ? 'border-bad-line bg-bad-bg text-bad' : 'border-warn-line bg-warn-bg text-warn') : 'border-line bg-surface text-ink'
             }`}
           >
-            <span className={`${paused ? 'text-bad' : 'text-warn'} text-[9px] leading-none`}>●</span>
+            <span className={`${alarmed ? 'text-bad' : 'text-warn'} text-[9px] leading-none`}>●</span>
             {showId ? <span className="text-muted">{id}</span> : null}
-            {paused ? (
-              entry.codeReason ? (
-                // The monitor's own cause, rendered in full and allowed to wrap:
-                // hiding it behind a tooltip is the failure mode #185 exists to fix.
-                <span>
-                  engine paused — {entry.codeReason} (engine at <code className="font-mono">{shortOid(entry.commit)}</code>, tree at{' '}
-                  <code className="font-mono">{shortOid(entry.codeHead)}</code>)
-                </span>
-              ) : (
-                // Pre-#185 engine: no reason in the heartbeat, so keep the generic wording.
-                <span>
-                  engine paused — code tree at <code className="font-mono">{shortOid(entry.codeHead)}</code> not clean (engine at{' '}
-                  <code className="font-mono">{shortOid(entry.commit)}</code>)
-                </span>
-              )
+            {paused && voice ? (
+              // The monitor's own cause (which names the dirty paths, #222),
+              // rendered in full and allowed to wrap: hiding it behind a
+              // tooltip is the failure mode #185 exists to fix. Then the
+              // consequence — the part that actually costs something — and,
+              // when a dirty tree is also pinning the engine on stale code,
+              // the upgrade queued behind it.
+              <span>
+                engine paused —{' '}
+                {entry.codeReason ?? (
+                  <>
+                    code tree at <code className="font-mono">{shortOid(entry.codeHead)}</code> not clean
+                  </>
+                )}{' '}
+                (engine at <code className="font-mono">{shortOid(entry.commit)}</code>, tree at{' '}
+                <code className="font-mono">{shortOid(entry.codeHead)}</code>). {voice.consequence}
+                {entry.codeUpgradeBlocked && (
+                  <>
+                    {' '}
+                    An upgrade to <code className="font-mono">{shortOid(entry.codeHead)}</code> is queued behind the dirty tree.
+                  </>
+                )}
+              </span>
             ) : (
               <span>
                 engine at <code className="font-mono">{shortOid(entry.commit)}</code> · main at <code className="font-mono">{shortOid(entry.codeHead)}</code>

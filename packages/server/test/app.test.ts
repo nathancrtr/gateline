@@ -587,12 +587,15 @@ describe('GET /api/engine-health (#141 drift passthrough)', () => {
       codeHead: 'b'.repeat(40),
       codeState: 'paused',
       codeReason: "checkout is on branch 'run/toy', not the default branch (main)",
+      codeCause: 'off-default-branch',
     })
     const paused = await get('/api/engine-health')
     expect(paused.body.engines.fixture).toMatchObject({
       codeState: 'paused',
       codeReason: "checkout is on branch 'run/toy', not the default branch (main)",
+      codeCause: 'off-default-branch',
     })
+    expect(paused.body.engines.fixture.codeUpgradeBlocked).toBeUndefined()
   })
 })
 

@@ -18,7 +18,12 @@
      join clauses with a semicolon. (e) Name before cite: give any id or file
      a noun phrase on first use ("the ordering rule (R5)"), at most one
      parenthetical file:line cite per sentence, full path at first mention
-     only — short name after. -->
+     only — short name after.
+     AUDIENCE (normative — tooling parses the `AUDIENCE:` line): decide-time
+     sections are what the G0 approver weighs at the gate; audit-time sections
+     are evidence, read when trust is in question, and Gatehouse folds them to
+     their heading until opened. Unlisted sections are decide-time.
+     AUDIENCE: Out of scope=audit -->
 
 ## Context
 <!-- The problem, grounded in the system as it exists. Note any mismatch

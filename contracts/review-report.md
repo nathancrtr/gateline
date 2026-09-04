@@ -20,7 +20,12 @@
      its place is in breach. Cites live in the Where column, one location per
      row; the Mechanism column says what was checked in a clause, never a
      chain of clauses. (c) Name before cite: give any id or file a noun phrase
-     on first use in the opening sentence. -->
+     on first use in the opening sentence.
+     AUDIENCE (normative — tooling parses the `AUDIENCE:` line): decide-time
+     sections are what the G2 approver weighs at the gate; audit-time sections
+     are evidence, read when trust is in question, and Gatehouse folds them to
+     their heading until opened. Unlisted sections are decide-time.
+     AUDIENCE: Coverage=audit; Boundary check=audit -->
 
 **Verdict:** approve | request-changes | escalate
 **Round:** <n of 3>

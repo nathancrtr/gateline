@@ -26,6 +26,9 @@ the web app that `ui`/`up` serve.)
 ```
 gateline status                          portfolio: phases, gates, needs-a-human
 gateline inbox                           everything waiting on a human, oldest first
+gateline new --slug … --title …          stage a run: --brief-file … [--profile patch|standard|full]
+                                         [--task-file …] (patch: the work item; arm refuses a stub)
+gateline arm <slug>                      start a staged run (also ensures its draft PR)
 gateline approve <slug> <gate>           --burden … [--notes …] [--no-advance] [--hold <reason>]
 gateline decline <slug> <gate>           --reason … (pauses the run as gate-declined)
 gateline resolve-escalation <slug> <n>   --note … (index shown by inbox)

@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline/promises'
 import { Command } from 'commander'
 import {
+  armRefusal,
   BUILTIN_SECTIONS,
   buildLexicon,
   buildPortfolio,
@@ -45,6 +46,9 @@ import {
   type Profile,
   type RunRef,
   type RunSource,
+  validateArtifact,
+  workItemIncomplete,
+  workItemPath,
 } from '@gateline/core'
 
 const program = new Command()
@@ -390,6 +394,7 @@ interface NewFlags {
   title?: string
   profile: string
   briefFile?: string
+  taskFile?: string
   budget: string
   key?: string
   source?: string
@@ -518,6 +523,10 @@ export async function stageNewRun(flags: NewFlags): Promise<number> {
     console.error(`--budget must be a number (got "${flags.budget}")`)
     return 1
   }
+  if (flags.taskFile && flags.profile !== 'patch') {
+    console.error(`--task-file applies only to --profile patch — a ${flags.profile} run plans its tasks at G1`)
+    return 1
+  }
 
   const { sources } = await resolveSources()
   const candidates = flags.source ? sources.filter((s) => s.id === flags.source) : sources
@@ -601,6 +610,29 @@ export async function stageNewRun(flags: NewFlags): Promise<number> {
     ;({ slug, title, briefMarkdown } = result)
   }
 
+  // The patch work item (#221): read verbatim, checked for the contract's
+  // keys and for the three things the stub leaves blank, then staged in the
+  // stub's place. Without it, the stub stages and `arm` will refuse.
+  let workItem: string | null = null
+  if (flags.taskFile) {
+    try {
+      workItem = await readFile(flags.taskFile, 'utf8')
+    } catch (e) {
+      console.error(`cannot read --task-file ${flags.taskFile}: ${(e as Error).message}`)
+      return 1
+    }
+    const validation = await validateArtifact(workItemPath(slug), workItem, source.templates)
+    if (!validation.ok) {
+      console.error(`--task-file is missing required key(s): ${validation.missing.join(', ')}${validation.notes.length ? ` (${validation.notes.join('; ')})` : ''}`)
+      return 1
+    }
+    const incomplete = workItemIncomplete(workItem)
+    if (incomplete) {
+      console.error(`--task-file is not a dispatchable work item: ${incomplete}`)
+      return 1
+    }
+  }
+
   let scaffold
   try {
     scaffold = planRunScaffold({
@@ -608,6 +640,7 @@ export async function stageNewRun(flags: NewFlags): Promise<number> {
       title,
       profile: flags.profile as Profile,
       briefMarkdown,
+      workItem,
       costLimitUsd: budget,
       intake: { source: null, ref: null, url: null, clientKey: flags.key ?? null },
       stagedBy: who.name,
@@ -623,6 +656,8 @@ export async function stageNewRun(flags: NewFlags): Promise<number> {
   const outcome = await source.stageRun(scaffold, who)
   if (outcome.outcome === 'created') {
     console.log(`staged ${outcome.slug} → ${outcome.branch} (${outcome.commit.slice(0, 10)})`)
+    if (flags.profile === 'patch' && !workItem)
+      console.log(`${workItemPath(slug)} is a stub — \`arm\` will refuse until it is written (restage with --task-file, or edit it on ${outcome.branch} from a throwaway worktree)`)
     if (outcome.pushFailed) console.warn(`push failed: ${outcome.pushFailed}`)
     return 0
   }
@@ -642,6 +677,7 @@ program
   .option('--title <title>', 'run title')
   .option('--profile <profile>', 'patch | standard | full', 'standard')
   .option('--brief-file <path>', 'path to an operator-authored intent-brief.md')
+  .option('--task-file <path>', 'patch profile: path to the human-authored work item, staged as tasks/01-<slug>.yaml')
   .option('--budget <usd>', 'cost ceiling in USD', '50')
   .option('--key <key>', 'idempotency / replay client key (optional)')
   .option('--source <id>', 'source id when several are configured')
@@ -663,6 +699,15 @@ export async function armRun(slug: string, flags: { source?: string }): Promise<
   if (!who) {
     console.error('git user.name/user.email are unset — decisions must be attributable to a named human')
     return 1
+  }
+  // A patch run arms only with a written work item (#221).
+  const { state } = await source.readState(ref)
+  if (state) {
+    const why = await armRefusal(source, ref, state)
+    if (why) {
+      console.error(why)
+      return 1
+    }
   }
   const code = await planAndWrite(source, ref, who, { action: 'arm' })
   if (code !== null) return code

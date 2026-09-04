@@ -41,6 +41,13 @@ release; `patch`: Implementer + Reviewer only, you author the single work item
 yourself and G1 approves brief + work item together). See DESIGN.md §4.1 for the
 role/gate matrix and the upgrade guardrail.
 
+For a `patch` run, supply the work item when you stage it: `gateline new
+--profile patch --brief-file <brief> --task-file <work-item>` writes your file as
+`tasks/01-<slug>.yaml`. Staged without one, the run carries a stub and `arm`
+refuses until it is written. If you fill the stub in by hand, do it on
+`run/<slug>` from a throwaway `git worktree` — never by checking the run branch
+out in the blessed checkout (TOPOLOGY.md §3.5).
+
 ## 1. Spec (Analyst → G0)
 
 Dispatch:

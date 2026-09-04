@@ -212,6 +212,35 @@ test('run lexicon (#311): a card opened near the reader\'s right edge stays insi
   }
 })
 
+test('audit-time sections fold to their heading and open verbatim (#217)', async ({ page }) => {
+  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=review-01.md')
+  const reader = page.locator('[data-reader]')
+  // Decide-time: Findings renders open, as it always did.
+  await expect(reader.getByRole('heading', { name: 'Findings' })).toBeVisible()
+  // Audit-time: Coverage and Boundary check fold to heading plus count.
+  const coverage = reader.locator('details[data-fold="Coverage"]')
+  await expect(coverage).toBeVisible()
+  expect(await coverage.evaluate((el) => (el as HTMLDetailsElement).open)).toBe(false)
+  await expect(coverage.locator('summary')).toContainText(/\d+ (paragraph|row|item)/)
+  // The sentence's tail, past the R1–R2 references the lexicon wraps in spans.
+  await expect(reader.getByText('error paths exercised by reading')).toBeHidden()
+  await expect(reader.locator('details[data-fold="Boundary check"]')).toBeVisible()
+  // One click: the section's own words, verbatim.
+  await coverage.locator('summary').click()
+  await expect(reader.getByText('error paths exercised by reading')).toBeVisible()
+
+  // The spec folds Out of scope and nothing else.
+  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=spec.md')
+  await expect(page.locator('[data-reader] details[data-fold]')).toHaveCount(1)
+  await expect(page.locator('[data-reader] details[data-fold="Out of scope"]')).toBeVisible()
+  await expect(page.locator('[data-reader]').getByRole('heading', { name: 'Requirements' })).toBeVisible()
+
+  // A contract with no annotation folds nothing: the intent brief carries none.
+  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=intent-brief.md')
+  await expect(page.locator('[data-reader] .prose-artifact').first()).toBeVisible()
+  await expect(page.locator('[data-reader] details[data-fold]')).toHaveCount(0)
+})
+
 test('run lexicon (#308): the idle card takes no space, and the keyboard still opens it', async ({ page }) => {
   // #308 made the idle card `display: none` instead of `visibility: hidden`,
   // which had left 416px of nothing laid out beside every reference on the page.

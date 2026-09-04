@@ -15,6 +15,7 @@ import { readIntake } from '@gateline/core/record'
 import { useKeys, type KeyHint } from '../use-keys.ts'
 import { EdgeFade, useScrollCue } from '../scroll-cue.tsx'
 import { collapseEngineSpans } from '../ledger-spans.ts'
+import { isAuditSection, itemCount, splitSections } from '../fold.ts'
 import { DIFF_SELECTION, decideTargetIndex, landingArtifact, resolveSurface, type Surface } from '../landing.ts'
 import { PROFILE_PHASES, api, formatAge, formatWhen, type InboxItem, type Phase, type RunDetailResponse, type RunSummary } from '../api.ts'
 import { AgeBadge, BudgetMeter, KeyHints, KindChip, PhaseChip, PhaseSpine, ValidationBadge } from '../components/chips.tsx'
@@ -938,7 +939,13 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
   const [params] = useSearchParams()
   const anchor = params.get('anchor')
   useEffect(() => {
-    if (anchor && data) document.getElementById(anchor)?.scrollIntoView({ block: 'start' })
+    if (!anchor || !data) return
+    const target = document.getElementById(anchor)
+    // A definition inside a folded audit-time section (#217) opens its fold
+    // before the jump, so a citation never lands on a closed heading.
+    const fold = target?.closest('details')
+    if (fold && !fold.open) fold.open = true
+    target?.scrollIntoView({ block: 'start' })
   }, [anchor, data])
   if (isLoading) return <LoadingSkeleton text="Reading artifact…" />
   if (error) return <PageStatus text={(error as Error).message} bad />
@@ -971,12 +978,55 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
         )}
         {isReviewPath(path) && <FindingsPanel src={src} slug={slug} path={path} />}
         {path.endsWith('.md') ? (
-          <Markdown sourcePath={path}>{content}</Markdown>
+          <FoldedMarkdown content={content} path={path} audit={validation.audit ?? []} />
         ) : (
           <pre className="overflow-x-auto font-mono text-xs leading-5">{content}</pre>
         )}
       </div>
     </article>
+  )
+}
+
+/**
+ * The artifact, with its audit-time sections folded (#217). The contract
+ * names them (`validation.audit`); each folds to its heading plus a count —
+ * rows, items, or paragraphs, arithmetic over the text — and opens in place
+ * to the verbatim section. Decide-time sections render as they always did.
+ * A contract that names no audit-time section renders the artifact whole,
+ * through the same single `Markdown` call as before: the split exists only
+ * when there is something to fold.
+ */
+function FoldedMarkdown({ content, path, audit }: { content: string; path: string; audit: string[] }) {
+  if (audit.length === 0) return <Markdown sourcePath={path}>{content}</Markdown>
+  return (
+    <>
+      {splitSections(content).map((section, i) => {
+        if (section.heading === null || !isAuditSection(section.heading, audit)) {
+          return (
+            <Markdown key={i} sourcePath={path}>
+              {section.headingLine ? `${section.headingLine}\n${section.body}` : section.body}
+            </Markdown>
+          )
+        }
+        const count = itemCount(section.body)
+        return (
+          <details key={i} data-fold={section.heading} className="group mb-[18px]">
+            <summary className="prose-artifact cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+              <h2 className="flex flex-wrap items-baseline gap-x-3">
+                <span>
+                  <span className="mr-2 inline-block text-[0.7em] text-muted transition-transform group-open:rotate-90">▶</span>
+                  {section.heading}
+                </span>
+                <span className="font-sans text-[13px] font-normal text-muted">
+                  {count.n} {count.unit} · audit-time, folded until opened
+                </span>
+              </h2>
+            </summary>
+            <Markdown sourcePath={path}>{section.body}</Markdown>
+          </details>
+        )
+      })}
+    </>
   )
 }
 

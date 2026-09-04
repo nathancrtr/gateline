@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, formatAge, type InboxItem } from '../api.ts'
 import { AgeBadge, KeyHints, KindChip } from '../components/chips.tsx'
+import { gateCardState } from '../gate-state.ts'
 import { useKeys, type KeyHint } from '../use-keys.ts'
 
 const STALE_SECONDS = 3 * 86_400 // aging turns urgent at 3 days
@@ -40,6 +41,9 @@ export function itemHref(item: InboxItem): string {
 const INBOX_COLUMNS = '4px 132px minmax(0, 1fr) 120px'
 
 function railClassFor(item: InboxItem): string {
+  // An in-flight gate is not a fault, so it does not take the fault colour
+  // (#159); it takes the muted rail of a row that is waiting on a machine.
+  if (item.kind === 'gate' && gateCardState(item) === 'inflight') return 'bg-faint'
   if (item.kind === 'gate' && !item.reviewable) return 'bg-bad'
   if (item.kind === 'gate') return 'bg-accent'
   if (item.kind === 'staged') return 'border-l-2 border-dashed border-[#c9bfa9]'
@@ -55,8 +59,10 @@ function InboxRow({ item, now, selected }: { item: InboxItem; now: number; selec
   const urgent = item.since !== null && now - item.since > STALE_SECONDS
   const stale = item.since !== null && now - item.since > STALE_DAYS
   const rail = railClassFor(item)
-  const isBouncedGate = item.kind === 'gate' && !item.reviewable
-  const isReviewableGate = item.kind === 'gate' && item.reviewable
+  const gateState = gateCardState(item)
+  const isBouncedGate = gateState === 'bounced'
+  const isInflightGate = gateState === 'inflight'
+  const isReviewableGate = gateState === 'reviewable'
   // Bounced rail gets the repeating hashed pattern (Candidate A signature)
   const railStyle = isBouncedGate
     ? { backgroundImage: `repeating-linear-gradient(180deg, var(--color-bad) 0 4px, transparent 4px 8px)` }
@@ -105,6 +111,15 @@ function InboxRow({ item, now, selected }: { item: InboxItem; now: number; selec
             <p className="mt-1 rounded-sm border border-bad-line bg-bad-bg px-[10px] py-[7px] text-[13px] text-bad">
               <b className="font-semibold">Bounced</b> — packet fails its
               contract; no approval is offered.
+            </p>
+          )}
+          {isInflightGate && item.inflight && (
+            <p
+              data-inbox-inflight
+              className="mt-1 rounded-sm border border-line-cool bg-[#f4f1ea] px-[10px] py-[7px] text-[13px] text-muted"
+            >
+              <b className="font-semibold">Superseded</b> — the {item.inflight.role} is
+              in flight; no approval is offered until the new packet lands.
             </p>
           )}
         </span>

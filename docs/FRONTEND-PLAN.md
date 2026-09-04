@@ -32,7 +32,10 @@ architecture rules here:
   pause/resume). No dispatch, no artifact edits, no second write channel.
 - **R3 — A malformed packet never renders as reviewable** (§4.1). Contract
   well-formedness is computed before human attention is spent; a packet missing
-  required sections gets a bounce view with no approve affordance.
+  required sections gets a bounce view with no approve affordance. A superseded
+  packet is the same refusal for a different cause (#159, §2.3): when the gate's
+  producing role holds an open dispatch, the card says so and offers nothing,
+  because the artifact under it is being replaced.
 
 ## 1. Product shape
 
@@ -139,6 +142,19 @@ don't store). Core encodes one rule per interaction:
 | Escalation | any `escalations[]` entry with `resolved: false` | the entry + `from_role` context |
 | Round-cap | any task `review_rounds ≥ 3` ∧ status ≠ done | both sides' latest artifacts |
 | Paused | `phase: paused` | `paused_reason` + budget/gate context |
+| In flight | a gate row above, ∧ an **open** `budget.ledger` entry (no `cost_usd`, not `failed`) for the gate's producing role, timestamped after the packet's newest commit | the same packet, marked superseded |
+
+The in-flight row (#159) is a gate that is ready by every clause above and still
+must not be decided. Decline G0 with notes and resume: the engine re-dispatches
+the Analyst with those notes (ORCHESTRATOR.md §4.2, rule D9), and until the new
+`spec.md` lands the old one satisfies "G0 ready" exactly. The item is emitted
+**non-reviewable with empty `problems`** — which is what distinguishes it from
+R3's bounce view — and carries `inflight: {role, since}`. The producing roles are
+the profile's own: G0 → Analyst, G1 → Architect (none in `patch`), G2 → Verifier
+(Reviewer in `patch`), G3 → Ops. It is aged against the engine's role timeout,
+one constant shared with it: an open entry older than that is a dispatch the
+engine would already have killed, so the gate returns to reviewable with the wait
+named rather than being suppressed on the word of a dead process.
 
 Each item carries **since** — the commit timestamp at which its condition became
 true (the newest commit touching its trigger artifacts) — giving honest SLA ages

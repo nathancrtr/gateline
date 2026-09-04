@@ -16,6 +16,8 @@
 //   Staged       phase=paused ∧ paused_reason = staged — awaiting arm, not resume/kill
 //   Declined     phase=paused ∧ paused_reason = gate-declined — no item at all
 //   Closed       phase=closed — no item at all, whatever else the record holds
+//   In flight    a gate row, but its producing role holds an OPEN ledger entry
+//                opened after the packet landed — non-reviewable, no problems
 //
 // The last three rows are #200. A `gate-declined` run is a DECIDED run: the
 // human already answered the gate, and the card it used to show told them to
@@ -34,6 +36,23 @@
 //
 // A gate whose packet is present but malformed yields a NON-reviewable item —
 // the bounce view (rule R3) — never a reviewable card.
+//
+// The in-flight row is #159, and it is the same refusal for a different cause.
+// Decline G0 with notes and resume: the gate re-opens, the engine re-dispatches
+// the analyst with those notes (ORCHESTRATOR.md §4.2, rule D9), and until the
+// new spec lands every clause of "G0 ready" is still true of the old one. The
+// human who had just declined was shown their own superseded artifact with an
+// Approve button on it, and reasonably read that as the correction channel
+// having failed. The engine's knowledge is already committed — the dispatch
+// opens a ledger entry under `budget.ledger` before the agent launches, which
+// is what rule D12 rests on — so reading it here costs no new state and keeps
+// R1 intact: files, plus the clock, and nothing else.
+//
+// It is aged rather than trusted forever. An open entry older than
+// `ROLE_TIMEOUT_MS` is one the engine would already have killed and swept, so
+// it means the engine is gone, not that an agent is working; the gate goes back
+// to reviewable with the wait said out loud, because suppressing a gate on the
+// word of a dead process is the worse failure.
 import {
   BUDGET_REASON,
   CLOSED_PHASE,
@@ -46,10 +65,13 @@ import {
   ROUND_CAP,
   STAGED_REASON,
   type GateId,
+  type Profile,
   type RunState,
 } from '../record/schema.ts'
+import { isOpenDispatch, parseLedger, ROLE_TIMEOUT_MS } from '../record/ledger.ts'
 import { validateArtifact, type Validation } from '../record/validate.ts'
 import type { RunRef, RunSource } from '../sources/source.ts'
+import { formatDuration } from './time.ts'
 
 export const GATE_QUESTIONS: Record<GateId, string> = {
   G0: 'Is this what we actually want built?',
@@ -72,9 +94,21 @@ export interface InboxItem {
   detail: string
   /** Epoch seconds when this began waiting (commit time of the trigger), or null. */
   since: number | null
-  /** False → bounce view: packet exists but fails its contract (R3). */
+  /**
+   * False → the card offers no decision. Two causes, told apart by `problems`:
+   * a non-empty `problems` is the bounce view (R3, the packet fails its
+   * contract); an empty one alongside `inflight` is the producer being out
+   * (#159).
+   */
   reviewable: boolean
   problems: string[]
+  /**
+   * The gate's producing role holds an open ledger entry opened after the
+   * packet landed: a new artifact is coming and this one is superseded (#159).
+   * `since` is epoch seconds, the dispatch's own `at`. Null on every other
+   * item, and on a gate whose producer is at rest.
+   */
+  inflight: { role: string; since: number } | null
   /** Run-relative artifact paths that make up the card's packet. */
   packet: string[]
   /** Escalation index into state.escalations, when kind=escalation. */
@@ -96,6 +130,51 @@ const isTaskFile = (p: string) => p.startsWith('tasks/') && p.endsWith('.yaml')
 
 function taskComplete(status: string): boolean {
   return G2_COMPLETE_STATUSES.has(status)
+}
+
+/**
+ * The role whose artifact a gate's packet waits on, and the artifact it lands.
+ *
+ * The frontend's half of the engine's `GATE_PRODUCER` (orchestrator/src/derive.ts),
+ * and profile-aware where that table is not: `patch` G1 has no producer at all —
+ * the human authored the brief and the work item, so there is no one out and
+ * nothing to supersede — and `patch` G2 ends at the reviewer, since a patch run
+ * has no verifier (DESIGN.md §4.1).
+ */
+export function gateProducer(gate: GateId, profile: Profile): { role: string; artifact: string } | null {
+  switch (gate) {
+    case 'G0':
+      return { role: 'analyst', artifact: 'spec.md' }
+    case 'G1':
+      return profile === 'patch' ? null : { role: 'architect', artifact: 'plan.md' }
+    case 'G2':
+      return profile === 'patch'
+        ? { role: 'reviewer', artifact: 'a review report' }
+        : { role: 'verifier', artifact: 'verification-report.md' }
+    case 'G3':
+      return { role: 'ops', artifact: 'release-plan.md' }
+  }
+}
+
+/**
+ * When `role` was last dispatched and not yet closed, in epoch milliseconds, or
+ * null if it is at rest. Only entries opened *after* the packet landed count: an
+ * older open entry is the dispatch that produced the packet, left unclosed, and
+ * reading it as a re-dispatch would suppress every gate the engine ever missed
+ * closing. `packetAt` is epoch seconds, or null when no commit could be found
+ * for the trigger — an unknown packet time is not evidence either way, so every
+ * open entry counts there.
+ */
+function openDispatchAt(state: RunState, role: string, packetAt: number | null): number | null {
+  const after = (packetAt ?? -Infinity) * 1000
+  let newest: number | null = null
+  for (const entry of parseLedger(state)) {
+    if (entry.role !== role || !isOpenDispatch(entry) || entry.at === null) continue
+    const at = Date.parse(entry.at)
+    if (!Number.isFinite(at) || at <= after) continue
+    if (newest === null || at > newest) newest = at
+  }
+  return newest
 }
 
 /** Which gate, if any, is on the table for the run's current phase. Only the profile's gates exist. */
@@ -148,6 +227,7 @@ export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<R
           reviewable: false,
           problems: [error ?? 'state.yaml unreadable'],
           packet: ['state.yaml'],
+          inflight: null,
           escalationIndex: null,
         },
       ],
@@ -183,6 +263,7 @@ export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<R
       reviewable: true,
       problems: [],
       packet: ['state.yaml'],
+      inflight: null,
       escalationIndex: i,
     })
   })
@@ -203,6 +284,7 @@ export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<R
         reviewable: true,
         problems: [],
         packet: [...reviewFiles, ...(has('spec.md') ? ['spec.md'] : []), ...(has('plan.md') ? ['plan.md'] : [])],
+        inflight: null,
         escalationIndex: null,
       })
     }
@@ -226,6 +308,7 @@ export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<R
         reviewable: true,
         problems: [],
         packet: ['state.yaml', 'intent-brief.md'],
+        inflight: null,
         escalationIndex: null,
       })
       return { items, validations }
@@ -248,6 +331,7 @@ export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<R
       reviewable: true,
       problems: [],
       packet: ['state.yaml'],
+      inflight: null,
       escalationIndex: null,
       pausedReason: state.paused_reason,
       costLimitUsd: state.budget?.cost_limit_usd ?? null,
@@ -304,17 +388,41 @@ export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<R
   }
 
   const touched = await source.lastTouched(ref, trigger)
+
+  // The producing role, if it is out (#159). Consulted only for a well-formed
+  // packet: a bounced one already says the true thing — the artifacts fail
+  // their contract — and `problems` is what tells the two refusals apart, so
+  // the bounce view keeps the card unchanged.
+  const producer = problems.length === 0 ? gateProducer(gate, state.profile) : null
+  const openAt = producer ? openDispatchAt(state, producer.role, touched?.time ?? null) : null
+  const openAgeMs = openAt === null ? 0 : Date.now() - openAt
+  const inflight =
+    openAt !== null && openAgeMs < ROLE_TIMEOUT_MS ? { role: producer!.role, since: Math.floor(openAt / 1000) } : null
+
+  let detail: string
+  if (problems.length) detail = 'Packet malformed — bounced, not reviewable'
+  else if (inflight)
+    detail =
+      `${producer!.role} was re-dispatched after ${producer!.artifact} landed — a new one is pending, ` +
+      `so the ${gate} packet on this card is superseded`
+  else if (openAt !== null)
+    detail =
+      `${producer!.role} was re-dispatched ${formatDuration(openAgeMs / 1000)} ago and has not landed ` +
+      `${producer!.artifact} — the engine ages out a lost dispatch; review what is here, or wait`
+  else detail = `${ref.slug} is waiting on ${gate}`
+
   items.push({
     kind: 'gate',
     gate,
     source: ref.source,
     slug: ref.slug,
     title: `${gate} — ${state.profile === 'patch' && gate === 'G1' ? PATCH_G1_QUESTION : GATE_QUESTIONS[gate]}`,
-    detail: problems.length ? 'Packet malformed — bounced, not reviewable' : `${ref.slug} is waiting on ${gate}`,
+    detail,
     since: touched?.time ?? null,
-    reviewable: problems.length === 0,
+    reviewable: problems.length === 0 && inflight === null,
     problems,
     packet,
+    inflight,
     escalationIndex: null,
   })
   return { items, validations }

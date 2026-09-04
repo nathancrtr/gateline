@@ -5,7 +5,7 @@
 // updates, comment-preserving YAML, the orchestrator's own commit verbs
 // (dispatched | bounced | advanced | escalated | paused | metered | harvested),
 // a bot identity, and — structurally — no code path that writes gates.*.
-import type { Identity } from '@gateline/core/record'
+import { type Identity, ROLE_TIMEOUT_MS } from '@gateline/core/record'
 import { Git, LocalGitSource, ensureDraftPr, type RunRef, type WriteResult } from '@gateline/core/sources'
 import type { Document } from 'yaml'
 import { hasShell, loadRoleCapabilities } from './capabilities.ts'
@@ -93,7 +93,13 @@ export interface TickOutcome {
   detail: string
 }
 
-const DEFAULT_ROLE_TIMEOUT_MS = 30 * 60 * 1000
+/**
+ * How long a dispatched agent may run before the engine kills it. The number
+ * lives in `@gateline/core/record` because Gatehouse ages the same open ledger
+ * entry out of its in-flight gate view (#159), and a reader that outlived — or
+ * fell short of — the killer would contradict it.
+ */
+const DEFAULT_ROLE_TIMEOUT_MS = ROLE_TIMEOUT_MS
 const DEFAULT_STALE_MS = 5 * 60 * 1000
 /** The host ceiling's rolling window (#97). */
 export const DEFAULT_SPEND_WINDOW_MS = 24 * 60 * 60 * 1000

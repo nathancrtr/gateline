@@ -27,6 +27,17 @@ export const ROUND_CAP_INSTRUCTION =
   'Read both sides, then unblock: decline the pending gate with direction, or edit the spec/plan and let the loop retry.'
 
 /**
+ * The third card with no button (#159), and the one that has to say why it has
+ * none the most carefully: nothing is wrong here. The producing role is out
+ * with a fresh dispatch — the usual cause is the decline you just made — so the
+ * packet on screen is the superseded one, and the card returns on its own when
+ * the replacement lands. The role and the artifact are in the item's `detail`,
+ * in the run's own words; this sentence is what to do about it.
+ */
+export const INFLIGHT_INSTRUCTION =
+  'Superseded — the producing role is in flight, so no approval is offered for this packet; the card returns when the new one lands.'
+
+/**
  * What the keyboard can do to *this* card, in the words the card uses (#284).
  *
  * Derived from the same two facts the handlers below branch on, so a card that

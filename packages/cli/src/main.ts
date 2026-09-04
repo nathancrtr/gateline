@@ -152,6 +152,9 @@ function printItem(item: InboxItem): void {
   if (!item.reviewable && item.problems.length) {
     for (const p of item.problems) console.log(`${' '.repeat(17)}✕ BOUNCED: ${p}`)
   }
+  // The terminal's half of #159: a gate whose producer is out is listed, since
+  // it is still the gate on the table, but it must not read as ready to decide.
+  if (item.inflight) console.log(`${' '.repeat(17)}⋯ SUPERSEDED: ${item.detail}`)
 }
 
 // The run lexicon in a terminal (#164): a hover can't exist here, so cited

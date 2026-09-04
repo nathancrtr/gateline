@@ -132,7 +132,7 @@ implementation time (one test per row, like the frontend's); its shape:
 | Role's artifact present but malformed | Bounce: re-dispatch the producer naming the missing sections |
 | Artifact well-formed, gate not decided | Rest (the frontend inbox surfaces it) |
 | Gate approved | Advance phase; dispatch the next role |
-| Gate declined | Rest as `paused: gate-declined`; a human resume re-dispatches the producing role with the decline notes as bounce input (resolved question 5) |
+| Gate declined | Rest as `paused: gate-declined`; a human resume re-dispatches the producing role with the decline notes as bounce input (resolved question 5). The re-dispatch opens a ledger entry, and the frontend reads that open entry as the in-flight signal (#159): while it stands, the gate card renders superseded rather than reviewable, so the human who just declined is not shown their own old artifact with an Approve button. It is the same fact rule D12 rests on, read by the other surface — one constant for the role timeout keeps the two from disagreeing about when a dispatch has been lost |
 | Task diff ready, `review_rounds` < 3 | Dispatch Reviewer (P5-constrained, §5.3) |
 | Review requests changes, rounds < 3 | Dispatch Implementer, round n+1 |
 | Round cap hit, or two bounces of the same artifact | Escalate; pause the run |

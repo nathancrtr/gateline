@@ -53,12 +53,84 @@ escalations:
   git(['checkout', '-q', 'main'])
 }
 
+const MIN = 60_000
+
+/**
+ * A G0-pending run whose ledger says whatever the row under test needs (#159).
+ *
+ * The generator cannot express these: `stateYaml`'s ledger lines always carry a
+ * `cost_usd`, and an *open* entry — the whole subject here — is one with none.
+ * The packet is the g0-pending run's own spec and brief, read off its branch
+ * rather than retyped, so these runs stay well-formed for free when the spec
+ * contract changes. Commit and dispatch times are backdated around the clock the
+ * derivation reads, since the rule under test is exactly "which is newer".
+ */
+function addLedgerRun(dir: string, slug: string, o: { packetAgoMin: number; ledger: string[] }): void {
+  const now = Date.now()
+  const at = new Date(now - o.packetAgoMin * MIN).toISOString()
+  const git = (args: string[], date?: string) =>
+    execFileSync('git', ['-C', dir, ...args], {
+      encoding: 'utf8',
+      env: date ? { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } : process.env,
+    })
+  const spec = git(['show', 'run/g0-pending:runs/g0-pending/spec.md'])
+  const brief = git(['show', 'run/g0-pending:runs/g0-pending/intent-brief.md'])
+  git(['checkout', '-q', '-b', `run/${slug}`, 'main'])
+  const runDir = join(dir, 'runs', slug)
+  mkdirSync(runDir, { recursive: true })
+  writeFileSync(join(runDir, 'intent-brief.md'), brief, 'utf8')
+  writeFileSync(join(runDir, 'spec.md'), spec, 'utf8')
+  writeFileSync(
+    join(runDir, 'state.yaml'),
+    `run: ${slug}
+branch: run/${slug}
+phase: spec
+profile: full
+paused_reason: null
+
+budget:
+  cost_limit_usd: 25
+  cost_spent_usd: 0
+  ledger:${o.ledger.length ? `\n${o.ledger.map((l) => `  - {${l}}`).join('\n')}` : ' []'}
+
+gates:
+  G0: {approved: false, by: null, at: null, notes: null}
+  G1: {approved: false, by: null, at: null, notes: null}
+  G2: {approved: false, by: null, at: null, notes: null}
+  G3: {approved: false, by: null, at: null, notes: null}
+
+tasks:
+  []
+
+escalations:
+  []
+`,
+    'utf8',
+  )
+  git(['add', '-A'])
+  git(['commit', '-q', '-m', `state(${slug}): artifacts`], at)
+  git(['checkout', '-q', 'main'])
+}
+
+/** One ledger line, ISO-timestamped `agoMin` minutes before now. */
+const entry = (role: string, agoMin: number, closed: boolean): string =>
+  `at: "${new Date(Date.now() - agoMin * MIN).toISOString()}", role: ${role}, task: null, round: null, ` +
+  `adapter: claude-code, model: m, tokens_in: null, tokens_out: null, cost_usd: ${closed ? '0.42' : 'null'}`
+
 beforeAll(async () => {
   ctx = await makeFixture()
   addPausedRun(ctx.repo.dir, 'staged-run', 'staged')
   addPausedRun(ctx.repo.dir, 'paused-declined', 'gate-declined')
   addPausedRun(ctx.repo.dir, 'paused-other-reason', 'round-cap')
   addPausedRun(ctx.repo.dir, 'paused-landed', 'slug-landed')
+  // #159, one run per row: the producer out and fresh; out and aged past the
+  // role timeout; landed (closed) and therefore quiet; a different role out;
+  // and an open entry that predates the packet it produced.
+  addLedgerRun(ctx.repo.dir, 'g0-redispatched', { packetAgoMin: 60, ledger: [entry('analyst', 5, false)] })
+  addLedgerRun(ctx.repo.dir, 'g0-lost-dispatch', { packetAgoMin: 180, ledger: [entry('analyst', 90, false)] })
+  addLedgerRun(ctx.repo.dir, 'g0-producer-landed', { packetAgoMin: 60, ledger: [entry('analyst', 5, true)] })
+  addLedgerRun(ctx.repo.dir, 'g0-other-role', { packetAgoMin: 60, ledger: [entry('architect', 5, false)] })
+  addLedgerRun(ctx.repo.dir, 'g0-open-before-packet', { packetAgoMin: 60, ledger: [entry('analyst', 120, false)] })
   refs = new Map((await ctx.source.listRuns()).map((r) => [r.slug, r]))
 })
 afterAll(() => dropFixture(ctx))
@@ -72,7 +144,12 @@ describe('run discovery', () => {
       'done-merged',
       'escalated',
       'forked-contract',
+      'g0-lost-dispatch',
+      'g0-open-before-packet',
+      'g0-other-role',
       'g0-pending',
+      'g0-producer-landed',
+      'g0-redispatched',
       'g1-pending',
       'g2-pending',
       'g3-pending',
@@ -290,6 +367,50 @@ describe('readiness derivation (§2.3, one row per test)', () => {
     expect(items[0]).toMatchObject({ kind: 'gate', gate: 'G0', reviewable: false })
     expect(items[0]!.problems.join(' ')).toMatch(/Requirements/)
     expect(items[0]!.problems.join(' ')).toMatch(/Assumptions/)
+  })
+
+  it('in flight: an open producer entry newer than the packet makes the gate non-reviewable (#159)', async () => {
+    const items = await gateItem('g0-redispatched')
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ kind: 'gate', gate: 'G0', reviewable: false })
+    expect(items[0]!.inflight).toMatchObject({ role: 'analyst' })
+    // Empty problems is what tells this apart from the R3 bounce view: nothing
+    // is malformed here, the artifact is simply being replaced.
+    expect(items[0]!.problems).toEqual([])
+    expect(items[0]!.detail).toContain('analyst')
+    expect(items[0]!.detail).toContain('superseded')
+    expect(items[0]!.inflight!.since).toBeGreaterThan(items[0]!.since!)
+  })
+
+  it('in flight ages out: an open entry older than the role timeout stays reviewable, with the wait said (#159)', async () => {
+    // Suppressing a gate on the word of an engine that is no longer running is
+    // the worse failure, so the card comes back — carrying why it was late.
+    const items = await gateItem('g0-lost-dispatch')
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ kind: 'gate', gate: 'G0', reviewable: true, inflight: null })
+    expect(items[0]!.detail).toContain('analyst was re-dispatched')
+    expect(items[0]!.detail).toContain('ages out a lost dispatch')
+  })
+
+  it('a closed producer entry is not in flight — the artifact landed and the gate is ordinary (#159)', async () => {
+    const items = await gateItem('g0-producer-landed')
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ kind: 'gate', gate: 'G0', reviewable: true, inflight: null })
+    expect(items[0]!.detail).toBe('g0-producer-landed is waiting on G0')
+  })
+
+  it('an open entry for another role leaves G0 alone — only the gate’s own producer supersedes it (#159)', async () => {
+    const items = await gateItem('g0-other-role')
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ kind: 'gate', gate: 'G0', reviewable: true, inflight: null })
+  })
+
+  it('an open entry older than the packet is the dispatch that produced it, not a re-dispatch (#159)', async () => {
+    // The engine's own metering can leave the opening entry unclosed; without
+    // the newer-than-the-packet clause that would suppress every fresh gate.
+    const items = await gateItem('g0-open-before-packet')
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ kind: 'gate', gate: 'G0', reviewable: true, inflight: null })
   })
 
   it('malformed state.yaml surfaces as a malformed-run item, never guessed around', async () => {

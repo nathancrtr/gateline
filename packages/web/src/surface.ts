@@ -75,3 +75,4 @@ export function boundaryLine(
   if (!surface || surface.withheld !== null) return null
   return { changed: files.length, undeclared: arrangeDiff(files, surface).undeclared }
 }
+// probe: a web-only change, to prove the packages slice skips (#318)

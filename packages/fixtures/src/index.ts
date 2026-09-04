@@ -70,6 +70,21 @@ Must run offline; none otherwise known.
 Changing the upstream data format.
 `
 
+/**
+ * The one artifact the Record reader cannot fit at any supported width (#312):
+ * an unbreakable token in prose, outside any code block (a `pre` scrolls on
+ * its own), so the reader itself overflows and its scroll cue has something
+ * real to announce. A digest, deliberately — a path would wrap at its hyphens,
+ * which browsers treat as break opportunities. Every other artifact fits,
+ * which is the other half of the evidence: a cue that fires on a fitting
+ * artifact has regressed #308.
+ */
+const wideBrief = (title: string) =>
+  brief(title).replace(
+    'Must run offline; none otherwise known.',
+    'Must run offline; the reference corpus is pinned by digest `sha512:' + 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'.repeat(2) + '`.',
+  )
+
 const spec = (title: string) => `# Specification: ${title}
 
 ## Context
@@ -733,7 +748,7 @@ export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts 
       // both how a real run accretes and what gives each commit something to
       // land. The final commit restores the same tree this run had before.
       files: {
-        'intent-brief.md': brief('log rotator'),
+        'intent-brief.md': wideBrief('log rotator'),
         'spec.md': spec('log rotator'),
         'state.yaml': stateYaml({ slug: 'g2-pending', phase: 'spec', gates: {} }),
       },

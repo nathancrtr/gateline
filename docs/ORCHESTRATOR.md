@@ -244,8 +244,10 @@ push/fetch half of this section does not apply.
    verb — the same harvest also runs as a defense-in-depth backstop for any
    non-isolated role that simply didn't commit. This happens before the checkout
    is force-removed once the run's last in-flight job settles, which is what
-   rescues the artifacts from that teardown. The orchestrator then commits the
-   closing bookkeeping — status, rounds, spend.
+   rescues the artifacts from that teardown. An isolated implementer (§5.3) gets
+   the same rescue on its own path: the fold harvests the task's worktree before
+   it rebases, scoped to the task's declared file-contact surface. The
+   orchestrator then commits the closing bookkeeping — status, rounds, spend.
 
 The CAS on step 1 is the duplicate-dispatch guard: two orchestrator instances, or a
 tick racing its own heartbeat, serialize on the ref update — the loser re-reads,
@@ -370,6 +372,21 @@ component that *consumes* adapters through their manifests (amendment list, §8)
   the run branch serially — mechanical while file-contact surfaces are disjoint,
   which the Architect already guarantees; an actual conflict escalates as a plan
   defect.
+- **The fold harvests before it discards** (#184). A task worktree is removed the
+  moment its fold finishes, so anything the implementer left uncommitted there
+  dies with it, tracked or untracked alike. The fold therefore commits whatever
+  is uncommitted inside the task's declared file-contact surface onto the task
+  branch first, under the bot identity and the `harvested` verb, reading the
+  surface entries as git pathspecs. This is §4.4's harvest-commit applied to the
+  isolated path, with the surface standing in for the role's artifact list.
+  Whatever the harvest did not take is handled two ways, and neither is silent:
+  - Tracked paths outside the surface are discarded, because they stop the
+    rebase from starting and are by definition not the task's product (#224).
+  - Untracked paths outside the surface are left for the worktree removal to
+    take.
+
+  The fold's result names both, and that result is what the dispatch outcome and
+  any escalation quote.
 
 ### 5.4 Dispatch prompts are templates, not compositions
 

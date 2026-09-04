@@ -145,8 +145,8 @@ export function burdenPillNeeded(detail: string, burden: string): boolean {
  * true count — nothing has been reviewed yet — and stays printed, which is also
  * what the portfolio's column has always done with the same number.
  */
-export function maxRoundsLabel(tasks: RunSummary['tasks']): string {
-  return tasks.total > 0 ? String(tasks.maxRounds) : '—'
+export function roundsLabel(tasks: RunSummary['tasks']): string {
+  return tasks.total > 0 ? `${tasks.maxRounds}/${tasks.roundCap}` : '—'
 }
 
 export function RunPage() {
@@ -331,7 +331,7 @@ export function RunPage() {
     </div>
   ) : null
 
-  const board = summary.tasks.total > 0 && detail.state ? <TaskBoard state={detail.state} /> : null
+  const board = summary.tasks.total > 0 && detail.state ? <TaskBoard state={detail.state} roundCap={summary.tasks.roundCap} /> : null
 
   // The lexicon covers the whole page, not just the artifact reader: a
   // decision card that names AC2.1 should resolve it where it stands (#252).
@@ -476,8 +476,12 @@ function RunMetadata({ summary, board }: { summary: RunSummary; board: React.Rea
             <BudgetMeter limit={summary.budget.limit} spent={summary.budget.spent} />
           </span>
           <Sep />
-          <span>
-            Max rounds <span className="tabular-nums text-ink">{maxRoundsLabel(summary.tasks)}</span>
+          {/* The observation and the rule, in one register the reader can
+              parse: the busiest task's round count, over the cap it is
+              judged against. "Max rounds" called the observation a limit,
+              beside a Budget that really is one (#314). */}
+          <span title="highest review-round count any task has reached, over the cap">
+            Rounds <span className="tabular-nums text-ink">{roundsLabel(summary.tasks)}</span>
           </span>
           {diverged && (
             <>
@@ -640,7 +644,7 @@ function NeedsYouCard({
         )}
         {mentionedTask && (
           <p className="mt-1.5 font-mono text-[12px] text-muted">
-            {mentionedTask.id} · {mentionedTask.status} · review round {mentionedTask.review_rounds}/3
+            {mentionedTask.id} · {mentionedTask.status} · review round {mentionedTask.review_rounds}/{detail.summary.tasks.roundCap}
           </p>
         )}
         {problems.length > 0 && (
@@ -719,7 +723,7 @@ function BranchRef({ refName, kind, url }: { refName: string; kind: RunSummary['
 
 /** The task board shares the status grammar — mono label, hairline rows —
  * and, like all status content, is never boxed. */
-function TaskBoard({ state }: { state: NonNullable<RunDetailResponse['state']> }) {
+function TaskBoard({ state, roundCap }: { state: NonNullable<RunDetailResponse['state']>; roundCap: number }) {
   const doneCount = state.tasks.filter((t) => t.status === 'done').length
   return (
     <section className="text-[13px]">
@@ -727,7 +731,7 @@ function TaskBoard({ state }: { state: NonNullable<RunDetailResponse['state']> }
         Task board · {doneCount} / {state.tasks.length} done
       </div>
       {state.tasks.map((t) => {
-        const capped = t.review_rounds >= 3
+        const capped = t.review_rounds >= roundCap
         const statusChip = capped
           ? 'font-bold text-bad bg-bad-bg border-bad-line'
           : t.status === 'done'

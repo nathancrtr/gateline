@@ -120,6 +120,15 @@ export type Disposition = (typeof DISPOSITIONS)[number]
 export const TASK_STATUSES = ['pending', 'dispatched', 'failed', 'in-progress', 'in-review', 'review-approved', 'verified', 'done'] as const
 export const G2_COMPLETE_STATUSES = new Set(['review-approved', 'verified', 'done'])
 
+/**
+ * The review-round cap (DESIGN.md §4): a task whose `review_rounds` reaches
+ * this without converging escalates to the human instead of being reviewed
+ * again. One home, so the orchestrator's rule, the readiness item, and every
+ * surface that draws `n/cap` or colours a task red agree by construction
+ * (#314). Display layers read it off the view model rather than importing it.
+ */
+export const ROUND_CAP = 3
+
 /** The `yaml` core schema parses unquoted dates as strings; normalize anything else. */
 const yamlScalarToString = z
   .union([z.string(), z.number(), z.date()])

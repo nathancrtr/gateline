@@ -3,7 +3,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { deriveReadiness, buildPortfolio, type RunRef } from '../src/index.ts'
+import { deriveReadiness, buildPortfolio, ROUND_CAP, type RunRef } from '../src/index.ts'
 import { dropFixture, makeFixture, type FixtureContext } from './fixture.helper.ts'
 
 let ctx: FixtureContext
@@ -160,12 +160,21 @@ describe('readiness derivation (§2.3, one row per test)', () => {
     expect(esc!.since).toBeGreaterThan(0)
   })
 
-  it('round-cap: review_rounds ≥ 3 on an unfinished task', async () => {
+  it('round-cap: review_rounds ≥ ROUND_CAP on an unfinished task', async () => {
     const items = await gateItem('round-cap')
     const cap = items.find((i) => i.kind === 'round-cap')
     expect(cap).toBeDefined()
     expect(cap!.title).toContain('01-core')
     expect(cap!.packet).toContain('review-03.md')
+  })
+
+  it('the summary carries the cap the round-cap item was judged against, so no surface retypes it (#314)', async () => {
+    const { runs } = await buildPortfolio([ctx.source])
+    const row = runs.find((r) => r.slug === 'round-cap')!
+    expect(row.tasks.roundCap).toBe(ROUND_CAP)
+    expect(row.tasks.maxRounds).toBeGreaterThanOrEqual(row.tasks.roundCap)
+    const fresh = runs.find((r) => r.slug === 'g1-pending')!
+    expect(fresh.tasks).toMatchObject({ maxRounds: 0, roundCap: ROUND_CAP })
   })
 
   it('paused: phase=paused surfaces resume/kill decision', async () => {

@@ -159,6 +159,27 @@ test('run lexicon (#163): ids resolve to verbatim hover cards and jump to their 
   await expect(page.locator('.prose-artifact li .lex-ref', { hasText: 'AC1.1' })).toHaveCount(0)
 })
 
+test('Record reader (#312): a clipped artifact shows a scroll cue, and a fitting one shows none', async ({ page }) => {
+  // g2-pending's brief carries one unbreakable path, so the reader overflows
+  // it at every supported width; plan.md fits everywhere. The second half is
+  // the one that used to be false: before #308 the idle lexicon card was laid
+  // out beside every reference, and a cue off `scrollWidth` would have fired
+  // on 12px of phantom overflow at 1024px with nothing to scroll to.
+  for (const width of [800, 900, 1000]) {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=intent-brief.md')
+    await expect(page.locator('[data-reader]')).toBeVisible()
+    await expect(page.locator('[data-scroll-cue="right"]'), `${width}px: cue on the clipped edge`).toBeVisible()
+    await expect(page.locator('[data-scroll-cue="left"]')).toHaveCount(0)
+  }
+  for (const width of [800, 1024, 1280]) {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=plan.md')
+    await expect(page.locator('[data-reader] .prose-artifact')).toBeVisible()
+    await expect(page.locator('[data-scroll-cue]'), `${width}px: no cue on an artifact that fits`).toHaveCount(0)
+  }
+})
+
 test('run lexicon (#308): the idle card takes no space, and the keyboard still opens it', async ({ page }) => {
   // #308 made the idle card `display: none` instead of `visibility: hidden`,
   // which had left 416px of nothing laid out beside every reference on the page.

@@ -13,6 +13,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 // detail.history. No new server data (ADR-6 rider, ADR-7).
 import { readIntake } from '@gateline/core/record'
 import { useKeys, type KeyHint } from '../use-keys.ts'
+import { EdgeFade, useScrollCue } from '../scroll-cue.tsx'
 import { DIFF_SELECTION, decideTargetIndex, landingArtifact, resolveSurface, type Surface } from '../landing.ts'
 import { PROFILE_PHASES, api, formatAge, formatWhen, type InboxItem, type Phase, type RunDetailResponse, type RunSummary } from '../api.ts'
 import { AgeBadge, BudgetMeter, KeyHints, KindChip, PhaseChip, PhaseSpine, ValidationBadge } from '../components/chips.tsx'
@@ -829,7 +830,7 @@ function RecordSurface({
           </div>
         )}
       </nav>
-      <ReaderPane>
+      <ReaderPane artifact={showDiff ? DIFF_SELECTION : current}>
         {showDiff ? (
           <DiffPane src={detail.summary.source} slug={detail.summary.slug} />
         ) : current ? (
@@ -872,15 +873,33 @@ export function navEntryClass(active: boolean) {
  * `lg` the reader is the column that keeps its width — the picker is the one
  * that gives width up.
  *
- * No scroll cue rides along yet, unlike the portfolio table's pane (#297). It
- * would lie: an idle lexicon card is `visibility: hidden`, not `display: none`,
- * so it is still laid out 416px wide beside its reference and shows up in this
- * pane's `scrollWidth` — 12px of phantom overflow at 1024px on the g2-pending
- * fixture, with nothing to scroll to. The cue is worth adding once the card
- * stops occupying layout while hidden.
+ * The scroll cue (#312) follows the portfolio table's (#297): a fade on
+ * whichever edge has content beyond it, measured live, drawn above the
+ * content so the reader's own tinted blocks cannot paint over it. It was
+ * deferred when this pane was written, and rightly then: the idle lexicon
+ * card was `visibility: hidden` but still laid out, so the pane reported
+ * 12px of phantom overflow at 1024px with nothing to scroll to, and a cue
+ * off `scrollWidth` would have lied. #308 made the idle card `display: none`;
+ * the reader's idle `scrollWidth` now equals its `clientWidth`, and any
+ * overflow it reports is real content. The `idle-card-collapsed` rule in the
+ * geometry sweep is what keeps that true.
  */
-function ReaderPane({ children }: { children: ReactNode }) {
-  return <div className="min-w-0 overflow-x-auto">{children}</div>
+function ReaderPane({ children, artifact }: { children: ReactNode; artifact?: string | null }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const cue = useScrollCue(ref, [artifact])
+  // `min-w-0` on the wrapper too: the reader is the column that yields width
+  // below `lg`, and a wrapper without it would hold the column at its
+  // content's width — the overflow then reaches the page body instead of
+  // stopping here (the geometry sweep caught exactly that on state.yaml).
+  return (
+    <div className="relative min-w-0">
+      <div ref={ref} data-reader className="min-w-0 overflow-x-auto">
+        {children}
+      </div>
+      {cue.left && <EdgeFade edge="left" />}
+      {cue.right && <EdgeFade edge="right" />}
+    </div>
+  )
 }
 
 /**

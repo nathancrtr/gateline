@@ -1,10 +1,11 @@
 // I6: every run × source at a glance.
-import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { type ReactNode, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { api, formatAge, type RunSummary } from '../api.ts'
 import { BudgetMeter, GateLedger, PhaseChip } from '../components/chips.tsx'
 import { PageStatus } from './inbox.tsx'
+import { EdgeFade, useScrollCue } from '../scroll-cue.tsx'
 
 // Candidate A header: sans, medium weight, tight letter-spacing.
 const TH =
@@ -39,28 +40,7 @@ export function needsYouMark(run: Pick<RunSummary, 'needsHuman' | 'escalationsOp
   return { kind: 'quiet', count: 0, label: 'nothing needs you' }
 }
 
-/** Which edges of a horizontally scrollable pane have content beyond them. */
-export interface ScrollCue {
-  left: boolean
-  right: boolean
-}
-
-/**
- * Whether a clipped table should announce itself, and on which edge (#297).
- *
- * The overflow containment here is right — it never escapes to the page body —
- * but a scroll the user cannot see is a scroll the user will not perform, and
- * the platform scrollbar stays hidden until they interact. One pixel of slack
- * absorbs sub-pixel layout so a table that exactly fits does not claim to be
- * cut off.
- */
-export function scrollCue(pane: { scrollLeft: number; scrollWidth: number; clientWidth: number }): ScrollCue {
-  const slack = 1
-  return {
-    left: pane.scrollLeft > slack,
-    right: pane.scrollWidth - pane.clientWidth - pane.scrollLeft > slack,
-  }
-}
+export { scrollCue } from '../scroll-cue.tsx'
 
 /**
  * The table's pane: the same contained horizontal scroll as before, plus the
@@ -70,28 +50,7 @@ export function scrollCue(pane: { scrollLeft: number; scrollWidth: number; clien
  */
 function ScrollPane({ children, label }: { children: ReactNode; label: string }) {
   const ref = useRef<HTMLDivElement>(null)
-  const [cue, setCue] = useState<ScrollCue>({ left: false, right: false })
-
-  useEffect(() => {
-    const pane = ref.current
-    if (!pane) return
-    const measure = () => {
-      const next = scrollCue(pane)
-      setCue((prev) => (prev.left === next.left && prev.right === next.right ? prev : next))
-    }
-    measure()
-    pane.addEventListener('scroll', measure, { passive: true })
-    // Re-measure on width changes and on content changes (a run appearing or a
-    // longer phase label both move the boundary), not just on scroll.
-    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure)
-    ro?.observe(pane)
-    if (pane.firstElementChild) ro?.observe(pane.firstElementChild)
-    return () => {
-      pane.removeEventListener('scroll', measure)
-      ro?.disconnect()
-    }
-  }, [])
-
+  const cue = useScrollCue(ref)
   const clipped = cue.left || cue.right
   return (
     <div className="mt-[30px]">
@@ -103,20 +62,8 @@ function ScrollPane({ children, label }: { children: ReactNode; label: string })
         >
           {children}
         </div>
-        {cue.left && (
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-y-px left-px w-[30px] rounded-l-lg"
-            style={{ background: 'linear-gradient(to right, rgba(36, 32, 28, 0.13), rgba(36, 32, 28, 0))' }}
-          />
-        )}
-        {cue.right && (
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-y-px right-px w-[38px] rounded-r-lg"
-            style={{ background: 'linear-gradient(to left, rgba(36, 32, 28, 0.13), rgba(36, 32, 28, 0))' }}
-          />
-        )}
+        {cue.left && <EdgeFade edge="left" radius="rounded-l-lg" />}
+        {cue.right && <EdgeFade edge="right" radius="rounded-r-lg" />}
       </div>
       {clipped && (
         <p className="mt-[7px] text-[11.5px] text-muted">

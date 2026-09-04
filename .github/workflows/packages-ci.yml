@@ -67,6 +67,16 @@ jobs:
           echo "rest=$rest" >> "$GITHUB_OUTPUT"
           echo "→ web=$web rest=$rest"
 
+  # The lockfile either carries every platform's optional bindings or only the
+  # writer's, and the difference surfaces only at build time on Linux, three
+  # checks later, on an unrelated branch (#291). Stdlib-only and before any
+  # install, so it fails on the PR that wrote the lockfile and names it.
+  lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: node packages/scripts/check-lockfile.mjs
+
   # Web-only slice: shallow, and scoped to the SPA's own typecheck and tests.
   web:
     needs: changes
@@ -136,13 +146,14 @@ jobs:
   # what a public repo would require.)
   ci:
     if: always()
-    needs: [changes, web, packages, e2e]
+    needs: [changes, lockfile, web, packages, e2e]
     runs-on: ubuntu-latest
     steps:
       - name: Verify the slices that ran
         run: |
           set -euo pipefail
           echo "changes=${{ needs.changes.result }}"
+          echo "lockfile=${{ needs.lockfile.result }}"
           echo "web=${{ needs.web.result }}"
           echo "packages=${{ needs.packages.result }}"
           echo "e2e=${{ needs.e2e.result }}"

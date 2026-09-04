@@ -23,6 +23,7 @@ import {
   missingSections,
   parseLedgerSubject,
   parseUnifiedDiff,
+  armRefusal,
   planDecision,
   scopeDiff,
   planRunScaffold,
@@ -186,6 +187,8 @@ export function createApp(deps: AppDeps): Hono {
             codeHead: health.codeHead,
             codeState: health.codeState,
             codeReason: health.codeReason,
+            codeCause: health.codeCause,
+            codeUpgradeBlocked: health.codeUpgradeBlocked,
           }
         : null
     }
@@ -529,6 +532,14 @@ export function createApp(deps: AppDeps): Hono {
           error: `gate packet is malformed and was bounced: ${gateItem.problems.join('; ')}`,
           problems: gateItem.problems,
         })
+    }
+
+    // A patch run arms only with a written work item (#221): the stub the
+    // scaffold ships is well-formed and empty, and nothing downstream would
+    // notice until an implementer was dispatched against it.
+    if (body.action === 'arm') {
+      const why = await armRefusal(source, ref, state)
+      if (why) return fail(c, 422, { error: why })
     }
 
     try {

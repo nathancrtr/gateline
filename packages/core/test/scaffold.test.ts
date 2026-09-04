@@ -15,6 +15,8 @@ import {
   STAGED_REASON,
   type Profile,
   type RunScaffoldInput,
+  WORK_ITEM_STUB_SCOPE,
+  workItemIncomplete,
 } from '../src/index.ts'
 
 const who = { name: 'Operator', email: 'op@example.test' }
@@ -68,6 +70,57 @@ describe('planRunScaffold — per-profile fixtures', () => {
       const parsed = parseYaml(stub) as Record<string, unknown>
       expect(parsed.title).toBe(title)
     }
+  })
+
+const writtenWorkItem = (slug: string) => `id: 01-${slug}
+title: Fix the thing
+requirements: []
+
+scope: |
+  Replace the off-by-one in the pager.
+
+file_contact_surface:
+  - src/pager.py
+  - tests/test_pager.py
+
+acceptance_tests:
+  - "pytest tests/test_pager.py passes"
+
+depends_on: []
+
+status: pending
+
+notes: ""
+`
+
+  it('patch stages a human-authored work item verbatim in the stub\'s place (#221)', () => {
+    const workItem = writtenWorkItem('toy-run')
+    const scaffold = planRunScaffold(baseInput('patch', { workItem }))
+    expect(scaffold.files['tasks/01-toy-run.yaml']).toBe(workItem)
+    expect(workItemIncomplete(scaffold.files['tasks/01-toy-run.yaml']!)).toBeNull()
+  })
+
+  it('a work item whose id does not name its file is refused (#221)', () => {
+    expect(() => planRunScaffold(baseInput('patch', { workItem: writtenWorkItem('other-run') }))).toThrow(ScaffoldError)
+    expect(() => planRunScaffold(baseInput('patch', { workItem: writtenWorkItem('other-run') }))).toThrow(/01-toy-run/)
+    expect(() => planRunScaffold(baseInput('patch', { workItem: 'id: [' }))).toThrow(/not valid YAML/)
+  })
+
+  it('a work item is refused where the profile has none to author (#221)', () => {
+    expect(() => planRunScaffold(baseInput('standard', { workItem: writtenWorkItem('toy-run') }))).toThrow(/patch/)
+    expect(() => planRunScaffold(baseInput('full', { workItem: writtenWorkItem('toy-run') }))).toThrow(ScaffoldError)
+  })
+
+  it('workItemIncomplete names what the stub leaves blank, and nothing else (#221)', () => {
+    const stub = planRunScaffold(baseInput('patch')).files['tasks/01-toy-run.yaml']!
+    expect(stub).toContain(WORK_ITEM_STUB_SCOPE)
+    expect(workItemIncomplete(stub)).toMatch(/placeholder/)
+    const written = writtenWorkItem('toy-run')
+    expect(workItemIncomplete(written)).toBeNull()
+    expect(workItemIncomplete(written.replace(/file_contact_surface:[^]*?acceptance_tests/, 'file_contact_surface: []\n\nacceptance_tests'))).toMatch(/file_contact_surface/)
+    expect(workItemIncomplete(written.replace(/acceptance_tests:[^]*?depends_on/, 'acceptance_tests: []\n\ndepends_on'))).toMatch(/acceptance_tests/)
+    expect(workItemIncomplete('scope: ""\nfile_contact_surface: [a]\nacceptance_tests: [b]\n')).toMatch(/scope is empty/)
+    expect(workItemIncomplete('- not a mapping\n')).toMatch(/mapping/)
   })
 
   it('standard and full do not emit a task stub', () => {

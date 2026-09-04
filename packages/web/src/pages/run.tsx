@@ -3,7 +3,7 @@
 // storage locations: the tab bar this replaced was `Artifacts | Diff | History`,
 // a filesystem hierarchy standing in for the human's job at a gate.
 // Decision affordances live in the cards (M2 wires them to POST /api/decisions).
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 // genesis-preview candidate (state.yaml gates.G1.notes): the run header's
@@ -13,6 +13,8 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 // detail.history. No new server data (ADR-6 rider, ADR-7).
 import { readIntake } from '@gateline/core/record'
 import { useKeys, type KeyHint } from '../use-keys.ts'
+import { EdgeFade, useScrollCue } from '../scroll-cue.tsx'
+import { collapseEngineSpans } from '../ledger-spans.ts'
 import { DIFF_SELECTION, decideTargetIndex, landingArtifact, resolveSurface, type Surface } from '../landing.ts'
 import { PROFILE_PHASES, api, formatAge, formatWhen, type InboxItem, type Phase, type RunDetailResponse, type RunSummary } from '../api.ts'
 import { AgeBadge, BudgetMeter, KeyHints, KindChip, PhaseChip, PhaseSpine, ValidationBadge } from '../components/chips.tsx'
@@ -145,8 +147,8 @@ export function burdenPillNeeded(detail: string, burden: string): boolean {
  * true count — nothing has been reviewed yet — and stays printed, which is also
  * what the portfolio's column has always done with the same number.
  */
-export function maxRoundsLabel(tasks: RunSummary['tasks']): string {
-  return tasks.total > 0 ? String(tasks.maxRounds) : '—'
+export function roundsLabel(tasks: RunSummary['tasks']): string {
+  return tasks.total > 0 ? `${tasks.maxRounds}/${tasks.roundCap}` : '—'
 }
 
 export function RunPage() {
@@ -331,7 +333,7 @@ export function RunPage() {
     </div>
   ) : null
 
-  const board = summary.tasks.total > 0 && detail.state ? <TaskBoard state={detail.state} /> : null
+  const board = summary.tasks.total > 0 && detail.state ? <TaskBoard state={detail.state} roundCap={summary.tasks.roundCap} /> : null
 
   // The lexicon covers the whole page, not just the artifact reader: a
   // decision card that names AC2.1 should resolve it where it stands (#252).
@@ -476,8 +478,12 @@ function RunMetadata({ summary, board }: { summary: RunSummary; board: React.Rea
             <BudgetMeter limit={summary.budget.limit} spent={summary.budget.spent} />
           </span>
           <Sep />
-          <span>
-            Max rounds <span className="tabular-nums text-ink">{maxRoundsLabel(summary.tasks)}</span>
+          {/* The observation and the rule, in one register the reader can
+              parse: the busiest task's round count, over the cap it is
+              judged against. "Max rounds" called the observation a limit,
+              beside a Budget that really is one (#314). */}
+          <span title="highest review-round count any task has reached, over the cap">
+            Rounds <span className="tabular-nums text-ink">{roundsLabel(summary.tasks)}</span>
           </span>
           {diverged && (
             <>
@@ -640,7 +646,7 @@ function NeedsYouCard({
         )}
         {mentionedTask && (
           <p className="mt-1.5 font-mono text-[12px] text-muted">
-            {mentionedTask.id} · {mentionedTask.status} · review round {mentionedTask.review_rounds}/3
+            {mentionedTask.id} · {mentionedTask.status} · review round {mentionedTask.review_rounds}/{detail.summary.tasks.roundCap}
           </p>
         )}
         {problems.length > 0 && (
@@ -719,7 +725,7 @@ function BranchRef({ refName, kind, url }: { refName: string; kind: RunSummary['
 
 /** The task board shares the status grammar — mono label, hairline rows —
  * and, like all status content, is never boxed. */
-function TaskBoard({ state }: { state: NonNullable<RunDetailResponse['state']> }) {
+function TaskBoard({ state, roundCap }: { state: NonNullable<RunDetailResponse['state']>; roundCap: number }) {
   const doneCount = state.tasks.filter((t) => t.status === 'done').length
   return (
     <section className="text-[13px]">
@@ -727,7 +733,7 @@ function TaskBoard({ state }: { state: NonNullable<RunDetailResponse['state']> }
         Task board · {doneCount} / {state.tasks.length} done
       </div>
       {state.tasks.map((t) => {
-        const capped = t.review_rounds >= 3
+        const capped = t.review_rounds >= roundCap
         const statusChip = capped
           ? 'font-bold text-bad bg-bad-bg border-bad-line'
           : t.status === 'done'
@@ -829,7 +835,7 @@ function RecordSurface({
           </div>
         )}
       </nav>
-      <ReaderPane>
+      <ReaderPane artifact={showDiff ? DIFF_SELECTION : current}>
         {showDiff ? (
           <DiffPane src={detail.summary.source} slug={detail.summary.slug} />
         ) : current ? (
@@ -872,15 +878,33 @@ export function navEntryClass(active: boolean) {
  * `lg` the reader is the column that keeps its width — the picker is the one
  * that gives width up.
  *
- * No scroll cue rides along yet, unlike the portfolio table's pane (#297). It
- * would lie: an idle lexicon card is `visibility: hidden`, not `display: none`,
- * so it is still laid out 416px wide beside its reference and shows up in this
- * pane's `scrollWidth` — 12px of phantom overflow at 1024px on the g2-pending
- * fixture, with nothing to scroll to. The cue is worth adding once the card
- * stops occupying layout while hidden.
+ * The scroll cue (#312) follows the portfolio table's (#297): a fade on
+ * whichever edge has content beyond it, measured live, drawn above the
+ * content so the reader's own tinted blocks cannot paint over it. It was
+ * deferred when this pane was written, and rightly then: the idle lexicon
+ * card was `visibility: hidden` but still laid out, so the pane reported
+ * 12px of phantom overflow at 1024px with nothing to scroll to, and a cue
+ * off `scrollWidth` would have lied. #308 made the idle card `display: none`;
+ * the reader's idle `scrollWidth` now equals its `clientWidth`, and any
+ * overflow it reports is real content. The `idle-card-collapsed` rule in the
+ * geometry sweep is what keeps that true.
  */
-function ReaderPane({ children }: { children: ReactNode }) {
-  return <div className="min-w-0 overflow-x-auto">{children}</div>
+function ReaderPane({ children, artifact }: { children: ReactNode; artifact?: string | null }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const cue = useScrollCue(ref, [artifact])
+  // `min-w-0` on the wrapper too: the reader is the column that yields width
+  // below `lg`, and a wrapper without it would hold the column at its
+  // content's width — the overflow then reaches the page body instead of
+  // stopping here (the geometry sweep caught exactly that on state.yaml).
+  return (
+    <div className="relative min-w-0">
+      <div ref={ref} data-reader className="min-w-0 overflow-x-auto">
+        {children}
+      </div>
+      {cue.left && <EdgeFade edge="left" />}
+      {cue.right && <EdgeFade edge="right" />}
+    </div>
+  )
 }
 
 /**
@@ -1019,6 +1043,60 @@ function HistoryTab({ history, src, slug }: { history: RunDetailResponse['histor
 
   if (history.length === 0) return <PageStatus text="No state history at this ref." />
 
+  const rows = useMemo(() => collapseEngineSpans(history), [history])
+  const [open, setOpen] = useState<ReadonlySet<number>>(() => new Set())
+
+  const renderRow = (i: number) => {
+    const h = history[i]!
+    const transition = Boolean(h.phase && i < history.length - 1 && history[i + 1]!.phase !== h.phase)
+    const e = h.ledger
+    const decided = DECISION_KINDS.has(e.kind)
+    const extra = e.gate ? burdenByGate.get(e.gate) : undefined
+    return (
+      <li
+        key={h.oid}
+        data-ledger-actor={e.actor}
+        data-ledger-kind={e.kind}
+        className={`relative flex items-baseline gap-3 border-b border-line py-2.5 pl-7 text-sm last:border-b-0 before:absolute before:left-0.5 before:top-[15px] before:h-2.5 before:w-2.5 before:rounded-full before:border-2 before:content-[''] ${
+          transition
+            ? 'before:border-accent before:bg-accent'
+            : decided
+              ? 'before:border-accent before:bg-inset'
+              : 'before:border-faint before:bg-inset'
+        }`}
+      >
+        <span className="w-32 shrink-0 font-mono text-[11.5px] tabular-nums text-faint">{formatWhen(h.time)}</span>
+        <span className={`min-w-0 flex-1 truncate text-[13px] ${LEDGER_TONE[e.actor] ?? ''}`} title={h.subject}>
+          {e.detail}
+        </span>
+        {/* Burden and notes come from the decisions endpoint, quoted,
+            never scored — and the pill is dropped when the commit
+            subject beside it already says the same word (#285/2). The
+            modern grammar writes `G1 approved by operator [burden:
+            light-correction]`, so on those rows the pill was the fact
+            restated eight pixels to its right. It still earns its place
+            on the v0 runs, whose subjects predate the bracketed form and
+            where the endpoint reading `state.yaml` is the only source. */}
+        {extra?.burden && burdenPillNeeded(e.detail, extra.burden) && (
+          <span className="shrink-0 rounded-xs border border-line px-1.5 py-px font-mono text-[10.5px] text-muted">{extra.burden}</span>
+        )}
+        {e.actor === 'orchestrator' && (
+          <span className="shrink-0 font-mono text-[10.5px] text-faint" title="committed under the orchestrator's bot identity">
+            engine
+          </span>
+        )}
+        {transition && <span className="shrink-0 font-mono text-[11px] text-accent-deep">→ {h.phase}</span>}
+        {raw && (
+          <>
+            <span className="w-24 shrink-0 truncate text-right text-[11.5px] text-muted">{h.author}</span>
+            <span className="shrink-0 font-mono text-[11px] text-faint">{h.oid.slice(0, 7)}</span>
+          </>
+        )}
+      </li>
+    )
+  }
+
+
   return (
     <div>
       <div className="mb-2 flex items-center justify-end">
@@ -1035,52 +1113,43 @@ function HistoryTab({ history, src, slug }: { history: RunDetailResponse['histor
         data-ledger
         className="relative ml-1.5 flex flex-col before:absolute before:bottom-1.5 before:left-1.5 before:top-1.5 before:w-0.5 before:bg-line before:content-['']"
       >
-        {history.map((h, i) => {
-          const transition = Boolean(h.phase && i < history.length - 1 && history[i + 1]!.phase !== h.phase)
-          const e = h.ledger
-          const decided = DECISION_KINDS.has(e.kind)
-          const extra = e.gate ? burdenByGate.get(e.gate) : undefined
+        {rows.map((r) => {
+          if (r.kind === 'row') return renderRow(r.index)
+          const expanded = open.has(r.from)
           return (
-            <li
-              key={h.oid}
-              data-ledger-actor={e.actor}
-              data-ledger-kind={e.kind}
-              className={`relative flex items-baseline gap-3 border-b border-line py-2.5 pl-7 text-sm last:border-b-0 before:absolute before:left-0.5 before:top-[15px] before:h-2.5 before:w-2.5 before:rounded-full before:border-2 before:content-[''] ${
-                transition
-                  ? 'before:border-accent before:bg-accent'
-                  : decided
-                    ? 'before:border-accent before:bg-inset'
-                    : 'before:border-faint before:bg-inset'
-              }`}
-            >
-              <span className="w-32 shrink-0 font-mono text-[11.5px] tabular-nums text-faint">{formatWhen(h.time)}</span>
-              <span className={`min-w-0 flex-1 truncate text-[13px] ${LEDGER_TONE[e.actor] ?? ''}`} title={h.subject}>
-                {e.detail}
-              </span>
-              {/* Burden and notes come from the decisions endpoint, quoted,
-                  never scored — and the pill is dropped when the commit
-                  subject beside it already says the same word (#285/2). The
-                  modern grammar writes `G1 approved by operator [burden:
-                  light-correction]`, so on those rows the pill was the fact
-                  restated eight pixels to its right. It still earns its place
-                  on the v0 runs, whose subjects predate the bracketed form and
-                  where the endpoint reading `state.yaml` is the only source. */}
-              {extra?.burden && burdenPillNeeded(e.detail, extra.burden) && (
-                <span className="shrink-0 rounded-xs border border-line px-1.5 py-px font-mono text-[10.5px] text-muted">{extra.burden}</span>
-              )}
-              {e.actor === 'orchestrator' && (
-                <span className="shrink-0 font-mono text-[10.5px] text-faint" title="committed under the orchestrator's bot identity">
-                  engine
-                </span>
-              )}
-              {transition && <span className="shrink-0 font-mono text-[11px] text-accent-deep">→ {h.phase}</span>}
-              {raw && (
-                <>
-                  <span className="w-24 shrink-0 truncate text-right text-[11.5px] text-muted">{h.author}</span>
-                  <span className="shrink-0 font-mono text-[11px] text-faint">{h.oid.slice(0, 7)}</span>
-                </>
-              )}
-            </li>
+            <Fragment key={`span-${r.from}`}>
+              {/* One review round or more of engine rows, folded (#283): the
+                  ledger reads as the decision sequence by default, and the
+                  engine's work between two decisions is summarized from its
+                  own rows — counts and the metered figures they carry, nothing
+                  more — until it is opened. Every row stays reachable. */}
+              <li
+                data-ledger-span={r.count}
+                data-ledger-span-open={expanded ? 'true' : undefined}
+                className="relative flex items-baseline gap-3 border-b border-line py-2.5 pl-7 text-sm last:border-b-0 before:absolute before:left-0.5 before:top-[15px] before:h-2.5 before:w-2.5 before:rounded-full before:border-2 before:border-faint before:bg-inset before:content-['']"
+              >
+                <span className="w-32 shrink-0 font-mono text-[11.5px] tabular-nums text-faint">{formatWhen(history[r.from]!.time)}</span>
+                <button
+                  type="button"
+                  onClick={() => setOpen((prev) => {
+                    const next = new Set(prev)
+                    if (next.has(r.from)) next.delete(r.from)
+                    else next.add(r.from)
+                    return next
+                  })}
+                  aria-expanded={expanded}
+                  className="min-w-0 flex-1 truncate text-left font-mono text-[12px] text-muted underline decoration-dotted underline-offset-2 hover:text-ink"
+                  title={expanded ? 'fold these rows' : 'show every row'}
+                >
+                  engine · {r.count} actions ·{' '}
+                  {r.verbs.map(([verb, n]) => `${n} ${verb}${verb === 'metered' && r.meteredUsd !== null ? ` ($${r.meteredUsd.toFixed(2)})` : ''}`).join(' · ')}
+                </button>
+                {r.entered.map((phase, k) => (
+                  <span key={k} className="shrink-0 font-mono text-[11px] text-accent-deep">→ {phase}</span>
+                ))}
+              </li>
+              {expanded && Array.from({ length: r.count }, (_, k) => renderRow(r.from + k))}
+            </Fragment>
           )
         })}
       </ol>

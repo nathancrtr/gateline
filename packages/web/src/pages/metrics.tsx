@@ -178,9 +178,11 @@ function BurdenBar({ mix, unrecorded, total }: { mix: Record<string, number>; un
 function RoundsSection({ metrics }: { metrics: MetricsResponse }) {
   const counts = new Map<number, number>()
   for (const run of metrics.runs) for (const t of run.rounds) counts.set(t.rounds, (counts.get(t.rounds) ?? 0) + 1)
-  const buckets = [0, 1, 2, 3].map((r) => ({
-    label: r === 3 ? '3+ (cap)' : String(r),
-    n: r === 3 ? [...counts].filter(([k]) => k >= 3).reduce((s, [, v]) => s + v, 0) : (counts.get(r) ?? 0),
+  const cap = metrics.roundCap
+  const buckets = Array.from({ length: cap + 1 }, (_, r) => ({
+    label: r === cap ? `${cap}+ (cap)` : String(r),
+    n: r === cap ? [...counts].filter(([k]) => k >= cap).reduce((s, [, v]) => s + v, 0) : (counts.get(r) ?? 0),
+    capped: r === cap,
   }))
   const max = Math.max(1, ...buckets.map((b) => b.n))
   const totalTasks = buckets.reduce((s, b) => s + b.n, 0)
@@ -188,14 +190,14 @@ function RoundsSection({ metrics }: { metrics: MetricsResponse }) {
   return (
     <section>
       <h2 className="mb-[5px] font-mono text-[13px] font-semibold uppercase tracking-[0.1em]">Review rounds per task</h2>
-      <p className="mb-3 max-w-[74ch] text-xs text-muted">Round 4 escalates by rule; tasks at 3+ usually mean a spec ambiguity, not an implementation defect.</p>
+      <p className="mb-3 max-w-[74ch] text-xs text-muted">Round {cap + 1} escalates by rule; tasks at {cap}+ usually mean a spec ambiguity, not an implementation defect.</p>
       <div className="flex max-w-[440px] flex-col gap-2">
         {buckets.map((b) => (
           <div key={b.label} className="flex items-center gap-3">
             <span className="w-16 shrink-0 text-right font-mono text-xs tabular-nums text-muted">{b.label}</span>
             <div className="h-4 flex-1 overflow-hidden rounded-[4px] border border-line bg-inset">
               <div
-                className={`h-full ${b.label.startsWith('3') && b.n > 0 ? 'bg-bad' : 'bg-accent shadow-[0_0_6px_var(--glow)]'}`}
+                className={`h-full ${b.capped && b.n > 0 ? 'bg-bad' : 'bg-accent shadow-[0_0_6px_var(--glow)]'}`}
                 style={{ width: `${(b.n / max) * 100}%`, minWidth: b.n > 0 ? '4px' : 0 }}
                 title={`${b.n} task(s)`}
               />

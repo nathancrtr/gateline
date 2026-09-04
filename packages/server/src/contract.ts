@@ -31,6 +31,7 @@ import type {
   Burden,
   Closure,
   ClosureRecord,
+  CodeTreeCause,
   CoverageRow,
   CriterionEvidence,
   DecisionAction,
@@ -80,6 +81,7 @@ export type {
   Burden,
   Closure,
   ClosureRecord,
+  CodeTreeCause,
   CoverageRow,
   CriterionEvidence,
   DecisionAction,
@@ -138,6 +140,10 @@ export interface EngineHealthEntry {
   codeState?: 'fresh' | 'superseded-pending' | 'paused'
   /** The monitor's specific cause, present only while paused (and only from engines new enough to report it). */
   codeReason?: string
+  /** The cause as a discriminant (#222): `dirty` is the ordinary, self-inflicted family; the rest are topology violations. Absent on older engines. */
+  codeCause?: CodeTreeCause
+  /** True while a dirty tree is also holding back a fast-forward the engine would restart onto (#222). */
+  codeUpgradeBlocked?: boolean
 }
 
 export interface EngineHealthResponse {

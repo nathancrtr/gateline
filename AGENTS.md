@@ -160,8 +160,8 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
 * Run the integration-tooling tests: `pytest scripts/test_integrate.py`
 * Integrate the framework into a host repo:
   `python3 scripts/integrate.py init|validate|fork` (see INTEGRATION.md)
-* CI: `render-check` (stale renders), `packages-ci` (typecheck, vitest, build,
-  Playwright e2e), `deploy-image` (Docker build + container smoke test; triggered
+* CI: `render-check` (stale renders), `packages-ci` (lockfile platform check,
+  typecheck, vitest, build, Playwright e2e), `deploy-image` (Docker build + container smoke test; triggered
   by `deploy/**` or `packages/**` changes)
 
 ## Conventions

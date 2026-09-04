@@ -5,6 +5,7 @@
 // the layering test enforces this file never reaches into sources/ or
 // view-model/.
 import { PROFILE_GATES, type Profile, type RunState } from './schema.ts'
+import { parse as parseYaml } from 'yaml'
 
 /** A staging request: slug/title/profile/brief plus a nullable, source-agnostic
  * intake identity (this run's only in-scope path is free-form: all fields
@@ -14,6 +15,12 @@ export interface RunScaffoldInput {
   title: string
   profile: Profile
   briefMarkdown: string // full intent-brief.md content, human-authored/confirmed
+  /**
+   * `patch` only (#221): the human-authored `tasks/01-<slug>.yaml`, staged
+   * verbatim in place of the stub. DESIGN.md §4.1 makes the work item the
+   * human's to supply in a patch run; this is the seam for supplying it.
+   */
+  workItem?: string | null
   costLimitUsd: number | null // null = omit ceiling; callers apply their own default
   intake: { source: string | null; ref: string | null; url: string | null; clientKey: string | null }
   stagedBy: string // human name echo; commit authorship stays authoritative
@@ -27,7 +34,38 @@ export interface RunScaffold {
   clientKey: string | null // for stageRun replay detection
 }
 
-/** Invalid slug, empty title, or empty brief. */
+/** The stub scope a patch scaffold carries until a human writes the work item (#221). */
+export const WORK_ITEM_STUB_SCOPE = 'Fill in what to build — the human author completes this stub before the run arms.'
+
+/** Where a patch run's single work item lives, relative to the run directory. */
+export const workItemPath = (slug: string): string => `tasks/01-${slug}.yaml`
+
+/**
+ * Why a work item is not yet something an implementer could be dispatched
+ * against, or null when it is (#221). Deliberately narrow: the scaffold's
+ * own placeholder, an empty contact surface, or empty acceptance tests —
+ * the three things the stub ships blank. Key presence is the contract's
+ * business (`validateArtifact`); this is about whether the human filled in
+ * what the scaffold left for them.
+ */
+export function workItemIncomplete(content: string): string | null {
+  let parsed: unknown
+  try {
+    parsed = parseYaml(content)
+  } catch (e) {
+    return `not valid YAML: ${(e as Error).message}`
+  }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return 'not a YAML mapping'
+  const item = parsed as Record<string, unknown>
+  const scope = typeof item.scope === 'string' ? item.scope : ''
+  if (scope.includes(WORK_ITEM_STUB_SCOPE)) return 'scope still carries the scaffold placeholder'
+  if (!scope.trim()) return 'scope is empty'
+  if (!Array.isArray(item.file_contact_surface) || item.file_contact_surface.length === 0) return 'file_contact_surface is empty'
+  if (!Array.isArray(item.acceptance_tests) || item.acceptance_tests.length === 0) return 'acceptance_tests is empty'
+  return null
+}
+
+/** Invalid slug, empty title, empty brief, or a work item where the profile has none. */
 export class ScaffoldError extends Error {
   constructor(message: string) {
     super(message)
@@ -92,13 +130,29 @@ escalations: []
     'intent-brief.md': input.briefMarkdown,
   }
 
-  if (input.profile === 'patch') {
-    files[`tasks/01-${input.slug}.yaml`] = `id: 01-${input.slug}
+  if (input.workItem && input.profile !== 'patch') {
+    throw new ScaffoldError(`a work item is authored at staging only for a patch run — a ${input.profile} run plans its tasks at G1`)
+  }
+
+  if (input.profile === 'patch' && input.workItem) {
+    // Verbatim, like the brief: the human's file is the artifact. The one
+    // thing checked here is that its id names the file it will live in.
+    let id: unknown
+    try {
+      const parsed = parseYaml(input.workItem)
+      id = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>).id : undefined
+    } catch (e) {
+      throw new ScaffoldError(`work item is not valid YAML: ${(e as Error).message}`)
+    }
+    if (id !== `01-${input.slug}`) throw new ScaffoldError(`work item id must be "01-${input.slug}" (the file is ${workItemPath(input.slug)}), got ${JSON.stringify(id ?? null)}`)
+    files[workItemPath(input.slug)] = input.workItem
+  } else if (input.profile === 'patch') {
+    files[workItemPath(input.slug)] = `id: 01-${input.slug}
 title: ${yamlString(title)}
 requirements: []
 
 scope: |
-  Fill in what to build — the human author completes this stub before the run arms.
+  ${WORK_ITEM_STUB_SCOPE}
 
 file_contact_surface: []
 

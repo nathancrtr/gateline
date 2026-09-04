@@ -159,6 +159,59 @@ test('run lexicon (#163): ids resolve to verbatim hover cards and jump to their 
   await expect(page.locator('.prose-artifact li .lex-ref', { hasText: 'AC1.1' })).toHaveCount(0)
 })
 
+test('Record reader (#312): a clipped artifact shows a scroll cue, and a fitting one shows none', async ({ page }) => {
+  // g2-pending's brief carries one unbreakable path, so the reader overflows
+  // it at every supported width; plan.md fits everywhere. The second half is
+  // the one that used to be false: before #308 the idle lexicon card was laid
+  // out beside every reference, and a cue off `scrollWidth` would have fired
+  // on 12px of phantom overflow at 1024px with nothing to scroll to.
+  for (const width of [800, 900, 1000]) {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=intent-brief.md')
+    await expect(page.locator('[data-reader]')).toBeVisible()
+    await expect(page.locator('[data-scroll-cue="right"]'), `${width}px: cue on the clipped edge`).toBeVisible()
+    await expect(page.locator('[data-scroll-cue="left"]')).toHaveCount(0)
+  }
+  for (const width of [800, 1024, 1280]) {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=plan.md')
+    await expect(page.locator('[data-reader] .prose-artifact')).toBeVisible()
+    await expect(page.locator('[data-scroll-cue]'), `${width}px: no cue on an artifact that fits`).toHaveCount(0)
+  }
+})
+
+test('run lexicon (#311): a card opened near the reader\'s right edge stays inside the reader', async ({ page }) => {
+  // The geometry sweep never hovers, so this is the one place a *revealed*
+  // card is measured. plan.md at 800px is the issue's worst case: the
+  // rightmost reference used to open a card 108px past the pane.
+  for (const width of [800, 1024]) {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=plan.md')
+    await expect(page.locator('.prose-artifact .lex-ref').first()).toBeVisible()
+    const index = await page.evaluate(() => {
+      const refs = [...document.querySelectorAll('.prose-artifact .lex-ref')]
+      let best = 0
+      refs.forEach((el, i) => {
+        if (el.getBoundingClientRect().right > refs[best]!.getBoundingClientRect().right) best = i
+      })
+      return best
+    })
+    const ref = page.locator('.prose-artifact .lex-ref').nth(index)
+    await ref.hover()
+    const card = ref.locator('.lex-card')
+    await expect(card).toBeVisible()
+    const { cardLeft, cardRight, paneLeft, paneRight } = await card.evaluate((el) => {
+      let pane = el.parentElement
+      while (pane && getComputedStyle(pane).overflowX === 'visible') pane = pane.parentElement
+      const c = el.getBoundingClientRect()
+      const p = pane!.getBoundingClientRect()
+      return { cardLeft: c.left, cardRight: c.right, paneLeft: p.left, paneRight: p.right }
+    })
+    expect(cardRight, `${width}px: card right edge inside the reader`).toBeLessThanOrEqual(paneRight)
+    expect(cardLeft, `${width}px: card left edge inside the reader`).toBeGreaterThanOrEqual(paneLeft)
+  }
+})
+
 test('run lexicon (#308): the idle card takes no space, and the keyboard still opens it', async ({ page }) => {
   // #308 made the idle card `display: none` instead of `visibility: hidden`,
   // which had left 416px of nothing laid out beside every reference on the page.

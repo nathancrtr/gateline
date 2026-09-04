@@ -18,6 +18,8 @@ const cliPath = resolve(dirname(fileURLToPath(import.meta.url)), '../src/main.ts
 
 let fixture: FixtureRepo
 let briefPath: string
+let taskPath: string
+let stubTaskPath: string
 
 const runIn = async (repoDir: string, args: string[], opts: { expectFail?: boolean; env?: NodeJS.ProcessEnv } = {}) => {
   try {
@@ -63,7 +65,32 @@ beforeAll(async () => {
     briefPath,
     '# Intent Brief: CSV Exporter\n\n## Problem\nExporting rows by hand is slow and error-prone.\n\n## Motivation\nSaves roughly an afternoon per release.\n\n## Constraints\nMust run offline.\n\n## Out of scope\nImporting.\n',
   )
+  // A written patch work item (#221), and one that is still the scaffold's stub.
+  taskPath = join(briefDir, 'work-item.yaml')
+  await writeFile(taskPath, workItemFor('arm-patch'))
+  stubTaskPath = join(briefDir, 'stub.yaml')
+  await writeFile(stubTaskPath, workItemFor('arm-patch').replace(/file_contact_surface:[^]*?acceptance_tests/, 'file_contact_surface: []\n\nacceptance_tests'))
 })
+
+const workItemFor = (slug: string) => `id: 01-${slug}
+title: Fix the pager
+requirements: []
+
+scope: |
+  Replace the off-by-one in the pager.
+
+file_contact_surface:
+  - src/pager.py
+
+acceptance_tests:
+  - "pytest tests/test_pager.py passes"
+
+depends_on: []
+
+status: pending
+
+notes: ""
+`
 afterAll(() => rm(fixture.dir, { recursive: true, force: true }))
 
 describe('gateline CLI', () => {
@@ -244,8 +271,9 @@ describe('gateline CLI', () => {
     }
   })
 
-  it('arm moves a staged patch run to phase plan (AC6.1)', async () => {
-    await run(['new', '--slug', 'arm-patch', '--title', 'Arm Patch', '--profile', 'patch', '--brief-file', briefPath])
+  it('arm moves a staged patch run to phase plan once its work item is written (AC6.1, #221)', async () => {
+    const staged = await run(['new', '--slug', 'arm-patch', '--title', 'Arm Patch', '--profile', 'patch', '--brief-file', briefPath, '--task-file', taskPath])
+    expect(staged.stdout).not.toMatch(/stub/)
     const { code } = await run(['arm', 'arm-patch'])
     expect(code).toBe(0)
 
@@ -254,6 +282,39 @@ describe('gateline CLI', () => {
     const { state } = await source.readState(ref)
     expect(state!.phase).toBe('plan')
     expect(state!.paused_reason).toBeNull()
+    expect(await source.readArtifact(ref, 'tasks/01-arm-patch.yaml')).toBe(workItemFor('arm-patch'))
+  })
+
+  it('arm refuses a patch run whose work item is still the stub, and new said so at staging (#221)', async () => {
+    const staged = await run(['new', '--slug', 'arm-stub', '--title', 'Arm Stub', '--profile', 'patch', '--brief-file', briefPath])
+    expect(staged.stdout).toMatch(/tasks\/01-arm-stub\.yaml is a stub/)
+    const { code, stderr } = await run(['arm', 'arm-stub'], true)
+    expect(code).toBe(1)
+    expect(stderr).toMatch(/not a dispatchable work item \(scope still carries the scaffold placeholder\)/)
+    expect(stderr).toMatch(/--task-file/)
+
+    const source = new LocalGitSource('fixture', fixture.dir)
+    const ref = (await source.listRuns()).find((r) => r.slug === 'arm-stub')!
+    expect((await source.readState(ref)).state!.phase).toBe('paused')
+  })
+
+  it('new refuses --task-file off the patch profile, an unwritten one, and one whose id names another run (#221)', async () => {
+    const wrongProfile = await run(['new', '--slug', 'tf-standard', '--title', 'T', '--profile', 'standard', '--brief-file', briefPath, '--task-file', taskPath], true)
+    expect(wrongProfile.code).toBe(1)
+    expect(wrongProfile.stderr).toMatch(/--task-file applies only to --profile patch/)
+
+    const blank = await run(['new', '--slug', 'arm-patch', '--title', 'T', '--profile', 'patch', '--brief-file', briefPath, '--task-file', stubTaskPath], true)
+    expect(blank.code).toBe(1)
+    expect(blank.stderr).toMatch(/not a dispatchable work item: file_contact_surface is empty/)
+
+    const wrongId = await run(['new', '--slug', 'tf-other', '--title', 'T', '--profile', 'patch', '--brief-file', briefPath, '--task-file', taskPath], true)
+    expect(wrongId.code).toBe(1)
+    expect(wrongId.stderr).toMatch(/work item id must be "01-tf-other"/)
+
+    const source = new LocalGitSource('fixture', fixture.dir)
+    const slugs = (await source.listRuns()).map((r) => r.slug)
+    expect(slugs).not.toContain('tf-standard')
+    expect(slugs).not.toContain('tf-other')
   })
 
   it('arm on a run that is not in the staged rest state exits 1 with a named error (AC6.2)', async () => {
@@ -581,5 +642,63 @@ describe('show — artifacts with lexicon footnotes (#164)', () => {
     const { code, stderr } = await run(['show', 'g2-pending', 'nope.md'], true)
     expect(code).toBe(1)
     expect(stderr).toMatch(/no artifact at nope\.md/)
+  })
+})
+
+describe('decision verbs accept every spelling of the note (#264)', () => {
+  let own: FixtureRepo
+  const state = async (slug: string) => {
+    const source = new LocalGitSource('own', own.dir)
+    const ref = (await source.listRuns()).find((r) => r.slug === slug)!
+    return (await source.readState(ref)).state!
+  }
+  beforeAll(() => {
+    own = generateFixtureRepo()
+  })
+  afterAll(() => rm(own.dir, { recursive: true, force: true }))
+
+  it('approve takes --note as --notes', async () => {
+    await runIn(own.dir, ['approve', 'g0-pending', 'G0', '--burden', 'confirmation', '--note', 'via the alias'])
+    expect((await state('g0-pending')).gates.G0).toMatchObject({ approved: true, notes: 'via the alias' })
+  })
+
+  it('decline takes --note and --notes as --reason', async () => {
+    await runIn(own.dir, ['decline', 'g1-pending', 'G1', '--note', 'plan overlaps'])
+    expect(await state('g1-pending')).toMatchObject({ phase: 'paused', paused_reason: 'gate-declined' })
+    expect((await state('g1-pending')).gates.G1).toMatchObject({ approved: false, notes: 'plan overlaps' })
+
+    await runIn(own.dir, ['decline', 'g2-pending', 'G2', '--notes', 'evidence thin'])
+    expect((await state('g2-pending')).gates.G2).toMatchObject({ approved: false, notes: 'evidence thin' })
+  })
+
+  it('resolve-escalation takes --notes as --note', async () => {
+    await runIn(own.dir, ['resolve-escalation', 'escalated', '0', '--notes', 'sample data committed'])
+    const esc = (await state('escalated')).escalations[0]!
+    expect(esc.resolved).toBe(true)
+    expect(esc.resolution).toBe('sample data committed')
+  })
+
+  it('the text stays required whichever spelling is omitted, and the message names the canonical flag', async () => {
+    const decline = await runIn(own.dir, ['decline', 'g3-pending', 'G3'], { expectFail: true })
+    expect(decline.code).toBe(1)
+    expect(decline.stderr).toMatch(/required option '--reason <text>'/)
+    expect((await state('g3-pending')).phase).not.toBe('paused')
+
+    const resolve = await runIn(own.dir, ['resolve-escalation', 'escalated', '0'], { expectFail: true })
+    expect(resolve.code).toBe(1)
+    expect(resolve.stderr).toMatch(/required option '--note <text>'/)
+  })
+
+  it('--help shows only the canonical spelling each verb documents', async () => {
+    const help = async (verb: string) => (await runIn(own.dir, [verb, '--help'])).stdout
+    const approve = await help('approve')
+    expect(approve).toContain('--notes <text>')
+    expect(approve).not.toMatch(/--note\b[^s]/)
+    const decline = await help('decline')
+    expect(decline).toContain('--reason <text>')
+    expect(decline).not.toContain('--note')
+    const resolve = await help('resolve-escalation')
+    expect(resolve).toContain('--note <text>')
+    expect(resolve).not.toContain('--notes')
   })
 })

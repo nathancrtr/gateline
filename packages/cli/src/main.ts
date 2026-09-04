@@ -8,8 +8,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline/promises'
-import { Command } from 'commander'
+import { Command, Option } from 'commander'
 import {
+  armRefusal,
   BUILTIN_SECTIONS,
   buildLexicon,
   buildPortfolio,
@@ -45,6 +46,9 @@ import {
   type Profile,
   type RunRef,
   type RunSource,
+  validateArtifact,
+  workItemIncomplete,
+  workItemPath,
 } from '@gateline/core'
 
 const program = new Command()
@@ -210,10 +214,29 @@ program
 interface DecideFlags {
   source?: string
   notes?: string
+  note?: string
   burden?: string
   reason?: string
   phase?: string
   push?: boolean
+}
+
+/**
+ * `--note`, `--notes` and `--reason` are three spellings of one field (#264):
+ * every decision verb lands its free text in `DecisionInput.notes`. Each verb
+ * keeps the semantically apt spelling in `--help` and parses the other two
+ * hidden, so a flag remembered from a sibling verb never fails the command.
+ */
+const noteText = (flags: DecideFlags): string | undefined => flags.reason ?? flags.notes ?? flags.note
+
+/** A hidden alias option: parses like the canonical flag, absent from `--help`. */
+const hiddenAlias = (flags: string) => new Option(`${flags} <text>`, 'alias').hideHelp()
+
+/** Fail the way commander fails a missing `.requiredOption`, so the message shape stays familiar. */
+const requireNoteText = (cmd: Command, flags: DecideFlags, canonical: string): string => {
+  const text = noteText(flags)
+  if (text === undefined) cmd.error(`error: required option '${canonical} <text>' not specified`)
+  return text
 }
 
 /**
@@ -293,6 +316,7 @@ program
   .option('--source <id>', 'source id when the slug is ambiguous')
   .option('--burden <category>', BURDENS.join(' | '))
   .option('--notes <text>', 'approval notes')
+  .addOption(hiddenAlias('--note'))
   .option('--no-advance', 'record the approval without moving the phase')
   .option('--hold <reason>', 'approve but pause the run in the same commit — the dispatch-safe way to wait on a human decision before the next phase runs')
   .action(async (slug: string, gate: string, flags: DecideFlags & { advance?: boolean; hold?: string }) => {
@@ -301,7 +325,7 @@ program
       action: 'approve',
       gate: gate.toUpperCase() as GateId,
       burden,
-      notes: flags.notes,
+      notes: noteText(flags),
       advancePhase: flags.advance,
       hold: flags.hold !== undefined || undefined,
       holdReason: flags.hold,
@@ -313,10 +337,12 @@ program
   .description('decline a gate with a reason (pauses the run as gate-declined)')
   .argument('<slug>', 'run slug')
   .argument('<gate>', 'G0 | G1 | G2 | G3')
-  .requiredOption('--reason <text>', 'why — this is the correction channel back to the producing role')
+  .option('--reason <text>', 'why — this is the correction channel back to the producing role')
+  .addOption(hiddenAlias('--note, --notes'))
   .option('--source <id>')
-  .action(async (slug: string, gate: string, flags: DecideFlags) => {
-    await decide(slug, flags, { action: 'decline', gate: gate.toUpperCase() as GateId, notes: flags.reason })
+  .action(async (slug: string, gate: string, flags: DecideFlags, cmd: Command) => {
+    const notes = requireNoteText(cmd, flags, '--reason')
+    await decide(slug, flags, { action: 'decline', gate: gate.toUpperCase() as GateId, notes })
   })
 
 program
@@ -324,10 +350,12 @@ program
   .description('resolve an escalation with a disposition note')
   .argument('<slug>', 'run slug')
   .argument('<index>', 'escalation index (see `gateline inbox`)')
-  .requiredOption('--note <text>', 'disposition')
+  .option('--note <text>', 'disposition')
+  .addOption(hiddenAlias('--notes'))
   .option('--disposition <route>', `${DISPOSITIONS.join(' | ')} — optional machine-actionable route for the engine; omit for the engine default`)
   .option('--source <id>')
-  .action(async (slug: string, index: string, flags: DecideFlags & { note: string; disposition?: string }) => {
+  .action(async (slug: string, index: string, flags: DecideFlags & { disposition?: string }, cmd: Command) => {
+    const notes = requireNoteText(cmd, flags, '--note')
     let disposition: Disposition | undefined
     if (flags.disposition !== undefined) {
       if (!(DISPOSITIONS as readonly string[]).includes(flags.disposition)) {
@@ -336,7 +364,7 @@ program
       }
       disposition = flags.disposition as Disposition
     }
-    await decide(slug, flags, { action: 'resolve-escalation', escalationIndex: Number(index), notes: flags.note, disposition })
+    await decide(slug, flags, { action: 'resolve-escalation', escalationIndex: Number(index), notes, disposition })
   })
 
 program
@@ -390,6 +418,7 @@ interface NewFlags {
   title?: string
   profile: string
   briefFile?: string
+  taskFile?: string
   budget: string
   key?: string
   source?: string
@@ -518,6 +547,10 @@ export async function stageNewRun(flags: NewFlags): Promise<number> {
     console.error(`--budget must be a number (got "${flags.budget}")`)
     return 1
   }
+  if (flags.taskFile && flags.profile !== 'patch') {
+    console.error(`--task-file applies only to --profile patch — a ${flags.profile} run plans its tasks at G1`)
+    return 1
+  }
 
   const { sources } = await resolveSources()
   const candidates = flags.source ? sources.filter((s) => s.id === flags.source) : sources
@@ -601,6 +634,29 @@ export async function stageNewRun(flags: NewFlags): Promise<number> {
     ;({ slug, title, briefMarkdown } = result)
   }
 
+  // The patch work item (#221): read verbatim, checked for the contract's
+  // keys and for the three things the stub leaves blank, then staged in the
+  // stub's place. Without it, the stub stages and `arm` will refuse.
+  let workItem: string | null = null
+  if (flags.taskFile) {
+    try {
+      workItem = await readFile(flags.taskFile, 'utf8')
+    } catch (e) {
+      console.error(`cannot read --task-file ${flags.taskFile}: ${(e as Error).message}`)
+      return 1
+    }
+    const validation = await validateArtifact(workItemPath(slug), workItem, source.templates)
+    if (!validation.ok) {
+      console.error(`--task-file is missing required key(s): ${validation.missing.join(', ')}${validation.notes.length ? ` (${validation.notes.join('; ')})` : ''}`)
+      return 1
+    }
+    const incomplete = workItemIncomplete(workItem)
+    if (incomplete) {
+      console.error(`--task-file is not a dispatchable work item: ${incomplete}`)
+      return 1
+    }
+  }
+
   let scaffold
   try {
     scaffold = planRunScaffold({
@@ -608,6 +664,7 @@ export async function stageNewRun(flags: NewFlags): Promise<number> {
       title,
       profile: flags.profile as Profile,
       briefMarkdown,
+      workItem,
       costLimitUsd: budget,
       intake: { source: null, ref: null, url: null, clientKey: flags.key ?? null },
       stagedBy: who.name,
@@ -623,6 +680,8 @@ export async function stageNewRun(flags: NewFlags): Promise<number> {
   const outcome = await source.stageRun(scaffold, who)
   if (outcome.outcome === 'created') {
     console.log(`staged ${outcome.slug} → ${outcome.branch} (${outcome.commit.slice(0, 10)})`)
+    if (flags.profile === 'patch' && !workItem)
+      console.log(`${workItemPath(slug)} is a stub — \`arm\` will refuse until it is written (restage with --task-file, or edit it on ${outcome.branch} from a throwaway worktree)`)
     if (outcome.pushFailed) console.warn(`push failed: ${outcome.pushFailed}`)
     return 0
   }
@@ -642,6 +701,7 @@ program
   .option('--title <title>', 'run title')
   .option('--profile <profile>', 'patch | standard | full', 'standard')
   .option('--brief-file <path>', 'path to an operator-authored intent-brief.md')
+  .option('--task-file <path>', 'patch profile: path to the human-authored work item, staged as tasks/01-<slug>.yaml')
   .option('--budget <usd>', 'cost ceiling in USD', '50')
   .option('--key <key>', 'idempotency / replay client key (optional)')
   .option('--source <id>', 'source id when several are configured')
@@ -663,6 +723,15 @@ export async function armRun(slug: string, flags: { source?: string }): Promise<
   if (!who) {
     console.error('git user.name/user.email are unset — decisions must be attributable to a named human')
     return 1
+  }
+  // A patch run arms only with a written work item (#221).
+  const { state } = await source.readState(ref)
+  if (state) {
+    const why = await armRefusal(source, ref, state)
+    if (why) {
+      console.error(why)
+      return 1
+    }
   }
   const code = await planAndWrite(source, ref, who, { action: 'arm' })
   if (code !== null) return code

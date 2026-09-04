@@ -3,7 +3,7 @@
 // storage locations: the tab bar this replaced was `Artifacts | Diff | History`,
 // a filesystem hierarchy standing in for the human's job at a gate.
 // Decision affordances live in the cards (M2 wires them to POST /api/decisions).
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 // genesis-preview candidate (state.yaml gates.G1.notes): the run header's
@@ -13,6 +13,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 // detail.history. No new server data (ADR-6 rider, ADR-7).
 import { readIntake } from '@gateline/core/record'
 import { useKeys, type KeyHint } from '../use-keys.ts'
+import { collapseEngineSpans } from '../ledger-spans.ts'
 import { DIFF_SELECTION, decideTargetIndex, landingArtifact, resolveSurface, type Surface } from '../landing.ts'
 import { PROFILE_PHASES, api, formatAge, formatWhen, type InboxItem, type Phase, type RunDetailResponse, type RunSummary } from '../api.ts'
 import { AgeBadge, BudgetMeter, KeyHints, KindChip, PhaseChip, PhaseSpine, ValidationBadge } from '../components/chips.tsx'
@@ -1019,6 +1020,60 @@ function HistoryTab({ history, src, slug }: { history: RunDetailResponse['histor
 
   if (history.length === 0) return <PageStatus text="No state history at this ref." />
 
+  const rows = useMemo(() => collapseEngineSpans(history), [history])
+  const [open, setOpen] = useState<ReadonlySet<number>>(() => new Set())
+
+  const renderRow = (i: number) => {
+    const h = history[i]!
+    const transition = Boolean(h.phase && i < history.length - 1 && history[i + 1]!.phase !== h.phase)
+    const e = h.ledger
+    const decided = DECISION_KINDS.has(e.kind)
+    const extra = e.gate ? burdenByGate.get(e.gate) : undefined
+    return (
+      <li
+        key={h.oid}
+        data-ledger-actor={e.actor}
+        data-ledger-kind={e.kind}
+        className={`relative flex items-baseline gap-3 border-b border-line py-2.5 pl-7 text-sm last:border-b-0 before:absolute before:left-0.5 before:top-[15px] before:h-2.5 before:w-2.5 before:rounded-full before:border-2 before:content-[''] ${
+          transition
+            ? 'before:border-accent before:bg-accent'
+            : decided
+              ? 'before:border-accent before:bg-inset'
+              : 'before:border-faint before:bg-inset'
+        }`}
+      >
+        <span className="w-32 shrink-0 font-mono text-[11.5px] tabular-nums text-faint">{formatWhen(h.time)}</span>
+        <span className={`min-w-0 flex-1 truncate text-[13px] ${LEDGER_TONE[e.actor] ?? ''}`} title={h.subject}>
+          {e.detail}
+        </span>
+        {/* Burden and notes come from the decisions endpoint, quoted,
+            never scored — and the pill is dropped when the commit
+            subject beside it already says the same word (#285/2). The
+            modern grammar writes `G1 approved by operator [burden:
+            light-correction]`, so on those rows the pill was the fact
+            restated eight pixels to its right. It still earns its place
+            on the v0 runs, whose subjects predate the bracketed form and
+            where the endpoint reading `state.yaml` is the only source. */}
+        {extra?.burden && burdenPillNeeded(e.detail, extra.burden) && (
+          <span className="shrink-0 rounded-xs border border-line px-1.5 py-px font-mono text-[10.5px] text-muted">{extra.burden}</span>
+        )}
+        {e.actor === 'orchestrator' && (
+          <span className="shrink-0 font-mono text-[10.5px] text-faint" title="committed under the orchestrator's bot identity">
+            engine
+          </span>
+        )}
+        {transition && <span className="shrink-0 font-mono text-[11px] text-accent-deep">→ {h.phase}</span>}
+        {raw && (
+          <>
+            <span className="w-24 shrink-0 truncate text-right text-[11.5px] text-muted">{h.author}</span>
+            <span className="shrink-0 font-mono text-[11px] text-faint">{h.oid.slice(0, 7)}</span>
+          </>
+        )}
+      </li>
+    )
+  }
+
+
   return (
     <div>
       <div className="mb-2 flex items-center justify-end">
@@ -1035,52 +1090,43 @@ function HistoryTab({ history, src, slug }: { history: RunDetailResponse['histor
         data-ledger
         className="relative ml-1.5 flex flex-col before:absolute before:bottom-1.5 before:left-1.5 before:top-1.5 before:w-0.5 before:bg-line before:content-['']"
       >
-        {history.map((h, i) => {
-          const transition = Boolean(h.phase && i < history.length - 1 && history[i + 1]!.phase !== h.phase)
-          const e = h.ledger
-          const decided = DECISION_KINDS.has(e.kind)
-          const extra = e.gate ? burdenByGate.get(e.gate) : undefined
+        {rows.map((r) => {
+          if (r.kind === 'row') return renderRow(r.index)
+          const expanded = open.has(r.from)
           return (
-            <li
-              key={h.oid}
-              data-ledger-actor={e.actor}
-              data-ledger-kind={e.kind}
-              className={`relative flex items-baseline gap-3 border-b border-line py-2.5 pl-7 text-sm last:border-b-0 before:absolute before:left-0.5 before:top-[15px] before:h-2.5 before:w-2.5 before:rounded-full before:border-2 before:content-[''] ${
-                transition
-                  ? 'before:border-accent before:bg-accent'
-                  : decided
-                    ? 'before:border-accent before:bg-inset'
-                    : 'before:border-faint before:bg-inset'
-              }`}
-            >
-              <span className="w-32 shrink-0 font-mono text-[11.5px] tabular-nums text-faint">{formatWhen(h.time)}</span>
-              <span className={`min-w-0 flex-1 truncate text-[13px] ${LEDGER_TONE[e.actor] ?? ''}`} title={h.subject}>
-                {e.detail}
-              </span>
-              {/* Burden and notes come from the decisions endpoint, quoted,
-                  never scored — and the pill is dropped when the commit
-                  subject beside it already says the same word (#285/2). The
-                  modern grammar writes `G1 approved by operator [burden:
-                  light-correction]`, so on those rows the pill was the fact
-                  restated eight pixels to its right. It still earns its place
-                  on the v0 runs, whose subjects predate the bracketed form and
-                  where the endpoint reading `state.yaml` is the only source. */}
-              {extra?.burden && burdenPillNeeded(e.detail, extra.burden) && (
-                <span className="shrink-0 rounded-xs border border-line px-1.5 py-px font-mono text-[10.5px] text-muted">{extra.burden}</span>
-              )}
-              {e.actor === 'orchestrator' && (
-                <span className="shrink-0 font-mono text-[10.5px] text-faint" title="committed under the orchestrator's bot identity">
-                  engine
-                </span>
-              )}
-              {transition && <span className="shrink-0 font-mono text-[11px] text-accent-deep">→ {h.phase}</span>}
-              {raw && (
-                <>
-                  <span className="w-24 shrink-0 truncate text-right text-[11.5px] text-muted">{h.author}</span>
-                  <span className="shrink-0 font-mono text-[11px] text-faint">{h.oid.slice(0, 7)}</span>
-                </>
-              )}
-            </li>
+            <Fragment key={`span-${r.from}`}>
+              {/* One review round or more of engine rows, folded (#283): the
+                  ledger reads as the decision sequence by default, and the
+                  engine's work between two decisions is summarized from its
+                  own rows — counts and the metered figures they carry, nothing
+                  more — until it is opened. Every row stays reachable. */}
+              <li
+                data-ledger-span={r.count}
+                data-ledger-span-open={expanded ? 'true' : undefined}
+                className="relative flex items-baseline gap-3 border-b border-line py-2.5 pl-7 text-sm last:border-b-0 before:absolute before:left-0.5 before:top-[15px] before:h-2.5 before:w-2.5 before:rounded-full before:border-2 before:border-faint before:bg-inset before:content-['']"
+              >
+                <span className="w-32 shrink-0 font-mono text-[11.5px] tabular-nums text-faint">{formatWhen(history[r.from]!.time)}</span>
+                <button
+                  type="button"
+                  onClick={() => setOpen((prev) => {
+                    const next = new Set(prev)
+                    if (next.has(r.from)) next.delete(r.from)
+                    else next.add(r.from)
+                    return next
+                  })}
+                  aria-expanded={expanded}
+                  className="min-w-0 flex-1 truncate text-left font-mono text-[12px] text-muted underline decoration-dotted underline-offset-2 hover:text-ink"
+                  title={expanded ? 'fold these rows' : 'show every row'}
+                >
+                  engine · {r.count} actions ·{' '}
+                  {r.verbs.map(([verb, n]) => `${n} ${verb}${verb === 'metered' && r.meteredUsd !== null ? ` ($${r.meteredUsd.toFixed(2)})` : ''}`).join(' · ')}
+                </button>
+                {r.entered.map((phase, k) => (
+                  <span key={k} className="shrink-0 font-mono text-[11px] text-accent-deep">→ {phase}</span>
+                ))}
+              </li>
+              {expanded && Array.from({ length: r.count }, (_, k) => renderRow(r.from + k))}
+            </Fragment>
           )
         })}
       </ol>

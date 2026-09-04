@@ -1,72 +1,104 @@
-// API client. Types come from @gateline/core as TYPE-ONLY imports — the core
-// runtime touches node:child_process and must never enter the browser bundle.
+// API client. Every wire type comes from ONE place: @gateline/server/contract,
+// the server's own declaration of what it accepts and returns (#317). This
+// file used to hand-declare those shapes beside a type-only import of core,
+// and the two agreed only by convention — the metrics type had already drifted,
+// omitting two fields the server sends.
+//
+// The import stays type-only apart from API_VERSION, because core's runtime
+// touches node:child_process and must never enter the browser bundle. The
+// contract module is types plus that one number, so it erases to almost
+// nothing.
+//
 // EXCEPTION (ADR-6, genesis-preview candidate): pages/new-run.tsx value-imports
 // planRunScaffold from '@gateline/core/record' for its live commit preview —
 // the record layer is probed browser-safe (yaml + zod only, no node builtins,
-// core/test/layering.test.ts enforces the ceiling). This file itself stays
-// type-only; the exception is scoped to that one subpath and that one page.
+// core/test/layering.test.ts enforces the ceiling). `web/test/boundary.test.ts`
+// holds the enumerated list of files allowed to do that, and the post-build
+// bundle check proves no node builtin reached the output either way.
+import { API_VERSION } from '@gateline/server/contract'
 import type {
+  ApiErrorBody,
+  ArtifactResponse,
+  DecisionRequest,
+  DecisionResponse,
+  DecisionsResponse,
+  DiffResponse,
+  EngineHealthResponse,
+  EvidenceRollup,
+  G1Packet,
+  HealthResponse,
+  InboxResponse,
+  LexiconResponse,
+  MetricsResponse,
+  ReviewsResponse,
+  RunDetailResponse,
+  RunsResponse,
+  StageRefusalReason,
+  StageRequest,
+  StageResponse,
+  StagingConfigResponse,
+} from '@gateline/server/contract'
+import type { Closure, GateId, Phase, Profile } from '@gateline/server/contract'
+
+export { API_VERSION }
+
+/**
+ * The wire vocabulary, re-exported so the rest of web imports one module —
+ * `../api` — rather than reaching across the workspace itself.
+ */
+export type {
+  ApiErrorBody,
+  ArtifactResponse,
   Burden,
   Closure,
   ClosureRecord,
+  CoverageRow,
+  CriterionEvidence,
   DecisionAction,
-  Disposition,
+  DecisionRequest,
+  DecisionResponse,
+  DecisionsResponse,
   DiffFile,
+  DiffResponse,
+  Disposition,
+  EngineHealthEntry,
+  EngineHealthResponse,
+  EvidenceRollup,
+  G1Packet,
+  GateDecisionRecord,
   GateId,
   GateMetrics,
+  HealthResponse,
+  HistoryEntry,
   InboxItem,
-  CoverageRow,
-  CriterionEvidence,
-  EvidenceRollup,
-  G1Packet,
-  LexiconEntry,
-  Phase,
-  GateDecisionRecord,
+  InboxResponse,
   LedgerEntry,
+  LexiconEntry,
+  LexiconResponse,
+  MetricsResponse,
+  Phase,
   Profile,
+  ReviewFinding,
+  ReviewReport,
+  ReviewsResponse,
+  RunDetailResponse,
   RunMetricsSummary,
   RunState,
-  ReviewFinding,
-  ReviewReport,
   RunSummary,
+  RunsResponse,
   Severity,
+  StageRefusalReason,
+  StageRequest,
+  StageResponse,
+  StagingConfigResponse,
+  StagingSourceConfig,
   SurfaceItemRef,
   SurfaceOverlap,
   SurfaceScopedDiff,
   Validation,
   Verdict,
   WorkItem,
-} from '@gateline/core'
-
-export type {
-  Burden,
-  Closure,
-  ClosureRecord,
-  CriterionEvidence,
-  DiffFile,
-  Disposition,
-  CoverageRow,
-  EvidenceRollup,
-  G1Packet,
-  GateDecisionRecord,
-  GateId,
-  InboxItem,
-  LedgerEntry,
-  LexiconEntry,
-  Phase,
-  Profile,
-  ReviewFinding,
-  ReviewReport,
-  RunState,
-  RunSummary,
-  Severity,
-  SurfaceItemRef,
-  SurfaceOverlap,
-  SurfaceScopedDiff,
-  Validation,
-  Verdict,
-  WorkItem,
-}
+} from '@gateline/server/contract'
 
 /**
  * Mirrors of core's closed vocabulary (DESIGN.md §4.1, §4.2) — a value import
@@ -120,152 +152,18 @@ export const CLOSURE_MEANINGS: Record<Closure, string> = {
   abandoned: 'a deliberate walk-away mid-flight',
 }
 
-/** Typed review reports for a run (#214), keyed by artifact path. */
-export interface ReviewsResponse {
-  reports: ReviewReport[]
-}
-
-export interface InboxResponse {
-  items: InboxItem[]
-  now: number
-}
-
-export interface RunsResponse {
-  runs: RunSummary[]
-  now: number
-}
-
-export interface HistoryEntry {
-  oid: string
-  time: number
-  author: string
-  subject: string
-  phase: string | null
-  /**
-   * The subject read as a ledger entry (#268), parsed in core on the server —
-   * the browser takes types from core but never values (see PROFILE_GATES).
-   * `kind: 'other'` means the subject matched no known grammar and must be
-   * rendered verbatim.
-   */
-  ledger: LedgerEntry
-}
-
-/** Gate decision records for one run (#268 AC1) — approver, burden and notes. */
-export interface DecisionsResponse {
-  decisions: GateDecisionRecord[]
-}
-
-export interface RunDetailResponse {
-  summary: RunSummary
-  items: InboxItem[]
-  state: RunState | null
-  stateError: string | null
-  stateRaw: string | null
-  validations: Record<string, Validation>
-  artifacts: string[]
-  history: HistoryEntry[]
-  /**
-   * The run branch's page on the git host (#267), derived on the server from
-   * `remote.origin.url` plus the run's branch. Null whenever no such page can
-   * be named without guessing — a local-only source, no origin, a non-GitHub
-   * remote, or a merged run whose branch is gone — and the page then keeps its
-   * own view rather than offering a dead link (FRONTEND.md §4.1).
-   */
-  branchUrl: string | null
-  now: number
-}
-
-export interface ArtifactResponse {
-  path: string
-  content: string
-  validation: Validation
-}
-
-export interface LexiconResponse {
-  /** Definitions in document order; duplicate ids (amended ADRs) all present. */
-  entries: LexiconEntry[]
-  /** The id-reference grammar as a regex source (core's ID_PATTERN, arriving as data). */
-  pattern: string
-}
-
-export interface DiffResponse {
-  /** The whole diff, in git's order. Scoping labels this list; it never filters it. */
-  files: DiffFile[]
-  merged: boolean
-  /**
-   * Which work item declared each changed file (#270), positional against
-   * `files`. `surface.withheld` is non-null when the run has no readable task
-   * set, and the view then renders the plain diff with that reason.
-   */
-  surface: SurfaceScopedDiff
-}
-
-export interface MetricsResponse {
-  perGate: GateMetrics[]
-  runs: RunMetricsSummary[]
-  decisions: {
-    source: string
-    slug: string
-    gate: GateId
-    approved: boolean
-    by: string | null
-    decidedAt: number
-    latencySeconds: number | null
-    burden: Burden | null
-  }[]
-}
-
-export interface StagingSourceConfig {
-  id: string
-  identity: { name: string; email: string } | null
-  briefSections: string[]
-  briefTemplate: string | null
-}
-
-export interface StagingConfigResponse {
-  sources: StagingSourceConfig[]
-  slugPattern: string
-}
-
-export interface StageRequest {
-  source?: string
-  slug: string
-  title: string
-  profile: Profile
-  briefMarkdown: string
-  costLimitUsd: number | null
-  intake: { source: string | null; ref: string | null; url: string | null; clientKey: string | null }
-}
-
-/** The five-way submission outcome taxonomy (R8, ux REC7) — refusals resolve
- * as values here, never as thrown errors, so the form renders the taxonomy
- * instead of a generic toast (ux A5). */
+/**
+ * The five-way submission outcome taxonomy (R8, ux REC7) — refusals resolve as
+ * values here, never as thrown errors, so the form renders the taxonomy instead
+ * of a generic toast (ux A5).
+ *
+ * This is `StageResponse` (the wire union) plus the HTTP status the client
+ * observed. The taxonomy itself is the server's; only `status` is added here.
+ */
 export type StageOutcomeView =
-  | { outcome: 'created'; slug: string; branch: string; commit: string; pushFailed?: string }
-  | { outcome: 'exists'; slug: string; branch: string }
-  | {
-      outcome: 'refused'
-      reason: 'slug-taken' | 'conflict' | 'no-identity' | 'missing-sections' | 'invalid-input'
-      message: string
-      missing?: string[]
-      status: number
-    }
-
-export interface DecisionRequest {
-  source: string
-  slug: string
-  action: DecisionAction
-  gate?: GateId
-  notes?: string
-  burden?: Burden
-  escalationIndex?: number
-  disposition?: Disposition
-  closure?: Closure
-  pauseReason?: string
-  resumePhase?: Phase
-  hold?: boolean
-  holdReason?: string
-}
+  | Extract<StageResponse, { outcome: 'created' }>
+  | Extract<StageResponse, { outcome: 'exists' }>
+  | (Extract<StageResponse, { outcome: 'refused' }> & { status: number })
 
 export class ApiError extends Error {
   constructor(
@@ -279,32 +177,15 @@ export class ApiError extends Error {
 async function getJson<T>(path: string): Promise<T> {
   const res = await fetch(path)
   if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { error?: string } | null
+    const body = (await res.json().catch(() => null)) as Partial<ApiErrorBody> | null
     throw new ApiError(body?.error ?? `${res.status} ${res.statusText}`, res.status)
   }
   return res.json() as Promise<T>
 }
 
-export interface EngineHealthEntry {
-  at: string
-  inFlight: number
-  pushRejections: Record<string, number>
-  stale: boolean
-  /** Self-supersede (#141) drift fields — absent on pre-#141 engines. */
-  commit?: string
-  codeHead?: string
-  codeState?: 'fresh' | 'superseded-pending' | 'paused'
-  /** The monitor's specific cause, present only while paused (and only from engines new enough to report it). */
-  codeReason?: string
-}
-
-export interface EngineHealthResponse {
-  /** Per source id; null = no co-located engine has ever reported here (viewer-only install, not an outage). */
-  engines: Record<string, EngineHealthEntry | null>
-  now: number
-}
-
 export const api = {
+  /** Liveness plus the server's wire version — compare against API_VERSION. */
+  health: () => getJson<HealthResponse>('/api/health'),
   inbox: () => getJson<InboxResponse>('/api/inbox'),
   engineHealth: () => getJson<EngineHealthResponse>('/api/engine-health'),
   runs: () => getJson<RunsResponse>('/api/runs'),
@@ -318,17 +199,13 @@ export const api = {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(req),
     })
-    const body = (await res.json().catch(() => null)) as {
-      outcome?: 'created' | 'exists' | 'refused'
-      slug?: string
-      branch?: string
-      commit?: string
-      pushFailed?: string
-      reason?: 'slug-taken' | 'conflict' | 'no-identity' | 'missing-sections' | 'invalid-input'
-      message?: string
-      missing?: string[]
-      error?: string
-    } | null
+    // Partial<> because this is untrusted input at runtime: the checks below
+    // are what promote it to the declared union.
+    const body = (await res.json().catch(() => null)) as
+      | (Partial<Extract<StageResponse, { outcome: 'created' }>> &
+          Partial<Extract<StageResponse, { outcome: 'refused' }>> &
+          Partial<ApiErrorBody> & { outcome?: StageResponse['outcome'] })
+      | null
     if (body === null) throw new ApiError(`${res.status} ${res.statusText}`, res.status)
     if (body.outcome === 'created' && body.slug && body.branch && body.commit)
       return { outcome: 'created', slug: body.slug, branch: body.branch, commit: body.commit, pushFailed: body.pushFailed }
@@ -347,15 +224,15 @@ export const api = {
   decisions: (src: string, slug: string) => getJson<DecisionsResponse>(`/api/runs/${src}/${slug}/decisions`),
   diff: (src: string, slug: string) => getJson<DiffResponse>(`/api/runs/${src}/${slug}/diff`),
   metrics: () => getJson<MetricsResponse>('/api/metrics'),
-  decide: async (req: DecisionRequest): Promise<{ ok: boolean; commit?: string; summary?: string; note?: string | null }> => {
+  decide: async (req: DecisionRequest): Promise<DecisionResponse> => {
     const res = await fetch('/api/decisions', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(req),
     })
-    const body = (await res.json().catch(() => null)) as { error?: string } | null
+    const body = (await res.json().catch(() => null)) as Partial<ApiErrorBody> | null
     if (!res.ok) throw new ApiError(body?.error ?? `${res.status} ${res.statusText}`, res.status)
-    return body as { ok: boolean; commit?: string; summary?: string; note?: string | null }
+    return body as unknown as DecisionResponse
   },
 }
 

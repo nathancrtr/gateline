@@ -6,7 +6,8 @@
   "description": "Localhost HTTP layer over @gateline/core: JSON reads, the single decision write path, SSE freshness, and the built SPA.",
   "exports": {
     ".": "./src/app.ts",
-    "./main": "./src/main.ts"
+    "./main": "./src/main.ts",
+    "./contract": "./src/contract.ts"
   },
   "scripts": {
     "dev": "node src/main.ts"

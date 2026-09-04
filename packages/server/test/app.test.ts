@@ -6,6 +6,7 @@ import { generateFixtureRepo, type FixtureRepo } from '@gateline/fixtures'
 import { LocalGitSource, parseRunState, SLUG_PATTERN, validateArtifact, writeEngineHealth } from '@gateline/core'
 import type { Hono } from 'hono'
 import { createApp } from '../src/app.ts'
+import { API_VERSION } from '../src/contract.ts'
 
 let fixture: FixtureRepo
 let source: LocalGitSource
@@ -64,6 +65,37 @@ beforeAll(() => {
   app = createApp({ sources: [source] })
 })
 afterAll(() => rm(fixture.dir, { recursive: true, force: true }))
+
+describe('the wire contract (#317)', () => {
+  it('serves the API version on /api/health, so a stale client can say so', async () => {
+    const { status, body } = await get('/api/health')
+    expect(status).toBe(200)
+    expect(body.ok).toBe(true)
+    // The number the client compiled against. A mismatch is the client's to
+    // notice; the server's job is to state it.
+    expect(body.apiVersion).toBe(API_VERSION)
+    expect(Array.isArray(body.sources)).toBe(true)
+  })
+
+  it('reports every failure in one shape', async () => {
+    // ApiErrorBody: `error` always present and a string, at every status.
+    for (const path of ['/api/runs/nope/nope', '/api/runs/nope/nope/lexicon', '/api/runs/nope/nope/g1']) {
+      const { status, body } = await get(path)
+      expect(status).toBe(404)
+      expect(typeof body.error).toBe('string')
+      expect(body.error.length).toBeGreaterThan(0)
+    }
+  })
+
+  it('never answers a write refusal with an undefined reason', async () => {
+    // `WriteResult` requires neither `message` nor `reason`, and the old code
+    // shipped `{ error: undefined }` — which serializes to `{}` and renders as
+    // "undefined" in the UI.
+    const { status, body } = await postJson('/api/decisions', { source: source.id, slug: 'nope', action: 'approve' })
+    expect(status).toBe(404)
+    expect(typeof body.error).toBe('string')
+  })
+})
 
 describe('read routes', () => {
   it('GET /api/inbox returns age-ranked items, oldest first', async () => {

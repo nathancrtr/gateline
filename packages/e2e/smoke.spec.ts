@@ -212,6 +212,25 @@ test('run lexicon (#311): a card opened near the reader\'s right edge stays insi
   }
 })
 
+test('verification verdict (#152): the G2 surface quotes the report\'s verdict and its non-verified rows', async ({ page }) => {
+  // The run that escalated carries the report that did it.
+  await page.goto('/runs/' + sourceId() + '/escalated?tab=record&artifact=verification-report.md')
+  const rollup = page.locator('[data-evidence-rollup]').first()
+  await expect(rollup).toBeVisible()
+  await expect(rollup.locator('[data-report-verdict="escalate"]')).toContainText('“escalate”')
+  const notVerified = rollup.locator('[data-not-verified]')
+  await expect(notVerified).toContainText('one criterion')
+  await expect(notVerified).toContainText('AC2.1')
+  await expect(notVerified).toContainText('“unverifiable”')
+  await expect(notVerified).not.toContainText('AC1.1')
+
+  // A clean report states pass and lists nothing.
+  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=verification-report.md')
+  const clean = page.locator('[data-evidence-rollup]').first()
+  await expect(clean.locator('[data-report-verdict="pass"]')).toBeVisible()
+  await expect(clean.locator('[data-not-verified]')).toHaveCount(0)
+})
+
 test('run lexicon (#308): the idle card takes no space, and the keyboard still opens it', async ({ page }) => {
   // #308 made the idle card `display: none` instead of `visibility: hidden`,
   // which had left 416px of nothing laid out beside every reference on the page.

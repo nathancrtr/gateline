@@ -47,6 +47,10 @@
 //       pause for human acknowledgment; its resolution (typically `return-to-implement`) is
 //       just another resolution matching that same `task <id>` text, so "latest matching
 //       resolution" (D17) picks it up and routes through #189's machinery unchanged
+//   D24 verifier verdict escalate (#152)             → escalate + pause; a resolution newer than the
+//       report means a human addressed the named condition, and the packet returns to the table
+//       (D10) — the verifier's channel mirrors the reviewer's (D17) without D17's re-review
+//       routing, since there is no round to re-run: the G2 human decides what happens next
 //   DB  any dispatch would exceed the budget cap     → escalate + pause budget-exhausted
 //       (skipped when budget enforcement is off, #109 — metering still happens)
 //
@@ -538,6 +542,26 @@ function implementPhase(obs: RunObservation): DerivedAction {
   // No verifier in `patch`: the reviews are the whole G2 packet (DESIGN.md §4.1).
   if (state.profile === 'patch')
     return rest('D10', 'all tasks review-complete; G2 is on the table (the frontend inbox surfaces it)')
+
+  // D24 — the verifier's escalation channel (#152). An escalate verdict is a
+  // standing fact in the report, like the reviewer's (D17): the unblocking
+  // input is a resolution newer than the report, after which the packet is
+  // simply on the table for the G2 human, failed rows and all. Only a
+  // well-formed report is read for its verdict — a malformed one bounces
+  // first (D7), through producerPhase below.
+  const verification = obs.verification
+  if (verification?.verdict === 'escalate' && obs.validations['verification-report.md']?.ok) {
+    const addressed = state.escalations.some(
+      (e) =>
+        e.resolved &&
+        e.resolved_at !== null &&
+        e.reason.includes('verifier escalated') &&
+        verification.lastTouched !== null &&
+        Date.parse(e.resolved_at) / 1000 > verification.lastTouched,
+    )
+    if (!addressed)
+      return escalate('D24', 'verifier escalated — a failure traces to the spec, plan, or gate process, not the implementation; see verification-report.md', 'escalation')
+  }
   return producerPhase(obs, 'G2')
 }
 

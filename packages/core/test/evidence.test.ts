@@ -194,3 +194,18 @@ describe('real finished runs', () => {
     expect(withEvidence.every((c) => c.evidence.every((a) => /^E\d+$/.test(a.label)))).toBe(true)
   })
 })
+
+describe('the report\'s overall verdict (#152)', () => {
+  const lexicon = buildLexicon({ spec: SPEC })
+  it('is quoted verbatim from the Verdict line, first line wins, fences ignored', () => {
+    const report = '# Verification Report: sample\n\n**Verdict:** escalate\n**Change verified:** tip\n\n## Results\n\n| Criterion | Verdict | Evidence |\n|---|---|---|\n| AC1.1 | unverifiable | see Gaps |\n\n```\n**Verdict:** pass\n```\n'
+    const rollup = buildEvidenceRollup({ lexicon, verification: report })
+    expect(rollup.verdict).toBe('escalate')
+    expect(rollup.criteria.find((c) => c.id === 'AC1.1')?.result).toEqual({ verdict: 'unverifiable', evidence: 'see Gaps' })
+  })
+
+  it('is null on a report that predates the line, and on no report at all', () => {
+    expect(buildEvidenceRollup({ lexicon, verification: VERIFICATION }).verdict).toBeNull()
+    expect(buildEvidenceRollup({ lexicon, verification: null }).verdict).toBeNull()
+  })
+})

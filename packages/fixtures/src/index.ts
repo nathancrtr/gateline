@@ -407,6 +407,7 @@ Diff stayed inside the declared file_contact_surface.
 
 const verification = () => `# Verification Report: run
 
+**Verdict:** pass
 **Change verified:** run branch tip
 **Environment:** local, python 3.12
 
@@ -445,6 +446,38 @@ AC2.2 not verified — the fixture corpus has no oversized sample.
  * passes validation and the gate is reviewable. It exists to prove the
  * structured G2 view withholds itself and says why (#256) instead of guessing.
  */
+/**
+ * The verifier's escalation channel (#152): the run that escalated carries
+ * the report that did it — one criterion unverifiable for a reason that lies
+ * in the spec, and the overall verdict that puts it in front of a human. The
+ * G2 surface quotes both, so a non-clean report never looks like a clean pass.
+ */
+const escalatingVerification = () => `# Verification Report: run
+
+**Verdict:** escalate
+**Change verified:** run branch tip
+**Environment:** local, python 3.12
+
+## Results
+
+| Criterion | Verdict | Evidence |
+|-----------|---------|----------|
+| AC1.1 | verified | see E1 |
+| AC2.1 | unverifiable | see Gaps |
+
+### E1 — AC1.1
+\`\`\`
+$ tool sample.txt
+ok (3 records)
+\`\`\`
+
+## Beyond the happy path
+Probed an empty queue; the consumer exits cleanly.
+
+## Gaps
+- AC2.1 unverifiable: the sample input the spec references does not exist in the repo — a spec defect, not an implementation one. Escalating.
+`
+
 const forkedVerification = () => `# Verification Report: run
 
 **Change verified:** run branch tip
@@ -922,6 +955,7 @@ export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts 
         'spec.md': spec('queue consumer'),
         'plan.md': plan('queue consumer'),
         'tasks/01-core.yaml': workItem('01-core', 'R1', 'in-progress'),
+        'verification-report.md': escalatingVerification(),
         'state.yaml': stateYaml({
           slug: 'escalated',
           phase: 'implement',

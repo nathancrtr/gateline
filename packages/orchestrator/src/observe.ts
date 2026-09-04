@@ -7,6 +7,7 @@ import { type GateId, type RunState, type Validation, validateArtifact } from '@
 import type { RunRef, RunSource } from '@gateline/core/sources'
 import { GATE_PRODUCER } from './derive.ts'
 import { parseReviewReport, type ReviewInfo } from './review-report.ts'
+import { parseVerificationReport, type VerificationInfo } from './verification-report.ts'
 
 export interface TaskFileInfo {
   path: string
@@ -41,6 +42,8 @@ export interface RunObservation {
   /** Validation per contract-bound artifact present in the run. */
   validations: Record<string, Validation>
   reviews: ReviewInfo[]
+  /** The verification report's overall verdict (#152), or null when the run has no report. */
+  verification: VerificationInfo | null
   /** Run-relative path → newest commit epoch seconds touching it. */
   lastTouched: Record<string, number | null>
   /**
@@ -109,6 +112,12 @@ export async function observeRun(source: RunSource, ref: RunRef, cfg: ObserveCon
   for (const path of artifacts.filter(isReviewFile)) {
     const content = (await source.readArtifact(ref, path)) ?? ''
     reviews.push(parseReviewReport(path, content, lastTouched[path] ?? null))
+  }
+
+  let verification: VerificationInfo | null = null
+  if (artifacts.includes('verification-report.md')) {
+    const content = (await source.readArtifact(ref, 'verification-report.md')) ?? ''
+    verification = parseVerificationReport(content, lastTouched['verification-report.md'] ?? null)
   }
 
   const taskFiles = new Map<string, TaskFileInfo>()
@@ -185,6 +194,7 @@ export async function observeRun(source: RunSource, ref: RunRef, cfg: ObserveCon
     artifacts,
     validations,
     reviews,
+    verification,
     lastTouched,
     lastNonStateCommit,
     declineEvents,

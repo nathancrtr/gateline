@@ -5,7 +5,16 @@
      Evidence = the command you ran and the output you observed.
      GRAMMAR (normative — tooling parses these shapes): evidence-block
      headings exactly `### E<k> — AC<n>.<m>`; the Criterion column carries the
-     bare `AC<n>.<m>` id. A deviation is a malformed artifact.
+     bare `AC<n>.<m>` id; one overall `**Verdict:** pass | fail | escalate`
+     line. A deviation is a malformed artifact.
+     VERDICT: `pass` when every in-scope criterion is verified; `fail` when
+     any criterion failed or could not be verified for a reason that lies in
+     the implementation or the environment — the G2 approver weighs it on the
+     card; `escalate` when a failure traces to the spec, the plan, or the gate
+     process rather than the implementation — this is the verifier's
+     escalation channel, and it pauses the run for a human the way a
+     reviewer's `escalate` does. Prose in Gaps has no such power: an
+     escalation that lives only in a sentence never reaches the gate.
      BUDGET: paste FAILING output in full; for passing checks the command plus
      its concluding line/exit code suffices. Never paste entire suites or
      restate the spec — reference criteria by number.
@@ -21,6 +30,7 @@
      file:line cite per sentence, full path at first mention only — short
      name after. -->
 
+**Verdict:** pass | fail | escalate
 **Change verified:** <branch/commit>
 **Environment:** <where this ran: local, CI, staging + versions that matter>
 

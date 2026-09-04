@@ -32,9 +32,36 @@ export function EvidenceRollupPanel({ src, slug }: { src: string; slug: string }
   const unknown = data.criteria.filter((c) => !c.defined)
   const uncited = defined.filter((c) => c.evidence.length === 0 && !c.result)
   const cited = defined.filter((c) => c.evidence.length > 0 || c.result)
+  // The report's own words about itself (#152): its overall verdict, and
+  // every Results row it marked as something other than verified. Quoted
+  // and attributed — the report said it — so a non-clean report is visually
+  // distinct from a clean pass without this panel judging anything.
+  const notVerified = data.criteria.filter((c) => c.result && c.result.verdict.trim().toLowerCase() !== 'verified')
+  const alarmed = data.verdict !== null && data.verdict.trim().toLowerCase() !== 'pass'
   return (
     <section className="mt-3 rounded-[5px] border border-line bg-inset px-3 py-2.5 text-xs" data-evidence-rollup>
       <p className="font-mono text-[11px] uppercase tracking-wide text-muted">Evidence citations — computed from the record</p>
+      {data.verdict !== null && (
+        <p className={`mt-1.5 ${alarmed ? 'font-semibold text-warn' : 'text-muted'}`} data-report-verdict={data.verdict}>
+          The report states its verdict: <span className="font-mono">“{data.verdict}”</span>
+        </p>
+      )}
+      {notVerified.length > 0 && (
+        <div className="mt-2" data-not-verified>
+          <p className="font-semibold text-warn">The report marks {notVerified.length === 1 ? 'one criterion' : `${notVerified.length} criteria`} as other than verified:</p>
+          <ul className="mt-1 flex flex-col gap-1">
+            {notVerified.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-baseline gap-x-2">
+                <span className="font-mono font-semibold">{c.id}</span>
+                <span className="text-muted">
+                  report states: <span className="font-mono">“{c.result!.verdict}”</span>
+                  {c.result!.evidence && <> — <span className="font-mono">“{c.result!.evidence}”</span></>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {uncited.length > 0 && (
         <div className="mt-2">
           <p className="font-semibold text-warn">No verification evidence cites:</p>

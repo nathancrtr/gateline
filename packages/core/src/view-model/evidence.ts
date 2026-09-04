@@ -66,6 +66,11 @@ export interface CriterionEvidence {
 
 export interface EvidenceRollup {
   hasVerification: boolean
+  /**
+   * The report's overall `**Verdict:**` line, verbatim (#152) — quoted and
+   * attributed, never computed. Null when the report predates the line.
+   */
+  verdict: string | null
   /** Spec-defined criteria in definition order, then unknown citations. */
   criteria: CriterionEvidence[]
   /**
@@ -83,6 +88,7 @@ const ANY_HEADING = /^#{1,6}\s/
 const H2 = /^##\s+(.+?)\s*$/
 const FENCE = /^\s*(```|~~~)/
 const VERIFICATION = 'verification-report.md'
+const VERDICT_LINE = /^\*{2}Verdict:\*{2}\s*(.+?)\s*$/
 
 interface Line {
   text: string
@@ -129,12 +135,15 @@ export function buildEvidenceRollup(input: {
 
   let blocks = 0
   let rows = 0
+  let verdict: string | null = null
   if (input.verification) {
     const lines = toLines(input.verification)
     let section = ''
     lines.forEach((line, i) => {
       if (line.inFence) return
       const text = line.text
+      const v = VERDICT_LINE.exec(text)
+      if (v && verdict === null) verdict = v[1]!
       const h2 = H2.exec(text)
       if (h2) section = h2[1]!
       const e = E_HEADING.exec(text)
@@ -199,6 +208,7 @@ export function buildEvidenceRollup(input: {
   // which is exactly right; spec-defined ids stay first, in spec order.
   return {
     hasVerification: input.verification !== null,
+    verdict,
     criteria: order.map((id) => byId.get(id)!),
     withheld:
       input.verification !== null && blocks === 0 && rows === 0

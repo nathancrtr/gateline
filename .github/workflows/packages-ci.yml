@@ -1,7 +1,15 @@
 name: packages-ci
 
+# Nothing in the workspace depends on @gateline/web, so a web-only change
+# cannot break core, server, cli, or orchestrator. This workflow states that
+# as a job graph: the full-history suite (whose cost is the orchestrator's
+# shadow replays, which walk finished runs commit by commit) runs only when
+# something outside web changes. Playwright is downstream of everything and
+# always runs — it is the floor, by design (#318).
+
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'packages/**'
       - '.github/workflows/packages-ci.yml'
@@ -11,8 +19,78 @@ on:
       - 'packages/**'
       - '.github/workflows/packages-ci.yml'
 
+# The orchestrator pushes artifact commits in bursts; without this, every
+# intermediate commit ran a full suite to completion. Pushes to main are never
+# cancelled — every commit that lands stays independently verified.
+concurrency:
+  group: packages-ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  test:
+  # Which slice of the workspace moved. Full-depth, but the pack is ~4 MiB —
+  # the expense in this workflow is the replays, never the clone.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      web: ${{ steps.classify.outputs.web }}
+      rest: ${{ steps.classify.outputs.rest }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: classify
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          # A first push to a branch (and a force-push whose `before` is gone)
+          # reports an all-zero or unreachable base. Fall back to running
+          # everything: an unclassifiable change is never a skipped check.
+          if [ -z "${BASE_SHA:-}" ] || [ "$BASE_SHA" = "0000000000000000000000000000000000000000" ] \
+             || ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            echo "base unavailable (${BASE_SHA:-unset}) — running every job"
+            echo "web=true"  >> "$GITHUB_OUTPUT"
+            echo "rest=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          files=$(git diff --name-only "$BASE_SHA...HEAD")
+          echo "changed files:"; echo "$files" | sed 's/^/  /'
+
+          web=false; rest=false
+          # The workflow file governs both slices, so a change to it runs both.
+          if echo "$files" | grep -qx '.github/workflows/packages-ci.yml'; then web=true; rest=true; fi
+          if echo "$files" | grep -q '^packages/web/'; then web=true; fi
+          if echo "$files" | grep '^packages/' | grep -qv '^packages/web/'; then rest=true; fi
+
+          echo "web=$web"   >> "$GITHUB_OUTPUT"
+          echo "rest=$rest" >> "$GITHUB_OUTPUT"
+          echo "→ web=$web rest=$rest"
+
+  # Web-only slice: shallow, and scoped to the SPA's own typecheck and tests.
+  web:
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: packages/package-lock.json
+      - run: npm ci
+      - run: npx tsc -p web/tsconfig.json
+      - run: npx vitest run web/test
+      - run: npm run build
+
+  # Everything else: the only job that needs this repository's real history.
+  packages:
+    needs: changes
+    if: needs.changes.outputs.rest == 'true'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -20,18 +98,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # core tests read this repo's real run history
+          fetch-depth: 0 # core tests and the orchestrator's shadow replays read this repo's real run history
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: packages/package-lock.json
       - run: npm ci
-      - run: npm run typecheck
+      - run: npm run typecheck # covers web too: core's types are web's types
       - run: npm test
       - run: npm run build
 
+  # Downstream of the whole workspace — it runs the real server against the
+  # generated fixture repo — so it is not part of either slice. Geometry is
+  # Playwright's alone (#301), and a core change moves what web lays out.
   e2e:
+    needs: changes
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -47,3 +129,26 @@ jobs:
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - run: npx playwright test
+
+  # The stable name for branch protection: one check that survives the job
+  # graph changing shape. A skipped slice is a pass; a failed or cancelled one
+  # is not. (No protection rule exists on this private repo today — this is
+  # what a public repo would require.)
+  ci:
+    if: always()
+    needs: [changes, web, packages, e2e]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify the slices that ran
+        run: |
+          set -euo pipefail
+          echo "changes=${{ needs.changes.result }}"
+          echo "web=${{ needs.web.result }}"
+          echo "packages=${{ needs.packages.result }}"
+          echo "e2e=${{ needs.e2e.result }}"
+          bad="${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}"
+          if [ "$bad" = "true" ]; then
+            echo "::error::a packages-ci job failed or was cancelled"
+            exit 1
+          fi
+          echo "all required jobs passed or were legitimately skipped"

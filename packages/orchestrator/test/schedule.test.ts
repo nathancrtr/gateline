@@ -3,6 +3,9 @@
 // the fake agent lands its delta, the closing commit meters, and the next
 // tick rests until a human merges.
 import { execFileSync } from 'node:child_process'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   deriveSweep,
@@ -169,6 +172,41 @@ describe('Scheduler end-to-end', () => {
     expect(marker).toContain('failed: "harness exploded"')
     // The open failed sweep rests until a human prunes or fixes it.
     expect(await scheduler.tick()).toMatchObject([{ kind: 'rest', rule: 'S1' }])
+  })
+
+  it('S1 and S3 read remote-tracking refs: a pruned local branch does not let a second sweep pile on (#273)', async () => {
+    const { dir, clock } = makeToyRepo()
+    seedConfig(dir, clock)
+    const dispatcher = new FakeDispatcher((req) => {
+      agentCommit(req.cwd, clock, { [`runs/${sweepSlug('historian', new Date())}/docs-delta.md`]: DELTA }, 'docs delta')
+      return { costUsd: 0.1 }
+    })
+    const scheduler = new Scheduler({ repoDir: dir, identity: BOT, dispatcher, registry: REGISTRY })
+
+    const [first] = await scheduler.tick()
+    expect(first).toMatchObject({ kind: 'dispatched', rule: 'S4' })
+    await scheduler.drain()
+    const branch = `run/${first!.slug}`
+
+    // Origin is the linearization point: the sweep lives there, unmerged,
+    // and the operator's local ref for it is pruned.
+    const remote = join(mkdtempSync(join(tmpdir(), 'gateline-sweep-remote-')), 'origin.git')
+    git(dir, ['init', '-q', '--bare', remote])
+    git(dir, ['remote', 'add', 'origin', remote])
+    git(dir, ['push', '-q', 'origin', 'main', branch])
+    git(dir, ['branch', '-D', branch])
+    expect(git(dir, ['for-each-ref', 'refs/heads/run/historian-*'])).toBe('')
+
+    // Before #273 this dispatched a second sweep over the same interval.
+    expect(await scheduler.tick()).toMatchObject([{ kind: 'rest', rule: 'S1', detail: expect.stringContaining(branch) }])
+    expect(dispatcher.calls).toHaveLength(1)
+
+    // Merged on origin (so no longer open), same day, local ref still absent:
+    // the duplicate guard sees the remote-tracking copy. Forced, so dueness
+    // (S2, which the fresh marker would now satisfy) is out of the way.
+    git(dir, ['merge', '-q', '--no-ff', '-m', `merge ${branch}`, `origin/${branch}`])
+    expect(await scheduler.tick({ force: 'historian' })).toMatchObject([{ kind: 'rest', rule: 'S3' }])
+    expect(dispatcher.calls).toHaveLength(1)
   })
 
   it('no orchestrator.yaml → no schedules, no dispatches', async () => {

@@ -19,6 +19,7 @@
     "dev": "npm run dev -w @gateline/server",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json && tsc -p web/tsconfig.json",
+    "check-lockfile": "node scripts/check-lockfile.mjs",
     "fixture": "node fixtures/src/main.ts"
   },
   "devDependencies": {

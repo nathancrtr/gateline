@@ -11,11 +11,11 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 // payload — readIntake reads the passthrough `intake:` block already on
 // detail.state, and the genesis commit is the oldest entry already in
 // detail.history. No new server data (ADR-6 rider, ADR-7).
-import { readIntake } from '@gateline/core/record'
+import { readIntake, splitSections } from '@gateline/core/record'
 import { useKeys, type KeyHint } from '../use-keys.ts'
 import { EdgeFade, useScrollCue } from '../scroll-cue.tsx'
 import { collapseEngineSpans } from '../ledger-spans.ts'
-import { isAuditSection, itemCount, splitSections } from '../fold.ts'
+import { isAuditSection, itemCount } from '../fold.ts'
 import { DIFF_SELECTION, decideTargetIndex, landingArtifact, resolveSurface, type Surface } from '../landing.ts'
 import { PROFILE_PHASES, api, formatAge, formatWhen, type InboxItem, type Phase, type RunDetailResponse, type RunSummary } from '../api.ts'
 import { AgeBadge, BudgetMeter, KeyHints, KindChip, PhaseChip, PhaseSpine, ValidationBadge } from '../components/chips.tsx'
@@ -1004,7 +1004,9 @@ function FoldedMarkdown({ content, path, audit }: { content: string; path: strin
   return (
     <div className="prose-artifact">
       {splitSections(content).map((section, i) => {
-        if (section.heading === null || !isAuditSection(section.heading, audit)) {
+        // Only an H2 can be audit-time: an H1 — a review's appended round —
+        // opens its own section, so its verdict never hides under a fold.
+        if (section.heading === null || section.depth !== 2 || !isAuditSection(section.heading, audit)) {
           return (
             <Markdown key={i} sourcePath={path} unwrapped>
               {section.headingLine ? `${section.headingLine}\n${section.body}` : section.body}
@@ -1014,16 +1016,14 @@ function FoldedMarkdown({ content, path, audit }: { content: string; path: strin
         const count = itemCount(section.body)
         return (
           <details key={i} data-fold={section.heading} className="group mb-[18px]">
-            <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-              <h2 className="flex flex-wrap items-baseline gap-x-3">
-                <span>
-                  <span className="mr-2 inline-block text-[0.7em] text-muted transition-transform group-open:rotate-90">▶</span>
-                  {section.heading}
-                </span>
-                <span className="font-sans text-[13px] font-normal text-muted">
-                  {count.n} {count.unit} · audit-time, folded until opened
-                </span>
-              </h2>
+            <summary className="flex cursor-pointer flex-wrap items-baseline gap-x-3 list-none [&::-webkit-details-marker]:hidden">
+              {/* The heading's accessible name stays the heading; the glyph
+                  and the count sit beside it, not inside it. */}
+              <span aria-hidden="true" className="inline-block text-[0.7em] text-muted transition-transform group-open:rotate-90">▶</span>
+              <h2 className="!my-0">{section.heading}</h2>
+              <span className="font-sans text-[13px] text-muted">
+                {count.n} {count.unit} · audit-time, folded until opened
+              </span>
             </summary>
             <Markdown sourcePath={path} unwrapped>
               {section.body}

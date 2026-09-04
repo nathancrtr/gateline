@@ -90,7 +90,8 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   each section's audience.** An artifact missing a required section is malformed —
   consuming agents bounce it, never guess. A contract's `AUDIENCE:` line names the
   sections that are audit-time evidence rather than decide-time reading; Gatehouse
-  folds those to their heading, and the line is contract meaning, not a UI setting. Two rule families are equally normative and equally bounceable: the
+  folds those to their heading, and the line is contract meaning, not a UI
+  setting. Two rule families are equally normative and equally bounceable: the
   **ID/heading grammar** tooling parses (`### R<n> — <name>`, criteria beginning
   `AC<n>.<m> — `) and the **READABILITY rules** on human-facing sections (plain-words
   opening sentence, one idea per paragraph, lists instead of semicolon chains, name

@@ -117,6 +117,11 @@ describe('AUDIENCE (#217)', () => {
     expect(extractAudience('AUDIENCE: Coverage=later; Findings')).toEqual({})
   })
 
+  it('reads the line with content after the comment close, and never inside a fence', () => {
+    expect(extractAudience('<!-- AUDIENCE: Coverage=audit --> ## trailing')).toEqual({ coverage: 'audit' })
+    expect(extractAudience('```\nAUDIENCE: Coverage=audit\n```\n')).toEqual({})
+  })
+
   it('a template with the line yields its audit-time sections, spelled as the template spells them', async () => {
     const templates: ContractTemplates = {
       read: async () => '# Review\n\n<!-- AUDIENCE: Coverage=audit; Boundary check=audit -->\n\n## Findings\n\n## Coverage\n\n## Boundary check\n',

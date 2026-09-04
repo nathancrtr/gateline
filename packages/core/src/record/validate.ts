@@ -3,6 +3,7 @@
 // contract validates against its own version. Built-in fallbacks cover repos
 // that carry runs but no contracts/ tree.
 import { parse as parseYaml } from 'yaml'
+import { FenceTracker, h2Headings } from './sections.ts'
 
 export interface Validation {
   /** Which contract this artifact was checked against, or null (no contract → presence-only). */
@@ -33,7 +34,13 @@ export type Audience = 'decide' | 'audit'
  */
 export function extractAudience(template: string): Record<string, Audience> {
   const out: Record<string, Audience> = {}
-  for (const m of template.matchAll(/^\s*(?:<!--\s*)?AUDIENCE:\s*(.+?)\s*(?:-->)?\s*$/gm)) {
+  const fences = new FenceTracker()
+  for (const line of template.split('\n')) {
+    if (fences.feed(line)) continue // a fenced example of the grammar is an example
+    const m = /^\s*(?:<!--\s*)?AUDIENCE:\s*(.+?)\s*(?:-->.*)?$/.exec(line)
+    if (!m) continue
+    // Pairs split on `;`, so a heading cannot itself contain one — a limit
+    // the contracts accept rather than a grammar to escape.
     for (const pair of m[1]!.split(';')) {
       const eq = pair.lastIndexOf('=')
       if (eq < 0) continue
@@ -53,15 +60,7 @@ export const BUILTIN_AUDIT_SECTIONS: Record<string, string[]> = {
 
 /** H2 headings are the required-section signal in every markdown contract. */
 export function extractSections(markdown: string): string[] {
-  const sections: string[] = []
-  let inFence = false
-  for (const line of markdown.split('\n')) {
-    if (/^\s*(```|~~~)/.test(line)) inFence = !inFence
-    if (inFence) continue
-    const m = /^##\s+(.+?)\s*$/.exec(line)
-    if (m) sections.push(m[1]!)
-  }
-  return sections
+  return h2Headings(markdown)
 }
 
 const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()

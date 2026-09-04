@@ -229,6 +229,16 @@ test('audit-time sections fold to their heading and open verbatim (#217)', async
   await coverage.locator('summary').click()
   await expect(reader.getByText('error paths exercised by reading')).toBeVisible()
 
+  // The fold's heading is the heading: the count sits beside it, not in its name.
+  await expect(reader.getByRole('heading', { name: 'Coverage', exact: true })).toBeVisible()
+
+  // A two-round review: the appended round's own heading and verdict render
+  // open, never inside the previous round's Boundary check fold.
+  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=review-02.md')
+  await expect(page.locator('[data-reader]').getByRole('heading', { name: 'Round 2', exact: true })).toBeVisible()
+  await expect(page.locator('[data-reader] details[data-fold="Coverage"]')).toHaveCount(2)
+  await expect(page.locator('[data-reader] details[data-fold="Boundary check"]').first()).not.toContainText('Round 2')
+
   // The spec folds Out of scope and nothing else.
   await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=spec.md')
   await expect(page.locator('[data-reader] details[data-fold]')).toHaveCount(1)

@@ -1,7 +1,8 @@
-// Folding audit-time sections (#217): what splits, what counts, and that a
-// fold never loses a word.
+// Folding audit-time sections (#217): which headings fold and what the
+// count says. The split itself is core's and tested there.
 import { describe, expect, it } from 'vitest'
-import { isAuditSection, itemCount, splitSections } from '../src/fold.ts'
+import { splitSections } from '@gateline/core/record'
+import { isAuditSection, itemCount } from '../src/fold.ts'
 
 const review = `# Review Report: 01-core
 
@@ -23,42 +24,41 @@ Requirement coverage R1–R2 checked.
 
 ## Boundary check
 Diff stayed inside the declared surface.
-\`\`\`
-## not a heading
-\`\`\`
+
+---
+
+# Round 2
+**Verdict:** approve
+
+## Coverage (round 2)
+Re-checked R1.
 `
 
-describe('splitSections', () => {
-  it('splits at H2s outside fences and keeps the preamble when it says something', () => {
-    const sections = splitSections(review)
-    expect(sections.map((s) => s.heading)).toEqual([null, 'Findings', 'Coverage', 'Boundary check'])
-    expect(sections[0]!.body).toContain('**Verdict:** approve')
-    expect(sections[3]!.body).toContain('## not a heading')
-  })
-
-  it('loses no line: the sections re-join to the artifact', () => {
-    const sections = splitSections(review)
-    const rejoined = sections.map((s) => (s.headingLine ? `${s.headingLine}\n${s.body}` : s.body)).join('\n')
-    expect(rejoined).toBe(review)
-  })
-
-  it('drops an empty preamble', () => {
-    expect(splitSections('## Only\ntext\n').map((s) => s.heading)).toEqual(['Only'])
+describe('isAuditSection', () => {
+  it('matches the way the validator matches headings, and a round-qualified repeat', () => {
+    expect(isAuditSection('Boundary check', ['Coverage', 'Boundary check'])).toBe(true)
+    expect(isAuditSection('Boundary-Check!', ['Boundary check'])).toBe(true)
+    expect(isAuditSection('Coverage (round 2)', ['Coverage'])).toBe(true)
+    expect(isAuditSection('Findings', ['Coverage'])).toBe(false)
+    expect(isAuditSection('Coverage gaps', ['Coverage'])).toBe(false)
   })
 })
 
-describe('isAuditSection', () => {
-  it('matches the way the validator matches headings', () => {
-    expect(isAuditSection('Boundary check', ['Coverage', 'Boundary check'])).toBe(true)
-    expect(isAuditSection('Boundary-Check!', ['Boundary check'])).toBe(true)
-    expect(isAuditSection('Findings', ['Coverage'])).toBe(false)
+describe('the fold over a multi-round review', () => {
+  it('the appended round opens its own section: its verdict is never under the previous fold', () => {
+    const sections = splitSections(review)
+    const round2 = sections.find((s) => s.heading === 'Round 2')!
+    expect(round2.depth).toBe(1)
+    expect(round2.body).toContain('**Verdict:** approve')
+    expect(sections.find((s) => s.heading === 'Boundary check')!.body).not.toContain('Round 2')
   })
 })
 
 describe('itemCount', () => {
+  const body = (heading: string) => splitSections(review).find((s) => s.heading === heading)!.body
+
   it('counts table rows when the section is a table, excluding the header and rule', () => {
-    const coverage = splitSections(review).find((s) => s.heading === 'Coverage')!.body
-    expect(itemCount(coverage)).toEqual({ n: 2, unit: 'rows' })
+    expect(itemCount(body('Coverage'))).toEqual({ n: 2, unit: 'rows' })
   })
 
   it('counts list items when the section is a list', () => {
@@ -66,7 +66,9 @@ describe('itemCount', () => {
     expect(itemCount('1. a\n')).toEqual({ n: 1, unit: 'item' })
   })
 
-  it('counts paragraphs otherwise, ignoring fenced blocks', () => {
+  it('counts paragraphs otherwise — not rules, comments, table lines, or fenced blocks', () => {
     expect(itemCount('one.\n\ntwo.\n```\n- not an item\n```\n')).toEqual({ n: 2, unit: 'paragraphs' })
+    expect(itemCount(body('Boundary check'))).toEqual({ n: 1, unit: 'paragraph' })
+    expect(itemCount('<!-- note -->\n\n---\n\n| only | header |\n|---|---|\n')).toEqual({ n: 0, unit: 'paragraphs' })
   })
 })

@@ -30,6 +30,15 @@ export function itemHref(item: InboxItem): string {
   return `/runs/${item.source}/${item.slug}${q ? `?${q}` : ''}`
 }
 
+/**
+ * The row's columns: rail, kind chip, the text cell, the time column. The
+ * template used to declare five columns for four cells, which parked the time
+ * column in a 92px slot with 120px of nothing after it; `minmax(0, 1fr)` is
+ * what lets the text cell shrink below its content so truncation engages
+ * rather than painting across the columns beside it (#280).
+ */
+const INBOX_COLUMNS = '4px 132px minmax(0, 1fr) 120px'
+
 function railClassFor(item: InboxItem): string {
   if (item.kind === 'gate' && !item.reviewable) return 'bg-bad'
   if (item.kind === 'gate') return 'bg-accent'
@@ -59,7 +68,7 @@ function InboxRow({ item, now, selected }: { item: InboxItem; now: number; selec
         className={`grid items-stretch transition-colors hover:bg-[#fbf9f4] ${
           selected ? 'bg-accent-tint' : 'bg-surface'
         }`}
-        style={{ gridTemplateColumns: '4px 132px 1fr 92px 120px' }}
+        style={{ gridTemplateColumns: INBOX_COLUMNS }}
         data-inbox-row
         aria-current={selected ? 'true' : undefined}
       >
@@ -71,7 +80,10 @@ function InboxRow({ item, now, selected }: { item: InboxItem; now: number; selec
         <span className="flex flex-col items-center justify-center pt-5">
           <KindChip item={item} />
         </span>
-        <span className="flex min-w-0 flex-col gap-[6px] px-[22px] py-[18px]">
+        <span className="flex min-w-0 flex-col gap-[6px] px-[22px] py-[18px]" data-inbox-text>
+          {/* Title and slug follow one overflow rule (#280): each truncates
+              inside the cell. The slug was `shrink-0`, so once it wrapped to
+              its own line it ran straight across the time column. */}
           <span className="flex flex-wrap items-baseline gap-[10px]">
             {isReviewableGate && (
               <span
@@ -82,7 +94,7 @@ function InboxRow({ item, now, selected }: { item: InboxItem; now: number; selec
             <span className="truncate text-[16px] font-semibold tracking-[-0.005em] text-ink">
               {item.title}
             </span>
-            <span className="shrink-0 font-mono text-[12.5px] text-muted">
+            <span className="min-w-0 truncate font-mono text-[12.5px] text-muted">
               {item.source}/{item.slug}
             </span>
           </span>
@@ -96,7 +108,9 @@ function InboxRow({ item, now, selected }: { item: InboxItem; now: number; selec
             </p>
           )}
         </span>
-        <span className="flex items-center justify-end border-l border-line pr-[22px]">
+        {/* A plain right-aligned time column, no full-height divider: a rule
+            turned any tight fit into something that read as broken (#280). */}
+        <span className="flex items-center justify-end pr-[22px]" data-inbox-age>
           <AgeBadge label={age} urgent={urgent} stale={stale} />
         </span>
       </Link>
@@ -153,19 +167,18 @@ export function InboxPage() {
           {[0, 1, 2].map((i) => (
             <div
               key={i}
-              className="flex items-stretch border-t border-line first:border-t-0"
-        style={{ gridTemplateColumns: '4px 132px 1fr 120px' }}
+              className="grid items-stretch border-t border-line first:border-t-0"
+              style={{ gridTemplateColumns: INBOX_COLUMNS }}
             >
               <span className="skel w-[4px]" />
               <span className="flex items-center justify-center p-5">
                 <span className="skel h-[22px] w-11" />
               </span>
-              <span className="flex flex-col gap-[10px] px-[22px] py-[18px]">
+              <span className="flex min-w-0 flex-col gap-[10px] px-[22px] py-[18px]">
                 <span className="skel h-3.5 w-2/3" />
                 <span className="skel h-3.5 w-1/2" />
               </span>
-              <span className="border-l border-line" />
-              <span className="flex items-center justify-end border-l border-line pr-[22px]">
+              <span className="flex items-center justify-end pr-[22px]">
                 <span className="skel h-4 w-9" />
               </span>
             </div>
@@ -199,30 +212,28 @@ export function InboxPage() {
         expires, and nothing is racing.
       </p>
 
-      {/* Kind filter tabs — Sentry-style grouping */}
-      <div className="flex gap-[6px] mt-[30px] flex-wrap items-center">
-        {filters.map((f, idx) => (
-          <span key={f.label}>
-            {idx > 0 && idx !== 1 && (
-              <span className="inline-block w-px h-[18px] bg-line mx-[6px] align-middle" />
-            )}
-            <button
-              className={`text-[13px] font-medium px-3 py-[7px] rounded-full border transition-colors ${
-                filter === f.kind
-                  ? 'bg-surface border-line-cool text-ink shadow-[var(--shadow-soft)]'
-                  : 'bg-transparent border-transparent text-[#4d4742] hover:bg-raised'
-              }`}
-              onClick={() => {
-                setFilter(f.kind)
-                setCursor(0)
-              }}
-            >
-              {f.label === 'All' ? 'All' : f.label}
-              <span className="font-mono text-[11px] text-muted ml-[6px]">
-                {f.count}
-              </span>
-            </button>
-          </span>
+      {/* Kind filter tabs — Sentry-style grouping. No dividers between them:
+          the rail wraps at narrow widths, and a divider that led a wrapped
+          row separated nothing from nothing (#280). The gaps carry it. */}
+      <div className="flex gap-[6px] mt-[30px] flex-wrap items-center" data-inbox-filters>
+        {filters.map((f) => (
+          <button
+            key={f.label}
+            className={`text-[13px] font-medium px-3 py-[7px] rounded-full border transition-colors ${
+              filter === f.kind
+                ? 'bg-surface border-line-cool text-ink shadow-[var(--shadow-soft)]'
+                : 'bg-transparent border-transparent text-[#4d4742] hover:bg-raised'
+            }`}
+            onClick={() => {
+              setFilter(f.kind)
+              setCursor(0)
+            }}
+          >
+            {f.label}
+            <span className="font-mono text-[11px] text-muted ml-[6px]">
+              {f.count}
+            </span>
+          </button>
         ))}
       </div>
 

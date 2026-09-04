@@ -65,17 +65,7 @@
 // interrupted anywhere converges on re-run. Note what is deliberately absent:
 // no rule writes gates.* (§3, structural safety) and no rule judges artifact
 // content — task status `verified` is a human/G2 judgment, never derived.
-import {
-  G2_COMPLETE_STATUSES,
-  GATE_IDS,
-  GATE_PHASES,
-  PROFILE_GATES,
-  PROFILE_PHASES,
-  gateUndecided,
-  phaseAfterGate,
-  type GateId,
-  type Phase,
-} from '@gateline/core'
+import { G2_COMPLETE_STATUSES, GATE_IDS, GATE_PHASES, PROFILE_GATES, PROFILE_PHASES, gateUndecided, phaseAfterGate, type GateId, type Phase } from '@gateline/core/record'
 import type { RunObservation } from './observe.ts'
 
 export const ROUND_CAP = 3

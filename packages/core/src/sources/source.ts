@@ -33,6 +33,26 @@ export type StageOutcome =
   | { outcome: 'exists'; slug: string; branch: string } // idempotent replay (AC1.3) — a success
   | { outcome: 'refused'; reason: StageRefusal; message: string }
 
+/**
+ * Thrown when a source requests local-only and an explicit push in the same
+ * breath (mode-resolution table, rule 1) — at either tier: `--local-only
+ * --push` on the CLI, or `local_only: true` with `push: true` on a config
+ * entry. Raised by `loadSources` and, independently, by the standalone
+ * orchestrator binary, which never goes through it (ADR-5, AC4.1).
+ *
+ * It lives here rather than beside `loadSources` because push mode is a
+ * property of a source, not of the frontend's view of one. That placement was
+ * also the orchestrator's only reach into the view-model layer, and moving it
+ * is what lets `orchestrator/test/core-ceiling.test.ts` hold the engine to
+ * record + sources (#132).
+ */
+export class LocalOnlyPushConflictError extends Error {
+  constructor(source: string) {
+    super(`source ${source}: local-only and push are both explicitly requested — they conflict (local-only forces push off); pick one`)
+    this.name = 'LocalOnlyPushConflictError'
+  }
+}
+
 export interface WriteResult {
   ok: boolean
   commit?: string

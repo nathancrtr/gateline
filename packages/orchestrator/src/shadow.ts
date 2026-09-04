@@ -3,8 +3,9 @@
 // orchestrator actually did next. Agreement builds the trust the autonomy
 // gate requires; every disagreement is dispositioned as an engine bug or a
 // design finding — either way the run was free design review.
-import type { LocalGitSource, RunRef, RunState } from '@gateline/core'
-import { parseRunState } from '@gateline/core'
+import type { RunState } from '@gateline/core/record'
+import type { LocalGitSource, RunRef } from '@gateline/core/sources'
+import { parseRunState } from '@gateline/core/record'
 import { deriveAction, type DerivedAction, type DispatchIntent } from './derive.ts'
 import { observeRun, type ObserveConfig } from './observe.ts'
 import { loadRegistry } from './registry.ts'

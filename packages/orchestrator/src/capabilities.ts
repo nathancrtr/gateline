@@ -9,7 +9,7 @@
 // commit instruction in place.
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { resolveFrameworkRootsFromDisk } from '@gateline/core'
+import { resolveFrameworkRootsFromDisk } from '@gateline/core/sources'
 
 const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---/
 const CAPABILITIES_RE = /^capabilities:\s*\[([^\]]*)\]/m

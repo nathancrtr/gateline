@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline/promises'
-import { Command } from 'commander'
+import { Command, Option } from 'commander'
 import {
   BUILTIN_SECTIONS,
   buildLexicon,
@@ -210,10 +210,29 @@ program
 interface DecideFlags {
   source?: string
   notes?: string
+  note?: string
   burden?: string
   reason?: string
   phase?: string
   push?: boolean
+}
+
+/**
+ * `--note`, `--notes` and `--reason` are three spellings of one field (#264):
+ * every decision verb lands its free text in `DecisionInput.notes`. Each verb
+ * keeps the semantically apt spelling in `--help` and parses the other two
+ * hidden, so a flag remembered from a sibling verb never fails the command.
+ */
+const noteText = (flags: DecideFlags): string | undefined => flags.reason ?? flags.notes ?? flags.note
+
+/** A hidden alias option: parses like the canonical flag, absent from `--help`. */
+const hiddenAlias = (flags: string) => new Option(`${flags} <text>`, 'alias').hideHelp()
+
+/** Fail the way commander fails a missing `.requiredOption`, so the message shape stays familiar. */
+const requireNoteText = (cmd: Command, flags: DecideFlags, canonical: string): string => {
+  const text = noteText(flags)
+  if (text === undefined) cmd.error(`error: required option '${canonical} <text>' not specified`)
+  return text
 }
 
 /**
@@ -293,6 +312,7 @@ program
   .option('--source <id>', 'source id when the slug is ambiguous')
   .option('--burden <category>', BURDENS.join(' | '))
   .option('--notes <text>', 'approval notes')
+  .addOption(hiddenAlias('--note'))
   .option('--no-advance', 'record the approval without moving the phase')
   .option('--hold <reason>', 'approve but pause the run in the same commit — the dispatch-safe way to wait on a human decision before the next phase runs')
   .action(async (slug: string, gate: string, flags: DecideFlags & { advance?: boolean; hold?: string }) => {
@@ -301,7 +321,7 @@ program
       action: 'approve',
       gate: gate.toUpperCase() as GateId,
       burden,
-      notes: flags.notes,
+      notes: noteText(flags),
       advancePhase: flags.advance,
       hold: flags.hold !== undefined || undefined,
       holdReason: flags.hold,
@@ -313,10 +333,12 @@ program
   .description('decline a gate with a reason (pauses the run as gate-declined)')
   .argument('<slug>', 'run slug')
   .argument('<gate>', 'G0 | G1 | G2 | G3')
-  .requiredOption('--reason <text>', 'why — this is the correction channel back to the producing role')
+  .option('--reason <text>', 'why — this is the correction channel back to the producing role')
+  .addOption(hiddenAlias('--note, --notes'))
   .option('--source <id>')
-  .action(async (slug: string, gate: string, flags: DecideFlags) => {
-    await decide(slug, flags, { action: 'decline', gate: gate.toUpperCase() as GateId, notes: flags.reason })
+  .action(async (slug: string, gate: string, flags: DecideFlags, cmd: Command) => {
+    const notes = requireNoteText(cmd, flags, '--reason')
+    await decide(slug, flags, { action: 'decline', gate: gate.toUpperCase() as GateId, notes })
   })
 
 program
@@ -324,10 +346,12 @@ program
   .description('resolve an escalation with a disposition note')
   .argument('<slug>', 'run slug')
   .argument('<index>', 'escalation index (see `gateline inbox`)')
-  .requiredOption('--note <text>', 'disposition')
+  .option('--note <text>', 'disposition')
+  .addOption(hiddenAlias('--notes'))
   .option('--disposition <route>', `${DISPOSITIONS.join(' | ')} — optional machine-actionable route for the engine; omit for the engine default`)
   .option('--source <id>')
-  .action(async (slug: string, index: string, flags: DecideFlags & { note: string; disposition?: string }) => {
+  .action(async (slug: string, index: string, flags: DecideFlags & { disposition?: string }, cmd: Command) => {
+    const notes = requireNoteText(cmd, flags, '--note')
     let disposition: Disposition | undefined
     if (flags.disposition !== undefined) {
       if (!(DISPOSITIONS as readonly string[]).includes(flags.disposition)) {
@@ -336,7 +360,7 @@ program
       }
       disposition = flags.disposition as Disposition
     }
-    await decide(slug, flags, { action: 'resolve-escalation', escalationIndex: Number(index), notes: flags.note, disposition })
+    await decide(slug, flags, { action: 'resolve-escalation', escalationIndex: Number(index), notes, disposition })
   })
 
 program

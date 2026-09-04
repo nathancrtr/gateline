@@ -583,3 +583,61 @@ describe('show — artifacts with lexicon footnotes (#164)', () => {
     expect(stderr).toMatch(/no artifact at nope\.md/)
   })
 })
+
+describe('decision verbs accept every spelling of the note (#264)', () => {
+  let own: FixtureRepo
+  const state = async (slug: string) => {
+    const source = new LocalGitSource('own', own.dir)
+    const ref = (await source.listRuns()).find((r) => r.slug === slug)!
+    return (await source.readState(ref)).state!
+  }
+  beforeAll(() => {
+    own = generateFixtureRepo()
+  })
+  afterAll(() => rm(own.dir, { recursive: true, force: true }))
+
+  it('approve takes --note as --notes', async () => {
+    await runIn(own.dir, ['approve', 'g0-pending', 'G0', '--burden', 'confirmation', '--note', 'via the alias'])
+    expect((await state('g0-pending')).gates.G0).toMatchObject({ approved: true, notes: 'via the alias' })
+  })
+
+  it('decline takes --note and --notes as --reason', async () => {
+    await runIn(own.dir, ['decline', 'g1-pending', 'G1', '--note', 'plan overlaps'])
+    expect(await state('g1-pending')).toMatchObject({ phase: 'paused', paused_reason: 'gate-declined' })
+    expect((await state('g1-pending')).gates.G1).toMatchObject({ approved: false, notes: 'plan overlaps' })
+
+    await runIn(own.dir, ['decline', 'g2-pending', 'G2', '--notes', 'evidence thin'])
+    expect((await state('g2-pending')).gates.G2).toMatchObject({ approved: false, notes: 'evidence thin' })
+  })
+
+  it('resolve-escalation takes --notes as --note', async () => {
+    await runIn(own.dir, ['resolve-escalation', 'escalated', '0', '--notes', 'sample data committed'])
+    const esc = (await state('escalated')).escalations[0]!
+    expect(esc.resolved).toBe(true)
+    expect(esc.resolution).toBe('sample data committed')
+  })
+
+  it('the text stays required whichever spelling is omitted, and the message names the canonical flag', async () => {
+    const decline = await runIn(own.dir, ['decline', 'g3-pending', 'G3'], { expectFail: true })
+    expect(decline.code).toBe(1)
+    expect(decline.stderr).toMatch(/required option '--reason <text>'/)
+    expect((await state('g3-pending')).phase).not.toBe('paused')
+
+    const resolve = await runIn(own.dir, ['resolve-escalation', 'escalated', '0'], { expectFail: true })
+    expect(resolve.code).toBe(1)
+    expect(resolve.stderr).toMatch(/required option '--note <text>'/)
+  })
+
+  it('--help shows only the canonical spelling each verb documents', async () => {
+    const help = async (verb: string) => (await runIn(own.dir, [verb, '--help'])).stdout
+    const approve = await help('approve')
+    expect(approve).toContain('--notes <text>')
+    expect(approve).not.toMatch(/--note\b[^s]/)
+    const decline = await help('decline')
+    expect(decline).toContain('--reason <text>')
+    expect(decline).not.toContain('--note')
+    const resolve = await help('resolve-escalation')
+    expect(resolve).toContain('--note <text>')
+    expect(resolve).not.toContain('--notes')
+  })
+})

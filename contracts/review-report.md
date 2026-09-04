@@ -15,11 +15,12 @@
      reads it to trust the review; a breach is bounced like a malformed
      finding, with the rule cited. (a) Open with one plain-words sentence
      stating overall coverage — no code spans, paths, or parenthetical cites.
-     (b) Then one bullet per area checked; terse "R1-R3 ✓"-style entries are
-     the proven shape. Never chain areas into a paragraph — any paragraph
-     over 120 words is in breach. (c) Name before cite: give any id or file
-     a noun phrase on first use, at most one parenthetical file:line cite
-     per sentence. -->
+     (b) Then the Coverage table (shape below): one row per requirement or
+     area checked. The table is the shape — a bullet list or a paragraph in
+     its place is in breach. Cites live in the Where column, one location per
+     row; the Mechanism column says what was checked in a clause, never a
+     chain of clauses. (c) Name before cite: give any id or file a noun phrase
+     on first use in the opening sentence. -->
 
 **Verdict:** approve | request-changes | escalate
 **Round:** <n of 3>
@@ -35,9 +36,20 @@
 
 ## Coverage
 <!-- What you checked and found clean — the G2 human relies on this, not just
-     the findings. One bullet per area, e.g.: "requirement coverage R1-R3 ✓",
-     "error paths in X ✓", "concurrency not assessed (no concurrent access
-     in scope)". Human-facing: READABILITY rules govern the shape. -->
+     the findings. One plain-words sentence on overall coverage, then the
+     table: one row per requirement or area, the same facts a prose chain
+     would carry at a fraction of the parse cost (the verification report's
+     Results table is the precedent). Status is ✓, ✗, partial, or n/a,
+     naming the criterion where one applies. Human-facing: READABILITY rules
+     govern the sentence; the table is the mandated shape. -->
+
+<one sentence: what was covered, what was not, and how — static reading, execution, both>
+
+| Requirement | Where | Mechanism checked | Status |
+|-------------|-------|-------------------|--------|
+| R2 | `walker.py:35-42` | `followlinks=False`; `lstat` + `S_ISREG` excludes file symlinks | ✓ AC2.2 |
+| error paths | `cli.py:88-104` | every raise maps to a named exit code | ✓ |
+| concurrency | — | not assessed: no concurrent access in scope | n/a |
 
 ## Boundary check
 <!-- Did the diff stay inside the task's declared file_contact_surface? -->

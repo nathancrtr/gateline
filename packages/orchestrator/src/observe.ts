@@ -26,6 +26,8 @@ export interface LedgerEntry {
   tokens_out: number | null
   cost_usd: number | null
   failed: boolean
+  /** Closed without a process ever spawning (#155): $0, not a failure, not a retry spent. */
+  refused: boolean
 }
 
 export interface OpenDispatch {
@@ -229,6 +231,7 @@ export function parseLedger(state: RunState | null): LedgerEntry[] {
       tokens_out: typeof e.tokens_out === 'number' ? e.tokens_out : null,
       cost_usd: typeof e.cost_usd === 'number' ? e.cost_usd : null,
       failed: e.failed === true,
+      refused: e.refused === true,
     })
   }
   return entries

@@ -33,6 +33,13 @@ export interface DispatchOutcome {
   error: string | null
   /** Retrying cannot help (e.g. a fold conflict = plan defect): escalate now. */
   fatal?: boolean
+  /**
+   * No process was ever spawned (#155): the dispatch was refused before the
+   * harness ran — a held checkout, a preflight error. True cost is zero and
+   * the ledger says so; the entry is neither a failure nor a retry spent,
+   * because the agent never got to try.
+   */
+  refused?: boolean
   /** Present when the dispatcher harvested the agent's work to a branch the
    *  engine folds (the remote runner, run "runner-agent" ADR-3/ADR-4). `base`
    *  is the commit the harvest branch was committed on top of (the dispatch's

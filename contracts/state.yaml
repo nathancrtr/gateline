@@ -75,7 +75,15 @@ budget:
   ledger: []              # append-only, one entry per model invocation:
                           #   {at, role, task, round, adapter, model,
                           #    tokens_in, tokens_out, cost_usd}
-                          # task/round null when not applicable. v0: append by hand
+                          # task/round null when not applicable. Two optional
+                          # flags close an entry that did not succeed:
+                          # `failed: true` — the harness ran and did not
+                          # complete (crash, timeout, aged out); cost_usd is
+                          # real usage when known, else the registry estimate.
+                          # `refused: true` — no process was spawned (a held
+                          # checkout, a preflight error); cost_usd is 0, and
+                          # the entry counts as neither a failure nor a retry.
+                          # v0: append by hand
                           # from harness usage output (a smaller, more concrete ask
                           # than maintaining a total); v1: the dispatch seam appends
                           # automatically. Facts, not a running total — totals are

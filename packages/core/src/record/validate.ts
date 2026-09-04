@@ -3,6 +3,7 @@
 // contract validates against its own version. Built-in fallbacks cover repos
 // that carry runs but no contracts/ tree.
 import { parse as parseYaml } from 'yaml'
+import { FenceTracker, h2Headings } from './sections.ts'
 
 export interface Validation {
   /** Which contract this artifact was checked against, or null (no contract → presence-only). */
@@ -12,19 +13,54 @@ export interface Validation {
   missing: string[]
   /** Non-fatal notes (e.g. fell back to built-in template). */
   notes: string[]
+  /**
+   * Audit-time sections (#217), as the contract spells them: evidence the
+   * approver reads when trust is in question rather than at every gate pass.
+   * A viewer folds them to their heading; nothing else changes. Absent or
+   * empty when the contract carries no `AUDIENCE:` line — a contract that
+   * says nothing about audience renders exactly as before.
+   */
+  audit?: string[]
+}
+
+export type Audience = 'decide' | 'audit'
+
+/**
+ * The `AUDIENCE:` line of a contract header (#217): `<section>=<audience>`
+ * pairs separated by `;`, e.g. `AUDIENCE: Coverage=audit; Boundary check=audit`.
+ * Sections not listed are decide-time. Contract meaning, versioned with the
+ * grammar — which is why it lives in the contract and not in a UI setting.
+ * Keyed by normalized heading, so a fork that respells a heading still folds.
+ */
+export function extractAudience(template: string): Record<string, Audience> {
+  const out: Record<string, Audience> = {}
+  const fences = new FenceTracker()
+  for (const line of template.split('\n')) {
+    if (fences.feed(line)) continue // a fenced example of the grammar is an example
+    const m = /^\s*(?:<!--\s*)?AUDIENCE:\s*(.+?)\s*(?:-->.*)?$/.exec(line)
+    if (!m) continue
+    // Pairs split on `;`, so a heading cannot itself contain one — a limit
+    // the contracts accept rather than a grammar to escape.
+    for (const pair of m[1]!.split(';')) {
+      const eq = pair.lastIndexOf('=')
+      if (eq < 0) continue
+      const name = normalize(pair.slice(0, eq))
+      const audience = pair.slice(eq + 1).trim().toLowerCase()
+      if (name && (audience === 'decide' || audience === 'audit')) out[name] = audience
+    }
+  }
+  return out
+}
+
+/** Built-in audit-time sections, mirroring the `AUDIENCE:` lines in contracts/ at the time of writing. */
+export const BUILTIN_AUDIT_SECTIONS: Record<string, string[]> = {
+  'review-report.md': ['Coverage', 'Boundary check'],
+  'spec.md': ['Out of scope'],
 }
 
 /** H2 headings are the required-section signal in every markdown contract. */
 export function extractSections(markdown: string): string[] {
-  const sections: string[] = []
-  let inFence = false
-  for (const line of markdown.split('\n')) {
-    if (/^\s*(```|~~~)/.test(line)) inFence = !inFence
-    if (inFence) continue
-    const m = /^##\s+(.+?)\s*$/.exec(line)
-    if (m) sections.push(m[1]!)
-  }
-  return sections
+  return h2Headings(markdown)
 }
 
 const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
@@ -155,10 +191,15 @@ export async function validateArtifact(
 
   // Markdown contracts: required H2s from the repo's template, else built-in.
   let required = BUILTIN_SECTIONS[contract] ?? []
+  let audit = BUILTIN_AUDIT_SECTIONS[contract] ?? []
   const template = await templates.read(contract)
   if (template) {
     const fromTemplate = extractSections(template)
     if (fromTemplate.length) required = fromTemplate
+    // The template's own word on audience, or silence: a contract with no
+    // `AUDIENCE:` line folds nothing, whatever the built-in list says.
+    const audience = extractAudience(template)
+    audit = fromTemplate.filter((s) => audience[normalize(s)] === 'audit')
   } else {
     notes.push('no contracts/ in repo; used built-in sections')
   }
@@ -171,5 +212,5 @@ export async function validateArtifact(
     const last = verdictLines(content).at(-1)
     if (last !== undefined && verificationVerdict(last) === null) missing.push('Verdict: pass | fail | escalate')
   }
-  return { contract, ok: missing.length === 0, missing, notes }
+  return { contract, ok: missing.length === 0, missing, notes, audit }
 }

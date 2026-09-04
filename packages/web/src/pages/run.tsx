@@ -11,10 +11,11 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 // payload — readIntake reads the passthrough `intake:` block already on
 // detail.state, and the genesis commit is the oldest entry already in
 // detail.history. No new server data (ADR-6 rider, ADR-7).
-import { readIntake } from '@gateline/core/record'
+import { readIntake, splitSections } from '@gateline/core/record'
 import { useKeys, type KeyHint } from '../use-keys.ts'
 import { EdgeFade, useScrollCue } from '../scroll-cue.tsx'
 import { collapseEngineSpans } from '../ledger-spans.ts'
+import { isAuditSection, itemCount } from '../fold.ts'
 import { DIFF_SELECTION, decideTargetIndex, landingArtifact, resolveSurface, type Surface } from '../landing.ts'
 import { PROFILE_PHASES, api, formatAge, formatWhen, type InboxItem, type Phase, type RunDetailResponse, type RunSummary } from '../api.ts'
 import { AgeBadge, BudgetMeter, KeyHints, KindChip, PhaseChip, PhaseSpine, ValidationBadge } from '../components/chips.tsx'
@@ -938,7 +939,13 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
   const [params] = useSearchParams()
   const anchor = params.get('anchor')
   useEffect(() => {
-    if (anchor && data) document.getElementById(anchor)?.scrollIntoView({ block: 'start' })
+    if (!anchor || !data) return
+    const target = document.getElementById(anchor)
+    // A definition inside a folded audit-time section (#217) opens its fold
+    // before the jump, so a citation never lands on a closed heading.
+    const fold = target?.closest('details')
+    if (fold && !fold.open) fold.open = true
+    target?.scrollIntoView({ block: 'start' })
   }, [anchor, data])
   if (isLoading) return <LoadingSkeleton text="Reading artifact…" />
   if (error) return <PageStatus text={(error as Error).message} bad />
@@ -971,12 +978,60 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
         )}
         {isReviewPath(path) && <FindingsPanel src={src} slug={slug} path={path} />}
         {path.endsWith('.md') ? (
-          <Markdown sourcePath={path}>{content}</Markdown>
+          <FoldedMarkdown content={content} path={path} audit={validation.audit ?? []} />
         ) : (
           <pre className="overflow-x-auto font-mono text-xs leading-5">{content}</pre>
         )}
       </div>
     </article>
+  )
+}
+
+/**
+ * The artifact, with its audit-time sections folded (#217). The contract
+ * names them (`validation.audit`); each folds to its heading plus a count —
+ * rows, items, or paragraphs, arithmetic over the text — and opens in place
+ * to the verbatim section. Decide-time sections render as they always did.
+ * A contract that names no audit-time section renders the artifact whole,
+ * through the same single `Markdown` call as before: the split exists only
+ * when there is something to fold.
+ */
+function FoldedMarkdown({ content, path, audit }: { content: string; path: string; audit: string[] }) {
+  if (audit.length === 0) return <Markdown sourcePath={path}>{content}</Markdown>
+  // One `.prose-artifact` wrapper for the whole artifact, however many
+  // renders it takes: the styles are descendant rules, and the DOM keeps
+  // reading as one artifact.
+  return (
+    <div className="prose-artifact">
+      {splitSections(content).map((section, i) => {
+        // Only an H2 can be audit-time: an H1 — a review's appended round —
+        // opens its own section, so its verdict never hides under a fold.
+        if (section.heading === null || section.depth !== 2 || !isAuditSection(section.heading, audit)) {
+          return (
+            <Markdown key={i} sourcePath={path} unwrapped>
+              {section.headingLine ? `${section.headingLine}\n${section.body}` : section.body}
+            </Markdown>
+          )
+        }
+        const count = itemCount(section.body)
+        return (
+          <details key={i} data-fold={section.heading} className="group mb-[18px]">
+            <summary className="flex cursor-pointer flex-wrap items-baseline gap-x-3 list-none [&::-webkit-details-marker]:hidden">
+              {/* The heading's accessible name stays the heading; the glyph
+                  and the count sit beside it, not inside it. */}
+              <span aria-hidden="true" className="inline-block text-[0.7em] text-muted transition-transform group-open:rotate-90">▶</span>
+              <h2 className="!my-0">{section.heading}</h2>
+              <span className="font-sans text-[13px] text-muted">
+                {count.n} {count.unit} · audit-time, folded until opened
+              </span>
+            </summary>
+            <Markdown sourcePath={path} unwrapped>
+              {section.body}
+            </Markdown>
+          </details>
+        )
+      })}
+    </div>
   )
 }
 

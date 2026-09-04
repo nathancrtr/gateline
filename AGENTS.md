@@ -86,9 +86,12 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
 * **A new portable core file must be added to `scripts/copy-manifest.json`**, or
   releases never offer it to host repos. `python3 scripts/integrate.py validate`
   re-proves the static integration invariants.
-* **Contracts specify required sections, concision budgets, and normative grammar.**
-  An artifact missing a required section is malformed — consuming agents bounce it,
-  never guess. Two rule families are equally normative and equally bounceable: the
+* **Contracts specify required sections, concision budgets, normative grammar, and
+  each section's audience.** An artifact missing a required section is malformed —
+  consuming agents bounce it, never guess. A contract's `AUDIENCE:` line names the
+  sections that are audit-time evidence rather than decide-time reading; Gatehouse
+  folds those to their heading, and the line is contract meaning, not a UI
+  setting. Two rule families are equally normative and equally bounceable: the
   **ID/heading grammar** tooling parses (`### R<n> — <name>`, criteria beginning
   `AC<n>.<m> — `) and the **READABILITY rules** on human-facing sections (plain-words
   opening sentence, one idea per paragraph, lists instead of semicolon chains, name

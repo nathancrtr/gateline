@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { contractFor, extractSections, missingSections, validateArtifact, type ContractTemplates } from '../src/index.ts'
+import { contractFor, extractAudience, extractSections, missingSections, validateArtifact, type ContractTemplates } from '../src/index.ts'
 
 const noTemplates: ContractTemplates = { read: async () => null }
 
@@ -104,6 +104,51 @@ describe('validateArtifact', () => {
     const v = await validateArtifact('tasks/01-x.yaml', 'id: [unclosed\n', noTemplates)
     expect(v.ok).toBe(false)
     expect(v.notes.join(' ')).toMatch(/not valid YAML/)
+  })
+})
+
+describe('AUDIENCE (#217)', () => {
+  it('parses the annotation line into normalized heading → audience', () => {
+    const tpl = '# Review\n\n<!-- prose\n     AUDIENCE: Coverage=audit; Boundary check=audit -->\n\n## Findings\n\n## Coverage\n\n## Boundary check\n'
+    expect(extractAudience(tpl)).toEqual({ coverage: 'audit', 'boundary check': 'audit' })
+  })
+
+  it('ignores an unknown audience word and a pair without =', () => {
+    expect(extractAudience('AUDIENCE: Coverage=later; Findings')).toEqual({})
+  })
+
+  it('reads the line with content after the comment close, and never inside a fence', () => {
+    expect(extractAudience('<!-- AUDIENCE: Coverage=audit --> ## trailing')).toEqual({ coverage: 'audit' })
+    expect(extractAudience('```\nAUDIENCE: Coverage=audit\n```\n')).toEqual({})
+  })
+
+  it('a template with the line yields its audit-time sections, spelled as the template spells them', async () => {
+    const templates: ContractTemplates = {
+      read: async () => '# Review\n\n<!-- AUDIENCE: Coverage=audit; Boundary check=audit -->\n\n## Findings\n\n## Coverage\n\n## Boundary check\n',
+    }
+    const v = await validateArtifact('review-01.md', '## Findings\n\n## Coverage\n\n## Boundary check\n', templates)
+    expect(v.ok).toBe(true)
+    expect(v.audit).toEqual(['Coverage', 'Boundary check'])
+  })
+
+  it('a template without the line folds nothing — it renders exactly as before', async () => {
+    const templates: ContractTemplates = { read: async () => '# Review\n\n## Findings\n\n## Coverage\n\n## Boundary check\n' }
+    const v = await validateArtifact('review-01.md', '## Findings\n\n## Coverage\n\n## Boundary check\n', templates)
+    expect(v.audit).toEqual([])
+  })
+
+  it('no contracts/ at all falls back to the built-in audit list, as it does for sections', async () => {
+    const v = await validateArtifact('spec.md', '## Context\n\n## Requirements\n\n## Assumptions\n\n## Out of scope\n', noTemplates)
+    expect(v.audit).toEqual(['Out of scope'])
+    expect((await validateArtifact('plan.md', '## Approach\n', noTemplates)).audit).toEqual([])
+  })
+
+  it('the repository\'s own contracts carry the line the built-ins mirror', async () => {
+    const { readFileSync } = await import('node:fs')
+    const { resolve } = await import('node:path')
+    const read = (name: string) => readFileSync(resolve(import.meta.dirname, '../../../contracts', name), 'utf8')
+    expect(extractAudience(read('review-report.md'))).toEqual({ coverage: 'audit', 'boundary check': 'audit' })
+    expect(extractAudience(read('spec.md'))).toEqual({ 'out of scope': 'audit' })
   })
 })
 

@@ -380,6 +380,30 @@ The header is also laid out for the 800–1000px band rather than degrading into
 spine fills the width it is given, and the rail's columns grow instead of stacking into
 the left half of the viewport.
 
+### 4.7 Audit-time sections fold (#217)
+
+An artifact's sections serve two readers. What the approver must weigh at the gate
+(a review's Findings, a spec's Requirements) and what exists as evidence for when
+trust is in question (a review's Coverage and Boundary check, a spec's Out of
+scope). The contract says which is which — one `AUDIENCE:` line in its header,
+`<section>=audit` pairs, unlisted sections decide-time — because that is contract
+meaning, versioned with the grammar, not a preference a UI holds. Core parses it
+where it parses required sections (`extractAudience`, beside `extractSections`),
+and the validation carries the audit-time headings to the client.
+
+The reader splits the artifact at its headings (`splitSections` in core — the
+same reading validation uses, so the two never disagree about a heading), renders
+each audit-time H2 as a fold showing the heading and a count (rows, items, or
+paragraphs: arithmetic over the text), and opens it in place to the verbatim
+section. An H1 opens a section of its own, so a review's appended round and its
+verdict never sit under the previous round's fold. A contract with no annotation
+renders the artifact whole, through one call, exactly as before.
+
+This is the first surface to encode the standing rule from #261 in code: a view
+may reorder, group, fold, badge, and diff, but every word shown comes byte-identical
+from the committed artifact and every word stays reachable. Folding is never
+truncation, and nothing here summarizes.
+
 ## 5. The dashboard question
 
 **For one operator running one pipeline, a dashboard is overhead — Claude Code plus

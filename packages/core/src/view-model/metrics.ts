@@ -1,7 +1,7 @@
 // Metrics (I8): computed from state.yaml git history plus the burden field —
 // no scribe, no store (rule R1). Latency is readiness-commit → decision-commit;
 // approval rate carries the >90% over-triggering flag from FRONTEND.md §4.4.
-import { GATE_IDS, gateUndecided, type Burden, type GateId } from '../record/schema.ts'
+import { GATE_IDS, ROUND_CAP, gateUndecided, type Burden, type GateId } from '../record/schema.ts'
 import type { RunRef, RunSource, StateCommit } from '../sources/source.ts'
 
 export interface GateDecisionRecord {
@@ -41,6 +41,8 @@ export interface Metrics {
   decisions: GateDecisionRecord[]
   perGate: GateMetrics[]
   runs: RunMetricsSummary[]
+  /** The review-round cap the `rounds` counts are read against (record `ROUND_CAP`). */
+  roundCap: number
 }
 
 const GATE_TRIGGERS: Record<GateId, (artifacts: string[]) => string[]> = {
@@ -146,5 +148,5 @@ export async function computeMetrics(sources: RunSource[]): Promise<Metrics> {
     }
   })
 
-  return { decisions, perGate, runs }
+  return { decisions, perGate, runs, roundCap: ROUND_CAP }
 }

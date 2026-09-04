@@ -21,7 +21,7 @@ import {
   burdenPillNeeded,
   cardInstruction,
   contractBadgeName,
-  maxRoundsLabel,
+  roundsLabel,
   orderArtifacts,
   visibleProblems,
 } from '../src/pages/run.tsx'
@@ -155,12 +155,13 @@ describe('4 · the record reads in pipeline order', () => {
 
 describe('5 · a non-value reads as one', () => {
   it('shows an em dash for a run with no tasks to have a round count of', () => {
-    expect(maxRoundsLabel({ total: 0, done: 0, maxRounds: 0 })).toBe('—')
+    expect(roundsLabel({ total: 0, done: 0, maxRounds: 0, roundCap: 3 })).toBe('—')
   })
 
-  it('prints a true zero, which is what the portfolio column does with the same run', () => {
-    expect(maxRoundsLabel({ total: 3, done: 0, maxRounds: 0 })).toBe('0')
-    expect(maxRoundsLabel({ total: 1, done: 0, maxRounds: 3 })).toBe('3')
+  it('prints a true zero over the cap it is judged against, never the observation alone (#314)', () => {
+    expect(roundsLabel({ total: 3, done: 0, maxRounds: 0, roundCap: 3 })).toBe('0/3')
+    expect(roundsLabel({ total: 1, done: 0, maxRounds: 3, roundCap: 3 })).toBe('3/3')
+    expect(roundsLabel({ total: 1, done: 0, maxRounds: 2, roundCap: 4 })).toBe('2/4')
   })
 })
 
@@ -260,7 +261,7 @@ const summary = (over: Partial<RunSummary> = {}): RunSummary =>
     pausedReason: null,
     closure: null,
     budget: { limit: 25, spent: 0 },
-    tasks: { total: 0, done: 0, maxRounds: 0 },
+    tasks: { total: 0, done: 0, maxRounds: 0, roundCap: 3 },
     updatedAt: null,
     aheadOfOrigin: null,
     behindOrigin: null,

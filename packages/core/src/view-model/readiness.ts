@@ -38,6 +38,7 @@ import {
   gateUndecided,
   GATE_PHASES,
   PROFILE_GATES,
+  ROUND_CAP,
   STAGED_REASON,
   type GateId,
   type RunState,
@@ -157,7 +158,7 @@ export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<R
 
   // --- Round-cap breaches.
   for (const task of state.tasks) {
-    if (task.review_rounds >= 3 && !taskComplete(task.status)) {
+    if (task.review_rounds >= ROUND_CAP && !taskComplete(task.status)) {
       const reviewFiles = artifacts.filter(isReviewFile)
       const touched = await source.lastTouched(ref, reviewFiles.length ? reviewFiles : ['state.yaml'])
       items.push({

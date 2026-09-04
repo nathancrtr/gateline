@@ -338,7 +338,7 @@ export function PortfolioPage() {
                   </td>
                   <td
                     className={`${NUM} ${
-                      run.tasks.maxRounds >= 3 ? 'font-semibold text-bad' : 'text-muted'
+                      run.tasks.maxRounds >= run.tasks.roundCap ? 'font-semibold text-bad' : 'text-muted'
                     }`}
                   >
                     {run.tasks.total ? run.tasks.maxRounds : '—'}

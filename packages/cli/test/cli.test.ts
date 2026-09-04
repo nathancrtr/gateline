@@ -18,6 +18,8 @@ const cliPath = resolve(dirname(fileURLToPath(import.meta.url)), '../src/main.ts
 
 let fixture: FixtureRepo
 let briefPath: string
+let taskPath: string
+let stubTaskPath: string
 
 const runIn = async (repoDir: string, args: string[], opts: { expectFail?: boolean; env?: NodeJS.ProcessEnv } = {}) => {
   try {
@@ -63,7 +65,32 @@ beforeAll(async () => {
     briefPath,
     '# Intent Brief: CSV Exporter\n\n## Problem\nExporting rows by hand is slow and error-prone.\n\n## Motivation\nSaves roughly an afternoon per release.\n\n## Constraints\nMust run offline.\n\n## Out of scope\nImporting.\n',
   )
+  // A written patch work item (#221), and one that is still the scaffold's stub.
+  taskPath = join(briefDir, 'work-item.yaml')
+  await writeFile(taskPath, workItemFor('arm-patch'))
+  stubTaskPath = join(briefDir, 'stub.yaml')
+  await writeFile(stubTaskPath, workItemFor('arm-patch').replace(/file_contact_surface:[^]*?acceptance_tests/, 'file_contact_surface: []\n\nacceptance_tests'))
 })
+
+const workItemFor = (slug: string) => `id: 01-${slug}
+title: Fix the pager
+requirements: []
+
+scope: |
+  Replace the off-by-one in the pager.
+
+file_contact_surface:
+  - src/pager.py
+
+acceptance_tests:
+  - "pytest tests/test_pager.py passes"
+
+depends_on: []
+
+status: pending
+
+notes: ""
+`
 afterAll(() => rm(fixture.dir, { recursive: true, force: true }))
 
 describe('gateline CLI', () => {
@@ -244,8 +271,9 @@ describe('gateline CLI', () => {
     }
   })
 
-  it('arm moves a staged patch run to phase plan (AC6.1)', async () => {
-    await run(['new', '--slug', 'arm-patch', '--title', 'Arm Patch', '--profile', 'patch', '--brief-file', briefPath])
+  it('arm moves a staged patch run to phase plan once its work item is written (AC6.1, #221)', async () => {
+    const staged = await run(['new', '--slug', 'arm-patch', '--title', 'Arm Patch', '--profile', 'patch', '--brief-file', briefPath, '--task-file', taskPath])
+    expect(staged.stdout).not.toMatch(/stub/)
     const { code } = await run(['arm', 'arm-patch'])
     expect(code).toBe(0)
 
@@ -254,6 +282,39 @@ describe('gateline CLI', () => {
     const { state } = await source.readState(ref)
     expect(state!.phase).toBe('plan')
     expect(state!.paused_reason).toBeNull()
+    expect(await source.readArtifact(ref, 'tasks/01-arm-patch.yaml')).toBe(workItemFor('arm-patch'))
+  })
+
+  it('arm refuses a patch run whose work item is still the stub, and new said so at staging (#221)', async () => {
+    const staged = await run(['new', '--slug', 'arm-stub', '--title', 'Arm Stub', '--profile', 'patch', '--brief-file', briefPath])
+    expect(staged.stdout).toMatch(/tasks\/01-arm-stub\.yaml is a stub/)
+    const { code, stderr } = await run(['arm', 'arm-stub'], true)
+    expect(code).toBe(1)
+    expect(stderr).toMatch(/not a dispatchable work item \(scope still carries the scaffold placeholder\)/)
+    expect(stderr).toMatch(/--task-file/)
+
+    const source = new LocalGitSource('fixture', fixture.dir)
+    const ref = (await source.listRuns()).find((r) => r.slug === 'arm-stub')!
+    expect((await source.readState(ref)).state!.phase).toBe('paused')
+  })
+
+  it('new refuses --task-file off the patch profile, an unwritten one, and one whose id names another run (#221)', async () => {
+    const wrongProfile = await run(['new', '--slug', 'tf-standard', '--title', 'T', '--profile', 'standard', '--brief-file', briefPath, '--task-file', taskPath], true)
+    expect(wrongProfile.code).toBe(1)
+    expect(wrongProfile.stderr).toMatch(/--task-file applies only to --profile patch/)
+
+    const blank = await run(['new', '--slug', 'arm-patch', '--title', 'T', '--profile', 'patch', '--brief-file', briefPath, '--task-file', stubTaskPath], true)
+    expect(blank.code).toBe(1)
+    expect(blank.stderr).toMatch(/not a dispatchable work item: file_contact_surface is empty/)
+
+    const wrongId = await run(['new', '--slug', 'tf-other', '--title', 'T', '--profile', 'patch', '--brief-file', briefPath, '--task-file', taskPath], true)
+    expect(wrongId.code).toBe(1)
+    expect(wrongId.stderr).toMatch(/work item id must be "01-tf-other"/)
+
+    const source = new LocalGitSource('fixture', fixture.dir)
+    const slugs = (await source.listRuns()).map((r) => r.slug)
+    expect(slugs).not.toContain('tf-standard')
+    expect(slugs).not.toContain('tf-other')
   })
 
   it('arm on a run that is not in the staged rest state exits 1 with a named error (AC6.2)', async () => {

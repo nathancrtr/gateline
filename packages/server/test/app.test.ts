@@ -419,6 +419,22 @@ Everything else.
     expect(subject).toBe(`state(${slug}): armed by Fixture Operator`)
   })
 
+  it('refuses to arm a patch run whose work item is still the scaffold stub (#221)', async () => {
+    const slug = 'stage-patch-stub'
+    await postJson('/api/runs', {
+      slug,
+      title: 'patch stub',
+      profile: 'patch',
+      briefMarkdown: fullBrief('patch stub'),
+      costLimitUsd: null,
+      intake: { source: null, ref: null, url: null, clientKey: null },
+    })
+    const { status, body } = await postJson('/api/decisions', { source: 'fixture', slug, action: 'arm' })
+    expect(status).toBe(422)
+    expect(body.error).toMatch(/tasks\/01-stage-patch-stub\.yaml is not a dispatchable work item/)
+    expect(git(['log', '-1', '--format=%s', `run/${slug}`]).trim()).toMatch(/^state\(stage-patch-stub\): staged by/)
+  })
+
   it("refuses arm on a non-staged run with planDecision's DecisionError message (AC5.2)", async () => {
     const { status, body } = await postJson('/api/decisions', { source: 'fixture', slug: 'g0-pending', action: 'arm' })
     expect(status).toBe(400)

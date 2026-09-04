@@ -11,6 +11,13 @@
 //   S1  a sweep branch for this role is open (unmerged) → rest (one in flight / awaiting review per role)
 //   S2  interval since the last merged sweep not elapsed → rest
 //   S3  today's sweep branch already exists             → rest (duplicate guard; sub-daily intervals clamp to daily)
+//
+// S1 and S3 read local *and* remote-tracking refs. Origin is the
+// linearization point (TOPOLOGY.md §3), so an unmerged sweep that exists only
+// under refs/remotes/ is still open — pruning the operator's local branch
+// must not let a second sweep pile onto the first (#273). The caller syncs
+// from origin (fetch --prune) before ticking, so those refs are fresh and a
+// branch deleted on origin does not rest the schedule forever.
 //   SB  role estimate exceeds the schedule's cost cap   → skip + warn (a config defect, not a dispatch)
 //   S4  otherwise                                       → dispatch the sweep
 //
@@ -29,6 +36,9 @@ import type { Dispatcher } from './seam.ts'
 import { ensureRunCheckout, removeRunCheckout } from './workspace.ts'
 
 const ZERO_OID = '0'.repeat(40)
+
+/** The local branch and every remote-tracking copy of `run/<name>` (#273). */
+const sweepRefPatterns = (name: string) => [`refs/heads/run/${name}`, `refs/remotes/*/run/${name}`]
 const DEFAULT_SWEEP_TIMEOUT_MS = 30 * 60 * 1000
 
 export interface ScheduleEntry {
@@ -239,12 +249,12 @@ export class Scheduler {
     const now = this.now()
     const slug = sweepSlug(entry.role, now)
 
-    // Open sweeps: run/<role>-* branches not yet merged into the default branch.
+    // Open sweeps: run/<role>-* branches not yet merged into the default
+    // branch, wherever the ref lives (#273).
     let openSweep: string | null = null
-    for (const { ref } of await this.git.forEachRef([`refs/heads/run/${entry.role}-*`])) {
-      const branch = ref.replace('refs/heads/', '')
+    for (const { ref } of await this.git.forEachRef(sweepRefPatterns(`${entry.role}-*`))) {
       if (!(await this.git.isAncestor(ref, defaultBranch))) {
-        openSweep = branch
+        openSweep = ref.replace(/^refs\/(heads|remotes\/[^/]+)\//, '')
         break
       }
     }
@@ -265,7 +275,7 @@ export class Scheduler {
       entry,
       lastSweptAt: force ? null : lastSweptAt,
       openSweep,
-      slugTaken: (await this.git.revParse(`refs/heads/run/${slug}`)) !== null,
+      slugTaken: (await this.git.forEachRef(sweepRefPatterns(slug))).length > 0,
       estimateUsd: this.cfg.registry?.estimates[entry.role] ?? DEFAULT_ESTIMATE_USD,
     })
     if (decision.kind !== 'dispatch')

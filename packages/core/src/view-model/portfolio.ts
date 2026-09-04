@@ -1,7 +1,7 @@
 // Portfolio rows (interaction I6) and the cross-source inbox: pure
 // derivations over RunSource reads — nothing here is stored (rule R1).
 import { deriveReadiness, type InboxItem } from './readiness.ts'
-import type { ClosureRecord, GateEntry, Profile, RunState } from '../record/schema.ts'
+import { ROUND_CAP, type ClosureRecord, type GateEntry, type Profile, type RunState } from '../record/schema.ts'
 import type { RunRef, RunSource } from '../sources/source.ts'
 
 export interface GateLedgerCell {
@@ -29,7 +29,14 @@ export interface RunSummary {
   /** Run profile (DESIGN.md §4.1); display layers filter the gate ledger through PROFILE_GATES. */
   profile: Profile
   gates: Record<'G0' | 'G1' | 'G2' | 'G3', GateLedgerCell>
-  tasks: { total: number; done: number; maxRounds: number }
+  /**
+   * `maxRounds` is the highest `review_rounds` any task has reached — an
+   * observation. `roundCap` is the rule it is judged against (record
+   * `ROUND_CAP`). They ride together so a surface can draw `n/cap` without
+   * retyping the cap, and so the label never calls the observation a limit
+   * (#314).
+   */
+  tasks: { total: number; done: number; maxRounds: number; roundCap: number }
   escalationsOpen: number
   budget: { limit: number | null; spent: number | null }
   /** Epoch seconds of the last commit touching the run directory. */
@@ -75,7 +82,7 @@ export async function summarizeRun(
         malformed: error ?? 'state.yaml unreadable',
         profile: 'full',
         gates: emptyLedger(),
-        tasks: { total: 0, done: 0, maxRounds: 0 },
+        tasks: { total: 0, done: 0, maxRounds: 0, roundCap: ROUND_CAP },
         escalationsOpen: 0,
         budget: { limit: null, spent: null },
         updatedAt: touched?.time ?? null,
@@ -108,6 +115,7 @@ export async function summarizeRun(
         total: state.tasks.length,
         done: state.tasks.filter((t) => t.status === 'done').length,
         maxRounds: state.tasks.reduce((m, t) => Math.max(m, t.review_rounds), 0),
+        roundCap: ROUND_CAP,
       },
       escalationsOpen: state.escalations.filter((e) => !e.resolved).length,
       budget: { limit: state.budget?.cost_limit_usd ?? null, spent: state.budget?.cost_spent_usd ?? null },

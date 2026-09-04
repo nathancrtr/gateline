@@ -12,6 +12,7 @@
 // territory, not this file's.
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import type { CodeTreeCause } from './code-tree.ts'
 import { Git } from './git.ts'
 
 export interface EngineHealth {
@@ -42,6 +43,10 @@ export interface EngineHealth {
   codeHead?: string
   codeState?: 'fresh' | 'superseded-pending' | 'paused'
   codeReason?: string
+  /** The monitor's `CodeTreeStatus.cause`, present only while paused (#222) — what a viewer keys tone on. */
+  codeCause?: CodeTreeCause
+  /** True while a dirty tree is also holding back a clean fast-forward the engine would otherwise restart onto (#222). */
+  codeUpgradeBlocked?: boolean
 }
 
 /** Grace beyond the expected cadence before a heartbeat reads as stale. */

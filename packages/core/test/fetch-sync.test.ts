@@ -1,11 +1,11 @@
 // Remote sync (hosted cockpit): a clone polls origin, remote runs appear,
 // clean local branches fast-forward, unpushed local decisions survive.
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Git, LocalGitSource, loadSources } from '../src/index.ts'
-import { dropFixture, makeFixture, type FixtureContext } from './fixture.helper.ts'
+import { dropDir, dropFixture, makeFixture, type FixtureContext } from './fixture.helper.ts'
 
 let upstream: FixtureContext
 let scratch: string
@@ -27,7 +27,7 @@ beforeEach(async () => {
 })
 afterEach(async () => {
   await dropFixture(upstream)
-  await rm(scratch, { recursive: true, force: true })
+  await dropDir(scratch)
 })
 
 /** A branch run in the fixture whose state parses (bad-state exists on purpose). */

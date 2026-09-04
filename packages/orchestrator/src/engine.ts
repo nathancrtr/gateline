@@ -15,7 +15,7 @@ import { observeRun, parseLedger, type RunObservation } from './observe.ts'
 import { promptBody } from './prompts.ts'
 import { resolveModel, type Registry } from './registry.ts'
 import type { Dispatcher, DispatchOutcome } from './seam.ts'
-import { ensureRunCheckout, ensureTaskCheckout, foldHarvestBranch, foldTaskBranch, isPlanDefect, reapTaskBranches, removeRunCheckout, type TaskCheckout } from './workspace.ts'
+import { ensureRunCheckout, ensureTaskCheckout, foldHarvestBranch, foldTaskBranch, checkoutHeldReason, heldCheckout, isPlanDefect, reapTaskBranches, removeRunCheckout, type TaskCheckout } from './workspace.ts'
 
 export interface EngineConfig {
   repoDir: string
@@ -142,7 +142,7 @@ const ensuredDraftPrs = new Map<string, string>()
 const reapedTaskBranches = new Set<string>()
 
 /** Rules that hold a dispatch back without writing anything — see `Deferral`. */
-const DEFERRAL_RULES = new Set(['MC', 'HB'])
+const DEFERRAL_RULES = new Set(['MC', 'HB', 'CH'])
 
 /** The host window's spend as `tick` measures it once per pass (#97). */
 interface HostProjection {
@@ -438,11 +438,14 @@ export class Engine {
       // runs before the budget guards: a run this tick refuses outright must
       // not spend headroom, or reserve a slot, on work it will never start.
       const live = await this.landedGuard(ref, action)
+      // A held checkout is probed next, for the same reason: a dispatch that
+      // cannot start must reserve neither a slot nor budget headroom.
+      const free = await this.checkoutGuard(ref, live)
       // Concurrency is checked before the budget guards, not after: a
       // dispatch this tick will not start must not add its estimate to the
       // host projection hostGuards accumulates across runs, or a deferral
       // here would spend budget headroom nothing consumed.
-      const admitted = this.concurrencyGuard(ref, live)
+      const admitted = this.concurrencyGuard(ref, free)
       const final = this.hostGuards(obs, admitted, host)
       if (final.kind === 'rest' && DEFERRAL_RULES.has(final.rule)) {
         const prior = this.deferred.get(ref.slug)
@@ -487,6 +490,33 @@ export class Engine {
     this.log(`${ref.slug}: ${why}`)
     if (free <= 0) return { kind: 'rest', rule: 'MC', why }
     return { ...action, dispatches: action.dispatches.slice(0, free), why: `${action.why} (${why})` }
+  }
+
+  /**
+   * Held-checkout guard (#154, rule CH). The run branch checked out somewhere
+   * the orchestrator does not own — a maintainer's worktree — is a standing
+   * condition of the host, not a defect of the role: the workspace preflight
+   * refuses it (`CheckoutHeldError`), and a retry against it cannot succeed
+   * until the human closes that checkout. Before this guard the refusal
+   * arrived *after* the intent commit, so it was metered, counted as a
+   * failure, paired with whatever had failed before, and escalated as
+   * `<role> failed twice` — an environmental conflict framed as the agent
+   * being broken, with the remedy cut off by the 120-character truncation.
+   *
+   * Probed before the intent is committed, and deferred like the resource
+   * cap: nothing written, no ledger entry, no retry spent, re-derived once
+   * the checkout is released. The heartbeat carries the condition, remedy
+   * first, for Gatehouse's engine chip. A dispatcher that manages its own
+   * workspace never touches a local checkout, so it is never held here.
+   */
+  private async checkoutGuard(ref: RunRef, action: DerivedAction): Promise<DerivedAction> {
+    if (action.kind !== 'dispatch') return action
+    if (this.cfg.dispatcher.managesOwnWorkspace === true) return action
+    const held = await heldCheckout(this.cfg.repoDir, ref.branch).catch(() => null)
+    if (held === null) return action
+    const why = `dispatch blocked: ${checkoutHeldReason(ref.branch, held)}; re-derived once it is released`
+    this.log(`${ref.slug}: ${why}`)
+    return { kind: 'rest', rule: 'CH', why }
   }
 
   /**
@@ -799,6 +829,11 @@ export class Engine {
     const isolate = !managesOwnWorkspace && intent.role === 'implementer' && intent.task !== null
     const job = (async () => {
       let outcome: DispatchOutcome
+      // Whether the harness was ever asked to run (#155). Everything before
+      // that point — the checkout, the framework roots, the role
+      // capabilities — can fail without a token being spent, and a failure
+      // there is a refusal: $0, and not the agent's.
+      let spawned = false
       try {
         const checkout = managesOwnWorkspace
           ? null
@@ -809,6 +844,7 @@ export class Engine {
         const taskPath = taskFile?.path ?? null
         const { runs: runsRoot } = await this.source.frameworkRoots()
         const caps = await this.capabilities()
+        spawned = true
         outcome = await this.cfg.dispatcher.dispatch({
           // managesOwnWorkspace dispatchers never read cwd (they check out
           // their own workspace on the workstation) — repoDir is a harmless
@@ -873,7 +909,9 @@ export class Engine {
           }
         }
       } catch (e) {
-        outcome = { ok: false, costUsd: null, tokensIn: null, tokensOut: null, error: (e as Error).message }
+        const refused = !spawned
+        outcome = { ok: false, costUsd: refused ? 0 : null, tokensIn: null, tokensOut: null, error: (e as Error).message, refused }
+        if (refused) this.log(`${ref.slug}: ${intent.role} dispatch refused before spawn — ${(e as Error).message}`)
       }
       await this.closeDispatch(ref, intent, outcome, openedAt)
     })()
@@ -908,7 +946,13 @@ export class Engine {
     openedAt?: string,
   ): Promise<void> {
     const estimate = this.estimates()[intent.role] ?? DEFAULT_ESTIMATE_USD
-    const cost = outcome.costUsd ?? this.computeCost(intent.role, outcome) ?? estimate
+    // Two failure timings, two honest costs (#155). Launched then lost —
+    // crash, timeout, age-out — meters the static estimate, because tokens
+    // may genuinely have burned. Refused before spawn cost nothing, and a
+    // ledger that says otherwise is exactly the number the budget panel
+    // exists to keep straight.
+    const refused = outcome.refused === true
+    const cost = refused ? 0 : (outcome.costUsd ?? this.computeCost(intent.role, outcome) ?? estimate)
 
     // Read-and-write under the run's write lock, so two jobs finishing
     // together serialize; retry only on a CAS refusal from another writer.
@@ -930,7 +974,9 @@ export class Engine {
       const priorFailures = ledger.filter(
         (e) => e.failed && e.role === intent.role && e.task === (intent.task ?? null),
       ).length
-      const escalateNow = !outcome.ok && (outcome.fatal === true || priorFailures >= 1) // one retry, then a human (§11); fatal skips the retry
+      // One retry, then a human (§11); fatal skips the retry. A refusal is
+      // neither: the agent never ran, so nothing has been tried.
+      const escalateNow = !outcome.ok && !refused && (outcome.fatal === true || priorFailures >= 1)
 
       const result = await this.source.writeState(
         ref,
@@ -938,7 +984,8 @@ export class Engine {
           doc.setIn(['budget', 'ledger', index, 'tokens_in'], outcome.tokensIn)
           doc.setIn(['budget', 'ledger', index, 'tokens_out'], outcome.tokensOut)
           doc.setIn(['budget', 'ledger', index, 'cost_usd'], cost)
-          if (!outcome.ok) doc.setIn(['budget', 'ledger', index, 'failed'], true)
+          if (!outcome.ok && !refused) doc.setIn(['budget', 'ledger', index, 'failed'], true)
+          if (refused) doc.setIn(['budget', 'ledger', index, 'refused'], true)
           const spent = ledger.reduce((sum, e, i) => sum + (i === index ? cost : (e.cost_usd ?? 0)), 0)
           doc.setIn(['budget', 'cost_spent_usd'], round2(spent))
           if (outcome.ok && intent.role === 'implementer' && intent.task) {
@@ -958,18 +1005,23 @@ export class Engine {
             }
           }
           if (escalateNow) {
+            // Worded from the facts (#114): a fatal first failure is one
+            // attempt, not two, and saying "twice" put a second attempt in
+            // the record that the ledger could not show.
+            const attempts = priorFailures + 1
+            const how = attempts >= 2 ? 'failed twice' : 'failed on its first attempt (fatal — a retry cannot help)'
             const count = countSeq(doc, ['escalations'])
             doc.setIn(['escalations', count], {
               at: this.nowIso(),
               from_role: 'orchestrator',
-              reason: `${intent.role}${intent.task ? ` (${intent.task})` : ''} failed twice: ${truncate(outcome.error ?? 'unknown error', 120)}`,
+              reason: `${intent.role}${intent.task ? ` (${intent.task})` : ''} ${how}: ${truncate(outcome.error ?? 'unknown error', 120)}`,
               resolved: false,
             })
             doc.setIn(['phase'], 'paused')
             doc.setIn(['paused_reason'], 'escalation')
           }
         },
-        `state(${ref.slug}): metered ${intent.role}${intent.task ? `(${intent.task}${intent.round ? ` r${intent.round}` : ''})` : ''} $${cost.toFixed(2)}${outcome.ok ? '' : ` — failed: ${truncate(outcome.error ?? 'unknown', 60)}`}`,
+        `state(${ref.slug}): metered ${intent.role}${intent.task ? `(${intent.task}${intent.round ? ` r${intent.round}` : ''})` : ''} $${cost.toFixed(2)}${outcome.ok ? '' : ` — ${refused ? 'refused' : 'failed'}: ${truncate(outcome.error ?? 'unknown', 60)}`}`,
       )
       if (result.ok && result.pushFailed && this.stalePush(result.pushFailed)) {
         // #103: the closing commit carries real usage — never discard it
@@ -983,7 +1035,7 @@ export class Engine {
       if (result.ok) {
         if (result.pushFailed) this.notePushFailure(ref, result.pushFailed)
         else this.notePushAccepted(ref.branch)
-        this.log(`${ref.slug}: metered ${intent.role} $${cost.toFixed(2)} ${outcome.ok ? 'ok' : `FAILED (${outcome.error})`}`)
+        this.log(`${ref.slug}: metered ${intent.role} $${cost.toFixed(2)} ${outcome.ok ? 'ok' : refused ? `REFUSED (${outcome.error})` : `FAILED (${outcome.error})`}`)
         return 'done'
       }
       if (result.reason !== 'ref-moved') {

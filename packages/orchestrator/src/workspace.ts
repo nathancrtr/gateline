@@ -14,6 +14,47 @@ import { Git } from '@gateline/core/sources'
 // worktree creation so concurrent jobs don't race `git worktree add`.
 const inFlight = new Map<string, Promise<string>>()
 
+/** The marker every orchestrator-owned worktree path carries; anything else holding a run branch is someone's. */
+const OWN_MARKER = 'gateline-orchestrator'
+
+/**
+ * The run branch is checked out somewhere the orchestrator does not own — a
+ * human's working copy, most likely (#154). Dispatching an agent into it would
+ * race their edits, so the checkout is refused. Typed, because the engine has
+ * to tell this apart from an agent that failed: it is a standing condition of
+ * the host, cleared by the human closing that checkout, and a retry against
+ * it cannot succeed — so it must neither burn the one retry nor read as the
+ * role being broken.
+ */
+export class CheckoutHeldError extends Error {
+  readonly path: string
+  constructor(branch: string, path: string) {
+    super(checkoutHeldReason(branch, path))
+    this.name = 'CheckoutHeldError'
+    this.path = path
+  }
+}
+
+/** The condition in its own words, remedy first — the old message truncated to exactly the part without one. */
+export function checkoutHeldReason(branch: string, path: string): string {
+  return (
+    `run branch ${branch} is held by a checkout the orchestrator does not manage at ${path} — ` +
+    `close it (git worktree remove, or switch that checkout to another branch) or run the agent by hand`
+  )
+}
+
+/**
+ * Where `branch` is checked out outside the orchestrator's own worktrees, or
+ * null when it is free (#154). The engine probes this before committing a
+ * dispatch intent, so a held branch defers the dispatch — nothing written, no
+ * ledger entry, no retry spent — instead of failing it after the fact.
+ */
+export async function heldCheckout(repoDir: string, branch: string): Promise<string | null> {
+  const worktrees = await new Git(repoDir).worktrees()
+  const foreign = worktrees.find((w) => w.branch === `refs/heads/${branch}` && !w.path.includes(OWN_MARKER))
+  return foreign?.path ?? null
+}
+
 export function ensureRunCheckout(repoDir: string, branch: string): Promise<string> {
   const key = `${repoDir}\0${branch}`
   let pending = inFlight.get(key)
@@ -35,13 +76,13 @@ async function createRunCheckout(repoDir: string, branch: string): Promise<strin
     // Ours (this process or a crashed predecessor) — adopt it. Compare by
     // the marker directory, not exact path: macOS tmpdir() says /var/…
     // while git reports the resolved /private/var/….
-    if (existing.path.includes('gateline-orchestrator')) return existing.path
+    if (existing.path.includes(OWN_MARKER)) return existing.path
     // The branch is checked out somewhere the orchestrator does not own —
-    // likely a human's working copy. Dispatching an agent into it would race
-    // their edits; refuse and let the failure surface as an escalation.
-    throw new Error(
-      `run branch ${branch} is checked out at ${existing.path}, which the orchestrator does not manage — close that checkout or run the agent by hand`,
-    )
+    // likely a human's working copy. The engine's checkout guard normally
+    // catches this before an intent is committed; reaching here means the
+    // checkout appeared in the gap, and the typed refusal lets the close
+    // path meter nothing and count no failure (#154, #155).
+    throw new CheckoutHeldError(branch, existing.path)
   }
 
   try {
@@ -60,7 +101,7 @@ async function createRunCheckout(repoDir: string, branch: string): Promise<strin
 export async function removeRunCheckout(repoDir: string, branch: string): Promise<void> {
   const git = new Git(repoDir)
   const worktrees = await git.worktrees()
-  const mine = worktrees.find((w) => w.branch === `refs/heads/${branch}` && w.path.includes('gateline-orchestrator'))
+  const mine = worktrees.find((w) => w.branch === `refs/heads/${branch}` && w.path.includes(OWN_MARKER))
   if (mine) await git.run(['worktree', 'remove', '--force', mine.path]).catch(() => {})
 }
 

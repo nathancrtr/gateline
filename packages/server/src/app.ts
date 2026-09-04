@@ -43,6 +43,8 @@ import {
   type RunSource,
 } from '@gateline/core'
 import { GenerationCache } from './cache.ts'
+import { API_VERSION, type EngineHealthResponse } from './contract.ts'
+import { fail, respond } from './respond.ts'
 import type { DispatchOutcome, RunnerApi } from './runner-api.ts'
 import { verifySignature, type WebhookConfig } from './webhook.ts'
 
@@ -69,19 +71,19 @@ export function createApp(deps: AppDeps): Hono {
     app.post('/api/webhooks/github', async (c) => {
       const raw = await c.req.text()
       if (!verifySignature(webhook.secret, raw, c.req.header('x-hub-signature-256'))) {
-        return c.json({ error: 'invalid signature' }, 401)
+        return fail(c, 401, { error: 'invalid signature' })
       }
       try {
         JSON.parse(raw)
       } catch {
-        return c.json({ error: 'body is not JSON' }, 400)
+        return fail(c, 400, { error: 'body is not JSON' })
       }
       const event = c.req.header('x-github-event') ?? ''
       try {
         const detail = await webhook.onEvent(event, JSON.parse(raw))
-        return c.json({ ok: true, detail })
+        return respond<'POST /api/webhooks/github'>(c, { ok: true, detail })
       } catch (e) {
-        return c.json({ error: (e as Error).message }, 500)
+        return fail(c, 500, { error: (e as Error).message })
       }
     })
   }
@@ -104,40 +106,40 @@ export function createApp(deps: AppDeps): Hono {
     }
 
     app.get('/api/runner/intents', async (c) => {
-      if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401)
+      if (!authorized(c)) return fail(c, 401, { error: 'unauthorized' })
       // repoUrl rides the same response (review-03.md F6): task 04's
       // workstation agent clones from this rather than requiring
       // `--repo-url` on every invocation; null when unconfigured/
       // unresolvable, in which case the agent's `--repo-url` flag is the
       // documented fallback.
       const [intents, repoUrl] = await Promise.all([runner.listIntents(), runner.repoUrl()])
-      return c.json({ intents, repoUrl })
+      return respond<'GET /api/runner/intents'>(c, { intents, repoUrl })
     })
 
     app.post('/api/runner/claim', async (c) => {
-      if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401)
+      if (!authorized(c)) return fail(c, 401, { error: 'unauthorized' })
       let body: { key?: string }
       try {
         body = await c.req.json()
       } catch {
-        return c.json({ error: 'invalid JSON body' }, 400)
+        return fail(c, 400, { error: 'invalid JSON body' })
       }
-      if (!body.key) return c.json({ error: 'key is required' }, 400)
+      if (!body.key) return fail(c, 400, { error: 'key is required' })
       const claimed = runner.claim(body.key)
-      return c.json(claimed ? { claimed: true } : { claimed: false, reason: 'already-claimed' })
+      return respond<'POST /api/runner/claim'>(c, claimed ? { claimed: true } : { claimed: false, reason: 'already-claimed' })
     })
 
     app.post('/api/runner/report', async (c) => {
-      if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401)
+      if (!authorized(c)) return fail(c, 401, { error: 'unauthorized' })
       let body: { key?: string; outcome?: DispatchOutcome }
       try {
         body = await c.req.json()
       } catch {
-        return c.json({ error: 'invalid JSON body' }, 400)
+        return fail(c, 400, { error: 'invalid JSON body' })
       }
-      if (!body.key || !body.outcome) return c.json({ error: 'key and outcome are required' }, 400)
+      if (!body.key || !body.outcome) return fail(c, 400, { error: 'key and outcome are required' })
       const resolved = runner.report(body.key, body.outcome)
-      return c.json({ resolved })
+      return respond<'POST /api/runner/report'>(c, { resolved })
     })
   }
 
@@ -160,26 +162,16 @@ export function createApp(deps: AppDeps): Hono {
     return fromTemplate.length ? fromTemplate : BUILTIN_SECTIONS['intent-brief.md']!
   }
 
-  app.get('/api/health', (c) => c.json({ ok: true, sources: deps.sources.map((s) => s.id) }))
+  app.get('/api/health', (c) =>
+    respond<'GET /api/health'>(c, { ok: true, apiVersion: API_VERSION, sources: deps.sources.map((s) => s.id) }),
+  )
 
   // Engine liveness per source (#100): null = no co-located engine has ever
   // reported on this deployment (a viewer-only install — not an outage);
   // stale = one was configured here and has gone silent, which the UI
   // renders as an outage banner instead of "waiting on gate".
   app.get('/api/engine-health', async (c) => {
-    const out: Record<
-      string,
-      {
-        at: string
-        inFlight: number
-        pushRejections: Record<string, number>
-        stale: boolean
-        commit?: string
-        codeHead?: string
-        codeState?: 'fresh' | 'superseded-pending' | 'paused'
-        codeReason?: string
-      } | null
-    > = {}
+    const out: EngineHealthResponse['engines'] = {}
     for (const s of deps.sources) {
       const dir = (s as { dir?: string }).dir
       if (!dir) continue
@@ -197,17 +189,17 @@ export function createApp(deps: AppDeps): Hono {
           }
         : null
     }
-    return c.json({ engines: out, now: Math.floor(Date.now() / 1000) })
+    return respond<'GET /api/engine-health'>(c, { engines: out, now: Math.floor(Date.now() / 1000) })
   })
 
   app.get('/api/inbox', async (c) => {
     const { inbox } = await cache.get('portfolio', () => buildPortfolio(deps.sources))
-    return c.json({ items: inbox, now: Math.floor(Date.now() / 1000) })
+    return respond<'GET /api/inbox'>(c, { items: inbox, now: Math.floor(Date.now() / 1000) })
   })
 
   app.get('/api/runs', async (c) => {
     const { runs } = await cache.get('portfolio', () => buildPortfolio(deps.sources))
-    return c.json({ runs, now: Math.floor(Date.now() / 1000) })
+    return respond<'GET /api/runs'>(c, { runs, now: Math.floor(Date.now() / 1000) })
   })
 
   // The staging form's configuration (plan "Server routes"): per-source
@@ -220,7 +212,7 @@ export function createApp(deps: AppDeps): Hono {
         return { id: s.id, identity, briefSections: requiredBriefSections(briefTemplate), briefTemplate }
       }),
     )
-    return c.json({ sources, slugPattern: SLUG_PATTERN })
+    return respond<'GET /api/staging'>(c, { sources, slugPattern: SLUG_PATTERN })
   })
 
   // Staging a new run (R1/R4/R8): a second mutating route riding its own
@@ -239,22 +231,28 @@ export function createApp(deps: AppDeps): Hono {
     try {
       body = await c.req.json()
     } catch {
-      return c.json({ outcome: 'refused', reason: 'invalid-input', message: 'invalid JSON body' }, 400)
+      return respond<'POST /api/runs'>(c, { outcome: 'refused', reason: 'invalid-input', message: 'invalid JSON body' }, 400)
     }
 
     if (!body.slug || !body.title || !body.profile || !body.briefMarkdown || !PROFILES.includes(body.profile))
-      return c.json({ outcome: 'refused', reason: 'invalid-input', message: 'slug, title, a valid profile, and briefMarkdown are required' }, 400)
+      return respond<'POST /api/runs'>(
+        c,
+        { outcome: 'refused', reason: 'invalid-input', message: 'slug, title, a valid profile, and briefMarkdown are required' },
+        400,
+      )
 
     // Source resolution (AC1.3): named only when more than one is configured.
     let source: RunSource
     if (body.source) {
       const found = sourceById(body.source)
-      if (!found) return c.json({ outcome: 'refused', reason: 'invalid-input', message: `unknown source "${body.source}"` }, 400)
+      if (!found)
+        return respond<'POST /api/runs'>(c, { outcome: 'refused', reason: 'invalid-input', message: `unknown source "${body.source}"` }, 400)
       source = found
     } else if (deps.sources.length === 1) {
       source = deps.sources[0]!
     } else {
-      return c.json(
+      return respond<'POST /api/runs'>(
+        c,
         { outcome: 'refused', reason: 'invalid-input', message: 'source is required when more than one source is configured' },
         400,
       )
@@ -264,7 +262,8 @@ export function createApp(deps: AppDeps): Hono {
     const required = requiredBriefSections(await source.templates.read('intent-brief.md'))
     const missing = missingSections(body.briefMarkdown, required)
     if (missing.length)
-      return c.json(
+      return respond<'POST /api/runs'>(
+        c,
         {
           outcome: 'refused',
           reason: 'missing-sections',
@@ -290,30 +289,37 @@ export function createApp(deps: AppDeps): Hono {
         stagedBy: who?.name ?? '',
       })
     } catch (e) {
-      if (e instanceof ScaffoldError) return c.json({ outcome: 'refused', reason: 'invalid-input', message: e.message }, 400)
+      if (e instanceof ScaffoldError)
+        return respond<'POST /api/runs'>(c, { outcome: 'refused', reason: 'invalid-input', message: e.message }, 400)
       throw e
     }
 
     const result = await source.stageRun(scaffold, who ?? { name: '', email: '' })
     if (result.outcome === 'created') {
       cache.bump()
-      return c.json(
+      return respond<'POST /api/runs'>(
+        c,
         result.pushFailed
           ? { outcome: 'created', slug: result.slug, branch: result.branch, commit: result.commit, pushFailed: result.pushFailed }
           : { outcome: 'created', slug: result.slug, branch: result.branch, commit: result.commit },
         201,
       )
     }
-    if (result.outcome === 'exists') return c.json({ outcome: 'exists', slug: result.slug, branch: result.branch }, 200)
+    if (result.outcome === 'exists')
+      return respond<'POST /api/runs'>(c, { outcome: 'exists', slug: result.slug, branch: result.branch }, 200)
     // refused: no-identity is a 400 (nothing to retry against); slug-taken
     // and conflict are 409s naming the branch that already holds the slug.
     const status = result.reason === 'no-identity' ? 400 : 409
-    return c.json({ outcome: 'refused', reason: result.reason, message: result.message }, status)
+    return respond<'POST /api/runs'>(
+      c,
+      { outcome: 'refused', reason: result.reason, message: result.message },
+      status,
+    )
   })
 
   app.get('/api/runs/:src/:slug', async (c) => {
     const found = await findRun(c.req.param('src'), c.req.param('slug'))
-    if (!found) return c.json({ error: 'run not found' }, 404)
+    if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
     const key = `run:${ref.source}:${ref.slug}`
     const payload = await cache.get(key, async () => {
@@ -352,19 +358,19 @@ export function createApp(deps: AppDeps): Hono {
         })),
       }
     })
-    return c.json({ ...payload, now: Math.floor(Date.now() / 1000) })
+    return respond<'GET /api/runs/:src/:slug'>(c, { ...payload, now: Math.floor(Date.now() / 1000) })
   })
 
   app.get('/api/runs/:src/:slug/artifact', async (c) => {
     const path = c.req.query('path')
-    if (!path) return c.json({ error: 'path query parameter required' }, 400)
+    if (!path) return fail(c, 400, { error: 'path query parameter required' })
     const found = await findRun(c.req.param('src'), c.req.param('slug'))
-    if (!found) return c.json({ error: 'run not found' }, 404)
+    if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
     const content = await source.readArtifact(ref, path)
-    if (content === null) return c.json({ error: `no artifact at ${path}` }, 404)
+    if (content === null) return fail(c, 404, { error: `no artifact at ${path}` })
     const validation = await validateArtifact(path, content, source.templates)
-    return c.json({ path, content, validation })
+    return respond<'GET /api/runs/:src/:slug/artifact'>(c, { path, content, validation })
   })
 
   // The run lexicon (#163): verbatim R/AC/ADR definitions from this run's
@@ -372,13 +378,13 @@ export function createApp(deps: AppDeps): Hono {
   // as data because the browser must not bundle the core runtime.
   app.get('/api/runs/:src/:slug/lexicon', async (c) => {
     const found = await findRun(c.req.param('src'), c.req.param('slug'))
-    if (!found) return c.json({ error: 'run not found' }, 404)
+    if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
     const lexicon = await cache.get(`lexicon:${ref.source}:${ref.slug}`, async () => {
       const [spec, plan] = await Promise.all([source.readArtifact(ref, 'spec.md'), source.readArtifact(ref, 'plan.md')])
       return buildLexicon({ spec, plan })
     })
-    return c.json({ entries: lexicon.entries, pattern: ID_PATTERN })
+    return respond<'GET /api/runs/:src/:slug/lexicon'>(c, { entries: lexicon.entries, pattern: ID_PATTERN })
   })
 
   // Typed review reports (#214): findings, severities, verdicts and rounds,
@@ -387,7 +393,7 @@ export function createApp(deps: AppDeps): Hono {
   // committed artifact; nothing here summarizes or judges.
   app.get('/api/runs/:src/:slug/reviews', async (c) => {
     const found = await findRun(c.req.param('src'), c.req.param('slug'))
-    if (!found) return c.json({ error: 'run not found' }, 404)
+    if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
     const reports = await cache.get(`reviews:${ref.source}:${ref.slug}`, async () => {
       const artifacts = await source.listArtifacts(ref)
@@ -397,7 +403,7 @@ export function createApp(deps: AppDeps): Hono {
           .map(async (p) => parseReview(p, (await source.readArtifact(ref, p)) ?? '')),
       )
     })
-    return c.json({ reports })
+    return respond<'GET /api/runs/:src/:slug/reviews'>(c, { reports })
   })
 
   // Evidence-presence rollup (#165): which criteria the verification record
@@ -405,7 +411,7 @@ export function createApp(deps: AppDeps): Hono {
   // text in the payload is a verbatim quote from the report.
   app.get('/api/runs/:src/:slug/evidence', async (c) => {
     const found = await findRun(c.req.param('src'), c.req.param('slug'))
-    if (!found) return c.json({ error: 'run not found' }, 404)
+    if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
     const rollup = await cache.get(`evidence:${ref.source}:${ref.slug}`, async () => {
       const [spec, verification, artifacts] = await Promise.all([
@@ -420,7 +426,7 @@ export function createApp(deps: AppDeps): Hono {
       )
       return buildEvidenceRollup({ lexicon: buildLexicon({ spec }), verification, reviews })
     })
-    return c.json(rollup)
+    return respond<'GET /api/runs/:src/:slug/evidence'>(c, rollup)
   })
 
   // G1's packet (#255): requirement coverage against the plan's own mapping
@@ -429,7 +435,7 @@ export function createApp(deps: AppDeps): Hono {
   // the record, not a computed failure, and no plan is scored.
   app.get('/api/runs/:src/:slug/g1', async (c) => {
     const found = await findRun(c.req.param('src'), c.req.param('slug'))
-    if (!found) return c.json({ error: 'run not found' }, 404)
+    if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
     const packet = await cache.get(`g1:${ref.source}:${ref.slug}`, async () => {
       const [spec, plan, artifacts] = await Promise.all([
@@ -444,7 +450,7 @@ export function createApp(deps: AppDeps): Hono {
       )
       return buildG1Packet({ lexicon: buildLexicon({ spec }), plan, tasks })
     })
-    return c.json(packet)
+    return respond<'GET /api/runs/:src/:slug/g1'>(c, packet)
   })
 
   // The diff, labelled with the contact surface each work item declared (#270).
@@ -454,7 +460,7 @@ export function createApp(deps: AppDeps): Hono {
   // labels (FRONTEND.md §4.1).
   app.get('/api/runs/:src/:slug/diff', async (c) => {
     const found = await findRun(c.req.param('src'), c.req.param('slug'))
-    if (!found) return c.json({ error: 'run not found' }, 404)
+    if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
     const { text, tasks } = await cache.get(`diff:${ref.source}:${ref.slug}`, async () => {
       const [text, artifacts] = await Promise.all([source.readDiff(ref), source.listArtifacts(ref)])
@@ -466,12 +472,16 @@ export function createApp(deps: AppDeps): Hono {
       return { text, tasks }
     })
     const files = parseUnifiedDiff(text)
-    return c.json({ files, merged: ref.kind === 'default', surface: scopeDiff(files, buildTaskSet(tasks)) })
+    return respond<'GET /api/runs/:src/:slug/diff'>(c, {
+      files,
+      merged: ref.kind === 'default',
+      surface: scopeDiff(files, buildTaskSet(tasks)),
+    })
   })
 
   app.get('/api/metrics', async (c) => {
     const metrics = await cache.get('metrics', () => computeMetrics(deps.sources))
-    return c.json(metrics)
+    return respond<'GET /api/metrics'>(c, metrics)
   })
 
   // The single write path (R2). Decisions carry name+timestamp+burden as a
@@ -495,19 +505,19 @@ export function createApp(deps: AppDeps): Hono {
     try {
       body = await c.req.json()
     } catch {
-      return c.json({ error: 'invalid JSON body' }, 400)
+      return fail(c, 400, { error: 'invalid JSON body' })
     }
-    if (!body.source || !body.slug || !body.action) return c.json({ error: 'source, slug, and action are required' }, 400)
+    if (!body.source || !body.slug || !body.action) return fail(c, 400, { error: 'source, slug, and action are required' })
 
     const found = await findRun(body.source, body.slug)
-    if (!found) return c.json({ error: 'run not found' }, 404)
+    if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
 
     const who = await source.identity()
-    if (!who) return c.json({ error: 'git user.name/user.email are unset — decisions must be attributable to a named human' }, 400)
+    if (!who) return fail(c, 400, { error: 'git user.name/user.email are unset — decisions must be attributable to a named human' })
 
     const { state, error } = await source.readState(ref)
-    if (!state) return c.json({ error: `run state is malformed: ${error}` }, 409)
+    if (!state) return fail(c, 409, { error: `run state is malformed: ${error}` })
 
     // R3 backstop: the UI never renders approve on a bounced packet, but the
     // API refuses too — a malformed packet is not approvable by any client.
@@ -515,7 +525,10 @@ export function createApp(deps: AppDeps): Hono {
       const { items } = await deriveReadiness(source, ref)
       const gateItem = items.find((i) => i.kind === 'gate' && i.gate === body.gate)
       if (gateItem && !gateItem.reviewable)
-        return c.json({ error: `gate packet is malformed and was bounced: ${gateItem.problems.join('; ')}`, problems: gateItem.problems }, 422)
+        return fail(c, 422, {
+          error: `gate packet is malformed and was bounced: ${gateItem.problems.join('; ')}`,
+          problems: gateItem.problems,
+        })
     }
 
     try {
@@ -524,29 +537,36 @@ export function createApp(deps: AppDeps): Hono {
       const result = await source.writeState(ref, planned.mutate, planned.message)
       if (!result.ok) {
         const status = result.reason === 'ref-moved' ? 409 : result.reason === 'dirty-worktree' ? 423 : 400
-        return c.json({ error: result.message ?? result.reason }, status)
+        // Neither field is required by WriteResult, and `{ error: undefined }`
+        // serializes to `{}` — a client then renders "undefined" as the reason.
+        return fail(c, status, { error: result.message ?? result.reason ?? 'the write was refused' })
       }
       cache.bump()
-      return c.json({ ok: true, commit: result.commit, summary: planned.summary, note: result.message ?? null })
+      return respond<'POST /api/decisions'>(c, {
+        ok: true,
+        commit: result.commit,
+        summary: planned.summary,
+        note: result.message ?? null,
+      })
     } catch (e) {
-      if (e instanceof DecisionError) return c.json({ error: e.message }, 400)
+      if (e instanceof DecisionError) return fail(c, 400, { error: e.message })
       throw e
     }
   })
 
   app.get('/api/runs/:src/:slug/decisions', async (c) => {
     const found = await findRun(c.req.param('src'), c.req.param('slug'))
-    if (!found) return c.json({ error: 'run not found' }, 404)
+    if (!found) return fail(c, 404, { error: 'run not found' })
     const records = await cache.get(`decisions:${found.ref.source}:${found.ref.slug}`, () =>
       collectRunDecisions(found.source, found.ref),
     )
-    return c.json({ decisions: records })
+    return respond<'GET /api/runs/:src/:slug/decisions'>(c, { decisions: records })
   })
 
   // SSE: ref movement → one "change" event; clients revalidate their queries.
   app.get('/api/events', (c) => {
     const subscribe = deps.subscribe
-    if (!subscribe) return c.json({ error: 'events unavailable' }, 501)
+    if (!subscribe) return fail(c, 501, { error: 'events unavailable' })
     return new Response(
       new ReadableStream({
         start(controller) {

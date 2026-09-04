@@ -141,3 +141,37 @@ Layout: `packages/core` (schema, discovery, readiness, validation, write path,
 metrics — zero UI deps) · `packages/cli` · `packages/server` (Hono) ·
 `packages/web` (React 19 + Vite + Tailwind v4). Dependency posture is lean and
 boring; every new package needs a reason in the PR description.
+
+## The wire contract
+
+`server/src/contract.ts` is the one declaration of what the HTTP API accepts
+and returns (#317). Handlers answer through `respond<'GET /api/inbox'>(c, …)`
+or `fail(c, 404, …)`, both generic over that module, so a response body that
+drifts from its declaration fails `npm run typecheck` on the server rather than
+in a browser. `API_VERSION` rides on `GET /api/health`; bump it when a change
+here would break a client compiled against the previous one.
+
+It belongs to the server because the server owns its own wire shape. Putting it
+in `core/view-model` was considered and rejected — core describes derivations,
+not transport, and a route map there would make every consumer of core a
+consumer of the HTTP API.
+
+Gatehouse imports that module and nothing else across the workspace. Two guards
+hold the line, and they catch different failures:
+
+- `web/test/boundary.test.ts` governs what the **source** may import. The one
+  exception is ADR-6's: two named pages value-import `@gateline/core/record`
+  (browser-safe — yaml and zod, no node builtins) so the new-run form can
+  preview the exact commit the server will make. That list is enumerated;
+  growing it means editing the test on purpose.
+- `web/scripts/check-bundle.mjs` runs after `vite build` and reads the **built
+  output**, failing the build if a node builtin landed in it. Its own patterns
+  are tested (`web/test/bundle-guard.test.ts`) because the first draft matched
+  `node:` loosely and fired on minified object literals — a guard that cries
+  wolf gets deleted, and one that matches nothing passes forever.
+
+`@gateline/core` and `@gateline/server` are **dev**Dependencies of `web` on
+purpose: web takes types from them, which erase at build, plus the record-layer
+values Vite bundles into the SPA. Nothing is resolved from `node_modules` at
+runtime — the browser loads one self-contained bundle — so they are build
+inputs, not runtime dependencies.

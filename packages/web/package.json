@@ -6,8 +6,9 @@
   "description": "The gate frontend SPA: inbox, portfolio, run detail, gate cards, metrics.",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -p tsconfig.json && vite build",
-    "preview": "vite preview"
+    "build": "tsc -p tsconfig.json && vite build && node scripts/check-bundle.mjs",
+    "preview": "vite preview",
+    "check-bundle": "node scripts/check-bundle.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.80.0",
@@ -19,6 +20,7 @@
   },
   "devDependencies": {
     "@gateline/core": "*",
+    "@gateline/server": "*",
     "@tailwindcss/vite": "^4.1.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",

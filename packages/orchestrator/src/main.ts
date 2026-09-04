@@ -185,7 +185,10 @@ program
   .description('run a scheduled sweep now, ignoring dueness (the open-sweep and same-day guards still apply)')
   .action(async (role: string) => {
     const opened = await open()
-    const { scheduler } = await buildEngine(opened)
+    const { engine, scheduler } = await buildEngine(opened)
+    // The open-sweep and same-day guards read remote-tracking refs (#273), so
+    // a forced sweep owns its freshness the way a one-shot tick does.
+    await engine.syncFromRemote()
     const outcomes = await scheduler.tick({ force: role })
     const mine = outcomes.filter((s) => s.role === role)
     if (mine.length === 0) {

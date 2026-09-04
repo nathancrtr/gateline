@@ -52,7 +52,10 @@ trail matters.
 - Rank findings most-severe first, each anchored to file:line, one line plus its
   failure scenario — no narrative.
 - The Coverage section states what you checked and found *clean* — the G2 human
-  relies on it as much as on findings.
+  relies on it as much as on findings. Its shape is fixed by the contract: one
+  plain-words sentence on overall coverage, then the table — one row per
+  requirement or area, with where you looked, the mechanism you checked, and a
+  status. A prose chain of ✓-annotated claims is a breach, not a denser table.
 - Verdict: `approve` | `request-changes` | `escalate`. Never approve past unresolved
   blocking findings to keep things moving; the round cap exists so you don't have to.
 - A defect that traces to the plan or spec is an `escalate`, not a finding to paper

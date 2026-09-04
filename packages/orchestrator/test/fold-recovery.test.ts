@@ -1,14 +1,14 @@
-// The fold's failure record: what it says went wrong (#223), what it does
-// about dirt an obedient implementer leaves behind (#224), and what survives
-// a fold that did not land (#225). Real git throughout — the whole subject is
-// what `git rebase` actually does, so stubbing it would test the assumption
-// that was the bug.
+// The fold's record: what it rescues before it discards anything (#184), what
+// it says went wrong (#223), what it does about dirt an obedient implementer
+// leaves behind (#224), and what survives a fold that did not land (#225).
+// Real git throughout — the whole subject is what `git rebase` actually does,
+// so stubbing it would test the assumption that was the bug.
 import { execFileSync } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { ensureTaskCheckout, foldTaskBranch, isPlanDefect, reapTaskBranches } from '../src/workspace.ts'
+import { ensureTaskCheckout, foldTaskBranch, isPlanDefect, reapTaskBranches, type TaskHarvest } from '../src/workspace.ts'
 
 const dirs: string[] = []
 
@@ -42,11 +42,98 @@ function commitOnRun(dir: string, file: string, body: string, message: string): 
 
 const fileOnRun = (dir: string, file: string): string => git(dir, ['show', `run/toy:${file}`])
 
+const subjects = (dir: string): string[] => git(dir, ['log', '--format=%s', 'run/toy']).trim().split('\n')
+
+/** The task context the engine passes down from `obs.taskFiles` and `cfg.identity`. */
+const harvestFor = (surface: string[]): TaskHarvest => ({
+  slug: 'toy',
+  task: '01-toy',
+  round: 1,
+  surface,
+  identity: { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' },
+})
+
 afterEach(() => {
   for (const dir of dirs.splice(0)) {
     git(dir, ['worktree', 'prune']).toString()
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+describe('fold harvest: the surface is rescued before anything is discarded (#184)', () => {
+  it('harvests a file the implementer left untracked inside its surface, and folds it', async () => {
+    const dir = makeRepo()
+    const checkout = await ensureTaskCheckout(dir, 'run/toy', '01-toy')
+
+    // The implementer produced its work and never `git add`ed it. Nothing
+    // here blocks a rebase, which is exactly why it used to be lost in
+    // silence: the fold's `finally` force-removes the worktree.
+    mkdirSync(join(checkout.path, 'src'), { recursive: true })
+    writeFileSync(join(checkout.path, 'src/new.ts'), 'export const b = 1\n')
+
+    // The second surface entry is prose, not a path — task YAMLs carry those.
+    // A pathspec matching nothing is ignored, never an error.
+    const result = await foldTaskBranch(dir, 'run/toy', checkout, harvestFor(['src/', '(merge commit only — entire tree)']))
+
+    expect(result.ok).toBe(true)
+    expect(result.harvested).toEqual(['src/new.ts'])
+    expect(result.message).toContain('harvested in surface: src/new.ts')
+    expect(fileOnRun(dir, 'src/new.ts')).toBe('export const b = 1\n')
+
+    // The closed commit grammar: the `harvested` verb, under the bot identity.
+    expect(subjects(dir)[0]).toBe('state(toy): harvested implementer(01-toy r1) artifacts')
+    expect(git(dir, ['log', '-1', '--format=%an', 'run/toy']).trim()).toBe('gateline-orchestrator')
+  })
+
+  it('harvests an in-surface edit to a tracked file rather than discarding it as dirt', async () => {
+    const dir = makeRepo()
+    const checkout = await ensureTaskCheckout(dir, 'run/toy', '01-toy')
+    writeFileSync(join(checkout.path, 'app.ts'), 'export const a = 9\n')
+
+    const result = await foldTaskBranch(dir, 'run/toy', checkout, harvestFor(['app.ts']))
+
+    // #224 would have reset --hard this away to let the rebase start; in
+    // surface, it is the task's product and belongs on the run branch.
+    expect(result.ok).toBe(true)
+    expect(result.harvested).toEqual(['app.ts'])
+    expect(result.discarded).toEqual([])
+    expect(fileOnRun(dir, 'app.ts')).toBe('export const a = 9\n')
+  })
+
+  it('names an untracked file outside the surface instead of harvesting it', async () => {
+    const dir = makeRepo()
+    const checkout = await ensureTaskCheckout(dir, 'run/toy', '01-toy')
+    writeFileSync(join(checkout.path, 'app.ts'), 'export const a = 7\n')
+    git(checkout.path, ['add', 'app.ts'])
+    git(checkout.path, ['commit', '-q', '-m', 'task 01: bump a'])
+    writeFileSync(join(checkout.path, 'probe.tsx'), 'scratch\n')
+
+    const result = await foldTaskBranch(dir, 'run/toy', checkout, harvestFor(['app.ts']))
+
+    expect(result.ok).toBe(true)
+    expect(result.harvested).toEqual([])
+    expect(result.leftBehind).toEqual(['probe.tsx'])
+    expect(result.message).toContain('left behind (untracked, outside surface): probe.tsx')
+    // Named, and still dropped: the worktree removal takes it, and it never
+    // reaches the run branch.
+    expect(() => fileOnRun(dir, 'probe.tsx')).toThrow()
+    expect(existsSync(checkout.path)).toBe(false)
+  })
+
+  it('writes no harvest commit when nothing in surface is uncommitted', async () => {
+    const dir = makeRepo()
+    const checkout = await ensureTaskCheckout(dir, 'run/toy', '01-toy')
+    writeFileSync(join(checkout.path, 'app.ts'), 'export const a = 8\n')
+    git(checkout.path, ['add', '-A'])
+    git(checkout.path, ['commit', '-q', '-m', 'task 01: committed its own work'])
+
+    const result = await foldTaskBranch(dir, 'run/toy', checkout, harvestFor(['app.ts']))
+
+    expect(result.ok).toBe(true)
+    expect(result.harvested).toEqual([])
+    expect(result.message).not.toContain('harvested')
+    expect(subjects(dir)).toEqual(['task 01: committed its own work', 'root'])
+  })
 })
 
 describe('fold hygiene: out-of-surface dirt (#224)', () => {

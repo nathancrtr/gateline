@@ -656,7 +656,8 @@ export class Engine {
           : isolate
             ? await ensureTaskCheckout(this.cfg.repoDir, ref.branch, intent.task!)
             : { path: await ensureRunCheckout(this.cfg.repoDir, ref.branch), branch: ref.branch }
-        const taskPath = intent.task ? (obs.taskFiles.get(intent.task)?.path ?? null) : null
+        const taskFile = intent.task ? (obs.taskFiles.get(intent.task) ?? null) : null
+        const taskPath = taskFile?.path ?? null
         const { runs: runsRoot } = await this.source.frameworkRoots()
         const caps = await this.capabilities()
         outcome = await this.cfg.dispatcher.dispatch({
@@ -673,7 +674,20 @@ export class Engine {
           round: intent.round,
         })
         if (isolate) {
-          const fold = await this.withLock(ref.slug, () => foldTaskBranch(this.cfg.repoDir, ref.branch, checkout as TaskCheckout))
+          // The fold's own harvest (#184): the isolated counterpart of the
+          // harvest-commit below. The task's declared file-contact surface is
+          // what scopes it — the isolated equivalent of `harvestPathspecs` —
+          // so work the implementer left uncommitted inside its own surface
+          // is committed before the fold discards anything and before the
+          // task worktree is force-removed.
+          const harvest = {
+            slug: ref.slug,
+            task: intent.task!,
+            round: intent.round,
+            surface: taskFile?.surface ?? [],
+            identity: this.cfg.identity,
+          }
+          const fold = await this.withLock(ref.slug, () => foldTaskBranch(this.cfg.repoDir, ref.branch, checkout as TaskCheckout, harvest))
           if (outcome.ok && !fold.ok) {
             outcome = { ok: false, costUsd: outcome.costUsd, tokensIn: outcome.tokensIn, tokensOut: outcome.tokensOut, error: fold.message, fatal: isPlanDefect(fold) }
           }

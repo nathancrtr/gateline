@@ -2,8 +2,8 @@
 // converge with no duplicate) and per-task worktree isolation for parallel
 // implementers (the wordfreq retro fix), including the fold-conflict → plan
 // defect escalation.
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { LocalGitSource } from '@gateline/core'
 import { Engine } from '../src/engine.ts'
@@ -67,7 +67,12 @@ describe('crash recovery (M4 drill)', () => {
 })
 
 describe('per-task worktree isolation (M4, wordfreq retro fix)', () => {
-  function repoThroughG1(surfaces: Record<string, string>) {
+  /**
+   * `leaveUncommitted` plays #184's implementer: it writes its surface file
+   * and never commits it, so only the fold's harvest can save the work from
+   * the task worktree's teardown.
+   */
+  function repoThroughG1(surfaces: Record<string, string>, leaveUncommitted = false) {
     const { dir, clock } = makeToyRepo()
     const observed: Record<string, boolean> = {}
     const dispatcher = new FakeDispatcher((req) => {
@@ -89,12 +94,16 @@ describe('per-task worktree isolation (M4, wordfreq retro fix)', () => {
           for (const [other, otherSurface] of Object.entries(surfaces)) {
             if (other !== task) observed[`${task}-saw-${other}`] = existsSync(join(req.cwd, otherSurface))
           }
-          agentCommit(
-            req.cwd,
-            clock,
-            { [surface]: `# built by ${task}\n`, [`runs/toy/tasks/${task}.yaml`]: taskYaml(task, surface, [], 'done') },
-            `toy: task ${task} r1`,
-          )
+          const bookkeeping = { [`runs/toy/tasks/${task}.yaml`]: taskYaml(task, surface, [], 'done') }
+          if (leaveUncommitted) {
+            // After the bookkeeping commit, so it stays genuinely uncommitted
+            // (`agentCommit` stages the whole tree).
+            agentCommit(req.cwd, clock, bookkeeping, `toy: task ${task} r1`)
+            mkdirSync(dirname(join(req.cwd, surface)), { recursive: true })
+            writeFileSync(join(req.cwd, surface), `# built by ${task}\n`)
+          } else {
+            agentCommit(req.cwd, clock, { [surface]: `# built by ${task}\n`, ...bookkeeping }, `toy: task ${task} r1`)
+          }
           return {}
         }
         case 'reviewer': {
@@ -135,6 +144,26 @@ describe('per-task worktree isolation (M4, wordfreq retro fix)', () => {
     expect(await git.show('run/toy', 'src/b.py')).toContain('02-b')
     // No task branches or worktrees left behind.
     expect(await git.forEachRef(['refs/heads/run/toy--task/*'])).toHaveLength(0)
+  })
+
+  it('the fold harvests what an implementer left uncommitted inside its own surface (#184)', { timeout: 90_000 }, async () => {
+    const { dir, engine } = repoThroughG1({ '01-a': 'src/a.py' }, true)
+    await reconcile(engine)
+    await humanDecide(dir, { action: 'approve', gate: 'G0', burden: 'confirmation' })
+    await reconcile(engine)
+    await humanDecide(dir, { action: 'approve', gate: 'G1', burden: 'confirmation' })
+    await reconcile(engine)
+
+    // The engine read the task's file_contact_surface out of its YAML and
+    // handed it to the fold as the harvest's scope, so the uncommitted work
+    // reached the run branch instead of dying with the task worktree.
+    const source = new LocalGitSource('check', dir)
+    expect(await source.git.show('run/toy', 'src/a.py')).toContain('01-a')
+    const harvests = log(dir).filter((l) => l.includes('harvested implementer(01-a'))
+    expect(harvests).toHaveLength(1)
+    expect(harvests[0]!.startsWith(`${BOT.name}|`)).toBe(true)
+    const { state } = await source.readState(toyRef(dir))
+    expect(state!.tasks.map((t) => t.status)).toEqual(['review-approved'])
   })
 
   it('a fold conflict escalates as a plan defect (declared-disjoint surfaces that were not)', { timeout: 90_000 }, async () => {

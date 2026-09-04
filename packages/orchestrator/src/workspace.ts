@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto'
 import { access } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { Identity } from '@gateline/core/record'
 import { Git } from '@gateline/core/sources'
 
 // Parallel dispatches for one run share its checkout; single-flight the
@@ -119,6 +120,10 @@ export interface FoldResult {
   retained: string | null
   /** Uncommitted tracked paths discarded to let the rebase start (#224); never silently dropped. */
   discarded: string[]
+  /** Paths committed onto the task branch by the pre-fold surface harvest (#184). */
+  harvested: string[]
+  /** Untracked paths outside the surface that the worktree removal drops (#184); named, never harvested. */
+  leftBehind: string[]
 }
 
 /** Only a plan defect is worth burning a human's escalation review on; everything else is retryable. */
@@ -150,34 +155,136 @@ async function dirtyTrackedPaths(wtGit: Git): Promise<string[]> {
 }
 
 /**
+ * Untracked paths in a worktree, as git collapses them: an entirely untracked
+ * directory is reported as the directory (`node_modules/`), not as its
+ * thousands of files. That collapsing is why the default untracked mode is
+ * used rather than `-uall` — this list goes into a human-read message.
+ */
+async function untrackedPaths(wtGit: Git): Promise<string[]> {
+  const out = await wtGit.run(['status', '--porcelain']).catch(() => '')
+  return out
+    .split('\n')
+    .filter((line) => line.startsWith('??'))
+    .map((line) => line.slice(3).trim())
+    .filter(Boolean)
+}
+
+/**
+ * What the pre-fold harvest needs to know about the dispatch it is rescuing
+ * (#184): which files the task was allowed to touch, and who to commit as.
+ * Optional on `foldTaskBranch` so a caller with no task context (the tests'
+ * direct fold, a future non-task fold) still folds — it simply harvests
+ * nothing.
+ */
+export interface TaskHarvest {
+  slug: string
+  task: string
+  round: number | null
+  /** The task's `file_contact_surface`, used verbatim as git pathspecs. */
+  surface: string[]
+  identity: Identity
+}
+
+/**
+ * Commit everything uncommitted inside the task's declared file-contact
+ * surface onto the task branch, before the fold discards anything and before
+ * the `finally` force-removes the worktree (#184). This is `Engine.harvest`
+ * (#182) applied to the isolated path: same bot identity, same `harvested`
+ * verb, same commit-message shape, and the same per-pathspec `git add -A`
+ * (run "runner-agent" review-04.md round-2 F10 — one combined add is
+ * all-or-nothing, so a surface entry matching nothing would silently drop the
+ * entries beside it). A surface entry that matches nothing is not an error:
+ * entries are sometimes prose rather than paths.
+ *
+ * The index is emptied first so the harvest is exactly the surface. An
+ * implementer may have staged out-of-surface changes without committing them,
+ * and those are #224's business — discarded and named — not the harvest's.
+ *
+ * Returns the paths committed; empty when nothing in scope was uncommitted,
+ * which is the normal case for an implementer that committed its own work.
+ */
+async function harvestSurface(wtGit: Git, harvest: TaskHarvest): Promise<string[]> {
+  if (harvest.surface.length === 0) return []
+  await wtGit.run(['reset', '-q']).catch(() => {})
+  for (const pathspec of harvest.surface) {
+    await wtGit.run(['add', '-A', '--', pathspec]).catch(() => {})
+  }
+  const staged = await wtGit.run(['diff', '--cached', '--name-only']).catch(() => '')
+  const paths = staged.split('\n').map((l) => l.trim()).filter(Boolean)
+  if (paths.length === 0) return []
+  const what = `${harvest.task}${harvest.round ? ` r${harvest.round}` : ''}`
+  await wtGit.run([
+    '-c',
+    `user.name=${harvest.identity.name}`,
+    '-c',
+    `user.email=${harvest.identity.email}`,
+    'commit',
+    '-m',
+    `state(${harvest.slug}): harvested implementer(${what}) artifacts`,
+  ])
+  return paths
+}
+
+/**
  * Serial fold-back: rebase the task branch onto the current run tip, then
  * CAS the run branch to the rebased head. Mechanical while file-contact
  * surfaces are disjoint (the Architect guarantees this); a genuine content
  * conflict is a plan defect and escalates. Call under the engine's per-run
  * write lock.
  *
- * Two things happen around the rebase that the failure record depends on.
- * Uncommitted tracked changes are cleared first (#224): an implementer that
+ * Three things happen around the rebase that the fold's record depends on.
+ *
+ * First, the surface harvest (#184). The worktree is force-removed in the
+ * `finally` below, so anything the implementer left uncommitted dies there —
+ * tracked or not. Whatever falls inside the task's declared file-contact
+ * surface is the task's product by definition, so it is committed onto the
+ * task branch under the bot identity before anything else runs, exactly as
+ * `Engine.harvest` (#182) rescues a non-isolated dispatch from the same
+ * teardown.
+ *
+ * Second, what the harvest did not take is cleared (#224). An implementer that
  * runs the suite in a fresh worktree must `npm install` to do it, which
  * rewrites the lockfile — a file in no task's contact surface, so an obedient
- * implementer leaves it uncommitted and its own work becomes unfoldable. What
- * it *did* produce it committed, so what is left over is by definition not the
- * task's product; it is discarded and every path named in the result. And the
- * task branch now survives a failed fold (#225), matching the position
+ * implementer leaves it uncommitted and its own work becomes unfoldable. Those
+ * tracked paths are discarded so the rebase can start, and every one is named
+ * in the result. Untracked paths outside the surface do not block a rebase and
+ * are not harvested, but the worktree removal drops them too, so they are named
+ * as well: nothing is destroyed without being said out loud.
+ *
+ * Third, the task branch survives a failed fold (#225), matching the position
  * `foldHarvestBranch` has held since review-04.md round-2 F9.
+ *
+ * Call under the engine's per-run write lock — the harvest commit runs under
+ * that lock too.
  */
-export async function foldTaskBranch(repoDir: string, runBranch: string, checkout: TaskCheckout): Promise<FoldResult> {
+export async function foldTaskBranch(
+  repoDir: string,
+  runBranch: string,
+  checkout: TaskCheckout,
+  harvest?: TaskHarvest,
+): Promise<FoldResult> {
   const git = new Git(repoDir)
   const wtGit = new Git(checkout.path)
   const retained = checkout.branch
-  const discarded = await dirtyTrackedPaths(wtGit)
-  if (discarded.length > 0) await wtGit.run(['reset', '--hard', 'HEAD']).catch(() => {})
+  let harvested: string[] = []
+  let discarded: string[] = []
+  let leftBehind: string[] = []
 
   const attempt = async (): Promise<FoldResult> => {
-    const dirt = discarded.length > 0 ? ` (discarded uncommitted: ${discarded.join(', ')})` : ''
+    harvested = harvest ? await harvestSurface(wtGit, harvest) : []
+    discarded = await dirtyTrackedPaths(wtGit)
+    leftBehind = await untrackedPaths(wtGit)
+    if (discarded.length > 0) await wtGit.run(['reset', '--hard', 'HEAD']).catch(() => {})
+
+    const notes = [
+      harvested.length > 0 ? `harvested in surface: ${harvested.join(', ')}` : null,
+      discarded.length > 0 ? `discarded uncommitted: ${discarded.join(', ')}` : null,
+      leftBehind.length > 0 ? `left behind (untracked, outside surface): ${leftBehind.join(', ')}` : null,
+    ].filter((n): n is string => n !== null)
+    const dirt = notes.length > 0 ? ` (${notes.join('; ')})` : ''
     for (let i = 0; i < 3; i++) {
       const runTip = await git.revParse(`refs/heads/${runBranch}`)
-      if (!runTip) return { ok: false, cause: 'infra', message: `${runBranch} disappeared mid-fold`, retained, discarded }
+      if (!runTip) return { ok: false, cause: 'infra', message: `${runBranch} disappeared mid-fold`, retained, discarded, harvested, leftBehind }
       try {
         await wtGit.run(['rebase', runTip])
       } catch (e) {
@@ -190,23 +297,31 @@ export async function foldTaskBranch(repoDir: string, runBranch: string, checkou
             : cause === 'dirty'
               ? `could not start — the worktree still has uncommitted tracked changes`
               : `failed for a reason that is neither a conflict nor a dirty worktree`
-        return { ok: false, cause, message: `rebase of ${checkout.branch} onto ${runBranch} ${why}${dirt}: ${raw}`, retained, discarded }
+        return {
+          ok: false,
+          cause,
+          message: `rebase of ${checkout.branch} onto ${runBranch} ${why}${dirt}: ${raw}`,
+          retained,
+          discarded,
+          harvested,
+          leftBehind,
+        }
       }
       const folded = await wtGit.revParse('HEAD')
-      if (!folded) return { ok: false, cause: 'infra', message: 'rebased head unreadable', retained, discarded }
+      if (!folded) return { ok: false, cause: 'infra', message: 'rebased head unreadable', retained, discarded, harvested, leftBehind }
       if (await git.updateRefCAS(`refs/heads/${runBranch}`, folded, runTip)) {
-        return { ok: true, cause: null, message: `folded ${checkout.branch} into ${runBranch}${dirt}`, retained: null, discarded }
+        return { ok: true, cause: null, message: `folded ${checkout.branch} into ${runBranch}${dirt}`, retained: null, discarded, harvested, leftBehind }
       }
       // The run branch moved (another fold, a human decision): rebase again.
     }
-    return { ok: false, cause: 'contention', message: 'fold lost CAS 3× — will re-derive', retained, discarded }
+    return { ok: false, cause: 'contention', message: 'fold lost CAS 3× — will re-derive', retained, discarded, harvested, leftBehind }
   }
 
   let result: FoldResult
   try {
     result = await attempt()
   } catch (e) {
-    result = { ok: false, cause: 'infra', message: `fold of ${checkout.branch} failed: ${(e as Error).message}`, retained, discarded }
+    result = { ok: false, cause: 'infra', message: `fold of ${checkout.branch} failed: ${(e as Error).message}`, retained, discarded, harvested, leftBehind }
   } finally {
     // The worktree always goes: it holds a lock and a tmpdir path, and its
     // commits live on the branch regardless. The branch goes only once the
@@ -272,10 +387,10 @@ export async function foldHarvestBranch(
   try {
     await git.run(['fetch', 'origin', `+refs/heads/${harvest.branch}:${fetchRef}`])
   } catch (e) {
-    return { ok: false, cause: 'infra', message: `fetch of harvest branch ${harvest.branch} failed: ${(e as Error).message}`, retained, discarded: [] }
+    return { ok: false, cause: 'infra', message: `fetch of harvest branch ${harvest.branch} failed: ${(e as Error).message}`, retained, discarded: [], harvested: [], leftBehind: [] }
   }
   const fetchedTip = await git.revParse(fetchRef)
-  if (!fetchedTip) return { ok: false, cause: 'infra', message: `harvest branch ${harvest.branch} not found on origin after fetch`, retained, discarded: [] }
+  if (!fetchedTip) return { ok: false, cause: 'infra', message: `harvest branch ${harvest.branch} not found on origin after fetch`, retained, discarded: [], harvested: [], leftBehind: [] }
 
   if (await git.revParse(`refs/heads/${localBranch}`)) await git.run(['branch', '-D', localBranch]).catch(() => {})
   await git.run(['worktree', 'prune']).catch(() => {})
@@ -287,7 +402,7 @@ export async function foldHarvestBranch(
     result = await (async (): Promise<FoldResult> => {
       for (let attempt = 0; attempt < 3; attempt++) {
         const runTip = await git.revParse(`refs/heads/${runBranch}`)
-        if (!runTip) return { ok: false, cause: 'infra', message: `${runBranch} disappeared mid-fold`, retained, discarded: [] }
+        if (!runTip) return { ok: false, cause: 'infra', message: `${runBranch} disappeared mid-fold`, retained, discarded: [], harvested: [], leftBehind: [] }
         try {
           // Explicit --onto (rather than foldTaskBranch's single-arg rebase):
           // the harvest branch's real parent (harvest.base) is known exactly,
@@ -309,16 +424,18 @@ export async function foldHarvestBranch(
             message: `rebase of harvest branch ${harvest.branch} onto ${runBranch} ${why}: ${raw}`,
             retained,
             discarded: [],
+            harvested: [],
+            leftBehind: [],
           }
         }
         const folded = await wtGit.revParse('HEAD')
-        if (!folded) return { ok: false, cause: 'infra', message: 'rebased head unreadable', retained, discarded: [] }
+        if (!folded) return { ok: false, cause: 'infra', message: 'rebased head unreadable', retained, discarded: [], harvested: [], leftBehind: [] }
         if (await git.updateRefCAS(`refs/heads/${runBranch}`, folded, runTip)) {
-          return { ok: true, cause: null, message: `folded harvest branch ${harvest.branch} into ${runBranch}`, retained: null, discarded: [] }
+          return { ok: true, cause: null, message: `folded harvest branch ${harvest.branch} into ${runBranch}`, retained: null, discarded: [], harvested: [], leftBehind: [] }
         }
         // The run branch moved (another fold, a human decision): rebase again.
       }
-      return { ok: false, cause: 'contention', message: 'fold lost CAS 3× — will re-derive', retained, discarded: [] }
+      return { ok: false, cause: 'contention', message: 'fold lost CAS 3× — will re-derive', retained, discarded: [], harvested: [], leftBehind: [] }
     })()
   } finally {
     await git.run(['worktree', 'remove', '--force', path]).catch(() => {})

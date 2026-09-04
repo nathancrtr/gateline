@@ -998,12 +998,15 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
  */
 function FoldedMarkdown({ content, path, audit }: { content: string; path: string; audit: string[] }) {
   if (audit.length === 0) return <Markdown sourcePath={path}>{content}</Markdown>
+  // One `.prose-artifact` wrapper for the whole artifact, however many
+  // renders it takes: the styles are descendant rules, and the DOM keeps
+  // reading as one artifact.
   return (
-    <>
+    <div className="prose-artifact">
       {splitSections(content).map((section, i) => {
         if (section.heading === null || !isAuditSection(section.heading, audit)) {
           return (
-            <Markdown key={i} sourcePath={path}>
+            <Markdown key={i} sourcePath={path} unwrapped>
               {section.headingLine ? `${section.headingLine}\n${section.body}` : section.body}
             </Markdown>
           )
@@ -1011,7 +1014,7 @@ function FoldedMarkdown({ content, path, audit }: { content: string; path: strin
         const count = itemCount(section.body)
         return (
           <details key={i} data-fold={section.heading} className="group mb-[18px]">
-            <summary className="prose-artifact cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+            <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
               <h2 className="flex flex-wrap items-baseline gap-x-3">
                 <span>
                   <span className="mr-2 inline-block text-[0.7em] text-muted transition-transform group-open:rotate-90">▶</span>
@@ -1022,11 +1025,13 @@ function FoldedMarkdown({ content, path, audit }: { content: string; path: strin
                 </span>
               </h2>
             </summary>
-            <Markdown sourcePath={path}>{section.body}</Markdown>
+            <Markdown sourcePath={path} unwrapped>
+              {section.body}
+            </Markdown>
           </details>
         )
       })}
-    </>
+    </div>
   )
 }
 

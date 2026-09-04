@@ -73,6 +73,12 @@ import { G2_COMPLETE_STATUSES, GATE_IDS, GATE_PHASES, PROFILE_GATES, PROFILE_PHA
 import type { RunObservation } from './observe.ts'
 
 export { ROUND_CAP }
+/**
+ * The reason D24 writes, and the key its resolution check matches on (#152).
+ * One constant, so the two cannot drift apart into perpetual re-escalation.
+ */
+export const VERIFIER_ESCALATION_KEY = 'verifier escalated'
+export const VERIFIER_ESCALATION_REASON = `${VERIFIER_ESCALATION_KEY} — a failure traces to the spec, plan, or gate process, not the implementation; see verification-report.md`
 export const BOUNCE_CAP = 2
 /** Conservative fallback when the registry carries no estimate for a role. */
 export const DEFAULT_ESTIMATE_USD = 5
@@ -555,12 +561,11 @@ function implementPhase(obs: RunObservation): DerivedAction {
       (e) =>
         e.resolved &&
         e.resolved_at !== null &&
-        e.reason.includes('verifier escalated') &&
+        e.reason.includes(VERIFIER_ESCALATION_KEY) &&
         verification.lastTouched !== null &&
         Date.parse(e.resolved_at) / 1000 > verification.lastTouched,
     )
-    if (!addressed)
-      return escalate('D24', 'verifier escalated — a failure traces to the spec, plan, or gate process, not the implementation; see verification-report.md', 'escalation')
+    if (!addressed) return escalate('D24', VERIFIER_ESCALATION_REASON, 'escalation')
   }
   return producerPhase(obs, 'G2')
 }

@@ -229,6 +229,15 @@ test('verification verdict (#152): the G2 surface quotes the report\'s verdict a
   const clean = page.locator('[data-evidence-rollup]').first()
   await expect(clean.locator('[data-report-verdict="pass"]')).toBeVisible()
   await expect(clean.locator('[data-not-verified]')).toHaveCount(0)
+
+  // And the verdict is on the G2 card itself, where the decision is made —
+  // not only on the report's own page.
+  await page.goto('/runs/' + sourceId() + '/g2-pending?decide=G2')
+  await expect(page.locator('[data-g2-packet] [data-report-verdict="pass"]')).toContainText('“pass”')
+
+  // A report from before the verdict line says so, rather than showing nothing.
+  await page.goto('/runs/' + sourceId() + '/forked-contract?decide=G2')
+  await expect(page.locator('[data-g2-packet] [data-report-verdict=""]')).toContainText('no overall verdict')
 })
 
 test('run lexicon (#308): the idle card takes no space, and the keyboard still opens it', async ({ page }) => {

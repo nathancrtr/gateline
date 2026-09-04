@@ -32,36 +32,10 @@ export function EvidenceRollupPanel({ src, slug }: { src: string; slug: string }
   const unknown = data.criteria.filter((c) => !c.defined)
   const uncited = defined.filter((c) => c.evidence.length === 0 && !c.result)
   const cited = defined.filter((c) => c.evidence.length > 0 || c.result)
-  // The report's own words about itself (#152): its overall verdict, and
-  // every Results row it marked as something other than verified. Quoted
-  // and attributed — the report said it — so a non-clean report is visually
-  // distinct from a clean pass without this panel judging anything.
-  const notVerified = data.criteria.filter((c) => c.result && c.result.verdict.trim().toLowerCase() !== 'verified')
-  const alarmed = data.verdict !== null && data.verdict.trim().toLowerCase() !== 'pass'
   return (
     <section className="mt-3 rounded-[5px] border border-line bg-inset px-3 py-2.5 text-xs" data-evidence-rollup>
       <p className="font-mono text-[11px] uppercase tracking-wide text-muted">Evidence citations — computed from the record</p>
-      {data.verdict !== null && (
-        <p className={`mt-1.5 ${alarmed ? 'font-semibold text-warn' : 'text-muted'}`} data-report-verdict={data.verdict}>
-          The report states its verdict: <span className="font-mono">“{data.verdict}”</span>
-        </p>
-      )}
-      {notVerified.length > 0 && (
-        <div className="mt-2" data-not-verified>
-          <p className="font-semibold text-warn">The report marks {notVerified.length === 1 ? 'one criterion' : `${notVerified.length} criteria`} as other than verified:</p>
-          <ul className="mt-1 flex flex-col gap-1">
-            {notVerified.map((c) => (
-              <li key={c.id} className="flex flex-wrap items-baseline gap-x-2">
-                <span className="font-mono font-semibold">{c.id}</span>
-                <span className="text-muted">
-                  report states: <span className="font-mono">“{c.result!.verdict}”</span>
-                  {c.result!.evidence && <> — <span className="font-mono">“{c.result!.evidence}”</span></>}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      <ReportVerdict rollup={data} />
       {uncited.length > 0 && (
         <div className="mt-2">
           <p className="font-semibold text-warn">No verification evidence cites:</p>
@@ -97,6 +71,55 @@ export function EvidenceRollupPanel({ src, slug }: { src: string; slug: string }
         </div>
       )}
     </section>
+  )
+}
+
+/** The first word of a Results verdict cell, lower-cased: `verified (with a note)` reads as `verified`. */
+const verdictWord = (cell: string) => cell.trim().split(/\s+/)[0]?.toLowerCase() ?? ''
+
+/**
+ * The report's own words about itself (#152): its overall verdict line, and
+ * every Results row whose verdict cell does not begin with "verified". Quoted
+ * and attributed — the report said it — so a non-clean report is visually
+ * distinct from a clean pass without the panel judging anything. A report
+ * with no verdict line says so too: absence is a fact of the record, and
+ * the one the approver most needs to notice on a report written today.
+ * Rendered on the G2 card and on the report's own rollup.
+ */
+export function ReportVerdict({ rollup }: { rollup: EvidenceRollup }) {
+  if (!rollup.hasVerification) return null
+  const notVerified = rollup.criteria.filter((c) => c.result && verdictWord(c.result.verdict) !== 'verified')
+  const alarmed = rollup.verdict !== null && rollup.verdict.trim().toLowerCase() !== 'pass'
+  return (
+    <div data-report-verdict-block>
+      {rollup.verdict === null ? (
+        <p className="mt-1.5 text-muted" data-report-verdict="">
+          The report states no overall verdict — written before the verdict line existed, or without it.
+        </p>
+      ) : (
+        <p className={`mt-1.5 ${alarmed ? 'font-semibold text-warn' : 'text-muted'}`} data-report-verdict={rollup.verdict}>
+          The report states its verdict: <span className="font-mono">“{rollup.verdict}”</span>
+        </p>
+      )}
+      {notVerified.length > 0 && (
+        <div className="mt-2" data-not-verified>
+          <p className="font-semibold text-warn">
+            Results rows whose verdict cell is not “verified”: {notVerified.length === 1 ? 'one criterion' : `${notVerified.length} criteria`}
+          </p>
+          <ul className="mt-1 flex flex-col gap-1">
+            {notVerified.map((c) => (
+              <li key={c.id} className="flex flex-wrap items-baseline gap-x-2">
+                <span className="font-mono font-semibold">{c.id}</span>
+                <span className="text-muted">
+                  report states: <span className="font-mono">{c.result!.verdict.trim() ? `“${c.result!.verdict}”` : '(empty cell)'}</span>
+                  {c.result!.evidence && <> — <span className="font-mono">“{c.result!.evidence}”</span></>}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -488,6 +511,9 @@ export function G2Packet({ src, slug, profile }: { src: string; slug: string; pr
   return (
     <section className={PACKET_FRAME} data-g2-packet>
       {header}
+      {/* The report's own verdict, on the card itself (#152): the fleetview-
+          design approver decided G2 without seeing two failed criteria. */}
+      <ReportVerdict rollup={rollup} />
       {/* Contracts are forkable; the parser is not the authority on them. When
           the grammar does not match, say which grammar and stand down — the
           report itself renders as its own markdown one click away. */}

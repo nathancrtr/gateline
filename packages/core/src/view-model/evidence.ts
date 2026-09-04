@@ -14,6 +14,7 @@
 // Ordering findings by the report's own severity label is quoting; computing a
 // verified/unverified ratio would not be, and is out of scope permanently.
 import { type Lexicon } from './lexicon.ts'
+import { verdictLines } from '../record/validate.ts'
 import { SEVERITY_RANK, parseReview, type ReviewFinding } from './review.ts'
 
 export interface EvidenceAnchor {
@@ -88,7 +89,6 @@ const ANY_HEADING = /^#{1,6}\s/
 const H2 = /^##\s+(.+?)\s*$/
 const FENCE = /^\s*(```|~~~)/
 const VERIFICATION = 'verification-report.md'
-const VERDICT_LINE = /^\*{2}Verdict:\*{2}\s*(.+?)\s*$/
 
 interface Line {
   text: string
@@ -135,15 +135,15 @@ export function buildEvidenceRollup(input: {
 
   let blocks = 0
   let rows = 0
-  let verdict: string | null = null
+  // The report's own verdict line, through the parser the orchestrator reads
+  // it with (#152) — the last line outside a fence is the one in force.
+  const verdict: string | null = input.verification ? (verdictLines(input.verification).at(-1) ?? null) : null
   if (input.verification) {
     const lines = toLines(input.verification)
     let section = ''
     lines.forEach((line, i) => {
       if (line.inFence) return
       const text = line.text
-      const v = VERDICT_LINE.exec(text)
-      if (v && verdict === null) verdict = v[1]!
       const h2 = H2.exec(text)
       if (h2) section = h2[1]!
       const e = E_HEADING.exec(text)

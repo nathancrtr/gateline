@@ -3,7 +3,7 @@
 // directly so each row is exercised in isolation.
 import { describe, expect, it } from 'vitest'
 import { PROFILES, STAGED_REASON, type GateEntry, type RunState, type Validation } from '@gateline/core'
-import { deriveAction, DEFAULT_ESTIMATE_USD } from '../src/derive.ts'
+import { deriveAction, DEFAULT_ESTIMATE_USD, VERIFIER_ESCALATION_REASON } from '../src/derive.ts'
 import type { LedgerEntry, RunObservation, TaskFileInfo } from '../src/observe.ts'
 import type { ReviewInfo } from '../src/review-report.ts'
 
@@ -1145,19 +1145,18 @@ describe('D24 — the verifier\'s escalation channel (#152)', () => {
 
   it('an escalate verdict escalates and pauses, naming the report', () => {
     const o = verified()
-    o.verification = { verdict: 'escalate', lastTouched: 500 }
-    expect(deriveAction(o)).toMatchObject({ kind: 'escalate', rule: 'D24', pause: 'escalation' })
-    expect((deriveAction(o) as { reason: string }).reason).toContain('verification-report.md')
+    o.verification = { verdict: 'escalate', raw: 'escalate', lastTouched: 500 }
+    expect(deriveAction(o)).toMatchObject({ kind: 'escalate', rule: 'D24', pause: 'escalation', reason: VERIFIER_ESCALATION_REASON })
   })
 
   it('a resolution newer than the report returns the packet to the table (D10), failed rows and all', () => {
     const o = verified()
-    o.verification = { verdict: 'escalate', lastTouched: 500 }
+    o.verification = { verdict: 'escalate', raw: 'escalate', lastTouched: 500 }
     o.state!.escalations = [
       {
         at: null,
         from_role: 'orchestrator',
-        reason: 'verifier escalated — a failure traces to the spec, plan, or gate process, not the implementation; see verification-report.md',
+        reason: VERIFIER_ESCALATION_REASON,
         resolved: true,
         resolved_by: 'op',
         resolved_at: '1970-01-01T00:10:00.000Z', // epoch 600 > lastTouched 500
@@ -1170,12 +1169,12 @@ describe('D24 — the verifier\'s escalation channel (#152)', () => {
 
   it('a resolution older than the report still escalates — the report is the newer fact', () => {
     const o = verified()
-    o.verification = { verdict: 'escalate', lastTouched: 500 }
+    o.verification = { verdict: 'escalate', raw: 'escalate', lastTouched: 500 }
     o.state!.escalations = [
       {
         at: null,
         from_role: 'orchestrator',
-        reason: 'verifier escalated — see verification-report.md',
+        reason: VERIFIER_ESCALATION_REASON,
         resolved: true,
         resolved_by: 'op',
         resolved_at: '1970-01-01T00:05:00.000Z', // epoch 300 < 500
@@ -1189,14 +1188,14 @@ describe('D24 — the verifier\'s escalation channel (#152)', () => {
   it('pass, fail, and a report without the line all leave G2 on the table — fail is the human\'s to weigh', () => {
     for (const verdict of ['pass', 'fail', null] as const) {
       const o = verified()
-      o.verification = { verdict, lastTouched: 500 }
+      o.verification = { verdict, raw: verdict, lastTouched: 500 }
       expect(deriveAction(o), String(verdict)).toMatchObject({ kind: 'rest', rule: 'D10' })
     }
   })
 
   it('a malformed report bounces before its verdict is read', () => {
     const o = verified()
-    o.verification = { verdict: 'escalate', lastTouched: 500 }
+    o.verification = { verdict: 'escalate', raw: 'escalate', lastTouched: 500 }
     o.validations['verification-report.md'] = { contract: 'verification-report.md', ok: false, missing: ['Gaps'], notes: [] }
     expect(deriveAction(o)).toMatchObject({ rule: 'D7' })
   })

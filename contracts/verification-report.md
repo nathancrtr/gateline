@@ -7,14 +7,21 @@
      headings exactly `### E<k> — AC<n>.<m>`; the Criterion column carries the
      bare `AC<n>.<m>` id; one overall `**Verdict:** pass | fail | escalate`
      line. A deviation is a malformed artifact.
-     VERDICT: `pass` when every in-scope criterion is verified; `fail` when
-     any criterion failed or could not be verified for a reason that lies in
-     the implementation or the environment — the G2 approver weighs it on the
-     card; `escalate` when a failure traces to the spec, the plan, or the gate
-     process rather than the implementation — this is the verifier's
-     escalation channel, and it pauses the run for a human the way a
-     reviewer's `escalate` does. Prose in Gaps has no such power: an
-     escalation that lives only in a sentence never reaches the gate.
+     VERDICT: exactly one of the three words, alone on its line — `fail —
+     see Gaps` is a deviation, not a verdict. `pass` when every in-scope
+     criterion is verified; `fail` when any criterion failed or could not be
+     verified for a reason that lies in the implementation or the environment
+     — the G2 approver weighs it on the card; `escalate` when a failure traces
+     to the spec, the plan, or the gate process rather than the
+     implementation — this is the verifier's escalation channel, and it
+     pauses the run for a human the way a reviewer's `escalate` does. When
+     causes are mixed, escalate wins: one spec-traced failure among
+     implementation failures makes the verdict `escalate`, and a criterion
+     that is unverifiable because the spec references something that does
+     not exist is a spec defect, not an environment gap. A re-verification
+     appended to this report adds its own verdict line; the last line is the
+     verdict in force. Prose in Gaps has no such power: an escalation that
+     lives only in a sentence never reaches the gate.
      BUDGET: paste FAILING output in full; for passing checks the command plus
      its concluding line/exit code suffices. Never paste entire suites or
      restate the spec — reference criteria by number.

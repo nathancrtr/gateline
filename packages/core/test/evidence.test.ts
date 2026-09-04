@@ -197,10 +197,11 @@ describe('real finished runs', () => {
 
 describe('the report\'s overall verdict (#152)', () => {
   const lexicon = buildLexicon({ spec: SPEC })
-  it('is quoted verbatim from the Verdict line, first line wins, fences ignored', () => {
+  it('is quoted verbatim from the Verdict line, the last one outside a fence, as the orchestrator reads it', () => {
     const report = '# Verification Report: sample\n\n**Verdict:** escalate\n**Change verified:** tip\n\n## Results\n\n| Criterion | Verdict | Evidence |\n|---|---|---|\n| AC1.1 | unverifiable | see Gaps |\n\n```\n**Verdict:** pass\n```\n'
     const rollup = buildEvidenceRollup({ lexicon, verification: report })
     expect(rollup.verdict).toBe('escalate')
+    expect(buildEvidenceRollup({ lexicon, verification: report + '\n# Re-verification\n**Verdict:** pass\n' }).verdict).toBe('pass')
     expect(rollup.criteria.find((c) => c.id === 'AC1.1')?.result).toEqual({ verdict: 'unverifiable', evidence: 'see Gaps' })
   })
 

@@ -16,10 +16,11 @@ import { useKeys, type KeyHint } from '../use-keys.ts'
 import { EdgeFade, useScrollCue } from '../scroll-cue.tsx'
 import { collapseEngineSpans } from '../ledger-spans.ts'
 import { isAuditSection, itemCount } from '../fold.ts'
+import { gateCardState } from '../gate-state.ts'
 import { DIFF_SELECTION, decideTargetIndex, landingArtifact, resolveSurface, type Surface } from '../landing.ts'
 import { PROFILE_PHASES, api, formatAge, formatWhen, type InboxItem, type Phase, type RunDetailResponse, type RunSummary } from '../api.ts'
 import { AgeBadge, BudgetMeter, KeyHints, KindChip, PhaseChip, PhaseSpine, ValidationBadge } from '../components/chips.tsx'
-import { BOUNCED_INSTRUCTION, DecidePanel, ROUND_CAP_INSTRUCTION } from '../components/decide.tsx'
+import { BOUNCED_INSTRUCTION, DecidePanel, INFLIGHT_INSTRUCTION, ROUND_CAP_INSTRUCTION } from '../components/decide.tsx'
 import { CloseRunPanel, ClosureRecordBlock } from '../components/close-run.tsx'
 import { DiffView } from '../components/diff-view.tsx'
 import { EvidenceRollupPanel, G2Packet } from '../components/evidence.tsx'
@@ -110,15 +111,19 @@ export function visibleProblems(item: InboxItem): string[] {
  * The instruction a card with no button has to give, for the description slot
  * (#285/6).
  *
- * Round-cap and bounce are the two decisions Gatehouse cannot offer a control
- * for — one needs a spec edit, the other needs the artifacts fixed — so the
- * sentence saying what to do instead *is* their affordance. It used to render
+ * Round-cap, bounce and in-flight are the three cards Gatehouse cannot offer a
+ * control for — one needs a spec edit, one needs the artifacts fixed, and the
+ * third (#159) needs only the wait — so the sentence saying what to do instead
+ * *is* their affordance. In-flight is tested first, because it is a gate with
+ * `reviewable: false` and would otherwise fall into the bounce row and be told
+ * its packet was malformed. It used to render
  * where the buttons would have gone, at the card foot, right-aligned and small,
  * which is the treatment for a footnote. Every other kind returns null and is
  * unchanged: its instruction is a button.
  */
 export function cardInstruction(item: InboxItem): { text: string; tone: string } | null {
   if (item.kind === 'round-cap') return { text: ROUND_CAP_INSTRUCTION, tone: 'text-[#4d4742]' }
+  if (gateCardState(item) === 'inflight') return { text: INFLIGHT_INSTRUCTION, tone: 'font-medium text-muted' }
   if (item.kind === 'gate' && !item.reviewable) return { text: BOUNCED_INSTRUCTION, tone: 'font-medium text-bad' }
   return null
 }
@@ -591,31 +596,47 @@ function NeedsYouCard({
         })}
       </>
     ) : null
+  // Three chromes for three states (#159). An in-flight card is neither the
+  // lifted accent of something to decide nor the red of something broken: it is
+  // a card at rest, waiting on a machine, and its eyebrow says so rather than
+  // claiming the human's attention for work that is already moving.
+  const gateState = gateCardState(item)
+  const inflight = gateState === 'inflight' ? item.inflight : null
+  const chrome = inflight
+    ? 'grid-cols-[4px_1fr] bg-[#f7f5f0] border border-line'
+    : item.reviewable
+      ? 'grid-cols-[4px_1fr] bg-accent-tint border border-[#e9d3c4] shadow-[var(--shadow-lift)]'
+      : 'grid-cols-[4px_1fr] bg-bad-bg border border-bad-line'
   // No overflow-hidden on the card: the lexicon hover card (#252) is
   // absolutely positioned and would be clipped by it. The accent rail rounds
   // its own left corners instead, which is all the clip was ever doing.
   return (
     <section
-      className={`relative grid rounded-lg ${
-        item.reviewable
-          ? 'grid-cols-[4px_1fr] bg-accent-tint border border-[#e9d3c4] shadow-[var(--shadow-lift)]'
-          : 'grid-cols-[4px_1fr] bg-bad-bg border border-bad-line'
-      }`}
+      className={`relative grid rounded-lg ${chrome}`}
       data-needs-card
+      data-card-state={gateState ?? undefined}
       data-sent-here={sentHere ? 'true' : undefined}
       ref={cardRef}
       tabIndex={-1}
     >
       <span
-        className={`w-[4px] self-stretch rounded-l-[7px] ${item.reviewable ? 'bg-accent' : 'bg-bad'}`}
+        className={`w-[4px] self-stretch rounded-l-[7px] ${inflight ? 'bg-faint' : item.reviewable ? 'bg-accent' : 'bg-bad'}`}
         aria-hidden="true"
       />
       <div className="min-w-0 px-6 py-4">
         <div className="flex items-center gap-3 flex-wrap">
-          <span className="inline-flex items-center gap-2 font-mono text-[11px] tracking-[0.12em] uppercase text-accent-deep bg-white border border-[#e9d3c4] px-[9px] py-[3px] rounded-xs">
-            <span className="inline-block w-[7px] h-[7px] rounded-full bg-accent" />
-            Needs you{item.gate ? ` · ${item.gate}` : ''}
-          </span>
+          {inflight ? (
+            <span className="inline-flex items-center gap-2 font-mono text-[11px] tracking-[0.12em] uppercase text-muted bg-white border border-line-cool px-[9px] py-[3px] rounded-xs">
+              <span className="inline-block w-[7px] h-[7px] rounded-full border border-current" />
+              Waiting on {inflight.role}
+              {item.gate ? ` · ${item.gate}` : ''}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-2 font-mono text-[11px] tracking-[0.12em] uppercase text-accent-deep bg-white border border-[#e9d3c4] px-[9px] py-[3px] rounded-xs">
+              <span className="inline-block w-[7px] h-[7px] rounded-full bg-accent" />
+              Needs you{item.gate ? ` · ${item.gate}` : ''}
+            </span>
+          )}
           {/* On a gate the KindChip says `● G2` eight pixels from a chip that
               already says `NEEDS YOU · G2` (#294) — two markers, one fact. Every
               other kind names something the chip beside it does not: escalation,

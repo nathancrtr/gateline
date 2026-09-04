@@ -33,6 +33,7 @@ const item = (over: Partial<InboxItem>): InboxItem =>
     kind: 'gate',
     gate: 'G2',
     escalationIndex: null,
+    inflight: null,
     reviewable: true,
     title: 'G2 — Does the evidence support merging?',
     detail: 'a-run is waiting on G2',

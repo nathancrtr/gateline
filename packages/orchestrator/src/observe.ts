@@ -3,7 +3,14 @@
 // (§4.2's first invariant). deriveAction() is then a pure function over this
 // snapshot — which is what makes one-test-per-row possible.
 import { parse as parseYaml } from 'yaml'
-import { type GateId, type RunState, type Validation, validateArtifact } from '@gateline/core/record'
+import {
+  type BudgetLedgerEntry,
+  type GateId,
+  parseLedger,
+  type RunState,
+  type Validation,
+  validateArtifact,
+} from '@gateline/core/record'
 import type { RunRef, RunSource } from '@gateline/core/sources'
 import { GATE_PRODUCER } from './derive.ts'
 import { parseReviewReport, type ReviewInfo } from './review-report.ts'
@@ -15,20 +22,15 @@ export interface TaskFileInfo {
   dependsOn: string[]
 }
 
-export interface LedgerEntry {
-  at: string | null
-  role: string
-  task: string | null
-  round: number | null
-  adapter: string | null
-  model: string | null
-  tokens_in: number | null
-  tokens_out: number | null
-  cost_usd: number | null
-  failed: boolean
-  /** Closed without a process ever spawning (#155): $0, not a failure, not a retry spent. */
-  refused: boolean
-}
+/**
+ * The budget ledger's entry, and its parser, now live in `@gateline/core/record`
+ * (#159): Gatehouse's readiness derivation reads the same open entries to know a
+ * gate's producer is in flight, and two parsers of one append-only list is how
+ * the engine and the frontend come to disagree about what is running. Re-exported
+ * under the engine's own names so every call site here reads as it always did.
+ */
+export type LedgerEntry = BudgetLedgerEntry
+export { parseLedger }
 
 export interface OpenDispatch {
   role: string
@@ -211,28 +213,3 @@ export async function observeRun(source: RunSource, ref: RunRef, cfg: ObserveCon
   }
 }
 
-/** The ledger rides in budget's passthrough fields; parse it defensively. */
-export function parseLedger(state: RunState | null): LedgerEntry[] {
-  const raw = (state?.budget as Record<string, unknown> | null)?.ledger
-  if (!Array.isArray(raw)) return []
-  const entries: LedgerEntry[] = []
-  for (const item of raw) {
-    if (!item || typeof item !== 'object') continue
-    const e = item as Record<string, unknown>
-    if (typeof e.role !== 'string') continue
-    entries.push({
-      at: typeof e.at === 'string' ? e.at : e.at instanceof Date ? e.at.toISOString() : null,
-      role: e.role,
-      task: typeof e.task === 'string' ? e.task : null,
-      round: typeof e.round === 'number' ? e.round : null,
-      adapter: typeof e.adapter === 'string' ? e.adapter : null,
-      model: typeof e.model === 'string' ? e.model : null,
-      tokens_in: typeof e.tokens_in === 'number' ? e.tokens_in : null,
-      tokens_out: typeof e.tokens_out === 'number' ? e.tokens_out : null,
-      cost_usd: typeof e.cost_usd === 'number' ? e.cost_usd : null,
-      failed: e.failed === true,
-      refused: e.refused === true,
-    })
-  }
-  return entries
-}

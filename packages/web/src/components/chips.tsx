@@ -2,6 +2,7 @@
 // Used identically everywhere — status is encoded in form, not just color.
 import { Fragment, useEffect, useRef } from 'react'
 import { PROFILE_GATES, type ClosureRecord, type GateId, type InboxItem, type Profile, type RunSummary } from '../api.ts'
+import { gateCardState } from '../gate-state.ts'
 import { gateNote, noteRung, phaseSpine, type GateCell, type PhaseCell, type SpineNoteRung } from '../spine.ts'
 import type { KeyHint } from '../use-keys.ts'
 
@@ -98,10 +99,16 @@ export function PhaseChip({
 
 export function KindChip({ item }: { item: InboxItem }) {
   if (item.kind === 'gate') {
-    const bounced = !item.reviewable
-    const tone = bounced
-      ? 'border border-dashed border-bad-line bg-bad-bg text-bad line-through'
-      : 'border border-[#e9d3c4] bg-accent-tint text-accent-deep'
+    // Three states, three forms (#159). The strike-through says "this packet is
+    // wrong"; an in-flight gate's packet is not wrong, only superseded, so it
+    // gets the dashed outline of something not yet settled and no fault colour.
+    const state = gateCardState(item)
+    const tone =
+      state === 'bounced'
+        ? 'border border-dashed border-bad-line bg-bad-bg text-bad line-through'
+        : state === 'inflight'
+          ? 'border border-dashed border-line-cool bg-transparent text-muted'
+          : 'border border-[#e9d3c4] bg-accent-tint text-accent-deep'
     return (
       <span
         className={`inline-flex min-w-9 items-center justify-center gap-1.5 rounded-full px-[9px] py-[3px] font-mono text-[11px] leading-none font-semibold tracking-[0.04em] ${tone}`}
@@ -230,7 +237,9 @@ export function PhaseSpine({ summary, items }: { summary: RunSummary; items?: In
   // A gate whose packet was bounced is on the table but offers no approval
   // (core's readiness rule R3); the cell must not tell the reader otherwise.
   const bounced = new Set(
-    (items ?? []).filter((i) => i.kind === 'gate' && !i.reviewable && i.gate !== null).map((i) => i.gate as GateId),
+    (items ?? [])
+      .filter((i) => gateCardState(i) === 'bounced' && i.gate !== null)
+      .map((i) => i.gate as GateId),
   )
   const pending = spine.cells.find((c) => c.kind === 'gate' && c.state === 'pending')
   const focus = pending?.kind === 'gate' ? pending.gate : (spine.position ?? null)

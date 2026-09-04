@@ -528,7 +528,11 @@ export function createApp(deps: AppDeps): Hono {
     if (body.action === 'approve' && body.gate) {
       const { items } = await deriveReadiness(source, ref)
       const gateItem = items.find((i) => i.kind === 'gate' && i.gate === body.gate)
-      if (gateItem && !gateItem.reviewable)
+      // `problems`, not `reviewable`: since #159 a gate is also non-reviewable
+      // while its producer is in flight, and that is a surface judgment, not a
+      // contract violation. Gatehouse withholds the button; the API still lets
+      // a human who means it approve the packet that is on the branch.
+      if (gateItem && gateItem.problems.length > 0)
         return fail(c, 422, {
           error: `gate packet is malformed and was bounced: ${gateItem.problems.join('; ')}`,
           problems: gateItem.problems,

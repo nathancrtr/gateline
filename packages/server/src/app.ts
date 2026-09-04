@@ -186,6 +186,8 @@ export function createApp(deps: AppDeps): Hono {
             codeHead: health.codeHead,
             codeState: health.codeState,
             codeReason: health.codeReason,
+            codeCause: health.codeCause,
+            codeUpgradeBlocked: health.codeUpgradeBlocked,
           }
         : null
     }

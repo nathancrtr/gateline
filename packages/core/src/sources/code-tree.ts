@@ -46,15 +46,37 @@ export function resolveCodeRepo(fromFileUrl: string): string | null {
 
 export type CodeTreeState = 'fresh' | 'superseded-pending' | 'supersede-confirmed' | 'paused'
 
+/**
+ * Why the monitor paused (#222). Two families a viewer must tell apart:
+ * `dirty` is ordinary and self-inflicted (someone ran `npm install`), and
+ * the rest mean the checkout's history or branch moved under a running
+ * engine — the TOPOLOGY.md §3.5 family, which deserves the alarmed voice.
+ * A discriminant rather than string matching on `reason`, so the tone
+ * decision never depends on the wording.
+ */
+export type CodeTreeCause = 'dirty' | 'in-progress' | 'detached' | 'off-default-branch' | 'non-fast-forward'
+
 export interface CodeTreeStatus {
   state: CodeTreeState
   /** The commit the process started on (immutable for the monitor's life). */
   startHead: string
   /** The code tree's on-disk HEAD as of this check. */
   codeHead: string
-  /** Human-readable cause, set only when `state === 'paused'`. */
+  /** Human-readable cause, set only when `state === 'paused'`. Names the dirty paths when the cause is `dirty`. */
   reason?: string
+  /** The machine-readable cause, set only when `state === 'paused'`. */
+  cause?: CodeTreeCause
+  /**
+   * Set only when paused for a dirty tree whose HEAD is a clean fast-forward
+   * of `startHead` on the default branch: the dirt short-circuits the check
+   * before supersede can be evaluated, so an upgrade is queued behind it
+   * and the operator should hear both facts together (#222).
+   */
+  upgradeBlocked?: boolean
 }
+
+/** How many dirty paths the pause reason names before summarizing the rest. */
+const NAMED_DIRTY_PATHS = 3
 
 /** Git-dir markers that mean "a rebase or merge is mid-flight". */
 const IN_PROGRESS_MARKERS = ['rebase-merge', 'rebase-apply', 'MERGE_HEAD']
@@ -92,11 +114,16 @@ export class CodeTreeMonitor {
   async check(): Promise<CodeTreeStatus> {
     const codeHead = await this.requireHead()
 
-    if (await this.isDirty()) {
-      return this.pause(codeHead, 'the working tree has uncommitted local changes')
+    const dirty = await this.dirtyPaths()
+    if (dirty.length > 0) {
+      const named = dirty.slice(0, NAMED_DIRTY_PATHS).join(', ')
+      const rest = dirty.length - NAMED_DIRTY_PATHS
+      const status = this.pause(codeHead, 'dirty', `the working tree has uncommitted local changes (${named}${rest > 0 ? `, +${rest} more` : ''})`)
+      if (await this.isQueuedUpgrade(codeHead)) status.upgradeBlocked = true
+      return status
     }
     if (await this.isRebaseOrMergeInProgress()) {
-      return this.pause(codeHead, 'a rebase or merge is in progress')
+      return this.pause(codeHead, 'in-progress', 'a rebase or merge is in progress')
     }
     if (codeHead === this._startHead) {
       // Clean and back on the commit we started on: fresh, whatever branch
@@ -108,14 +135,15 @@ export class CodeTreeMonitor {
     const branch = await this.currentBranch()
     const defaultBranch = await this.git.defaultBranch()
     if (branch === null) {
-      return this.pause(codeHead, `checkout is on a detached HEAD, not the default branch (${defaultBranch})`)
+      return this.pause(codeHead, 'detached', `checkout is on a detached HEAD, not the default branch (${defaultBranch})`)
     }
     if (branch !== defaultBranch) {
-      return this.pause(codeHead, `checkout is on branch '${branch}', not the default branch (${defaultBranch})`)
+      return this.pause(codeHead, 'off-default-branch', `checkout is on branch '${branch}', not the default branch (${defaultBranch})`)
     }
     if (!(await this.git.isAncestor(this._startHead, codeHead))) {
       return this.pause(
         codeHead,
+        'non-fast-forward',
         `HEAD moved from ${this._startHead.slice(0, 7)} to ${codeHead.slice(0, 7)}, which is not a fast-forward`,
       )
     }
@@ -136,11 +164,23 @@ export class CodeTreeMonitor {
     return { state: 'superseded-pending', startHead: this._startHead, codeHead }
   }
 
-  private pause(codeHead: string, reason: string): CodeTreeStatus {
+  private pause(codeHead: string, cause: CodeTreeCause, reason: string): CodeTreeStatus {
     // Any paused observation invalidates an in-flight debounce (D2): once
     // the tree goes clean-ff again, pending/confirmed starts over.
     this.resetDebounce()
-    return { state: 'paused', startHead: this._startHead, codeHead, reason }
+    return { state: 'paused', startHead: this._startHead, codeHead, reason, cause }
+  }
+
+  /**
+   * Would this HEAD have confirmed a supersede were the tree clean? The
+   * dirty check runs first, so a dirty tree pins the engine on stale code
+   * as well as halting dispatch — worth saying in the same breath.
+   */
+  private async isQueuedUpgrade(codeHead: string): Promise<boolean> {
+    if (codeHead === this._startHead) return false
+    const branch = await this.currentBranch()
+    if (branch === null || branch !== (await this.git.defaultBranch())) return false
+    return this.git.isAncestor(this._startHead, codeHead)
   }
 
   private resetDebounce(): void {
@@ -154,8 +194,12 @@ export class CodeTreeMonitor {
     return head
   }
 
-  private async isDirty(): Promise<boolean> {
-    return (await this.git.run(['status', '--porcelain'])).trim().length > 0
+  /** The dirty paths, as `git status --porcelain` names them (a rename reads `old -> new`). */
+  private async dirtyPaths(): Promise<string[]> {
+    return (await this.git.run(['status', '--porcelain']))
+      .split('\n')
+      .filter((line) => line.trim().length > 0)
+      .map((line) => line.slice(3))
   }
 
   private async isRebaseOrMergeInProgress(): Promise<boolean> {

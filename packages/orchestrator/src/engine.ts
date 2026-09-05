@@ -12,7 +12,18 @@ import type { Document } from 'yaml'
 import { hasShell, loadRoleCapabilities } from './capabilities.ts'
 import { deriveAction, DEFAULT_ESTIMATE_USD, type Bookkeeping, type DerivedAction, type DispatchIntent } from './derive.ts'
 import { harvestPathspecs } from './harvest.ts'
-import { observeRun, parseLedger, type LedgerEntry, type RunObservation } from './observe.ts'
+import {
+  after,
+  anchored,
+  ledgerOpenAnchor,
+  nonStateAnchor,
+  observeRun,
+  parseLedger,
+  resolutionAnchor,
+  type Anchor,
+  type LedgerEntry,
+  type RunObservation,
+} from './observe.ts'
 import { promptBody } from './prompts.ts'
 import { resolveModel, type Registry } from './registry.ts'
 import type { Dispatcher, DispatchOutcome } from './seam.ts'
@@ -229,31 +240,34 @@ function describeWindow(ms: number): string {
 /**
  * The index of a resolved escalation carrying exactly this reason, when
  * nothing has changed since it was resolved — no ledger entry opened and no
- * commit outside state.yaml landed after `resolved_at`. Null otherwise: an
- * unresolved match is D3's business, and a resolved one that predates new
- * facts is a genuinely new occurrence.
+ * commit outside state.yaml landed after it. Null otherwise: an unresolved
+ * match is D3's business, and a resolved one that predates new facts is a
+ * genuinely new occurrence.
+ *
+ * "After" is branch order (#346), like every other recency check in the table:
+ * the commit where the human's resolution landed, against the dispatch's own
+ * intent commit and the newest non-state commit. Read off `resolved_at` and a
+ * ledger `at` instead, this compared the human's machine with the engine
+ * host's — and the audit's own test for it needed a back-dated commit to pass.
  */
 function alreadyResolved(obs: RunObservation, reason: string): number | null {
   const state = obs.state
   if (!state) return null
   let found: number | null = null
-  let resolvedAt = Number.NaN
+  let resolvedAt: Anchor | null = null
   state.escalations.forEach((e, i) => {
-    if (e.reason !== reason || !e.resolved || !e.resolved_at) return
-    const t = Date.parse(e.resolved_at)
-    if (Number.isNaN(t)) return
-    if (found === null || t > resolvedAt) {
+    if (e.reason !== reason || !e.resolved) return
+    const at = resolutionAnchor(obs, i)
+    if (!anchored(at)) return
+    if (found === null || after(obs.order, at, resolvedAt!)) {
       found = i
-      resolvedAt = t
+      resolvedAt = at
     }
   })
-  if (found === null) return null
-  const newestLedger = obs.ledger.reduce((max, e) => {
-    const t = e.at ? Date.parse(e.at) : Number.NaN
-    return Number.isNaN(t) ? max : Math.max(max, t)
-  }, Number.NEGATIVE_INFINITY)
-  if (newestLedger > resolvedAt) return null
-  if (obs.lastNonStateCommit !== null && obs.lastNonStateCommit * 1000 > resolvedAt) return null
+  if (found === null || resolvedAt === null) return null
+  const since: Anchor = resolvedAt
+  if (obs.ledger.some((_, i) => after(obs.order, ledgerOpenAnchor(obs, i), since))) return null
+  if (after(obs.order, nonStateAnchor(obs), since)) return null
   return found
 }
 

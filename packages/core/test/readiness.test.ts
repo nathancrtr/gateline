@@ -56,6 +56,69 @@ escalations:
   git(['checkout', '-q', 'main'])
 }
 
+/**
+ * A run whose task is past the cap but whose round-cap escalation a human has
+ * already resolved (#342). The rule under test is exactly "which came second",
+ * so the record has to be able to say it: the review lands in one commit and
+ * the resolution in the next, which is how the real flow writes them — the
+ * engine escalates and pauses in its own commit, and the human resolves in
+ * another. Since #346 that commit order is what decides, with the timestamps
+ * (backdated review, a recent resolution) agreeing rather than deciding.
+ */
+function addGrantedRoundCapRun(dir: string, slug: string): void {
+  const git = (args: string[], date?: string) =>
+    execFileSync('git', ['-C', dir, ...args], {
+      encoding: 'utf8',
+      env: date ? { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } : process.env,
+    })
+  const landed = new Date(Date.now() - 60 * MIN).toISOString()
+  const resolvedAt = new Date(Date.now() - 5 * MIN).toISOString()
+  git(['checkout', '-q', '-b', `run/${slug}`, 'main'])
+  const runDir = join(dir, 'runs', slug)
+  mkdirSync(runDir, { recursive: true })
+  writeFileSync(
+    join(runDir, 'intent-brief.md'),
+    '# Intent Brief: granted round\n\n## Problem\n\n## Motivation\n\n## Constraints\n\n## Out of scope\n',
+    'utf8',
+  )
+  writeFileSync(join(runDir, 'review-01.md'), '# Review Report: 01-core\n\n**Verdict:** request-changes\n', 'utf8')
+  const stateFor = (resolved: boolean) => `run: ${slug}
+branch: run/${slug}
+phase: implement
+profile: patch
+paused_reason: null
+
+budget:
+  cost_limit_usd: 25
+  cost_spent_usd: 0
+  ledger: []
+
+gates:
+  G1: {approved: true, by: Nathan Carter, at: "${landed}", notes: null}
+  G2: {approved: false, by: null, at: null, notes: null}
+
+tasks:
+  - {id: 01-core, status: in-review, review_rounds: 3}
+
+escalations:
+  - at: "${landed}"
+    from_role: orchestrator
+    reason: "task 01-core: 3 review rounds without convergence — usually a spec ambiguity"
+    resolved: ${resolved}
+    resolved_by: ${resolved ? 'Nathan Carter' : 'null'}
+    resolved_at: ${resolved ? `"${resolvedAt}"` : 'null'}
+    resolution: ${resolved ? '"spec ambiguity clarified; take another round"' : 'null'}
+`
+  writeFileSync(join(runDir, 'state.yaml'), stateFor(false), 'utf8')
+  git(['add', '-A'])
+  git(['commit', '-q', '-m', `state(${slug}): artifacts`], landed)
+  // The human's resolution, in its own commit — the fact the card stands down on.
+  writeFileSync(join(runDir, 'state.yaml'), stateFor(true), 'utf8')
+  git(['add', '-A'])
+  git(['commit', '-q', '-m', `state(${slug}): escalation #0 resolved by Nathan Carter`], resolvedAt)
+  git(['checkout', '-q', 'main'])
+}
+
 const MIN = 60_000
 
 /**
@@ -126,6 +189,7 @@ beforeAll(async () => {
   addPausedRun(ctx.repo.dir, 'paused-declined', 'gate-declined')
   addPausedRun(ctx.repo.dir, 'paused-other-reason', 'round-cap')
   addPausedRun(ctx.repo.dir, 'paused-landed', 'slug-landed')
+  addGrantedRoundCapRun(ctx.repo.dir, 'round-cap-granted')
   // #159, one run per row: the producer out and fresh; out and aged past the
   // role timeout; landed (closed) and therefore quiet; a different role out;
   // and an open entry that predates the packet it produced.
@@ -165,6 +229,7 @@ describe('run discovery', () => {
       'paused-landed',
       'paused-other-reason',
       'round-cap',
+      'round-cap-granted',
       'staged-run',
     ])
     expect(refs.get('done-merged')!.kind).toBe('default')
@@ -248,6 +313,16 @@ describe('readiness derivation (§2.3, one row per test)', () => {
     expect(cap).toBeDefined()
     expect(cap!.title).toContain('01-core')
     expect(cap!.packet).toContain('review-03.md')
+  })
+
+  it('round-cap: a resolution newer than the latest review grants another round, so the card stands down (#342)', async () => {
+    // The engine's rule D4 reads exactly this fact and dispatches round n+1;
+    // a card asking the human to unblock a loop that is already moving asks
+    // for a decision they have made. The next verdict past the cap is newer
+    // than the resolution again, and both surfaces raise it afresh.
+    const items = await gateItem('round-cap-granted')
+    expect(items.find((i) => i.kind === 'round-cap')).toBeUndefined()
+    expect(items).toHaveLength(0)
   })
 
   it('the summary carries the cap the round-cap item was judged against, so no surface retypes it (#314)', async () => {

@@ -256,6 +256,10 @@ export class LocalGitSource implements RunSource {
     return result
   }
 
+  async runHistory(ref: RunRef): Promise<CommitInfo[]> {
+    return this.git.log(ref.ref, [await this.runDir(ref.slug)], { topoOrder: true })
+  }
+
   async lastTouched(ref: RunRef, paths: string[]): Promise<CommitInfo | null> {
     const runDir = await this.runDir(ref.slug)
     return this.git.lastTouched(

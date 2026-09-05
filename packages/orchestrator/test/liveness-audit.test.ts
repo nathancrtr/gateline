@@ -103,8 +103,11 @@ async function throughG1(dir: string, engine: Engine): Promise<void> {
   await humanDecide(dir, { action: 'approve', gate: 'G1', burden: 'confirmation' })
 }
 
-describe('F1 — the round cap has no in-grammar exit (#342)', () => {
-  it.fails('resolving the round-cap escalation and resuming grants another round instead of re-pausing', { timeout: 120_000 }, async () => {
+describe('F1 — the round cap now has an in-grammar exit (#342)', () => {
+  // A longer budget than the reproduction needed: it stopped at the re-pause,
+  // and this drives the granted round through an implementer and a reviewer
+  // dispatch on real git checkouts before asserting.
+  it('resolving the round-cap escalation and resuming grants another round instead of re-pausing', { timeout: 240_000 }, async () => {
     const { dir, clock } = makeToyRepo()
     // A reviewer that never converges and an implementer that always responds:
     // three rounds, then D4.
@@ -133,10 +136,10 @@ describe('F1 — the round cap has no in-grammar exit (#342)', () => {
       await humanDecide(dir, { action: 'resume' })
       const dispatched = await ticks(engine, dispatcher, 2)
       state = await readState(dir)
-      // Expected: the resolution grants a fresh round (or routes the task), so
-      // the run either dispatches or rests on a human decision that exists.
-      // Today: D4 re-fires on the same rounds count and re-pauses `round-cap`
-      // — the only exits are a hand edit of review_rounds or task status.
+      // D4 reads its own escalation's resolution (#342): one newer than the
+      // latest delivered verdict grants the loop another round, so the run
+      // dispatches instead of re-pausing `round-cap`. The next verdict past
+      // the cap is newer than the resolution again, and D4 asks afresh.
       expect(state.paused_reason).not.toBe('round-cap')
       expect(dispatched).toBeGreaterThan(0)
     } finally {
@@ -145,8 +148,8 @@ describe('F1 — the round cap has no in-grammar exit (#342)', () => {
   })
 })
 
-describe('F2 — a producer that lands nothing is re-dispatched without bound (#343)', () => {
-  it.fails('D9: an analyst that returns without changing spec.md after a decline is not paid for every tick', { timeout: 120_000 }, async () => {
+describe('F2 — a producer that lands nothing is bounded by the landing cap (#343)', () => {
+  it('D9: an analyst that returns without changing spec.md after a decline is not paid for every tick', { timeout: 120_000 }, async () => {
     const { dir, clock } = makeToyRepo()
     let analystCalls = 0
     const dispatcher = new FakeDispatcher(
@@ -166,8 +169,9 @@ describe('F2 — a producer that lands nothing is re-dispatched without bound (#
       await humanDecide(dir, { action: 'decline', gate: 'G0', notes: 'tighten R1' })
       await humanDecide(dir, { action: 'resume' })
       const redos = await ticks(engine, dispatcher, 4)
-      // Expected: at most a bounce-cap's worth of redos, then a human. Today:
-      // one paid dispatch per tick until cost_limit_usd trips DB.
+      // Rule DL counts the closed-ok analyst entries opened since spec.md
+      // last moved: at LANDING_CAP of them the engine escalates and pauses
+      // instead of dispatching again.
       expect(redos).toBeLessThanOrEqual(2)
       const state = await readState(dir)
       expect(state.phase === 'paused' || state.escalations.some((e) => !e.resolved)).toBe(true)
@@ -176,15 +180,15 @@ describe('F2 — a producer that lands nothing is re-dispatched without bound (#
     }
   })
 
-  it.fails('D13: a reviewer that delivers no verdict is not paid for every tick', { timeout: 120_000 }, async () => {
+  it('D13: a reviewer that delivers no verdict is not paid for every tick', { timeout: 120_000 }, async () => {
     const { dir, clock } = makeToyRepo()
     const dispatcher = new FakeDispatcher(cooperative(clock, { reviewer: () => ({}) }))
     const engine = makeEngine(dir, dispatcher)
     try {
       await throughG1(dir, engine)
       // Tick until the first reviewer dispatch: D5 advance, D19 seed, D11
-      // implementer, then D13. Not `reconcile` — this loop never rests until
-      // the budget cap stops it, which is the finding.
+      // implementer, then D13. Not `reconcile` — before #343 this loop never
+      // rested until the budget cap stopped it; now rule DL stops it.
       for (let i = 0; i < 8 && !dispatcher.calls.some((c) => c.role === 'reviewer'); i++) await ticks(engine, dispatcher, 1)
       const before = dispatcher.calls.filter((c) => c.role === 'reviewer').length
       expect(before).toBe(1)
@@ -243,8 +247,8 @@ describe('F4 — a terminal run is not moved by the engine (#345, fixed)', () =>
   })
 })
 
-describe('F5 — recency is read from wall clocks, not from the record (#346)', () => {
-  it.fails('a resolution later in branch history counts even when its clock reads earlier than the verdict', { timeout: 120_000 }, async () => {
+describe('F5 — recency is read from the record, not from wall clocks (#346, fixed)', () => {
+  it('a resolution later in branch history counts even when its clock reads earlier than the verdict', { timeout: 120_000 }, async () => {
     const { dir, clock } = makeToyRepo()
     const dispatcher = new FakeDispatcher(
       cooperative(clock, {
@@ -282,10 +286,12 @@ describe('F5 — recency is read from wall clocks, not from the record (#346)', 
       await humanDecide(dir, { action: 'resume' })
       const dispatched = await ticks(engine, dispatcher, 2)
       state = await readState(dir)
-      // Expected: the record's own order says the human resolved after the
-      // verdict, so the re-review dispatches. Today: D17 compares resolved_at
-      // to the review commit's time, finds no resolution "after" it, and
-      // re-escalates — the run pauses again with nothing left to resolve.
+      // The record's own order says the human resolved after the verdict, so
+      // the re-review dispatches. D17 reads the commit where `resolved` became
+      // true against the commit that landed the review, and no clock can
+      // contradict that edge — before #346 it compared `resolved_at` with the
+      // review commit's time, found no resolution "after" it, and re-escalated,
+      // pausing the run again with nothing left for anyone to resolve.
       expect(dispatched).toBeGreaterThan(0)
       expect(state.paused_reason).toBeNull()
     } finally {
@@ -342,8 +348,8 @@ describe('F8 — the stale sweep is process-local (#349)', () => {
   })
 })
 
-describe('F9 — `in-progress` with no open dispatch is a rest with no exit (#350)', () => {
-  it.fails('a task stuck in-progress with nothing in flight is surfaced or aged, not rested on forever', { timeout: 120_000 }, async () => {
+describe('F9 — `in-progress` with no open dispatch is handed back to the loop (#350)', () => {
+  it('a task stuck in-progress with nothing in flight is surfaced or aged, not rested on forever', { timeout: 120_000 }, async () => {
     const { dir, clock } = makeToyRepo()
     const dispatcher = new FakeDispatcher(cooperative(clock))
     const engine = makeEngine(dir, dispatcher)
@@ -357,8 +363,9 @@ describe('F9 — `in-progress` with no open dispatch is a rest with no exit (#35
       await ticks(engine, dispatcher, 3)
       const state = await readState(dir)
       const { items } = await deriveReadiness(source, toyRef(dir))
-      // Expected: either the engine treats it as stale after the role timeout
-      // or a human is told. Today: D12 rests, the inbox is empty, forever.
+      // D25 (#350): `in-progress` counts as in flight only alongside an open
+      // ledger entry, so a hand-set one with nothing behind it goes back to
+      // `pending` and the loop picks the task up again.
       expect(items.length > 0 || state.tasks[0]!.status !== 'in-progress').toBe(true)
     } finally {
       await removeRunCheckout(dir, 'run/toy')

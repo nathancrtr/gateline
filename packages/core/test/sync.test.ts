@@ -23,16 +23,32 @@ const APPROVAL: PrApproval = {
 }
 
 describe('planSync', () => {
-  it('plans only undecided-G2 runs whose PR carries an approval', async () => {
+  it('plans only runs whose G2 is on the table, with its packet landed, and whose PR carries an approval', async () => {
     const provider = providerWith({
-      'run/g2-pending': APPROVAL, // G2 undecided → planned
+      'run/g2-pending': APPROVAL, // G2 on the table, packet complete → planned
       'run/g3-pending': { ...APPROVAL, number: 8 }, // G2 already approved → skipped
-      'run/g0-pending': { ...APPROVAL, number: 9 }, // G2 undecided too — sync records the fact
+      'run/g0-pending': { ...APPROVAL, number: 9 }, // still at spec → skipped
     })
     const plan = await planSync(ctx.source, provider)
     const slugs = plan.map((p) => p.slug).sort()
-    expect(slugs).toEqual(['g0-pending', 'g2-pending'])
+    expect(slugs).toEqual(['g2-pending'])
     expect(plan[0]!.message).toMatch(/synced from PR #/)
+  })
+
+  // #344: the draft PR exists from the moment the run is armed, so an Approve
+  // on it can land long before G2 is anyone's question. Copying it in gave the
+  // engine's D5 rule an approved gate to advance on, skipping the phases the
+  // gate is supposed to gate.
+  it('leaves a run that has not reached G2 alone, however early the PR was approved', async () => {
+    const provider = providerWith({ 'run/g0-pending': APPROVAL, 'run/g1-pending': { ...APPROVAL, number: 8 } })
+    expect(await planSync(ctx.source, provider)).toEqual([])
+  })
+
+  it('leaves a run in implement alone until G2’s own evidence has landed', async () => {
+    // `escalated` is at implement with G0 and G1 signed — G2 is next by phase
+    // order — but its one task is still in-progress and it has no reviews.
+    const provider = providerWith({ 'run/escalated': APPROVAL })
+    expect(await planSync(ctx.source, provider)).toEqual([])
   })
 
   it('plans nothing when no PR is approved', async () => {

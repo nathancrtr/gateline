@@ -4,8 +4,18 @@
 // reviewer and review time (not the syncer, not sync time); burden stays
 // unrecorded — the sync can't know how hard the review was. Phase is not
 // advanced: recording a fact is not orchestrating.
+//
+// It copies an approval only onto a G2 that is genuinely on the table (#344).
+// "Undecided" alone was not enough: a run's draft PR exists from the moment it
+// is armed, "do not merge" banner and all, so a reviewer clicking Approve at
+// phase `spec` had their click copied into G2 — and the engine's D5 rule then
+// advanced the run the tick it reached implement, with no tasks worked and no
+// verification. Recording a fact is still not orchestrating; the point is that
+// "G2 is approved" is only a fact about a packet that exists, which is why the
+// gate card's own readiness rule (phase order, then the evidence packet) is the
+// condition here too — shared code, so the card and the sync cannot drift.
 import { execFile } from 'node:child_process'
-import { gateUndecided } from '../record/schema.ts'
+import { decisionPhase, g2PacketReady, pendingGateAt } from '../record/schema.ts'
 import type { RunRef, RunSource, WriteResult } from './source.ts'
 
 export interface PrApproval {
@@ -34,13 +44,15 @@ export interface SyncResult extends SyncPlanEntry {
   error?: string
 }
 
-/** Runs whose G2 is undecided but whose PR carries an approved review. */
+/** Runs whose G2 is on the table and whose PR carries an approved review. */
 export async function planSync(source: RunSource, provider: PrProvider): Promise<SyncPlanEntry[]> {
   const plan: SyncPlanEntry[] = []
   for (const ref of await source.listRuns()) {
     if (ref.kind === 'default') continue // merged: history, not a pending gate
     const { state } = await source.readState(ref)
-    if (!state || !gateUndecided(state.gates.G2)) continue
+    if (!state) continue
+    if (pendingGateAt(state, decisionPhase(state)) !== 'G2') continue
+    if (!g2PacketReady(state, await source.listArtifacts(ref))) continue
     const approval = await provider.approval(ref.branch)
     if (!approval) continue
     plan.push({

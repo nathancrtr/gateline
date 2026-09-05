@@ -53,19 +53,29 @@
 // it means the engine is gone, not that an agent is working; the gate goes back
 // to reviewable with the wait said out loud, because suppressing a gate on the
 // word of a dead process is the worse failure.
+//
+// Three of the facts these rules read now live in `record/schema.ts` — which
+// gate is pending (`pendingGateAt`), which role produces a gate's packet
+// (`gateProducer`), and whether G2's evidence has landed (`g2PacketReady`).
+// The write path reads the same three for a different purpose: it refuses a
+// decision about any gate but the pending one (#344), refuses an approval
+// while the producer is out (#351), and lets the PR-approval sync copy an
+// Approve into G2 only once G2 is genuinely on the table. One definition each
+// is what stops the card a human is shown and the write the API accepts from
+// disagreeing.
 import {
   BUDGET_REASON,
   CLOSED_PHASE,
   DECLINED_REASON,
   LANDED_REASON,
   G2_COMPLETE_STATUSES,
-  gateUndecided,
-  GATE_PHASES,
-  PROFILE_GATES,
+  g2PacketReady,
+  gateProducer,
+  isReviewFile,
+  pendingGate,
   ROUND_CAP,
   STAGED_REASON,
   type GateId,
-  type Profile,
   type RunState,
 } from '../record/schema.ts'
 import { isOpenDispatch, parseLedger, ROLE_TIMEOUT_MS } from '../record/ledger.ts'
@@ -125,35 +135,10 @@ export interface RunReadiness {
   validations: Record<string, Validation>
 }
 
-const isReviewFile = (p: string) => /^review-\d+.*\.md$/.test(p)
 const isTaskFile = (p: string) => p.startsWith('tasks/') && p.endsWith('.yaml')
 
 function taskComplete(status: string): boolean {
   return G2_COMPLETE_STATUSES.has(status)
-}
-
-/**
- * The role whose artifact a gate's packet waits on, and the artifact it lands.
- *
- * The frontend's half of the engine's `GATE_PRODUCER` (orchestrator/src/derive.ts),
- * and profile-aware where that table is not: `patch` G1 has no producer at all —
- * the human authored the brief and the work item, so there is no one out and
- * nothing to supersede — and `patch` G2 ends at the reviewer, since a patch run
- * has no verifier (DESIGN.md §4.1).
- */
-export function gateProducer(gate: GateId, profile: Profile): { role: string; artifact: string } | null {
-  switch (gate) {
-    case 'G0':
-      return { role: 'analyst', artifact: 'spec.md' }
-    case 'G1':
-      return profile === 'patch' ? null : { role: 'architect', artifact: 'plan.md' }
-    case 'G2':
-      return profile === 'patch'
-        ? { role: 'reviewer', artifact: 'a review report' }
-        : { role: 'verifier', artifact: 'verification-report.md' }
-    case 'G3':
-      return { role: 'ops', artifact: 'release-plan.md' }
-  }
 }
 
 /**
@@ -175,14 +160,6 @@ function openDispatchAt(state: RunState, role: string, packetAt: number | null):
     if (newest === null || at > newest) newest = at
   }
   return newest
-}
-
-/** Which gate, if any, is on the table for the run's current phase. Only the profile's gates exist. */
-export function pendingGate(state: RunState): GateId | null {
-  for (const gate of PROFILE_GATES[state.profile]) {
-    if (GATE_PHASES[gate].includes(state.phase) && gateUndecided(state.gates[gate])) return gate
-  }
-  return null
 }
 
 /**
@@ -371,8 +348,7 @@ export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<R
     const verification = state.profile === 'patch' ? [] : ['verification-report.md']
     packet = [...reviews, ...verification]
     trigger = [...reviews, ...verification]
-    const tasksComplete = state.tasks.length > 0 && state.tasks.every((t) => taskComplete(t.status))
-    ready = tasksComplete && reviews.length > 0 && verification.every((p) => has(p))
+    ready = g2PacketReady(state, artifacts)
   } else {
     packet = ['release-plan.md']
     trigger = ['release-plan.md']

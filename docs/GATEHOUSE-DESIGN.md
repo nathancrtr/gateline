@@ -9,7 +9,12 @@ built. Earlier rounds are kept at the end as history, not deleted.
 Process: `~/.claude/skills/seeded-design` (every visual property is sampled
 from an artifact outside the model, derived from a sampled value, or forced
 by a written constraint) with Anthropic's `frontend-design` plugin as the
-taste layer. **Status: step 4 of 8 — directions written, none chosen.**
+taste layer. **Status: step 5 of 8 — every screen mocked up in every
+direction; none chosen.** The mockups are one self-contained page,
+[`docs/design/gatehouse-directions.html`](design/gatehouse-directions.html)
+(direction and screen switchers, a compare view, real content from this
+repository's runs, type held constant), published privately as an artifact
+for review.
 
 ---
 

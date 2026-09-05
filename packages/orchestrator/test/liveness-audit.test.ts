@@ -220,8 +220,8 @@ describe('F3 — a gate is decided in its own phase, in order (#344)', () => {
   })
 })
 
-describe('F4 — the engine can move a terminal run (#345)', () => {
-  it.fails('a dispatch that fails after the human closed the run does not un-close it', { timeout: 60_000 }, async () => {
+describe('F4 — a terminal run is not moved by the engine (#345, fixed)', () => {
+  it('a dispatch that fails after the human closed the run does not un-close it', { timeout: 60_000 }, async () => {
     const { dir } = makeToyRepo()
     let finish: (o: object) => void = () => {}
     const dispatcher = new FakeDispatcher(() => new Promise<object>((resolve) => (finish = resolve)))
@@ -294,17 +294,19 @@ describe('F5 — recency is read from wall clocks, not from the record (#346)', 
   })
 })
 
-describe('F6 — a standing refusal appends a $0 entry every tick (#347)', () => {
-  it.fails('consecutive refusals of the same intent are bounded', { timeout: 60_000 }, async () => {
+describe('F6 — a standing refusal is bounded (#347, fixed)', () => {
+  it('consecutive refusals of the same intent are bounded', { timeout: 60_000 }, async () => {
     const { dir } = makeToyRepo()
     const dispatcher = new FakeDispatcher(() => ({ ok: false, refused: true, costUsd: 0, tokensIn: null, tokensOut: null, error: 'nothing can spawn here' }))
     const engine = makeEngine(dir, dispatcher)
     try {
       await ticks(engine, dispatcher, 4)
       const state = await readState(dir)
-      // Expected: a couple of refusals, then a deferral or an escalation — not
-      // a commit per tick for as long as the condition stands (#340's shape).
+      // Two refusals, then rule RF holds the dispatch back: nothing written,
+      // the heartbeat carrying the condition, one probe per window instead of
+      // a commit per tick for as long as it stands (#340's shape).
       expect(parseLedger(state).length).toBeLessThanOrEqual(2)
+      expect(engine.deferrals()[0]).toMatchObject({ slug: 'toy', rule: 'RF' })
     } finally {
       await removeRunCheckout(dir, 'run/toy')
     }

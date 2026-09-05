@@ -5,13 +5,13 @@
 // updates, comment-preserving YAML, the orchestrator's own commit verbs
 // (dispatched | bounced | advanced | escalated | paused | metered | harvested),
 // a bot identity, and — structurally — no code path that writes gates.*.
-import { type Identity, ROLE_TIMEOUT_MS } from '@gateline/core/record'
+import { type Identity, ROLE_TIMEOUT_MS, TERMINAL_PHASES } from '@gateline/core/record'
 import { Git, LocalGitSource, ensureDraftPr, type RunRef, type WriteResult } from '@gateline/core/sources'
 import type { Document } from 'yaml'
 import { hasShell, loadRoleCapabilities } from './capabilities.ts'
 import { deriveAction, DEFAULT_ESTIMATE_USD, type Bookkeeping, type DerivedAction, type DispatchIntent } from './derive.ts'
 import { harvestPathspecs } from './harvest.ts'
-import { observeRun, parseLedger, type RunObservation } from './observe.ts'
+import { observeRun, parseLedger, type LedgerEntry, type RunObservation } from './observe.ts'
 import { promptBody } from './prompts.ts'
 import { resolveModel, type Registry } from './registry.ts'
 import type { Dispatcher, DispatchOutcome } from './seam.ts'
@@ -148,7 +148,18 @@ const ensuredDraftPrs = new Map<string, string>()
 const reapedTaskBranches = new Set<string>()
 
 /** Rules that hold a dispatch back without writing anything — see `Deferral`. */
-const DEFERRAL_RULES = new Set(['MC', 'HB', 'CH'])
+const DEFERRAL_RULES = new Set(['MC', 'HB', 'CH', 'RF'])
+
+/**
+ * Rule RF's two numbers (#347). A pre-spawn refusal costs $0 and counts toward
+ * no retry (#155), so nothing in the record stops the next tick re-deriving the
+ * same dispatch — a standing refusal grows the ledger and the branch by one
+ * commit per tick. After this many consecutive refusals of the same (role,
+ * task, round) the guard holds the dispatch back, and lets exactly one probe
+ * through once this long has passed since the newest refusal.
+ */
+const REFUSAL_DEFER_AFTER = 2
+const REFUSAL_PROBE_MS = 15 * 60 * 1000
 
 /** The host window's spend as `tick` measures it once per pass (#97). */
 interface HostProjection {
@@ -198,6 +209,36 @@ function alreadyResolved(obs: RunObservation, reason: string): number | null {
 }
 
 /**
+ * The trailing run of consecutive pre-spawn refusals of one intent (#347), or
+ * null when the ledger does not show one worth holding a dispatch back for.
+ *
+ * "Trailing" is the whole point: a success or a real failure closed after a
+ * refusal resets the count, because the condition that refused is demonstrably
+ * gone. An open entry is ignored — it is in flight, not an outcome — and a
+ * refusal older than `REFUSAL_PROBE_MS` lets one dispatch through, which is
+ * what gives the deferral an exit the engine can derive rather than one only a
+ * human could supply.
+ */
+function standingRefusals(
+  ledger: LedgerEntry[],
+  intent: { role: string; task: string | null; round: number | null },
+  now: number,
+): number | null {
+  const mine = ledger.filter(
+    (e) => e.role === intent.role && e.task === (intent.task ?? null) && e.round === (intent.round ?? null) && (e.cost_usd !== null || e.failed),
+  )
+  let count = 0
+  for (let i = mine.length - 1; i >= 0 && mine[i]!.refused; i--) count++
+  if (count < REFUSAL_DEFER_AFTER) return null
+  const at = mine[mine.length - 1]!.at
+  const newest = at ? Date.parse(at) : Number.NaN
+  // An undated refusal is treated as just-now: a fact the engine cannot date
+  // is not a reason to spend another dispatch on it.
+  if (!Number.isNaN(newest) && now - newest >= REFUSAL_PROBE_MS) return null
+  return count
+}
+
+/**
  * A dispatch the engine is holding back without writing anything (#97): a
  * ceiling that clears itself — the resource cap (MC), the host spend window
  * (HB) — defers rather than pauses, so nothing in `state.yaml` says why the
@@ -242,6 +283,13 @@ export class Engine {
   onSettled: (() => void) | null = null
   /** Runs deferred on the last tick, by slug — see `Deferral`. */
   private deferred = new Map<string, Deferral>()
+  /**
+   * The last pre-spawn refusal's message per job key (#347), so rule RF can
+   * name what refused. Process ephemera like `jobs`: the ledger records *that*
+   * a dispatch was refused, never why, and a restarted engine simply says so
+   * rather than inventing a reason.
+   */
+  private readonly lastRefusal = new Map<string, string>()
 
   constructor(cfg: EngineConfig) {
     this.cfg = cfg
@@ -447,11 +495,16 @@ export class Engine {
       // A held checkout is probed next, for the same reason: a dispatch that
       // cannot start must reserve neither a slot nor budget headroom.
       const free = await this.checkoutGuard(ref, live)
+      // A refusal that keeps standing is the same shape as a held checkout,
+      // caught one tick later — the ledger, not a probe, is what shows it.
+      // Same placement, and for the same reason: a dispatch this tick will
+      // not start reserves neither a slot nor budget headroom.
+      const unrefused = this.refusalGuard(ref, obs, free)
       // Concurrency is checked before the budget guards, not after: a
       // dispatch this tick will not start must not add its estimate to the
       // host projection hostGuards accumulates across runs, or a deferral
       // here would spend budget headroom nothing consumed.
-      const admitted = this.concurrencyGuard(ref, free)
+      const admitted = this.concurrencyGuard(ref, unrefused)
       const final = this.hostGuards(obs, admitted, host)
       if (final.kind === 'rest' && DEFERRAL_RULES.has(final.rule)) {
         const prior = this.deferred.get(ref.slug)
@@ -523,6 +576,62 @@ export class Engine {
     const why = `dispatch blocked: ${checkoutHeldReason(ref.branch, held)}; re-derived once it is released`
     this.log(`${ref.slug}: ${why}`)
     return { kind: 'rest', rule: 'CH', why }
+  }
+
+  /**
+   * Standing-refusal guard (#347, rule RF). A dispatch refused before spawn is
+   * not a failure: it meters $0, marks the entry `refused`, and counts toward
+   * no retry (#155). That is right for a one-off, and wrong for a condition
+   * that stands — a broken framework root, a dispatcher that will not spawn —
+   * because nothing in the record then stops the next tick deriving the very
+   * same dispatch. #340 gave that shape a $0 price and, with it, an unbounded
+   * one: one ledger entry and one commit per tick, for as long as the
+   * condition lasts.
+   *
+   * So bound it at the ledger. After `REFUSAL_DEFER_AFTER` consecutive
+   * refusals of the same (role, task, round), with no success or real failure
+   * closed after them, hold the dispatch back.
+   *
+   * **A deferral, not a pause.** Every pre-spawn refusal is a fact about the
+   * host, never about the run: the workspace, the framework roots, the role
+   * capabilities, the harness itself. Nothing in `state.yaml` says it and
+   * nothing a human could write there would clear it, so pausing and
+   * escalating would ask for a decision that changes none of the inputs the
+   * rule reads — the #96/#97 dead loop, one resolve-and-resume per tick with
+   * the same refusal waiting on the other side. CH and HB defer for exactly
+   * this reason and RF joins them: nothing is written, the heartbeat carries
+   * the condition at the level it actually lives, and the run's record stays
+   * as clean as the run is.
+   *
+   * The deferral clears itself two ways, so it is a hold and never a wall.
+   * A dispatch that lands anything other than a refusal resets the trailing
+   * count, and once `REFUSAL_PROBE_MS` has passed since the newest refusal one
+   * probe dispatch goes through — the engine's own way of asking whether the
+   * host is well again, since nothing in the record will ever say so. A
+   * condition that truly stands therefore costs one $0 entry per probe window
+   * instead of one per tick.
+   */
+  private refusalGuard(ref: RunRef, obs: RunObservation, action: DerivedAction): DerivedAction {
+    if (action.kind !== 'dispatch') return action
+    const now = (this.cfg.now?.() ?? new Date()).getTime()
+    const held: string[] = []
+    const live = action.dispatches.filter((intent) => {
+      const standing = standingRefusals(obs.ledger, intent, now)
+      if (standing === null) return true
+      const last = this.lastRefusal.get(jobKey(ref.slug, intent.role, intent.task, intent.round))
+      held.push(
+        `${intent.role}${intent.task ? `(${intent.task})` : ''} refused ${standing}× before spawn` +
+          `${last ? `: ${truncate(last, 120)}` : ' (this process saw none of them — see the refused ledger entries)'}`,
+      )
+      return false
+    })
+    if (held.length === 0) return action
+    const why =
+      `${held.join('; ')} — deferred, not paused: a refusal before spawn is a condition of the host, ` +
+      `not of the run, so no edit to state.yaml can clear it; re-probed once per ${describeWindow(REFUSAL_PROBE_MS)}`
+    this.log(`${ref.slug}: ${why}`)
+    if (live.length === 0) return { kind: 'rest', rule: 'RF', why }
+    return { ...action, dispatches: live, why: `${action.why} (${why})` }
   }
 
   /**
@@ -690,6 +799,18 @@ export class Engine {
       reapedTaskBranches.add(ref.slug)
       const reaped = await reapTaskBranches(this.cfg.repoDir, ref.branch).catch(() => [] as string[])
       if (reaped.length > 0) this.log(`${ref.slug}: reaped retained task branches — ${reaped.join(', ')}`)
+    }
+    // Invariant I6 (§4.7), belt to the close path's braces. Derivation already
+    // rests a `done` or `closed` run on D1, ahead of every rule that could
+    // want to move it, so nothing should arrive here with a phase, an
+    // escalation or a dispatch for a terminal run — but the guards run after
+    // derivation and each may substitute an action of its own, and the cost of
+    // being wrong is the engine writing over a record a human declared final.
+    // Rest instead, and say so.
+    if (action.kind !== 'rest' && obs.state && (TERMINAL_PHASES as readonly string[]).includes(obs.state.phase)) {
+      const why = `${action.kind} refused on a ${obs.state.phase} run — the engine does not move a terminal run (rule ${action.rule}: ${action.why})`
+      this.log(`${ref.slug}: ${why}`)
+      return { ...base, action: { kind: 'rest', rule: action.rule, why }, detail: why }
     }
     switch (action.kind) {
       case 'rest':
@@ -959,6 +1080,12 @@ export class Engine {
     // exists to keep straight.
     const refused = outcome.refused === true
     const cost = refused ? 0 : (outcome.costUsd ?? this.computeCost(intent.role, outcome) ?? estimate)
+    // What refused, for rule RF's words on a later tick (#347). Any other
+    // outcome — a success, a real failure — is the condition demonstrably
+    // gone, so the note goes with it.
+    const jkey = jobKey(ref.slug, intent.role, intent.task, intent.round)
+    if (refused) this.lastRefusal.set(jkey, outcome.error ?? 'unknown error')
+    else this.lastRefusal.delete(jkey)
 
     // Read-and-write under the run's write lock, so two jobs finishing
     // together serialize; retry only on a CAS refusal from another writer.
@@ -966,6 +1093,37 @@ export class Engine {
       const fresh = await this.source.readState(ref)
       if (!fresh.state) return 'done'
       const ledger = parseLedger(fresh.state)
+      // Invariant I6 (§4.7): the engine never un-closes a run. A human may
+      // close a run — or a gate approval may carry it to `done` — while this
+      // dispatch is still out, and the job then lands on a record its human
+      // declared final. What this closing commit may still write is everything
+      // about the dispatch itself, and nothing about the run.
+      //
+      // The meter, because real usage was spent and dropping it would leave
+      // the ledger and `cost_spent_usd` lying about what the run cost. The
+      // task's status too, and for a reason worth spelling out: the intent
+      // commit already moved the task to `dispatched`, so leaving it there
+      // would stand a reopened run up in the #350 shape — `dispatched` with
+      // no open ledger entry, which D12 reads as in flight forever. The
+      // bookkeeping is the other half of a write already made, so it lands
+      // exactly as it would on a live run, except that a would-be second
+      // failure hands the task back to `pending` rather than marking it
+      // `failed`: `failed` is D20's pairing with an escalation, and the
+      // escalation is what a terminal run must not have.
+      //
+      // What is suppressed is the run-level writes — the escalation entry,
+      // `phase`, `paused_reason` — because those move the record itself. So a
+      // failure here is recorded and asked of no one. The same guard covers
+      // the heartbeat's stale sweep, which reaches this method by the same
+      // path after a restart.
+      const phase = fresh.state.phase
+      const terminal = (TERMINAL_PHASES as readonly string[]).includes(phase)
+      if (terminal && !outcome.ok) {
+        this.log(
+          `${ref.slug}: ${intent.role}${intent.task ? `(${intent.task})` : ''} ${refused ? 'refused' : 'failed'} against a ${phase} run — ` +
+            `usage and the task's own bookkeeping recorded, nothing escalated: a closed or done run is not moved by the engine`,
+        )
+      }
       const index = ledger.findIndex(
         (e) =>
           e.role === intent.role &&
@@ -982,7 +1140,7 @@ export class Engine {
       ).length
       // One retry, then a human (§11); fatal skips the retry. A refusal is
       // neither: the agent never ran, so nothing has been tried.
-      const escalateNow = !outcome.ok && !refused && (outcome.fatal === true || priorFailures >= 1)
+      const escalateNow = !terminal && !outcome.ok && !refused && (outcome.fatal === true || priorFailures >= 1)
 
       const result = await this.source.writeState(
         ref,
@@ -1027,7 +1185,7 @@ export class Engine {
             doc.setIn(['paused_reason'], 'escalation')
           }
         },
-        `state(${ref.slug}): metered ${intent.role}${intent.task ? `(${intent.task}${intent.round ? ` r${intent.round}` : ''})` : ''} $${cost.toFixed(2)}${outcome.ok ? '' : ` — ${refused ? 'refused' : 'failed'}: ${truncate(outcome.error ?? 'unknown', 60)}`}`,
+        `state(${ref.slug}): metered ${intent.role}${intent.task ? `(${intent.task}${intent.round ? ` r${intent.round}` : ''})` : ''} $${cost.toFixed(2)}${outcome.ok ? '' : ` — ${refused ? 'refused' : 'failed'}: ${truncate(outcome.error ?? 'unknown', 60)}`}${terminal ? ` (run ${phase} — nothing escalated)` : ''}`,
       )
       if (result.ok && result.pushFailed && this.stalePush(result.pushFailed)) {
         // #103: the closing commit carries real usage — never discard it

@@ -388,19 +388,6 @@ export async function observeRun(source: RunSource, ref: RunRef, cfg: ObserveCon
   const declineEvents: RunObservation['declineEvents'] = {}
   const declineOids: Partial<Record<GateId, string>> = {}
   const bounceCounts: Record<string, number> = {}
-  // Where each artifact's bounce budget last reset (#348): the newest resolved
-  // contract dispute naming it. Recency is commit time against `resolved_at`,
-  // the same shape D17 and D20 use — and the same wall-clock reading #346 is
-  // revisiting for all three at once.
-  const disputeResolvedAt: Record<string, number> = {}
-  for (const esc of state?.escalations ?? []) {
-    const named = esc.resolved ? CONTRACT_DISPUTE.exec(esc.reason) : null
-    if (!named || !esc.resolved_at) continue
-    const at = Math.floor(Date.parse(esc.resolved_at) / 1000)
-    if (!Number.isFinite(at)) continue
-    const artifact = named[1]!
-    if (at > (disputeResolvedAt[artifact] ?? Number.NEGATIVE_INFINITY)) disputeResolvedAt[artifact] = at
-  }
   const ledgerCommits: RunObservation['ledgerCommits'] = ledger.map(() => ({ open: null, close: null }))
   const ledgerIndex = new Map<string, number>()
   ledger.forEach((e, i) => ledgerIndex.set(ledgerEntryKey(e), i))
@@ -409,9 +396,33 @@ export async function observeRun(source: RunSource, ref: RunRef, cfg: ObserveCon
   // Where each escalation was resolved comes from core, so Gatehouse's
   // round-cap card and rule D4 read one definition (#346).
   const resolutionCommits = resolutionCommitsOf(history, escalations.length)
+  // Where each artifact's bounce budget last reset (#348): the newest resolved
+  // contract dispute naming it. "Newest" is branch order (#346): the walk below
+  // runs newest-first, so a bounce commit seen before the dispute's resolution
+  // commit is newer than the reset and counts; once the resolution commit is
+  // reached, that artifact's budget is closed for everything older. A
+  // resolution the branch cannot place (a hand-built history) falls back to
+  // its `resolved_at` against the bounce commit's time.
+  const disputeResolutionOids = new Map<string, string>()
+  const disputeResolvedAt: Record<string, number> = {}
+  escalations.forEach((esc, i) => {
+    const named = esc.resolved ? CONTRACT_DISPUTE.exec(esc.reason) : null
+    if (!named) return
+    const artifact = named[1]!
+    const commit = resolutionCommits[i]
+    if (commit) {
+      disputeResolutionOids.set(commit.oid, artifact)
+      return
+    }
+    const at = esc.resolved_at ? Math.floor(Date.parse(esc.resolved_at) / 1000) : Number.NaN
+    if (Number.isFinite(at) && at > (disputeResolvedAt[artifact] ?? Number.NEGATIVE_INFINITY)) disputeResolvedAt[artifact] = at
+  })
+  const budgetClosed = new Set<string>()
   for (const commit of history) {
+    const resetFor = disputeResolutionOids.get(commit.oid)
+    if (resetFor !== undefined) budgetClosed.add(resetFor)
     const bounce = /^state\([^)]+\):\s*bounced\s+(\S+)/.exec(commit.subject)
-    if (bounce && commit.time > (disputeResolvedAt[bounce[1]!] ?? Number.NEGATIVE_INFINITY))
+    if (bounce && !budgetClosed.has(bounce[1]!) && commit.time > (disputeResolvedAt[bounce[1]!] ?? Number.NEGATIVE_INFINITY))
       bounceCounts[bounce[1]!] = (bounceCounts[bounce[1]!] ?? 0) + 1
     if (!commit.state) continue
     for (const gate of ['G0', 'G1', 'G2', 'G3'] as GateId[]) {

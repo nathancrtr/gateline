@@ -74,6 +74,7 @@ const closedOk = (role: string, task: string | null, at: string): LedgerEntry =>
   cost_usd: 2,
   failed: false,
   refused: false,
+  engine: null,
 })
 
 /**

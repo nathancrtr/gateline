@@ -78,11 +78,22 @@ describe('the bounce budget resets with the dispute (#348)', () => {
 
   it('counts bounces that land after the resolution, so the next dispute still escalates', async () => {
     const { dir } = makeToyRepo()
+    // The resolution lands first, then two fresh bounces: what a repair followed
+    // by a producer regenerating the artifact malformed looks like on the
+    // branch. Its `resolved_at` is stamped a minute *ahead*, and does not
+    // matter: the record's own order says the bounces came after (#346).
+    await resolveDispute(dir, 60)
     await bounceTwice(dir)
-    // Resolved a minute *ago*: the same two bounces now postdate it, which is
-    // what a fresh round of bounces after a repair looks like.
-    await resolveDispute(dir, -60)
     expect((await observe(dir)).bounceCounts['spec.md']).toBe(2)
+  })
+
+  it('reads the order from the branch, not the clocks: a resolution committed after the bounces resets them whatever its timestamp says', async () => {
+    const { dir } = makeToyRepo()
+    await bounceTwice(dir)
+    // Stamped a minute ago — by wall clock the bounces would postdate it —
+    // but it was committed after them, and that is what counts (#346).
+    await resolveDispute(dir, -60)
+    expect((await observe(dir)).bounceCounts['spec.md']).toBeUndefined()
   })
 
   it('leaves another artifact’s budget alone — the reset is named, not global', async () => {

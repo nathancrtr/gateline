@@ -589,14 +589,20 @@ function NeedsYouCard({
       <>
         {chipPaths.map((p) => {
           const report = isReviewPath(p) ? reports?.find((r) => r.path === p) : undefined
+          const verdicts = (report?.rounds ?? []).map((r) => r.verdict).filter((v): v is NonNullable<typeof v> => v !== null)
+          const verdictArc =
+            verdicts.length === 0 ? null : verdicts.length > 1 && verdicts[0] !== verdicts[verdicts.length - 1] ? `${verdicts[0]} → ${verdicts[verdicts.length - 1]}` : verdicts[verdicts.length - 1]
           return (
             <Link
               key={p}
               to={`/runs/${item.source}/${item.slug}?tab=record&artifact=${encodeURIComponent(p)}`}
-              className="imp inline-flex items-center gap-1.5 hover:bg-inset"
+              className="imp hover:bg-inset"
             >
               {p}
-              {report && report.rounds.length > 0 && <VerdictChip verdicts={report.rounds.map((r) => r.verdict)} />}
+              {/* The verdict rides inside the same impression as the name, in
+                  the name-plus-code grammar: a chip nested in a chip stood
+                  4px taller than its neighbours (measured, 2026-09-04). */}
+              {verdictArc && <span className="text-muted"> · {verdictArc}</span>}
             </Link>
           )
         })}

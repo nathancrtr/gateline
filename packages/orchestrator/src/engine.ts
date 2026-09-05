@@ -5,6 +5,7 @@
 // updates, comment-preserving YAML, the orchestrator's own commit verbs
 // (dispatched | bounced | advanced | escalated | paused | metered | harvested),
 // a bot identity, and — structurally — no code path that writes gates.*.
+import { hostname } from 'node:os'
 import { type Identity, ROLE_TIMEOUT_MS, TERMINAL_PHASES } from '@gateline/core/record'
 import { Git, LocalGitSource, ensureDraftPr, type RunRef, type WriteResult } from '@gateline/core/sources'
 import type { Document } from 'yaml'
@@ -31,6 +32,14 @@ export interface EngineConfig {
   roleTimeoutMs?: number
   /** Age at which an open ledger entry with no live job is declared lost (default 5 min). */
   staleMs?: number
+  /**
+   * Who this engine is, stamped on every ledger entry it opens (#349) and read
+   * back by `sweepStale`. Defaults to `<hostname>:<pid>` — the process is the
+   * unit, because the process is what owns the job table the sweep is really
+   * asking about. Override only to model another process (tests) or to name an
+   * engine whose pid a supervisor recycles.
+   */
+  engineId?: string
   /** Push every orchestrator commit to origin (hosted mode): the machine is disposable, origin is not. */
   push?: boolean
   /**
@@ -101,6 +110,46 @@ export interface TickOutcome {
  */
 const DEFAULT_ROLE_TIMEOUT_MS = ROLE_TIMEOUT_MS
 const DEFAULT_STALE_MS = 5 * 60 * 1000
+
+/**
+ * Engine identity (#349): `<hostname>:<pid>`, short enough to read in a diff of
+ * `state.yaml` and specific enough to probe. The blessed topology is one engine
+ * per machine (TOPOLOGY.md §3.1), so in production this is exactly that pair;
+ * the `#n` suffix exists only so a *second* engine constructed inside one
+ * process — a test, a future in-process sibling — never inherits the first
+ * one's entries and starts aging live jobs out from under it.
+ */
+let engineSeq = 0
+function defaultEngineId(): string {
+  const n = engineSeq++
+  return `${hostname()}:${process.pid}${n === 0 ? '' : `#${n}`}`
+}
+
+/** Split an engine id back into the machine and the process it names. */
+function parseEngineId(id: string): { host: string; pid: number } | null {
+  const m = /^(.+):(\d+)(?:#\d+)?$/.exec(id)
+  if (!m) return null
+  return { host: m[1]!, pid: Number(m[2]) }
+}
+
+/**
+ * Is that pid still a process on this machine? Signal 0 is the standard
+ * existence probe: no error means it is running, `EPERM` means it is running
+ * under another user, anything else (`ESRCH`) means it is gone. Machine-local
+ * by construction, the same boundary `sources/engine-health.ts` draws — an
+ * engine on another host cannot be probed from here, so the sweep never
+ * claims its entries early.
+ */
+function pidAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (e) {
+    return (e as NodeJS.ErrnoException).code === 'EPERM'
+  }
+}
+
 /** The host ceiling's rolling window (#97). */
 export const DEFAULT_SPEND_WINDOW_MS = 24 * 60 * 60 * 1000
 
@@ -267,6 +316,8 @@ export interface InFlightJob {
 
 export class Engine {
   readonly source: LocalGitSource
+  /** This process, as the ledger names it (#349) — see `EngineConfig.engineId`. */
+  readonly engineId: string
   private readonly cfg: EngineConfig
   /** In-flight jobs, keyed slug|role|task|round — host ephemera, never committed (§4.4). */
   private readonly jobs = new Map<string, Promise<void>>()
@@ -293,6 +344,7 @@ export class Engine {
 
   constructor(cfg: EngineConfig) {
     this.cfg = cfg
+    this.engineId = cfg.engineId ?? defaultEngineId()
     this.source = new LocalGitSource('orchestrator', cfg.repoDir, {
       identity: cfg.identity,
       push: cfg.push,
@@ -742,24 +794,69 @@ export class Engine {
   }
 
   /**
+   * Which stale window an open ledger entry falls under (#349).
+   *
+   * "No job for it in `this.jobs`" is only evidence of a lost dispatch when
+   * this engine is the one that opened the entry — otherwise it is evidence of
+   * nothing at all, because a process cannot see another process's job table.
+   * The entry's `engine` key is what closes that gap:
+   *
+   * - no name (pre-#349, or hand-written): claim it. An upgraded engine
+   *   restarting on entries its old code wrote still recovers on `staleMs`.
+   * - this engine's own name: the dispatch was launched here and is gone from
+   *   here — the §4.4 crash signature, exactly as before.
+   * - a name whose process is no longer running on this machine: the same
+   *   signature, one process removed. This is what keeps a restart — a crash,
+   *   or the §13 self-supersede exit — converging inside one stale window: the
+   *   old pid is gone the moment the new engine boots.
+   * - anything else — another live pid here, or any engine on another host,
+   *   which this machine cannot probe (the boundary `sources/engine-health.ts`
+   *   draws): assume it is working. Aging it early is what put two agents on
+   *   one task.
+   */
+  private staleVerdict(engine: string | null): { prompt: boolean; why: string } {
+    if (engine === null) return { prompt: true, why: 'entry names no engine, so this one claims it' }
+    if (engine === this.engineId) return { prompt: true, why: `opened here (${engine}) with no live job — lost between commit and completion` }
+    const named = parseEngineId(engine)
+    if (named && named.host === hostname() && !pidAlive(named.pid)) return { prompt: true, why: `opened by ${engine}, whose process is gone from this machine` }
+    return { prompt: false, why: `opened by ${engine}, which may still be running it` }
+  }
+
+  /**
    * Crash recovery (§4.4): an open ledger entry with no living job and no
    * artifact is exactly the signature of a dispatch lost between commit and
    * completion. Age it out: close it as failed (metered at the conservative
    * static estimate); the next derivation re-dispatches — a lost dispatch
    * costs a retry, never corruption.
+   *
+   * An entry another engine may still be holding is not that signature, so it
+   * waits out `roleTimeoutMs + staleMs` instead (#349): past the role timeout
+   * no live job could still be behind it, whoever opened it, because that is
+   * when its own engine kills it.
    */
   private async sweepStale(ref: RunRef): Promise<void> {
     const { state } = await this.source.readState(ref)
     if (!state) return
     const staleMs = this.cfg.staleMs ?? DEFAULT_STALE_MS
+    const graceMs = (this.cfg.roleTimeoutMs ?? DEFAULT_ROLE_TIMEOUT_MS) + staleMs
     const now = (this.cfg.now?.() ?? new Date()).getTime()
     for (const entry of parseLedger(state)) {
       if (entry.cost_usd !== null || entry.failed) continue
       const key = jobKey(ref.slug, entry.role, entry.task, entry.round)
       if (this.jobs.has(key)) continue // alive here; not stale
       const openedAt = entry.at ? Date.parse(entry.at) : NaN
-      if (Number.isNaN(openedAt) || now - openedAt < staleMs) continue
-      this.log(`${ref.slug}: aging stale dispatch ${entry.role}${entry.task ? `(${entry.task})` : ''} — no live job`)
+      if (Number.isNaN(openedAt)) continue
+      const what = `${entry.role}${entry.task ? `(${entry.task})` : ''}`
+      const verdict = this.staleVerdict(entry.engine)
+      const age = now - openedAt
+      if (age < (verdict.prompt ? staleMs : graceMs)) {
+        // A foreign entry past the short window is the topology TOPOLOGY.md
+        // §3.1 forbids showing itself. Say so rather than acting on it.
+        if (!verdict.prompt && age >= staleMs)
+          this.log(`${ref.slug}: leaving ${what} open — ${verdict.why}; it ages only after the role timeout (${describeWindow(graceMs)})`)
+        continue
+      }
+      this.log(`${ref.slug}: aging stale dispatch ${what} — ${verdict.why}`)
       await this.closeDispatch(ref, { role: entry.role, task: entry.task, round: entry.round }, {
         ok: false,
         costUsd: null,
@@ -904,6 +1001,9 @@ export class Engine {
                   round: intent.round,
                   adapter: this.cfg.dispatcher.adapterFor?.(intent.role) ?? this.cfg.dispatcher.adapter,
                   model: this.cfg.registry ? resolveModel(this.cfg.registry, intent.role) : null,
+                  // Who is holding this open (#349) — the only thing that lets a
+                  // later sweep tell an orphan from another process's live job.
+                  engine: this.engineId,
                   tokens_in: null,
                   tokens_out: null,
                   cost_usd: null,

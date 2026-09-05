@@ -65,6 +65,7 @@ const failedAttempt = (task: string, at: string): LedgerEntry => ({
   cost_usd: 8,
   failed: true,
   refused: false,
+  engine: null,
 })
 
 describe('the derivation table, one rule per row', () => {

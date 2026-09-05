@@ -15,7 +15,10 @@
 //   D5  gate approved but phase not advanced         → record phase advance
 //   D6  producer artifact absent                     → dispatch the producing role
 //   D7  producer artifact malformed, bounces < 2     → bounce (re-dispatch naming missing sections)
-//   D8  same artifact bounced twice                  → escalate + pause (contract dispute)
+//   D8  same artifact bounced twice since the last
+//       resolved dispute over it                     → escalate + pause (contract dispute);
+//       resolving that escalation is what resets the budget, so an artifact a human repaired
+//       by hand and a producer later regenerated malformed gets its two bounces again (#348)
 //   D9  gate declined since artifact last landed     → re-dispatch producer with the decline notes
 //   D10 artifact well-formed, gate undecided         → rest (the inbox surfaces it)
 //   D11 eligible pending tasks                       → dispatch parallel implementer set (disjoint surfaces only)
@@ -569,6 +572,21 @@ function implementPhase(obs: RunObservation): DerivedAction {
   }
   return producerPhase(obs, 'G2')
 }
+
+/**
+ * D8's escalation reason, and the pattern that finds one again (#348).
+ *
+ * Two readers match on this text rather than on a rule id, because the reason
+ * is all `state.yaml` records: `observe.ts` reads it to date the bounce budget
+ * from the last resolved dispute over that artifact, and Gatehouse's paused
+ * card (`core/src/view-model/readiness.ts`) reads it to say what a hand fix
+ * actually is. Core cannot import this — the layering runs record → sources →
+ * view-model, with nothing pointing at the orchestrator — so it matches on the
+ * same stable substrings instead. Reword the reason and both go quiet: keep
+ * `<artifact> bounced` at the head and `is still malformed` behind it, or fix
+ * both readers in the same change.
+ */
+export const CONTRACT_DISPUTE = /^(\S+) bounced \d+× and is still malformed\b/
 
 /** D7/D8 — malformed artifact: bounce twice, then it's a contract dispute. */
 function bounceOrEscalate(obs: RunObservation, role: Role, artifact: string): DerivedAction | null {

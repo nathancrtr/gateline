@@ -32,6 +32,18 @@ export interface BudgetLedgerEntry {
   failed: boolean
   /** Closed without a process ever spawning (#155): $0, not a failure, not a retry spent. */
   refused: boolean
+  /**
+   * Which engine process opened this entry (#349), as `<hostname>:<pid>`.
+   * Null on entries written before the key existed, and on hand-written ones.
+   *
+   * The stale sweep is the only reader: an open entry says "an agent is
+   * running", and without a name on it a second engine cannot tell a crashed
+   * process's orphan from another process's live job — it aged both after
+   * `staleMs` and re-dispatched, putting two agents on one task. With the
+   * name, a sweep ages its own entries (and unnamed ones) on the short
+   * window and another engine's only once no live job could still hold it.
+   */
+  engine: string | null
 }
 
 /**
@@ -67,6 +79,7 @@ export function parseLedger(state: RunState | null): BudgetLedgerEntry[] {
       cost_usd: typeof e.cost_usd === 'number' ? e.cost_usd : null,
       failed: e.failed === true,
       refused: e.refused === true,
+      engine: typeof e.engine === 'string' && e.engine !== '' ? e.engine : null,
     })
   }
   return entries

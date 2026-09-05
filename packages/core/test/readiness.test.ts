@@ -3,8 +3,11 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { deriveReadiness, buildPortfolio, ROUND_CAP, type RunRef } from '../src/index.ts'
+import { deriveReadiness, buildPortfolio, parseRunState, pausedInstruction, ROUND_CAP, type RunRef, type RunState } from '../src/index.ts'
 import { dropFixture, makeFixture, type FixtureContext } from './fixture.helper.ts'
+
+/** The sentence a pause with nothing specific to say still gets. */
+const GENERIC_PAUSE = 'Resume the run, or close it with a disposition saying why it ends here'
 
 let ctx: FixtureContext
 let refs: Map<string, RunRef>
@@ -286,7 +289,7 @@ describe('readiness derivation (§2.3, one row per test)', () => {
 
   it('paused for a human reason keeps the generic instruction', async () => {
     const items = await gateItem('paused-other-reason')
-    expect(items[0]!.detail).toBe('Resume the run, or close it with a disposition saying why it ends here')
+    expect(items[0]!.detail).toBe(GENERIC_PAUSE)
   })
 
   it('staged: paused_reason=staged yields exactly one staged item, never a paused one (AC6.1, ADR-4)', async () => {
@@ -422,6 +425,105 @@ describe('readiness derivation (§2.3, one row per test)', () => {
   it('done run needs nothing', async () => {
     const items = await gateItem('done-merged')
     expect(items).toHaveLength(0)
+  })
+})
+
+/**
+ * #348. `escalation` is the one pause reason that says nothing about its own
+ * exit: it means a human is owed, and the engine writes it for conditions as
+ * different as a contract dispute and a phase outside the profile. Some of
+ * those clear themselves once the named edit lands; these do not clear at all
+ * without a hand edit, and resolving alone re-pauses within a tick. So the
+ * card reads the last resolved escalation's own words. The reasons are
+ * composed in `orchestrator/src/derive.ts` (rules D8, D21, D4) and quoted here
+ * verbatim: this is the test that catches a reword on either side.
+ */
+describe('pausedInstruction reads the resolved escalation (#348)', () => {
+  const pausedOn = (...escalations: { reason: string; resolvedAt: string }[]): RunState => {
+    const { state, error } = parseRunState(
+      `run: toy
+branch: run/toy
+phase: paused
+profile: full
+paused_reason: escalation
+
+budget: {cost_limit_usd: 25, cost_spent_usd: 0, ledger: []}
+
+gates:
+  G0: {approved: false, by: null, at: null, notes: null}
+  G1: {approved: false, by: null, at: null, notes: null}
+  G2: {approved: false, by: null, at: null, notes: null}
+  G3: {approved: false, by: null, at: null, notes: null}
+
+tasks: []
+
+escalations:
+${escalations
+  .map(
+    (e) => `  - at: "2026-09-01T09:00:00Z"
+    from_role: orchestrator
+    reason: ${JSON.stringify(e.reason)}
+    resolved: true
+    resolved_by: Toy Operator
+    resolved_at: "${e.resolvedAt}"
+    resolution: seen`,
+  )
+  .join('\n')}
+`,
+    )
+    expect(error).toBeNull()
+    return state!
+  }
+
+  const at = (hour: string) => `2026-09-01T${hour}:00:00Z`
+
+  it('D8 contract dispute: name the artifact, and say a resolution alone re-pauses', () => {
+    const detail = pausedInstruction(pausedOn({ reason: 'plan.md bounced 2× and is still malformed — contract dispute, a human should look', resolvedAt: at('11') }))
+    expect(detail).toContain('plan.md')
+    expect(detail).toContain('by hand')
+    expect(detail).toContain('contract')
+    expect(detail).toContain('re-pauses')
+  })
+
+  it('D21 profile violation: say edit profile: heavier, and that profiles never downgrade', () => {
+    const detail = pausedInstruction(pausedOn({ reason: 'phase "release" does not exist in profile standard', resolvedAt: at('11') }))
+    expect(detail).toContain('profile:')
+    expect(detail).toContain('never downgrade')
+    expect(detail).toContain('re-pauses')
+    // The gate half of D21 is the same edit and gets the same sentence.
+    expect(
+      pausedInstruction(pausedOn({ reason: 'gate G3 is decided but does not exist in profile patch — profiles upgrade mid-run, never downgrade', resolvedAt: at('11') })),
+    ).toBe(detail)
+  })
+
+  it('D4 no task files: say which files have to land, and where', () => {
+    const detail = pausedInstruction(pausedOn({ reason: 'phase is implement but the run has no task files — the G1 packet did not carry into state', resolvedAt: at('11') }))
+    expect(detail).toContain('tasks/*.yaml')
+    expect(detail).toContain('runs/toy/')
+    expect(detail).toContain('re-pauses')
+  })
+
+  it('D4 unknown status: quote the status and list the ones the table knows', () => {
+    const detail = pausedInstruction(pausedOn({ reason: 'task 01-core has status "wedged" the derivation table has no rule for', resolvedAt: at('11') }))
+    expect(detail).toContain('01-core')
+    expect(detail).toContain('"wedged"')
+    expect(detail).toContain('in-review')
+  })
+
+  it('any other escalation keeps the generic sentence — the match is deliberately narrow', () => {
+    expect(pausedInstruction(pausedOn({ reason: 'reviewer escalated task 01-core — see runs/toy/review-01.md', resolvedAt: at('11') }))).toBe(GENERIC_PAUSE)
+    expect(pausedInstruction(pausedOn())).toBe(GENERIC_PAUSE) // paused for an escalation nobody recorded
+  })
+
+  it('the most recently resolved escalation governs, not the first one recorded', () => {
+    const detail = pausedInstruction(
+      pausedOn(
+        { reason: 'spec.md bounced 2× and is still malformed — contract dispute, a human should look', resolvedAt: at('11') },
+        { reason: 'phase "release" does not exist in profile standard', resolvedAt: at('14') },
+      ),
+    )
+    expect(detail).toContain('profile:')
+    expect(detail).not.toContain('spec.md')
   })
 })
 

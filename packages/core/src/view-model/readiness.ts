@@ -12,7 +12,11 @@
 //                ∧ nothing else already speaks for the run; the card's
 //                instruction is the reason's (#96): budget-exhausted says
 //                raise the limit, slug-landed says close — a bare "resume"
-//                on either re-pauses on the next tick
+//                on either re-pauses on the next tick. `escalation` goes one
+//                level further (#348) and reads the last resolved
+//                escalation's own words, because that reason covers both
+//                conditions that clear themselves and ones whose only exit is
+//                a hand edit of an artifact, a `profile:` or a `phase:`
 //   Staged       phase=paused ∧ paused_reason = staged — awaiting arm, not resume/kill
 //   Declined     phase=paused ∧ paused_reason = gate-declined — no item at all
 //   Closed       phase=closed — no item at all, whatever else the record holds
@@ -67,6 +71,7 @@ import {
   BUDGET_REASON,
   CLOSED_PHASE,
   DECLINED_REASON,
+  ESCALATION_REASON,
   LANDED_REASON,
   G2_COMPLETE_STATUSES,
   g2PacketReady,
@@ -75,6 +80,7 @@ import {
   pendingGate,
   ROUND_CAP,
   STAGED_REASON,
+  TASK_STATUSES,
   type GateId,
   type RunState,
 } from '../record/schema.ts'
@@ -163,15 +169,71 @@ function openDispatchAt(state: RunState, role: string, packetAt: number | null):
 }
 
 /**
+ * The escalation reasons whose only exit is a hand edit (#348), matched on the
+ * words the engine writes rather than on a rule id — the rule id is not in the
+ * record, only the sentence is.
+ *
+ * These substrings are a contract with `orchestrator/src/derive.ts`, which
+ * composes the reasons (rules D8, D21, D4). Core cannot import them: the
+ * layering runs record → sources → view-model and nothing here points at the
+ * orchestrator. So they are duplicated deliberately, kept to the most stable
+ * fragment of each sentence, and noted at both ends — reword a reason there
+ * and the card here quietly falls back to the generic line.
+ */
+const HAND_EDIT_ESCALATIONS = {
+  /** D8: `<artifact> bounced N× and is still malformed — contract dispute …` */
+  contractDispute: /^(\S+) bounced \d+× and is still malformed\b/,
+  /** D21: `gate G1 is decided but does not exist in profile patch …` / `phase "release" does not exist in profile …` */
+  profileViolation: /does not exist in profile\b/,
+  /** D4: `phase is implement but the run has no task files …` */
+  noTaskFiles: /has no task files\b/,
+  /** D4: `task 01-core has status "wat" the derivation table has no rule for` */
+  unknownStatus: /^task (\S+) has status "([^"]*)" the derivation table has no rule for\b/,
+}
+
+/**
+ * The escalation whose resolution left the run paused: the newest resolved
+ * one. A paused card with reason `escalation` only ever renders once every
+ * escalation is resolved (an unresolved one speaks for itself, above), so the
+ * thing the human still has to do is whatever that last one pointed at.
+ */
+function lastResolved(state: RunState): string | null {
+  let reason: string | null = null
+  let at = Number.NEGATIVE_INFINITY
+  for (const esc of state.escalations) {
+    if (!esc.resolved) continue
+    const t = esc.resolved_at ? Date.parse(esc.resolved_at) : Number.NaN
+    // Undated resolutions still count, in record order, so a hand-resolved
+    // escalation is not silently ignored.
+    const key = Number.isNaN(t) ? at : t
+    if (key >= at) {
+      at = key
+      reason = esc.reason
+    }
+  }
+  return reason
+}
+
+/**
  * What actually clears the pause (#96). The old card said "resume or decline"
  * for every reason, and for the two reasons the orchestrator itself writes
  * that advice was a closed loop: a budget pause is recomputed from the
  * ledger and the limit, a landed-slug pause from the default branch, and a
  * resume that changes neither re-pauses seconds later — each cycle costing
  * two decisions and one more escalation entry.
+ *
+ * `escalation` is the third such reason and the hardest of the three (#348),
+ * because it does not name a condition at all — only that a human is owed.
+ * Some of what it stands for clears itself; some of it (a contract dispute, a
+ * profile violation, a breakdown that never landed) has no exit but a hand
+ * edit, and there the same closed loop applies: resolving is an
+ * acknowledgment, the engine re-derives from files nobody changed, and the run
+ * re-pauses within a tick. So the card goes one level deeper and reads the
+ * resolved escalation's own words.
  */
 export function pausedInstruction(state: RunState): string {
   const limit = state.budget?.cost_limit_usd ?? null
+  const generic = 'Resume the run, or close it with a disposition saying why it ends here'
   switch (state.paused_reason) {
     case BUDGET_REASON:
       return limit !== null
@@ -179,8 +241,26 @@ export function pausedInstruction(state: RunState): string {
         : 'This orchestrator requires a per-run cost_limit_usd and the run has none. Resume with a limit, or close the run with a disposition'
     case LANDED_REASON:
       return `runs/${state.run}/ already shipped on the default branch and this branch moved on after the merge. Close the run with a disposition (already-delivered) and carry any remaining work on a fresh slug — resuming re-pauses on the next tick`
+    case ESCALATION_REASON: {
+      // Resolving one of these acknowledges the condition; it does not change
+      // it. The engine re-derives from the same files and re-pauses unless the
+      // edit the reason names has landed too, so the card names the edit.
+      const reason = lastResolved(state)
+      if (reason === null) return generic
+      const dispute = HAND_EDIT_ESCALATIONS.contractDispute.exec(reason)
+      if (dispute)
+        return `${dispute[1]} is still malformed after two bounces. Fix it by hand — or fix the contract it fails — then resume: the engine re-validates, and resolving alone re-pauses`
+      if (HAND_EDIT_ESCALATIONS.profileViolation.test(reason))
+        return 'The run is outside its own profile. Edit profile: to one that includes it, or correct phase: by hand, then resume — profiles upgrade mid-run, never downgrade, and resolving alone re-pauses'
+      if (HAND_EDIT_ESCALATIONS.noTaskFiles.test(reason))
+        return `The G1 breakdown never reached this branch. Commit the tasks/*.yaml files under runs/${state.run}/ by hand, then resume — resolving alone re-pauses`
+      const status = HAND_EDIT_ESCALATIONS.unknownStatus.exec(reason)
+      if (status)
+        return `Task ${status[1]} carries a status the derivation has no rule for ("${status[2]}"). Edit it by hand to one the table knows (${TASK_STATUSES.join(', ')}), then resume — resolving alone re-pauses`
+      return generic
+    }
     default:
-      return 'Resume the run, or close it with a disposition saying why it ends here'
+      return generic
   }
 }
 

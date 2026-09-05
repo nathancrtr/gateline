@@ -135,7 +135,7 @@ implementation time (one test per row, like the frontend's); its shape:
 | Gate declined | Rest as `paused: gate-declined`; a human resume re-dispatches the producing role with the decline notes as bounce input (resolved question 5). The re-dispatch opens a ledger entry, and the frontend reads that open entry as the in-flight signal (#159): while it stands, the gate card renders superseded rather than reviewable, so the human who just declined is not shown their own old artifact with an Approve button. It is the same fact rule D12 rests on, read by the other surface — one constant for the role timeout keeps the two from disagreeing about when a dispatch has been lost |
 | Task diff ready, `review_rounds` < 3 | Dispatch Reviewer (P5-constrained, §5.3) |
 | Review requests changes, rounds < 3 | Dispatch Implementer, round n+1 |
-| Round cap hit, or two bounces of the same artifact | Escalate; pause the run |
+| Round cap hit, or two bounces of the same artifact | Escalate; pause the run. The bounce budget is per dispute, not per run (#348): only bounces newer than the most recently resolved contract dispute over *that* artifact count, so an artifact a human repaired by hand and a producer later regenerated malformed gets the same two bounces the first occurrence had, rather than escalating on sight against a count from weeks earlier. The pause is `escalation`, whose only exit here is a hand edit — the paused card reads the resolved escalation's own words and names that edit, the way `budget-exhausted` names the limit (#96) |
 | Review verdict `escalate` | Escalate; pause. Resolving the escalation *after* the verdict landed routes by the LATEST matching resolution's optional `disposition` (issues #189, #190): `re-review` dispatches the re-review round immediately — an explicit human override of the #188 zero-delta guard; `return-to-implement` sends the task back to the implementer with the review report, or on to a verify round if the implementer already responded (whose-turn logic keyed off the resolution's timestamp, mirroring the request-changes row above); `re-plan` sends the finding to the architect's amendment mode (see the next row); no disposition named falls back to the legacy behavior — a re-review round only once a real commit (anything other than `state.yaml`) has also landed newer than the verdict, else rest naming the fix that still needs to land (issue #188) |
 | Disposition `re-plan` | Dispatch the architect in amendment mode, carrying the review report path and the resolution note (rule D22) — an architect already in flight rests instead, same as any other in-flight producer. Once the amendment lands (`plan.md` or a `tasks/*.yaml` touched newer than the resolution), the engine raises a *fresh* escalation naming `task <id>` and pauses for human acknowledgment (rule D23, issue #190) rather than acting on the widened surface unattended — the architect proposes, the human still disposes. That acknowledgment escalation's own resolution (typically `return-to-implement`) is just another resolution matching the same `task <id>` text, so the LATEST-matching-resolution rule above picks it up and routes through the ordinary machinery unchanged |
 | Verification verdict `escalate` (rule D24, #152) | Escalate; pause. The verifier's own channel, mirroring the reviewer's: `**Verdict:** escalate` on the verification report means a failure traces to the spec, the plan, or the gate process rather than the implementation. A resolution newer than the report returns the packet to the table for the G2 human, failed rows and all — there is no round to re-run, so no disposition routing applies. `pass` and `fail` never pause: `fail` is the G2 human's to weigh, and the gate surface quotes the report's verdict and its non-verified rows so a non-clean report never reads as a clean pass. Reports that predate the verdict line behave as before |
@@ -253,15 +253,45 @@ push/fetch half of this section does not apply.
    it rebases, scoped to the task's declared file-contact surface. The
    orchestrator then commits the closing bookkeeping — status, rounds, spend.
 
-The CAS on step 1 is the duplicate-dispatch guard: two orchestrator instances, or a
-tick racing its own heartbeat, serialize on the ref update — the loser re-reads,
-sees `dispatched`, and rests. A crash between steps 1 and 2 leaves a `dispatched`
-entry with no living job and no artifact; the heartbeat detects exactly that
-signature and re-dispatches — agents are disposable by design (DESIGN.md §1), so a
-lost dispatch costs a retry, never corruption. Job handles (PIDs, harness session
+The CAS on step 1 is the duplicate-dispatch guard for the *commit*: two orchestrator
+instances, or a tick racing its own heartbeat, serialize on the ref update — the
+loser re-reads, sees `dispatched`, and rests. A crash between steps 1 and 2 leaves a
+`dispatched` entry with no living job and no artifact; the heartbeat detects exactly
+that signature and re-dispatches — agents are disposable by design (DESIGN.md §1), so
+a lost dispatch costs a retry, never corruption. Job handles (PIDs, harness session
 ids) are deliberately **not** committed: they are host-specific ephemera, treated as
 cache — the loop must always be able to reconstruct reality by probing, because git
 is the only store (the frontend's R1, inherited).
+
+The CAS does not guard the *job*, and until #349 nothing did. "No living job" was
+read from one process's own table, so a second engine against the same runs — the
+topology TOPOLOGY.md §3.1 forbids — read the first engine's live dispatches as
+orphans after five minutes of a thirty-minute role timeout and re-dispatched them:
+two agents on one task. The entry therefore carries one durable fact about its
+writer: `engine: <hostname>:<pid>`, a new optional key documented in
+`contracts/state.yaml`. That is not a job handle and does not break the rule above —
+it identifies the *process*, which outlives every job it launches and is the thing a
+later reader can actually probe. What the sweep guarantees, stated exactly:
+
+* **Its own entries, and entries that name no engine at all** (pre-#349, or
+  hand-written) age after `staleMs` — five minutes by default. Unchanged.
+* **An entry whose named process is gone from this machine** ages after `staleMs`
+  too. This is what makes a restart converge: a crashed engine, or the §13
+  self-supersede exit, leaves a pid that no longer exists, and the replacement
+  process — a different pid on the same host — probes it with signal 0 and claims
+  the entry inside one stale window.
+* **An entry whose named process is still running here, or that names another
+  machine** (which this one cannot probe — the same machine-local boundary
+  `engine-health.json` draws) ages only after `roleTimeoutMs + staleMs`. Past the
+  role timeout no live job can be behind it whoever opened it, because that is when
+  its own engine kills it. Until then the sweep leaves it alone and says so in the
+  log, which is also the clearest signal available that two engines are pointed at
+  one set of runs.
+
+Pid reuse is the acknowledged gap: a recycled pid reads as alive, and the entry
+waits out the role timeout instead of five minutes. That is the safe direction —
+late recovery, never a double dispatch — and it costs nothing on the blessed
+topology, where there is one engine per machine.
 
 ### 4.5 Pause and resume
 
@@ -620,7 +650,7 @@ Extends DESIGN.md §9 for the autonomous mode:
 
 | Failure mode | Mitigation |
 |---|---|
-| Duplicate dispatch (two instances, crash-restart, racing ticks) | Commit-then-launch: intent is a CAS commit; heartbeat probes liveness before re-dispatching |
+| Duplicate dispatch (two instances, crash-restart, racing ticks) | Commit-then-launch: the intent is a CAS commit, which serializes the *commit* — racing ticks lose it and rest. The *job* is guarded separately (§4.4, #349): the entry names the process that opened it, so the stale sweep ages its own entries, unnamed ones, and entries whose named pid is gone from this machine after `staleMs`, and everything else — another live engine here, or any engine on a host this one cannot probe — only after `roleTimeoutMs + staleMs`, past which no live job can still be behind it. A crash or a §13 self-supersede restart therefore recovers inside one stale window, while a second engine against the same runs no longer ages the first one's live dispatches out from under it. It stays a forbidden topology (TOPOLOGY.md §3.1) that nothing enforces; the sweep now logs it rather than acting on it |
 | Orchestrator races a human decision | CAS refusal → re-tick; both writers already treat refusal as the designed outcome |
 | Runaway spend | Every model invocation flows through the metered seam; pre-flight cap; pause-don't-degrade. Resume from the budget pause carries a higher limit or is refused (#96); the host ceiling is a per-window rate that defers rather than pauses (#97) |
 | Run branch held by a human's checkout (#154) | The workspace preflight refuses to dispatch into a checkout the orchestrator does not manage — an agent there would race the human's edits. Deterministic and environmental, so it is neither the role's failure nor a retry's business: rule `CH` probes for it before the intent commit and defers (written nowhere, re-derived once released), and the rare refusal that slips past the probe closes its ledger entry at `$0`, `refused`, counting toward nothing (#155). Counting toward nothing also means nothing stops it repeating, so any pre-spawn refusal that stands — this one, a broken framework root, a dispatcher that will not spawn — is bounded by rule `RF` after two in a row: deferred like `CH`, re-probed once a window, never escalated, since no edit to the run's record could clear a condition of the host (#347) |

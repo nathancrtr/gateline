@@ -24,6 +24,7 @@ describe('parseLedger', () => {
         tokens_out: 900,
         cost_usd: 0.42,
         failed: false,
+        engine: 'workstation:4242',
       },
     ])
     expect(parseLedger(state)).toEqual([
@@ -39,8 +40,19 @@ describe('parseLedger', () => {
         cost_usd: 0.42,
         failed: false,
         refused: false,
+        engine: 'workstation:4242',
       },
     ])
+  })
+
+  // #349: the stale sweep reads this to tell a crashed engine's orphan from
+  // another engine's live job. An entry from before the key existed — or one a
+  // human typed — has to parse to null rather than to a name nobody wrote, or
+  // the sweep would wait out a role timeout for an engine that never existed.
+  it('reads a missing or non-string engine name as null', () => {
+    expect(parseLedger(withLedger([{ role: 'ops' }]))[0]!.engine).toBeNull()
+    expect(parseLedger(withLedger([{ role: 'ops', engine: '' }]))[0]!.engine).toBeNull()
+    expect(parseLedger(withLedger([{ role: 'ops', engine: 4242 }]))[0]!.engine).toBeNull()
   })
 
   it('degrades a wrong-typed field to null rather than throwing', () => {

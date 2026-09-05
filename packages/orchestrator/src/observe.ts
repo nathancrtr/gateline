@@ -12,7 +12,7 @@ import {
   validateArtifact,
 } from '@gateline/core/record'
 import type { RunRef, RunSource } from '@gateline/core/sources'
-import { GATE_PRODUCER } from './derive.ts'
+import { CONTRACT_DISPUTE, GATE_PRODUCER } from './derive.ts'
 import { parseReviewReport, type ReviewInfo } from './review-report.ts'
 import { parseVerificationReport, type VerificationInfo } from './verification-report.ts'
 
@@ -65,7 +65,18 @@ export interface RunObservation {
    * commit time otherwise (same-second commits make wall clocks ambiguous).
    */
   declineEvents: Partial<Record<GateId, { at: number; notes: string | null; redone: boolean }>>
-  /** Artifact → number of orchestrator bounce commits, from the commit grammar. */
+  /**
+   * Artifact → orchestrator bounce commits since the artifact's bounce budget
+   * last reset, from the commit grammar.
+   *
+   * The budget is per dispute, not per lifetime (#348). Counting the whole
+   * branch history made D8 a one-shot: a human who resolved the contract
+   * dispute, repaired the artifact by hand and let the producer regenerate it
+   * got no bounces at all the next time it came back malformed — the second
+   * occurrence escalated on sight, with a reason quoting bounces from weeks
+   * earlier. Resolving the D8 escalation for an artifact is what clears its
+   * count, so each dispute starts the same two bounces the first one had.
+   */
   bounceCounts: Record<string, number>
   ledger: LedgerEntry[]
   /** Ledger entries opened by a dispatch and not yet closed: in-flight work. */
@@ -147,10 +158,24 @@ export async function observeRun(source: RunSource, ref: RunRef, cfg: ObserveCon
   const declineEvents: RunObservation['declineEvents'] = {}
   const declineOids: Partial<Record<GateId, string>> = {}
   const bounceCounts: Record<string, number> = {}
+  // Where each artifact's bounce budget last reset (#348): the newest resolved
+  // contract dispute naming it. Recency is commit time against `resolved_at`,
+  // the same shape D17 and D20 use — and the same wall-clock reading #346 is
+  // revisiting for all three at once.
+  const disputeResolvedAt: Record<string, number> = {}
+  for (const esc of state?.escalations ?? []) {
+    const named = esc.resolved ? CONTRACT_DISPUTE.exec(esc.reason) : null
+    if (!named || !esc.resolved_at) continue
+    const at = Math.floor(Date.parse(esc.resolved_at) / 1000)
+    if (!Number.isFinite(at)) continue
+    const artifact = named[1]!
+    if (at > (disputeResolvedAt[artifact] ?? Number.NEGATIVE_INFINITY)) disputeResolvedAt[artifact] = at
+  }
   const history = await source.stateHistory(ref) // newest first
   for (const commit of history) {
     const bounce = /^state\([^)]+\):\s*bounced\s+(\S+)/.exec(commit.subject)
-    if (bounce) bounceCounts[bounce[1]!] = (bounceCounts[bounce[1]!] ?? 0) + 1
+    if (bounce && commit.time > (disputeResolvedAt[bounce[1]!] ?? Number.NEGATIVE_INFINITY))
+      bounceCounts[bounce[1]!] = (bounceCounts[bounce[1]!] ?? 0) + 1
     if (!commit.state) continue
     for (const gate of ['G0', 'G1', 'G2', 'G3'] as GateId[]) {
       if (declineEvents[gate]) continue // newest wins; already found

@@ -527,6 +527,13 @@ true, stated once so implementation and review can check against them:
 6. Phase, status, and pause values stay within the contract enums the readiness
    table recognizes; new states go through a contract amendment first, never
    improvisation (the wordfreq `review-approved` lesson).
+7. A gate decision is legal only for the gate on the table — the profile's first
+   un-approved gate, and only while the run stands in one of the phases that
+   gate is decided in (a paused run is judged by the phase a resume would
+   restore). Gatehouse offered nothing else; since #344 the CLI and the API
+   refuse it too, and the PR-approval sync obeys the same rule rather than
+   copying an early Approve on the draft PR into an undecided G2. An approval
+   that can be written out of order is one a verifier cannot trust.
 
 Deferred frontend nice-to-haves — explicitly *not* required for v1: a clarifying
 clause in the frontend README that R2's "exactly one write path" scopes to the human

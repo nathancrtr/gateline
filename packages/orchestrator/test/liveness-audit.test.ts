@@ -197,24 +197,25 @@ describe('F2 — a producer that lands nothing is re-dispatched without bound (#
   })
 })
 
-describe('F3 — a gate can be decided out of phase order (#344)', () => {
-  it.fails('planDecision refuses to approve a gate whose phase the run has not reached', async () => {
+describe('F3 — a gate is decided in its own phase, in order (#344)', () => {
+  it('planDecision refuses to approve a gate whose phase the run has not reached', async () => {
     const { dir } = makeToyRepo()
     const state = await readState(dir)
     expect(state.phase).toBe('spec')
-    // Expected: G2 is not on the table in spec. Today: accepted, and the
-    // advance sets phase to release — implement and its verification skipped.
-    expect(() => planDecision(state, { action: 'approve', gate: 'G2', burden: 'confirmation' }, HUMAN)).toThrow()
+    // G2 is not on the table in spec, so the approval is refused rather than
+    // signed and advanced to release with implement and its verification
+    // skipped. The message names the phase and the gate that is pending.
+    expect(() => planDecision(state, { action: 'approve', gate: 'G2', burden: 'confirmation' }, HUMAN)).toThrow(/G0 is the gate awaiting a decision/)
   })
 
-  it.fails('PR-approval sync leaves G2 alone while the run has not reached implement', async () => {
+  it('PR-approval sync leaves G2 alone while the run has not reached implement', async () => {
     const { dir } = makeToyRepo()
     const source = new LocalGitSource('human', dir)
     const provider = { approval: async () => ({ number: 1, url: 'https://example.test/pr/1', reviewer: 'early-bird', submittedAt: new Date().toISOString() }) }
     const plan = await planSync(source, provider)
-    // Expected: nothing to sync — the packet G2 decides does not exist yet.
-    // Today: the approval is copied in, and D5 advances the run to done the
-    // tick it enters implement, with no tasks worked and no verification.
+    // Nothing to sync: the packet G2 decides does not exist yet, so an early
+    // Approve on the draft PR stays on the PR instead of becoming a gate entry
+    // the engine's D5 rule would advance the run to done on.
     expect(plan).toHaveLength(0)
   })
 })
@@ -362,8 +363,8 @@ describe('F9 — `in-progress` with no open dispatch is a rest with no exit (#35
   })
 })
 
-describe('F10 — a gate can be approved while its producer is being re-dispatched (#351)', () => {
-  it.fails('planDecision refuses an approval whose packet is about to be replaced', { timeout: 60_000 }, async () => {
+describe('F10 — a gate cannot be approved while its producer is being re-dispatched (#351)', () => {
+  it('planDecision refuses an approval whose packet is about to be replaced', { timeout: 60_000 }, async () => {
     const { dir, clock } = makeToyRepo()
     let analystCalls = 0
     let finish: (o: object) => void = () => {}
@@ -383,10 +384,10 @@ describe('F10 — a gate can be approved while its producer is being re-dispatch
       await engine.tick() // D9 re-dispatch, now in flight
       const state = await readState(dir)
       expect(parseLedger(state).filter((e) => e.role === 'analyst' && e.cost_usd === null)).toHaveLength(1)
-      // Expected: the open producer entry is the #159 signal; approving the
-      // superseded packet is refused. Today: accepted, and the redo lands a
+      // The open producer entry is the #159 signal, and approving the
+      // superseded packet is refused on it — so the redo can no longer land a
       // spec nobody approved under an approved G0.
-      expect(() => planDecision(state, { action: 'approve', gate: 'G0', burden: 'confirmation' }, HUMAN)).toThrow()
+      expect(() => planDecision(state, { action: 'approve', gate: 'G0', burden: 'confirmation' }, HUMAN)).toThrow(/analyst is in flight/)
     } finally {
       finish({})
       await engine.drain()

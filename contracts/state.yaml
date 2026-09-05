@@ -119,7 +119,12 @@ tasks:                    # mirrors tasks/*.yaml status; the ONLY home of review
                           #         in-review | review-approved | verified | done
                           # `dispatched`: a producer was launched but has not yet
                           # committed its artifact — the v1 commit-then-launch guard
-                          # (docs/ORCHESTRATOR.md §4.4). `failed`: the implementer
+                          # (docs/ORCHESTRATOR.md §4.4). `in-progress`: a v0 /
+                          # hand-written status the engine never writes; it reads
+                          # it as in flight ONLY alongside an open ledger entry for
+                          # the task, and otherwise returns the task to `pending`,
+                          # because a status nothing is working is a rest with no
+                          # exit. `failed`: the implementer
                           # failed twice and the run escalated; the orchestrator
                           # returns the task to pending once the naming escalation
                           # is resolved. `review-approved`: review passed,

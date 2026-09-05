@@ -12,7 +12,7 @@ import {
   validateArtifact,
 } from '@gateline/core/record'
 import type { RunRef, RunSource } from '@gateline/core/sources'
-import { CONTRACT_DISPUTE, GATE_PRODUCER } from './derive.ts'
+import { CONTRACT_DISPUTE, GATE_PRODUCER, landingEscalationKey } from './derive.ts'
 import { parseReviewReport, type ReviewInfo } from './review-report.ts'
 import { parseVerificationReport, type VerificationInfo } from './verification-report.ts'
 
@@ -81,6 +81,23 @@ export interface RunObservation {
   ledger: LedgerEntry[]
   /** Ledger entries opened by a dispatch and not yet closed: in-flight work. */
   openDispatches: OpenDispatch[]
+  /**
+   * Per (role, task) — keyed by `idleKey` — how many dispatches closed ok and
+   * landed nothing (#343): closed-ok ledger entries opened *after* the last
+   * commit touching what that dispatch existed to produce — the gate's packet
+   * artifact for a producer, the task's whole record for a task-scoped role.
+   * Rule DL reads it before every dispatch, because half the derivation table
+   * re-dispatches on the absence of an expected change and would otherwise
+   * count nothing at all — an agent that returns ok and commits nothing is a
+   * success to the close path and a no-op here, so the same dispatch re-derives
+   * every tick until the budget stops it.
+   *
+   * The count resets on two facts: what it was to land moving (the role
+   * produced), and a human resolving that (role, task)'s escalation — the same
+   * "resolution newer than the standing fact" shape D17 and D20 read, so
+   * resolve-and-resume does not walk straight back into the cap.
+   */
+  idleDispatches: Map<string, number>
   /** Sum of closed ledger cost, or cost_spent_usd when no ledger exists (v0 runs). */
   ledgerSpentUsd: number
   taskFiles: Map<string, TaskFileInfo>
@@ -106,7 +123,93 @@ export interface ObserveConfig {
 
 const isTaskFile = (p: string) => p.startsWith('tasks/') && p.endsWith('.yaml')
 const isReviewFile = (p: string) => /^review-\d+.*\.md$/.test(p)
+/**
+ * Statuses whose task holds its `file_contact_surface` against a parallel
+ * launch: everything that is neither pending nor complete. `in-progress` stays
+ * in the set even though D25 (#350) now returns it to `pending` when no ledger
+ * entry stands behind it — the transition takes a tick, and a surface claimed
+ * by a task mid-transition is not one another implementer may take.
+ */
 const WORKING_STATUSES = new Set(['dispatched', 'in-progress', 'in-review'])
+
+/** How `idleDispatches` is keyed: one counter per (role, task) pair. */
+export const idleKey = (role: string, task: string | null): string => `${role}|${task ?? ''}`
+
+/**
+ * The landing counters (#343), as a pure function of the facts they read — the
+ * counting rule the engine's DL check depends on, exposed so it can be tested
+ * without a repository.
+ *
+ * What a dispatch was sent to land is the gate's packet artifact for a producer
+ * role, and the task's whole record — work item plus reviews — for a
+ * task-scoped one. An entry counts when it closed ok — a failure is the failure
+ * path's business (#147) and a refusal never ran (#155) — and was opened after
+ * both of the facts that reset the count: the artifact last moving, and the
+ * latest resolution of that (role, task)'s own landing escalation. A missing
+ * artifact has no landing to be newer than, so every closed-ok entry counts,
+ * which is the case the cap most needs to see.
+ */
+export function idleDispatchCounts(input: {
+  ledger: LedgerEntry[]
+  reviews: ReviewInfo[]
+  taskFiles: Map<string, TaskFileInfo>
+  lastTouched: Record<string, number | null>
+  escalations: RunState['escalations']
+}): Map<string, number> {
+  const producerArtifact: Record<string, string> = {}
+  for (const { role, artifact } of Object.values(GATE_PRODUCER)) producerArtifact[role] = artifact
+  /**
+   * A task-scoped role's landing shows up somewhere in that task's own record
+   * — its work item, or a review report about it. Both, not just the one the
+   * dispatching rule reads: an implementer's real product is code, which lives
+   * outside the run directory and the observation therefore cannot see, so the
+   * work item's response note and the reviewer's answer to that round are the
+   * only marks it leaves here. Reading the work item alone would count a whole
+   * v0-shaped round — code landed, reviewed, answered — as having produced
+   * nothing, which is exactly what the dupefind replay shows.
+   */
+  const expectedArtifacts = (role: string, task: string | null): string[] => {
+    if (task !== null) {
+      const paths: string[] = []
+      const item = input.taskFiles.get(task)?.path
+      if (item) paths.push(item)
+      for (const review of input.reviews) if (review.task === task) paths.push(review.path)
+      return paths
+    }
+    const artifact = producerArtifact[role]
+    return artifact ? [artifact] : []
+  }
+  const floors = new Map<string, number>()
+  const floorFor = (role: string, task: string | null, key: string): number => {
+    const cached = floors.get(key)
+    if (cached !== undefined) return cached
+    let landed: number | null = null
+    for (const path of expectedArtifacts(role, task)) {
+      const at = input.lastTouched[path] ?? null
+      if (at !== null && (landed === null || at > landed)) landed = at
+    }
+    let floor = landed === null ? Number.NEGATIVE_INFINITY : landed * 1000
+    const escalationKey = landingEscalationKey(role, task)
+    for (const e of input.escalations) {
+      if (!e.resolved || e.resolved_at === null || !e.reason.includes(escalationKey)) continue
+      const at = Date.parse(e.resolved_at)
+      if (Number.isFinite(at) && at > floor) floor = at
+    }
+    floors.set(key, floor)
+    return floor
+  }
+
+  const counts = new Map<string, number>()
+  for (const entry of input.ledger) {
+    if (entry.at === null || entry.cost_usd === null || entry.failed || entry.refused) continue // closed ok only
+    const at = Date.parse(entry.at)
+    if (!Number.isFinite(at)) continue
+    const key = idleKey(entry.role, entry.task)
+    if (at <= floorFor(entry.role, entry.task, key)) continue
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  return counts
+}
 
 export async function observeRun(source: RunSource, ref: RunRef, cfg: ObserveConfig = {}): Promise<RunObservation> {
   const { state, error } = await source.readState(ref)
@@ -208,6 +311,8 @@ export async function observeRun(source: RunSource, ref: RunRef, cfg: ObserveCon
   const closedSum = ledger.reduce((sum, e) => sum + (e.cost_usd ?? 0), 0)
   const ledgerSpentUsd = ledger.length > 0 ? closedSum : (state?.budget?.cost_spent_usd ?? 0)
 
+  const idleDispatches = idleDispatchCounts({ ledger, reviews, taskFiles, lastTouched, escalations: state?.escalations ?? [] })
+
   const inFlightSurfaces: string[][] = []
   for (const task of state?.tasks ?? []) {
     if (WORKING_STATUSES.has(task.status)) {
@@ -230,6 +335,7 @@ export async function observeRun(source: RunSource, ref: RunRef, cfg: ObserveCon
     bounceCounts,
     ledger,
     openDispatches,
+    idleDispatches,
     ledgerSpentUsd,
     taskFiles,
     inFlightSurfaces,

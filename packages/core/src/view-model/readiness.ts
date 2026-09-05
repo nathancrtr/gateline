@@ -7,7 +7,9 @@
 //                verification-report.md present ∧ ¬G2
 //   G3 ready     phase=release    ∧ release-plan.md present ∧ ¬G3
 //   Escalation   any escalations[] entry with resolved: false
-//   Round-cap    any task review_rounds ≥ 3 ∧ status not complete
+//   Round-cap    any task review_rounds ≥ 3 ∧ status not complete ∧ no
+//                resolution newer than the latest review grants it another
+//                round (#342 — the engine's rule D4 reads the same fact)
 //   Paused       phase=paused ∧ paused_reason ∉ {staged, gate-declined}
 //                ∧ nothing else already speaks for the run; the card's
 //                instruction is the reason's (#96): budget-exhausted says
@@ -215,6 +217,25 @@ function lastResolved(state: RunState): string | null {
 }
 
 /**
+ * Whether a human has already granted this task another round past the cap
+ * (#342) — the readiness half of the engine's rule D4.
+ *
+ * The engine's round-cap escalation names the task as `task <id>:`, and a
+ * resolution of it newer than the latest review is what lets D4 stand down and
+ * the loop dispatch round n+1. `since` is the latest review's commit time in
+ * epoch seconds; an unknown one is not evidence either way, so nothing counts.
+ * The comparison is wall-clock, exactly as the engine's is.
+ */
+function grantedAnotherRound(state: RunState, task: string, since: number | null): boolean {
+  if (since === null) return false
+  return state.escalations.some((e) => {
+    if (!e.resolved || !e.resolved_at || !e.reason.includes(`task ${task}:`)) return false
+    const at = Date.parse(e.resolved_at)
+    return Number.isFinite(at) && at / 1000 > since
+  })
+}
+
+/**
  * What actually clears the pause (#96). The old card said "resume or decline"
  * for every reason, and for the two reasons the orchestrator itself writes
  * that advice was a closed loop: a budget pause is recomputed from the
@@ -330,6 +351,13 @@ export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<R
     if (task.review_rounds >= ROUND_CAP && !taskComplete(task.status)) {
       const reviewFiles = artifacts.filter(isReviewFile)
       const touched = await source.lastTouched(ref, reviewFiles.length ? reviewFiles : ['state.yaml'])
+      // The engine's own exit from the cap, read here so the two surfaces
+      // agree (#342): a resolution newer than the latest review is a human
+      // granting the loop another round, and rule D4 stands down on it. Asking
+      // again on this card would ask for a decision that has been made — and
+      // the loop is moving, so there is nothing to decide until the next
+      // verdict past the cap lands and D4 raises it afresh.
+      if (grantedAnotherRound(state, task.id, touched?.time ?? null)) continue
       items.push({
         kind: 'round-cap',
         gate: null,

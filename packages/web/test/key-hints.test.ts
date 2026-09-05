@@ -73,7 +73,7 @@ describe('KeyHints', () => {
   it('stays in the quiet mono register rather than competing with the card', () => {
     const html = renderToStaticMarkup(createElement(KeyHints, { hints: [['a', 'approve'] as KeyHint] }))
     expect(html).toContain('font-mono')
-    expect(html).toContain('text-faint')
+    expect(html).toContain('text-muted')
   })
 })
 

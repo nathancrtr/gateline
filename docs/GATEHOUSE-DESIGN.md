@@ -9,13 +9,28 @@ built. Earlier rounds are kept at the end as history, not deleted.
 Process: `~/.claude/skills/seeded-design` (every visual property is sampled
 from an artifact outside the model, derived from a sampled value, or forced
 by a written constraint) with Anthropic's `frontend-design` plugin as the
-taste layer. **Status: step 6 of 8 — direction A1, "the impression", chosen
-on 2026-09-04 and being iterated.** The three-direction mockups are one
+taste layer. **Status: step 7 of 8 — built.** The token contract with
+per-token provenance and the contrast table is
+[`packages/web/DESIGN.md`](../packages/web/DESIGN.md), held to its floors by
+`packages/web/test/contrast.test.ts`. The three-direction mockups are one
 self-contained page,
 [`docs/design/gatehouse-directions.html`](design/gatehouse-directions.html);
-the iteration on A1 is a second page,
-[`docs/design/gatehouse-impression.html`](design/gatehouse-impression.html),
-with live ground candidates and the audit result printed for each.
+the iteration on A1 with live ground candidates is
+[`docs/design/gatehouse-impression.html`](design/gatehouse-impression.html).
+
+### What was settled at the build (2026-09-04)
+
+- **Ground `#F3F3EE`** — the lightest of the five candidates, chosen with the
+  register's collision flags in view; the justification is in the contract.
+- **Accent provisional.** The grey-and-dusty-red pairing is not favoured long
+  term; something livelier is expected, from a seed, in a later pass. The
+  mockups were not regenerated for it.
+- **Single theme**, **type inherited** (Inter / Newsreader / JetBrains Mono,
+  vendoring in scope), **copy tics only** — the deep rewrite waits.
+- Found in the real app and fixed before the commit: a column of red dashed
+  phase cells in the portfolio (now the plain mark), an in-flight gate chip
+  hatched like a bounce (now dotted), a skeleton invisible on the inset
+  frame, and the full profile's four gate marks overflowing their button.
 
 ### The pick, and the pushback
 

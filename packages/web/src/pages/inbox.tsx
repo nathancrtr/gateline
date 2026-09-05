@@ -32,100 +32,59 @@ export function itemHref(item: InboxItem): string {
 }
 
 /**
- * The row's columns: rail, kind chip, the text cell, the time column. The
- * template used to declare five columns for four cells, which parked the time
- * column in a 92px slot with 120px of nothing after it; `minmax(0, 1fr)` is
- * what lets the text cell shrink below its content so truncation engages
- * rather than painting across the columns beside it (#280).
+ * The row's columns: the kind impression, the text cell, the time column.
+ * `minmax(0, 1fr)` is what lets the text cell shrink below its content so
+ * truncation engages rather than painting across the column beside it
+ * (#280). The coloured rail that used to lead the row is gone with the
+ * redesign: kind is the impression's own word, and a row on a ledger is
+ * separated by its rule, not by a stripe.
  */
-const INBOX_COLUMNS = '4px 132px minmax(0, 1fr) 120px'
-
-function railClassFor(item: InboxItem): string {
-  // An in-flight gate is not a fault, so it does not take the fault colour
-  // (#159); it takes the muted rail of a row that is waiting on a machine.
-  if (item.kind === 'gate' && gateCardState(item) === 'inflight') return 'bg-faint'
-  if (item.kind === 'gate' && !item.reviewable) return 'bg-bad'
-  if (item.kind === 'gate') return 'bg-accent'
-  if (item.kind === 'staged') return 'border-l-2 border-dashed border-[#c9bfa9]'
-  if (item.kind === 'paused') return 'bg-warn'
-  if (item.kind === 'escalation') return 'bg-info'
-  if (item.kind === 'round-cap') return 'bg-[#946014]'
-  if (item.kind === 'malformed') return 'bg-bad'
-  return 'bg-faint'
-}
+const INBOX_COLUMNS = '150px minmax(0, 1fr) 96px'
 
 function InboxRow({ item, now, selected }: { item: InboxItem; now: number; selected: boolean }) {
   const age = formatAge(item.since, now)
   const urgent = item.since !== null && now - item.since > STALE_SECONDS
   const stale = item.since !== null && now - item.since > STALE_DAYS
-  const rail = railClassFor(item)
   const gateState = gateCardState(item)
   const isBouncedGate = gateState === 'bounced'
   const isInflightGate = gateState === 'inflight'
-  const isReviewableGate = gateState === 'reviewable'
-  // Bounced rail gets the repeating hashed pattern (Candidate A signature)
-  const railStyle = isBouncedGate
-    ? { backgroundImage: `repeating-linear-gradient(180deg, var(--color-bad) 0 4px, transparent 4px 8px)` }
-    : undefined
   return (
-    <li className="border-t border-line first:border-t-0">
+    <li className="border-b border-line">
       <Link
         to={itemHref(item)}
-        className={`grid items-stretch transition-colors hover:bg-[#fbf9f4] ${
-          selected ? 'bg-accent-tint' : 'bg-surface'
-        }`}
+        className={`grid items-start hover:bg-inset ${selected ? 'bg-accent-tint' : ''}`}
         style={{ gridTemplateColumns: INBOX_COLUMNS }}
         data-inbox-row
         aria-current={selected ? 'true' : undefined}
       >
-        <span
-          className={`w-[4px] self-stretch ${rail}`}
-          style={railStyle}
-          aria-hidden="true"
-        />
-        <span className="flex flex-col items-center justify-center pt-5">
+        <span className="flex items-start pt-[13px]">
           <KindChip item={item} />
         </span>
-        <span className="flex min-w-0 flex-col gap-[6px] px-[22px] py-[18px]" data-inbox-text>
+        <span className="flex min-w-0 flex-col gap-[3px] py-[11px] pr-[14px]" data-inbox-text>
           {/* Title and slug follow one overflow rule (#280): each truncates
-              inside the cell. The slug was `shrink-0`, so once it wrapped to
-              its own line it ran straight across the time column. */}
+              inside the cell. */}
           <span className="flex flex-wrap items-baseline gap-[10px]">
-            {isReviewableGate && (
-              <span
-                className="inline-block h-[7px] w-[7px] shrink-0 rounded-full bg-accent align-middle"
-                aria-hidden="true"
-              />
-            )}
-            <span className="truncate text-[16px] font-semibold tracking-[-0.005em] text-ink">
-              {item.title}
-            </span>
+            <span className="truncate text-[15px] font-semibold text-ink">{item.title}</span>
             <span className="min-w-0 truncate font-mono text-[12.5px] text-muted">
               {item.source}/{item.slug}
             </span>
           </span>
-          <p className="max-w-[78ch] truncate text-[14.5px] text-muted">
-            {item.detail}
-          </p>
+          <p className="max-w-[var(--measure)] truncate text-[13.5px] text-muted">{item.detail}</p>
           {isBouncedGate && (
-            <p className="mt-1 rounded-sm border border-bad-line bg-bad-bg px-[10px] py-[7px] text-[13px] text-bad">
-              <b className="font-semibold">Bounced</b> — packet fails its
-              contract; no approval is offered.
+            <p className="mt-1 text-[13px] text-ink">
+              <b className="font-semibold">Bounced</b> — packet fails its contract; no approval is offered.
             </p>
           )}
           {isInflightGate && item.inflight && (
-            <p
-              data-inbox-inflight
-              className="mt-1 rounded-sm border border-line-cool bg-[#f4f1ea] px-[10px] py-[7px] text-[13px] text-muted"
-            >
-              <b className="font-semibold">Superseded</b> — the {item.inflight.role} is
-              in flight; no approval is offered until the new packet lands.
+            <p data-inbox-inflight className="mt-1 text-[13px] text-muted">
+              <b className="font-semibold text-ink">Superseded</b> — the {item.inflight.role} is in flight; no approval is
+              offered until the new packet lands.
             </p>
           )}
         </span>
         {/* A plain right-aligned time column, no full-height divider: a rule
             turned any tight fit into something that read as broken (#280). */}
-        <span className="flex items-center justify-end pr-[22px]" data-inbox-age>
+        <span className="flex items-start justify-end pt-[14px]" data-inbox-age>
           <AgeBadge label={age} urgent={urgent} stale={stale} />
         </span>
       </Link>
@@ -178,22 +137,17 @@ export function InboxPage() {
   if (isLoading)
     return (
       <div className="mx-auto max-w-[1080px]">
-        <div className="rounded-lg border border-line bg-surface overflow-hidden">
+        <div className="border-t border-ink">
           {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className="grid items-stretch border-t border-line first:border-t-0"
-              style={{ gridTemplateColumns: INBOX_COLUMNS }}
-            >
-              <span className="skel w-[4px]" />
-              <span className="flex items-center justify-center p-5">
-                <span className="skel h-[22px] w-11" />
+            <div key={i} className="grid items-stretch border-b border-line" style={{ gridTemplateColumns: INBOX_COLUMNS }}>
+              <span className="flex items-center py-[13px]">
+                <span className="skel h-[21px] w-16" />
               </span>
-              <span className="flex min-w-0 flex-col gap-[10px] px-[22px] py-[18px]">
+              <span className="flex min-w-0 flex-col gap-[8px] py-[13px]">
                 <span className="skel h-3.5 w-2/3" />
                 <span className="skel h-3.5 w-1/2" />
               </span>
-              <span className="flex items-center justify-end pr-[22px]">
+              <span className="flex items-center justify-end py-[13px]">
                 <span className="skel h-4 w-9" />
               </span>
             </div>
@@ -207,74 +161,48 @@ export function InboxPage() {
 
   return (
     <div className="mx-auto max-w-[1080px]">
-      <div className="font-mono text-[12px] uppercase tracking-[0.14em] text-accent-deep mb-[10px]">
-        Pending human decisions · oldest first
-      </div>
-      <div className="flex items-baseline gap-[18px] flex-wrap">
-        <h1 className="font-sans text-[54px] font-semibold leading-[1.04] tracking-[-0.02em] text-ink">
-          Inbox
-        </h1>
-        <span className="font-sans text-[54px] font-medium leading-none text-accent tabular-nums tracking-[-0.02em]">
-          {items!.length}
-          <sup className="ml-2 font-sans text-[13px] font-medium text-muted align-super tracking-[0.02em]">
-            waiting
-          </sup>
-        </span>
-      </div>
-      <p className="mt-[14px] max-w-[62ch] text-[15.5px] leading-[1.6] text-[#4d4742]">
-        A reading-queue across every run on the agent pipeline. Scan for what
-        needs you; open the run to read the artifact and decide. Nothing here
-        expires, and nothing is racing.
-      </p>
+      <h1 className="text-[20px] font-semibold leading-[1.25] text-ink">Inbox</h1>
+      <p className="mt-1 text-[13px] text-muted">Pending human decisions across every run, oldest first.</p>
 
-      {/* Kind filter tabs — Sentry-style grouping. No dividers between them:
-          the rail wraps at narrow widths, and a divider that led a wrapped
-          row separated nothing from nothing (#280). The gaps carry it. */}
-      <div className="flex gap-[6px] mt-[30px] flex-wrap items-center" data-inbox-filters>
+      {/* Kind filters: plain type, the active one underlined. Wraps at narrow
+          widths; the gaps carry it (#280). */}
+      <div className="mt-[22px] flex flex-wrap items-center gap-x-[18px] gap-y-2 font-mono text-[12.5px] font-medium" data-inbox-filters>
         {filters.map((f) => (
           <button
             key={f.label}
-            className={`text-[13px] font-medium px-3 py-[7px] rounded-full border transition-colors ${
-              filter === f.kind
-                ? 'bg-surface border-line-cool text-ink shadow-[var(--shadow-soft)]'
-                : 'bg-transparent border-transparent text-[#4d4742] hover:bg-raised'
-            }`}
+            className={`pb-[3px] ${filter === f.kind ? 'text-ink shadow-[inset_0_-1.5px_0_var(--color-ink)]' : 'text-muted hover:text-ink'}`}
             onClick={() => {
               setFilter(f.kind)
               setCursor(0)
             }}
           >
-            {f.label}
-            <span className="font-mono text-[11px] text-muted ml-[6px]">
-              {f.count}
-            </span>
+            {f.label} <span className="tabular-nums">{f.count}</span>
           </button>
         ))}
       </div>
 
       {filteredItems!.length === 0 ? (
-        <div className="mt-6 rounded-lg border border-line bg-surface overflow-hidden">
-          <div className="px-10 py-20 text-center">
-            <span className="gate-sigil mb-3.5 block text-accent opacity-85" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="44" height="44">
-                <rect x="3.5" y="3" width="2.6" height="18" rx="1.3" fill="currentColor" />
-                <rect x="17.9" y="3" width="2.6" height="18" rx="1.3" fill="currentColor" />
-                <rect x="3.5" y="8.6" width="17" height="2.2" rx="1.1" fill="currentColor" />
-              </svg>
-            </span>
-            <h2 className="font-sans text-[46px] font-semibold tracking-[-0.02em] text-ink">
-              Inbox zero.
-            </h2>
-            <p className="mx-auto mt-2 max-w-[46ch] text-[15px] text-muted">
-              Nothing is waiting on you. The agents are reading, writing, and
-              reviewing on their own. Come back when a gate clears, or open the
-              portfolio to look in on a run at your leisure.
-            </p>
-          </div>
+        <div className="mt-[14px] border-t border-ink px-2 py-16 text-center">
+          <span className="gate-sigil mb-3 block" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="36" height="36">
+              <rect x="3.5" y="3" width="2.6" height="18" fill="currentColor" />
+              <rect x="17.9" y="3" width="2.6" height="18" fill="currentColor" />
+              <rect x="3.5" y="8.6" width="17" height="2.2" fill="currentColor" />
+            </svg>
+          </span>
+          <h2 className="text-[20px] font-semibold text-ink">Nothing is waiting on you.</h2>
+          <p className="mx-auto mt-1.5 max-w-[46ch] text-[13.5px] text-muted">
+            The agents are reading, writing and reviewing on their own. Open the portfolio to look in on a run.
+          </p>
         </div>
       ) : (
         <>
-          <ul className="mt-6 rounded-lg border border-line bg-surface overflow-hidden">
+          <ul className="mt-[14px] border-t border-ink">
+            <li className="grid text-[11.5px] text-muted" style={{ gridTemplateColumns: INBOX_COLUMNS }} aria-hidden="true">
+              <span className="py-1.5">kind</span>
+              <span className="py-1.5">entry</span>
+              <span className="py-1.5 text-right">waiting</span>
+            </li>
             {filteredItems!.map((item, i) => (
               <InboxRow
                 key={`${item.source}/${item.slug}/${item.kind}/${item.gate ?? item.escalationIndex ?? i}`}
@@ -284,11 +212,14 @@ export function InboxPage() {
               />
             ))}
           </ul>
-          {/* Under the queue, not over it: the row cursor is visible before
-              the hint explains what moves it, which is the order a reader
-              works it out in anyway. Nothing to move through, no hint —
-              `useKeys` is disabled on the same condition. */}
-          <KeyHints hints={INBOX_HINTS} className="mt-2.5 text-right" />
+          <div className="flex items-baseline justify-between pt-2 text-[12px] text-muted">
+            <span className="tabular-nums">
+              {filteredItems!.length} {filteredItems!.length === 1 ? 'entry' : 'entries'}
+            </span>
+            {/* Under the queue, not over it: the row cursor is visible before
+                the hint explains what moves it. */}
+            <KeyHints hints={INBOX_HINTS} />
+          </div>
         </>
       )}
     </div>

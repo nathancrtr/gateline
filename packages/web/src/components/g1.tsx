@@ -60,7 +60,7 @@ export function G1Packet({ src, slug }: { src: string; slug: string }) {
 function Withheld({ reason, src, slug, path, hook }: { reason: string; src: string; slug: string; path: string; hook: string }) {
   return (
     <p
-      className="mt-1.5 rounded-[4px] border border-warn-line bg-warn-bg px-2.5 py-2 text-[12px] leading-[1.5] text-warn"
+      className="mt-1.5 border border-warn-line bg-warn-bg px-2.5 py-2 text-[12px] leading-[1.5] text-warn"
       data-withheld={hook}
     >
       {reason}{' '}
@@ -73,9 +73,9 @@ function Withheld({ reason, src, slug, path, hook }: { reason: string; src: stri
 
 function GroupLabel({ children, hint }: { children: string; hint?: string }) {
   return (
-    <p className="mt-2.5 font-mono text-[10.5px] uppercase tracking-[0.06em] text-faint">
+    <p className="mt-2.5 font-mono text-[10.5px] text-faint">
       {children}
-      {hint && <span className="ml-1.5 normal-case tracking-normal text-muted">· {hint}</span>}
+      {hint && <span className="ml-1.5 normal-case text-muted">· {hint}</span>}
     </p>
   )
 }
@@ -116,7 +116,7 @@ function Coverage({ packet, src, slug }: { packet: G1PacketData; src: string; sl
             ))}
             {packet.unmappedTasks.length > 0 && (
               <li
-                className="rounded-[5px] border border-line bg-surface px-3 py-2 font-mono text-[11.5px] leading-[1.5] text-muted"
+                className="border border-line bg-surface px-3 py-2 font-mono text-[11.5px] leading-[1.5] text-muted"
                 data-unmapped-tasks
               >
                 no mapping row names: {packet.unmappedTasks.join(', ')}
@@ -136,7 +136,7 @@ function CoverageEntry({ row }: { row: CoverageRow }) {
   const uncovered = row.defined && row.mapped.length === 0
   return (
     <li
-      className={`rounded-[5px] border px-3 py-2 ${uncovered ? 'border-warn-line bg-warn-bg' : 'border-line bg-surface'}`}
+      className={`border px-3 py-2 ${uncovered ? 'border-warn-line bg-warn-bg' : 'border-line bg-surface'}`}
       data-coverage={row.id}
       data-mapped={row.mapped.length}
     >
@@ -153,7 +153,7 @@ function CoverageEntry({ row }: { row: CoverageRow }) {
             row.mapped.map((t) => (
               <span
                 key={t}
-                className={`rounded-xs border px-[7px] py-px font-mono text-[10.5px] leading-none ${
+                className={`border px-[7px] py-px font-mono text-[10.5px] leading-none ${
                   row.unknownTasks.includes(t) ? 'border-warn-line bg-warn-bg text-warn' : 'border-line bg-inset text-muted'
                 }`}
                 title={row.unknownTasks.includes(t) ? 'no tasks/*.yaml declares this id' : undefined}
@@ -224,7 +224,7 @@ function ParallelSafety({ packet, src, slug }: { packet: G1PacketData; src: stri
 function OverlapEntry({ overlap }: { overlap: SurfaceOverlap }) {
   return (
     <li
-      className={`rounded-[5px] border px-3 py-2 ${overlap.ordered ? 'border-line bg-surface' : 'border-warn-line bg-warn-bg'}`}
+      className={`border px-3 py-2 ${overlap.ordered ? 'border-line bg-surface' : 'border-warn-line bg-warn-bg'}`}
       data-overlap={`${overlap.a}-${overlap.b}`}
       data-ordered={overlap.ordered ? 'true' : 'false'}
     >
@@ -233,7 +233,7 @@ function OverlapEntry({ overlap }: { overlap: SurfaceOverlap }) {
           {overlap.a} ↔ {overlap.b}
         </span>
         <span
-          className={`shrink-0 rounded-full border px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none ${
+          className={`shrink-0 border px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none ${
             overlap.ordered ? 'border-line bg-inset text-muted' : 'border-warn-line bg-warn-bg text-warn'
           }`}
         >
@@ -255,7 +255,7 @@ function OverlapEntry({ overlap }: { overlap: SurfaceOverlap }) {
 function TaskEntry({ item, src, slug }: { item: WorkItem; src: string; slug: string }) {
   const [open, setOpen] = useState(false)
   return (
-    <li className="rounded-[5px] border border-line bg-surface px-3 py-2" data-task={item.id || item.path}>
+    <li className="border border-line bg-surface px-3 py-2" data-task={item.id || item.path}>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
         <span className="shrink-0 font-mono text-[11.5px] font-semibold text-ink">{item.id || item.path}</span>
         <span className="min-w-0 flex-1 text-[12.5px] text-ink">
@@ -266,7 +266,7 @@ function TaskEntry({ item, src, slug }: { item: WorkItem; src: string; slug: str
         )}
         <button
           onClick={() => setOpen((v) => !v)}
-          className="shrink-0 rounded-full border border-line bg-surface px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none text-muted"
+          className="shrink-0 border border-line bg-surface px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none text-muted"
         >
           surface{open ? ' ▾' : ' ▸'}
         </button>
@@ -311,18 +311,18 @@ function Decisions({ src, slug }: { src: string; slug: string }) {
           const key = `${entry.id}-${i}`
           const expanded = open === key
           return (
-            <li key={key} className="rounded-[5px] border border-line bg-surface px-3 py-2" data-adr={entry.id}>
+            <li key={key} className="border border-line bg-surface px-3 py-2" data-adr={entry.id}>
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <span className="shrink-0 font-mono text-[11.5px] font-semibold text-ink">{entry.id}</span>
                 {entry.qualifier && (
-                  <span className="shrink-0 rounded-xs border border-info-line bg-info-bg px-[7px] py-px font-mono text-[10.5px] leading-none text-info">
+                  <span className="shrink-0 border border-info-line bg-info-bg px-[7px] py-px font-mono text-[10.5px] leading-none text-info">
                     {entry.qualifier}
                   </span>
                 )}
                 <span className="min-w-0 flex-1 text-[12.5px] font-medium text-ink">{entry.shortName}</span>
                 <button
                   onClick={() => setOpen(expanded ? null : key)}
-                  className="shrink-0 rounded-full border border-line bg-surface px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none text-muted"
+                  className="shrink-0 border border-line bg-surface px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none text-muted"
                 >
                   {expanded ? 'less ▾' : 'more ▸'}
                 </button>
@@ -332,7 +332,7 @@ function Decisions({ src, slug }: { src: string; slug: string }) {
               </p>
               {/* The whole definition, verbatim — folding is never truncation. */}
               {expanded && (
-                <pre className="mt-1.5 overflow-x-auto rounded-[4px] bg-inset p-2.5 font-mono text-[11.5px] leading-[1.5] text-ink whitespace-pre-wrap">
+                <pre className="mt-1.5 overflow-x-auto bg-inset p-2.5 font-mono text-[11.5px] leading-[1.5] text-ink whitespace-pre-wrap">
                   {entry.definition}
                 </pre>
               )}

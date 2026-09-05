@@ -9,12 +9,38 @@ built. Earlier rounds are kept at the end as history, not deleted.
 Process: `~/.claude/skills/seeded-design` (every visual property is sampled
 from an artifact outside the model, derived from a sampled value, or forced
 by a written constraint) with Anthropic's `frontend-design` plugin as the
-taste layer. **Status: step 5 of 8 — every screen mocked up in every
-direction; none chosen.** The mockups are one self-contained page,
-[`docs/design/gatehouse-directions.html`](design/gatehouse-directions.html)
-(direction and screen switchers, a compare view, real content from this
-repository's runs, type held constant), published privately as an artifact
-for review.
+taste layer. **Status: step 6 of 8 — direction A1, "the impression", chosen
+on 2026-09-04 and being iterated.** The three-direction mockups are one
+self-contained page,
+[`docs/design/gatehouse-directions.html`](design/gatehouse-directions.html);
+the iteration on A1 is a second page,
+[`docs/design/gatehouse-impression.html`](design/gatehouse-impression.html),
+with live ground candidates and the audit result printed for each.
+
+### The pick, and the pushback
+
+A1 was chosen over A2 and B on 2026-09-04 with three corrections, all
+applied in the iteration page:
+
+1. **The ground was too dark.** The 85% paper-in-shade read as glum. The
+   iteration offers the lit paper as sampled (`#ECECE4`, 91%) and three
+   derivations along the same hue — 92%, 93%, 94% — plus a chroma-halved
+   91%. Every lighter step lands nearer a value a sibling product already
+   shipped, and the page prints which; that is the register's aggregate
+   finding in miniature, and the choice is made with it in view.
+2. **The red vertical rule is retired.** It mimicked a writing pad, and the
+   mimicry was the point of it — which is the wrong reason. Red keeps two
+   jobs only, both states: the position a run is standing at, and *over*
+   (budget, threshold).
+3. **One surface, fewer boxes.** The page-inside-a-darker-frame shell is
+   gone; rack and content sit on the same paper, separated by a rule. Nav
+   counts and filters are plain type; impressions are reserved for states
+   and kinds. The lead paragraphs under each title are cut to a line.
+
+Reviewed screen by screen in a browser before republishing. Two defects
+found that way and fixed: portfolio slugs wrapping in a narrow column, and
+the New-run preview's ruled-paper background cutting through its own text
+— an over-literal use of the artifact, removed.
 
 ---
 

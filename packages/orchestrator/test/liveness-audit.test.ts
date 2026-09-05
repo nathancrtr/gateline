@@ -314,7 +314,7 @@ describe('F6 — a standing refusal is bounded (#347, fixed)', () => {
 })
 
 describe('F8 — the stale sweep is process-local (#349)', () => {
-  it.fails('a second engine does not age out and re-dispatch a job that is alive in the first', { timeout: 60_000 }, async () => {
+  it('a second engine does not age out and re-dispatch a job that is alive in the first', { timeout: 60_000 }, async () => {
     const { dir, clock } = makeToyRepo()
     const hung = new FakeDispatcher(() => new Promise(() => {}))
     const first = makeEngine(dir, hung)
@@ -328,10 +328,11 @@ describe('F8 — the stale sweep is process-local (#349)', () => {
     try {
       await other.tick()
       await other.drain()
-      // Expected: nothing distinguishes this from a crashed engine today, so
-      // the entry is aged and the analyst runs twice at once — the intent
-      // commit's CAS guards the *commit*, not the job. The fix needs an
-      // engine identity on the entry and a liveness signal to read.
+      // Fixed (#349): the entry names the engine that opened it, and that
+      // engine's process is alive here, so `other` leaves it alone until the
+      // role timeout has passed — past which no live job could still hold it.
+      // The intent commit's CAS only ever guarded the *commit*; this is what
+      // guards the job.
       expect(second.calls).toHaveLength(0)
       const state = await readState(dir)
       assertStateInvariants(state)

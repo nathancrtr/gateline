@@ -83,6 +83,15 @@ budget:
                           # `refused: true` — no process was spawned (a held
                           # checkout, a preflight error); cost_usd is 0, and
                           # the entry counts as neither a failure nor a retry.
+                          # One more optional key names the writer:
+                          # `engine: <hostname>:<pid>` — which orchestrator
+                          # process opened the entry. An open entry is the only
+                          # durable record that an agent is running, and the
+                          # stale sweep reads this to tell a crashed process's
+                          # orphan (age it out, re-dispatch) from another live
+                          # process's job (leave it alone). Absent on entries
+                          # written by hand or before the key existed, which the
+                          # sweep treats as its own.
                           # v0: append by hand
                           # from harness usage output (a smaller, more concrete ask
                           # than maintaining a total); v1: the dispatch seam appends

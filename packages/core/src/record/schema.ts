@@ -43,6 +43,12 @@ export const BUDGET_REASON = 'budget-exhausted' as const
  * the remaining work needs a fresh slug, and this run a closing disposition. */
 export const LANDED_REASON = 'slug-landed' as const
 
+/** A run the orchestrator paused alongside an escalation it raised. The reason
+ * says only that a human is owed; what actually clears the pause is whatever
+ * the escalation's own text names, which is where the paused card's
+ * instruction comes from (#348). */
+export const ESCALATION_REASON = 'escalation' as const
+
 /**
  * A run a human closed out before it reached `done` (#200) — a real phase, not
  * another `paused_reason`.

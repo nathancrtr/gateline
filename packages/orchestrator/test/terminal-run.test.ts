@@ -13,19 +13,7 @@ import { LocalGitSource } from '@gateline/core'
 import { Engine } from '../src/engine.ts'
 import { parseLedger } from '../src/observe.ts'
 import { removeRunCheckout } from '../src/workspace.ts'
-import {
-  agentCommit,
-  FakeDispatcher,
-  humanDecide,
-  makeToyRepo,
-  PLAN,
-  reconcile,
-  SPEC,
-  taskYaml,
-  TEST_REGISTRY,
-  toyRef,
-  type Clock,
-} from './engine.helper.ts'
+import { agentCommit, deadEngineId, FakeDispatcher, humanDecide, makeToyRepo, PLAN, reconcile, SPEC, taskYaml, TEST_REGISTRY, toyRef, type Clock } from './engine.helper.ts'
 
 const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
 
@@ -171,7 +159,10 @@ describe('a dispatch that lands on a closed run is metered and nothing else (#34
   it('ages a lost dispatch out of a closed run without escalating it', { timeout: 60_000 }, async () => {
     const { dir } = toyRepo()
     const { dispatcher, finish } = heldDispatcher()
-    const engine = makeEngine(dir, dispatcher)
+    // The first engine opens the entry under a pid that is no longer running
+    // (#349): a restart reclaims an entry only when the engine that opened it
+    // is dead, and this process is very much alive.
+    const engine = makeEngine(dir, dispatcher, { engineId: deadEngineId() })
     const source = new LocalGitSource('check', dir)
     // A second engine stands in for the restart: the first engine's job is
     // alive here, so only a process that never launched it reads the open

@@ -353,6 +353,36 @@ failed, or awaiting review — so sweeps never pile up on an unmerged predecesso
 a role's estimate exceeding its schedule's cap is a config defect that skips with a
 warning rather than dispatching (pause-don't-degrade, applied to schedules).
 
+### 4.7 Invariants of the loop
+
+The tick is a state machine: the record is the state, the rules and the human
+verbs are the transitions, and two writers interleave on one branch under CAS.
+The 2026-09-04 audit wrote that machine down and walked every rest state to its
+exit; these are the properties it must keep, checked mechanically by
+`packages/orchestrator/test/invariants.ts` and pinned, one property per test, by
+`liveness-audit.test.ts` — where a property the loop does not yet have is a
+reproduction marked `it.fails`, which passes today because the bug is there and
+flips the day a fix lands.
+
+- **I1 Single dispatch.** At most one open ledger entry per (role, task,
+  round). Commit-then-launch's promise (§4.4).
+- **I2 Profile.** The phase is one the profile has, and only the profile's
+  gates are ever decided (D21).
+- **I3 Ledger sum.** `cost_spent_usd` is the sum of `ledger[].cost_usd` (§6).
+- **I4 Pause coherence.** A paused run says why; an unpaused run carries no
+  reason.
+- **I5 Ask once.** No two unresolved escalations share a reason, and a resolved
+  reason recurs only after a new fact — a dispatch opened, a non-state commit
+  landed (#96).
+- **I6 Terminal.** A run in `done` or `closed` is never moved by the engine.
+- **I7 Exit.** Every rest state the engine writes has an exit in the decision
+  grammar that changes a fact the resting rule reads, or the surface says
+  plainly that the exit is a hand edit (#96, #97 were the first two breaches
+  found; the audit lists the rest).
+- **I8 Bounded spend without a human.** Between two human decisions the number
+  of paid dispatches is bounded by the profile and the task count, never by the
+  budget alone.
+
 ## 5. The dispatch seam
 
 ### 5.1 Interface

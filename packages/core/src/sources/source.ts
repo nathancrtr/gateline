@@ -80,6 +80,17 @@ export interface RunSource {
   /** Unified diff of the run branch against the default branch, runs/ excluded. */
   readDiff(ref: RunRef): Promise<string>
   stateHistory(ref: RunRef): Promise<StateCommit[]>
+  /**
+   * Every commit on the run branch touching the run's own directory, newest
+   * first — the branch's own order, which is what "after" means when the
+   * clocks that stamped the facts disagree (#346, `branch-order.ts`). One log,
+   * no per-commit reads: `stateHistory` is the expensive walk, this is the
+   * cheap index that places its commits alongside the artifact landings.
+   *
+   * Optional, like the origin-divergence counts: a driver with no history to
+   * offer omits it, and its callers fall back to timestamps.
+   */
+  runHistory?(ref: RunRef): Promise<CommitInfo[]>
   /** Most recent commit touching any of the given run-relative paths. */
   lastTouched(ref: RunRef, paths: string[]): Promise<CommitInfo | null>
   /**

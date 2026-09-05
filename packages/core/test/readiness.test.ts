@@ -58,10 +58,12 @@ escalations:
 
 /**
  * A run whose task is past the cap but whose round-cap escalation a human has
- * already resolved (#342). The reviews are backdated and the resolution is
- * stamped now, because the rule under test is exactly "which is newer": a
- * resolution after the latest verdict is the human granting the loop another
- * round, and the engine's rule D4 stands down on the same fact.
+ * already resolved (#342). The rule under test is exactly "which came second",
+ * so the record has to be able to say it: the review lands in one commit and
+ * the resolution in the next, which is how the real flow writes them — the
+ * engine escalates and pauses in its own commit, and the human resolves in
+ * another. Since #346 that commit order is what decides, with the timestamps
+ * (backdated review, a recent resolution) agreeing rather than deciding.
  */
 function addGrantedRoundCapRun(dir: string, slug: string): void {
   const git = (args: string[], date?: string) =>
@@ -80,9 +82,7 @@ function addGrantedRoundCapRun(dir: string, slug: string): void {
     'utf8',
   )
   writeFileSync(join(runDir, 'review-01.md'), '# Review Report: 01-core\n\n**Verdict:** request-changes\n', 'utf8')
-  writeFileSync(
-    join(runDir, 'state.yaml'),
-    `run: ${slug}
+  const stateFor = (resolved: boolean) => `run: ${slug}
 branch: run/${slug}
 phase: implement
 profile: patch
@@ -104,15 +104,18 @@ escalations:
   - at: "${landed}"
     from_role: orchestrator
     reason: "task 01-core: 3 review rounds without convergence — usually a spec ambiguity"
-    resolved: true
-    resolved_by: Nathan Carter
-    resolved_at: "${resolvedAt}"
-    resolution: "spec ambiguity clarified; take another round"
-`,
-    'utf8',
-  )
+    resolved: ${resolved}
+    resolved_by: ${resolved ? 'Nathan Carter' : 'null'}
+    resolved_at: ${resolved ? `"${resolvedAt}"` : 'null'}
+    resolution: ${resolved ? '"spec ambiguity clarified; take another round"' : 'null'}
+`
+  writeFileSync(join(runDir, 'state.yaml'), stateFor(false), 'utf8')
   git(['add', '-A'])
   git(['commit', '-q', '-m', `state(${slug}): artifacts`], landed)
+  // The human's resolution, in its own commit — the fact the card stands down on.
+  writeFileSync(join(runDir, 'state.yaml'), stateFor(true), 'utf8')
+  git(['add', '-A'])
+  git(['commit', '-q', '-m', `state(${slug}): escalation #0 resolved by Nathan Carter`], resolvedAt)
   git(['checkout', '-q', 'main'])
 }
 

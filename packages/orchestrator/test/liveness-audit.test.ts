@@ -247,8 +247,8 @@ describe('F4 — a terminal run is not moved by the engine (#345, fixed)', () =>
   })
 })
 
-describe('F5 — recency is read from wall clocks, not from the record (#346)', () => {
-  it.fails('a resolution later in branch history counts even when its clock reads earlier than the verdict', { timeout: 120_000 }, async () => {
+describe('F5 — recency is read from the record, not from wall clocks (#346, fixed)', () => {
+  it('a resolution later in branch history counts even when its clock reads earlier than the verdict', { timeout: 120_000 }, async () => {
     const { dir, clock } = makeToyRepo()
     const dispatcher = new FakeDispatcher(
       cooperative(clock, {
@@ -286,10 +286,12 @@ describe('F5 — recency is read from wall clocks, not from the record (#346)', 
       await humanDecide(dir, { action: 'resume' })
       const dispatched = await ticks(engine, dispatcher, 2)
       state = await readState(dir)
-      // Expected: the record's own order says the human resolved after the
-      // verdict, so the re-review dispatches. Today: D17 compares resolved_at
-      // to the review commit's time, finds no resolution "after" it, and
-      // re-escalates — the run pauses again with nothing left to resolve.
+      // The record's own order says the human resolved after the verdict, so
+      // the re-review dispatches. D17 reads the commit where `resolved` became
+      // true against the commit that landed the review, and no clock can
+      // contradict that edge — before #346 it compared `resolved_at` with the
+      // review commit's time, found no resolution "after" it, and re-escalated,
+      // pausing the run again with nothing left for anyone to resolve.
       expect(dispatched).toBeGreaterThan(0)
       expect(state.paused_reason).toBeNull()
     } finally {

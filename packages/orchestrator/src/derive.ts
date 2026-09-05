@@ -37,7 +37,7 @@
 //   D17 reviewer verdict escalate                    → escalate + pause; the LATEST resolution
 //       newer than the verdict routes by its disposition (#189, #190): `re-review` dispatches the
 //       re-review round immediately, an explicit human override of the #188 zero-delta guard;
-//       `return-to-implement` mirrors D14/D15's turn-taking off the resolution's timestamp;
+//       `return-to-implement` mirrors D14/D15's turn-taking off the resolution's own commit;
 //       `re-plan` sends the finding to the architect's amendment mode — see D22/D23; absent
 //       disposition → legacy behavior, gated on a non-state.yaml commit newer than the
 //       verdict (dispatch re-review) or rest naming the fix still to land (#188)
@@ -52,7 +52,7 @@
 //   D22 D17 resolution disposition `re-plan`, no amendment landed yet (#190) → dispatch the
 //       architect in amendment mode, carrying the review report path and the resolution note;
 //       an architect already in flight rests instead (D12 shape)
-//   D23 D17 resolution disposition `re-plan`, amendment landed since resolved_at (plan.md or a
+//   D23 D17 resolution disposition `re-plan`, amendment landed since the resolution (plan.md or a
 //       tasks/*.yaml touched newer, #190) → raise a fresh escalation naming `task <id>` and
 //       pause for human acknowledgment; its resolution (typically `return-to-implement`) is
 //       just another resolution matching that same `task <id>` text, so "latest matching
@@ -80,13 +80,34 @@
 // rather than release, and in `patch` the plan phase has no producing role —
 // the human authored the packet, so there is no one to dispatch or bounce to.
 //
+// Every "after" in that table is BRANCH ORDER, not a clock (#346): the commit
+// where a human's resolution landed against the commit that landed the verdict
+// it answers, the dispatch's intent commit against the artifact it was sent to
+// produce. `resolved_at`, a ledger `at` and a committer date come from three
+// machines — the documented topology is a hosted engine with a laptop CLI
+// (DEPLOY.md §2) — and seconds of skew used to flip these comparisons in both
+// directions: a genuine resolution reading older than the verdict re-escalated
+// forever, one reading newer than a commit it preceded routed a round that
+// should not run. Timestamps stay for display and as the fallback for a fact
+// the branch cannot place (observe.ts's `Anchor`).
+//
 // Two invariants govern every row (§4.2): each action is derivable from
 // committed files alone, and each action is idempotent to re-derive — a tick
 // interrupted anywhere converges on re-run. Note what is deliberately absent:
 // no rule writes gates.* (§3, structural safety) and no rule judges artifact
 // content — task status `verified` is a human/G2 judgment, never derived.
 import { G2_COMPLETE_STATUSES, GATE_IDS, GATE_PHASES, PROFILE_GATES, PROFILE_PHASES, ROUND_CAP, gateUndecided, phaseAfterGate, type Escalation, type GateId, type Phase, type RunState } from '@gateline/core/record'
-import { idleKey, type RunObservation } from './observe.ts'
+import {
+  after,
+  anchored,
+  artifactAnchor,
+  idleKey,
+  ledgerCloseAnchor,
+  nonStateAnchor,
+  resolutionAnchor,
+  type Anchor,
+  type RunObservation,
+} from './observe.ts'
 
 export { ROUND_CAP }
 /**
@@ -233,7 +254,7 @@ export function deriveAction(obs: RunObservation): DerivedAction {
       // unresolved). After it, the next verdict past the cap is newer than
       // the resolution again, so D4 re-fires and asks again: one human
       // decision per extra round, which is the point of the cap.
-      const granted = latestResolution(state, (reason) => reason.includes(`task ${t.id}:`), review?.lastTouched ?? null)
+      const granted = latestResolution(obs, (reason) => reason.includes(`task ${t.id}:`), reportAnchor(obs, review))
       if (granted) {
         // A `disposition` on that resolution routes the granted round exactly
         // as D17's does (#189, #190) — one shared helper, so the two cannot
@@ -398,18 +419,25 @@ function implementPhase(obs: RunObservation): DerivedAction {
       // escalation reason always carries `(task-id)`, which is what the
       // match keys on (D17's reviewer reasons use `task <id>`, so the two
       // rules never claim each other's escalations).
-      const lastFailure = Math.max(
-        ...obs.ledger
-          .filter((e) => e.failed && e.role === 'implementer' && e.task === task.id && e.at !== null)
-          .map((e) => Date.parse(e.at!)),
-      )
-      const acknowledged = state.escalations.some(
-        (e) =>
-          e.resolved &&
-          e.resolved_at !== null &&
-          e.reason.includes(`(${task.id})`) &&
-          (!Number.isFinite(lastFailure) || Date.parse(e.resolved_at) > lastFailure),
-      )
+      //
+      // "After" is branch order (#346): the failure's own closing commit
+      // against the commit that recorded the resolution. The human's clock and
+      // the engine host's are not the same clock, and a resolution that read
+      // older than the failure it answered froze the task for good.
+      let lastFailure: Anchor | null = null
+      obs.ledger.forEach((e, i) => {
+        if (!e.failed || e.role !== 'implementer' || e.task !== task.id) return
+        const closed = ledgerCloseAnchor(obs, i)
+        if (!anchored(closed)) return
+        if (lastFailure === null || after(obs.order, closed, lastFailure)) lastFailure = closed
+      })
+      const floor: Anchor | null = lastFailure
+      const acknowledged = state.escalations.some((e, i) => {
+        if (!e.resolved || !e.reason.includes(`(${task.id})`)) return false
+        if (floor === null) return e.resolved_at !== null // no failure on record to be newer than
+        const at = resolutionAnchor(obs, i)
+        return anchored(at) && after(obs.order, at, floor)
+      })
       if (acknowledged)
         return record(
           'D20',
@@ -481,7 +509,8 @@ function implementPhase(obs: RunObservation): DerivedAction {
         // verify that by re-review instead of re-escalating every tick. A
         // human may resolve more than once (acknowledge, then later resolve
         // with a disposition) — only the LATEST matching resolution governs.
-        const resolution = latestResolution(state, (reason) => reason.includes(`task ${task.id}`), review!.lastTouched)
+        const verdictAt = reportAnchor(obs, review!)
+        const resolution = latestResolution(obs, (reason) => reason.includes(`task ${task.id}`), verdictAt)
         if (!resolution) return escalate('D17', `reviewer escalated task ${task.id} — see ${review!.path}`, 'escalation')
 
         // The disposition routing is shared with D4 (#342) — see dispositionRoute.
@@ -500,8 +529,7 @@ function implementPhase(obs: RunObservation): DerivedAction {
         // acknowledgment. Without this a zero-delta resolve+resume dispatches
         // a re-review round against a byte-identical range, burning one of
         // the ROUND_CAP rounds for nothing (#188).
-        const landed =
-          obs.lastNonStateCommit !== null && review!.lastTouched !== null && obs.lastNonStateCommit > review!.lastTouched
+        const landed = after(obs.order, nonStateAnchor(obs), verdictAt)
         if (!landed)
           return rest(
             'D17',
@@ -518,10 +546,10 @@ function implementPhase(obs: RunObservation): DerivedAction {
         continue
       }
       // request-changes: whose turn? The task file's notes record the
-      // implementer's response; newer than the review means responded.
+      // implementer's response; landed after the review means responded — two
+      // agent commits on one branch, so the branch says which came second.
       const taskPath = obs.taskFiles.get(task.id)?.path
-      const taskTouched = taskPath ? (obs.lastTouched[taskPath] ?? null) : null
-      const responded = taskTouched !== null && review!.lastTouched !== null && taskTouched > review!.lastTouched
+      const responded = after(obs.order, artifactAnchor(obs, taskPath), reportAnchor(obs, review!))
       if (responded) {
         // D15 — the verify round. Round cap: a verify round past the cap is
         // caught by D4 above (rounds ≥ cap with the task incomplete).
@@ -571,17 +599,19 @@ function implementPhase(obs: RunObservation): DerivedAction {
   // first (D7), through producerPhase below.
   const verification = obs.verification
   if (verification?.verdict === 'escalate' && obs.validations['verification-report.md']?.ok) {
-    const addressed = state.escalations.some(
-      (e) =>
-        e.resolved &&
-        e.resolved_at !== null &&
-        e.reason.includes(VERIFIER_ESCALATION_KEY) &&
-        verification.lastTouched !== null &&
-        Date.parse(e.resolved_at) / 1000 > verification.lastTouched,
-    )
+    const reportAt = reportAnchor(obs, verification, 'verification-report.md')
+    const addressed = latestResolution(obs, (reason) => reason.includes(VERIFIER_ESCALATION_KEY), reportAt) !== null
     if (!addressed) return escalate('D24', VERIFIER_ESCALATION_REASON, 'escalation')
   }
   return producerPhase(obs, 'G2')
+}
+
+/** A resolution the table acts on, with the place on the branch it was made. */
+interface Resolution {
+  entry: Escalation
+  index: number
+  /** Where `resolved` flipped — the fact "after the resolution" is measured against (#346). */
+  at: Anchor
 }
 
 /**
@@ -600,29 +630,43 @@ function implementPhase(obs: RunObservation): DerivedAction {
 export const CONTRACT_DISPUTE = /^(\S+) bounced \d+× and is still malformed\b/
 
 /**
- * The latest resolution of an escalation whose reason `matches`, newer than
- * `since` (epoch seconds), or null when there is none — the shape D17, D20 and
- * D4 all read: an append-only fact no later edit can amend, so a human's
- * resolution is the unblocking input. A human may resolve more than once
- * (acknowledge, then later resolve with a disposition), and only the LATEST
- * matching resolution governs. An unknown `since` is not evidence either way,
- * so nothing matches. The comparison is wall-clock for now; #346 revisits every
- * recency check in the table at once.
+ * The latest resolution of an escalation whose reason `matches`, made after
+ * `since`, or null when there is none — the shape D17, D20 and D4 all read: an
+ * append-only fact no later edit can amend, so a human's resolution is the
+ * unblocking input. A human may resolve more than once (acknowledge, then
+ * later resolve with a disposition), and only the LATEST matching resolution
+ * governs. An unplaceable, untimed `since` is not evidence either way, so
+ * nothing matches.
+ *
+ * Both "after `since`" and "latest" are branch order (#346): the commit where
+ * `resolved` became true, against the commit that landed the verdict it
+ * answers. `resolved_at` is stamped by whichever machine served the human's
+ * decision — a laptop CLI against a hosted engine in the documented topology —
+ * and reading it against a committer's clock made a genuine resolution look
+ * older than the thing it followed, which re-escalated forever.
  */
-function latestResolution(state: RunState, matches: (reason: string) => boolean, since: number | null): Escalation | null {
-  if (since === null) return null
-  let best: Escalation | null = null
-  let bestAt = Number.NEGATIVE_INFINITY
-  for (const e of state.escalations) {
-    if (!e.resolved || e.resolved_at === null || !matches(e.reason)) continue
-    const at = Date.parse(e.resolved_at)
-    if (!Number.isFinite(at) || at / 1000 <= since) continue
-    if (at > bestAt) {
-      best = e
-      bestAt = at
-    }
-  }
+function latestResolution(obs: RunObservation, matches: (reason: string) => boolean, since: Anchor): Resolution | null {
+  const { state } = obs
+  if (!state || !anchored(since)) return null
+  let best: Resolution | null = null
+  state.escalations.forEach((entry, index) => {
+    if (!entry.resolved || !matches(entry.reason)) return
+    const at = resolutionAnchor(obs, index)
+    if (!anchored(at) || !after(obs.order, at, since)) return
+    if (best === null || after(obs.order, at, best.at)) best = { entry, index, at }
+  })
   return best
+}
+
+/**
+ * Where a report last landed — the verdict a resolution is measured against.
+ * The parsed report carries its own commit time, so only the oid comes from
+ * the observation's path index.
+ */
+const reportAnchor = (obs: RunObservation, report: { path?: string; lastTouched: number | null } | undefined | null, path?: string): Anchor => {
+  if (!report) return { oid: null, time: null }
+  const key = report.path ?? path
+  return { oid: key ? (obs.lastTouchedOid[key] ?? null) : null, time: report.lastTouched }
 }
 
 /**
@@ -641,12 +685,13 @@ function dispositionRoute(
   obs: RunObservation,
   task: { id: string; review_rounds: number },
   review: { path: string },
-  resolution: Escalation,
+  resolution: Resolution,
 ): DerivedAction | DispatchIntent | null {
+  const entry = resolution.entry
   // `re-review` — an explicit human choice made at resolve time, which is
   // itself the judgment the #188 zero-delta guard exists to protect when no
   // human has looked. Bypass it.
-  if (resolution.disposition === 're-review')
+  if (entry.disposition === 're-review')
     return {
       role: 'reviewer',
       task: task.id,
@@ -658,13 +703,12 @@ function dispositionRoute(
 
   // `return-to-implement` — the human chose to send the task back to the
   // implementer rather than straight to re-review. Whose turn is it? Mirrors
-  // D14/D15, but keyed off the resolution's timestamp rather than the
-  // review's: the task file's notes record the implementer's response, and
-  // newer than the resolution means responded.
-  if (resolution.disposition === 'return-to-implement') {
+  // D14/D15, but keyed off the resolution rather than the review: the task
+  // file's notes record the implementer's response, and landing after the
+  // resolution commit means responded.
+  if (entry.disposition === 'return-to-implement') {
     const taskPath = obs.taskFiles.get(task.id)?.path
-    const taskTouched = taskPath ? (obs.lastTouched[taskPath] ?? null) : null
-    const respondedToResolution = taskTouched !== null && taskTouched > Date.parse(resolution.resolved_at!) / 1000
+    const respondedToResolution = after(obs.order, artifactAnchor(obs, taskPath), resolution.at)
     if (respondedToResolution)
       return {
         role: 'reviewer',
@@ -689,16 +733,12 @@ function dispositionRoute(
   // the architect's amendment mode rather than the implementer. At most one
   // architect amendment in flight, and the landed amendment is acknowledged
   // before anything acts on the widened surface (D23).
-  if (resolution.disposition === 're-plan') {
+  if (entry.disposition === 're-plan') {
     const inFlight = obs.openDispatches.find((d) => d.role === 'architect')
     if (inFlight)
       return rest('D12', `architect dispatched ${inFlight.at ?? ''} and not yet landed — in flight (task ${task.id} awaits the amendment)`)
 
-    const resolvedAtSec = Date.parse(resolution.resolved_at!) / 1000
-    const touchedSince = (path: string | undefined) => {
-      const t = path ? (obs.lastTouched[path] ?? null) : null
-      return t !== null && t > resolvedAtSec
-    }
+    const touchedSince = (path: string | undefined) => after(obs.order, artifactAnchor(obs, path), resolution.at)
     const amendmentLanded = touchedSince('plan.md') || [...obs.taskFiles.values()].some((f) => touchedSince(f.path))
 
     if (amendmentLanded)
@@ -715,7 +755,7 @@ function dispositionRoute(
           role: 'architect',
           task: null,
           round: null,
-          bounce: { kind: 'amendment', report: review.path, note: resolution.resolution ?? '', task: task.id },
+          bounce: { kind: 'amendment', report: review.path, note: entry.resolution ?? '', task: task.id },
           lands: 'plan.md',
           reason: `task ${task.id}: escalation resolved with disposition re-plan — dispatch architect in amendment mode with the review report and resolution note`,
         },

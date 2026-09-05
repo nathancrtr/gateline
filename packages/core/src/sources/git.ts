@@ -145,9 +145,14 @@ export class Git {
     }
   }
 
-  async log(rev: string, paths: string[] = [], opts: { maxCount?: number } = {}): Promise<CommitInfo[]> {
+  async log(rev: string, paths: string[] = [], opts: { maxCount?: number; topoOrder?: boolean } = {}): Promise<CommitInfo[]> {
     const args = ['log', '--format=%H%x00%ct%x00%an%x00%ae%x00%s']
     if (opts.maxCount) args.push(`-n${opts.maxCount}`)
+    // `--topo-order` states the guarantee the branch-order index depends on
+    // (#346): a parent is never listed before its child, whatever dates the
+    // commits carry. Git's default traversal already holds it, but the index
+    // is only sound *because* of it, so it is asked for rather than assumed.
+    if (opts.topoOrder) args.push('--topo-order')
     args.push(rev)
     if (paths.length) args.push('--', ...paths)
     try {

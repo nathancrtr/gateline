@@ -2,7 +2,7 @@
 // discipline the frontend's readiness table keeps. Observations are built
 // directly so each row is exercised in isolation.
 import { describe, expect, it } from 'vitest'
-import { PROFILES, STAGED_REASON, type Disposition, type GateEntry, type RunState, type Validation } from '@gateline/core'
+import { BranchOrder, PROFILES, STAGED_REASON, type CommitInfo, type Disposition, type GateEntry, type RunState, type Validation } from '@gateline/core'
 import { deriveAction, DEFAULT_ESTIMATE_USD, LANDING_CAP, roundCapReason, VERIFIER_ESCALATION_REASON } from '../src/derive.ts'
 import { idleDispatchCounts, type LedgerEntry, type RunObservation, type TaskFileInfo } from '../src/observe.ts'
 import type { ReviewInfo } from '../src/review-report.ts'
@@ -34,7 +34,15 @@ const obs = (over: Partial<RunObservation> = {}): RunObservation => ({
   reviews: [],
   verification: null,
   lastTouched: {},
+  lastTouchedOid: {},
   lastNonStateCommit: null,
+  lastNonStateOid: null,
+  // No branch to read: every recency check in these hand-built rows falls back
+  // to the timestamps written into them, which is exactly what #346 keeps as
+  // the fallback. The branch-order semantics have their own rows below.
+  order: new BranchOrder(),
+  resolutionCommits: [],
+  ledgerCommits: [],
   declineEvents: {},
   bounceCounts: {},
   ledger: [],
@@ -1416,5 +1424,160 @@ describe('D24 — the verifier\'s escalation channel (#152)', () => {
     o.verification = { verdict: 'escalate', raw: 'escalate', lastTouched: 500 }
     o.validations['verification-report.md'] = { contract: 'verification-report.md', ok: false, missing: ['Gaps'], notes: [] }
     expect(deriveAction(o)).toMatchObject({ rule: 'D7' })
+  })
+})
+
+describe('recency is branch order, not a wall clock (#346)', () => {
+  // Three machines stamp the facts these rules compare: the one that served
+  // the human's decision (`resolved_at`), the committer that landed the
+  // artifact, and the engine host that wrote the ledger. A hosted engine with
+  // a laptop CLI is the documented topology, so every row below gives the
+  // record an order that CONTRADICTS the clocks, and asserts the record wins.
+  const commit = (oid: string, time: number): CommitInfo => ({ oid, time, author: 'a', email: 'a@t', subject: oid })
+  /** A branch, listed newest first, as `git log` yields it. */
+  const branch = (...oids: string[]) => new BranchOrder(oids.map((oid, i) => commit(oid, 9000 - i)))
+  /** An escalation resolved at a clock time that may disagree with its commit. */
+  const resolvedAt = (reason: string, epochSec: number, disposition: Disposition | null = null) =>
+    resolved(reason, new Date(epochSec * 1000).toISOString(), disposition)
+
+  const escalated = (over: Partial<RunObservation> = {}) =>
+    obs({
+      state: state({
+        phase: 'implement',
+        tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+        escalations: [resolvedAt('reviewer escalated task 01-a — see review-01.md', 100, 're-review')],
+      } as Partial<RunState>),
+      taskFiles: new Map([taskFile('01-a')]),
+      reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['escalate'], lastTouched: 500 }],
+      lastTouchedOid: { 'review-01.md': 'review' },
+      ...over,
+    })
+
+  it('D17 — a resolution the branch places after the verdict counts, though its clock reads earlier', () => {
+    // The human's laptop is a minute behind the committer that landed the
+    // review; the resolution commit is still the branch's newer fact.
+    const a = deriveAction(escalated({ order: branch('resolve', 'review'), resolutionCommits: [commit('resolve', 100)] }))
+    expect(a).toMatchObject({ kind: 'dispatch' })
+    expect(a.kind === 'dispatch' && a.dispatches[0]).toMatchObject({ role: 'reviewer', task: '01-a', round: 2 })
+  })
+
+  it('D17 — a resolution the branch places before the verdict does not count, though its clock reads later', () => {
+    // The mirror image, and the half that matters for safety: a resolution
+    // that predates the verdict must not route a round the human never saw.
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [resolvedAt('reviewer escalated task 01-a — see review-01.md', 9_000, 're-review')],
+    } as Partial<RunState>)
+    const a = deriveAction(
+      escalated({ state: s, order: branch('review', 'resolve'), resolutionCommits: [commit('resolve', 9_000)] }),
+    )
+    expect(a).toMatchObject({ kind: 'escalate', rule: 'D17', pause: 'escalation' })
+  })
+
+  it('D4 — the round cap stands down on a resolution the branch places after the latest verdict (#342)', () => {
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 3 }],
+      escalations: [resolvedAt(roundCapReason('01-a', 3), 100)],
+    } as Partial<RunState>)
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        reviews: [{ path: 'review-01.md', task: '01-a', verdicts: ['request-changes'], lastTouched: 500 }],
+        lastTouchedOid: { 'review-01.md': 'review' },
+        order: branch('resolve', 'review'),
+        resolutionCommits: [commit('resolve', 100)],
+      }),
+    )
+    // Not the round-cap escalation: the grant stands and the implement rules
+    // take the task — round 4 goes back to the implementer with the report.
+    expect(a).toMatchObject({ kind: 'dispatch' })
+    expect(a.kind === 'dispatch' && a.dispatches[0]).toMatchObject({ role: 'implementer', task: '01-a', round: 4 })
+  })
+
+  it('D24 — the verifier’s escalation clears on a resolution the branch places after the report (#152)', () => {
+    const o = obs({
+      state: state({
+        phase: 'implement',
+        tasks: [{ id: '01-a', status: 'review-approved', review_rounds: 1 }],
+        escalations: [resolvedAt(VERIFIER_ESCALATION_REASON, 100)],
+      } as Partial<RunState>),
+      taskFiles: new Map([taskFile('01-a')]),
+      artifacts: ['spec.md', 'plan.md', 'tasks/01-a.yaml', 'review-01.md', 'verification-report.md'],
+      validations: { 'verification-report.md': { contract: 'verification-report.md', ok: true, missing: [], notes: [] } },
+      verification: { verdict: 'escalate', raw: 'escalate', lastTouched: 500 },
+      lastTouchedOid: { 'verification-report.md': 'report' },
+      order: branch('resolve', 'report'),
+      resolutionCommits: [commit('resolve', 100)],
+    })
+    expect(deriveAction(o)).toMatchObject({ kind: 'rest', rule: 'D10' })
+  })
+
+  it('D20 — a frozen task thaws on a resolution the branch places after the failure that froze it (#147)', () => {
+    const ledger = [failedAttempt('01-a', '1970-01-01T02:30:00.000Z')] // epoch 9000: later than the resolution's clock
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'failed', review_rounds: 0 }],
+      escalations: [resolvedAt('implementer failed twice (01-a) — a human should look', 100)],
+    } as Partial<RunState>)
+    const a = deriveAction(
+      obs({
+        state: s,
+        taskFiles: new Map([taskFile('01-a')]),
+        ledger,
+        ledgerCommits: [{ open: commit('dispatch', 8_000), close: commit('failure', 9_000) }],
+        order: branch('resolve', 'failure', 'dispatch'),
+        resolutionCommits: [commit('resolve', 100)],
+      }),
+    )
+    expect(a).toMatchObject({ kind: 'record', rule: 'D20' })
+  })
+
+  it('DL — the landing cap counts by the dispatch’s own intent commit, not by the ledger’s clock (#343)', () => {
+    // The engine host runs behind the committer, so both entries carry an `at`
+    // older than spec.md's commit time — the shape that left the counter at
+    // zero and re-dispatched an idle producer every tick.
+    const ledger = [closedOk('analyst', null, '1970-01-01T00:01:00.000Z'), closedOk('analyst', null, '1970-01-01T00:02:00.000Z')]
+    const shared = {
+      ledger,
+      lastTouched: { 'spec.md': 9_000 },
+      lastTouchedOid: { 'spec.md': 'spec' },
+      ledgerCommits: [
+        { open: commit('open-1', 60), close: commit('close-1', 61) },
+        { open: commit('open-2', 120), close: commit('close-2', 121) },
+      ],
+      order: branch('close-2', 'open-2', 'close-1', 'open-1', 'spec'),
+    }
+    const counts = idle(shared)
+    expect(counts.get('analyst|')).toBe(2)
+    expect(deriveAction(obs({ ...shared, idleDispatches: counts }))).toMatchObject({ kind: 'escalate', rule: 'DL' })
+  })
+
+  it('DL — a dispatch whose intent commit predates the landing never counts, whatever its clock says', () => {
+    // The productive dispatch: it opens, the artifact lands, it closes. The
+    // count is read off the OPENING commit for exactly this reason — counting
+    // by the close would score every successful producer as idle.
+    const ledger = [closedOk('analyst', null, '1970-01-01T02:30:00.000Z')] // epoch 9000, newer than the commit
+    const counts = idle({
+      ledger,
+      lastTouched: { 'spec.md': 200 },
+      lastTouchedOid: { 'spec.md': 'spec' },
+      ledgerCommits: [{ open: commit('open-1', 100), close: commit('close-1', 300) }],
+      order: branch('close-1', 'spec', 'open-1'),
+    })
+    expect(counts.get('analyst|')).toBeUndefined()
+  })
+
+  it('an observation the branch cannot place falls back to the clocks it does have', () => {
+    // Every hand-built row above this describe block relies on this: no order
+    // index, so the timestamps decide, exactly as they did before #346.
+    const s = state({
+      phase: 'implement',
+      tasks: [{ id: '01-a', status: 'in-review', review_rounds: 1 }],
+      escalations: [resolvedAt('reviewer escalated task 01-a — see review-01.md', 600, 're-review')],
+    } as Partial<RunState>)
+    expect(deriveAction(escalated({ state: s }))).toMatchObject({ kind: 'dispatch' })
   })
 })

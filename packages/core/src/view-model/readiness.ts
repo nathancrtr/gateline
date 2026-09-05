@@ -8,8 +8,9 @@
 //   G3 ready     phase=release    ∧ release-plan.md present ∧ ¬G3
 //   Escalation   any escalations[] entry with resolved: false
 //   Round-cap    any task review_rounds ≥ 3 ∧ status not complete ∧ no
-//                resolution newer than the latest review grants it another
-//                round (#342 — the engine's rule D4 reads the same fact)
+//                resolution made after the latest review grants it another
+//                round (#342 — the engine's rule D4 reads the same fact, and
+//                "after" is branch order in both, #346)
 //   Paused       phase=paused ∧ paused_reason ∉ {staged, gate-declined}
 //                ∧ nothing else already speaks for the run; the card's
 //                instruction is the reason's (#96): budget-exhausted says
@@ -60,6 +61,17 @@
 // to reviewable with the wait said out loud, because suppressing a gate on the
 // word of a dead process is the worse failure.
 //
+// That in-flight comparison — the open entry against the packet's landing — is
+// the one recency check here still read from clocks after #346. An open entry
+// has no closing commit, and placing its *opening* commit on the branch means
+// walking `stateHistory` (a read per state commit) on the common path, for
+// every run, on every inbox render. The honest comparison is the open commit
+// against the artifact landing, and it belongs here the day the source can
+// answer it without that walk. Until then the clocks in question are the engine
+// host's and its own dispatch checkout's — the same machine in the blessed
+// topology — while the round-cap row below compares a *human's* clock with a
+// committer's, which is where the skew actually bites.
+//
 // Three of the facts these rules read now live in `record/schema.ts` — which
 // gate is pending (`pendingGateAt`), which role produces a gate's packet
 // (`gateProducer`), and whether G2's evidence has landed (`g2PacketReady`).
@@ -88,6 +100,8 @@ import {
 } from '../record/schema.ts'
 import { isOpenDispatch, parseLedger, ROLE_TIMEOUT_MS } from '../record/ledger.ts'
 import { validateArtifact, type Validation } from '../record/validate.ts'
+import type { CommitInfo } from '../sources/git.ts'
+import { readBranchOrder, resolutionCommitsOf } from '../sources/branch-order.ts'
 import type { RunRef, RunSource } from '../sources/source.ts'
 import { formatDuration } from './time.ts'
 
@@ -221,17 +235,40 @@ function lastResolved(state: RunState): string | null {
  * (#342) — the readiness half of the engine's rule D4.
  *
  * The engine's round-cap escalation names the task as `task <id>:`, and a
- * resolution of it newer than the latest review is what lets D4 stand down and
- * the loop dispatch round n+1. `since` is the latest review's commit time in
- * epoch seconds; an unknown one is not evidence either way, so nothing counts.
- * The comparison is wall-clock, exactly as the engine's is.
+ * resolution of it made after the latest review is what lets D4 stand down and
+ * the loop dispatch round n+1. `since` is the commit that landed that review;
+ * an unknown one is not evidence either way, so nothing counts.
+ *
+ * "After" is branch order, exactly as the engine reads it (#346): the commit
+ * where `resolved` became true, against the review's own commit. Comparing
+ * `resolved_at` — stamped by whichever machine served the human's decision —
+ * with a committer's clock made this card and rule D4 disagree under a second
+ * of skew, which is the one thing the two surfaces must never do. The clocks
+ * remain the fallback for a run whose history could not be read.
+ *
+ * Reading the history costs a walk, so it happens only here, behind a cap
+ * breach that most runs never have.
  */
-function grantedAnotherRound(state: RunState, task: string, since: number | null): boolean {
-  if (since === null) return false
-  return state.escalations.some((e) => {
-    if (!e.resolved || !e.resolved_at || !e.reason.includes(`task ${task}:`)) return false
-    const at = Date.parse(e.resolved_at)
-    return Number.isFinite(at) && at / 1000 > since
+async function grantedAnotherRound(
+  source: RunSource,
+  ref: RunRef,
+  state: RunState,
+  task: string,
+  since: CommitInfo | null,
+): Promise<boolean> {
+  if (!since) return false
+  const candidates = state.escalations
+    .map((e, index) => ({ e, index }))
+    .filter(({ e }) => e.resolved && e.reason.includes(`task ${task}:`))
+  if (candidates.length === 0) return false
+  const [order, history] = await Promise.all([readBranchOrder(source, ref), source.stateHistory(ref)])
+  const resolutionCommits = resolutionCommitsOf(history, state.escalations.length)
+  return candidates.some(({ e, index }) => {
+    const at = resolutionCommits[index]
+    const byBranch = order.after(at?.oid ?? null, since.oid)
+    if (byBranch !== null) return byBranch
+    const stamped = e.resolved_at ? Date.parse(e.resolved_at) : Number.NaN
+    return Number.isFinite(stamped) && stamped / 1000 > since.time
   })
 }
 
@@ -357,7 +394,7 @@ export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<R
       // again on this card would ask for a decision that has been made — and
       // the loop is moving, so there is nothing to decide until the next
       // verdict past the cap lands and D4 raises it afresh.
-      if (grantedAnotherRound(state, task.id, touched?.time ?? null)) continue
+      if (await grantedAnotherRound(source, ref, state, task.id, touched)) continue
       items.push({
         kind: 'round-cap',
         gate: null,

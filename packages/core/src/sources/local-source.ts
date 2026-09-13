@@ -1,14 +1,15 @@
 // LocalGitSource: reads a clone without touching its checkout (all reads
 // address refs), writes through plumbing with CAS (plan §3).
-import { access, readFile, writeFile } from 'node:fs/promises'
+
 import { constants } from 'node:fs'
+import { access, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parseDocument } from 'yaml'
-import { Git, type CommitInfo } from './git.ts'
-import { memoizedFrameworkRoots, type FrameworkRoots } from './framework-roots.ts'
+import { type RunScaffold, readIntake } from '../record/scaffold.ts'
 import { parseRunState, STAGED_REASON } from '../record/schema.ts'
-import { readIntake, type RunScaffold } from '../record/scaffold.ts'
 import type { ContractTemplates } from '../record/validate.ts'
+import { type FrameworkRoots, memoizedFrameworkRoots } from './framework-roots.ts'
+import { type CommitInfo, Git } from './git.ts'
 import type { Identity, RunRef, RunSource, StageOutcome, StateCommit, StateDocMutation, WriteResult } from './source.ts'
 
 const RUN_BRANCH_PREFIX = 'run/'

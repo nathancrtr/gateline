@@ -3,11 +3,11 @@
 // script plays the agent: write artifacts, commit, report usage), and a
 // reconcile loop that drives the engine to a fixed point.
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { hostname, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { type DecisionInput, LocalGitSource, planDecision, type RunRef } from '@gateline/core'
 import { expect } from 'vitest'
-import { LocalGitSource, planDecision, type DecisionInput, type RunRef } from '@gateline/core'
 import type { Engine } from '../src/engine.ts'
 import type { Registry } from '../src/registry.ts'
 import type { Dispatcher, DispatchOutcome, DispatchRequest } from '../src/seam.ts'
@@ -231,7 +231,40 @@ export class FakeDispatcher implements Dispatcher {
   }
 }
 
-export const toyRef = (dir: string): RunRef => ({ source: 'human', slug: 'toy', ref: 'run/toy', kind: 'branch', branch: 'run/toy' })
+/**
+ * A promise and its resolver, made before anything can await it.
+ *
+ * Not `Promise.withResolvers`: the project's tsc lib target predates it, and
+ * widening the whole project's target for a test helper is the wrong trade —
+ * the same reason `concurrency-cap.test.ts` writes its gate out by hand.
+ */
+export function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve: (value: T) => void = () => {}
+  const promise = new Promise<T>((r) => {
+    resolve = r
+  })
+  return { promise, resolve }
+}
+
+/**
+ * A dispatcher whose one job hangs until the test releases it.
+ *
+ * The deferred is built here, *before* the dispatcher, and that is the whole
+ * point (#361). `tick()` returns as soon as the intent commit lands and the
+ * job is registered; the job reaches the harness several awaits later, a `git
+ * worktree add` among them. A resolver captured inside the script — the shape
+ * this helper replaces — is therefore still its no-op stub whenever a loaded
+ * machine lets the test reach `finish()` first: `finish()` resolves nothing,
+ * the script then hands `drain()` a promise whose only resolver has been
+ * overwritten, and the test hangs rather than runs slow. One deferred, made up
+ * front and returned by every call, releases the job whenever it arrives.
+ */
+export function heldDispatcher(): { dispatcher: FakeDispatcher; finish: (o: Partial<DispatchOutcome>) => void } {
+  const held = deferred<Partial<DispatchOutcome>>()
+  return { dispatcher: new FakeDispatcher(() => held.promise), finish: held.resolve }
+}
+
+export const toyRef = (_dir: string): RunRef => ({ source: 'human', slug: 'toy', ref: 'run/toy', kind: 'branch', branch: 'run/toy' })
 
 /** A human decision through core's own write path — never the engine's. */
 export async function humanDecide(dir: string, input: DecisionInput): Promise<void> {

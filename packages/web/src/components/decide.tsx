@@ -2,11 +2,12 @@
 // deciding; decline requires a reason; escalations take a disposition note;
 // paused runs resume. A CAS conflict (409) re-presents rather than retrying —
 // the refusal is the designed outcome.
-import { useEffect, useMemo, useState } from 'react'
+
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useMemo, useState } from 'react'
 import { ApiError, api, type Burden, type Disposition, type GateId, type InboxItem, type Profile } from '../api.ts'
+import { type KeyHint, useKeys } from '../use-keys.ts'
 import { KeyHints } from './chips.tsx'
-import { useKeys, type KeyHint } from '../use-keys.ts'
 
 /**
  * The two cards whose only affordance is a sentence (#285/6).
@@ -447,6 +448,7 @@ export function DecidePanel({
               step={1}
               value={costLimit}
               onChange={(e) => setCostLimit(e.target.value)}
+              // biome-ignore lint/a11y/noAutofocus: the decision panel opens because the approver chose to raise the limit; focus belongs on the field they came here to fill in.
               autoFocus
               data-decide="cost-limit"
               className="input-well w-32 px-[11px] py-[7px] font-mono text-sm tabular-nums"
@@ -507,6 +509,7 @@ function NotesField({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
+      // biome-ignore lint/a11y/noAutofocus: callers opt in deliberately (decline/hold/resolve notes) — the field the approver is about to type into.
       autoFocus={autoFocus}
       rows={2}
       className="input-well w-full resize-y px-[11px] py-[9px] text-sm placeholder:text-muted"

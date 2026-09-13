@@ -3,7 +3,7 @@
 // root-layout repo — same runs, same states, same artifacts — instead of the
 // #83 failure class (silent empty inbox from an unresolved path assumption).
 import { rm } from 'node:fs/promises'
-import { generateFixtureRepo, type FixtureRepo } from '@gateline/fixtures'
+import { type FixtureRepo, generateFixtureRepo } from '@gateline/fixtures'
 import { afterAll, describe, expect, it } from 'vitest'
 import { LocalGitSource } from '../src/index.ts'
 

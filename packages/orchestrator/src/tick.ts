@@ -3,8 +3,8 @@
 // Dry-run stops here — no writes, no dispatches, exactly what shadow mode
 // promises. The write/execute half lives in engine.ts.
 import type { RunRef, RunSource } from '@gateline/core/sources'
-import { deriveAction, type DerivedAction } from './derive.ts'
-import { observeRun, type ObserveConfig, type RunObservation } from './observe.ts'
+import { type DerivedAction, deriveAction } from './derive.ts'
+import { type ObserveConfig, observeRun, type RunObservation } from './observe.ts'
 
 export interface TickDerivation {
   ref: RunRef

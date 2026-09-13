@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CodeTreeMonitor, Git, LocalGitSource, resolveCodeRepo, SUPERSEDE_EXIT_CODE } from '@gateline/core/sources'
 // gateline-orchestrator — the v1 orchestrator's CLI.
 //   tick --dry-run   derive and print each run's next action; write nothing
 //   tick             one live reconcile pass: dispatch, wait, meter, exit
@@ -6,16 +7,15 @@
 //   shadow <slug>    replay a run's history, derived vs actual (M1)
 //   sweep <role>     force a scheduled sweep now (ignores dueness, not the guards)
 import { Command } from 'commander'
-import { CodeTreeMonitor, Git, LocalGitSource, SUPERSEDE_EXIT_CODE, resolveCodeRepo } from '@gateline/core/sources'
-import { loadRegistry, type Registry } from './registry.ts'
-import { deriveAll } from './tick.ts'
 import { formatAction } from './derive.ts'
-import { formatShadowStep, shadowReplay } from './shadow.ts'
 import type { Engine } from './engine.ts'
+import { loadRegistry, type Registry } from './registry.ts'
 import type { Scheduler, SweepOutcome } from './schedule.ts'
-import { runLoop } from './triggers.ts'
+import { formatShadowStep, shadowReplay } from './shadow.ts'
 import { stagedShutdown } from './shutdown.ts'
 import { assembleOrchestrator, BOT_IDENTITY } from './start.ts'
+import { deriveAll } from './tick.ts'
+import { runLoop } from './triggers.ts'
 
 export { BOT_IDENTITY }
 
@@ -221,8 +221,13 @@ program
       return
     }
     const steps = await shadowReplay(opened.source, slug, rev)
-    steps.forEach((s, i) => console.log(`${formatShadowStep(s, i)}\n`))
-    const counts = steps.reduce<Record<string, number>>((acc, s) => ({ ...acc, [s.verdict]: (acc[s.verdict] ?? 0) + 1 }), {})
+    steps.forEach((s, i) => {
+      console.log(`${formatShadowStep(s, i)}\n`)
+    })
+    const counts = steps.reduce<Record<string, number>>((acc, s) => {
+      acc[s.verdict] = (acc[s.verdict] ?? 0) + 1
+      return acc
+    }, {})
     console.log(`steps: ${steps.length}  ${Object.entries(counts).map(([k, v]) => `${k}: ${v}`).join('  ')}`)
   })
 

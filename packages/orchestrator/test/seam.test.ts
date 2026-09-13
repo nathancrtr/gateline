@@ -9,7 +9,7 @@ import { Engine } from '../src/engine.ts'
 import type { HeadlessManifest } from '../src/manifest.ts'
 import { HeadlessDispatcher } from '../src/seam.ts'
 import { removeRunCheckout } from '../src/workspace.ts'
-import { agentCommit, FakeDispatcher, humanDecide, makeToyRepo, PLAN, SPEC, taskYaml, TEST_REGISTRY } from './engine.helper.ts'
+import { agentCommit, FakeDispatcher, humanDecide, makeToyRepo, PLAN, SPEC, TEST_REGISTRY, taskYaml } from './engine.helper.ts'
 
 const shManifest = (script: string): HeadlessManifest => ({
   adapter: 'toy-sh',

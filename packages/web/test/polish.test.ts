@@ -7,10 +7,11 @@
 // and neither needs layout. What is left over for the browser, and was checked
 // there, is whether the result reads well; what is left over for
 // `e2e/geometry.spec.ts` is whether it still fits.
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 import type { G1Packet as G1PacketData, InboxItem, RunSummary } from '../src/api.ts'
 import { AgeBadge, BudgetMeter, PhaseSpine } from '../src/components/chips.tsx'
@@ -21,8 +22,8 @@ import {
   burdenPillNeeded,
   cardInstruction,
   contractBadgeName,
-  roundsLabel,
   orderArtifacts,
+  roundsLabel,
   visibleProblems,
 } from '../src/pages/run.tsx'
 

@@ -7,10 +7,10 @@
 // assertions) but is fully self-contained: its own fixture dir and its own
 // server on a port other than 4399, so it never collides with smoke.spec's
 // server under parallel Playwright workers (plan Risk 2).
-import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
+import { type ChildProcess, execFileSync, spawn } from 'node:child_process'
 import { rmSync } from 'node:fs'
-import { expect, test, type Page } from '@playwright/test'
 import { generateFixtureRepo } from '@gateline/fixtures'
+import { expect, type Page, test } from '@playwright/test'
 
 const PORT = 4398
 test.use({ baseURL: `http://127.0.0.1:${PORT}` })

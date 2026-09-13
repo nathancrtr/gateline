@@ -82,7 +82,7 @@ Changing the upstream data format.
 const wideBrief = (title: string) =>
   brief(title).replace(
     'Must run offline; none otherwise known.',
-    'Must run offline; the reference corpus is pinned by digest `sha512:' + 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'.repeat(2) + '`.',
+    `Must run offline; the reference corpus is pinned by digest \`sha512:${'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'.repeat(2)}\`.`,
   )
 
 const spec = (title: string) => `# Specification: ${title}

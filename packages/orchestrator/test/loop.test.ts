@@ -9,10 +9,10 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { CodeTreeMonitor, type CodeTreeStatus, type EngineHealth, engineHealthPath } from '@gateline/core'
 import { afterEach, describe, expect, it } from 'vitest'
-import { CodeTreeMonitor, engineHealthPath, type CodeTreeStatus, type EngineHealth } from '@gateline/core'
 import type { TickOutcome } from '../src/engine.ts'
-import { runLoop, type EngineLike } from '../src/triggers.ts'
+import { type EngineLike, runLoop } from '../src/triggers.ts'
 
 const cleanups: string[] = []
 afterEach(() => {

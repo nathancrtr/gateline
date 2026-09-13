@@ -1,7 +1,8 @@
 // Folding audit-time sections (#217): which headings fold and what the
 // count says. The split itself is core's and tested there.
-import { describe, expect, it } from 'vitest'
+
 import { splitSections } from '@gateline/core/record'
+import { describe, expect, it } from 'vitest'
 import { isAuditSection, itemCount } from '../src/fold.ts'
 
 const review = `# Review Report: 01-core

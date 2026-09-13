@@ -4,6 +4,13 @@
   "private": true,
   "type": "module",
   "description": "The gate frontend SPA: inbox, portfolio, run detail, gate cards, metrics.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nathancrtr/gateline.git",
+    "directory": "packages/web"
+  },
+  "author": "Nathan Carter",
   "scripts": {
     "dev": "vite",
     "build": "tsc -p tsconfig.json && vite build && node scripts/check-bundle.mjs",

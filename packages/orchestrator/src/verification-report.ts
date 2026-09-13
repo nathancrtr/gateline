@@ -7,7 +7,7 @@
 // must be exactly one of the three: "fail — escalating AC3.2" is not `fail`,
 // it is a deviation, and validation bounces it. Reports that predate the line
 // parse as `null` and behave as they always did.
-import { verdictLines, verificationVerdict, type VerificationVerdict } from '@gateline/core/record'
+import { type VerificationVerdict, verdictLines, verificationVerdict } from '@gateline/core/record'
 
 export interface VerificationInfo {
   /** The overall verdict in force (the last line's), or null when absent or unrecognized. */

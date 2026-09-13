@@ -51,7 +51,7 @@ function makeCallback(intents: PendingIntent[] = [INTENT]): RunnerCallback & { r
   return { pendingIntents: () => intents, resolveOutcome }
 }
 
-function authed(path: string, init: RequestInit = {}) {
+function authed(_path: string, init: RequestInit = {}) {
   return { ...init, headers: { ...(init.headers ?? {}), authorization: `Bearer ${TOKEN}` } }
 }
 
@@ -187,7 +187,7 @@ describe('runner-agent API', () => {
   })
 
   it('reporting an outcome releases the claim immediately, before its TTL would otherwise expire', async () => {
-    let clock = 0
+    const clock = 0
     const shortIntent: PendingIntent = { ...INTENT, timeoutMs: 1_000 }
     const callback = makeCallback([shortIntent])
     const runnerApi = buildRunnerApi({ token: TOKEN, callback, log: () => {}, now: () => clock })!

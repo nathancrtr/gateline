@@ -3,8 +3,8 @@
 // idempotency/collision scan, a plumbing genesis commit against the default
 // branch's tip, and create-only CAS landing.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { Git, LocalGitSource, parseRunState, planRunScaffold, STAGED_REASON, type Profile, type RunScaffoldInput } from '../src/index.ts'
-import { dropFixture, makeFixture, type FixtureContext } from './fixture.helper.ts'
+import { Git, LocalGitSource, type Profile, parseRunState, planRunScaffold, type RunScaffoldInput, STAGED_REASON } from '../src/index.ts'
+import { dropFixture, type FixtureContext, makeFixture } from './fixture.helper.ts'
 
 let ctx: FixtureContext
 const who = { name: 'Staging Operator', email: 'staging-operator@example.test' }

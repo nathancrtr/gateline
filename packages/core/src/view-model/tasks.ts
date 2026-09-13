@@ -422,9 +422,9 @@ export function parseWorkItem(path: string, content: string): WorkItem {
     notes: asText(map.get('notes')),
     withheld:
       absent.length > 0
-        ? `${path} declares no top-level \`${absent.join('\` and \`')}\`, so it does not follow the contracts/work-item.yaml grammar this view reads.`
+        ? `${path} declares no top-level \`${absent.join('` and `')}\`, so it does not follow the contracts/work-item.yaml grammar this view reads.`
         : unreadable.length > 0
-          ? `${path} writes \`${unreadable.join('\` and \`')}\` as a nested block rather than the list contracts/work-item.yaml fixes, so this view cannot say which files it declared.`
+          ? `${path} writes \`${unreadable.join('` and `')}\` as a nested block rather than the list contracts/work-item.yaml fixes, so this view cannot say which files it declared.`
           : null,
   }
 }

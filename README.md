@@ -80,7 +80,7 @@ yet, so the source is a clone of `main`; once the first release tags, a pinned
 release replaces the clone as the canonical source
 ([INTEGRATION.md §3](docs/INTEGRATION.md)).
 
-**Prerequisites:** `git`; Python ≥ 3.9 (stdlib only — the integration tool has no
+**Prerequisites:** `git`; Python ≥ 3.11 (stdlib only — the integration tool has no
 dependencies); Node ≥ 24 for the cockpit; and an agent runner logged in on your
 machine (Claude Code in the examples — the Copilot CLI and opencode adapters
 render the same agents).

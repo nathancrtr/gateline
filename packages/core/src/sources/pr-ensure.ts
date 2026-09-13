@@ -10,7 +10,7 @@
 // rather than the branch name, and are refreshed as better artifacts land —
 // until a human edits the body, which hands the description over for good.
 import { execFile } from 'node:child_process'
-import { parseRunState, PROFILES, STAGED_REASON, type Profile } from '../record/schema.ts'
+import { PROFILES, type Profile, parseRunState, STAGED_REASON } from '../record/schema.ts'
 import { resolveFrameworkRoots } from './framework-roots.ts'
 import { Git } from './git.ts'
 import { describeRun, isGeneratedBody, type RunDescription } from './pr-description.ts'

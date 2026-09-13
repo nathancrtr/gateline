@@ -4,11 +4,11 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, describe, expect, it } from 'vitest'
-import { generateFixtureRepo } from '@gateline/fixtures'
 import { LocalGitSource } from '@gateline/core'
-import { deriveAll } from '../src/tick.ts'
+import { generateFixtureRepo } from '@gateline/fixtures'
+import { afterAll, describe, expect, it } from 'vitest'
 import type { DerivedAction } from '../src/derive.ts'
+import { deriveAll } from '../src/tick.ts'
 
 const dir = mkdtempSync(join(tmpdir(), 'gateline-orch-fixture-'))
 generateFixtureRepo(dir)
@@ -34,7 +34,7 @@ describe('dry-run tick over the fixture repo', () => {
     expect(bySlug['g3-pending']).toMatchObject({ kind: 'rest', rule: 'D10' })
 
     // Humans own escalations, pauses, and malformed state; the engine rests.
-    expect(bySlug['escalated']).toMatchObject({ kind: 'rest', rule: 'D3' })
+    expect(bySlug.escalated).toMatchObject({ kind: 'rest', rule: 'D3' })
     expect(bySlug['paused-budget']).toMatchObject({ kind: 'rest', rule: 'D2' })
     expect(bySlug['bad-state']).toMatchObject({ kind: 'rest', rule: 'D0' })
     expect(bySlug['done-merged']).toMatchObject({ kind: 'rest', rule: 'D1' })

@@ -1,8 +1,9 @@
 // Portfolio rows (interaction I6) and the cross-source inbox: pure
 // derivations over RunSource reads — nothing here is stored (rule R1).
-import { deriveReadiness, type InboxItem } from './readiness.ts'
-import { ROUND_CAP, type ClosureRecord, type GateEntry, type Profile, type RunState } from '../record/schema.ts'
+
+import { type ClosureRecord, type GateEntry, type Profile, ROUND_CAP, type RunState } from '../record/schema.ts'
 import type { RunRef, RunSource } from '../sources/source.ts'
+import { deriveReadiness, type InboxItem } from './readiness.ts'
 
 export interface GateLedgerCell {
   approved: boolean

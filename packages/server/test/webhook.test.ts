@@ -1,9 +1,9 @@
 // The webhook route: HMAC is the gate; events fan out to sync actions.
 import { createHmac } from 'node:crypto'
+import type { RunSource } from '@gateline/core'
 import { describe, expect, it, vi } from 'vitest'
 import { createApp } from '../src/app.ts'
 import { buildWebhook } from '../src/webhook.ts'
-import type { RunSource } from '@gateline/core'
 
 const SECRET = 'hook-secret'
 
@@ -31,7 +31,7 @@ describe('POST /api/webhooks/github', () => {
   it('rejects a bad signature without dispatching', async () => {
     const { app, onEvent } = makeApp()
     const body = JSON.stringify({})
-    const res = await post(app, body, { 'x-hub-signature-256': sign(body + 'tampered'), 'x-github-event': 'push' })
+    const res = await post(app, body, { 'x-hub-signature-256': sign(`${body}tampered`), 'x-github-event': 'push' })
     expect(res.status).toBe(401)
     expect(onEvent).not.toHaveBeenCalled()
   })

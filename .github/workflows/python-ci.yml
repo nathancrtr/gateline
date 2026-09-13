@@ -1,0 +1,26 @@
+name: python-ci
+
+# The vendored tooling (render-agents.py, integrate.py) is stdlib-only and
+# must run on whatever interpreter an operator's machine has — this matrix is
+# the floor (3.11) and the current latest, so a floor-breaking change fails
+# here instead of on someone else's laptop.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  python-ci:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.14']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install pytest
+      - run: python -m pytest scripts/test_integrate.py -q
+      - run: python3 scripts/render-agents.py --check

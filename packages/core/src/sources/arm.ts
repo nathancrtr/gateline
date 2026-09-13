@@ -7,7 +7,7 @@
 // reads that stub for meaning: an implementer dispatched against "Fill in
 // what to build" has no spec or plan to fall back on. So the stub is refused
 // at the one moment a human is already acting on the run.
-import { workItemIncomplete, type RunState } from '../record/index.ts'
+import { type RunState, workItemIncomplete } from '../record/index.ts'
 import type { RunRef, RunSource } from './source.ts'
 
 /**

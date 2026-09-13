@@ -14,8 +14,9 @@
 // g1.tsx, rounds.tsx) share: `FindingCard` is the row all three render, and
 // `Inline` and `PacketSweep` are the two pieces of quoting chrome all three
 // need. Chrome that only one surface uses stays in that surface's own file.
-import { useState, type ReactNode } from 'react'
+
 import { useQuery } from '@tanstack/react-query'
+import { type ReactNode, useState } from 'react'
 import { api, type ReviewFinding, type ReviewReport, type Severity, type Verdict } from '../api.ts'
 import { CitedText } from './lexicon.tsx'
 
@@ -43,8 +44,7 @@ export function Inline({ children }: { children: string }) {
   const parts: ReactNode[] = []
   let last = 0
   let key = 0
-  let m: RegExpExecArray | null
-  while ((m = re.exec(children))) {
+  for (const m of children.matchAll(re)) {
     if (m.index > last) parts.push(<CitedText key={key++}>{children.slice(last, m.index)}</CitedText>)
     parts.push(
       m[1] !== undefined ? (
@@ -218,6 +218,7 @@ export function FindingCard({
           </span>
           {collapsible && (
             <button
+              type="button"
               onClick={() => setOpen((v) => !v)}
               className={`shrink-0 border px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none ${
                 finding.resolution === null

@@ -1,11 +1,11 @@
 // Remote sync (hosted cockpit): a clone polls origin, remote runs appear,
 // clean local branches fast-forward, unpushed local decisions survive.
 import { mkdtemp, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Git, LocalGitSource, loadSources } from '../src/index.ts'
-import { dropDir, dropFixture, makeFixture, type FixtureContext } from './fixture.helper.ts'
+import { dropDir, dropFixture, type FixtureContext, makeFixture } from './fixture.helper.ts'
 
 let upstream: FixtureContext
 let scratch: string

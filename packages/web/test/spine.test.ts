@@ -1,28 +1,29 @@
 // The run header's phase spine (#254). What is under test is the part that
 // could quietly become a lie: which cells exist for a profile, where the run is
 // standing, and which gate is on the table. The rendering is chips.tsx's job.
-import { describe, expect, it } from 'vitest'
+
 import {
+  CLOSURE_MEANINGS as CORE_CLOSURE_MEANINGS,
+  CLOSURES as CORE_CLOSURES,
   GATE_PHASES as CORE_GATE_PHASES,
   PROFILE_GATES as CORE_PROFILE_GATES,
   PROFILE_PHASES as CORE_PROFILE_PHASES,
-  CLOSURES as CORE_CLOSURES,
-  CLOSURE_MEANINGS as CORE_CLOSURE_MEANINGS,
 } from '@gateline/core/record'
 import { GATE_QUESTIONS as CORE_GATE_QUESTIONS, PATCH_G1_QUESTION as CORE_PATCH_G1_QUESTION } from '@gateline/core/view-model'
+import { describe, expect, it } from 'vitest'
 import {
-  CLOSURES,
   CLOSURE_MEANINGS,
+  CLOSURES,
   GATE_PHASES,
   GATE_QUESTIONS,
+  type GateId,
   PATCH_G1_QUESTION,
   PROFILE_GATES,
   PROFILE_PHASES,
-  type GateId,
   type Profile,
   type RunSummary,
 } from '../src/api.ts'
-import { SPINE_NOTE_RUNGS, gateNote, noteRung, phaseSpine, spineFit, type GateCell, type PhaseCell } from '../src/spine.ts'
+import { type GateCell, gateNote, noteRung, type PhaseCell, phaseSpine, SPINE_NOTE_RUNGS, spineFit } from '../src/spine.ts'
 
 type Ledger = RunSummary['gates']
 

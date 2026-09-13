@@ -465,7 +465,7 @@ frontend and the orchestrator run from the framework checkout/release for as lon
 as the operator uses them — a standing instrument on the operator's machine, not
 a dependency of the host tree — and Stage 3's frontend read check is an operator
 step from that checkout. Everything that travels into the host stays stdlib-only
-Python 3.9+, same constraint as the renderer and for the same reason: host
+Python 3.11+, same constraint as the renderer and for the same reason: host
 machines' interpreters vary, and the integration tool is precisely the thing that
 runs *before* the environment probe has fixed anything.
 

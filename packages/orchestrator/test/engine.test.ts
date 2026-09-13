@@ -4,32 +4,32 @@
 // then escalate; decline recovery re-dispatches with the decline notes.
 // The FakeDispatcher plays the harness; humans decide through core's own
 // write path, never the engine's.
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+
 import { execFileSync } from 'node:child_process'
-import { describe, expect, it, vi } from 'vitest'
+import { join } from 'node:path'
 import { LocalGitSource } from '@gateline/core'
+import { describe, expect, it, vi } from 'vitest'
 import { Engine } from '../src/engine.ts'
 import { parseLedger } from '../src/observe.ts'
 import { removeRunCheckout } from '../src/workspace.ts'
 import {
   agentCommit,
   appendToFile,
+  type Clock,
   FakeDispatcher,
   HUMAN,
   humanDecide,
   log,
   makeToyRepo,
   PLAN,
-  reconcile,
   RELEASE_PLAN,
   REVIEW,
+  reconcile,
   SPEC,
-  taskYaml,
   TEST_REGISTRY,
+  taskYaml,
   toyRef,
   VERIFICATION,
-  type Clock,
 } from './engine.helper.ts'
 
 const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
@@ -39,7 +39,7 @@ function makeEngine(dir: string, dispatcher: FakeDispatcher, over: Partial<Const
 }
 
 /** The full toy pipeline as a dispatcher script: each role produces its contract artifact. */
-function pipelineScript(dir: string, clock: Clock) {
+function pipelineScript(_dir: string, clock: Clock) {
   let reviewer01Calls = 0
   let analystCalls = 0
   return (req: { cwd: string; role: string; body: string }) => {

@@ -9,9 +9,10 @@ Usage:
     python3 scripts/render-agents.py            # (re)write all rendered files
     python3 scripts/render-agents.py --check    # exit 1 if any rendered file is stale
 
-Stdlib-only and Python 3.9-compatible on purpose (see plan ADR-8 of the wordfreq
-run): JSON manifests instead of YAML, no PEP 604 annotations.
+Stdlib-only and Python 3.11-compatible on purpose (see plan ADR-8 of the wordfreq
+run): JSON manifests instead of YAML, no third-party imports.
 """
+# requires Python >= 3.11
 import json
 import re
 import sys

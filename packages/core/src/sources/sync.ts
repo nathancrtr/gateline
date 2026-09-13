@@ -16,7 +16,7 @@
 // condition here too — shared code, so the card and the sync cannot drift.
 import { execFile } from 'node:child_process'
 import { decisionPhase, g2PacketReady, pendingGateAt } from '../record/schema.ts'
-import type { RunRef, RunSource, WriteResult } from './source.ts'
+import type { RunSource, WriteResult } from './source.ts'
 
 export interface PrApproval {
   number: number
@@ -128,7 +128,7 @@ export class GhCliProvider implements PrProvider {
       latestReviews: { author: { login: string }; state: string; submittedAt: string }[]
     }[]
     const pr = prs[0]
-    if (!pr || pr.reviewDecision !== 'APPROVED') return null
+    if (pr?.reviewDecision !== 'APPROVED') return null
     const review = pr.latestReviews.filter((r) => r.state === 'APPROVED').at(-1)
     if (!review) return null
     return { number: pr.number, url: pr.url, reviewer: review.author.login, submittedAt: review.submittedAt }

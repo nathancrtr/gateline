@@ -18,10 +18,11 @@ Usage (from the vendored copy inside a host repo):
     python3 scripts/integrate.py validate [<target-repo>] [--prefix .gateline]
     python3 scripts/integrate.py fork <core-file> --reason "why" [...]
 
-Stdlib-only and Python 3.9-compatible on purpose, same constraint as the
+Stdlib-only and Python 3.11-compatible on purpose, same constraint as the
 renderer and for the same reason: this tool runs *before* the environment
 probe has fixed anything (INTEGRATION.md §8).
 """
+# requires Python >= 3.11
 import argparse
 import hashlib
 import json

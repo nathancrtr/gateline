@@ -11,12 +11,12 @@ import {
   deriveSweep,
   parseEvery,
   parseScheduleConfig,
-  Scheduler,
-  sweepSlug,
   type ScheduleEntry,
+  Scheduler,
   type SweepFacts,
+  sweepSlug,
 } from '../src/schedule.ts'
-import { agentCommit, Clock, FakeDispatcher, makeToyRepo, TEST_REGISTRY } from './engine.helper.ts'
+import { agentCommit, type Clock, FakeDispatcher, makeToyRepo, TEST_REGISTRY } from './engine.helper.ts'
 
 const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
 

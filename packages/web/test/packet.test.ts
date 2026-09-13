@@ -9,12 +9,13 @@
 // assertions are about is the markup. The inputs are real artifacts run
 // through core's own parsers, so a change to either grammar fails here rather
 // than passing against a hand-built object.
+
+import { buildEvidenceRollup, buildLexicon, parseReview } from '@gateline/core/view-model'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
-import { buildEvidenceRollup, buildLexicon, parseReview } from '@gateline/core/view-model'
 import type { EvidenceRollup, ReviewReport } from '../src/api.ts'
 import { G2Packet } from '../src/components/evidence.tsx'
 import { FindingCard } from '../src/components/findings.tsx'

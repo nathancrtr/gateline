@@ -12,11 +12,12 @@
 // tests drive `observeRun` over real commits, because the count is read from
 // the commit grammar and the reset from `state.yaml` — both facts on the
 // branch, neither reachable from a hand-built observation.
-import { describe, expect, it } from 'vitest'
+
 import { LocalGitSource } from '@gateline/core'
+import { describe, expect, it } from 'vitest'
 import { deriveAction } from '../src/derive.ts'
 import { observeRun } from '../src/observe.ts'
-import { makeToyRepo, toyRef, HUMAN } from './engine.helper.ts'
+import { HUMAN, makeToyRepo, toyRef } from './engine.helper.ts'
 
 const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
 

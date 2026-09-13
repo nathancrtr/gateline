@@ -11,28 +11,31 @@
 //
 // Findings are numbered as in the audit; the ones that hold today are
 // asserted plainly.
+
+import { deriveReadiness, LocalGitSource, planDecision, planSync, type RunState } from '@gateline/core'
 import { describe, expect, it } from 'vitest'
-import { LocalGitSource, deriveReadiness, planDecision, planSync, type RunState } from '@gateline/core'
 import { Engine } from '../src/engine.ts'
 import { parseLedger } from '../src/observe.ts'
 import { removeRunCheckout } from '../src/workspace.ts'
 import {
   agentCommit,
   appendToFile,
+  type Clock,
+  deferred,
   FakeDispatcher,
   HUMAN,
+  heldDispatcher,
   humanDecide,
   makeToyRepo,
   PLAN,
-  reconcile,
   RELEASE_PLAN,
   REVIEW,
+  reconcile,
   SPEC,
-  taskYaml,
   TEST_REGISTRY,
+  taskYaml,
   toyRef,
   VERIFICATION,
-  type Clock,
 } from './engine.helper.ts'
 import { assertStateInvariants, assertTerminalStays } from './invariants.ts'
 
@@ -227,8 +230,7 @@ describe('F3 — a gate is decided in its own phase, in order (#344)', () => {
 describe('F4 — a terminal run is not moved by the engine (#345, fixed)', () => {
   it('a dispatch that fails after the human closed the run does not un-close it', { timeout: 60_000 }, async () => {
     const { dir } = makeToyRepo()
-    let finish: (o: object) => void = () => {}
-    const dispatcher = new FakeDispatcher(() => new Promise<object>((resolve) => (finish = resolve)))
+    const { dispatcher, finish } = heldDispatcher()
     const engine = makeEngine(dir, dispatcher)
     try {
       await engine.tick() // analyst in flight
@@ -377,21 +379,26 @@ describe('F10 — a gate cannot be approved while its producer is being re-dispa
   it('planDecision refuses an approval whose packet is about to be replaced', { timeout: 60_000 }, async () => {
     const { dir, clock } = makeToyRepo()
     let analystCalls = 0
-    let finish: (o: object) => void = () => {}
+    // Built before the dispatcher, never inside its script (#361): `tick()`
+    // returns as soon as the intent commit lands, several awaits ahead of the
+    // launch job reaching the harness, so a resolver assigned in the script is
+    // not yet the real one when this test hits its `finally`. The full account
+    // is on `heldDispatcher`, which is this shape for every other held job.
+    const redo = deferred<object>()
     const dispatcher = new FakeDispatcher((req) => {
       analystCalls++
       if (analystCalls === 1) {
         agentCommit(req.cwd, clock, { 'runs/toy/spec.md': SPEC }, 'toy: spec')
         return {}
       }
-      return new Promise<object>((resolve) => (finish = resolve)) // the redo, in flight
+      return redo.promise // the redo, in flight
     })
     const engine = makeEngine(dir, dispatcher)
     try {
       await reconcile(engine)
       await humanDecide(dir, { action: 'decline', gate: 'G0', notes: 'tighten R1' })
       await humanDecide(dir, { action: 'resume' })
-      await engine.tick() // D9 re-dispatch, now in flight
+      await engine.tick() // D9 re-dispatch: intent committed, job registered — the harness call follows
       const state = await readState(dir)
       expect(parseLedger(state).filter((e) => e.role === 'analyst' && e.cost_usd === null)).toHaveLength(1)
       // The open producer entry is the #159 signal, and approving the
@@ -399,7 +406,7 @@ describe('F10 — a gate cannot be approved while its producer is being re-dispa
       // spec nobody approved under an approved G0.
       expect(() => planDecision(state, { action: 'approve', gate: 'G0', burden: 'confirmation' }, HUMAN)).toThrow(/analyst is in flight/)
     } finally {
-      finish({})
+      redo.resolve({})
       await engine.drain()
       await removeRunCheckout(dir, 'run/toy')
     }
@@ -446,7 +453,10 @@ describe('what holds today (the properties the walk relies on)', () => {
     for (const seed of [11, 23]) {
       const { dir, clock } = makeToyRepo({ budget: 200 })
       let x = seed
-      const rand = () => ((x = (x * 1103515245 + 12345) % 2147483648) / 2147483648)
+      const rand = () => {
+        x = (x * 1103515245 + 12345) % 2147483648
+        return x / 2147483648
+      }
       let failNext = false
       const dispatcher = new FakeDispatcher((req) => {
         // One dispatch in eight fails outright; the rest cooperate.

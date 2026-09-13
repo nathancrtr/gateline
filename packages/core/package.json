@@ -4,6 +4,13 @@
   "private": true,
   "type": "module",
   "description": "Layered core: record (state.yaml schema, validation, decision actions), sources (git, RunSource drivers, GitHub sync), view-model (readiness, portfolio, metrics for the gate frontend). Runs from TypeScript source (Node >=24 type stripping); no build step.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nathancrtr/gateline.git",
+    "directory": "packages/core"
+  },
+  "author": "Nathan Carter",
   "exports": {
     ".": "./src/index.ts",
     "./record": "./src/record/index.ts",

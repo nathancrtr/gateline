@@ -1,11 +1,12 @@
 // The default screen: everything that needs a human, everywhere, oldest first.
-import { useMemo, useState } from 'react'
+
 import { useQuery } from '@tanstack/react-query'
+import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, formatAge, type InboxItem } from '../api.ts'
 import { AgeBadge, KeyHints, KindChip } from '../components/chips.tsx'
 import { gateCardState } from '../gate-state.ts'
-import { useKeys, type KeyHint } from '../use-keys.ts'
+import { type KeyHint, useKeys } from '../use-keys.ts'
 
 const STALE_SECONDS = 3 * 86_400 // aging turns urgent at 3 days
 const STALE_DAYS = 7 * 86_400 // aging turns stale at 7 days
@@ -170,6 +171,7 @@ export function InboxPage() {
         {filters.map((f) => (
           <button
             key={f.label}
+            type="button"
             className={`pb-[3px] ${filter === f.kind ? 'text-ink shadow-[inset_0_-1.5px_0_var(--color-ink)]' : 'text-muted hover:text-ink'}`}
             onClick={() => {
               setFilter(f.kind)
@@ -184,7 +186,7 @@ export function InboxPage() {
       {filteredItems!.length === 0 ? (
         <div className="mt-[14px] border-t border-ink px-2 py-16 text-center">
           <span className="gate-sigil mb-3 block" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="36" height="36">
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="36" height="36">
               <rect x="3.5" y="3" width="2.6" height="18" fill="currentColor" />
               <rect x="17.9" y="3" width="2.6" height="18" fill="currentColor" />
               <rect x="3.5" y="8.6" width="17" height="2.2" fill="currentColor" />

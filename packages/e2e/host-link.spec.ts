@@ -10,10 +10,10 @@
 // the shared fixture an origin would also flip zero-config sources into push
 // mode (view-model/config.ts's pushWhenOriginExists) and change what every
 // other spec is testing.
-import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
+import { type ChildProcess, execFileSync, spawn } from 'node:child_process'
 import { rmSync } from 'node:fs'
-import { expect, test } from '@playwright/test'
 import { generateFixtureRepo } from '@gateline/fixtures'
+import { expect, test } from '@playwright/test'
 
 const PORT = 4397
 test.use({ baseURL: `http://127.0.0.1:${PORT}` })

@@ -208,7 +208,7 @@ describe('parseWorkItem', () => {
   })
 
   it('AC3 — withholds and names the key when the contact surface is absent', () => {
-    const stripped = WELL_FORMED.replace(/file_contact_surface:\n(  - .*\n)+/, '')
+    const stripped = WELL_FORMED.replace(/file_contact_surface:\n( {2}- .*\n)+/, '')
     const item = parseWorkItem('tasks/01-example.yaml', stripped)
     expect(item.withheld).toContain('file_contact_surface')
     expect(item.withheld).toContain('tasks/01-example.yaml')
@@ -226,7 +226,7 @@ describe('parseWorkItem', () => {
     // a diff view state that every changed file is out of surface — a verdict
     // manufactured out of a record the parser had not read.
     const forked = WELL_FORMED.replace(
-      /file_contact_surface:\n(  - .*\n)+/,
+      /file_contact_surface:\n( {2}- .*\n)+/,
       'file_contact_surface:\n  paths:\n    - src/example/thing.ts\n  mode: exclusive\n',
     )
     const item = parseWorkItem('tasks/01-example.yaml', forked)
@@ -242,17 +242,17 @@ describe('parseWorkItem', () => {
   it('reads a flow sequence written on its own indented line', () => {
     // `file_contact_surface:` then an indented `[]` is a list, not a nested
     // shape — the distinction the withholding above turns on.
-    const indented = WELL_FORMED.replace(/file_contact_surface:\n(  - .*\n)+/, 'file_contact_surface:\n  []\n')
+    const indented = WELL_FORMED.replace(/file_contact_surface:\n( {2}- .*\n)+/, 'file_contact_surface:\n  []\n')
     expect(parseWorkItem('tasks/01-x.yaml', indented)).toMatchObject({ withheld: null, fileContactSurface: [] })
 
-    const wrapped = WELL_FORMED.replace(/file_contact_surface:\n(  - .*\n)+/, 'file_contact_surface:\n  [a.ts, b.ts]\n')
+    const wrapped = WELL_FORMED.replace(/file_contact_surface:\n( {2}- .*\n)+/, 'file_contact_surface:\n  [a.ts, b.ts]\n')
     expect(parseWorkItem('tasks/01-x.yaml', wrapped).fileContactSurface).toEqual(['a.ts', 'b.ts'])
   })
 
   it('distinguishes a declared-empty surface from an absent one', () => {
     // The `patch`-profile stub scaffold writes `file_contact_surface: []`. That
     // is a record saying "nothing declared", not a record this view cannot read.
-    const stub = WELL_FORMED.replace(/file_contact_surface:\n(  - .*\n)+/, 'file_contact_surface: []\n')
+    const stub = WELL_FORMED.replace(/file_contact_surface:\n( {2}- .*\n)+/, 'file_contact_surface: []\n')
     const item = parseWorkItem('tasks/01-stub.yaml', stub)
     expect(item.withheld).toBeNull()
     expect(item.fileContactSurface).toEqual([])

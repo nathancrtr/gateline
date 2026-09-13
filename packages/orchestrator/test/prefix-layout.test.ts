@@ -6,13 +6,13 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
 import { Git } from '@gateline/core'
+import { describe, expect, it } from 'vitest'
 import { Engine } from '../src/engine.ts'
 import { loadHeadlessManifest } from '../src/manifest.ts'
 import { loadRegistry } from '../src/registry.ts'
 import { Scheduler, sweepSlug } from '../src/schedule.ts'
-import { agentCommit, Clock, FakeDispatcher, makeToyRepo, reconcile, toyRef, humanDecide, TEST_REGISTRY, SPEC } from './engine.helper.ts'
+import { agentCommit, FakeDispatcher, humanDecide, makeToyRepo, reconcile, SPEC, TEST_REGISTRY, toyRef } from './engine.helper.ts'
 
 const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
 

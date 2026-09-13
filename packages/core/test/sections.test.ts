@@ -4,7 +4,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { FenceTracker, extractSections, h2Headings, splitSections } from '../src/index.ts'
+import { extractSections, FenceTracker, h2Headings, splitSections } from '../src/index.ts'
 
 const rejoin = (md: string) => splitSections(md).map((s) => (s.headingLine !== null ? `${s.headingLine}\n${s.body}` : s.body)).join('\n')
 

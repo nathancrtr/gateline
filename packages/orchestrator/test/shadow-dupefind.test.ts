@@ -7,11 +7,12 @@
 // veto absorbed as a compatible rest, DB pre-flight against a real ledger
 // for a second run, and the response-visibility contract gap (class A) that
 // this run discovered and roles/implementer.md now closes.
-import { fileURLToPath } from 'node:url'
+
 import { resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { fileURLToPath } from 'node:url'
 import { LocalGitSource } from '@gateline/core'
-import { shadowReplay, type ShadowStep } from '../src/shadow.ts'
+import { describe, expect, it } from 'vitest'
+import { type ShadowStep, shadowReplay } from '../src/shadow.ts'
 
 const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../..')
 const source = new LocalGitSource('sandbox', repoRoot)

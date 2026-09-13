@@ -20,8 +20,9 @@
 // a score: no coverage percentage, no plan grade, and an ordered overlap is
 // shown as ordered rather than hidden, because two tasks may touch one file by
 // design and that call is the approver's.
-import { useState } from 'react'
+
 import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type CoverageRow, type G1Packet as G1PacketData, type SurfaceOverlap, type WorkItem } from '../api.ts'
 import { PACKET_FRAME, PACKET_LABEL, PacketSweep } from './findings.tsx'
@@ -241,8 +242,8 @@ function OverlapEntry({ overlap }: { overlap: SurfaceOverlap }) {
         </span>
       </div>
       <ul className="mt-1 flex flex-col gap-0.5">
-        {overlap.entries.map((e, i) => (
-          <li key={i} className="font-mono text-[11.5px] text-muted">
+        {overlap.entries.map((e) => (
+          <li key={`${e.a}|${e.b}`} className="font-mono text-[11.5px] text-muted">
             {e.a === e.b ? e.a : `${e.a} ⊃ ${e.b}`}
           </li>
         ))}
@@ -265,6 +266,7 @@ function TaskEntry({ item, src, slug }: { item: WorkItem; src: string; slug: str
           <span className="shrink-0 font-mono text-[10.5px] text-muted">after {item.dependsOn.join(', ')}</span>
         )}
         <button
+          type="button"
           onClick={() => setOpen((v) => !v)}
           className="shrink-0 border border-line bg-surface px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none text-muted"
         >
@@ -321,6 +323,7 @@ function Decisions({ src, slug }: { src: string; slug: string }) {
                 )}
                 <span className="min-w-0 flex-1 text-[12.5px] font-medium text-ink">{entry.shortName}</span>
                 <button
+                  type="button"
                   onClick={() => setOpen(expanded ? null : key)}
                   className="shrink-0 border border-line bg-surface px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none text-muted"
                 >

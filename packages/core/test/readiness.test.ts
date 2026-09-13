@@ -3,8 +3,8 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { deriveReadiness, buildPortfolio, parseRunState, pausedInstruction, ROUND_CAP, type RunRef, type RunState } from '../src/index.ts'
-import { dropFixture, makeFixture, type FixtureContext } from './fixture.helper.ts'
+import { buildPortfolio, deriveReadiness, parseRunState, pausedInstruction, ROUND_CAP, type RunRef, type RunState } from '../src/index.ts'
+import { dropFixture, type FixtureContext, makeFixture } from './fixture.helper.ts'
 
 /** The sentence a pause with nothing specific to say still gets. */
 const GENERIC_PAUSE = 'Resume the run, or close it with a disposition saying why it ends here'

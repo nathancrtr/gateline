@@ -1,9 +1,10 @@
 // #159's web half: three gate-card states out of two flags, and the surfaces
 // that used to read `!reviewable` as "bounced" reading them through one place.
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 import type { InboxItem } from '../src/api.ts'
 import { KindChip } from '../src/components/chips.tsx'

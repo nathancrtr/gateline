@@ -8,12 +8,26 @@
 // were reopened (#350) — and nothing about the run: no escalation, no phase,
 // no paused_reason.
 import { rmSync } from 'node:fs'
-import { afterEach, describe, expect, it } from 'vitest'
 import { LocalGitSource } from '@gateline/core'
+import { afterEach, describe, expect, it } from 'vitest'
 import { Engine } from '../src/engine.ts'
 import { parseLedger } from '../src/observe.ts'
 import { removeRunCheckout } from '../src/workspace.ts'
-import { agentCommit, deadEngineId, FakeDispatcher, humanDecide, makeToyRepo, PLAN, reconcile, SPEC, taskYaml, TEST_REGISTRY, toyRef, type Clock } from './engine.helper.ts'
+import {
+  agentCommit,
+  type Clock,
+  deadEngineId,
+  FakeDispatcher,
+  heldDispatcher,
+  humanDecide,
+  makeToyRepo,
+  PLAN,
+  reconcile,
+  SPEC,
+  TEST_REGISTRY,
+  taskYaml,
+  toyRef,
+} from './engine.helper.ts'
 
 const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
 
@@ -66,13 +80,6 @@ async function toImplement(dir: string, engine: Engine, until: () => boolean): P
     await engine.drain()
   }
   expect(until()).toBe(true)
-}
-
-/** A dispatcher whose one job hangs until the test resolves it. */
-function heldDispatcher(): { dispatcher: FakeDispatcher; finish: (o: object) => void } {
-  let resolve: (o: object) => void = () => {}
-  const dispatcher = new FakeDispatcher(() => new Promise<object>((r) => (resolve = r)))
-  return { dispatcher, finish: (o) => resolve(o) }
 }
 
 describe('a dispatch that lands on a closed run is metered and nothing else (#345)', () => {

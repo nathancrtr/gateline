@@ -83,7 +83,7 @@ state, not dispatch.
 
 ### 2.1 Data model and validation
 
-`@gateline/core` types mirror the contracts exactly: `RunState` (from
+`@gateline/core` types mirror the contracts: `RunState` (from
 `contracts/state.yaml`), `Task`, `GateEntry`, `Escalation`, plus derived types
 (`InboxItem`, `GatePacket`, `RunSummary`). Parsing is zod-validated YAML; a state
 file that fails schema validation surfaces as a *malformed run* (visible, opens the
@@ -91,7 +91,7 @@ raw file, never guessable-around — the contract's bounce rule applied to ourse
 
 Artifact well-formedness (R3) derives required sections **from the target repo's own
 `contracts/*.md` templates at read time** — the validator reads the section headings
-of `contracts/spec.md` in the repo it is rendering, not a list hardcoded in the app.
+of `contracts/spec.md` in the repo it is rendering, rather than a list hardcoded in the app.
 A consumer who forks the framework and amends a contract gets a frontend that
 validates against *their* contract, for free. (Built-in fallbacks cover repos that
 imported runs but not `contracts/`.)
@@ -147,7 +147,7 @@ don't store). Core encodes one rule per interaction:
 The in-flight row (#159) is a gate that is ready by every clause above and still
 must not be decided. Decline G0 with notes and resume: the engine re-dispatches
 the Analyst with those notes (ORCHESTRATOR.md §4.2, rule D9), and until the new
-`spec.md` lands the old one satisfies "G0 ready" exactly. The item is emitted
+`spec.md` lands the old one satisfies "G0 ready". The item is emitted
 **non-reviewable with empty `problems`** — which is what distinguishes it from
 R3's bounce view — and carries `inflight: {role, since}`. The producing roles are
 the profile's own: G0 → Analyst, G1 → Architect (none in `patch`), G2 → Verifier
@@ -197,7 +197,7 @@ differ, echoing the Agent Inbox per-interrupt configuration:
 
 | Card | Layout | Affordances |
 |---|---|---|
-| **G0** | Brief and spec side-by-side; requirements/acceptance-criteria numbered and anchor-linked | Approve · Approve with notes · **Decline with reason** (routes back to Analyst — the "edit the spec" instinct is served by declining with specific notes, not by editing in-app; the frontend never adds content) |
+| **G0** | Brief and spec side-by-side; requirements/acceptance-criteria numbered and anchor-linked | Approve · Approve with notes · **Decline with reason** (routes back to Analyst — the "edit the spec" instinct is served by declining with specific notes rather than by editing in-app; the frontend never adds content) |
 | **G1** | Plan with ADRs foregrounded; task cards with file-contact surfaces, overlap check rendered as a badge | Approve · Approve with notes · Decline with reason |
 | **G2** | Verdict strip (reviewer verdict, verifier result, rounds used) → diff viewer → both reports; evidence expanded only for failures, per the contracts' own budget rules | Approve · Approve with notes · Decline with reason; deep-link to the PR when one exists |
 | **G3** | Release plan with the rollback section pinned and non-collapsible | Approve · Decline |
@@ -243,7 +243,7 @@ encoded in a small fixed vocabulary (gate states, phases, verdicts) used identic
 everywhere; Inter/system for UI, mono for artifacts; generous line length limits for
 reading specs; light and dark from day one. Metrics charts follow the dataviz
 guidance at implementation time. The bar: an engineer reviews a G2 on a phone at a
-coffee shop and it feels like reading, not operating.
+coffee shop and it feels like reading rather than operating.
 
 ## 6. Metrics (I8) — computed, never logged
 
@@ -258,7 +258,7 @@ All from git history of `state.yaml` plus the burden field — no scribe, no sto
 - **Rounds** per task (from state history), distribution and trend.
 - **Cost** — renders `budget` fields honestly, including "never updated," which is
   itself the finding (the wordfreq lesson); automated metering stays a v1
-  orchestrator concern, not a frontend one.
+  orchestrator concern rather than a frontend one.
 
 ## 7. Contract and doc changes (small, explicit)
 

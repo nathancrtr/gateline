@@ -5,7 +5,7 @@
 // reworded one — fails here rather than silently going quiet on the page.
 import { describe, expect, it } from 'vitest'
 import { GATE_QUESTIONS, PATCH_G1_QUESTION } from '../src/api.ts'
-import { RECORD_ENTRY_SHAPE, navEntryClass, restatesWhatIsShown } from '../src/pages/run.tsx'
+import { navEntryClass, RECORD_ENTRY_SHAPE, restatesWhatIsShown } from '../src/pages/run.tsx'
 
 /** What the card renders above its subtitle: the title, the run slug (the H1)
  *  and the age badge on the chip row. */

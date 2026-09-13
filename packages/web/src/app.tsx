@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { NavLink, Outlet } from 'react-router-dom'
-import { api, formatAge, type EngineHealthEntry } from './api.ts'
+import { api, type EngineHealthEntry, formatAge } from './api.ts'
 import { pauseVoice } from './drift.ts'
 import { useLiveInvalidation } from './use-live.ts'
 
@@ -24,7 +24,7 @@ function NavItem({ to, label, badge, end }: { to: string; label: string; badge?:
 function Sigil({ size }: { size: number }) {
   return (
     <span className="gate-sigil" aria-hidden="true">
-      <svg viewBox="0 0 24 24" width={size} height={size}>
+      <svg aria-hidden="true" viewBox="0 0 24 24" width={size} height={size}>
         <rect x="3.5" y="3" width="2.6" height="18" fill="currentColor" />
         <rect x="17.9" y="3" width="2.6" height="18" fill="currentColor" />
         <rect x="3.5" y="8.6" width="17" height="2.2" fill="currentColor" />

@@ -1,9 +1,10 @@
 // One test per derivation-table row (docs/ORCHESTRATOR.md §4.2) — the same
 // discipline the frontend's readiness table keeps. Observations are built
 // directly so each row is exercised in isolation.
+
+import { BranchOrder, type CommitInfo, type Disposition, type GateEntry, PROFILES, type RunState, STAGED_REASON, type Validation } from '@gateline/core'
 import { describe, expect, it } from 'vitest'
-import { BranchOrder, PROFILES, STAGED_REASON, type CommitInfo, type Disposition, type GateEntry, type RunState, type Validation } from '@gateline/core'
-import { deriveAction, DEFAULT_ESTIMATE_USD, LANDING_CAP, roundCapReason, VERIFIER_ESCALATION_REASON } from '../src/derive.ts'
+import { DEFAULT_ESTIMATE_USD, deriveAction, LANDING_CAP, roundCapReason, VERIFIER_ESCALATION_REASON } from '../src/derive.ts'
 import { idleDispatchCounts, type LedgerEntry, type RunObservation, type TaskFileInfo } from '../src/observe.ts'
 import type { ReviewInfo } from '../src/review-report.ts'
 

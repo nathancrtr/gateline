@@ -5,9 +5,10 @@
 // interleave in. Each is a pure function of the record — the same discipline
 // as derivation itself — so a test can assert them after any step, and a
 // random walk can assert them after every step.
-import { expect } from 'vitest'
+
 import type { RunState } from '@gateline/core/record'
 import { PROFILE_GATES, PROFILE_PHASES, TERMINAL_PHASES } from '@gateline/core/record'
+import { expect } from 'vitest'
 import { parseLedger } from '../src/observe.ts'
 
 const round2 = (n: number) => Math.round(n * 100) / 100

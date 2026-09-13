@@ -9,9 +9,9 @@
 // phase and no ok/warn/bad tint: the seed's ledger leaves one ink on the
 // page, and the word carries the difference.
 import { Fragment, useEffect, useRef } from 'react'
-import { PROFILE_GATES, type ClosureRecord, type GateId, type InboxItem, type Profile, type RunSummary } from '../api.ts'
+import { type ClosureRecord, type GateId, type InboxItem, PROFILE_GATES, type Profile, type RunSummary } from '../api.ts'
 import { gateCardState } from '../gate-state.ts'
-import { gateNote, noteRung, phaseSpine, type GateCell, type PhaseCell, type SpineNoteRung } from '../spine.ts'
+import { type GateCell, gateNote, noteRung, type PhaseCell, phaseSpine, type SpineNoteRung } from '../spine.ts'
 import type { KeyHint } from '../use-keys.ts'
 
 /**
@@ -168,7 +168,7 @@ export function AgeBadge({ label, urgent, stale }: { label: string; urgent: bool
 const GATE_GLYPH = { approved: '✓', declined: '✕', pending: '·' } as const
 
 /** One gate cell of the G0–G3 ledger strip. */
-export function GateCell({ id, cell }: { id: GateId; cell: RunSummary['gates'][GateId] }) {
+export function GateChip({ id, cell }: { id: GateId; cell: RunSummary['gates'][GateId] }) {
   const state = cell.approved ? 'approved' : cell.decided ? 'declined' : 'pending'
   const tone = state === 'approved' ? 'fill' : state === 'declined' ? 'struck' : ''
   const title = cell.decided ? `${id} ${cell.approved ? 'approved' : 'declined'} by ${cell.by}${cell.at ? ` · ${cell.at}` : ''}` : `${id} pending`
@@ -183,7 +183,7 @@ export function GateLedger({ gates, profile = 'full' }: { gates: RunSummary['gat
   return (
     <span className="inline-flex gap-[4px]">
       {PROFILE_GATES[profile].map((g) => (
-        <GateCell key={g} id={g} cell={gates[g]} />
+        <GateChip key={g} id={g} cell={gates[g]} />
       ))}
     </span>
   )
@@ -352,6 +352,7 @@ function SpineGate({ cell, bounced, noteClass }: { cell: GateCell; bounced: bool
         className={`h-[24px] whitespace-nowrap text-center font-mono text-[10.5px] leading-[12px] text-muted ${noteClass}`}
       >
         {note?.map((line, i) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: `note` is a fixed, pre-split set of display lines for one gate cell, never reordered.
           <Fragment key={i}>
             {i > 0 && <br />}
             {line}

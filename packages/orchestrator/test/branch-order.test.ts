@@ -9,11 +9,10 @@
 // rule subtracted the two. Each case here back-dates the resolution's commit
 // so its clock says the opposite of what the branch says.
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, writeFileSync } from 'node:fs'
-import { rmSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
 import { deriveReadiness, LocalGitSource } from '@gateline/core'
+import { afterEach, describe, expect, it } from 'vitest'
 import { deriveAction, roundCapReason } from '../src/derive.ts'
 import { observeRun } from '../src/observe.ts'
 import { makeToyRepo, REVIEW, SPEC, toyRef } from './engine.helper.ts'

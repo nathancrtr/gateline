@@ -1,11 +1,12 @@
 // I6: every run × source at a glance.
-import { type ReactNode, useRef } from 'react'
+
 import { useQuery } from '@tanstack/react-query'
+import { type ReactNode, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { api, formatAge, type RunSummary } from '../api.ts'
 import { BudgetMeter, GateLedger, Imp, PhaseChip } from '../components/chips.tsx'
-import { PageStatus } from './inbox.tsx'
 import { EdgeFade, useScrollCue } from '../scroll-cue.tsx'
+import { PageStatus } from './inbox.tsx'
 
 // The ledger's column heads: small, muted, on the rule.
 const TH = 'text-left font-sans font-normal text-[11.5px] text-muted pr-2.5 pb-1.5 border-b border-ink whitespace-nowrap'
@@ -96,6 +97,7 @@ export function PortfolioPage() {
       <div>
         <div className="border-t border-ink">
           {[130, 110, 150].map((w, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: three static skeleton placeholder rows, never reordered or data-backed.
             <div key={i} className="flex items-center gap-4 border-b border-line py-[12px]">
               <span className="skel h-[21px] w-[22px]" />
               <span className="skel h-[14px]" style={{ width: w }} />
@@ -126,7 +128,7 @@ export function PortfolioPage() {
       {runs.length === 0 ? (
         <div className="mt-[22px] border-t border-ink px-2 py-16 text-center">
           <span className="gate-sigil mb-3 block" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="36" height="36">
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="36" height="36">
               <rect x="3.5" y="3" width="2.6" height="18" fill="currentColor" />
               <rect x="17.9" y="3" width="2.6" height="18" fill="currentColor" />
               <rect x="3.5" y="8.6" width="17" height="2.2" fill="currentColor" />

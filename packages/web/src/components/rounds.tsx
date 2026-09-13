@@ -10,17 +10,17 @@
 // what the record shows: a finding the later round did not mention is reported
 // as not mentioned, never as resolved.
 import { Link } from 'react-router-dom'
-import { compareRounds, reportsForTask, type RoundFinding, type RoundSide } from '../rounds.ts'
+import { compareRounds, type RoundFinding, type RoundSide, reportsForTask } from '../rounds.ts'
 import {
   FindingCard,
   Inline,
   PACKET_FRAME,
   PACKET_LABEL,
   PacketSweep,
-  VerdictChip,
   plainQuote,
   unbulleted,
   useReviewsQuery,
+  VerdictChip,
 } from './findings.tsx'
 
 const artifactLink = (src: string, slug: string, path: string) =>

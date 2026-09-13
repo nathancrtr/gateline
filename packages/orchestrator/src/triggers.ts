@@ -3,9 +3,9 @@
 // commits, other orchestrators), dispatch completion (Engine.onSettled),
 // heartbeat (missed events, stale aging), and manual (the CLI's `tick`).
 // The ref-watch mirrors the frontend server's freshness watcher.
-import { watch, type FSWatcher } from 'node:fs'
+import { type FSWatcher, watch } from 'node:fs'
 import { join } from 'node:path'
-import { Git, type CodeTreeMonitor, type CodeTreeState, type CodeTreeStatus, writeEngineHealth } from '@gateline/core/sources'
+import { type CodeTreeMonitor, type CodeTreeState, type CodeTreeStatus, Git, writeEngineHealth } from '@gateline/core/sources'
 import type { Deferral, TickOutcome } from './engine.ts'
 import type { Scheduler } from './schedule.ts'
 

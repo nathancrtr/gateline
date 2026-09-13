@@ -1,8 +1,8 @@
 // PR-approval sync: plan (dry-run) and apply against the fixture repo, with a
 // fake provider standing in for GitHub.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { applySync, planSync, planSyncForSource, type PrApproval, type PrProvider } from '../src/index.ts'
-import { dropFixture, makeFixture, type FixtureContext } from './fixture.helper.ts'
+import { applySync, type PrApproval, type PrProvider, planSync, planSyncForSource } from '../src/index.ts'
+import { dropFixture, type FixtureContext, makeFixture } from './fixture.helper.ts'
 
 let ctx: FixtureContext
 

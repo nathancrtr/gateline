@@ -264,7 +264,7 @@ export function heldDispatcher(): { dispatcher: FakeDispatcher; finish: (o: Part
   return { dispatcher: new FakeDispatcher(() => held.promise), finish: held.resolve }
 }
 
-export const toyRef = (dir: string): RunRef => ({ source: 'human', slug: 'toy', ref: 'run/toy', kind: 'branch', branch: 'run/toy' })
+export const toyRef = (_dir: string): RunRef => ({ source: 'human', slug: 'toy', ref: 'run/toy', kind: 'branch', branch: 'run/toy' })
 
 /** A human decision through core's own write path — never the engine's. */
 export async function humanDecide(dir: string, input: DecisionInput): Promise<void> {

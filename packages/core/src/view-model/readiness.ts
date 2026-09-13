@@ -81,27 +81,28 @@
 // Approve into G2 only once G2 is genuinely on the table. One definition each
 // is what stops the card a human is shown and the write the API accepts from
 // disagreeing.
+
+import { isOpenDispatch, parseLedger, ROLE_TIMEOUT_MS } from '../record/ledger.ts'
 import {
   BUDGET_REASON,
   CLOSED_PHASE,
   DECLINED_REASON,
   ESCALATION_REASON,
-  LANDED_REASON,
   G2_COMPLETE_STATUSES,
+  type GateId,
   g2PacketReady,
   gateProducer,
   isReviewFile,
+  LANDED_REASON,
   pendingGate,
   ROUND_CAP,
+  type RunState,
   STAGED_REASON,
   TASK_STATUSES,
-  type GateId,
-  type RunState,
 } from '../record/schema.ts'
-import { isOpenDispatch, parseLedger, ROLE_TIMEOUT_MS } from '../record/ledger.ts'
-import { validateArtifact, type Validation } from '../record/validate.ts'
-import type { CommitInfo } from '../sources/git.ts'
+import { type Validation, validateArtifact } from '../record/validate.ts'
 import { readBranchOrder, resolutionCommitsOf } from '../sources/branch-order.ts'
+import type { CommitInfo } from '../sources/git.ts'
 import type { RunRef, RunSource } from '../sources/source.ts'
 import { formatDuration } from './time.ts'
 

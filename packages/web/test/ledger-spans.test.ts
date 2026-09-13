@@ -1,8 +1,9 @@
 // Folding the decision ledger's engine spans (#283). What is under test is
 // what could quietly become a verdict or lose a row: which rows fold, what the
 // summary counts, and that nothing below the threshold changes shape.
-import { describe, expect, it } from 'vitest'
+
 import { parseLedgerSubject } from '@gateline/core/view-model'
+import { describe, expect, it } from 'vitest'
 import type { HistoryEntry } from '../src/api.ts'
 import { collapseEngineSpans, SPAN_MIN_ROWS } from '../src/ledger-spans.ts'
 

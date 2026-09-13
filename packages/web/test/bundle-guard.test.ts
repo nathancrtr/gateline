@@ -8,9 +8,9 @@
  * patterns are tested from both sides: real leaks are caught, and the shapes
  * that made it noisy stay quiet.
  */
+import { describe, expect, it } from 'vitest'
 // @ts-expect-error - plain .mjs script, no type declarations
 import { scan } from '../scripts/check-bundle.mjs'
-import { describe, expect, it } from 'vitest'
 
 const hits = (text: string): string[] => (scan(text) as { text: string }[]).map((h) => h.text)
 

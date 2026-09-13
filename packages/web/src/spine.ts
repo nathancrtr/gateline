@@ -25,11 +25,11 @@
 import {
   GATE_PHASES,
   GATE_QUESTIONS,
+  type GateId,
   PATCH_G1_QUESTION,
+  type Phase,
   PROFILE_GATES,
   PROFILE_PHASES,
-  type GateId,
-  type Phase,
   type Profile,
   type RunSummary,
 } from './api.ts'

@@ -3,46 +3,47 @@
 // planDecision/writeState, staging over planRunScaffold/stageRun. No route
 // here composes a sources/git.ts primitive directly (AC1.1).
 import { timingSafeEqual } from 'node:crypto'
-import { Hono, type Context } from 'hono'
 import {
+  armRefusal,
+  BUILTIN_SECTIONS,
+  type Burden,
   buildEvidenceRollup,
   buildG1Packet,
   buildLexicon,
   buildPortfolio,
   buildTaskSet,
-  BUILTIN_SECTIONS,
+  type Closure,
   collectRunDecisions,
   computeMetrics,
-  deriveReadiness,
+  type DecisionAction,
   DecisionError,
+  type Disposition,
+  deriveReadiness,
   engineHealthStale,
   extractSections,
+  type GateId,
   hostBranchUrl,
   ID_PATTERN,
-  parseReview,
   missingSections,
-  parseLedgerSubject,
-  parseUnifiedDiff,
-  armRefusal,
-  planDecision,
-  scopeDiff,
-  planRunScaffold,
+  type Phase,
   PROFILES,
+  type Profile,
+  parseLedgerSubject,
+  parseReview,
+  parseUnifiedDiff,
+  planDecision,
+  planRunScaffold,
+  type RunRef,
+  type RunScaffold,
+  type RunSource,
   readEngineHealth,
   ScaffoldError,
   SLUG_PATTERN,
+  scopeDiff,
   summarizeRun,
   validateArtifact,
-  type Burden,
-  type Closure,
-  type DecisionAction,
-  type Disposition,
-  type GateId,
-  type Phase,
-  type Profile,
-  type RunRef,
-  type RunSource,
 } from '@gateline/core'
+import { type Context, Hono } from 'hono'
 import { GenerationCache } from './cache.ts'
 import { API_VERSION, type EngineHealthResponse } from './contract.ts'
 import { fail, respond } from './respond.ts'
@@ -281,7 +282,7 @@ export function createApp(deps: AppDeps): Hono {
     // body carries no free-text "your name" field. `stageRun` below is the
     // one that actually guards identity; this call only needs a string.
     const who = await source.identity()
-    let scaffold
+    let scaffold: RunScaffold
     try {
       scaffold = planRunScaffold({
         slug: body.slug,

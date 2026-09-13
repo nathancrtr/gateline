@@ -1,5 +1,5 @@
-import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { LocalGitSource } from '../src/index.ts'
 import { isHumanDecision, parseLedgerSubject } from '../src/view-model/ledger.ts'

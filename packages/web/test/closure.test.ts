@@ -5,7 +5,7 @@
 // the two never resolve into the same slot, and that a record missing either
 // one says so instead of going blank.
 import { describe, expect, it } from 'vitest'
-import { CLOSURES, CLOSURE_MEANINGS, type Closure, type ClosureRecord } from '../src/api.ts'
+import { CLOSURE_MEANINGS, CLOSURES, type Closure, type ClosureRecord } from '../src/api.ts'
 import { closureRecordView } from '../src/components/close-run.tsx'
 
 const record = (over: Partial<ClosureRecord> = {}): ClosureRecord =>

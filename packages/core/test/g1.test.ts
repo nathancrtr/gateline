@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { buildG1Packet, buildLexicon, entriesOverlap, parseRequirementMapping, surfaceOverlaps, parseWorkItem } from '../src/index.ts'
+import { buildG1Packet, buildLexicon, entriesOverlap, parseRequirementMapping, parseWorkItem, surfaceOverlaps } from '../src/index.ts'
 
 const SPEC = `# Specification: limiter
 

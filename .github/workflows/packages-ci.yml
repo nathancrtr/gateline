@@ -77,6 +77,23 @@ jobs:
       - uses: actions/checkout@v4
       - run: node packages/scripts/check-lockfile.mjs
 
+  # Biome across the whole workspace. Fast and covers every package in one
+  # pass, so it runs on its own rather than joining the web/rest split.
+  lint:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: packages/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+
   # Web-only slice: shallow, and scoped to the SPA's own typecheck and tests.
   web:
     needs: changes
@@ -145,7 +162,7 @@ jobs:
   # is not. This is the required check for branch protection on `main`.
   ci:
     if: always()
-    needs: [changes, lockfile, web, packages, e2e]
+    needs: [changes, lockfile, lint, web, packages, e2e]
     runs-on: ubuntu-latest
     steps:
       - name: Verify the slices that ran
@@ -153,6 +170,7 @@ jobs:
           set -euo pipefail
           echo "changes=${{ needs.changes.result }}"
           echo "lockfile=${{ needs.lockfile.result }}"
+          echo "lint=${{ needs.lint.result }}"
           echo "web=${{ needs.web.result }}"
           echo "packages=${{ needs.packages.result }}"
           echo "e2e=${{ needs.e2e.result }}"

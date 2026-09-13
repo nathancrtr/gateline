@@ -3,8 +3,8 @@
 // "remote agent" here (calling pendingIntents()/resolveOutcome() directly, the
 // same surface the runner API — task 03 — will expose over HTTP) ever settles.
 import { describe, expect, it } from 'vitest'
+import { type OpenLedgerEntry, RemoteDispatcher } from '../src/runner-dispatcher.ts'
 import type { DispatchOutcome, DispatchRequest } from '../src/seam.ts'
-import { RemoteDispatcher, type OpenLedgerEntry } from '../src/runner-dispatcher.ts'
 
 const req = (over: Partial<DispatchRequest> = {}): DispatchRequest => ({
   cwd: '/nonexistent/never-read',

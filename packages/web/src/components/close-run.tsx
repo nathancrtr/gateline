@@ -12,9 +12,10 @@
 // and unrecoverable later: which of these four a closure meant lives in the
 // human's head at closing time and nowhere in the record, so a closure captured
 // without one can never be re-derived into a category afterwards.
-import { useState } from 'react'
+
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ApiError, api, CLOSURES, CLOSURE_MEANINGS, type Closure, type ClosureRecord } from '../api.ts'
+import { useState } from 'react'
+import { ApiError, api, CLOSURE_MEANINGS, CLOSURES, type Closure, type ClosureRecord } from '../api.ts'
 
 /** What a closure is *not*: closing never touches the branch or the artifacts. */
 const KEEPS_THE_RECORD = 'The branch, the run directory, and every artifact stay exactly where they are — closing decides the run, it does not delete it.'

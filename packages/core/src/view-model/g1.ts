@@ -23,7 +23,7 @@
 // — two tasks may touch one file by design, which is why an ordered overlap is
 // reported as ordered rather than dropped.
 import type { Lexicon } from './lexicon.ts'
-import { parseRequirementMapping, type MappingRow, type RequirementMapping } from './plan.ts'
+import { type MappingRow, parseRequirementMapping, type RequirementMapping } from './plan.ts'
 import { buildTaskSet, type TaskSet, type WorkItem } from './tasks.ts'
 
 export interface CoverageRow {

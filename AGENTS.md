@@ -136,8 +136,8 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
 * Re-render adapter agent files after any `roles/` or manifest change:
   `python3 scripts/render-agents.py` (verify with `--check` — the same check CI runs)
 * Run the frontend/orchestrator tests: `npm test` in `packages/` (typecheck:
-  `npm run typecheck`; e2e: `npm run build && npx playwright test`; needs
-  `npm install` once, Node ≥ 24)
+  `npm run typecheck`; e2e: `npm run build && npx playwright test`; lint:
+  `npm run lint`; needs `npm install` once, Node ≥ 24)
 * Drive the local instance with the `gateline` CLI (`packages/cli`, run from
   source — `node packages/cli/src/main.ts <cmd>` in any tree *is* that tree's
   `gateline`):

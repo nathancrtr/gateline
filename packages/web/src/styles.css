@@ -110,7 +110,9 @@ body {
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: the reduced-motion override must beat any component's own specificity, including ones added later — the standard a11y pattern. */
     animation: none !important;
+    /* biome-ignore lint/complexity/noImportantStyles: same reduced-motion override as above. */
     transition-duration: 0.01ms !important;
   }
 }
@@ -339,6 +341,7 @@ body {
 .lex-card-def li {
   @apply my-0.5;
 }
+/* biome-ignore lint/style/noDescendingSpecificity: unrelated to .prose-artifact pre code above — disjoint scopes (lex-card-def vs. prose-artifact), never the same element. */
 .lex-card-def code {
   @apply text-[11px];
 }

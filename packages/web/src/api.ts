@@ -15,10 +15,11 @@
 // core/test/layering.test.ts enforces the ceiling). `web/test/boundary.test.ts`
 // holds the enumerated list of files allowed to do that, and the post-build
 // bundle check proves no node builtin reached the output either way.
-import { API_VERSION } from '@gateline/server/contract'
+
 import type {
   ApiErrorBody,
   ArtifactResponse,
+  Closure,
   DecisionRequest,
   DecisionResponse,
   DecisionsResponse,
@@ -26,21 +27,21 @@ import type {
   EngineHealthResponse,
   EvidenceRollup,
   G1Packet,
+  GateId,
   HealthResponse,
   InboxResponse,
   LexiconResponse,
   MetricsResponse,
+  Phase,
+  Profile,
   ReviewsResponse,
   RunDetailResponse,
   RunsResponse,
-  StageRefusalReason,
   StageRequest,
   StageResponse,
   StagingConfigResponse,
 } from '@gateline/server/contract'
-import type { Closure, GateId, Phase, Profile } from '@gateline/server/contract'
-
-export { API_VERSION }
+import { API_VERSION } from '@gateline/server/contract'
 
 /**
  * The wire vocabulary, re-exported so the rest of web imports one module —
@@ -99,6 +100,7 @@ export type {
   Verdict,
   WorkItem,
 } from '@gateline/server/contract'
+export { API_VERSION }
 
 /**
  * Mirrors of core's closed vocabulary (DESIGN.md §4.1, §4.2) — a value import

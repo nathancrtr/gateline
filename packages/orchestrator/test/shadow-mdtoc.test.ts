@@ -6,11 +6,12 @@
 // What this run pins that wordfreq's replay could not: decline recovery
 // (D9) from a genuine G1 decline, §4.4 intent commits scored as agreement,
 // review_rounds records matching, and DB pre-flight against a real ledger.
-import { fileURLToPath } from 'node:url'
+
 import { resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { fileURLToPath } from 'node:url'
 import { LocalGitSource } from '@gateline/core'
-import { shadowReplay, type ShadowStep } from '../src/shadow.ts'
+import { describe, expect, it } from 'vitest'
+import { type ShadowStep, shadowReplay } from '../src/shadow.ts'
 
 const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../..')
 const source = new LocalGitSource('sandbox', repoRoot)
@@ -99,8 +100,7 @@ describe('mdtoc shadow replay', { timeout: 120_000 }, () => {
       const parallelSkew =
         step.action.kind === 'dispatch' &&
         step.action.rule === 'D13' &&
-        step.next !== null &&
-        step.next.subject.includes('task 03')
+        step.next?.subject.includes('task 03')
       expect(
         declineRipple || parallelSkew,
         `undispositioned disagreement at ${step.oid.slice(0, 7)} (${step.subject}): ${step.note}`,

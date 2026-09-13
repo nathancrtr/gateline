@@ -2,10 +2,11 @@
 // copilot-cli configured alongside claude-code, a run's Reviewer and
 // Verifier demonstrably execute on a different vendor than its Implementer;
 // with claude-code alone the pin is unsatisfiable and stays advisory.
-import { fileURLToPath } from 'node:url'
+
 import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { loadHeadlessManifest, type HeadlessManifest } from '../src/manifest.ts'
+import { type HeadlessManifest, loadHeadlessManifest } from '../src/manifest.ts'
 import { adapterVendor, RoutingDispatcher, VendorPinError } from '../src/router.ts'
 import type { Dispatcher, DispatchOutcome, DispatchRequest } from '../src/seam.ts'
 import { TEST_REGISTRY } from './engine.helper.ts'
@@ -137,9 +138,9 @@ describe('RoutingDispatcher (P5 at dispatch time)', () => {
     const source = new LocalGitSource('check', dir)
     const { state } = await source.readState(toyRef(dir))
     const byRole = Object.fromEntries(parseLedger(state).map((e) => [e.role + (e.round ?? ''), e.adapter]))
-    expect(byRole['implementer1']).toBe('claude-code')
-    expect(byRole['reviewer1']).toBe('copilot-cli')
-    expect(byRole['verifier']).toBe('copilot-cli')
+    expect(byRole.implementer1).toBe('claude-code')
+    expect(byRole.reviewer1).toBe('copilot-cli')
+    expect(byRole.verifier).toBe('copilot-cli')
   }, 60_000)
 
   it('refuses when two adapters are live but neither can satisfy the pin', () => {

@@ -22,7 +22,7 @@
 // `detail` is the byte-identical remainder of the subject, and every extracted
 // field is a substring of it, so a renderer can satisfy "verbatim and reachable"
 // (#261's standing rule) without holding the raw string separately.
-import { BURDENS, GATE_IDS, type Burden, type GateId } from '../record/schema.ts'
+import { BURDENS, type Burden, GATE_IDS, type GateId } from '../record/schema.ts'
 
 /** Who the grammar attributes the entry to. Derived from the verb, not the
  * committer: a human decision is a human decision whichever identity pushed it. */

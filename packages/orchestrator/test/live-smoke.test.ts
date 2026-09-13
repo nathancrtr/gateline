@@ -3,8 +3,8 @@
 // parsing against the actual CLI. Opt-in (real spend): ORCH_LIVE_SMOKE=1.
 // Run from the repo root: ORCH_LIVE_SMOKE=1 npx vitest run packages/orchestrator/test/live-smoke.test.ts
 import { tmpdir } from 'node:os'
-import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { loadHeadlessManifest } from '../src/manifest.ts'
 import { HeadlessDispatcher } from '../src/seam.ts'

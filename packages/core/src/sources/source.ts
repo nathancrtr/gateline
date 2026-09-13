@@ -1,10 +1,11 @@
 // The RunSource driver seam (plan §2.2): everything above this interface is
 // indifferent to whether runs come from a local clone or (later) the GitHub
 // API. Nothing above it may know which driver it is talking to.
-import type { CommitInfo } from './git.ts'
-import type { Identity, RunState, StateDocMutation, StateParseResult } from '../record/schema.ts'
+
 import type { RunScaffold } from '../record/scaffold.ts'
+import type { Identity, RunState, StateDocMutation, StateParseResult } from '../record/schema.ts'
 import type { ContractTemplates } from '../record/validate.ts'
+import type { CommitInfo } from './git.ts'
 
 export interface RunRef {
   /** Source id this run belongs to. */

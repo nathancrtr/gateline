@@ -7,27 +7,27 @@
 // a bot identity, and — structurally — no code path that writes gates.*.
 import { hostname } from 'node:os'
 import { type Identity, ROLE_TIMEOUT_MS, TERMINAL_PHASES } from '@gateline/core/record'
-import { Git, LocalGitSource, ensureDraftPr, type RunRef, type WriteResult } from '@gateline/core/sources'
+import { ensureDraftPr, Git, LocalGitSource, type RunRef, type WriteResult } from '@gateline/core/sources'
 import type { Document } from 'yaml'
 import { hasShell, loadRoleCapabilities } from './capabilities.ts'
-import { deriveAction, DEFAULT_ESTIMATE_USD, type Bookkeeping, type DerivedAction, type DispatchIntent } from './derive.ts'
+import { type Bookkeeping, DEFAULT_ESTIMATE_USD, type DerivedAction, type DispatchIntent, deriveAction } from './derive.ts'
 import { harvestPathspecs } from './harvest.ts'
 import {
+  type Anchor,
   after,
   anchored,
+  type LedgerEntry,
   ledgerOpenAnchor,
   nonStateAnchor,
   observeRun,
   parseLedger,
-  resolutionAnchor,
-  type Anchor,
-  type LedgerEntry,
   type RunObservation,
+  resolutionAnchor,
 } from './observe.ts'
 import { promptBody } from './prompts.ts'
-import { resolveModel, type Registry } from './registry.ts'
+import { type Registry, resolveModel } from './registry.ts'
 import type { Dispatcher, DispatchOutcome } from './seam.ts'
-import { ensureRunCheckout, ensureTaskCheckout, foldHarvestBranch, foldTaskBranch, checkoutHeldReason, heldCheckout, isPlanDefect, reapTaskBranches, removeRunCheckout, type TaskCheckout } from './workspace.ts'
+import { checkoutHeldReason, ensureRunCheckout, ensureTaskCheckout, foldHarvestBranch, foldTaskBranch, heldCheckout, isPlanDefect, reapTaskBranches, removeRunCheckout, type TaskCheckout } from './workspace.ts'
 
 export interface EngineConfig {
   repoDir: string
@@ -1454,7 +1454,9 @@ function applyBookkeeping(doc: Document, updates: Bookkeeping[]): void {
       setTaskFieldByDoc(doc, u.task, 'review_rounds', u.to)
     } else {
       const offset = countSeq(doc, ['tasks'])
-      u.ids.forEach((id, i) => doc.setIn(['tasks', offset + i], { id, status: 'pending', review_rounds: 0 }))
+      u.ids.forEach((id, i) => {
+        doc.setIn(['tasks', offset + i], { id, status: 'pending', review_rounds: 0 })
+      })
     }
   }
 }

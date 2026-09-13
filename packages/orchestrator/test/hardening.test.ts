@@ -5,8 +5,8 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
-import { describe, expect, it } from 'vitest'
 import { LocalGitSource } from '@gateline/core'
+import { describe, expect, it } from 'vitest'
 import { Engine } from '../src/engine.ts'
 import { parseLedger } from '../src/observe.ts'
 import {
@@ -17,11 +17,11 @@ import {
   log,
   makeToyRepo,
   PLAN,
-  reconcile,
   REVIEW,
+  reconcile,
   SPEC,
-  taskYaml,
   TEST_REGISTRY,
+  taskYaml,
   toyRef,
   VERIFICATION,
 } from './engine.helper.ts'

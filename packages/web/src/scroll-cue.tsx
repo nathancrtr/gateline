@@ -1,4 +1,4 @@
-import { useEffect, useState, type RefObject } from 'react'
+import { type RefObject, useEffect, useState } from 'react'
 
 /** Which edges of a horizontally scrollable pane have content beyond them. */
 export interface ScrollCue {

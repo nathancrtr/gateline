@@ -120,6 +120,7 @@ history. Nothing is logged separately: if it isn't in git, it didn't happen.
 ```sh
 npm test               # vitest: core, server, CLI (fixture-repo backed)
 npm run typecheck
+npm run lint            # biome check . — see biome.json for the tuned rule set
 npx playwright test    # e2e smoke against a generated fixture repo
 npm run dev            # API server; pair with: npm run dev -w @gateline/web
 ```

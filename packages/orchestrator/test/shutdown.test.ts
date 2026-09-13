@@ -3,7 +3,7 @@
 // the target is faked; the seam test proves the SIGKILL side.
 import { describe, expect, it } from 'vitest'
 import type { InFlightJob } from '../src/engine.ts'
-import { stagedShutdown, type ShutdownTarget } from '../src/shutdown.ts'
+import { type ShutdownTarget, stagedShutdown } from '../src/shutdown.ts'
 
 const job = (over: Partial<InFlightJob> = {}): InFlightJob => ({
   slug: 'toy',

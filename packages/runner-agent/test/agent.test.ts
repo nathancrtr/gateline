@@ -7,12 +7,12 @@ import type { HeadlessManifest } from '@gateline/orchestrator'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildCommand,
-  computeOutcome,
   ControlPlaneClient,
-  executeIntent,
-  runAgent,
+  computeOutcome,
   type DispatchOutcome,
+  executeIntent,
   type PendingIntent,
+  runAgent,
 } from '../src/agent.ts'
 import type { Workspace } from '../src/workspace.ts'
 
@@ -177,7 +177,7 @@ describe('executeIntent (workspace + manifest + spawn + outcome, end to end)', (
       // describe block below with real git repos; here it's a no-op so this
       // test stays scoped to AC3.2's outcome-shape claim.
       getHeadImpl: async () => 'fake-base-oid',
-      harvestAndPushImpl: async (ws, branch, _pathspecs, base, _identity, slug, role) => {
+      harvestAndPushImpl: async (_ws, branch, _pathspecs, base, _identity, slug, role) => {
         expect(base).toBe('fake-base-oid')
         expect(slug).toBe(INTENT.slug)
         expect(role).toBe(INTENT.role)
@@ -254,7 +254,7 @@ describe('executeIntent (workspace + manifest + spawn + outcome, end to end)', (
         const { runCommand } = await import('../src/agent.ts')
         return runCommand(cmd, args, cwd, timeoutMs)
       },
-      harvestAndPushImpl: async (ws, branch, _pathspecs, base) => ({ pushed: false, branch, base }),
+      harvestAndPushImpl: async (_ws, branch, _pathspecs, base) => ({ pushed: false, branch, base }),
     })
     expect(outcome.ok).toBe(true)
   })
@@ -442,7 +442,7 @@ describe('runAgent (poll → claim → execute → report lifecycle, against a m
       createWorkspaceImpl: async () => ({ path: '/tmp', remove: async () => void removed.count++ }),
       getHeadImpl: async () => 'fake-base-oid',
       manifestLoaderImpl: async () => shManifest('echo \'{"cost":1,"in":2,"out":3}\''),
-      harvestAndPushImpl: async (ws, branch, _pathspecs, base) => ({ pushed: false, branch, base }),
+      harvestAndPushImpl: async (_ws, branch, _pathspecs, base) => ({ pushed: false, branch, base }),
       log: () => {},
     })
 

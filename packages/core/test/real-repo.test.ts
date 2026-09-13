@@ -1,7 +1,8 @@
 // Acceptance check against this repository's real history: the wordfreq run
 // (merged, done) must be discovered, summarized, and metered correctly.
-import { fileURLToPath } from 'node:url'
+
 import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { collectRunDecisions, LocalGitSource, summarizeRun } from '../src/index.ts'
 

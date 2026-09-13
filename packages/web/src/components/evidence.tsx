@@ -6,10 +6,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { api, type CriterionEvidence, type EvidenceRollup, type Profile, type ReviewFinding, type ReviewReport } from '../api.ts'
-import { FindingCard, Inline, PACKET_FRAME, PACKET_LABEL, PacketSweep, VerdictChip, useReviews } from './findings.tsx'
-import { useLexicon } from './lexicon.tsx'
 import { DIFF_SELECTION } from '../landing.ts'
 import { boundaryLine, fileLabel } from '../surface.ts'
+import { FindingCard, Inline, PACKET_FRAME, PACKET_LABEL, PacketSweep, useReviews, VerdictChip } from './findings.tsx'
+import { useLexicon } from './lexicon.tsx'
 
 const artifactLink = (src: string, slug: string, artifact: string, anchor?: string) =>
   `/runs/${src}/${slug}?tab=record&artifact=${encodeURIComponent(artifact)}${anchor ? `&anchor=${anchor}` : ''}`
@@ -283,12 +283,14 @@ function EvidenceBody({ block, restated }: { block: string; restated: string }) 
       {evidenceSegments(block, restated).map((segment, i) =>
         segment.kind === 'code' ? (
           <pre
+            // biome-ignore lint/suspicious/noArrayIndexKey: segment text can repeat (e.g. two blank lines); this is a fixed, one-time parse of block/restated, never reordered.
             key={i}
             className="mt-1 overflow-x-auto border border-line bg-inset p-2 font-mono text-[11.5px] leading-[1.5] text-ink"
           >
             {segment.text}
           </pre>
         ) : (
+          // biome-ignore lint/suspicious/noArrayIndexKey: see the code-segment case above.
           <p key={i} className="mt-1 whitespace-pre-wrap text-[12px] leading-[1.5] text-muted">
             <Inline>{segment.text}</Inline>
           </p>

@@ -4,15 +4,15 @@
 // one deployment, one clone, one authority (docs/TOPOLOGY.md §3.1).
 import { stat } from 'node:fs/promises'
 import type { Identity } from '@gateline/core/record'
-import { CodeTreeMonitor, Git, LocalGitSource, LocalOnlyPushConflictError, resolveCodeRepo, type CodeTreeStatus } from '@gateline/core/sources'
+import { CodeTreeMonitor, type CodeTreeStatus, Git, LocalOnlyPushConflictError, resolveCodeRepo } from '@gateline/core/sources'
 import { Engine, type InFlightJob } from './engine.ts'
 import { headlessManifestPath, loadHeadlessManifest } from './manifest.ts'
 import { loadRegistry } from './registry.ts'
-import { RemoteDispatcher, type PendingIntent } from './runner-dispatcher.ts'
 import { RoutingDispatcher } from './router.ts'
+import { type PendingIntent, RemoteDispatcher } from './runner-dispatcher.ts'
 import { Scheduler } from './schedule.ts'
-import { HeadlessDispatcher, type DispatchOutcome } from './seam.ts'
-import { runLoop, type RunLoop } from './triggers.ts'
+import { type DispatchOutcome, HeadlessDispatcher } from './seam.ts'
+import { type RunLoop, runLoop } from './triggers.ts'
 
 /**
  * The zero-argument shape @gateline/server's own `RunnerCallback` expects

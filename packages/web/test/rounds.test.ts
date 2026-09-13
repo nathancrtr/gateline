@@ -2,8 +2,9 @@
 // quietly become a verdict: which findings are called still-open, what the
 // later round is said to have done about each one, and when the whole view
 // stands down rather than guessing.
-import { describe, expect, it } from 'vitest'
+
 import { parseReview } from '@gateline/core/view-model'
+import { describe, expect, it } from 'vitest'
 import type { ReviewReport } from '../src/api.ts'
 import { compareRounds, reportsForTask } from '../src/rounds.ts'
 

@@ -10,12 +10,12 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
 import { LocalGitSource } from '@gateline/core'
+import { afterEach, describe, expect, it } from 'vitest'
 import { Engine } from '../src/engine.ts'
 import { parseLedger } from '../src/observe.ts'
 import { heldCheckout, removeRunCheckout } from '../src/workspace.ts'
-import { agentCommit, FakeDispatcher, makeToyRepo, SPEC, TEST_REGISTRY, toyRef, type Clock } from './engine.helper.ts'
+import { agentCommit, type Clock, FakeDispatcher, makeToyRepo, SPEC, TEST_REGISTRY, toyRef } from './engine.helper.ts'
 
 const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
 

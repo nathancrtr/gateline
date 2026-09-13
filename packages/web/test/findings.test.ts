@@ -10,12 +10,13 @@
 //
 // These render through `renderToStaticMarkup`, which needs no DOM: the markup
 // is what the assertions are about.
+
+import { parseReview } from '@gateline/core/view-model'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
-import { parseReview } from '@gateline/core/view-model'
 import type { ReviewReport } from '../src/api.ts'
 import { FindingCard } from '../src/components/findings.tsx'
 import { RoundCapPanel } from '../src/components/rounds.tsx'

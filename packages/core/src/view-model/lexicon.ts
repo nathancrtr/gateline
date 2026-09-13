@@ -78,7 +78,7 @@ function blockFrom(lines: Line[], start: number, stop?: (text: string) => boolea
   let end = start + 1
   while (
     end < lines.length &&
-    (lines[end]!.inFence || (!ANY_HEADING.test(lines[end]!.text) && !(stop && stop(lines[end]!.text))))
+    (lines[end]!.inFence || (!ANY_HEADING.test(lines[end]!.text) && !(stop?.(lines[end]!.text))))
   )
     end++
   while (end > start + 1 && lines[end - 1]!.text.trim() === '') end--
@@ -204,8 +204,7 @@ export function scanIds(text: string): string[] {
   const re = new RegExp(ID_PATTERN, 'g')
   const seen = new Set<string>()
   const out: string[] = []
-  let m: RegExpExecArray | null
-  while ((m = re.exec(text))) {
+  for (const m of text.matchAll(re)) {
     if (!seen.has(m[0])) {
       seen.add(m[0])
       out.push(m[0])

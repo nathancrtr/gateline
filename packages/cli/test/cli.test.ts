@@ -8,10 +8,10 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { generateFixtureRepo, type FixtureRepo } from '@gateline/fixtures'
 import { LocalGitSource } from '@gateline/core'
-import { draftBriefMarkdown, resolveUpMode, runInteractiveNew, type InteractiveNewIO } from '../src/main.ts'
+import { type FixtureRepo, generateFixtureRepo } from '@gateline/fixtures'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { draftBriefMarkdown, type InteractiveNewIO, resolveUpMode, runInteractiveNew } from '../src/main.ts'
 
 const exec = promisify(execFile)
 const cliPath = resolve(dirname(fileURLToPath(import.meta.url)), '../src/main.ts')
@@ -69,7 +69,7 @@ beforeAll(async () => {
   taskPath = join(briefDir, 'work-item.yaml')
   await writeFile(taskPath, workItemFor('arm-patch'))
   stubTaskPath = join(briefDir, 'stub.yaml')
-  await writeFile(stubTaskPath, workItemFor('arm-patch').replace(/file_contact_surface:[^]*?acceptance_tests/, 'file_contact_surface: []\n\nacceptance_tests'))
+  await writeFile(stubTaskPath, workItemFor('arm-patch').replace(/file_contact_surface:[\s\S]*?acceptance_tests/, 'file_contact_surface: []\n\nacceptance_tests'))
 })
 
 const workItemFor = (slug: string) => `id: 01-${slug}

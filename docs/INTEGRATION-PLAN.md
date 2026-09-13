@@ -74,8 +74,8 @@ copy manifest shipped with the release, lock written per §3's normative schema
 `roles/integrator.md`, `contracts/integration-profile.md` (including the
 gate-mapping-to-adopted-set and dispatch-reality sections), and the canned smoke
 brief. `upgrade` is **not** in this item (v1, per §11) — except the narrow slice
-P1 needs: reading a commit-pinned lock and rewriting it against a tag, which is
-`init`-adjacent bookkeeping, not the 3-way merge.
+P1 needs: reading a commit-pinned lock and rewriting it against a tag, which counts
+as `init`-adjacent bookkeeping rather than the 3-way merge.
 **Exit:** the §11 acceptance test — replay `init` against both hand-built hosts
 and diff against their scaffolds, every delta dispositioned as tool bug or
 hand-integration mistake; `validate` passes on the tool's own output.
@@ -169,17 +169,20 @@ maintainer-mediated and redacted, as INTEGRATION.md §6 requires).
 **Order:** W0 → (W1 ∥ W3) → W2 → W4 → W5; P0 runs as soon as W0 lands; P1–P4
 after W4. Nothing here waits on the orchestrator trust ladder — the proof is
 read + decide, not dispatch, so #35/#36 (shadow bar, live-dispatch
-verification) are explicitly out of the critical path.
+verification) are out of the critical path.
 
-**Risks.** (a) W0 scope: the split touches a core contract with two machine
-consumers (frontend, orchestrator) — hold it to the intent brief's constraints,
-resist folding queue features (#46, #54) in. (b) The P1 fork collapse is a
-hypothesis; its failure mode is benign (a smaller recorded fork) but would be a
-design finding worth an issue. (c) Version-number semantics (W4) is a one-way
-door once a public consumer exists — it is a named decision, not a default.
-(d) The W2 acceptance replay against the pilot host depends on access to that
-scaffold; if unavailable, integration #2 alone is the replay target and the
-pilot diff waits.
+**Risks.**
+
+- W0 scope: the split touches a core contract with two machine consumers
+  (frontend, orchestrator) — hold it to the intent brief's constraints, resist
+  folding queue features (#46, #54) in.
+- The P1 fork collapse is a hypothesis; its failure mode is benign (a smaller
+  recorded fork) but would be a design finding worth an issue.
+- Version-number semantics (W4) is a one-way door once a public consumer
+  exists; it is a named decision rather than a default.
+- The W2 acceptance replay against the pilot host depends on access to that
+  scaffold; if unavailable, integration #2 alone is the replay target and the
+  pilot diff waits.
 
 **Non-goals of this plan:** npm/package publishing, hosted multi-user Stage C,
 orchestrator deployment on any host, `GitHubSource` (#45), the full 3-way-merge
@@ -190,5 +193,5 @@ W4 is a tag consumable from the private repo by its existing operators.
 
 *Companion documents: [INTEGRATION.md](INTEGRATION.md) (the design),
 [FRONTEND.md](FRONTEND.md) / [FRONTEND-PLAN.md](FRONTEND-PLAN.md) (the toolchain
-the proof exercises), [ORCHESTRATOR.md](ORCHESTRATOR.md) (deliberately outside
+the proof exercises), [ORCHESTRATOR.md](ORCHESTRATOR.md) (outside
 the critical path).*

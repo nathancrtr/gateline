@@ -96,9 +96,9 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   `AC<n>.<m> — `) and the **READABILITY rules** on human-facing sections (plain-words
   opening sentence, one idea per paragraph, lists instead of semicolon chains, name
   before cite). Breaches are bounced with the rule cited.
-* **Run profiles are fixed sets.** There is no per-run role or gate toggle; if a
-  profile doesn't fit, pick the next heavier one. Profile upgrades are
-  one-way and human-decided (a human edits `profile:` and resumes — the reconciler
+* **Run profiles are fixed sets, not knobs.** There is no per-run role or gate
+  toggle; if a profile doesn't fit, pick the next heavier one. Profile upgrades
+  are one-way and human-decided (a human edits `profile:` and resumes — the reconciler
   derives the backfill); downgrading mid-run is forbidden, and an engine that
   observes a profile lighter than the gates already decided escalates.
 * **One authority per deployment, and the blessed checkout stays on the default

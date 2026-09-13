@@ -54,7 +54,7 @@ Three lessons transfer directly:
    its native concurrency control. (Argo CD is logically three services and
    operationally one unit.)
 2. **Distribute the runner, never the reconciler.** When work must execute on
-   user-controlled hardware — the CI systems' daily bread, and exactly our
+   user-controlled hardware — the CI systems' daily bread, and our
    subscription-billing constraint — the remote piece is a thin agent that pulls a
    job, runs it in a disposable workspace, and reports back through the control
    plane. The scheduler never moves.
@@ -80,7 +80,7 @@ one push path — hosted (the entrypoint already co-locates them; make
 clone with its own fetch loop and `watch --push` — is retired in favor of that
 single `up` authority (#104). There is no startup guard that refuses `--push`
 without a sync provider — "sync provider" is not a first-class object anywhere
-in the `up`/engine startup path, and building one would be exactly the new
+in the `up`/engine startup path, and building one would be the new
 remote-abstraction layer this proposal doesn't need. What a deployment's
 origin-egress posture actually is — pushing, polling read-only, or touching
 origin not at all — is a property of each source's resolved mode, decided once
@@ -114,7 +114,7 @@ workstation agent — the only component that runs off the control-plane machine
 - reports the outcome and usage through the control plane, which does all state
   writing and metering itself.
 
-The dispatch seam (`seam.ts`) already isolates exactly the surface that needs to
+The dispatch seam (`seam.ts`) already isolates the surface that needs to
 move; a runner agent is a `Dispatcher` implementation whose execution happens to
 be remote. Transport can start as low-tech as the rest of the system (the agent
 polls the control plane; no inbound port on the workstation).
@@ -194,9 +194,9 @@ tiers below hold for both.
    unless `push`/`--push` is set explicitly.
 
 **The `--no-push` alias, and where it stops.** `gateline up --no-push` resolves
-to full local-only — no push, no `gh` calls, no origin fetch — not merely a
-push ceiling; a `--no-push` clone that still fetched origin and opened draft
-PRs behind the operator's back was exactly the leak this topology closes. (The
+to full local-only — no push, no `gh` calls, no origin fetch — rather than
+only a push ceiling; a `--no-push` clone that still fetched origin and opened
+draft PRs behind the operator's back was the leak this topology closes. (The
 standalone `gateline-orchestrator` binary has no `--no-push` of its own — it
 takes `--push` and `--local-only` directly.) The alias holds only at the CLI
 tier.
@@ -218,7 +218,7 @@ config source into local-only.
 - `gateline sync` never throws, including on a repo with no `origin` remote at
   all; it prints the literal `local-only: nothing to sync` and exits 0.
 
-**Naming the mode, not just inferring it.** `gateline up`'s startup log states
+**The mode is named, so nobody has to infer it.** `gateline up`'s startup log states
 which resolution path fired: `local-only (--local-only)`, `local-only
 (--no-push)`, or `local-only (no origin remote)` on one side; `pushing to
 origin (--push)` or `pushing to origin (origin auto-detected)` on the other.

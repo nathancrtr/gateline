@@ -14,7 +14,7 @@ framework's product components under `packages/` — the gate frontend (web, CLI
 server over `@gateline/core`) and the v1 orchestrator
 (`packages/orchestrator`), with a hosted single-user deployment recipe
 under `deploy/`. Application code under `apps/` is the output of pipeline runs, kept
-as evidence rather than as software being maintained for its own sake.
+as evidence — not software being maintained for its own sake.
 
 **Names.** The framework and this repository are **gateline**; the web UI is
 **Gatehouse**. Two earlier names are retired and must not be reintroduced:

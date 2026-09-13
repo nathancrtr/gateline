@@ -60,10 +60,9 @@ only path in, matching how the Claude Code adapter is actually used in v0 mode.
 - **P5 decorrelation is fully honored here, unlike the Claude Code adapter.** Copilot
   CLI natively hosts Anthropic, OpenAI, and Google models behind one interface, so
   Reviewer and Verifier can bind to genuinely different vendors than the Implementer
-  (see the mapping table) — cross-vendor decorrelation rather than a same-vendor,
-  different-lineage fallback. If your team runs Copilot CLI as the primary
-  driver, this is the adapter that satisfies the "different models for different
-  agents" requirement most literally.
+  (see the mapping table). If your team runs Copilot CLI as the primary driver,
+  this is the adapter that satisfies the "different models for different agents"
+  requirement most literally.
 - **Custom agent profiles are a newer Copilot CLI surface** (`.github/agents/*.agent.md`).
   Behavior — especially `disable-model-invocation`, `tools` alias resolution, and
   non-interactive `--agent` dispatch — should be spot-checked against your installed

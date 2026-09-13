@@ -32,9 +32,9 @@ round-trip.
 
 ## Working in this repo
 
-- `.claude/agents/` and `.github/agents/` are rendered files — never hand-edit
-  them. Edit the source role spec or adapter manifest, then run
-  `python3 scripts/render-agents.py` (CI fails stale renders).
+- `.claude/agents/`, `.github/agents/`, and `.opencode/agents/` are rendered
+  files — never hand-edit them. Edit the source role spec or adapter manifest,
+  then run `python3 scripts/render-agents.py` (CI fails stale renders).
 - Tests: `pytest scripts/test_integrate.py` for the integration tool,
   `npm test` in `packages/` for Gatehouse and the orchestrator (Node ≥ 24),
   `pytest apps/wordfreq` for pipeline-run output.

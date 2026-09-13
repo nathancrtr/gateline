@@ -142,8 +142,7 @@ jobs:
 
   # The stable name for branch protection: one check that survives the job
   # graph changing shape. A skipped slice is a pass; a failed or cancelled one
-  # is not. (No protection rule exists on this private repo today — this is
-  # what a public repo would require.)
+  # is not. This is the required check for branch protection on `main`.
   ci:
     if: always()
     needs: [changes, lockfile, web, packages, e2e]

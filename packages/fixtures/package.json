@@ -4,6 +4,13 @@
   "private": true,
   "type": "module",
   "description": "Generates a demo git repository with pipeline runs in every interesting state — used by tests and `gateline ui --demo`.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nathancrtr/gateline.git",
+    "directory": "packages/fixtures"
+  },
+  "author": "Nathan Carter",
   "exports": {
     ".": "./src/index.ts"
   },

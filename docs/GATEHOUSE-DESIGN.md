@@ -4,7 +4,7 @@ The visual design of Gatehouse, gateline's cockpit, and where each decision
 came from. This document holds the *reasoning*; the token contract with
 per-token provenance lives beside the code in
 [`packages/web/DESIGN.md`](../packages/web/DESIGN.md) once a direction is
-built. Earlier rounds are kept at the end as history rather than deleted.
+built. Earlier rounds are kept at the end as history.
 
 Process: `~/.claude/skills/seeded-design` (every visual property is sampled
 from an artifact outside the model, derived from a sampled value, or forced
@@ -117,14 +117,13 @@ What the artifact does beyond colour:
 1. **Colour lives on the stamp, not on the page.** The body of each stamp
    says which class of thing it is; the impression it leaves is one ink. A
    reader of the book never meets pink or slate — they meet a name and a
-   number in black on ruled paper. Colour is an index for picking rather than a
-   message on the record.
+   number in black on ruled paper. Colour is an index for picking.
 2. **Every entry is name + code.** `減価償却費 · 766`. Nothing on the page is
    a bare word. That is the `G2 — Does the evidence support merging?` habit
    this product already has, made typographic.
 3. **State as texture.** A worn stamp prints unevenly. An impression is
    visibly a *stamped* thing, distinct from the ruled structure of the page
-   and from handwriting. A fourth state needs a texture rather than a fourth hue.
+   and from handwriting. A fourth state needs a texture.
 4. **The rules do the separating.** Blue-grey horizontals, one red vertical.
    No boxes, no cards, no shadows.
 
@@ -135,7 +134,7 @@ What the artifact does beyond colour:
 | Artifact | A specimen French Nansen passport (certificate of identity and travel for stateless refugees), cover and visa pages 7–9 with International Nansen Office revenue stamps affixed |
 | Source | https://www.loc.gov/item/2021667890/ (World Digital Library; original at the UN Office at Geneva Library) |
 | Licence | Library of Congress: no known restrictions, free to use and reuse |
-| Chosen because | It is a document whose whole job is to be stamped at gates by named officials, and its pages are designed as empty ledgers for those stamps to accumulate on, each stamp a fee paid and a passage recorded. The green band is a category mark rather than decoration. |
+| Chosen because | It is a document whose whole job is to be stamped at gates by named officials, and its pages are designed as empty ledgers for those stamps to accumulate on, each stamp a fee paid and a passage recorded. The green band is a category mark. |
 
 What was measured (native, 5743×1991):
 
@@ -184,7 +183,7 @@ What was measured (native, 1000×675 — the slide is published at this size):
 
 **This seed is not a colour source.** The slide is underexposed and its
 page reads at 60% lightness with a green-teal cast (hue 160) that is the
-film rather than the paper; the audit flags every value from it. It is kept as a
+film, not the paper; the audit flags every value from it. It is kept as a
 **structure** source: the register's grammar (one row per event, narrow
 fixed columns for times and identities, entries in the order they happened,
 no prose) is the right shape for the History surface and the Portfolio, and
@@ -348,14 +347,14 @@ surface.
 | role | hex | provenance |
 |---|---|---|
 | ground | `#D4B48C` | sampled, the card stock, 35% of the image, **69%** lightness |
-| reading surface | `#DCDCDC` | sampled, the stamp paper, 86% — long text is read on the affixed sheet rather than the card; the sheet computes 1.4 against the card and is bounded by its perforated edge rather than by contrast |
+| reading surface | `#DCDCDC` | sampled, the stamp paper, 86% — long text is read on the affixed sheet; it computes 1.4 against the card and is bounded by its perforated edge, not by contrast |
 | ink | `#242424` | sampled, the letterpress; 7.9 on the card, 11.3 on the sheet |
 | muted | `#4C3C2C` | derived from ink along the card's hue; 5.4 on the card, 7.7 on the sheet |
 | band | `#243C04` | sampled, the green diagonal, 39% of its crop — a source/category mark; 6.2 on the card |
 | stamp ink | `#0444B4` | sampled, the Russian-refugee stamps, 6.5% of the stamp crop; 6.2 on the sheet, and it never sits on the card (4.3 there) |
 | second ink | `#443C04` | sampled, the Armenian-refugee stamps' olive; 5.7 on the card |
 
-Two values need writing down now rather than later. The ground's hue (30)
+Two values need writing down now. The ground's hue (30)
 is inside the register's amber band and the stamp blue (218) is inside its
 cobalt band. Both are **sampled**, at the proportions above, and neither
 is the default the band was written for — the band catches terracotta
@@ -391,7 +390,7 @@ from being read for an hour.
 
 **What it costs.** A dark warm ground is the boldest move available and the
 easiest to tire of; every chip and every rule has to be re-measured against
-69% instead of 96%, and most of what shipped will not survive that. The
+the new 69% ground, and most of what shipped will not survive that. The
 white reading sheet on card is a two-surface system, so anything that
 straddles both (the lexicon hover card, the packet chips) is designed
 twice. And it gives the public README a look that is unmistakable, which is
@@ -402,7 +401,7 @@ either the point or the problem.
 ## For the human
 
 - Killing all three is a valid outcome and means the seeds were wrong.
-- Mix structure rather than colour: A1's page with B's "decision as an affixed
+- Mix structure: A1's page with B's "decision as an affixed
   object" is a legitimate mix; A2's stamp colours on B's card is not.
 - The question to ask of each: *could a competitor ship this?*
 

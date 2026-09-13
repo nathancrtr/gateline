@@ -1,6 +1,6 @@
 # DESIGN.md — Gatehouse
 
-The token contract. Later work reads this rather than re-deciding. A value
+The token contract. Later work reads this. A value
 that is not here was not decided; a value here without provenance was
 chosen, which is the one forbidden move.
 
@@ -41,7 +41,7 @@ set of decisions nobody sourced.
 **What the seed does beyond colour, and what this contract keeps of it.**
 Colour lives on the stamp and never on the page: a reader of the book meets
 one ink on ruled paper. Every entry is a name plus a code. A worn stamp
-prints unevenly, so a state can be a texture rather than a hue. And the
+prints unevenly, so a state can be a texture. And the
 rules do the separating — no boxes, no cards, no shadows.
 
 ## Tokens
@@ -63,11 +63,11 @@ consumer keeps working; what they resolve to is recorded here.
 | `--color-accent-deep` | `#1C2424` | **sampled**, the darkest impression ink — what a pressed mark and a button are filled with |
 | `--color-muted` | `#5A6262` | derived from the ink, lifted to 5.6 on the ground |
 | `--color-faint` | `#636B73` | derived from the rule hue, the lightest text that clears 4.5 on the inset |
-| `--color-on-solid` | `#F3F3EE` | the paper — reversed type is paper showing through rather than white |
+| `--color-on-solid` | `#F3F3EE` | the paper — reversed type is paper showing through, not white |
 | `--color-line` | `#A4ACB4` | **sampled**, the ledger's blue-grey horizontal rules, 5% of the paper crop |
 | `--color-line-cool` | `#828D98` | derived from the rules, darkened to 3.0 for form-control borders |
 | `--color-accent` | `#2C343C` | the ink — what used to be a hue is now weight |
-| `--color-accent-tint` | `#E4E4DC` | the raised paper: a selected entry is the paper one step down rather than a tint of a hue |
+| `--color-accent-tint` | `#E4E4DC` | the raised paper: a selected entry is the paper one step down, not a tint of a hue |
 | `--color-accent-soft` | `rgba(44,52,60,.08)` | the ink at wash weight |
 | `--color-ok`, `--color-info` | `#2C343C` | the ink: a good state is the plain mark, and the word carries it |
 | `--color-mark` | `#A46C6C` | **sampled**, the ledger's red vertical column rule, 2% of the paper crop — the position a run stands at, and *over* |
@@ -96,7 +96,7 @@ It is here on purpose, chosen by the maintainer on 2026-09-04 from a set of
 five live candidates with the audit printed on each: the lit paper as
 sampled (91%) read as glum at full-page scale, and every lighter step lands
 nearer a value a sibling product already owns — which is the register's
-aggregate finding shown live rather than an argument against this value. Hue 60
+aggregate finding, shown live. Hue 60
 and the paper's saturation are held; only lightness moved. What carries
 identity here is not the ground but the impression grammar, the one ink,
 the rules-not-cards structure and the absent elevation, none of which
@@ -117,7 +117,7 @@ the words beside them. Hue 0 is outside every burned band.
 | | family | source |
 |---|---|---|
 | Reading | Newsreader | held from the previous round |
-| Chrome | Inter | held from the previous round — **a register default rather than a decision** |
+| Chrome | Inter | held from the previous round — **a register default, not a decision** |
 | Mono | JetBrains Mono | held from the previous round |
 
 Type was deliberately held constant through the direction mockups so the
@@ -125,7 +125,7 @@ comparison isolated ground, structure and marks. It is the next pass, seeded
 from the artifact's own lettering (a gothic with wide, lining, tabular
 figures doing the code work), and it includes vendoring: a self-hosted
 cockpit should not phone a font CDN. Until that pass lands, this table
-records that the chrome face was inherited rather than chosen.
+records that the chrome face was inherited.
 
 ## Layout grammar
 
@@ -156,7 +156,7 @@ code) in one ink, told apart by texture: filled for a decision taken, hollow
 for pending, struck for declined, hatched at the leading edge for bounced,
 dotted for a state not reached or a run at rest, dashed in the red for the
 position a run stands at. A human's own decision on the History ledger is
-pressed rather than printed — set 1.6° askew and roughened with an SVG
+pressed — set 1.6° askew and roughened with an SVG
 displacement filter — because it is the one mark on the page a person made.
 There is no ok/warn/bad hue; the word and the texture carry it.
 
@@ -189,14 +189,14 @@ Beyond the shared register in the skill:
 4. **The red vertical rule is retired.** Mimicry was the reason for it.
 5. **One surface.** No page-inside-a-frame; `--color-surface` equals the
    ground.
-6. **Portfolio phase chips are the plain mark** rather than the red position tone:
+6. **Portfolio phase chips are the plain mark**, not the red position tone:
    a column of dashed red cells read as a column of alarms (2026-09-04,
    found in the browser).
 7. **The accent stays provisional.** The maintainer does not favour the
    grey-and-dusty-red pairing long term and expects "something a little
-   livelier"; that is a future seeded pass rather than a free choice, and the
+   livelier"; that is a future seeded pass, and the
    mockups were not regenerated for it.
-8. **Type is inherited rather than chosen** — see *Type*; the next pass.
+8. **Type is inherited** — see *Type*; the next pass.
 
 ## Contrast
 

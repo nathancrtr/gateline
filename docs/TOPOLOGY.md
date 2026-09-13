@@ -183,7 +183,7 @@ tiers below hold for both.
 3. Otherwise, an explicit push setting wins: `--push`/`push: true` turns
    local-only off; **at the CLI tier only**, `--no-push` turns it on (the
    alias below).
-4. Otherwise, origin auto-detect decides *local-only*, not push: no
+4. Otherwise, origin auto-detect decides *local-only*: no
    `remote.origin.url` configured → local-only; an origin exists → not
    local-only. Whether a not-local-only source then pushes is a separate
    question, answered by rule 3's push default for its tier — CLI-tier
@@ -194,9 +194,9 @@ tiers below hold for both.
    unless `push`/`--push` is set explicitly.
 
 **The `--no-push` alias, and where it stops.** `gateline up --no-push` resolves
-to full local-only — no push, no `gh` calls, no origin fetch — rather than
-only a push ceiling; a `--no-push` clone that still fetched origin and opened
-draft PRs behind the operator's back was the leak this topology closes. (The
+to full local-only — no push, no `gh` calls, no origin fetch — not merely a
+push ceiling; a `--no-push` clone that still fetched origin and opened draft
+PRs behind the operator's back was the leak this topology closes. (The
 standalone `gateline-orchestrator` binary has no `--no-push` of its own — it
 takes `--push` and `--local-only` directly.) The alias holds only at the CLI
 tier.
@@ -218,7 +218,7 @@ config source into local-only.
 - `gateline sync` never throws, including on a repo with no `origin` remote at
   all; it prints the literal `local-only: nothing to sync` and exits 0.
 
-**The mode is named, so nobody has to infer it.** `gateline up`'s startup log states
+**Naming the mode.** `gateline up`'s startup log states
 which resolution path fired: `local-only (--local-only)`, `local-only
 (--no-push)`, or `local-only (no origin remote)` on one side; `pushing to
 origin (--push)` or `pushing to origin (origin auto-detected)` on the other.

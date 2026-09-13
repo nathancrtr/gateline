@@ -18,8 +18,7 @@ Two proofs, in dependency order:
 
 1. **Upstream:** the framework becomes an adoptable open dependency — a tagged
    release an arms-length operator can integrate from, with `integrate.py`,
-   renderer overlays, and a normative lockfile schema, instead of a hand
-   procedure and a bare commit pin.
+   renderer overlays, and a normative lockfile schema.
 2. **Downstream:** integration #2 is re-based onto that release and operated
    through the framework's own toolchain — its operator manages real gate
    decisions through a locally launched gate-frontend (Gatehouse) instance
@@ -42,7 +41,7 @@ Ordered. Each item names its exit criterion; tracked issues in parentheses.
 Split `contracts/state.yaml` into a generic core (run identity, gates-as-map,
 escalations, pause) and an SDLC extension (branch convention, G0–G3, tasks,
 budget); the frontend validates run state against the target repo's own
-`contracts/state.yaml` per its R3 rule instead of a compiled-in schema.
+`contracts/state.yaml` per its R3 rule.
 Best-effort escalation parsing (#49, `run/escalation-visibility`) rides the same
 milestone or lands immediately after.
 
@@ -75,7 +74,7 @@ copy manifest shipped with the release, lock written per §3's normative schema
 gate-mapping-to-adopted-set and dispatch-reality sections), and the canned smoke
 brief. `upgrade` is **not** in this item (v1, per §11) — except the narrow slice
 P1 needs: reading a commit-pinned lock and rewriting it against a tag, which counts
-as `init`-adjacent bookkeeping rather than the 3-way merge.
+as `init`-adjacent bookkeeping, not the 3-way merge.
 **Exit:** the §11 acceptance test — replay `init` against both hand-built hosts
 and diff against their scaffolds, every delta dispositioned as tool bug or
 hand-integration mistake; `validate` passes on the tool's own output.
@@ -131,7 +130,7 @@ maintainer-mediated and redacted, as INTEGRATION.md §6 requires).
 - **P2 — validate.** `integrate.py validate` on the host: checksums over the
   taken subset, provenance mode `private` matches its NOTICE pattern, renders
   current, state parses against the host's own contract, instance vocabulary
-  (`web` capability; `publish`/`none` gates) declared rather than incidental.
+  (`web` capability; `publish`/`none` gates) declared.
 - **P3 — Gatehouse live.** From the cockpit checkout at the pinned tag:
   `gateline ui --repo <host>` — single-user, `127.0.0.1`, browser. Acceptance,
   in order of increasing consequence:
@@ -179,7 +178,7 @@ verification) are out of the critical path.
 - The P1 fork collapse is a hypothesis; its failure mode is benign (a smaller
   recorded fork) but would be a design finding worth an issue.
 - Version-number semantics (W4) is a one-way door once a public consumer
-  exists; it is a named decision rather than a default.
+  exists.
 - The W2 acceptance replay against the pilot host depends on access to that
   scaffold; if unavailable, integration #2 alone is the replay target and the
   pilot diff waits.

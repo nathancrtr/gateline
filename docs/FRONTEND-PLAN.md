@@ -71,7 +71,7 @@ Three human surfaces plus a CLI, all views over the same core library:
 - **`gateline` CLI** — the same read models and the same write path in terminal form:
   `status`, `inbox`, `approve`/`decline`, `resolve-escalation`, `pause`/`resume`,
   `sync`, and `ui` (starts the server, opens the browser). FRONTEND.md's Stage B
-  tool, subsumed rather than skipped — decisions stay possible when no browser is.
+  tool, carried forward whole — decisions stay possible when no browser is.
 
 Deliberate absences, restated from FRONTEND.md §5 so they survive into code review:
 no dispatch or steering of agents (the harness is the cockpit), no chat, no artifact
@@ -91,7 +91,7 @@ raw file, never guessable-around — the contract's bounce rule applied to ourse
 
 Artifact well-formedness (R3) derives required sections **from the target repo's own
 `contracts/*.md` templates at read time** — the validator reads the section headings
-of `contracts/spec.md` in the repo it is rendering, rather than a list hardcoded in the app.
+of `contracts/spec.md` in the repo it is rendering.
 A consumer who forks the framework and amends a contract gets a frontend that
 validates against *their* contract, for free. (Built-in fallbacks cover repos that
 imported runs but not `contracts/`.)
@@ -154,7 +154,7 @@ the profile's own: G0 → Analyst, G1 → Architect (none in `patch`), G2 → Ve
 (Reviewer in `patch`), G3 → Ops. It is aged against the engine's role timeout,
 one constant shared with it: an open entry older than that is a dispatch the
 engine would already have killed, so the gate returns to reviewable with the wait
-named rather than being suppressed on the word of a dead process.
+named.
 
 Each item carries **since** — the commit timestamp at which its condition became
 true (the newest commit touching its trigger artifacts) — giving honest SLA ages
@@ -197,7 +197,7 @@ differ, echoing the Agent Inbox per-interrupt configuration:
 
 | Card | Layout | Affordances |
 |---|---|---|
-| **G0** | Brief and spec side-by-side; requirements/acceptance-criteria numbered and anchor-linked | Approve · Approve with notes · **Decline with reason** (routes back to Analyst — the "edit the spec" instinct is served by declining with specific notes rather than by editing in-app; the frontend never adds content) |
+| **G0** | Brief and spec side-by-side; requirements/acceptance-criteria numbered and anchor-linked | Approve · Approve with notes · **Decline with reason** (routes back to Analyst — the "edit the spec" instinct is served by declining with specific notes; the frontend never adds content) |
 | **G1** | Plan with ADRs foregrounded; task cards with file-contact surfaces, overlap check rendered as a badge | Approve · Approve with notes · Decline with reason |
 | **G2** | Verdict strip (reviewer verdict, verifier result, rounds used) → diff viewer → both reports; evidence expanded only for failures, per the contracts' own budget rules | Approve · Approve with notes · Decline with reason; deep-link to the PR when one exists |
 | **G3** | Release plan with the rollback section pinned and non-collapsible | Approve · Decline |
@@ -243,7 +243,7 @@ encoded in a small fixed vocabulary (gate states, phases, verdicts) used identic
 everywhere; Inter/system for UI, mono for artifacts; generous line length limits for
 reading specs; light and dark from day one. Metrics charts follow the dataviz
 guidance at implementation time. The bar: an engineer reviews a G2 on a phone at a
-coffee shop and it feels like reading rather than operating.
+coffee shop and it feels like reading, not operating.
 
 ## 6. Metrics (I8) — computed, never logged
 
@@ -258,7 +258,7 @@ All from git history of `state.yaml` plus the burden field — no scribe, no sto
 - **Rounds** per task (from state history), distribution and trend.
 - **Cost** — renders `budget` fields honestly, including "never updated," which is
   itself the finding (the wordfreq lesson); automated metering stays a v1
-  orchestrator concern rather than a frontend one.
+  orchestrator concern.
 
 ## 7. Contract and doc changes (small, explicit)
 

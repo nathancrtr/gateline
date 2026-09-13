@@ -5,7 +5,7 @@ The [ORCHESTRATOR.md](../../docs/ORCHESTRATOR.md) design, implemented: a
 Triggers fire an idempotent tick that reads `state.yaml` at the run branch tip,
 derives the next action from committed files alone, executes it, CAS-commits,
 and exits. Gate waits are rest states and cost nothing. Humans interact only at
-gates and escalations, through the frontend or `gateline` CLI, exactly as before.
+gates and escalations, through the frontend or `gateline` CLI, as before.
 
 Rules it is built to be checked against:
 
@@ -18,9 +18,9 @@ Rules it is built to be checked against:
   decision grammar (`G2 approved by <name>`) is reserved for humans.
 - **Every model invocation flows through the dispatch seam** and is metered
   into `budget.ledger[]`; enforcement is a pre-flight cap check that pauses
-  (`budget-exhausted`), never degrades. Enforcement — not metering — can be
+  (`budget-exhausted`), never degrades. Enforcement can be
   switched off with `--no-budget-enforcement` (also on `gateline up`) for
-  flat-rate-billed harnesses (#109); the ledger records either way.
+  flat-rate-billed harnesses (#109); metering cannot — the ledger records either way.
 - **R2 scoping:** the frontend's "exactly one write path" governs the human
   surfaces (web, CLI, server — still dispatch-free). The orchestrator is the
   sanctioned machine co-writer, a sibling consumer of the same `@gateline/core`
@@ -76,7 +76,7 @@ the branch waits for a human to review the docs-delta and merge. No
 
 Driving a live toy run end-to-end (the M2 exit criterion):
 
-1. Create the run by hand exactly as in WALKTHROUGH.md §0 (branch,
+1. Create the run by hand as in WALKTHROUGH.md §0 (branch,
    `runs/<slug>/`, intent brief, `state.yaml` with a real
    `budget.cost_limit_usd`), commit.
 2. Start `watch`. The orchestrator dispatches the Analyst and rests at G0.
@@ -152,10 +152,10 @@ has earned trust (design §10).
 | `shadow.ts` | M1: replay history, derived vs actual, disagreements dispositioned (see `shadow-wordfreq.md`). |
 
 Crash recovery: job handles are never committed (host ephemera). A `dispatched`
-ledger entry with no living job and no artifact is exactly the crash signature;
+ledger entry with no living job and no artifact is the crash signature;
 the heartbeat ages it out (metered at the static estimate, marked `failed`) and
 the next derivation re-dispatches — one retry, then escalate. Kill the process
-anywhere; restart converges (`test/hardening.test.ts` drills exactly this).
+anywhere; restart converges (`test/hardening.test.ts` drills this).
 
 ## Autonomy gate
 

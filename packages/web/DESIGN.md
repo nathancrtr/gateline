@@ -96,7 +96,7 @@ It is here on purpose, chosen by the maintainer on 2026-09-04 from a set of
 five live candidates with the audit printed on each: the lit paper as
 sampled (91%) read as glum at full-page scale, and every lighter step lands
 nearer a value a sibling product already owns — which is the register's
-aggregate finding, shown live. Hue 60
+aggregate finding shown live, not an argument against this value. Hue 60
 and the paper's saturation are held; only lightness moved. What carries
 identity here is not the ground but the impression grammar, the one ink,
 the rules-not-cards structure and the absent elevation, none of which

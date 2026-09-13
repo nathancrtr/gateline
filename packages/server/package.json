@@ -4,6 +4,13 @@
   "private": true,
   "type": "module",
   "description": "Localhost HTTP layer over @gateline/core: JSON reads, the single decision write path, SSE freshness, and the built SPA.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nathancrtr/gateline.git",
+    "directory": "packages/server"
+  },
+  "author": "Nathan Carter",
   "exports": {
     ".": "./src/app.ts",
     "./main": "./src/main.ts",

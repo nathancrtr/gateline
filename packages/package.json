@@ -2,6 +2,12 @@
   "name": "packages",
   "private": true,
   "type": "module",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nathancrtr/gateline.git"
+  },
+  "author": "Nathan Carter",
   "engines": {
     "node": ">=24"
   },

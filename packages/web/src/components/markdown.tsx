@@ -11,7 +11,7 @@ export function Markdown({ children, sourcePath, unwrapped }: { children: string
   const rehypePlugins = useMemo(() => (lex ? [lexiconRehype(lex.pattern, sourcePath)] : []), [lex, sourcePath])
   const components = useMemo(() => (lex ? ({ 'lex-ref': LexRef } as unknown as Components) : undefined), [lex])
   const rendered = (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={rehypePlugins} components={components}>
+    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={rehypePlugins} components={components} skipHtml>
       {children}
     </ReactMarkdown>
   )

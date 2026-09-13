@@ -8,13 +8,14 @@
 // were reopened (#350) — and nothing about the run: no escalation, no phase,
 // no paused_reason.
 import { rmSync } from 'node:fs'
-import { afterEach, describe, expect, it } from 'vitest'
 import { LocalGitSource } from '@gateline/core'
+import { afterEach, describe, expect, it } from 'vitest'
 import { Engine } from '../src/engine.ts'
 import { parseLedger } from '../src/observe.ts'
 import { removeRunCheckout } from '../src/workspace.ts'
 import {
   agentCommit,
+  type Clock,
   deadEngineId,
   FakeDispatcher,
   heldDispatcher,
@@ -23,10 +24,9 @@ import {
   PLAN,
   reconcile,
   SPEC,
-  taskYaml,
   TEST_REGISTRY,
+  taskYaml,
   toyRef,
-  type Clock,
 } from './engine.helper.ts'
 
 const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }

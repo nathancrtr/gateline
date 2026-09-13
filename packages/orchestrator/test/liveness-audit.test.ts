@@ -11,30 +11,31 @@
 //
 // Findings are numbered as in the audit; the ones that hold today are
 // asserted plainly.
+
+import { deriveReadiness, LocalGitSource, planDecision, planSync, type RunState } from '@gateline/core'
 import { describe, expect, it } from 'vitest'
-import { LocalGitSource, deriveReadiness, planDecision, planSync, type RunState } from '@gateline/core'
 import { Engine } from '../src/engine.ts'
 import { parseLedger } from '../src/observe.ts'
 import { removeRunCheckout } from '../src/workspace.ts'
 import {
   agentCommit,
   appendToFile,
+  type Clock,
   deferred,
   FakeDispatcher,
-  heldDispatcher,
   HUMAN,
+  heldDispatcher,
   humanDecide,
   makeToyRepo,
   PLAN,
-  reconcile,
   RELEASE_PLAN,
   REVIEW,
+  reconcile,
   SPEC,
-  taskYaml,
   TEST_REGISTRY,
+  taskYaml,
   toyRef,
   VERIFICATION,
-  type Clock,
 } from './engine.helper.ts'
 import { assertStateInvariants, assertTerminalStays } from './invariants.ts'
 

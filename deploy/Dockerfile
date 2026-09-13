@@ -6,26 +6,41 @@
 # still decide every gate — the orchestrator dispatches within phases and
 # structurally cannot write gates.*.
 
-FROM node:24-slim AS build
+# Pinned by digest (node:24-slim multi-arch index, as of 2026-09-12) so both
+# stages resolve to a known, reproducible base regardless of registry drift.
+FROM node:24-slim@sha256:2fe369e969550cde8e867afc3fe370b260140cab4a23d467074295b42163d553 AS build
 WORKDIR /app
 COPY packages/ ./
 RUN npm ci --no-audit --no-fund && npm run build
 
-FROM node:24-slim
+FROM node:24-slim@sha256:2fe369e969550cde8e867afc3fe370b260140cab4a23d467074295b42163d553
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git ca-certificates curl \
  && rm -rf /var/lib/apt/lists/*
 
 # cloudflared is the optional tunnel client; the entrypoint starts it only
 # when TUNNEL_TOKEN is set, so the machine can run with no public port.
+# Pinned to a specific release and verified by checksum (not "latest", which
+# has no integrity guarantee). Bump CLOUDFLARED_VERSION and the two sha256
+# ARGs together when updating; both are overridable.
+ARG CLOUDFLARED_VERSION=2026.9.1
+ARG CLOUDFLARED_SHA256_AMD64=03f1f25d1cc93b9ad6c60569d44060bc4f17ed97075760ed8cfca4b12dcd68cc
+ARG CLOUDFLARED_SHA256_ARM64=3d97437c71848bd8df68041e12436b484a661d95073ea1937f01a845ce88faa3
 ARG TARGETARCH=amd64
 RUN curl -fsSL -o /usr/local/bin/cloudflared \
-      "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${TARGETARCH}" \
+      "https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-${TARGETARCH}" \
+ && case "${TARGETARCH}" in \
+      amd64) CLOUDFLARED_SHA256="${CLOUDFLARED_SHA256_AMD64}" ;; \
+      arm64) CLOUDFLARED_SHA256="${CLOUDFLARED_SHA256_ARM64}" ;; \
+      *) echo "unsupported TARGETARCH: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+ && echo "${CLOUDFLARED_SHA256}  /usr/local/bin/cloudflared" | sha256sum -c - \
  && chmod +x /usr/local/bin/cloudflared
 
 # The claude CLI is the orchestrator's dispatch harness (adapters/claude-code).
-# Overridable pin; `latest` keeps the recipe usable without tracking releases.
-ARG CLAUDE_CODE_VERSION=latest
+# Pinned to the version current as of this Dockerfile's last update, for a
+# reproducible image; bump deliberately (not "latest", which drifts silently).
+ARG CLAUDE_CODE_VERSION=2.1.270
 RUN npm install -g --no-audit --no-fund "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}"
 
 # Unprivileged runtime user: the claude CLI refuses permission-bypass modes

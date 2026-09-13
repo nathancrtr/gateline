@@ -48,7 +48,11 @@ Two more properties worth knowing:
 ## How it works
 
 The image (`deploy/Dockerfile`, entrypoint `deploy/entrypoint.sh`) contains
-the server, the built SPA, git, and cloudflared. On boot it:
+the server, the built SPA, git, and cloudflared. The base image, cloudflared
+binary, and `@anthropic-ai/claude-code` CLI are all pinned (by digest,
+checksum, and version respectively, each overridable via build `ARG`s) rather
+than tracking `latest`, so the image is reproducible and bumps are
+deliberate. On boot it:
 
 1. Clones `REPO_URL` onto the volume (first boot only) and detaches `HEAD`,
    so no branch is checked out and every local branch can fast-forward.

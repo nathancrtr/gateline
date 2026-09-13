@@ -39,7 +39,7 @@ round-trip.
   `npm test` in `packages/` for Gatehouse and the orchestrator (Node ≥ 24),
   `pytest apps/wordfreq` for pipeline-run output.
 - Everything that vendors into host repos stays stdlib-only, Python
-  3.9-compatible.
+  3.11-compatible.
 - No vendor or model name may appear in `roles/` or `contracts/`; concrete
   model IDs live only in `registry/models.yaml`.
 - Completed runs under `runs/` are historical records — never retro-edit them.

@@ -80,7 +80,7 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   evidence-position/production-role distinction, and the adopter extension rule
   ("open table, closed gates") are recorded in DESIGN.md §4.2.
 * **`scripts/render-agents.py` and `scripts/integrate.py` stay stdlib-only and
-  Python 3.9-compatible** (JSON manifests, no PEP 604 annotations) so they run on
+  Python 3.11-compatible** (JSON manifests, no third-party imports) so they run on
   any operator's machine — including before the environment probe has fixed
   anything (INTEGRATION.md §8).
 * **A new portable core file must be added to `scripts/copy-manifest.json`**, or

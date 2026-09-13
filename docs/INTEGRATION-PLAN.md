@@ -60,7 +60,7 @@ with marked splice boundaries; resolves paths relative to its own location;
 validates capabilities and gate names against the union of framework-declared
 and instance-declared vocabulary (declaration syntax = INTEGRATION.md open
 question 6 — decide here, smallest mechanism that distinguishes "instance-added"
-from "typo'd"). Stays stdlib-only, Python 3.9+.
+from "typo'd"). Stays stdlib-only, Python 3.11+.
 **Exit:** this repo re-renders byte-identical with no overlays present (CI
 `--check` green); a fixture host with overlays + instance vocabulary renders
 correctly; an undeclared capability or gate name fails the render.

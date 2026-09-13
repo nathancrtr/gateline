@@ -7,7 +7,7 @@
 **Checklist**
 - [ ] `python3 scripts/render-agents.py --check` passes (rendered agents current)
 - [ ] No vendor or model names in `roles/` or `contracts/`
-- [ ] Vendored tooling stays stdlib-only, Python 3.9-compatible
+- [ ] Vendored tooling stays stdlib-only, Python 3.11-compatible
 - [ ] Tests pass: `pytest scripts/test_integrate.py` (and `npm test` in
       `packages/` if it's touched)
 - [ ] No retro-edits to completed runs under `runs/`

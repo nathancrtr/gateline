@@ -41,7 +41,7 @@ Three consequences fall out of that one decision:
 | P3 | **Runtime-neutral core, thin adapters.** The `roles/`, `contracts/`, `registry/` trees are portable; each runtime gets a small adapter. | Designing around one CLI's features |
 | P4 | **Human at phase gates.** Agents are autonomous *within* a phase; a named human approves transitions. | Unattended merge-to-main; unattended releases |
 | P5 | **Decorrelate where it counts.** Reviewer and Verifier should bind to a *different vendor* than the Implementer whose work they check. | Same model grading its own homework |
-| P6 | **Extend by adding roles rather than tuning knobs.** New need → new role spec + contract. | Sprawling per-agent configuration surfaces |
+| P6 | **Extend by adding roles, not tuning knobs.** New need → new role spec + contract. | Sprawling per-agent configuration surfaces |
 
 P5 is the strongest technical argument for the cross-vendor requirement. Models from
 the same family share blind spots — an error the implementer's model reliably makes is

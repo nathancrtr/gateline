@@ -63,11 +63,11 @@ consumer keeps working; what they resolve to is recorded here.
 | `--color-accent-deep` | `#1C2424` | **sampled**, the darkest impression ink — what a pressed mark and a button are filled with |
 | `--color-muted` | `#5A6262` | derived from the ink, lifted to 5.6 on the ground |
 | `--color-faint` | `#636B73` | derived from the rule hue, the lightest text that clears 4.5 on the inset |
-| `--color-on-solid` | `#F3F3EE` | the paper — reversed type is paper showing through, not white |
+| `--color-on-solid` | `#F3F3EE` | the paper — reversed type is paper showing through rather than white |
 | `--color-line` | `#A4ACB4` | **sampled**, the ledger's blue-grey horizontal rules, 5% of the paper crop |
 | `--color-line-cool` | `#828D98` | derived from the rules, darkened to 3.0 for form-control borders |
 | `--color-accent` | `#2C343C` | the ink — what used to be a hue is now weight |
-| `--color-accent-tint` | `#E4E4DC` | the raised paper: a selected entry is the paper one step down, not a tint of a hue |
+| `--color-accent-tint` | `#E4E4DC` | the raised paper: a selected entry is the paper one step down rather than a tint of a hue |
 | `--color-accent-soft` | `rgba(44,52,60,.08)` | the ink at wash weight |
 | `--color-ok`, `--color-info` | `#2C343C` | the ink: a good state is the plain mark, and the word carries it |
 | `--color-mark` | `#A46C6C` | **sampled**, the ledger's red vertical column rule, 2% of the paper crop — the position a run stands at, and *over* |
@@ -96,7 +96,7 @@ It is here on purpose, chosen by the maintainer on 2026-09-04 from a set of
 five live candidates with the audit printed on each: the lit paper as
 sampled (91%) read as glum at full-page scale, and every lighter step lands
 nearer a value a sibling product already owns — which is the register's
-aggregate finding shown live, not an argument against this value. Hue 60
+aggregate finding shown live rather than an argument against this value. Hue 60
 and the paper's saturation are held; only lightness moved. What carries
 identity here is not the ground but the impression grammar, the one ink,
 the rules-not-cards structure and the absent elevation, none of which
@@ -107,7 +107,7 @@ actual pixel is on every screen, one step down from the page.
 ### Why there is no red text at the mark's own value
 
 The column rule as sampled, `#A46C6C`, computes 3.8 on the ground: enough
-for a mark, not for text. So the red exists twice — `--color-mark` as
+for a mark; it is not enough for text. So the red exists twice — `--color-mark` as
 sampled, for the dashed position cell, the over-budget bar and the
 threshold tick, and `--color-warn` darkened along the same hue to 4.5 for
 the words beside them. Hue 0 is outside every burned band.
@@ -117,7 +117,7 @@ the words beside them. Hue 0 is outside every burned band.
 | | family | source |
 |---|---|---|
 | Reading | Newsreader | held from the previous round |
-| Chrome | Inter | held from the previous round — **a register default, not a decision** |
+| Chrome | Inter | held from the previous round — **a register default rather than a decision** |
 | Mono | JetBrains Mono | held from the previous round |
 
 Type was deliberately held constant through the direction mockups so the
@@ -125,7 +125,7 @@ comparison isolated ground, structure and marks. It is the next pass, seeded
 from the artifact's own lettering (a gothic with wide, lining, tabular
 figures doing the code work), and it includes vendoring: a self-hosted
 cockpit should not phone a font CDN. Until that pass lands, this table
-records that the chrome face was inherited, not chosen.
+records that the chrome face was inherited rather than chosen.
 
 ## Layout grammar
 
@@ -181,7 +181,7 @@ Beyond the shared register in the skill:
 1. **Single theme.** No dark theme until a dark-ground artifact is sampled
    (2026-09-04).
 2. **The ground is `#F3F3EE`**, inside the band and near curricle's, with
-   the justification above; not reopened by the audit's flag.
+   the justification above; the audit's flag does not reopen it.
 3. **The semantic quartet is collapsed** to ink plus one red. `ok` and
    `info` resolve to the ink; `warn` and `bad` to the red text token. The
    product's own rule that status is carried in form is what makes this
@@ -189,14 +189,14 @@ Beyond the shared register in the skill:
 4. **The red vertical rule is retired.** Mimicry was the reason for it.
 5. **One surface.** No page-inside-a-frame; `--color-surface` equals the
    ground.
-6. **Portfolio phase chips are the plain mark**, not the red position tone:
+6. **Portfolio phase chips are the plain mark** rather than the red position tone:
    a column of dashed red cells read as a column of alarms (2026-09-04,
    found in the browser).
 7. **The accent stays provisional.** The maintainer does not favour the
    grey-and-dusty-red pairing long term and expects "something a little
-   livelier"; that is a future seeded pass, not a free choice, and the
+   livelier"; that is a future seeded pass rather than a free choice, and the
    mockups were not regenerated for it.
-8. **Type is inherited, not chosen** — see *Type*; the next pass.
+8. **Type is inherited rather than chosen** — see *Type*; the next pass.
 
 ## Contrast
 

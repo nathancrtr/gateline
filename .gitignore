@@ -5,6 +5,10 @@ __pycache__/
 /fly.toml
 # local API keys / secrets (e.g. OPENROUTER_API_KEY); never commit
 /.env
+# local private memos and strategy notes; never commit
+/.private/
+# Claude Code scratch worktrees; generated per checkout, never committed
+/.claude/worktrees/
 
 # Playwright leaves this behind after a run; it is a scratch file, not evidence.
 /test-results/

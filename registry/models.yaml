@@ -5,32 +5,30 @@
 # runner's model vocabulary (e.g. anthropic/claude-fable-5 -> "fable" in Claude
 # Code) — when you change a binding here, update the manifests and re-render.
 #
-# Model IDs below are ILLUSTRATIVE. Pin to your org's approved, current models
-# and re-verify pricing/limits when you do.
+# Model IDs below are ILLUSTRATIVE. Pin them to your org's approved, current
+# models and re-verify pricing and limits when you do.
 
 profiles:
   frontier-reasoning:
     # Deepest reasoning available; used where judgment concentrates and errors
     # are expensive (architecture, review, orchestration). Cost-insensitive.
     default: anthropic/claude-fable-5
-    alternates:
-      - openai/<current-frontier-model>
-      - google/<current-frontier-model>
+    # alternates: add your org's approved models from a second vendor here (P5 needs one)
+    alternates: []
 
   balanced:
     # Strong general capability at moderate cost; the workhorse tier.
     default: anthropic/claude-sonnet-5
-    alternates:
-      - openai/<current-workhorse-model>
-      - google/<current-workhorse-model>
+    # alternates: add your org's approved models from a second vendor here (P5 needs one)
+    alternates: []
 
   fast-cheap:
     # High-volume, low-stakes work: triage, summarization, formatting.
     # First binding: historian — evidence-gathering and doc reconciliation,
     # with a human reviewing every sweep branch before merge.
     default: anthropic/claude-haiku-4-5
-    alternates:
-      - openai/<current-small-model>
+    # alternates: add your org's approved models from a second vendor here (P5 needs one)
+    alternates: []
 
 pricing:
   # $ per million tokens, keyed by the model IDs above. ILLUSTRATIVE like the
@@ -42,16 +40,10 @@ pricing:
   anthropic/claude-sonnet-5:  {usd_per_mtok_in: 3,  usd_per_mtok_out: 15}
   anthropic/claude-haiku-4-5: {usd_per_mtok_in: 1,  usd_per_mtok_out: 5}
 
-  # opencode's open-weight POC bindings (adapters/opencode/manifest.json,
-  # 2026-07-23), OpenRouter rates at the time. NOTE — currently a fallback
-  # only, not live-wired: resolveModel() (registry.ts) resolves a role to
-  # this file's OWN profile default (the anthropic ids above), never an
-  # adapter's model_map/model_overrides spelling, so computeCost()'s registry
-  # lookup will never actually key on these. In practice this doesn't cost
-  # accuracy today because the opencode adapter reports real per-dispatch
-  # cost directly (usage_report format ndjson-sum sums each event's own
-  # `cost` field) — these entries are for reference/a future adapter-aware
-  # resolveModel, not an active code path.
+  # Reference rates for the opencode adapter's open-weight bindings
+  # (adapters/opencode/manifest.json). The opencode adapter reports real
+  # per-dispatch cost itself, so these entries are not on the metering path
+  # today (see issue #359 for the underlying resolveModel() gap).
   openrouter/z-ai/glm-5.2:            {usd_per_mtok_in: 0.78,  usd_per_mtok_out: 2.45}
   openrouter/deepseek/deepseek-v4-pro:   {usd_per_mtok_in: 0.435, usd_per_mtok_out: 0.87}
   openrouter/deepseek/deepseek-v4-flash: {usd_per_mtok_in: 0.09,  usd_per_mtok_out: 0.18}

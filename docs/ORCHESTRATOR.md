@@ -13,13 +13,12 @@ path — on the `worktree-frontend-design` branch until it merges)
 
 ## 1. What v1 changes — and what it must not
 
-DESIGN.md §7 defines the v0 → v1 transition as a change of *executor*, not of role:
-"the role specs are identical in both modes — only who executes `orchestrator.md`
-changes." That sentence is this document's charter. v1 succeeds when
-`roles/orchestrator.md` is executed continuously, correctly, and cheaply without a
-human — and every other property of the system is preserved bit-for-bit: gates held
-by named humans, artifacts as the only interface between agents, `state.yaml`
-canonical, budgets that pause rather than degrade.
+DESIGN.md §7 defines the v0 → v1 transition as a change of *executor*: "the role specs
+are identical in both modes — only who executes `orchestrator.md` changes." That
+sentence is this document's charter. v1 succeeds when `roles/orchestrator.md` is
+executed continuously, correctly, and cheaply without a human — and every other
+property of the system is preserved bit-for-bit: gates held by named humans, artifacts
+as the only interface between agents, `state.yaml` canonical, budgets that pause.
 
 The v1 orchestrator also arrives **second**. The gate frontend shipped first and
 established the discipline for machines that touch `state.yaml`: comment-preserving
@@ -28,8 +27,7 @@ reader parses, ISO-8601 timestamps, `review_rounds` living in exactly one place.
 FRONTEND-PLAN.md §11 even names the race this design must survive — "writing refs
 under a live agent session races the orchestrator; CAS refusal + re-present is the
 *designed* outcome." The orchestrator is therefore designed as a second well-behaved
-co-writer joining an ecosystem with established rules, rather than a privileged process the
-frontend must accommodate. A hard requirement follows:
+co-writer joining an ecosystem with established rules. A hard requirement follows:
 
 > **v1 requires zero frontend changes.** The orchestrator honors the frontend's
 > existing conventions (§7 lists them as a compatibility contract); anything the
@@ -132,22 +130,22 @@ implementation time (one test per row, like the frontend's); its shape:
 | Role's artifact present but malformed | Bounce: re-dispatch the producer naming the missing sections |
 | Artifact well-formed, gate not decided | Rest (the frontend inbox surfaces it) |
 | Gate approved | Advance phase; dispatch the next role |
-| Gate declined | Rest as `paused: gate-declined`; a human resume re-dispatches the producing role with the decline notes as bounce input (resolved question 5). The re-dispatch opens a ledger entry, and the frontend reads that open entry as the in-flight signal (#159): while it stands, the gate card renders superseded rather than reviewable, so the human who just declined is not shown their own old artifact with an Approve button. It is the same fact rule D12 rests on, read by the other surface — one constant for the role timeout keeps the two from disagreeing about when a dispatch has been lost |
+| Gate declined | Rest as `paused: gate-declined`; a human resume re-dispatches the producing role with the decline notes as bounce input (resolved question 5). The re-dispatch opens a ledger entry, and the frontend reads that open entry as the in-flight signal (#159): while it stands, the gate card renders superseded, so the human who just declined is not shown their own old artifact with an Approve button. It is the same fact rule D12 rests on, read by the other surface — one constant for the role timeout keeps the two from disagreeing about when a dispatch has been lost |
 | Task diff ready, `review_rounds` < 3 | Dispatch Reviewer (P5-constrained, §5.3) |
 | Review requests changes, rounds < 3 | Dispatch Implementer, round n+1 |
-| Round cap hit, or two bounces of the same artifact | Escalate; pause the run. The cap has an exit in the grammar (issue #342): resolving *that* escalation after the latest delivered verdict grants the loop one more round, and rule D4 stands down for that task — the implement rules then dispatch round n+1, or the resolution's optional `disposition` routes it (`re-review`, `return-to-implement`, `re-plan`) through the same helper the escalate-verdict row below uses. The next verdict past the cap lands after the resolution again, so the engine asks once per extra round rather than once and never again. Readiness reads the same fact — through the same helper — so the inbox card disappears while the granted round runs The bounce budget counts per dispute rather than per run (#348): only bounces newer than the most recently resolved contract dispute over *that* artifact count, so an artifact a human repaired by hand and a producer later regenerated malformed gets the same two bounces the first occurrence had, rather than escalating on sight against a count from weeks earlier. The pause is `escalation`, whose only exit here is a hand edit — the paused card reads the resolved escalation's own words and names that edit, the way `budget-exhausted` names the limit (#96) |
-| Review verdict `escalate` | Escalate; pause. Resolving the escalation *after* the verdict landed — after in the record's own order, rather than by any clock (see below) — routes by the LATEST matching resolution's optional `disposition` (issues #189, #190): `re-review` dispatches the re-review round immediately — an explicit human override of the #188 zero-delta guard; `return-to-implement` sends the task back to the implementer with the review report, or on to a verify round if the implementer already responded (whose-turn logic keyed off the resolution's own commit, mirroring the request-changes row above); `re-plan` sends the finding to the architect's amendment mode (see the next row); no disposition named falls back to the legacy behavior — a re-review round only once a real commit (anything other than `state.yaml`) has also landed after the verdict, else rest naming the fix that still needs to land (issue #188) |
-| Disposition `re-plan` | Dispatch the architect in amendment mode, carrying the review report path and the resolution note (rule D22) — an architect already in flight rests instead, same as any other in-flight producer. Once the amendment lands (`plan.md` or a `tasks/*.yaml` touched after the resolution's commit), the engine raises a *fresh* escalation naming `task <id>` and pauses for human acknowledgment (rule D23, issue #190) rather than acting on the widened surface unattended — the architect proposes, the human still disposes. That acknowledgment escalation's own resolution (typically `return-to-implement`) is just another resolution matching the same `task <id>` text, so the LATEST-matching-resolution rule above picks it up and routes through the ordinary machinery unchanged |
-| Verification verdict `escalate` (rule D24, #152) | Escalate; pause. The verifier's own channel, mirroring the reviewer's: `**Verdict:** escalate` on the verification report means a failure traces to the spec, the plan, or the gate process rather than the implementation. A resolution landing after the report returns the packet to the table for the G2 human, failed rows and all — there is no round to re-run, so no disposition routing applies. `pass` and `fail` never pause: `fail` is the G2 human's to weigh, and the gate surface quotes the report's verdict and its non-verified rows so a non-clean report never reads as a clean pass. Reports that predate the verdict line behave as before |
+| Round cap hit, or two bounces of the same artifact | Escalate; pause the run. The cap has an exit in the grammar (issue #342): resolving *that* escalation after the latest delivered verdict grants the loop one more round, and rule D4 stands down for that task — the implement rules then dispatch round n+1, or the resolution's optional `disposition` routes it (`re-review`, `return-to-implement`, `re-plan`) through the same helper the escalate-verdict row below uses. The next verdict past the cap lands after the resolution again, so the engine asks again for each extra round. Readiness reads the same fact — through the same helper — so the inbox card disappears while the granted round runs The bounce budget counts per dispute (#348): only bounces newer than the most recently resolved contract dispute over *that* artifact count, so an artifact a human repaired by hand and a producer later regenerated malformed gets the same two bounces the first occurrence had. The pause is `escalation`, whose only exit here is a hand edit — the paused card reads the resolved escalation's own words and names that edit, the way `budget-exhausted` names the limit (#96) |
+| Review verdict `escalate` | Escalate; pause. Resolving the escalation *after* the verdict landed — after in the record's own order (see below) — routes by the LATEST matching resolution's optional `disposition` (issues #189, #190): `re-review` dispatches the re-review round immediately — an explicit human override of the #188 zero-delta guard; `return-to-implement` sends the task back to the implementer with the review report, or on to a verify round if the implementer already responded (whose-turn logic keyed off the resolution's own commit, mirroring the request-changes row above); `re-plan` sends the finding to the architect's amendment mode (see the next row); no disposition named falls back to the legacy behavior — a re-review round only once a real commit (anything other than `state.yaml`) has also landed after the verdict, else rest naming the fix that still needs to land (issue #188) |
+| Disposition `re-plan` | Dispatch the architect in amendment mode, carrying the review report path and the resolution note (rule D22) — an architect already in flight rests instead, same as any other in-flight producer. Once the amendment lands (`plan.md` or a `tasks/*.yaml` touched after the resolution's commit), the engine raises a *fresh* escalation naming `task <id>` and pauses for human acknowledgment (rule D23, issue #190) — the architect proposes, the human still disposes. That acknowledgment escalation's own resolution (typically `return-to-implement`) is just another resolution matching the same `task <id>` text, so the LATEST-matching-resolution rule above picks it up and routes through the ordinary machinery unchanged |
+| Verification verdict `escalate` (rule D24, #152) | Escalate; pause. The verifier's own channel, mirroring the reviewer's: `**Verdict:** escalate` on the verification report means a failure traces to the spec, the plan, or the gate process. A resolution landing after the report returns the packet to the table for the G2 human, failed rows and all — there is no round to re-run, so no disposition routing applies. `pass` and `fail` never pause: `fail` is the G2 human's to weigh, and the gate surface quotes the report's verdict and its non-verified rows so a non-clean report never reads as a clean pass. Reports that predate the verdict line behave as before |
 | Implementer dispatch fails | Return the task to `pending` for its one retry; a second failure marks the task `failed` (nothing reads it as in-flight), escalates, and pauses. Resolving the escalation *after* the last failed attempt returns the task to `pending` — a fresh round supersedes the failure (issue #147). The escalation is worded from the facts: a fatal first failure says so, and `failed twice` only when the ledger shows two (#114) |
-| A role returns ok and lands nothing (#343) | Rule DL, the landing cap — `BOUNCE_CAP`'s twin. Half this table re-dispatches on the *absence* of an expected change and counts nothing, so an agent that returns `ok` without committing (an analyst that reads the decline notes and concludes the spec already answers them; a reviewer that times out without writing) is a success to the close path and a no-op to derivation, re-dispatched every tick until `cost_limit_usd` trips. The ledger already carries what is needed: per (role, task), the dispatches that closed ok and were opened after the artifact they existed to land last moved. For a producer that artifact is the gate's packet; for a task-scoped role it is the task's whole record — its work item and the reviews of it — because an implementer's real product is code, which lives outside the run directory and the observation cannot see, so the response note and the reviewer's answer to that round are the marks the round leaves here. At `LANDING_CAP` of them the engine escalates and pauses instead of dispatching, naming the role, the count and the artifact. Two facts reset the count — the artifact moving, and a human resolving that escalation — so resolve-and-resume does not walk straight back into the cap. The check sits inside the one gated dispatch path, ahead of the budget pre-flight: raising the limit is the wrong answer to a role that is not producing |
+| A role returns ok and lands nothing (#343) | Rule DL, the landing cap — `BOUNCE_CAP`'s twin. Half this table re-dispatches on the *absence* of an expected change and counts nothing, so an agent that returns `ok` without committing (an analyst that reads the decline notes and concludes the spec already answers them; a reviewer that times out without writing) is a success to the close path and a no-op to derivation, re-dispatched every tick until `cost_limit_usd` trips. The ledger already carries what is needed: per (role, task), the dispatches that closed ok and were opened after the artifact they existed to land last moved. For a producer that artifact is the gate's packet; for a task-scoped role it is the task's whole record — its work item and the reviews of it — because an implementer's real product is code, which lives outside the run directory and the observation cannot see, so the response note and the reviewer's answer to that round are the marks the round leaves here. At `LANDING_CAP` of them the engine escalates and pauses, naming the role, the count and the artifact. Two facts reset the count — the artifact moving, and a human resolving that escalation — so resolve-and-resume does not walk straight back into the cap. The check sits inside the one gated dispatch path, ahead of the budget pre-flight: raising the limit is the wrong answer to a role that is not producing |
 | Task status `in-progress` with no open ledger entry (#350) | Record the task back to `pending` (rule D25). The engine never writes `in-progress` — the contract lists it for v0 and hand-written records — and reading it as in flight made it a rest nothing could age: no dispatch behind it, no gate waiting on it, and readiness showing a run that needs nothing. With no open entry there is no work to be in the middle of, so the loop takes the task back |
 | Dispatch refused before spawn (#154, #155) | A refusal is not a failure: the ledger entry closes at `$0` with `refused: true`, counts toward no retry, and raises no escalation. The run branch held by a checkout the orchestrator does not own is caught earlier still — probed before the intent commit (rule `CH`) and deferred like the resource cap, nothing written, re-derived once the checkout is released; the heartbeat carries the condition, remedy first |
-| The same refusal twice in a row (#347, rule `RF`) | Defer. A refusal costs nothing and counts toward nothing, which is right for a one-off and unbounded for a condition that stands: the next tick derives the same dispatch, and the ledger and the branch grow by one entry and one commit per tick. So after two consecutive refusals of the same (role, task, round), with no success or real failure closed after them, the dispatch is held back like the resource cap — nothing written, the heartbeat carrying the condition and the last refusal's words. Deferred rather than paused because every pre-spawn refusal is a fact about the host, never about the run: no edit a human could make to `state.yaml` would clear it, so escalating would ask for a decision that changes none of the inputs the rule reads (the #96/#97 dead loop). It clears itself two ways — a dispatch that lands anything but a refusal resets the count, and one probe dispatch goes through per window, since nothing in the record will ever say the host is well again |
+| The same refusal twice in a row (#347, rule `RF`) | Defer. A refusal costs nothing and counts toward nothing, which is right for a one-off and unbounded for a condition that stands: the next tick derives the same dispatch, and the ledger and the branch grow by one entry and one commit per tick. So after two consecutive refusals of the same (role, task, round), with no success or real failure closed after them, the dispatch is held back like the resource cap — nothing written, the heartbeat carrying the condition and the last refusal's words. Deferred because every pre-spawn refusal is a fact about the host, never about the run: no edit a human could make to `state.yaml` would clear it, so escalating would ask for a decision that changes none of the inputs the rule reads (the #96/#97 dead loop). It clears itself two ways — a dispatch that lands anything but a refusal resets the count, and one probe dispatch goes through per window, since nothing in the record will ever say the host is well again |
 | Budget pre-flight fails (§6) | Pause `budget-exhausted`; escalate. The pause is a *condition* recomputed from the ledger and the limit, so the only resume that sticks is one that raises `cost_limit_usd` in the same commit — the frontend, the CLI and the decision planner all require it from this reason (#96). A standing condition that re-fires with the same words after its escalation was resolved re-pauses without appending a second escalation (#96) |
 | Host window exceeded (§6, rule `HB`) | Defer, like the resource cap: nothing is written, the run re-derives once the window has rolled, and the heartbeat carries the held-back runs for Gatehouse's engine chip (#97) |
 
-Every "after" in that table means **branch order** rather than a clock (issue #346). The
+Every "after" in that table means **branch order**, not a clock (issue #346). The
 commit where a human's resolution landed, against the commit that landed the
 verdict it answers; a dispatch's own intent commit, against the artifact it was
 sent to produce. Three machines stamp those facts — the one that served the
@@ -168,91 +166,84 @@ Two invariants govern every row: each action is derivable from committed files
 alone, and each action is **idempotent to re-derive** — a tick interrupted anywhere
 converges on re-run.
 
-The whole table is parameterized by the run's **profile** (DESIGN.md §4.1,
-issue #4): reduced profiles subset the gates, G2 advances to `done` rather than
-`release`, and in `patch` the plan phase has no producing role — the human
-authored the brief and work item, so there is no one to dispatch or bounce to,
-and the reviews alone are G2's packet. A profile invariant violation — a decided
+The whole table is parameterized by the run's **profile**
+(DESIGN.md §4.1, issue #4): reduced profiles subset the gates and drop the `release`
+phase, so G2 advances to `done`; in `patch` the plan phase has no producing role —
+the human authored the brief and work item, so there is no one to dispatch or bounce
+to, and the reviews alone are G2's packet. A profile invariant violation — a decided
 gate outside the profile (mid-run downgrade), a phase outside the profile's
-sequence, or a patch run with no work item — escalates (rule D21): honest
-failure, never a guess. Upgrading mid-run needs no special engine handling: the
-human edits `profile:` heavier and resumes, and the missing artifacts under the
-new profile derive as ordinary dispatches.
+sequence, or a patch run with no work item — escalates (rule D21): honest failure,
+never a guess. Upgrading mid-run needs no special engine handling: the human edits
+`profile:` heavier and resumes, and the missing artifacts under the new profile
+derive as ordinary dispatches.
 
 A consequence of statelessness worth naming: an escalation is a *pointer to a
-condition* in the committed files, and marking it resolved is an acknowledgment,
-not a change. When the condition is one a human can edit away (raise
-`cost_limit_usd`, repair the branch), the engine re-derives quiet on the next tick
-only once that edit lands — a resolution alone re-escalates, which is the engine
-nagging rather than a bug. The `escalate` verdict is the exception: it stands in an
-append-only review report no one may amend, so there the resolution itself is the
-input — the engine reads its timestamp and answers with a re-review round rather
-than a repeat escalation (issue #142). But a resolution is only ever a `state.yaml`
-edit, and marking one resolved costs nothing to type truthfully or not — so the
-engine also requires a real commit under the run directory, excluding `state.yaml`
-itself, newer than the escalate verdict before it will spend a re-review round:
-resolved with no such commit rests, naming the fix that still needs to land rather
-than burning one of the capped rounds against a byte-identical range (issue #188).
-That guard is the *default* absent an instruction otherwise — a human resolving
-the escalation may instead name a `disposition` (issue #189), a machine-actionable
-route captured in the same resolve decision as the free-text note: `re-review`
-tells the engine the condition is addressed and to verify now, bypassing the
-guard as an explicit override (the human's judgment stands in for the commit
-check); `return-to-implement` routes the task back to the implementer with the
-review report first — or straight to a verify round, if the implementer already
-responded since the resolution landed — mirroring the request-changes
-turn-taking but keyed off the resolution's timestamp rather than the review's;
-`re-plan` names a surface or decomposition defect no task's `file_contact_surface`
-can absorb (issue #190) and sends it to the architect instead — dispatched in
-amendment mode with the review report path and the resolution note (rule D22),
-same in-flight/budget-gated dispatch path as any other producer. The architect
-may widen a task's `file_contact_surface` in amendment mode (roles/architect.md),
-but the widening does not take effect silently: once it lands (`plan.md` or a
-`tasks/*.yaml` touched newer than the resolution), the engine raises a *fresh*
-escalation naming `task <id>` and pauses (rule D23) rather than resuming
-unattended — the agent proposes, the named human still disposes. Resolving that
-acknowledgment escalation (typically `return-to-implement`) is, to the engine,
-just one more resolution whose reason happens to match the same `task <id>`
-text, so the "latest matching resolution" rule immediately above composes
-correctly without any special case: it becomes the new latest match and routes
-through the ordinary `return-to-implement`/`re-review` machinery unchanged.
-When more than one resolution matches (a human may acknowledge, then later
-resolve with a disposition), only the latest one's disposition governs. A
-twice-failed implementer task is the same shape as the disposition-less
-default: the failed ledger entries are append-only facts, so the resolution's
-timestamp is the input — resolved after the last failure, the task returns to
-`pending` for a fresh round (issue #147).
+condition* in the committed files, and marking it resolved is only an acknowledgment.
+When the condition is one a human can edit away (raise `cost_limit_usd`, repair the
+branch), the engine re-derives quiet on the next tick only once that edit lands — a
+resolution alone re-escalates, which is the engine nagging as designed. The `escalate`
+verdict is the exception: it stands in an append-only review report no one may amend,
+so there the resolution itself is the input — the engine reads its timestamp and
+answers with a re-review round (issue #142). But a resolution is only ever a
+`state.yaml` edit, and marking one resolved costs nothing to type truthfully or not —
+so the engine also requires a real commit under the run directory, excluding
+`state.yaml` itself, newer than the escalate verdict before it will spend a re-review
+round: resolved with no such commit rests, naming the fix that still needs to land
+(issue #188). That guard is the *default* absent an instruction otherwise — a human
+resolving the escalation may instead name a `disposition` (issue #189), a
+machine-actionable route captured in the same resolve decision as the free-text note:
+`re-review` tells the engine the condition is addressed and to verify now, bypassing
+the guard as an explicit override (the human's judgment stands in for the commit
+check); `return-to-implement` routes the task back to the implementer with the review
+report first — or straight to a verify round, if the implementer already responded
+since the resolution landed — mirroring the request-changes turn-taking but keyed off
+the resolution's own timestamp; `re-plan` names a surface or decomposition defect no
+task's `file_contact_surface` can absorb (issue #190) and sends it to the architect
+instead — dispatched in amendment mode with the review report path and the resolution
+note (rule D22), same in-flight/budget-gated dispatch path as any other producer. The
+architect may widen a task's `file_contact_surface` in amendment mode
+(roles/architect.md), but the widening does not take effect silently: once it lands
+(`plan.md` or a `tasks/*.yaml` touched newer than the resolution), the engine raises a
+*fresh* escalation naming `task <id>` and pauses (rule D23): the agent proposes, the
+named human still disposes. Resolving that acknowledgment escalation (typically
+`return-to-implement`) is, to the engine, just one more resolution whose reason
+happens to match the same `task <id>` text, so the "latest matching resolution" rule
+immediately above composes correctly without any special case: it becomes the new
+latest match and routes through the ordinary `return-to-implement`/`re-review`
+machinery unchanged. When more than one resolution matches (a human may acknowledge,
+then later resolve with a disposition), only the latest one's disposition governs. A
+twice-failed implementer task is the same shape as the disposition-less default: the
+failed ledger entries are append-only facts, so the resolution's timestamp is the
+input — resolved after the last failure, the task returns to `pending` for a fresh
+round (issue #147).
 
 ### 4.3 Writes: the same discipline as the frontend
 
-Read at tip; comment-preserving edit (the `yaml` document API, not
-re-serialization); blob/tree/commit via plumbing; `update-ref` compare-and-swap.
-CAS refusal (a human decided mid-tick, an agent committed) → discard, re-tick. Two
-additions specific to a machine writer:
+Read at tip; comment-preserving edit (the `yaml` document API); blob/tree/commit via
+plumbing; `update-ref` compare-and-swap. CAS refusal (a human decided mid-tick, an
+agent committed) → discard, re-tick. Two additions specific to a machine writer:
 
 - **Distinct identity.** Orchestrator commits are authored by a dedicated bot
-  identity — one per orchestrator install rather than per repo (resolved question 4) —
-  never a person's `git config`. Gate entries are written only by named
-  humans (AGENTS.md convention); provenance must make machine bookkeeping and human
-  decisions distinguishable at a glance.
+  identity — one per orchestrator install (resolved question 4) — never a
+  person's `git config`. Gate entries are written only by named humans (AGENTS.md
+  convention); provenance must make machine bookkeeping and human decisions
+  distinguishable at a glance.
 - **Reserved grammar.** Commit messages follow the frontend's structured form —
   `state(<slug>): <verb> …` — with the orchestrator using its own verbs
   (`dispatched`, `bounced`, `advanced`, `escalated`, `paused`, `metered`,
   `harvested`) and never the human decision grammar (`G2 approved by <name> …`),
   which the metrics reader treats as authoritative for decisions.
 
-When the resolved deployment mode pushes at all, both writers carry their
-commits to origin themselves. The engine pushes with each bookkeeping commit
-(`--push`, #103), and zero-config frontend sources push human decisions in the
-same write whenever the repo has an origin (#149) — a decision that only
-landed locally would otherwise wait on the engine's next commit to reach
-origin, and an engine at rest never commits, so the viewer and origin consumers
-would silently see different runs. Any residual divergence is surfaced, not
-hidden: run summaries carry an ahead-of-origin commit count, shown as an
-"unpushed" badge in Gatehouse. Under the **local-only** topology
-(docs/TOPOLOGY.md §3.6) neither writer pushes, and origin is never fetched
-either — both writers still commit locally, as above, but the
-push/fetch half of this section does not apply.
+When the resolved deployment mode pushes at all, both writers carry their commits to
+origin themselves. The engine pushes with each bookkeeping commit (`--push`, #103),
+and zero-config frontend sources push human decisions in the same write whenever the
+repo has an origin (#149) — a decision that only landed locally would otherwise wait
+on the engine's next commit to reach origin, and an engine at rest never commits, so
+the viewer and origin consumers would silently see different runs. Any residual
+divergence is surfaced: run summaries carry an ahead-of-origin commit count, shown as
+an "unpushed" badge in Gatehouse. Under the **local-only** topology (docs/TOPOLOGY.md
+§3.6) neither writer pushes, and origin is never fetched either — both writers still
+commit locally, as above, but the push/fetch half of this section does not apply.
 
 ### 4.4 Dispatch protocol: commit-then-launch
 
@@ -307,41 +298,38 @@ later reader can actually probe. What the sweep guarantees:
   log, which is also the clearest signal available that two engines are pointed at
   one set of runs.
 
-Pid reuse is the acknowledged gap: a recycled pid reads as alive, and the entry
-waits out the role timeout instead of five minutes. That is the safe direction —
-late recovery, never a double dispatch — and it costs nothing on the blessed
-topology, where there is one engine per machine.
+Pid reuse is the acknowledged gap: a recycled pid reads as alive, and the entry waits
+out the whole role timeout. That is the safe direction — late recovery, never a double
+dispatch — and it costs nothing on the blessed topology, where there is one engine per
+machine.
 
 ### 4.5 Pause and resume
 
-`phase: paused` — written by a human (frontend, CLI, hand edit) or by the
-orchestrator itself (caps) — means: no new dispatches. In-flight jobs run to
-completion and their artifacts land harmlessly on the run branch, whatever the
-reason; a budget pause stops the *next* dispatch, never the one already paid
-for. And the engine never un-closes a run: a dispatch that closes after a human
-closed the run meters its usage and finishes its own task's bookkeeping, and
-writes nothing about the run itself — no escalation, no `phase`, no
-`paused_reason`. The task status is the dispatch's own record rather than the
-run's, and a task left at `dispatched` with nothing in flight would strand a
-reopened run, so it is handed back the way it would be on a live run. Resume is
-a human writing `phase` back (the frontend's resume control already derives the
-phase from the gate ledger); the watcher turns that commit into a tick.
-**`state.yaml` is the entire control plane, in both directions** — there is no
-orchestrator API, config channel, or command queue to keep consistent with it.
+`phase: paused` — written by a human (frontend, CLI, hand edit) or by the orchestrator
+itself (caps) — means: no new dispatches. In-flight jobs run to completion and their
+artifacts land harmlessly on the run branch, whatever the reason; a budget pause stops
+the *next* dispatch, never the one already paid for. And the engine never un-closes a
+run: a dispatch that closes after a human closed the run meters its usage and finishes
+its own task's bookkeeping, and writes nothing about the run itself — no escalation,
+no `phase`, no `paused_reason`. The task status is the dispatch's own record, and a
+task left at `dispatched` with nothing in flight would strand a reopened run, so it is
+handed back the way it would be on a live run. Resume is a human writing `phase` back
+(the frontend's resume control already derives the phase from the gate ledger); the
+watcher turns that commit into a tick. **`state.yaml` is the entire control plane, in
+both directions** — there is no orchestrator API, config channel, or command queue to
+keep consistent with it.
 
-That sentence cuts both ways (#96). A pause the orchestrator wrote for a
-condition it recomputes every tick — `budget-exhausted` from the ledger and
-`cost_limit_usd`, `slug-landed` from the default branch — cannot be resumed out
-of by a human disposition alone, because the disposition changes no fact the
-rule reads: the next tick re-derives the same pause, and each cycle costs two
-decisions and one more escalation entry. So the resume from `budget-exhausted`
-*carries the budget decision*: a new `cost_limit_usd`, higher than the current
-one, written in the same CAS commit as the phase restore, and refused without
-it. The human changes the fact, rather than the rule. `slug-landed` has no fact to
-change — the run cannot become un-merged — so its card says the one thing that
-works: close the run with a disposition and carry the remaining work on a fresh
-slug. And the pause card's instruction follows the reason rather than reading
-"resume or decline" for all of them.
+That sentence cuts both ways (#96). A pause the orchestrator wrote for a condition it
+recomputes every tick — `budget-exhausted` from the ledger and `cost_limit_usd`,
+`slug-landed` from the default branch — cannot be resumed out of by a human
+disposition alone, because the disposition changes no fact the rule reads: the next
+tick re-derives the same pause, and each cycle costs two decisions and one more
+escalation entry. So the resume from `budget-exhausted` *carries the budget decision*:
+a new `cost_limit_usd`, higher than the current one, written in the same CAS commit as
+the phase restore, and refused without it. The human changes the fact. `slug-landed`
+has no fact to change — the run cannot become un-merged — so its card says the one
+thing that works: close the run with a disposition and carry the remaining work on a
+fresh slug. And the pause card's instruction follows the reason.
 
 #### Closing a run (#200)
 
@@ -350,18 +338,17 @@ reaches `phase: closed` and carries a `closure` block naming a typed disposition
 `already-delivered`, `superseded`, `obsolete`, or `abandoned`, plus a required
 reason and the named human who decided it.
 
-The disposition is typed rather than free text because the distinction lives in the
-human's head at closing time and nowhere in the record. A run whose work shipped by
-another path succeeded; recording that in the same state as a run someone walked
-away from would flatten it into "gave up" in the one place the project treats as its
-audit trail. An untyped closure can never be re-derived into these categories later.
+The disposition is typed because the distinction lives in the human's head at closing
+time and nowhere in the record. A run whose work shipped by another path succeeded;
+recording that in the same state as a run someone walked away from would flatten it
+into "gave up" in the one place the project treats as its audit trail. An untyped
+closure can never be re-derived into these categories later.
 
 Three rules follow from it:
 
 * **The engine never closes a run.** Closing is a human decision, so `closure` joins
   `gates.*` on the list of things the orchestrator only reads. The engine's own
-  terminal move is still `pause`, which asks for a human rather than answering for
-  one.
+  terminal move is still `pause`, which asks for a human.
 * **A closed run rests under D1**, ahead of the escalation and round-cap rules. A
   closure answers everything inside the run at once, so a closed run with an open
   escalation raises nothing — asking a human to resolve an escalation on a run they
@@ -373,15 +360,15 @@ Three rules follow from it:
 
 ### 4.6 Scheduled roles: the Historian sweep
 
-Some roles run on a schedule rather than at a gate — the Historian (DESIGN.md §3) sweeps the
-interval since its last run and reconciles docs, changelog, and tracker with the run
-record. The orchestrator derives these dispatches the same way it derives everything
-else: from committed files, on the same tick.
+Some roles run on a schedule — the Historian (DESIGN.md §3) sweeps the interval since
+its last run and reconciles docs, changelog, and tracker with the run record. The
+orchestrator derives these dispatches the same way it derives everything else: from
+committed files, on the same tick.
 
 Schedules live in **`orchestrator.yaml` at the repository root**, read at the
-default-branch tip like the registry. This is committed project policy rather than a runtime
-command channel — any orchestrator instance pointed at the repo derives the same
-sweeps, and changing the cadence is a reviewed commit:
+default-branch tip like the registry. This is committed project policy — any
+orchestrator instance pointed at the repo derives the same sweeps, and changing the
+cadence is a reviewed commit:
 
 ```yaml
 schedules:
@@ -404,9 +391,9 @@ interval derivable.
 
 The schedule rules mirror the D-table's discipline (one test per row, S0–S4 + SB in
 `schedule.ts`): a schedule rests while a sweep for its role is open — dispatched,
-failed, or awaiting review — so sweeps never pile up on an unmerged predecessor, and
-a role's estimate exceeding its schedule's cap is a config defect that skips with a
-warning rather than dispatching (pause-don't-degrade, applied to schedules).
+failed, or awaiting review — so sweeps never pile up on an unmerged predecessor, and a
+role's estimate exceeding its schedule's cap is a config defect that skips with a
+warning (pause-don't-degrade, applied to schedules).
 
 ### 4.7 Invariants of the loop
 
@@ -533,7 +520,7 @@ autonomy multiplies the cost of a missing meter. The design:
   `cost_limit_usd`; projected exceedance → pause `budget-exhausted` + escalation.
   Pause-don't-degrade, unchanged. Resuming from that pause requires a higher
   `cost_limit_usd` in the same commit (§4.5, #96).
-- **The host ceiling is a rate, rather than a lifetime** (#97). `--spend-limit-usd`
+- **The host ceiling is a rolling-window rate** (#97). `--spend-limit-usd`
   bounds what the deployment spends per rolling window (`--spend-window`,
   default 24 hours): closed ledger entries opened inside the window at their
   real cost, plus every open entry at its estimate, across every active run.
@@ -541,12 +528,11 @@ autonomy multiplies the cost of a missing meter. The design:
   a run leaves the sum only when its branch lands, so a static cap was reached
   once and never left — the host was bricked by its own history, and the
   binding number lived in a process flag no run's `state.yaml` could reach.
-  A window clears itself, which changes the guard's kind: rule `HB` *defers*
-  a dispatch that would cross it — nothing written, the run re-derived once
-  the window has moved — as the resource cap does, instead of pausing
-  the run that happened to ask and escalating a host-level condition into one
-  run's record. The heartbeat carries the held-back runs (`deferrals`), and
-  Gatehouse shows them on the engine chip, at the level the condition lives.
+  A window clears itself, which changes the guard's kind: rule `HB` *defers* a
+  dispatch that would cross it — nothing written, the run re-derived once the window
+  has moved — as the resource cap does. The heartbeat carries the held-back runs
+  (`deferrals`), and Gatehouse shows them on the engine chip, at the level the
+  condition lives.
 - **A refusal meters nothing** (#155). A dispatch that never spawned a process
   — a held checkout, a preflight error — closes its ledger entry at `$0`, marked
   `refused`, so `cost_spent_usd` carries no fictional spend. Only a dispatch
@@ -554,10 +540,10 @@ autonomy multiplies the cost of a missing meter. The design:
   estimate, because tokens may have burned.
 - **Enforcement is a switch; metering is not** (#109). `--no-budget-enforcement`
   disables the cap pauses — per-run, `--require-budget`, and `--spend-limit-usd`
-  alike — for operators whose harness bills flat-rate, where dollar caps don't
-  map to marginal cost. The ledger, `cost_spent_usd`, and token counts record
-  regardless: pause-don't-degrade governs enforcement rather than measurement. Default
-  is on, and an opted-out orchestrator says so loudly at startup.
+  alike — for operators whose harness bills flat-rate, where dollar caps don't map
+  to marginal cost. The ledger, `cost_spent_usd`, and token counts record
+  regardless: pause-don't-degrade governs enforcement. Default is on, and an
+  opted-out orchestrator says so loudly at startup.
 - **v0 benefits immediately.** The ledger contract lands first (M0); a human
   orchestrator appends a ledger entry from harness usage output — a smaller, more
   concrete ask than maintaining a total, and the shape v1 automates. The
@@ -593,8 +579,8 @@ true, stated once so implementation and review can check against them:
    un-approved gate, and only while the run stands in one of the phases that
    gate is decided in (a paused run is judged by the phase a resume would
    restore). Gatehouse offered nothing else; since #344 the CLI and the API
-   refuse it too, and the PR-approval sync obeys the same rule rather than
-   copying an early Approve on the draft PR into an undecided G2. An approval
+   refuse it too, and the PR-approval sync obeys the same rule, so an early
+   Approve on the draft PR never lands in an undecided G2. An approval
    that can be written out of order is one a verifier cannot trust.
 
 Deferred frontend nice-to-haves — explicitly *not* required for v1: a clarifying
@@ -643,12 +629,11 @@ the derivation rules' dispatch half, the seam, the metering normalizer, the trig
 
 ## 10. Trust ladder: milestones with promotion criteria
 
-DESIGN.md §7's promotion criterion — gate reviews have become confirmations rather
-than corrections — gates *autonomy* rather than design. The milestones front-load
-trust-building and measurement, and defer autonomy until it is earned. The frontend
-supplies the measurement for free: the burden field it records on every gate
-decision is the "confirmation vs correction" signal, so the promotion bar
-is now checkable from metrics rather than vibes.
+DESIGN.md §7's promotion criterion — gate reviews that have become confirmations —
+gates *autonomy*. The milestones front-load trust-building and measurement, and
+defer autonomy until it is earned. The frontend supplies the measurement for free:
+the burden field it records on every gate decision is the "confirmation vs
+correction" signal, so the promotion bar is now checkable from metrics.
 
 | # | Milestone | Contents | Exit criterion |
 |---|---|---|---|
@@ -658,11 +643,10 @@ is now checkable from metrics rather than vibes.
 | M3 | Cross-vendor dispatch | copilot-cli headless dispatcher; `avoid_vendor_of` enforced at dispatch time | A run's Reviewer and Verifier demonstrably execute on a different vendor than its Implementer |
 | M4 | Hardening | Crash-recovery drill; per-task worktree isolation; trigger packaging (cron/launchd template); WALKTHROUGH v1 section | Killing the orchestrator mid-dispatch and restarting converges with no duplicate dispatch; a second operator can run v1 cold from the docs |
 
-**The autonomy gate:** M2 does not begin until the §7 promotion criterion is
-credibly met — sustained majority-`confirmation` burden across v0 gate decisions.
-M0–M1 are design and spike work, sanctioned early (they sharpen v0 rather than
-bypass it: M0 gives v0 a real ledger, M1's shadow disagreements are free design
-review).
+**The autonomy gate:** M2 does not begin until the §7 promotion criterion is credibly
+met — sustained majority-`confirmation` burden across v0 gate decisions. M0–M1 are
+design and spike work, sanctioned early (they sharpen v0: M0 gives v0 a real ledger,
+and M1's shadow disagreements are free design review).
 
 **Host-repo deployment is designed for; it isn't built yet.** Triggers are already an
 interface; a CI-triggered variant (scheduled + event-dispatched workflows) slots in
@@ -676,11 +660,11 @@ Extends DESIGN.md §9 for the autonomous mode:
 
 | Failure mode | Mitigation |
 |---|---|
-| Duplicate dispatch (two instances, crash-restart, racing ticks) | Commit-then-launch: the intent is a CAS commit, which serializes the *commit* — racing ticks lose it and rest. The *job* is guarded separately (§4.4, #349): the entry names the process that opened it, so the stale sweep ages its own entries, unnamed ones, and entries whose named pid is gone from this machine after `staleMs`, and everything else — another live engine here, or any engine on a host this one cannot probe — only after `roleTimeoutMs + staleMs`, past which no live job can still be behind it. A crash or a §13 self-supersede restart therefore recovers inside one stale window, while a second engine against the same runs no longer ages the first one's live dispatches out from under it. It stays a forbidden topology (TOPOLOGY.md §3.1) that nothing enforces; the sweep now logs it rather than acting on it |
+| Duplicate dispatch (two instances, crash-restart, racing ticks) | Commit-then-launch: the intent is a CAS commit, which serializes the *commit* — racing ticks lose it and rest. The *job* is guarded separately (§4.4, #349): the entry names the process that opened it, so the stale sweep ages its own entries, unnamed ones, and entries whose named pid is gone from this machine after `staleMs`, and everything else — another live engine here, or any engine on a host this one cannot probe — only after `roleTimeoutMs + staleMs`, past which no live job can still be behind it. A crash or a §13 self-supersede restart therefore recovers inside one stale window, while a second engine against the same runs no longer ages the first one's live dispatches out from under it. It stays a forbidden topology (TOPOLOGY.md §3.1) that nothing enforces; the sweep now logs it and leaves it alone |
 | Orchestrator races a human decision | CAS refusal → re-tick; both writers already treat refusal as the designed outcome |
-| Runaway spend | Every model invocation flows through the metered seam; pre-flight cap; pause-don't-degrade. Resume from the budget pause carries a higher limit or is refused (#96); the host ceiling is a per-window rate that defers rather than pauses (#97) |
+| Runaway spend | Every model invocation flows through the metered seam; pre-flight cap; pause-don't-degrade. Resume from the budget pause carries a higher limit or is refused (#96); the host ceiling is a per-window rate that defers the dispatch (#97) |
 | Run branch held by a human's checkout (#154) | The workspace preflight refuses to dispatch into a checkout the orchestrator does not manage — an agent there would race the human's edits. Deterministic and environmental, so it is neither the role's failure nor a retry's business: rule `CH` probes for it before the intent commit and defers (written nowhere, re-derived once released), and the rare refusal that slips past the probe closes its ledger entry at `$0`, `refused`, counting toward nothing (#155). Counting toward nothing also means nothing stops it repeating, so any pre-spawn refusal that stands — this one, a broken framework root, a dispatcher that will not spawn — is bounded by rule `RF` after two in a row: deferred like `CH`, re-probed once a window, never escalated, since no edit to the run's record could clear a condition of the host (#347) |
-| Runaway *resource* use (the host, rather than the budget) | Dispatch concurrency cap across all runs (default 2; `--max-concurrent-dispatches`, `0` disables). Each dispatch carries an agent process, a cold dependency install, and a full suite run, so it is concurrency, rather than cost, that exhausts the machine. Unlike a budget ceiling this never escalates: no human decision unblocks it and it clears itself as jobs finish, so a capped dispatch is deferred (rule `MC`), written nowhere, and re-derived on a later tick |
+| Runaway *resource* use on the host | Dispatch concurrency cap across all runs (default 2; `--max-concurrent-dispatches`, `0` disables). Each dispatch carries an agent process, a cold dependency install, and a full suite run, so concurrency is what exhausts the machine. Unlike a budget ceiling this never escalates: no human decision unblocks it and it clears itself as jobs finish, so a capped dispatch is deferred (rule `MC`), written nowhere, and re-derived on a later tick |
 | A run continuing past its own merge (slug reuse, #213) | A slug is used once. `runs/<slug>/` on the default branch means the run has shipped, so its record there is the durable one: the source classifies an identical record as historical — by ancestry for a merge commit, by record identity for a squash or rebase merge, which leaves no ancestry to find — and the engine refuses to dispatch or advance a branch that kept committing after its merge (rule `LR`), pausing it `slug-landed` for a human. Neither a ceiling to raise nor a condition that clears itself: the remaining work needs a fresh slug. Staging refuses the slug outright |
 | Agent returns without producing (#343) | A dispatch that closes `ok` and commits nothing is invisible to derivation, which re-derives the same dispatch on the next tick. Rule DL bounds it the way `BOUNCE_CAP` bounds a malformed artifact: `LANDING_CAP` closed-ok dispatches for the same (role, task) with the expected artifact untouched since escalate and pause, naming the role and what it did not land. A task-scoped role's record is read whole — work item plus reviews — so a round that landed code and no response note still counts as having produced something. The artifact moving, or a human resolving that escalation, resets the count |
 | Hung or stuck dispatch job | Per-role wall-clock timeout (default 30 min; `--role-timeout`) → kill the harness's whole process group, re-dispatch once, then escalate. The group kill matters: a surviving child would keep spending and hold the stdio pipes open, delaying the closing commit |
@@ -710,12 +694,11 @@ sections above. Recorded here so the reasoning survives:
 
 ## 13. Merge-update lifecycle (self-supersede)
 
-An orchestrator process loads its own code once, at start, from the checkout
-it runs in. A `git pull` that lands after that — a human merging a framework
-fix under a running engine — does nothing on its own; the running process
-keeps executing the code it already has in memory. This section is the
-mechanism (#141) that turns that staleness into a bounded, self-detected
-process replacement instead of a silent drift nobody notices.
+An orchestrator process loads its own code once, at start, from the checkout it runs
+in. A `git pull` that lands after that — a human merging a framework fix under a
+running engine — does nothing on its own; the running process keeps executing the code
+it already has in memory. This section is the mechanism (#141) that turns that
+staleness into a bounded, self-detected process replacement.
 
 **Deployment model.** The blessed topology (#100/#112, [TOPOLOGY.md](TOPOLOGY.md)
 §3.1) is one checkout, co-located: the server, the engine, and the CLI are one
@@ -725,16 +708,15 @@ installed `gateline` binary `npm link`ed to that checkout's
 "update the code" reduces to "advance that one checkout" — no fleet of
 processes to reconcile against each other.
 
-**What is monitored.** Not a configured run source — the *code tree*, the git
-checkout that owns the running module's own source, resolved from
-`import.meta.url` (`resolveCodeRepo` in `@gateline/core`). Under the co-located
-default this is the same clone the engine reconciles runs against; under a
-host-repo setup (INTEGRATION.md) it need not be, and it is the code tree's
-staleness that matters here. When the running module isn't inside a git
-checkout at all — installed from a published package, or (as on the hosted
-Fly recipe, DEPLOY.md) baked into a container image with no `.git` above it
-— `resolveCodeRepo` returns null, no monitor is constructed, and this whole
-section is inert: there is nothing to watch.
+**What is monitored.** The *code tree*: the git checkout that owns the running
+module's own source, resolved from `import.meta.url` (`resolveCodeRepo` in
+`@gateline/core`). Under the co-located default this is the same clone the engine
+reconciles runs against; under a host-repo setup (INTEGRATION.md) it need not be,
+and it is the code tree's staleness that matters here. When the running module isn't
+inside a git checkout at all — installed from a published package, or (as on the
+hosted Fly recipe, DEPLOY.md) baked into a container image with no `.git` above it —
+`resolveCodeRepo` returns null, no monitor is constructed, and this whole section is
+inert: there is nothing to watch.
 
 **Operator flow.** `git pull` in the checkout — by hand, or via `gateline
 upgrade` (below) — is the only input; the engine never pulls on its own.
@@ -763,21 +745,19 @@ the written `codeState` collapses it into `superseded-pending` ("pending
 restart" is the only steady state left to describe).
 
 **Guardrails.**
-- Only a clean fast-forward of the default branch counts as an update.
-  Anything else — dirty tree, in-progress rebase/merge, branch switch,
-  detached HEAD, or history that isn't a fast-forward of the commit the
-  process started on — is `paused` rather than superseded, and the engine never
-  dispatches on mixed code.
-- **Debounce.** A fast-forward must be observed on two consecutive boundary
-  checks before it is confirmed, so a heartbeat racing a `git pull` still in
-  progress reads `superseded-pending` once rather than firing early on a
-  half-updated tree.
-- **`paused` is deliberate idling: no silent hang.** The heartbeat keeps
-  writing while paused (`codeState: 'paused'`, plus `codeReason` carrying the
-  monitor's specific cause), and Gatehouse's drift chip renders that reason —
-  which branch, which conflict — rather than a generic message, as a distinct,
-  stronger-tone pill beside the engine outage banner; a paused engine reads
-  differently from a dead one, and points at the actual fix.
+- Only a clean fast-forward of the default branch counts as an update. Anything else —
+  dirty tree, in-progress rebase/merge, branch switch, detached HEAD, or history that
+  isn't a fast-forward of the commit the process started on — is `paused`, and the
+  engine never dispatches on mixed code.
+- **Debounce.** A fast-forward must be observed on two consecutive boundary checks
+  before it is confirmed, so a heartbeat racing a `git pull` still in progress reads
+  `superseded-pending` once and fires nothing on a half-updated tree.
+- **`paused` is deliberate idling: no silent hang.** The heartbeat keeps writing
+  while paused (`codeState: 'paused'`, plus `codeReason` carrying the monitor's
+  specific cause), and Gatehouse's drift chip renders that reason — which branch,
+  which conflict — as a distinct, stronger-tone pill beside the engine outage
+  banner; a paused engine reads differently from a dead one, and points at the
+  actual fix.
 
 **What stays human-owned.** The engine never calls `git pull`; the update
 input is always an operator action (a manual pull, or `gateline upgrade`).
@@ -800,7 +780,7 @@ launchd example plist for this deployment is deliberately deferred (tracked
 on #141); `packages/orchestrator/README.md`'s trigger-packaging
 section carries one for `tick`, which doesn't need updating for this.
 
-**`gateline upgrade`.** Convenience layered over the same mechanism, rather than a second one:
+**`gateline upgrade`.** Convenience layered over the same mechanism:
 refuses on a dirty tree, `git pull --ff-only`, then `npm install` — and,
 when the workspace carries the web app, `npm run build`: the server serves
 `packages/web/dist`, the one part of the tree that does not run from

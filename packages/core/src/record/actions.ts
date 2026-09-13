@@ -3,14 +3,18 @@
 // and metrics reader depend on. Legality is checked against the current state
 // before any write is attempted.
 import type { Document } from 'yaml'
+import { isOpenDispatch, parseLedger, ROLE_TIMEOUT_MS } from './ledger.ts'
 import {
   BUDGET_REASON,
   BURDENS,
   CLOSED_PHASE,
   CLOSURES,
+  decisionPhase,
   deriveResumePhase,
   DISPOSITIONS,
+  gateProducer,
   gateUndecided,
+  pendingGateAt,
   phaseAfterGate,
   PHASES,
   PROFILE_GATES,
@@ -108,6 +112,8 @@ export function planDecision(state: RunState, input: DecisionInput, who: Identit
         throw new DecisionError(
           entry.approved ? `${gate} is already approved (by ${entry.by})` : `${gate} was declined by ${entry.by}; resume the run to re-open it`,
         )
+      requireOnTheTable(state, gate)
+      requireProducerAtRest(state, gate)
       if (!input.burden || !BURDENS.includes(input.burden))
         throw new DecisionError(`approve requires a burden category (${BURDENS.join(' | ')}) — it is the pilot's headline metric`)
       const hold = input.hold === true
@@ -142,6 +148,7 @@ export function planDecision(state: RunState, input: DecisionInput, who: Identit
       const gate = requireGate(state, input)
       const entry = state.gates[gate]
       if (!gateUndecided(entry)) throw new DecisionError(`${gate} is already decided (by ${entry.by})`)
+      requireOnTheTable(state, gate)
       const reason = input.notes?.trim()
       if (!reason) throw new DecisionError('decline requires a reason — it is the correction channel back to the producing role')
       const at = nowIso()
@@ -304,6 +311,78 @@ export function planDecision(state: RunState, input: DecisionInput, who: Identit
       }
     }
   }
+}
+
+/**
+ * A gate is decided in its own phase, and only once every gate before it is
+ * approved (#344).
+ *
+ * Without this a `gateline approve <slug> G2` at phase `spec` was accepted and
+ * the advance wrote `phase: release` — implement, its reviews and its
+ * verification skipped, under a well-formed audit trail. Gatehouse only ever
+ * offered the pending gate, so the hole was the CLI and the API: the two
+ * surfaces that write the record directly. An approval that can be written out
+ * of order is one a verifier cannot trust (#129).
+ *
+ * Which phase counts is `decisionPhase`'s question, and it is generous where
+ * the record is merely mid-transition: a paused run is decided against the
+ * phase a resume would restore, because pausing is how a run waits for exactly
+ * this decision, and a phase that lags its own gate ledger is judged by the
+ * ledger. A *staged* run is refused outright: nothing has been produced for any
+ * gate yet, and arming is what starts it.
+ */
+function requireOnTheTable(state: RunState, gate: GateId): void {
+  const slug = state.run
+  if (state.phase === 'paused' && state.paused_reason === STAGED_REASON)
+    throw new DecisionError(`${slug} is staged and not yet armed — there is no packet to decide; arm it first (\`gateline arm ${slug}\`)`)
+  const phase = decisionPhase(state)
+  const pending = pendingGateAt(state, phase)
+  if (pending === gate) return
+  const where = state.phase === 'paused' ? `paused, and a resume would put it back in phase "${phase}"` : `in phase "${state.phase}"`
+  throw new DecisionError(
+    `${slug} is ${where}, where ${gate} is not on the table — ${pending ? `${pending} is the gate awaiting a decision` : 'no gate is pending'}. ` +
+      'Gates are decided in phase order; deciding this one from here would settle a phase the run has not run',
+  )
+}
+
+/**
+ * An approval must not land on a packet that is already being replaced (#351).
+ *
+ * Decline a gate and resume: the engine re-dispatches the producing role with
+ * the notes (ORCHESTRATOR.md §4.2, rule D9) and holds an open ledger entry for
+ * it until the new artifact lands. Approving in that window signs the packet
+ * the redo is about to overwrite, and the redo then lands an artifact nobody
+ * approved under an approved gate. Gatehouse has withheld the button since
+ * #159 on exactly this signal; this is the same refusal for the CLI and the API.
+ *
+ * The entry is aged, not trusted forever, and by the same constant the gate
+ * card ages it by: an open entry older than `ROLE_TIMEOUT_MS` is one the engine
+ * would already have killed and swept, so it means the engine is gone rather
+ * than that an agent is working — and refusing a decision on the word of a dead
+ * process is the worse failure.
+ *
+ * One narrower reading than the card's, on purpose. The card also compares the
+ * entry against the packet's commit time and ignores anything older, which this
+ * layer cannot do: `planDecision` is a pure function of `state.yaml` and has no
+ * repository to ask when the artifact landed. So a still-open dispatch that
+ * already committed its artifact is refused here for the minutes before the
+ * engine's drain closes the entry. That is a self-clearing wait with a message
+ * saying so, in the direction that costs a re-try rather than a bad record.
+ */
+function requireProducerAtRest(state: RunState, gate: GateId): void {
+  const producer = gateProducer(gate, state.profile)
+  if (!producer) return
+  const open = parseLedger(state).find((e) => {
+    if (e.role !== producer.role || !isOpenDispatch(e) || e.refused || e.at === null) return false
+    const at = Date.parse(e.at)
+    return Number.isFinite(at) && Date.now() - at < ROLE_TIMEOUT_MS
+  })
+  if (!open) return
+  throw new DecisionError(
+    `the ${producer.role} is in flight for ${gate} — a new ${producer.artifact} is coming, so the packet on the branch is about to be ` +
+      `superseded and approving it would sign an artifact the redo overwrites. Wait for it to land; if that dispatch was lost, the engine ` +
+      `ages the entry out within ${Math.round(ROLE_TIMEOUT_MS / 60_000)} minutes and ${gate} is decidable again`,
+  )
 }
 
 function requireGate(state: RunState, input: DecisionInput): GateId {

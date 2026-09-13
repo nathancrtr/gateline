@@ -2,9 +2,9 @@
 // run branch, a scriptable FakeDispatcher standing in for a harness (its
 // script plays the agent: write artifacts, commit, report usage), and a
 // reconcile loop that drives the engine to a fixed point.
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { hostname, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { expect } from 'vitest'
 import { LocalGitSource, planDecision, type DecisionInput, type RunRef } from '@gateline/core'
@@ -13,6 +13,21 @@ import type { Registry } from '../src/registry.ts'
 import type { Dispatcher, DispatchOutcome, DispatchRequest } from '../src/seam.ts'
 
 export const HUMAN = { name: 'Toy Operator', email: 'op@example.test' }
+
+/**
+ * An engine identity (#349) naming a process that has already exited on this
+ * host — what a crashed engine's open ledger entries carry once the machine
+ * has moved on, and the thing a restart's sweep probes for. `spawnSync` only
+ * returns after the child is reaped, so its pid is genuinely free.
+ *
+ * A crash drill needs this because two `Engine`s built in one test process are
+ * two live processes as far as the sweep can tell: without it, the "restart"
+ * would be politely waiting out the role timeout for an engine that is, in
+ * literal truth, still running.
+ */
+export function deadEngineId(): string {
+  return `${hostname()}:${spawnSync(process.execPath, ['-e', '']).pid}`
+}
 
 export const TEST_REGISTRY: Registry = {
   profiles: {

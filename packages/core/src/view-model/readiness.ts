@@ -7,12 +7,19 @@
 //                verification-report.md present ∧ ¬G2
 //   G3 ready     phase=release    ∧ release-plan.md present ∧ ¬G3
 //   Escalation   any escalations[] entry with resolved: false
-//   Round-cap    any task review_rounds ≥ 3 ∧ status not complete
+//   Round-cap    any task review_rounds ≥ 3 ∧ status not complete ∧ no
+//                resolution made after the latest review grants it another
+//                round (#342 — the engine's rule D4 reads the same fact, and
+//                "after" is branch order in both, #346)
 //   Paused       phase=paused ∧ paused_reason ∉ {staged, gate-declined}
 //                ∧ nothing else already speaks for the run; the card's
 //                instruction is the reason's (#96): budget-exhausted says
 //                raise the limit, slug-landed says close — a bare "resume"
-//                on either re-pauses on the next tick
+//                on either re-pauses on the next tick. `escalation` goes one
+//                level further (#348) and reads the last resolved
+//                escalation's own words, because that reason covers both
+//                conditions that clear themselves and ones whose only exit is
+//                a hand edit of an artifact, a `profile:` or a `phase:`
 //   Staged       phase=paused ∧ paused_reason = staged — awaiting arm, not resume/kill
 //   Declined     phase=paused ∧ paused_reason = gate-declined — no item at all
 //   Closed       phase=closed — no item at all, whatever else the record holds
@@ -53,23 +60,48 @@
 // it means the engine is gone, not that an agent is working; the gate goes back
 // to reviewable with the wait said out loud, because suppressing a gate on the
 // word of a dead process is the worse failure.
+//
+// That in-flight comparison — the open entry against the packet's landing — is
+// the one recency check here still read from clocks after #346. An open entry
+// has no closing commit, and placing its *opening* commit on the branch means
+// walking `stateHistory` (a read per state commit) on the common path, for
+// every run, on every inbox render. The honest comparison is the open commit
+// against the artifact landing, and it belongs here the day the source can
+// answer it without that walk. Until then the clocks in question are the engine
+// host's and its own dispatch checkout's — the same machine in the blessed
+// topology — while the round-cap row below compares a *human's* clock with a
+// committer's, which is where the skew actually bites.
+//
+// Three of the facts these rules read now live in `record/schema.ts` — which
+// gate is pending (`pendingGateAt`), which role produces a gate's packet
+// (`gateProducer`), and whether G2's evidence has landed (`g2PacketReady`).
+// The write path reads the same three for a different purpose: it refuses a
+// decision about any gate but the pending one (#344), refuses an approval
+// while the producer is out (#351), and lets the PR-approval sync copy an
+// Approve into G2 only once G2 is genuinely on the table. One definition each
+// is what stops the card a human is shown and the write the API accepts from
+// disagreeing.
 import {
   BUDGET_REASON,
   CLOSED_PHASE,
   DECLINED_REASON,
+  ESCALATION_REASON,
   LANDED_REASON,
   G2_COMPLETE_STATUSES,
-  gateUndecided,
-  GATE_PHASES,
-  PROFILE_GATES,
+  g2PacketReady,
+  gateProducer,
+  isReviewFile,
+  pendingGate,
   ROUND_CAP,
   STAGED_REASON,
+  TASK_STATUSES,
   type GateId,
-  type Profile,
   type RunState,
 } from '../record/schema.ts'
 import { isOpenDispatch, parseLedger, ROLE_TIMEOUT_MS } from '../record/ledger.ts'
 import { validateArtifact, type Validation } from '../record/validate.ts'
+import type { CommitInfo } from '../sources/git.ts'
+import { readBranchOrder, resolutionCommitsOf } from '../sources/branch-order.ts'
 import type { RunRef, RunSource } from '../sources/source.ts'
 import { formatDuration } from './time.ts'
 
@@ -125,35 +157,10 @@ export interface RunReadiness {
   validations: Record<string, Validation>
 }
 
-const isReviewFile = (p: string) => /^review-\d+.*\.md$/.test(p)
 const isTaskFile = (p: string) => p.startsWith('tasks/') && p.endsWith('.yaml')
 
 function taskComplete(status: string): boolean {
   return G2_COMPLETE_STATUSES.has(status)
-}
-
-/**
- * The role whose artifact a gate's packet waits on, and the artifact it lands.
- *
- * The frontend's half of the engine's `GATE_PRODUCER` (orchestrator/src/derive.ts),
- * and profile-aware where that table is not: `patch` G1 has no producer at all —
- * the human authored the brief and the work item, so there is no one out and
- * nothing to supersede — and `patch` G2 ends at the reviewer, since a patch run
- * has no verifier (DESIGN.md §4.1).
- */
-export function gateProducer(gate: GateId, profile: Profile): { role: string; artifact: string } | null {
-  switch (gate) {
-    case 'G0':
-      return { role: 'analyst', artifact: 'spec.md' }
-    case 'G1':
-      return profile === 'patch' ? null : { role: 'architect', artifact: 'plan.md' }
-    case 'G2':
-      return profile === 'patch'
-        ? { role: 'reviewer', artifact: 'a review report' }
-        : { role: 'verifier', artifact: 'verification-report.md' }
-    case 'G3':
-      return { role: 'ops', artifact: 'release-plan.md' }
-  }
 }
 
 /**
@@ -177,12 +184,92 @@ function openDispatchAt(state: RunState, role: string, packetAt: number | null):
   return newest
 }
 
-/** Which gate, if any, is on the table for the run's current phase. Only the profile's gates exist. */
-export function pendingGate(state: RunState): GateId | null {
-  for (const gate of PROFILE_GATES[state.profile]) {
-    if (GATE_PHASES[gate].includes(state.phase) && gateUndecided(state.gates[gate])) return gate
+/**
+ * The escalation reasons whose only exit is a hand edit (#348), matched on the
+ * words the engine writes rather than on a rule id — the rule id is not in the
+ * record, only the sentence is.
+ *
+ * These substrings are a contract with `orchestrator/src/derive.ts`, which
+ * composes the reasons (rules D8, D21, D4). Core cannot import them: the
+ * layering runs record → sources → view-model and nothing here points at the
+ * orchestrator. So they are duplicated deliberately, kept to the most stable
+ * fragment of each sentence, and noted at both ends — reword a reason there
+ * and the card here quietly falls back to the generic line.
+ */
+const HAND_EDIT_ESCALATIONS = {
+  /** D8: `<artifact> bounced N× and is still malformed — contract dispute …` */
+  contractDispute: /^(\S+) bounced \d+× and is still malformed\b/,
+  /** D21: `gate G1 is decided but does not exist in profile patch …` / `phase "release" does not exist in profile …` */
+  profileViolation: /does not exist in profile\b/,
+  /** D4: `phase is implement but the run has no task files …` */
+  noTaskFiles: /has no task files\b/,
+  /** D4: `task 01-core has status "wat" the derivation table has no rule for` */
+  unknownStatus: /^task (\S+) has status "([^"]*)" the derivation table has no rule for\b/,
+}
+
+/**
+ * The escalation whose resolution left the run paused: the newest resolved
+ * one. A paused card with reason `escalation` only ever renders once every
+ * escalation is resolved (an unresolved one speaks for itself, above), so the
+ * thing the human still has to do is whatever that last one pointed at.
+ */
+function lastResolved(state: RunState): string | null {
+  let reason: string | null = null
+  let at = Number.NEGATIVE_INFINITY
+  for (const esc of state.escalations) {
+    if (!esc.resolved) continue
+    const t = esc.resolved_at ? Date.parse(esc.resolved_at) : Number.NaN
+    // Undated resolutions still count, in record order, so a hand-resolved
+    // escalation is not silently ignored.
+    const key = Number.isNaN(t) ? at : t
+    if (key >= at) {
+      at = key
+      reason = esc.reason
+    }
   }
-  return null
+  return reason
+}
+
+/**
+ * Whether a human has already granted this task another round past the cap
+ * (#342) — the readiness half of the engine's rule D4.
+ *
+ * The engine's round-cap escalation names the task as `task <id>:`, and a
+ * resolution of it made after the latest review is what lets D4 stand down and
+ * the loop dispatch round n+1. `since` is the commit that landed that review;
+ * an unknown one is not evidence either way, so nothing counts.
+ *
+ * "After" is branch order, exactly as the engine reads it (#346): the commit
+ * where `resolved` became true, against the review's own commit. Comparing
+ * `resolved_at` — stamped by whichever machine served the human's decision —
+ * with a committer's clock made this card and rule D4 disagree under a second
+ * of skew, which is the one thing the two surfaces must never do. The clocks
+ * remain the fallback for a run whose history could not be read.
+ *
+ * Reading the history costs a walk, so it happens only here, behind a cap
+ * breach that most runs never have.
+ */
+async function grantedAnotherRound(
+  source: RunSource,
+  ref: RunRef,
+  state: RunState,
+  task: string,
+  since: CommitInfo | null,
+): Promise<boolean> {
+  if (!since) return false
+  const candidates = state.escalations
+    .map((e, index) => ({ e, index }))
+    .filter(({ e }) => e.resolved && e.reason.includes(`task ${task}:`))
+  if (candidates.length === 0) return false
+  const [order, history] = await Promise.all([readBranchOrder(source, ref), source.stateHistory(ref)])
+  const resolutionCommits = resolutionCommitsOf(history, state.escalations.length)
+  return candidates.some(({ e, index }) => {
+    const at = resolutionCommits[index]
+    const byBranch = order.after(at?.oid ?? null, since.oid)
+    if (byBranch !== null) return byBranch
+    const stamped = e.resolved_at ? Date.parse(e.resolved_at) : Number.NaN
+    return Number.isFinite(stamped) && stamped / 1000 > since.time
+  })
 }
 
 /**
@@ -192,9 +279,19 @@ export function pendingGate(state: RunState): GateId | null {
  * ledger and the limit, a landed-slug pause from the default branch, and a
  * resume that changes neither re-pauses seconds later — each cycle costing
  * two decisions and one more escalation entry.
+ *
+ * `escalation` is the third such reason and the hardest of the three (#348),
+ * because it does not name a condition at all — only that a human is owed.
+ * Some of what it stands for clears itself; some of it (a contract dispute, a
+ * profile violation, a breakdown that never landed) has no exit but a hand
+ * edit, and there the same closed loop applies: resolving is an
+ * acknowledgment, the engine re-derives from files nobody changed, and the run
+ * re-pauses within a tick. So the card goes one level deeper and reads the
+ * resolved escalation's own words.
  */
 export function pausedInstruction(state: RunState): string {
   const limit = state.budget?.cost_limit_usd ?? null
+  const generic = 'Resume the run, or close it with a disposition saying why it ends here'
   switch (state.paused_reason) {
     case BUDGET_REASON:
       return limit !== null
@@ -202,8 +299,26 @@ export function pausedInstruction(state: RunState): string {
         : 'This orchestrator requires a per-run cost_limit_usd and the run has none. Resume with a limit, or close the run with a disposition'
     case LANDED_REASON:
       return `runs/${state.run}/ already shipped on the default branch and this branch moved on after the merge. Close the run with a disposition (already-delivered) and carry any remaining work on a fresh slug — resuming re-pauses on the next tick`
+    case ESCALATION_REASON: {
+      // Resolving one of these acknowledges the condition; it does not change
+      // it. The engine re-derives from the same files and re-pauses unless the
+      // edit the reason names has landed too, so the card names the edit.
+      const reason = lastResolved(state)
+      if (reason === null) return generic
+      const dispute = HAND_EDIT_ESCALATIONS.contractDispute.exec(reason)
+      if (dispute)
+        return `${dispute[1]} is still malformed after two bounces. Fix it by hand — or fix the contract it fails — then resume: the engine re-validates, and resolving alone re-pauses`
+      if (HAND_EDIT_ESCALATIONS.profileViolation.test(reason))
+        return 'The run is outside its own profile. Edit profile: to one that includes it, or correct phase: by hand, then resume — profiles upgrade mid-run, never downgrade, and resolving alone re-pauses'
+      if (HAND_EDIT_ESCALATIONS.noTaskFiles.test(reason))
+        return `The G1 breakdown never reached this branch. Commit the tasks/*.yaml files under runs/${state.run}/ by hand, then resume — resolving alone re-pauses`
+      const status = HAND_EDIT_ESCALATIONS.unknownStatus.exec(reason)
+      if (status)
+        return `Task ${status[1]} carries a status the derivation has no rule for ("${status[2]}"). Edit it by hand to one the table knows (${TASK_STATUSES.join(', ')}), then resume — resolving alone re-pauses`
+      return generic
+    }
     default:
-      return 'Resume the run, or close it with a disposition saying why it ends here'
+      return generic
   }
 }
 
@@ -273,6 +388,13 @@ export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<R
     if (task.review_rounds >= ROUND_CAP && !taskComplete(task.status)) {
       const reviewFiles = artifacts.filter(isReviewFile)
       const touched = await source.lastTouched(ref, reviewFiles.length ? reviewFiles : ['state.yaml'])
+      // The engine's own exit from the cap, read here so the two surfaces
+      // agree (#342): a resolution newer than the latest review is a human
+      // granting the loop another round, and rule D4 stands down on it. Asking
+      // again on this card would ask for a decision that has been made — and
+      // the loop is moving, so there is nothing to decide until the next
+      // verdict past the cap lands and D4 raises it afresh.
+      if (await grantedAnotherRound(source, ref, state, task.id, touched)) continue
       items.push({
         kind: 'round-cap',
         gate: null,
@@ -371,8 +493,7 @@ export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<R
     const verification = state.profile === 'patch' ? [] : ['verification-report.md']
     packet = [...reviews, ...verification]
     trigger = [...reviews, ...verification]
-    const tasksComplete = state.tasks.length > 0 && state.tasks.every((t) => taskComplete(t.status))
-    ready = tasksComplete && reviews.length > 0 && verification.every((p) => has(p))
+    ready = g2PacketReady(state, artifacts)
   } else {
     packet = ['release-plan.md']
     trigger = ['release-plan.md']

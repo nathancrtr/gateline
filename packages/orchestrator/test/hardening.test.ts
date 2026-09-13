@@ -3,6 +3,7 @@
 // implementers (the wordfreq retro fix), including the fold-conflict → plan
 // defect escalation.
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import { hostname } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { LocalGitSource } from '@gateline/core'
@@ -10,6 +11,7 @@ import { Engine } from '../src/engine.ts'
 import { parseLedger } from '../src/observe.ts'
 import {
   agentCommit,
+  deadEngineId,
   FakeDispatcher,
   humanDecide,
   log,
@@ -32,9 +34,12 @@ describe('crash recovery (M4 drill)', () => {
 
     // Engine 1 commits the dispatch intent, then the host "dies": the
     // dispatcher never returns and the process state is simply abandoned —
-    // exactly the §4.4 crash between commit and completion.
+    // exactly the §4.4 crash between commit and completion. It runs under the
+    // identity of a process that has already exited (#349), which is what the
+    // record of a crashed engine actually looks like: the ledger entry names a
+    // pid, and by the time the restart sweeps, that pid is gone.
     const hung = new FakeDispatcher(() => new Promise(() => {}))
-    const engine1 = new Engine({ repoDir: dir, identity: BOT, dispatcher: hung, registry: TEST_REGISTRY })
+    const engine1 = new Engine({ repoDir: dir, identity: BOT, dispatcher: hung, registry: TEST_REGISTRY, engineId: deadEngineId() })
     await engine1.tick() // commits intent, launches the never-returning job
     // (engine1 is now abandoned; its in-memory job table dies with it)
 
@@ -63,6 +68,111 @@ describe('crash recovery (M4 drill)', () => {
     expect(state!.phase).toBe('spec') // resting at G0, not paused: one failure is a retry, not an escalation
     const g0Waits = log(dir).filter((l) => l.includes('dispatched analyst'))
     expect(g0Waits).toHaveLength(2) // intent committed once per dispatch, never doubled
+  })
+})
+
+describe('the stale sweep reads who opened the entry (#349)', () => {
+  /** Tick an engine into a never-returning analyst dispatch and walk away from it. */
+  async function orphanAnalyst(dir: string, engineId?: string): Promise<void> {
+    const hung = new FakeDispatcher(() => new Promise(() => {}))
+    await new Engine({ repoDir: dir, identity: BOT, dispatcher: hung, registry: TEST_REGISTRY, engineId }).tick()
+  }
+
+  const analystEntries = async (dir: string) =>
+    parseLedger((await new LocalGitSource('check', dir).readState(toyRef(dir))).state).filter((e) => e.role === 'analyst')
+
+  it('ages an entry opened under its own identity once staleMs has passed', { timeout: 60_000 }, async () => {
+    const { dir, clock } = makeToyRepo()
+    const id = `${hostname()}:4242`
+    await orphanAnalyst(dir, id)
+    expect((await analystEntries(dir))[0]!.engine).toBe(id) // the dispatch signs its intent
+
+    // The engine comes back under the same name — a restart the supervisor
+    // re-identifies, or an operator-set engineId. An entry it wrote with no
+    // job of its own behind it is the §4.4 crash signature, and nothing else:
+    // age it on the short window.
+    const live = new FakeDispatcher((req) => {
+      agentCommit(req.cwd, clock, { 'runs/toy/spec.md': SPEC }, 'toy: spec')
+      return {}
+    })
+    const restart = new Engine({ repoDir: dir, identity: BOT, dispatcher: live, registry: TEST_REGISTRY, staleMs: 0, engineId: id })
+    await restart.tick()
+    await restart.drain()
+
+    const entries = await analystEntries(dir)
+    expect(entries).toHaveLength(2)
+    expect(entries.filter((e) => e.failed)).toHaveLength(1)
+    expect(live.calls).toHaveLength(1)
+  })
+
+  it('claims an entry that names no engine at all — a pre-#349 or hand-written one', { timeout: 60_000 }, async () => {
+    const { dir, clock } = makeToyRepo()
+    const source = new LocalGitSource('human', dir)
+    const at = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+    const write = await source.writeState(
+      toyRef(dir),
+      (doc) =>
+        doc.setIn(
+          ['budget', 'ledger'],
+          [{ at, role: 'analyst', task: null, round: null, adapter: 'test', model: 'test', tokens_in: null, tokens_out: null, cost_usd: null }],
+        ),
+      'state(toy): hand-written open entry, no engine named',
+    )
+    expect(write.ok).toBe(true)
+    expect((await analystEntries(dir))[0]!.engine).toBeNull()
+
+    // Nothing names an owner, so nobody else can be waiting on it: the default
+    // five-minute window applies, and an engine upgraded across the key still
+    // recovers the entries its old code wrote.
+    const live = new FakeDispatcher((req) => {
+      agentCommit(req.cwd, clock, { 'runs/toy/spec.md': SPEC }, 'toy: spec')
+      return {}
+    })
+    const engine = new Engine({ repoDir: dir, identity: BOT, dispatcher: live, registry: TEST_REGISTRY })
+    await engine.tick()
+    await engine.drain()
+
+    const entries = await analystEntries(dir)
+    expect(entries).toHaveLength(2)
+    expect(entries.filter((e) => e.failed)).toHaveLength(1)
+    expect(live.calls).toHaveLength(1)
+  })
+
+  it('waits out the role timeout on an entry another live engine opened', { timeout: 60_000 }, async () => {
+    const { dir, clock } = makeToyRepo()
+    await orphanAnalyst(dir) // default identity: this very process, demonstrably alive
+    const roleTimeoutMs = 30 * 60 * 1000
+
+    const live = new FakeDispatcher((req) => {
+      agentCommit(req.cwd, clock, { 'runs/toy/spec.md': SPEC }, 'toy: spec')
+      return {}
+    })
+    const other = new Engine({ repoDir: dir, identity: BOT, dispatcher: live, registry: TEST_REGISTRY, staleMs: 0, roleTimeoutMs })
+    await other.tick()
+    await other.drain()
+    // staleMs: 0 is the most aggressive window there is, and it still does not
+    // touch someone else's live job — the #349 regression in one line.
+    expect(live.calls).toHaveLength(0)
+    expect((await analystEntries(dir)).filter((e) => e.failed)).toHaveLength(0)
+
+    // Past the role timeout plus the stale grace, no live job can be behind it
+    // whoever opened it: that is when its own engine would have killed it.
+    const later = new Engine({
+      repoDir: dir,
+      identity: BOT,
+      dispatcher: live,
+      registry: TEST_REGISTRY,
+      staleMs: 0,
+      roleTimeoutMs,
+      now: () => new Date(Date.now() + roleTimeoutMs + 60_000),
+    })
+    await later.tick()
+    await later.drain()
+
+    const entries = await analystEntries(dir)
+    expect(entries).toHaveLength(2)
+    expect(entries.filter((e) => e.failed)).toHaveLength(1)
+    expect(live.calls).toHaveLength(1)
   })
 })
 

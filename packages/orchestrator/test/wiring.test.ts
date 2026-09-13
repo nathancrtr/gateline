@@ -15,7 +15,7 @@ import { parseLedger } from '../src/observe.ts'
 import { RemoteDispatcher } from '../src/runner-dispatcher.ts'
 import type { DispatchOutcome } from '../src/seam.ts'
 import { makeRunnerCallback } from '../src/start.ts'
-import { makeToyRepo, TEST_REGISTRY, toyRef } from './engine.helper.ts'
+import { deadEngineId, makeToyRepo, TEST_REGISTRY, toyRef } from './engine.helper.ts'
 
 const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
 const TOKEN = 'runner-secret'
@@ -172,6 +172,11 @@ describe('R7 lease semantics — no new mechanism beyond this.jobs (engine.ts)',
       dispatcher: remote1,
       registry: TEST_REGISTRY,
       roleTimeoutMs: 24 * 60 * 60 * 1000,
+      // The killed workstation's engine ran as a process that has since
+      // exited (#349) — the ledger entry it left behind names that dead pid,
+      // which is what tells the restart's sweep the job is an orphan and not
+      // another live engine's work.
+      engineId: deadEngineId(),
     })
     await engine1.tick() // commits the intent, launches the never-reporting job
 

@@ -3,7 +3,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { Git, planDecision, parseRunState, DecisionError, type Closure, type Disposition, type RunRef } from '../src/index.ts'
+import { Git, planDecision, parseRunState, DecisionError, type Closure, type Disposition, type RunRef, type RunState } from '../src/index.ts'
 import { dropFixture, makeFixture, type FixtureContext } from './fixture.helper.ts'
 
 let ctx: FixtureContext
@@ -344,6 +344,119 @@ describe('decision legality (planDecision)', () => {
       const after = await ctx.source.readState(ref)
       expect(after.state!.budget!.cost_limit_usd).toBe(limit + 1)
     })
+  })
+})
+
+// #344: a gate is decided in its own phase, once every gate before it is
+// signed. Gatehouse only ever offered the pending gate, so these are the
+// refusals the CLI and the API were missing — the surfaces that write the
+// record directly.
+describe('gate order (#344)', () => {
+  it('refuses to approve a gate whose phase the run has not reached, naming the phase and the pending gate', async () => {
+    const ref = await refFor('g0-pending')
+    const { state } = await ctx.source.readState(ref)
+    expect(state!.phase).toBe('spec')
+    expect(() => planDecision(state!, { action: 'approve', gate: 'G2', burden: 'confirmation' }, who)).toThrow(DecisionError)
+    expect(() => planDecision(state!, { action: 'approve', gate: 'G2', burden: 'confirmation' }, who)).toThrow(
+      /in phase "spec", where G2 is not on the table — G0 is the gate awaiting a decision/,
+    )
+  })
+
+  it('refuses to decline one either — a decline settles the gate just as much as an approval', async () => {
+    const ref = await refFor('g0-pending')
+    const { state } = await ctx.source.readState(ref)
+    expect(() => planDecision(state!, { action: 'decline', gate: 'G1', notes: 'not this plan' }, who)).toThrow(/G1 is not on the table/)
+  })
+
+  it('still approves the gate that is on the table, and still advances the phase', async () => {
+    const ref = await refFor('g2-pending')
+    const { state } = await ctx.source.readState(ref)
+    expect(state!.phase).toBe('implement')
+    const planned = planDecision(state!, { action: 'approve', gate: 'G2', burden: 'confirmation' }, who)
+    const result = await ctx.source.writeState(ref, planned.mutate, planned.message)
+    expect(result.ok).toBe(true)
+    const after = await ctx.source.readState(ref)
+    expect(after.state!.gates.G2.approved).toBe(true)
+    expect(after.state!.phase).toBe('release')
+  })
+
+  it('lets a run paused for an escalation decide the gate a resume would put it back on', async () => {
+    const ref = await refFor('g0-pending')
+    const { state } = await ctx.source.readState(ref)
+    const paused = planDecision(state!, { action: 'pause', pauseReason: 'escalation' }, who)
+    await ctx.source.writeState(ref, paused.mutate, paused.message)
+
+    const mid = await ctx.source.readState(ref)
+    expect(mid.state!.phase).toBe('paused')
+    // The run is paused over a question about the spec, and answering that
+    // question *is* the G0 decision. Refusing it here would leave the human
+    // holding a card with no legal move on it.
+    const planned = planDecision(mid.state!, { action: 'approve', gate: 'G0', burden: 'light-correction' }, who)
+    expect(planned.summary).toContain('Approve G0')
+    const result = await ctx.source.writeState(ref, planned.mutate, planned.message)
+    expect(result.ok).toBe(true)
+    expect((await ctx.source.readState(ref)).state!.phase).toBe('plan')
+  })
+
+  it('judges a phase that lags its own gate ledger by the ledger — a signed gate not yet walked past is mid-transition, not a skip', async () => {
+    const ref = await refFor('g0-pending')
+    const { state } = await ctx.source.readState(ref)
+    const signed = planDecision(state!, { action: 'approve', gate: 'G0', burden: 'confirmation', advancePhase: false }, who)
+    await ctx.source.writeState(ref, signed.mutate, signed.message)
+
+    const mid = await ctx.source.readState(ref)
+    expect(mid.state!.phase).toBe('spec') // the engine's D5 convergence has not run yet
+    expect(mid.state!.gates.G0.approved).toBe(true)
+    expect(planDecision(mid.state!, { action: 'approve', gate: 'G1', burden: 'confirmation' }, who).summary).toContain('Approve G1')
+  })
+
+  it('refuses any gate decision on a staged run — arming is what starts it', async () => {
+    const ref = await refFor('g0-pending')
+    const { state } = await ctx.source.readState(ref)
+    const staged = { ...state!, phase: 'paused' as const, paused_reason: 'staged' }
+    expect(() => planDecision(staged, { action: 'approve', gate: 'G0', burden: 'confirmation' }, who)).toThrow(/staged and not yet armed/)
+    expect(() => planDecision(staged, { action: 'decline', gate: 'G0', notes: 'no' }, who)).toThrow(/staged and not yet armed/)
+  })
+})
+
+// #351: the same refusal Gatehouse has made since #159, for the CLI and the
+// API. A ledger entry with no cost is a dispatch believed to be in flight.
+describe('the producing role in flight (#351)', () => {
+  const withLedger = (state: RunState, ledger: object[]): RunState => ({
+    ...state,
+    budget: { cost_limit_usd: null, cost_spent_usd: null, ...(state.budget ?? {}), ledger },
+  })
+  const open = (role: string, agoMs: number) => ({ at: new Date(Date.now() - agoMs).toISOString(), role, cost_usd: null })
+
+  it('refuses an approval while the gate’s producer holds an open dispatch', async () => {
+    const ref = await refFor('g0-pending')
+    const { state } = await ctx.source.readState(ref)
+    const inFlight = withLedger(state!, [open('analyst', 60_000)])
+    expect(() => planDecision(inFlight, { action: 'approve', gate: 'G0', burden: 'confirmation' }, who)).toThrow(DecisionError)
+    expect(() => planDecision(inFlight, { action: 'approve', gate: 'G0', burden: 'confirmation' }, who)).toThrow(
+      /the analyst is in flight for G0 .* about to be superseded/s,
+    )
+  })
+
+  it('ages the entry out on the same clock the gate card does — a dead engine does not hold a gate shut', async () => {
+    const ref = await refFor('g0-pending')
+    const { state } = await ctx.source.readState(ref)
+    const stale = withLedger(state!, [open('analyst', 90 * 60_000)])
+    expect(planDecision(stale, { action: 'approve', gate: 'G0', burden: 'confirmation' }, who).summary).toContain('Approve G0')
+  })
+
+  it('ignores an open dispatch of some other role, and a closed one of its own', async () => {
+    const ref = await refFor('g0-pending')
+    const { state } = await ctx.source.readState(ref)
+    const others = withLedger(state!, [open('architect', 60_000), { ...open('analyst', 60_000), cost_usd: 0.42 }])
+    expect(planDecision(others, { action: 'approve', gate: 'G0', burden: 'confirmation' }, who).summary).toContain('Approve G0')
+  })
+
+  it('still allows the decline — it adds notes for the redo, it does not sign anything', async () => {
+    const ref = await refFor('g0-pending')
+    const { state } = await ctx.source.readState(ref)
+    const inFlight = withLedger(state!, [open('analyst', 60_000)])
+    expect(planDecision(inFlight, { action: 'decline', gate: 'G0', notes: 'tighten R1' }, who).summary).toContain('Decline G0')
   })
 })
 

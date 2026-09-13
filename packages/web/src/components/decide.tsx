@@ -23,8 +23,15 @@ import { useKeys, type KeyHint } from '../use-keys.ts'
 export const BOUNCED_INSTRUCTION =
   'Bounced — fix the artifacts (or the contract) and the card returns; no approval is offered for a malformed packet.'
 
+/**
+ * What actually clears a round cap (#342). The old sentence told the human to
+ * "decline the pending gate with direction", and on a run paused at the cap
+ * there is no gate card to decline — the only exits were hand edits of
+ * `review_rounds` or of the task's status. Resolving the escalation is now the
+ * exit the engine reads, so the card says that instead.
+ */
 export const ROUND_CAP_INSTRUCTION =
-  'Read both sides, then unblock: decline the pending gate with direction, or edit the spec/plan and let the loop retry.'
+  'Read both sides, then unblock: resolve the escalation — with a disposition to route the round — and resume. One more round follows, and the next verdict past the cap asks again.'
 
 /**
  * The third card with no button (#159), and the one that has to say why it has

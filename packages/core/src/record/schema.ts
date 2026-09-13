@@ -43,6 +43,12 @@ export const BUDGET_REASON = 'budget-exhausted' as const
  * the remaining work needs a fresh slug, and this run a closing disposition. */
 export const LANDED_REASON = 'slug-landed' as const
 
+/** A run the orchestrator paused alongside an escalation it raised. The reason
+ * says only that a human is owed; what actually clears the pause is whatever
+ * the escalation's own text names, which is where the paused card's
+ * instruction comes from (#348). */
+export const ESCALATION_REASON = 'escalation' as const
+
 /**
  * A run a human closed out before it reached `done` (#200) — a real phase, not
  * another `paused_reason`.
@@ -315,4 +321,104 @@ export function deriveResumePhase(state: RunState): Phase {
     if (!state.gates[gate].approved) return GATE_PHASES[gate][0]!
   }
   return 'done'
+}
+
+/**
+ * Which gate, if any, is on the table when the run stands at `phase`.
+ *
+ * The frontier is the profile's first un-approved gate: every gate before it
+ * is signed, so it is the only gate a decision can honestly be about. It is on
+ * the table when `phase` is one of the phases that gate is decided in and
+ * nobody has decided it yet — a declined gate is a *decided* gate until a
+ * resume re-opens it.
+ *
+ * One definition, two readers. The readiness rules draw a gate card from it
+ * (`view-model/readiness.ts`) and `planDecision` refuses a decision that is not
+ * about it (#344). Two implementations of "pending" is how the card a human is
+ * shown and the write the API accepts drift apart.
+ */
+export function pendingGateAt(state: RunState, phase: Phase): GateId | null {
+  for (const gate of PROFILE_GATES[state.profile]) {
+    if (state.gates[gate].approved) continue
+    return GATE_PHASES[gate].includes(phase) && gateUndecided(state.gates[gate]) ? gate : null
+  }
+  return null
+}
+
+/** Which gate, if any, is on the table for the run's current phase. */
+export function pendingGate(state: RunState): GateId | null {
+  return pendingGateAt(state, state.phase)
+}
+
+/**
+ * The phase a gate decision is judged against: the run's own, or the one its
+ * gate ledger derives when that is further along.
+ *
+ * Two records need the ledger's answer rather than the phase field's. A paused
+ * or closed run holds no position in the sequence at all, and yet the ordinary
+ * reason a run is paused is a question about the very packet its pending gate
+ * covers — which a human answers by deciding that gate. And a phase can simply
+ * lag its own ledger for a while: an `advancePhase: false` approval signs the
+ * gate without moving the phase, and the engine's convergence rule (D5) writes
+ * the advance on its next tick. A gate signed but not yet walked past is a
+ * record mid-transition, not a run that skipped anything.
+ *
+ * A phase *ahead* of the ledger is the opposite case and keeps its own value,
+ * so the decision is judged where the record actually claims to be — refusing
+ * is the safe direction when those two disagree that way.
+ */
+export function decisionPhase(state: RunState): Phase {
+  const derived = deriveResumePhase(state)
+  const sequence: Phase[] = PROFILE_PHASES[state.profile].filter((p) => p !== 'paused' && p !== CLOSED_PHASE)
+  const here = sequence.indexOf(state.phase)
+  if (here < 0) return derived // paused or closed: no position of its own
+  return sequence.indexOf(derived) > here ? derived : state.phase
+}
+
+/**
+ * The role whose artifact a gate's packet waits on, and the artifact it lands.
+ *
+ * The record layer's half of the engine's `GATE_PRODUCER`
+ * (orchestrator/src/derive.ts), and profile-aware where that table is not:
+ * `patch` G1 has no producer at all — the human authored the brief and the work
+ * item, so there is no one out and nothing to supersede — and `patch` G2 ends
+ * at the reviewer, since a patch run has no verifier (DESIGN.md §4.1).
+ *
+ * It lives here rather than in the view model because two readings need it and
+ * they must not drift: the gate card withholds itself while the producer is out
+ * (#159) and `planDecision` refuses the approval for the same reason (#351).
+ */
+export function gateProducer(gate: GateId, profile: Profile): { role: string; artifact: string } | null {
+  switch (gate) {
+    case 'G0':
+      return { role: 'analyst', artifact: 'spec.md' }
+    case 'G1':
+      return profile === 'patch' ? null : { role: 'architect', artifact: 'plan.md' }
+    case 'G2':
+      return profile === 'patch'
+        ? { role: 'reviewer', artifact: 'a review report' }
+        : { role: 'verifier', artifact: 'verification-report.md' }
+    case 'G3':
+      return { role: 'ops', artifact: 'release-plan.md' }
+  }
+}
+
+/** A review report, as the contract names one: `review-<nn>[-suffix].md`. */
+export function isReviewFile(path: string): boolean {
+  return /^review-\d+.*\.md$/.test(path)
+}
+
+/**
+ * Is the evidence G2 decides on complete — every task carried to
+ * review-approved or beyond, at least one review report, and, outside `patch`
+ * (which has no verifier), the verification report?
+ *
+ * Shared by the gate card and the PR-approval sync so the two agree by
+ * construction (#344). The sync copies a reviewer's Approve on the draft PR
+ * into G2, and a copy made before this packet exists is an approval of nothing.
+ */
+export function g2PacketReady(state: RunState, artifacts: string[]): boolean {
+  const tasksComplete = state.tasks.length > 0 && state.tasks.every((t) => G2_COMPLETE_STATUSES.has(t.status))
+  const verification = state.profile === 'patch' || artifacts.includes('verification-report.md')
+  return tasksComplete && artifacts.some(isReviewFile) && verification
 }

@@ -9,6 +9,8 @@ multi-agent development.
 
 ![Gatehouse, gateline's cockpit, in five screens: the Inbox with four decisions waiting, one of them a bounced malformed packet; the Portfolio's gate ledger across nineteen runs; the run csvpeek paused on an escalation with its budget over the limit; the finished run fleetview-design and its artifact record; and Metrics flagging gates G1 and G2 as over-triggering.](docs/images/gatehouse.gif)
 
+**Current state**: The frontend, CLI, and orchestrator are fully operable and run as one unit via `gateline up`. Gate approvals are a convention, not evidence, until [#129](https://github.com/nathancrtr/gateline/issues/129) lands.
+
 ## The one idea
 
 Agents never share a conversation; they share **typed artifacts in git**. A role
@@ -166,7 +168,8 @@ and the v1 orchestrator are implemented in `packages/` and run as one co-located
 (`gateline up`) over a single clone — one authority per deployment
 ([TOPOLOGY.md](docs/TOPOLOGY.md)); a single-user hosting recipe lives in
 [`deploy/`](deploy/). Autonomy stays gated on the DESIGN.md §7 promotion criterion.
-Next: live cross-vendor dispatch, then the integration workflow
+
+**Next**: live cross-vendor dispatch and verifiable run record ([#129](https://github.com/nathancrtr/gateline/issues/129)), then the integration workflow
 ([INTEGRATION.md](docs/INTEGRATION.md)) and a first tagged release.
 
 ## License

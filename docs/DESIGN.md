@@ -83,7 +83,7 @@ Notes on the roster:
   role or contract. It differs from the gate roles in two deliberate ways: a
   schedule drives it (`orchestrator.yaml` `schedules:`; each sweep is a mini-run
   `runs/historian-<date>/` on its own branch), and its human approval is the
-  sweep branch's review-and-merge rather than a numbered gate.
+  sweep branch's review-and-merge.
 
 Full specs live in [`roles/`](../roles/) — one file per role, with mission, operating
 instructions, definition of done, and explicit escalation triggers.
@@ -114,7 +114,7 @@ Rules that keep the loop safe:
   agents arguing past three rounds are almost always stuck on an ambiguity in the
   spec; that defect sits at G0/G1, upstream of the implementation.
 - **Budget cap.** Each run carries a token/cost budget in `state.yaml`; exhaustion
-  pauses the pipeline rather than degrading quality silently. In v1 every dispatch is
+  pauses the pipeline. In v1 every dispatch is
   metered automatically through the orchestrator's dispatch seam into
   `budget.ledger[]`, with a pre-flight cap check (ORCHESTRATOR.md §6) — the wordfreq
   pilot proved the earlier honor-system approach silently records nothing. *Remaining
@@ -140,7 +140,7 @@ which roles run and which gates exist. Three profiles, fixed sets, heaviest last
 Any run of any profile can also end at `closed` — the terminal state for a run a human
 ends short of `done`, carrying a typed disposition
 (`already-delivered | superseded | obsolete | abandoned`) and a reason. It is a rest
-state overlaid on the sequence rather than a step in it: nothing derives from a closed
+state overlaid on the sequence: nothing derives from a closed
 run, and closing deletes nothing (ORCHESTRATOR.md §4.5).
 
 - **`patch`** — bug fixes and small bounded changes. The human authors the intent
@@ -182,19 +182,19 @@ Mechanics and guardrails:
   edit adds the newly required gate entries (undecided); an absent entry parses
   as undecided anyway, so forgetting one degrades gracefully. Downgrading
   mid-run is forbidden — an engine that observes a profile lighter than the
-  gates already decided escalates rather than guessing.
+  gates already decided escalates.
 
 ### 4.2 Closed vocabulary, open table — why the sets are fixed
 
-The gate set and the profile set are closed vocabulary rather than defaults. §4.1
+The gate set and the profile set are closed vocabulary, not defaults. §4.1
 states the rule ("fixed sets, not knobs"); this section records the reasoning,
 because the pressure to make them configurable will recur — from adopters who
 want one more gate, and from maintainers who fear having shipped one too few.
 
 A run record is a set of claims. `profile: standard` claims exactly which gates
 had to be decided, by name, before the run reached `done` — and that claim is
-checkable only because the profile→gates mapping is fixed by the framework, not
-by the deployment. Make the gate set configurable and every check degrades from
+checkable only because the profile→gates mapping is fixed by the framework.
+Make the gate set configurable and every check degrades from
 "were the required approvals given?" to "were the approvals this deployment
 chose to require given?": the record stops being comparable across
 repositories, and a reader must audit the configuration before the evidence
@@ -231,7 +231,7 @@ explicit. Two kinds of role wear one name:
   their identity: G0's meaning is "a named human approved this spec," not "an
   Analyst produced it." Here the roster is a curated realization, closed in
   this repository by governance (the AGENTS.md invariant: maintainer decision,
-  recorded in an issue) rather than by anything structural — vocabulary growth
+  recorded in an issue), not by anything structural — vocabulary growth
   stays maintainer-gated and versioned, never adopter-configured.
 
 For host repositories adding roles through the overlay layer (INTEGRATION.md),
@@ -264,12 +264,12 @@ set.
 ## 5. Artifact contracts
 
 Every handoff artifact has a template in [`contracts/`](../contracts/). Templates are
-short by design — they specify *required sections* rather than prose style. An artifact
+short by design — they specify *required sections*. An artifact
 missing a required section is malformed, and the consuming agent's first duty is to
 bounce it, never to guess.
 
-Contracts also carry **budgets**, so concision is a contract property instead of a
-style hope. The rules are uniform — never restate an artifact you can reference
+Contracts also carry **budgets**, so concision is an enforced contract property.
+The rules are uniform — never restate an artifact you can reference
 (requirement numbers, file:line); evidence is pasted in full only for failures; no
 process narrative. Verbose artifacts dilute the signal for their model readers and
 beget verbose downstream artifacts (agents mirror the register they read). They also
@@ -292,7 +292,7 @@ A run's artifacts live under `runs/<slug>/`, committed on the run's branch. See
 
 ## 6. Model binding — the cross-vendor mechanism
 
-Roles declare a **capability profile** rather than a model. [`registry/models.yaml`](../registry/models.yaml)
+Roles declare a **capability profile**, not a model. [`registry/models.yaml`](../registry/models.yaml)
 resolves profiles to concrete vendor/model IDs, and binds each role to a profile (with
 optional per-role vendor pins to enforce P5 decorrelation).
 
@@ -322,7 +322,7 @@ apply to a new hire.
 **v1 — agent-orchestrated.** The Orchestrator role is bound to a model and a scheduler
 (cron, CI trigger, or long-running session). Humans interact only at gates. Promotion
 criterion: the team has run enough v0 cycles that gate reviews have become
-confirmations rather than corrections. The v1 design — a stateless reconciler over
+confirmations, not corrections. The v1 design — a stateless reconciler over
 `state.yaml` with an adapter-shaped dispatch seam and automated budget metering — is
 specified in [ORCHESTRATOR.md](ORCHESTRATOR.md) and implemented in
 [`packages/orchestrator`](../packages/orchestrator/) (runbook in

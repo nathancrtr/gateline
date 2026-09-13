@@ -9,10 +9,11 @@
 // Layer 2 of `vitest.config.ts`'s map: `renderToStaticMarkup`, no DOM. What it
 // cannot reach is the transition — clicking `Approve…` and watching the hint
 // go — which is asserted in the browser instead and recorded in the PR.
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 import type { InboxItem } from '../src/api.ts'
 import { KeyHints } from '../src/components/chips.tsx'

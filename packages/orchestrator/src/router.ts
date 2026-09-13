@@ -4,8 +4,9 @@
 // single-vendor adapter, the pin is unsatisfiable and remains advisory (the
 // claude-code README's documented "P5 only partially honored" state); the
 // router says so once instead of failing every run.
-import type { Registry } from './registry.ts'
+
 import type { HeadlessManifest } from './manifest.ts'
+import type { Registry } from './registry.ts'
 import type { Dispatcher, DispatchOutcome, DispatchRequest } from './seam.ts'
 
 export interface RoutedAdapter {

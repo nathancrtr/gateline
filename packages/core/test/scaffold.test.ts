@@ -1,20 +1,21 @@
 // The pure half of the run-creation seam (record/scaffold.ts): planRunScaffold
 // emits state.yaml/intent-brief.md (+ a patch task stub) with no I/O, and the
 // staged rest state (ADR-1) rides the existing paused/arm decision path.
-import { parse as parseYaml, parseDocument } from 'yaml'
+
 import { describe, expect, it } from 'vitest'
+import { parseDocument, parse as parseYaml } from 'yaml'
 import {
   BUILTIN_WORK_ITEM_KEYS,
   DecisionError,
+  PROFILE_GATES,
+  type Profile,
   parseRunState,
   planDecision,
   planRunScaffold,
-  PROFILE_GATES,
+  type RunScaffoldInput,
   readIntake,
   ScaffoldError,
   STAGED_REASON,
-  type Profile,
-  type RunScaffoldInput,
   WORK_ITEM_STUB_SCOPE,
   workItemIncomplete,
 } from '../src/index.ts'
@@ -117,8 +118,8 @@ notes: ""
     expect(workItemIncomplete(stub)).toMatch(/placeholder/)
     const written = writtenWorkItem('toy-run')
     expect(workItemIncomplete(written)).toBeNull()
-    expect(workItemIncomplete(written.replace(/file_contact_surface:[^]*?acceptance_tests/, 'file_contact_surface: []\n\nacceptance_tests'))).toMatch(/file_contact_surface/)
-    expect(workItemIncomplete(written.replace(/acceptance_tests:[^]*?depends_on/, 'acceptance_tests: []\n\ndepends_on'))).toMatch(/acceptance_tests/)
+    expect(workItemIncomplete(written.replace(/file_contact_surface:[\s\S]*?acceptance_tests/, 'file_contact_surface: []\n\nacceptance_tests'))).toMatch(/file_contact_surface/)
+    expect(workItemIncomplete(written.replace(/acceptance_tests:[\s\S]*?depends_on/, 'acceptance_tests: []\n\ndepends_on'))).toMatch(/acceptance_tests/)
     expect(workItemIncomplete('scope: ""\nfile_contact_surface: [a]\nacceptance_tests: [b]\n')).toMatch(/scope is empty/)
     expect(workItemIncomplete('- not a mapping\n')).toMatch(/mapping/)
   })

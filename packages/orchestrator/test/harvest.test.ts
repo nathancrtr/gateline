@@ -8,12 +8,12 @@
 // identity before the checkout can be torn down.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
 import { LocalGitSource } from '@gateline/core'
+import { describe, expect, it } from 'vitest'
 import { Engine } from '../src/engine.ts'
 import { parseLedger } from '../src/observe.ts'
 import { removeRunCheckout } from '../src/workspace.ts'
-import { agentCommit, FakeDispatcher, humanDecide, log, makeToyRepo, reconcile, SPEC, TEST_REGISTRY, toyRef, type Clock } from './engine.helper.ts'
+import { agentCommit, FakeDispatcher, log, makeToyRepo, reconcile, SPEC, TEST_REGISTRY, toyRef } from './engine.helper.ts'
 
 const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
 

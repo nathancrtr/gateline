@@ -222,5 +222,5 @@ export function describeRun(input: RunDescriptionInput): RunDescription {
   }
 
   parts.push(...footer(input, from))
-  return { title, body: parts.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n', from }
+  return { title, body: `${parts.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd()}\n`, from }
 }

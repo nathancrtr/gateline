@@ -3,32 +3,33 @@
 // storage locations: the tab bar this replaced was `Artifacts | Diff | History`,
 // a filesystem hierarchy standing in for the human's job at a gate.
 // Decision affordances live in the cards (M2 wires them to POST /api/decisions).
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+
 // genesis-preview candidate (state.yaml gates.G1.notes): the run header's
 // genesis line is display-only, rendered from data already in the run detail
 // payload — readIntake reads the passthrough `intake:` block already on
 // detail.state, and the genesis commit is the oldest entry already in
 // detail.history. No new server data (ADR-6 rider, ADR-7).
 import { readIntake, splitSections } from '@gateline/core/record'
-import { useKeys, type KeyHint } from '../use-keys.ts'
-import { EdgeFade, useScrollCue } from '../scroll-cue.tsx'
-import { collapseEngineSpans } from '../ledger-spans.ts'
-import { isAuditSection, itemCount } from '../fold.ts'
-import { gateCardState } from '../gate-state.ts'
-import { DIFF_SELECTION, decideTargetIndex, landingArtifact, resolveSurface, type Surface } from '../landing.ts'
-import { PROFILE_PHASES, api, formatAge, formatWhen, type InboxItem, type Phase, type RunDetailResponse, type RunSummary } from '../api.ts'
+import { useQuery } from '@tanstack/react-query'
+import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { api, formatAge, formatWhen, type InboxItem, type Phase, PROFILE_PHASES, type RunDetailResponse, type RunSummary } from '../api.ts'
 import { AgeBadge, BudgetMeter, Imp, KeyHints, KindChip, PhaseChip, PhaseSpine, ValidationBadge } from '../components/chips.tsx'
-import { BOUNCED_INSTRUCTION, DecidePanel, INFLIGHT_INSTRUCTION, ROUND_CAP_INSTRUCTION } from '../components/decide.tsx'
 import { CloseRunPanel, ClosureRecordBlock } from '../components/close-run.tsx'
+import { BOUNCED_INSTRUCTION, DecidePanel, INFLIGHT_INSTRUCTION, ROUND_CAP_INSTRUCTION } from '../components/decide.tsx'
 import { DiffView } from '../components/diff-view.tsx'
 import { EvidenceRollupPanel, G2Packet } from '../components/evidence.tsx'
+import { FindingsPanel, useReviews, VerdictChip } from '../components/findings.tsx'
 import { G1Packet } from '../components/g1.tsx'
-import { FindingsPanel, VerdictChip, useReviews } from '../components/findings.tsx'
 import { CitedObjects, CitedText, LexiconProvider, useRunLexicon } from '../components/lexicon.tsx'
 import { Markdown } from '../components/markdown.tsx'
 import { RoundCapPanel } from '../components/rounds.tsx'
+import { isAuditSection, itemCount } from '../fold.ts'
+import { gateCardState } from '../gate-state.ts'
+import { DIFF_SELECTION, decideTargetIndex, landingArtifact, resolveSurface, type Surface } from '../landing.ts'
+import { collapseEngineSpans } from '../ledger-spans.ts'
+import { EdgeFade, useScrollCue } from '../scroll-cue.tsx'
+import { type KeyHint, useKeys } from '../use-keys.ts'
 import { PageStatus } from './inbox.tsx'
 
 const isReviewPath = (p: string) => /^review-\d+.*\.md$/.test(p)
@@ -426,6 +427,7 @@ function SurfaceTab({
   const active = current === surface
   return (
     <button
+      type="button"
       onClick={() => onSelect(surface)}
       data-surface={surface}
       aria-current={active ? 'page' : undefined}
@@ -512,7 +514,7 @@ function RunMetadata({ summary, board }: { summary: RunSummary; board: React.Rea
           <span>
             Updated{' '}
             <span className="tabular-nums text-ink">
-              {summary.updatedAt ? formatAge(summary.updatedAt, Date.now() / 1000) + ' ago' : '—'}
+              {summary.updatedAt ? `${formatAge(summary.updatedAt, Date.now() / 1000)} ago` : '—'}
             </span>
           </span>
         </div>
@@ -585,9 +587,8 @@ function NeedsYouCard({
   // (#215) — the G2 approver should not have to open three files to learn
   // that one of them said request-changes.
   const chips =
-    chipPaths.length > 0 ? (
-      <>
-        {chipPaths.map((p) => {
+    chipPaths.length > 0
+      ? chipPaths.map((p) => {
           const report = isReviewPath(p) ? reports?.find((r) => r.path === p) : undefined
           const verdicts = (report?.rounds ?? []).map((r) => r.verdict).filter((v): v is NonNullable<typeof v> => v !== null)
           const verdictArc =
@@ -605,9 +606,8 @@ function NeedsYouCard({
               {verdictArc && <span className="text-muted"> · {verdictArc}</span>}
             </Link>
           )
-        })}
-      </>
-    ) : null
+        })
+      : null
   // Three chromes for three states (#159). An in-flight card is neither the
   // lifted accent of something to decide nor the red of something broken: it is
   // a card at rest, waiting on a machine, and its eyebrow says so rather than
@@ -832,6 +832,7 @@ function RecordSurface({
               return (
                 <li key={p} className="max-lg:min-w-0">
                   <button
+                    type="button"
                     onClick={() => onSelect(p)}
                     data-artifact-entry={p}
                     data-selected={!showDiff && p === current ? 'true' : undefined}
@@ -847,7 +848,7 @@ function RecordSurface({
           </ul>
           <div className="mt-3.5 border-t border-line pt-3.5 max-lg:mt-0 max-lg:flex max-lg:items-center max-lg:border-t-0 max-lg:pt-0">
             <div className={`${NAV_LABEL} max-lg:px-2 max-lg:pb-0 max-lg:py-1.5 max-lg:shrink-0`}>The change</div>
-            <button onClick={() => onSelect(DIFF_SELECTION)} data-select-diff className={navEntryClass(showDiff)}>
+            <button type="button" onClick={() => onSelect(DIFF_SELECTION)} data-select-diff className={navEntryClass(showDiff)}>
               <span className="truncate">diff by surface</span>
             </button>
           </div>
@@ -1030,6 +1031,7 @@ function FoldedMarkdown({ content, path, audit }: { content: string; path: strin
         // opens its own section, so its verdict never hides under a fold.
         if (section.heading === null || section.depth !== 2 || !isAuditSection(section.heading, audit)) {
           return (
+            // biome-ignore lint/suspicious/noArrayIndexKey: sections split from one static artifact body in document order; a heading can be null (the preamble) or repeat (review rounds).
             <Markdown key={i} sourcePath={path} unwrapped>
               {section.headingLine ? `${section.headingLine}\n${section.body}` : section.body}
             </Markdown>
@@ -1037,6 +1039,7 @@ function FoldedMarkdown({ content, path, audit }: { content: string; path: strin
         }
         const count = itemCount(section.body)
         return (
+          // biome-ignore lint/suspicious/noArrayIndexKey: see the case above — same static, document-order split.
           <details key={i} data-fold={section.heading} className="group mb-[18px]">
             <summary className="flex cursor-pointer flex-wrap items-baseline gap-x-3 list-none [&::-webkit-details-marker]:hidden">
               {/* The heading's accessible name stays the heading; the glyph
@@ -1118,10 +1121,10 @@ function HistoryTab({ history, src, slug }: { history: RunDetailResponse['histor
     return m
   }, [decisions])
 
-  if (history.length === 0) return <PageStatus text="No state history at this ref." />
-
   const rows = useMemo(() => collapseEngineSpans(history), [history])
   const [open, setOpen] = useState<ReadonlySet<number>>(() => new Set())
+
+  if (history.length === 0) return <PageStatus text="No state history at this ref." />
 
   const renderRow = (i: number) => {
     const h = history[i]!
@@ -1230,6 +1233,7 @@ function HistoryTab({ history, src, slug }: { history: RunDetailResponse['histor
                   {r.verbs.map(([verb, n]) => `${n} ${verb}${verb === 'metered' && r.meteredUsd !== null ? ` ($${r.meteredUsd.toFixed(2)})` : ''}`).join(' · ')}
                 </button>
                 {r.entered.map((phase, k) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: a bounce cycle can revisit the same phase, so the name isn't unique; this is a fixed sequence from committed history.
                   <span key={k} className="shrink-0 font-mono text-[11px] text-accent-deep">→ {phase}</span>
                 ))}
               </li>

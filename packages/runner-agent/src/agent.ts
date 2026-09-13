@@ -21,6 +21,7 @@ import { spawn } from 'node:child_process'
 import {
   BOT_IDENTITY,
   dig,
+  type HeadlessManifest,
   harvestPathspecs,
   loadHeadlessManifest,
   matchesLineFilter,
@@ -28,9 +29,8 @@ import {
   parseNdjson,
   resolveFrameworkRootsFromDisk,
   sumField,
-  type HeadlessManifest,
 } from '@gateline/orchestrator'
-import { createWorkspace, getHead, harvestAndPush, type CreateWorkspaceOptions, type HarvestResult, type Workspace } from './workspace.ts'
+import { type CreateWorkspaceOptions, createWorkspace, getHead, type HarvestResult, harvestAndPush, type Workspace } from './workspace.ts'
 
 /** Mirrors runner-api.ts's `PendingIntent` (server side of this relay). */
 export interface PendingIntent {

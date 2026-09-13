@@ -2,7 +2,7 @@
 // one immutable snapshot, read entirely from committed files at the run ref
 // (§4.2's first invariant). deriveAction() is then a pure function over this
 // snapshot — which is what makes one-test-per-row possible.
-import { parse as parseYaml } from 'yaml'
+
 import {
   type BudgetLedgerEntry,
   type GateId,
@@ -11,7 +11,8 @@ import {
   type Validation,
   validateArtifact,
 } from '@gateline/core/record'
-import { BranchOrder, readBranchOrder, resolutionCommitsOf, type CommitInfo, type RunRef, type RunSource } from '@gateline/core/sources'
+import { BranchOrder, type CommitInfo, type RunRef, type RunSource, readBranchOrder, resolutionCommitsOf } from '@gateline/core/sources'
+import { parse as parseYaml } from 'yaml'
 import { CONTRACT_DISPUTE, GATE_PRODUCER, landingEscalationKey } from './derive.ts'
 import { parseReviewReport, type ReviewInfo } from './review-report.ts'
 import { parseVerificationReport, type VerificationInfo } from './verification-report.ts'
@@ -390,7 +391,9 @@ export async function observeRun(source: RunSource, ref: RunRef, cfg: ObserveCon
   const bounceCounts: Record<string, number> = {}
   const ledgerCommits: RunObservation['ledgerCommits'] = ledger.map(() => ({ open: null, close: null }))
   const ledgerIndex = new Map<string, number>()
-  ledger.forEach((e, i) => ledgerIndex.set(ledgerEntryKey(e), i))
+  ledger.forEach((e, i) => {
+    ledgerIndex.set(ledgerEntryKey(e), i)
+  })
   const closeSettled = new Set<number>()
   const history = await source.stateHistory(ref) // newest first
   // Where each escalation was resolved comes from core, so Gatehouse's

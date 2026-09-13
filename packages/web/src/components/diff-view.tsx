@@ -128,8 +128,8 @@ function FileDiff({ file }: { file: DiffFile }) {
       <div className="overflow-x-auto">
         <table className="w-full border-collapse font-mono text-xs leading-5">
           <tbody>
-            {file.hunks.map((hunk, hi) => (
-              <HunkRows key={hi} header={hunk.header} lines={hunk.lines} />
+            {file.hunks.map((hunk) => (
+              <HunkRows key={hunk.header} header={hunk.header} lines={hunk.lines} />
             ))}
           </tbody>
         </table>
@@ -150,6 +150,7 @@ function HunkRows({ header, lines }: { header: string; lines: DiffFile['hunks'][
         const bg = line.kind === 'add' ? 'bg-ok-soft' : line.kind === 'del' ? 'bg-bad-soft' : ''
         const sign = line.kind === 'add' ? '+' : line.kind === 'del' ? '−' : ' '
         return (
+          // biome-ignore lint/suspicious/noArrayIndexKey: a diff line has no natural id (old/new line numbers are null on "no newline" meta lines); this is a fixed, never-reordered render of one hunk.
           <tr key={i} className={bg}>
             <td className="w-[44px] select-none border-r border-line px-2 py-0 text-right tabular-nums text-faint">{line.oldNo ?? ''}</td>
             <td className="w-[44px] select-none border-r border-line px-2 py-0 text-right tabular-nums text-faint">{line.newNo ?? ''}</td>

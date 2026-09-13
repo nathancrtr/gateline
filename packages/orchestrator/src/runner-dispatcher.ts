@@ -6,7 +6,7 @@
 // `resolveOutcome()` — hands back a real `DispatchOutcome`. This keeps the seam
 // (seam.ts) the engine's only dispatch call site and its only metering point:
 // the relay adds a transport, not a second seam.
-import type { DispatchOutcome, DispatchRequest, Dispatcher } from './seam.ts'
+import type { Dispatcher, DispatchOutcome, DispatchRequest } from './seam.ts'
 
 /**
  * A projection of the engine's ledger entry (`observe.ts`'s `LedgerEntry`) that

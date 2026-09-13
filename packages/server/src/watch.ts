@@ -1,6 +1,6 @@
 // Freshness: watch each repo's ref storage (refs/ + packed-refs) and emit a
 // debounced change signal. Agents commit → refs move → clients revalidate.
-import { watch, type FSWatcher } from 'node:fs'
+import { type FSWatcher, watch } from 'node:fs'
 import { join } from 'node:path'
 import { Git } from '@gateline/core'
 

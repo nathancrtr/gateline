@@ -4,8 +4,8 @@
 // for. hasShell selects between the two instructions; there is no default,
 // so every call site has to decide.
 import { describe, expect, it } from 'vitest'
-import { promptBody } from '../src/prompts.ts'
 import type { DispatchIntent } from '../src/derive.ts'
+import { promptBody } from '../src/prompts.ts'
 
 const intent = (role: DispatchIntent['role'], task: string | null = null, round: number | null = null): DispatchIntent => ({
   role,

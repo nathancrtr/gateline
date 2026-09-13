@@ -4,10 +4,10 @@
 // gate requires; every disagreement is dispositioned as an engine bug or a
 // design finding — either way the run was free design review.
 import type { RunState } from '@gateline/core/record'
-import type { LocalGitSource, RunRef } from '@gateline/core/sources'
 import { parseRunState } from '@gateline/core/record'
-import { deriveAction, type DerivedAction, type DispatchIntent } from './derive.ts'
-import { observeRun, type ObserveConfig } from './observe.ts'
+import type { LocalGitSource, RunRef } from '@gateline/core/sources'
+import { type DerivedAction, type DispatchIntent, deriveAction } from './derive.ts'
+import { type ObserveConfig, observeRun } from './observe.ts'
 import { loadRegistry } from './registry.ts'
 
 export type ShadowVerdict = 'agree' | 'disagree' | 'note' | 'end'

@@ -4,10 +4,10 @@ import { describe, expect, it } from 'vitest'
 import {
   DecisionError,
   deriveResumePhase,
+  PROFILE_GATES,
   parseRunState,
   phaseAfterGate,
   planDecision,
-  PROFILE_GATES,
   type RunState,
 } from '../src/index.ts'
 

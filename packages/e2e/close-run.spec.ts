@@ -6,10 +6,10 @@
 // checkout, so the committed record is checked the way an operator would
 // inspect it. Ports in use: 4399 smoke, 4398 staging, 4397 host-link, 4396
 // here — each spec needs its own so parallel workers never collide.
-import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
+import { type ChildProcess, execFileSync, spawn } from 'node:child_process'
 import { rmSync } from 'node:fs'
-import { expect, test } from '@playwright/test'
 import { generateFixtureRepo } from '@gateline/fixtures'
+import { expect, test } from '@playwright/test'
 
 const PORT = 4396
 test.use({ baseURL: `http://127.0.0.1:${PORT}` })

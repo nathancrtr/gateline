@@ -3,11 +3,11 @@
 // and the per-run-budget requirement (--require-budget).
 import { execFileSync } from 'node:child_process'
 import { rmSync } from 'node:fs'
-import { afterEach, describe, expect, it } from 'vitest'
 import { LocalGitSource } from '@gateline/core'
+import { afterEach, describe, expect, it } from 'vitest'
 import { Engine } from '../src/engine.ts'
 import { parseLedger } from '../src/observe.ts'
-import { agentCommit, FakeDispatcher, makeToyRepo, SPEC, TEST_REGISTRY, type Clock } from './engine.helper.ts'
+import { agentCommit, type Clock, FakeDispatcher, makeToyRepo, SPEC, TEST_REGISTRY } from './engine.helper.ts'
 
 const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
 

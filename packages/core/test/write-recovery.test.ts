@@ -6,7 +6,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { Git, planDecision, type RunRef } from '../src/index.ts'
-import { dropFixture, makeFixture, type FixtureContext } from './fixture.helper.ts'
+import { dropFixture, type FixtureContext, makeFixture } from './fixture.helper.ts'
 
 let ctx: FixtureContext
 const who = { name: 'Fixture Operator', email: 'operator@example.test' }
@@ -118,7 +118,7 @@ describe('writeState kill-window recovery', () => {
     // A human touches the checkout after the kill — the dirt no longer
     // matches the intent's recorded bytes, so it can't be attributed to the
     // engine (ADR-3).
-    const handEdited = (await readFile(statePath, 'utf8')) + '# a human was here too\n'
+    const handEdited = `${await readFile(statePath, 'utf8')}# a human was here too\n`
     await writeFile(statePath, handEdited, 'utf8')
 
     const { state: s2 } = await ctx.source.readState(ref)
@@ -137,7 +137,7 @@ describe('writeState kill-window recovery', () => {
     const git = new Git(ctx.repo.dir)
     await git.run(['checkout', '-q', 'run/g1-pending'])
 
-    const handEdited = (await readFile(statePath, 'utf8')) + '# local scribble\n'
+    const handEdited = `${await readFile(statePath, 'utf8')}# local scribble\n`
     await writeFile(statePath, handEdited, 'utf8')
     expect(await ctx.source.git.revParse(intentRef)).toBeNull() // absent, never written
 
@@ -189,7 +189,7 @@ describe('surviving refusal message (plan "Interface contracts": Surviving refus
     const git = new Git(ctx.repo.dir)
     await git.run(['checkout', '-q', 'run/g1-pending'])
 
-    const handEdited = (await readFile(statePath, 'utf8')) + '# local scribble\n'
+    const handEdited = `${await readFile(statePath, 'utf8')}# local scribble\n`
     await writeFile(statePath, handEdited, 'utf8')
     expect(await ctx.source.git.revParse(intentRef)).toBeNull() // absent, never written — unattributable
 

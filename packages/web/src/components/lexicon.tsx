@@ -5,10 +5,11 @@
 // verbatim, never paraphrased or generated: the hover card is a lens on the
 // exact bytes under approval, so no gloss can misinform a decision the
 // record then attributes to the approver.
-import { createContext, useContext, useMemo, type ReactNode } from 'react'
+
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
+import { createContext, type ReactNode, useContext, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
+import { Link } from 'react-router-dom'
 import remarkGfm from 'remark-gfm'
 import { api, type LexiconEntry } from '../api.ts'
 
@@ -82,8 +83,7 @@ function splitText(value: string, re: RegExp, skip?: SkipOnce): HNode[] | null {
   re.lastIndex = 0
   const out: HNode[] = []
   let last = 0
-  let m: RegExpExecArray | null
-  while ((m = re.exec(value))) {
+  for (const m of value.matchAll(re)) {
     if (skip && !skip.used && m[0] === skip.id) {
       skip.used = true
       continue
@@ -110,7 +110,8 @@ function walk(node: HNode, opts: WalkOpts, skip?: SkipOnce): void {
   if (node.type === 'element' && /^h[1-6]$/.test(node.tagName ?? '')) {
     const m = /^\s*(R\d+|ADR-\d+|E\d+)\b/.exec(textOf(node))
     if (m) {
-      ;(node.properties ??= {}).id = `def-${m[1]}`
+      node.properties ??= {}
+      node.properties.id = `def-${m[1]}`
       if (opts.definesHeadings) skip = { id: m[1]!, used: false }
     }
   }
@@ -192,6 +193,8 @@ export function LexRef({ children }: { children?: ReactNode }) {
   const entry = defs?.at(-1)
   const reveal = (e: { currentTarget: HTMLElement }) => placeCard(e.currentTarget)
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: the WAI-ARIA tooltip trigger pattern — plain text with a role="tooltip" popup below — has no interactive ARIA role of its own.
+    // biome-ignore lint/a11y/noNoninteractiveTabindex: tabIndex is what makes the tooltip reachable by keyboard (onFocus mirrors onMouseEnter); removing it would make the hover card mouse-only.
     <span className={`lex-ref ${entry ? '' : 'lex-ref-missing'}`} tabIndex={0} onMouseEnter={reveal} onFocus={reveal}>
       {id}
       <span className="lex-card" role="tooltip">
@@ -212,7 +215,7 @@ export function LexRef({ children }: { children?: ReactNode }) {
             supersedes {defs.length - 1} earlier definition{defs.length > 2 ? 's' : ''}
           </span>
         )}
-        {entry && entry.body && (
+        {entry?.body && (
           <span className="lex-card-def">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.body}</ReactMarkdown>
           </span>
@@ -251,8 +254,7 @@ export function CitedText({ children }: { children: string }) {
   const parts: ReactNode[] = []
   let last = 0
   let key = 0
-  let m: RegExpExecArray | null
-  while ((m = re.exec(children))) {
+  for (const m of children.matchAll(re)) {
     if (!lex.byId.has(m[0])) continue
     if (m.index > last) parts.push(children.slice(last, m.index))
     parts.push(<LexRef key={key++}>{m[0]}</LexRef>)
@@ -286,8 +288,7 @@ export function CitedObjects({ content, path }: { content: string; path: string 
     const re = new RegExp(lex.pattern, 'g')
     const seen = new Set<string>()
     const ids: string[] = []
-    let m: RegExpExecArray | null
-    while ((m = re.exec(content))) {
+    for (const m of content.matchAll(re)) {
       if (!seen.has(m[0])) {
         seen.add(m[0])
         ids.push(m[0])

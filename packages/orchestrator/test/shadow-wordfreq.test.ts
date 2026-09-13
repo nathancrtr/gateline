@@ -2,11 +2,12 @@
 // replay the wordfreq run and hold the engine to what the human orchestrator
 // actually did. Every disagreement must belong to a dispositioned class —
 // see shadow-wordfreq.md for the disposition table.
-import { fileURLToPath } from 'node:url'
+
 import { resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { fileURLToPath } from 'node:url'
 import { LocalGitSource } from '@gateline/core'
-import { shadowReplay, type ShadowStep } from '../src/shadow.ts'
+import { describe, expect, it } from 'vitest'
+import { type ShadowStep, shadowReplay } from '../src/shadow.ts'
 
 const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../..')
 const source = new LocalGitSource('sandbox', repoRoot)

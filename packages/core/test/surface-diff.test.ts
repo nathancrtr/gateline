@@ -3,8 +3,8 @@
 // these tests are about what it may and may not say: it labels, it never
 // filters, and it never judges.
 import { describe, expect, it } from 'vitest'
-import { buildTaskSet, type TaskSet } from '../src/view-model/tasks.ts'
 import { scopeDiff, undeclaredIndices } from '../src/view-model/surface-diff.ts'
+import { buildTaskSet, type TaskSet } from '../src/view-model/tasks.ts'
 import { parseUnifiedDiff } from '../src/view-model/unidiff.ts'
 
 const item = (id: string, surface: string[], status = 'pending') => ({

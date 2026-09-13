@@ -10,8 +10,7 @@ import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { Engine } from '../src/engine.ts'
-import { parseLedger } from '../src/observe.ts'
-import { agentCommit, FakeDispatcher, makeToyRepo, SPEC, TEST_REGISTRY, type Clock } from './engine.helper.ts'
+import { agentCommit, type Clock, FakeDispatcher, makeToyRepo, SPEC, TEST_REGISTRY } from './engine.helper.ts'
 
 const BOT = { name: 'gateline-orchestrator', email: 'orchestrator@gateline.invalid' }
 

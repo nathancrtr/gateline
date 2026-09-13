@@ -29,10 +29,10 @@
 // fixture run's git history) a hundred times over. Within it each combination
 // is navigated fresh rather than resized into: an early draft resized, and the
 // stale-layout artefacts it produced were indistinguishable from real findings.
-import { spawn, type ChildProcess } from 'node:child_process'
+import { type ChildProcess, spawn } from 'node:child_process'
 import { rmSync } from 'node:fs'
-import { expect, test, type Browser, type Page } from '@playwright/test'
 import { generateFixtureRepo } from '@gateline/fixtures'
+import { type Browser, expect, type Page, test } from '@playwright/test'
 
 const PORT = 4395
 // The page is built with `browser.newPage()` rather than taken from the `page`

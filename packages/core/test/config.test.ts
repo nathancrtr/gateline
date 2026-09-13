@@ -7,8 +7,8 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { buildPortfolio, loadSources, LocalOnlyPushConflictError, planDecision, type LocalGitSource } from '../src/index.ts'
-import { dropFixture, makeFixture, type FixtureContext } from './fixture.helper.ts'
+import { buildPortfolio, type LocalGitSource, LocalOnlyPushConflictError, loadSources, planDecision } from '../src/index.ts'
+import { dropFixture, type FixtureContext, makeFixture } from './fixture.helper.ts'
 
 let ctx: FixtureContext
 let toplevel: string

@@ -1,10 +1,10 @@
 // E2E smoke (plan §9): inbox → gate card → approve → the commit exists with
 // the right author, message, and preserved YAML comments; the bounce view
 // offers no approval; the keyboard loop drives a decision end-to-end.
-import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
+import { type ChildProcess, execFileSync, spawn } from 'node:child_process'
 import { rmSync } from 'node:fs'
-import { expect, test } from '@playwright/test'
 import { generateFixtureRepo } from '@gateline/fixtures'
+import { expect, test } from '@playwright/test'
 
 const PORT = 4399
 let fixtureDir: string
@@ -45,7 +45,7 @@ test('inbox ranks oldest first and flags bounced packets', async ({ page }) => {
 })
 
 test('bounce view renders problems and offers no approval (R3)', async ({ page }) => {
-  await page.goto('/runs/' + sourceId() + '/malformed-spec?decide=G0')
+  await page.goto(`/runs/${sourceId()}/malformed-spec?decide=G0`)
   const card = page.locator('[data-needs-card]')
   await expect(card).toContainText('missing required sections')
   await expect(card.locator('[data-decide="approve"]')).toHaveCount(0)
@@ -55,7 +55,7 @@ test('bounce view renders problems and offers no approval (R3)', async ({ page }
 test('bounce view at G3 (#260): a thin release plan is malformed, not ready', async ({ page }) => {
   // The last gate to get a checkable packet. Before contracts/release-plan.md
   // existed, a release plan of one line passed on presence alone.
-  await page.goto('/runs/' + sourceId() + '/malformed-release?decide=G3')
+  await page.goto(`/runs/${sourceId()}/malformed-release?decide=G3`)
   const card = page.locator('[data-needs-card]')
   await expect(card).toContainText('missing required sections')
   await expect(card).toContainText('Rollback plan')
@@ -63,7 +63,7 @@ test('bounce view at G3 (#260): a thin release plan is malformed, not ready', as
 })
 
 test('the pointer decision loop: approve G0 with burden → correct commit', async ({ page }) => {
-  await page.goto('/runs/' + sourceId() + '/g0-pending?decide=G0')
+  await page.goto(`/runs/${sourceId()}/g0-pending?decide=G0`)
   const card = page.locator('[data-needs-card]').first()
   await card.locator('[data-decide="approve"]').click()
   await card.getByText('Light correction').click()
@@ -83,7 +83,7 @@ test('the pointer decision loop: approve G0 with burden → correct commit', asy
 // gate: once G1 is decided there is no G1 card left to compose a packet
 // for. The file already runs in declaration order for the same reason.
 test('G1 packet (#255): coverage and parallel safety, composed from the record', async ({ page }) => {
-  await page.goto('/runs/' + sourceId() + '/g1-pending?decide=G1')
+  await page.goto(`/runs/${sourceId()}/g1-pending?decide=G1`)
   const packet = page.locator('[data-g1-packet]')
   await expect(packet).toBeVisible()
 
@@ -119,7 +119,7 @@ test('G1 packet (#255): coverage and parallel safety, composed from the record',
 })
 
 test('the keyboard loop: a → 1 → approve on the primary card', async ({ page }) => {
-  await page.goto('/runs/' + sourceId() + '/g1-pending?decide=G1')
+  await page.goto(`/runs/${sourceId()}/g1-pending?decide=G1`)
   const card = page.locator('[data-needs-card]').first()
   await expect(card.locator('[data-decide="approve"]')).toBeVisible()
   await page.keyboard.press('a')
@@ -140,7 +140,7 @@ test('portfolio and metrics render', async ({ page }) => {
 })
 
 test('run lexicon (#163): ids resolve to verbatim hover cards and jump to their definition', async ({ page }) => {
-  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=verification-report.md')
+  await page.goto(`/runs/${sourceId()}/g2-pending?tab=record&artifact=verification-report.md`)
   await expect(page.locator('.lex-cited > summary')).toContainText('Cites AC1.1, AC2.1')
   const ref = page.locator('.prose-artifact .lex-ref', { hasText: 'AC1.1' }).first()
   await ref.hover()
@@ -167,14 +167,14 @@ test('Record reader (#312): a clipped artifact shows a scroll cue, and a fitting
   // on 12px of phantom overflow at 1024px with nothing to scroll to.
   for (const width of [800, 900, 1000]) {
     await page.setViewportSize({ width, height: 900 })
-    await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=intent-brief.md')
+    await page.goto(`/runs/${sourceId()}/g2-pending?tab=record&artifact=intent-brief.md`)
     await expect(page.locator('[data-reader]')).toBeVisible()
     await expect(page.locator('[data-scroll-cue="right"]'), `${width}px: cue on the clipped edge`).toBeVisible()
     await expect(page.locator('[data-scroll-cue="left"]')).toHaveCount(0)
   }
   for (const width of [800, 1024, 1280]) {
     await page.setViewportSize({ width, height: 900 })
-    await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=plan.md')
+    await page.goto(`/runs/${sourceId()}/g2-pending?tab=record&artifact=plan.md`)
     await expect(page.locator('[data-reader] .prose-artifact')).toBeVisible()
     await expect(page.locator('[data-scroll-cue]'), `${width}px: no cue on an artifact that fits`).toHaveCount(0)
   }
@@ -186,7 +186,7 @@ test('run lexicon (#311): a card opened near the reader\'s right edge stays insi
   // rightmost reference used to open a card 108px past the pane.
   for (const width of [800, 1024]) {
     await page.setViewportSize({ width, height: 900 })
-    await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=plan.md')
+    await page.goto(`/runs/${sourceId()}/g2-pending?tab=record&artifact=plan.md`)
     await expect(page.locator('.prose-artifact .lex-ref').first()).toBeVisible()
     const index = await page.evaluate(() => {
       const refs = [...document.querySelectorAll('.prose-artifact .lex-ref')]
@@ -213,7 +213,7 @@ test('run lexicon (#311): a card opened near the reader\'s right edge stays insi
 })
 
 test('audit-time sections fold to their heading and open verbatim (#217)', async ({ page }) => {
-  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=review-01.md')
+  await page.goto(`/runs/${sourceId()}/g2-pending?tab=record&artifact=review-01.md`)
   const reader = page.locator('[data-reader]')
   // Decide-time: Findings renders open, as it always did.
   await expect(reader.getByRole('heading', { name: 'Findings' })).toBeVisible()
@@ -234,26 +234,26 @@ test('audit-time sections fold to their heading and open verbatim (#217)', async
 
   // A two-round review: the appended round's own heading and verdict render
   // open, never inside the previous round's Boundary check fold.
-  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=review-02.md')
+  await page.goto(`/runs/${sourceId()}/g2-pending?tab=record&artifact=review-02.md`)
   await expect(page.locator('[data-reader]').getByRole('heading', { name: 'Round 2', exact: true })).toBeVisible()
   await expect(page.locator('[data-reader] details[data-fold="Coverage"]')).toHaveCount(2)
   await expect(page.locator('[data-reader] details[data-fold="Boundary check"]').first()).not.toContainText('Round 2')
 
   // The spec folds Out of scope and nothing else.
-  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=spec.md')
+  await page.goto(`/runs/${sourceId()}/g2-pending?tab=record&artifact=spec.md`)
   await expect(page.locator('[data-reader] details[data-fold]')).toHaveCount(1)
   await expect(page.locator('[data-reader] details[data-fold="Out of scope"]')).toBeVisible()
   await expect(page.locator('[data-reader]').getByRole('heading', { name: 'Requirements' })).toBeVisible()
 
   // A contract with no annotation folds nothing: the intent brief carries none.
-  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=intent-brief.md')
+  await page.goto(`/runs/${sourceId()}/g2-pending?tab=record&artifact=intent-brief.md`)
   await expect(page.locator('[data-reader] .prose-artifact').first()).toBeVisible()
   await expect(page.locator('[data-reader] details[data-fold]')).toHaveCount(0)
 })
 
 test('verification verdict (#152): the G2 surface quotes the report\'s verdict and its non-verified rows', async ({ page }) => {
   // The run that escalated carries the report that did it.
-  await page.goto('/runs/' + sourceId() + '/escalated?tab=record&artifact=verification-report.md')
+  await page.goto(`/runs/${sourceId()}/escalated?tab=record&artifact=verification-report.md`)
   const rollup = page.locator('[data-evidence-rollup]').first()
   await expect(rollup).toBeVisible()
   await expect(rollup.locator('[data-report-verdict="escalate"]')).toContainText('“escalate”')
@@ -264,18 +264,18 @@ test('verification verdict (#152): the G2 surface quotes the report\'s verdict a
   await expect(notVerified).not.toContainText('AC1.1')
 
   // A clean report states pass and lists nothing.
-  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=verification-report.md')
+  await page.goto(`/runs/${sourceId()}/g2-pending?tab=record&artifact=verification-report.md`)
   const clean = page.locator('[data-evidence-rollup]').first()
   await expect(clean.locator('[data-report-verdict="pass"]')).toBeVisible()
   await expect(clean.locator('[data-not-verified]')).toHaveCount(0)
 
   // And the verdict is on the G2 card itself, where the decision is made —
   // not only on the report's own page.
-  await page.goto('/runs/' + sourceId() + '/g2-pending?decide=G2')
+  await page.goto(`/runs/${sourceId()}/g2-pending?decide=G2`)
   await expect(page.locator('[data-g2-packet] [data-report-verdict="pass"]')).toContainText('“pass”')
 
   // A report from before the verdict line says so, rather than showing nothing.
-  await page.goto('/runs/' + sourceId() + '/forked-contract?decide=G2')
+  await page.goto(`/runs/${sourceId()}/forked-contract?decide=G2`)
   await expect(page.locator('[data-g2-packet] [data-report-verdict=""]')).toContainText('no overall verdict')
 })
 
@@ -288,7 +288,7 @@ test('run lexicon (#308): the idle card takes no space, and the keyboard still o
   // — the reference itself carries the tabindex, focusing it displays the card,
   // and only then does the jump link enter the tab order. This test is that
   // sequence, in order, because each step depends on the one before.
-  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=verification-report.md')
+  await page.goto(`/runs/${sourceId()}/g2-pending?tab=record&artifact=verification-report.md`)
   const ref = page.locator('.prose-artifact .lex-ref', { hasText: 'AC1.1' }).first()
   await expect(ref).toBeVisible()
   const card = ref.locator('.lex-card')
@@ -313,7 +313,7 @@ test('run lexicon (#308): the idle card takes no space, and the keyboard still o
 test('evidence rollup (#165): uncited criteria are the headline; anchors jump to the evidence block', async ({ page }) => {
   // The one-line citation map now lives where the report itself is on screen;
   // G2's decision card carries the composed packet instead (#256).
-  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=verification-report.md')
+  await page.goto(`/runs/${sourceId()}/g2-pending?tab=record&artifact=verification-report.md`)
   const rollup = page.locator('[data-evidence-rollup]').first()
   await expect(rollup).toContainText('No verification evidence cites:')
   await expect(rollup).toContainText('AC2.2')
@@ -325,7 +325,7 @@ test('evidence rollup (#165): uncited criteria are the headline; anchors jump to
 })
 
 test('G2 packet (#256): the gate opens on a criterion-ordered surface, not a file listing', async ({ page }) => {
-  await page.goto('/runs/' + sourceId() + '/g2-pending')
+  await page.goto(`/runs/${sourceId()}/g2-pending`)
   const packet = page.locator('[data-g2-packet]')
   await expect(packet).toBeVisible()
 
@@ -386,7 +386,7 @@ test('G2 packet (#256): the gate opens on a criterion-ordered surface, not a fil
 })
 
 test('G2 packet (#256): a patch run shows the reviews as the whole packet, with no missing-verifier error', async ({ page }) => {
-  await page.goto('/runs/' + sourceId() + '/patch-g2-pending')
+  await page.goto(`/runs/${sourceId()}/patch-g2-pending`)
   const packet = page.locator('[data-g2-packet]')
   await expect(packet).toContainText('patch profile runs no verifier — the reviews are the packet')
   // No verification column, and nothing claiming the record is incomplete.
@@ -398,7 +398,7 @@ test('G2 packet (#256): a patch run shows the reviews as the whole packet, with 
 })
 
 test('G2 packet (#256): a forked verification grammar withholds the view and says why', async ({ page }) => {
-  await page.goto('/runs/' + sourceId() + '/forked-contract')
+  await page.goto(`/runs/${sourceId()}/forked-contract`)
   const packet = page.locator('[data-g2-packet]')
   // The report passes its contract — the gate is reviewable, not bounced.
   await expect(page.locator('[data-needs-card]')).toContainText('Does the evidence support merging?')
@@ -418,7 +418,7 @@ test('G2 packet (#256): a forked verification grammar withholds the view and say
 })
 
 test('decision ledger (#268): History reads decisions and engine verbs, not a commit log', async ({ page }) => {
-  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=history')
+  await page.goto(`/runs/${sourceId()}/g2-pending?tab=history`)
   const ledger = page.locator('[data-ledger]')
   await expect(ledger).toBeVisible()
 
@@ -452,13 +452,13 @@ test('decision ledger (#268): History reads decisions and engine verbs, not a co
 test('decision ledger (#268): a schema-invalid run still renders its ledger (AC5)', async ({ page }) => {
   // bad-state's state.yaml is not valid YAML. Parsing reads commit subjects
   // only, so the ledger must survive what the state parser cannot.
-  await page.goto('/runs/' + sourceId() + '/bad-state?tab=history')
+  await page.goto(`/runs/${sourceId()}/bad-state?tab=history`)
   await expect(page.locator('[data-ledger]')).toBeVisible()
   await expect(page.locator('[data-ledger] li').first()).toBeVisible()
 })
 
 test('surface-scoped diff (#270): the diff groups by what each work item declared', async ({ page }) => {
-  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record&artifact=@diff')
+  await page.goto(`/runs/${sourceId()}/g2-pending?tab=record&artifact=@diff`)
 
   // AC1 — a group per work item, named by the item and the surface it declared.
   const core = page.locator('[data-surface-group="01-core"]')
@@ -486,7 +486,7 @@ test('surface-scoped diff (#270): a forked work-item grammar withholds the group
   // forked-contract writes its contact surface as a structured block. Every
   // required key is there, so the gate is reviewable — the view stands down and
   // names the grammar rather than reporting every file as out of surface.
-  await page.goto('/runs/' + sourceId() + '/forked-contract?tab=record&artifact=@diff')
+  await page.goto(`/runs/${sourceId()}/forked-contract?tab=record&artifact=@diff`)
   await expect(page.locator('[data-surface-withheld]')).toContainText('nested block')
   await expect(page.locator('[data-surface-group]')).toHaveCount(0)
   await expect(page.locator('[data-undeclared]')).toHaveCount(0)
@@ -494,14 +494,14 @@ test('surface-scoped diff (#270): a forked work-item grammar withholds the group
   await expect(page.getByText('src/pruner.py', { exact: true }).first()).toBeVisible()
   await expect(page.getByText('def prune(paths):')).toBeVisible()
   // The G2 card claims no boundary check it did not run.
-  await page.goto('/runs/' + sourceId() + '/forked-contract')
+  await page.goto(`/runs/${sourceId()}/forked-contract`)
   await expect(page.locator('[data-boundary-check]')).toHaveCount(0)
 })
 
 test('surface-scoped diff (#270): G2’s packet carries the boundary fact and routes to it', async ({ page }) => {
   // DESIGN.md §4 puts the diff in G2's packet; #256 deferred its form to #259,
   // which chose this view. The card states the fact and links to the diff.
-  await page.goto('/runs/' + sourceId() + '/g2-pending')
+  await page.goto(`/runs/${sourceId()}/g2-pending`)
   const boundary = page.locator('[data-boundary-check]')
   await expect(boundary).toContainText('3 changed files')
   await expect(boundary).toContainText('1 outside every declared surface')
@@ -515,13 +515,13 @@ test('surface-scoped diff (#270): G2’s packet carries the boundary fact and ro
 
 test('surfaces (#258): a pending run opens on Decide, a done run on Record with no empty Decide', async ({ page }) => {
   // AC1 — the decision is what opens, not the first artifact alphabetically.
-  await page.goto('/runs/' + sourceId() + '/g2-pending')
+  await page.goto(`/runs/${sourceId()}/g2-pending`)
   await expect(page.locator('[data-surface="decide"]')).toHaveAttribute('aria-current', 'page')
   await expect(page.locator('[data-needs-card]')).toBeVisible()
   await expect(page.locator('[data-g2-packet]')).toBeVisible()
 
   // AC1 — a run with nothing on the table is offered no Decide surface at all.
-  await page.goto('/runs/' + sourceId() + '/done-merged')
+  await page.goto(`/runs/${sourceId()}/done-merged`)
   await expect(page.locator('[data-surface="decide"]')).toHaveCount(0)
   await expect(page.locator('[data-surface="record"]')).toHaveAttribute('aria-current', 'page')
   await expect(page.locator('[data-needs-card]')).toHaveCount(0)
@@ -536,24 +536,24 @@ test('surfaces (#258): a pending run opens on Decide, a done run on Record with 
 test('surfaces (#258): retired tab names still resolve, and leave a canonical URL', async ({ page }) => {
   // AC3 — links minted before the rename keep working. ?tab=artifacts is the
   // record, and the artifact it named is still the one open.
-  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=artifacts&artifact=spec.md')
+  await page.goto(`/runs/${sourceId()}/g2-pending?tab=artifacts&artifact=spec.md`)
   await expect(page).toHaveURL(/tab=record/)
   await expect(page).toHaveURL(/artifact=spec\.md/)
   await expect(page.locator('.prose-artifact')).toBeVisible()
 
   // ?tab=diff is the record with the change open.
-  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=diff')
+  await page.goto(`/runs/${sourceId()}/g2-pending?tab=diff`)
   await expect(page).toHaveURL(/tab=record/)
   await expect(page.locator('[data-surface-group="01-core"]')).toBeVisible()
 
   // A ?tab=decide link that has aged out lands on the record, not a blank panel.
-  await page.goto('/runs/' + sourceId() + '/done-merged?tab=decide')
+  await page.goto(`/runs/${sourceId()}/done-merged?tab=decide`)
   await expect(page).toHaveURL(/tab=record/)
   await expect(page.locator('[data-surface="record"]')).toHaveAttribute('aria-current', 'page')
 })
 
 test('surfaces (#258): the change reads inside Record, and every artifact stays reachable', async ({ page }) => {
-  await page.goto('/runs/' + sourceId() + '/g2-pending?tab=record')
+  await page.goto(`/runs/${sourceId()}/g2-pending?tab=record`)
   // AC2 — the artifact list is unchanged, and the change sits below it.
   for (const path of ['spec.md', 'plan.md', 'verification-report.md', 'review-01.md']) {
     await expect(page.getByRole('button', { name: new RegExp(path.replace('.', '\\.')) })).toBeVisible()
@@ -573,13 +573,13 @@ test('surfaces (#258): the change reads inside Record, and every artifact stays 
 test('G1 packet (#255): a patch run keeps its brief-plus-work-item view', async ({ page }) => {
   // AC4 — patch runs have no plan.md and no spec, so there is no mapping to
   // check and no coverage claim to make.
-  await page.goto('/runs/' + sourceId() + '/patch-g1-pending?decide=G1')
+  await page.goto(`/runs/${sourceId()}/patch-g1-pending?decide=G1`)
   await expect(page.locator('[data-needs-card]').first()).toBeVisible()
   await expect(page.locator('[data-g1-packet]')).toHaveCount(0)
 })
 
 test('round cap (#257): the surface compares the last two rounds, not a file list', async ({ page }) => {
-  await page.goto('/runs/' + sourceId() + '/round-cap')
+  await page.goto(`/runs/${sourceId()}/round-cap`)
   const panel = page.locator('[data-round-cap]')
   await expect(panel).toBeVisible()
 
@@ -626,13 +626,13 @@ test('round cap (#257): a single-round record offers no comparison and says why'
   // AC4 — g2-pending's task carries one numbered round in its own file; the
   // panel is not offered there at all, and where it is offered on a record it
   // cannot compare, it withholds itself in words rather than showing nothing.
-  await page.goto('/runs/' + sourceId() + '/g2-pending')
+  await page.goto(`/runs/${sourceId()}/g2-pending`)
   await expect(page.locator('[data-round-cap]')).toHaveCount(0)
 })
 
 test('phase spine (#254): the profile is shape, not prose', async ({ page }) => {
   // AC1 — a full run shows six phases and four gate transitions, interleaved.
-  await page.goto('/runs/' + sourceId() + '/g3-pending')
+  await page.goto(`/runs/${sourceId()}/g3-pending`)
   const spine = page.locator('[data-spine]')
   await expect(spine.locator('[data-spine-phase]')).toHaveCount(6)
   await expect(spine.locator('[data-spine-gate]')).toHaveCount(4)
@@ -661,7 +661,7 @@ test('phase spine (#254): the profile is shape, not prose', async ({ page }) => 
 
 test('phase spine (#254): a reduced profile has fewer cells, not empty ones', async ({ page }) => {
   // AC1 — patch shows four phases and two gates, with no G0 or G3 cell at all.
-  await page.goto('/runs/' + sourceId() + '/patch-g1-pending')
+  await page.goto(`/runs/${sourceId()}/patch-g1-pending`)
   const spine = page.locator('[data-spine]')
   await expect(spine.locator('[data-spine-phase]')).toHaveCount(4)
   await expect(spine.locator('[data-spine-gate]')).toHaveCount(2)
@@ -676,7 +676,7 @@ test('phase spine (#254): a reduced profile has fewer cells, not empty ones', as
 test('phase spine (#254): a paused run is placed, not parked at the start', async ({ page }) => {
   // AC4 — rest states stay distinguishable from any live phase and from each
   // other: the spine says where the run stands, the chip says it is not moving.
-  await page.goto('/runs/' + sourceId() + '/paused-budget')
+  await page.goto(`/runs/${sourceId()}/paused-budget`)
   const spine = page.locator('[data-spine]')
   await expect(spine).toHaveAttribute('data-rest', 'paused')
   await expect(spine.locator('[data-spine-phase="plan"]')).toHaveAttribute('data-state', 'current')
@@ -686,7 +686,7 @@ test('phase spine (#254): a paused run is placed, not parked at the start', asyn
 
   // A moving run carries no rest chip at all — that is what makes the chip mean
   // something when it is there.
-  await page.goto('/runs/' + sourceId() + '/g3-pending')
+  await page.goto(`/runs/${sourceId()}/g3-pending`)
   await expect(page.locator('header [data-phase-chip]')).toHaveCount(0)
 })
 
@@ -695,7 +695,7 @@ test('phase spine (#254): the header lays out full-width at 900px', async ({ pag
   // columns stacked into the left half and left the right half empty, above the
   // decide surface they were supposed to introduce.
   await page.setViewportSize({ width: 900, height: 1000 })
-  await page.goto('/runs/' + sourceId() + '/g2-pending')
+  await page.goto(`/runs/${sourceId()}/g2-pending`)
   const header = (await page.locator('header').boundingBox())!
 
   // The spine uses the band rather than hugging the left edge, and a full run's

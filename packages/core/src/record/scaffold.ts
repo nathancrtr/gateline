@@ -4,8 +4,9 @@
 // stageRun, which is the only branch-minting path. Imports schema.ts only —
 // the layering test enforces this file never reaches into sources/ or
 // view-model/.
-import { PROFILE_GATES, type Profile, type RunState } from './schema.ts'
+
 import { parse as parseYaml } from 'yaml'
+import { PROFILE_GATES, type Profile, type RunState } from './schema.ts'
 
 /** A staging request: slug/title/profile/brief plus a nullable, source-agnostic
  * intake identity (this run's only in-scope path is free-form: all fields

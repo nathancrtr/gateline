@@ -16,10 +16,10 @@ import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { describe, expect, it } from 'vitest'
 import { LocalGitSource } from '@gateline/core'
 import { createApp } from '@gateline/server'
 import { buildRunnerApi } from '@gateline/server/main'
+import { describe, expect, it } from 'vitest'
 import { Engine } from '../src/engine.ts'
 import { parseLedger } from '../src/observe.ts'
 import { RemoteDispatcher } from '../src/runner-dispatcher.ts'
@@ -69,7 +69,9 @@ function listen(app: { fetch: (req: Request) => Response | Promise<Response> }):
         const request = new Request(`http://127.0.0.1${req.url}`, { method: req.method, headers, body: noBody ? undefined : body })
         const response = await app.fetch(request)
         res.statusCode = response.status
-        response.headers.forEach((value, key) => res.setHeader(key, value))
+        response.headers.forEach((value, key) => {
+          res.setHeader(key, value)
+        })
         res.end(Buffer.from(await response.arrayBuffer()))
       })()
     })

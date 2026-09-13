@@ -3,8 +3,8 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { Git, planDecision, parseRunState, DecisionError, type Closure, type Disposition, type RunRef, type RunState } from '../src/index.ts'
-import { dropFixture, makeFixture, type FixtureContext } from './fixture.helper.ts'
+import { type Closure, DecisionError, type Disposition, Git, parseRunState, planDecision, type RunRef, type RunState } from '../src/index.ts'
+import { dropFixture, type FixtureContext, makeFixture } from './fixture.helper.ts'
 
 let ctx: FixtureContext
 const who = { name: 'Fixture Operator', email: 'operator@example.test' }
@@ -98,7 +98,7 @@ describe('approve via the write path', () => {
     const git = new Git(ctx.repo.dir)
     await git.run(['checkout', '-q', 'run/g1-pending'])
     const statePath = join(ctx.repo.dir, 'runs/g1-pending/state.yaml')
-    const dirtied = (await readFile(statePath, 'utf8')) + '# local scribble\n'
+    const dirtied = `${await readFile(statePath, 'utf8')}# local scribble\n`
     await writeFile(statePath, dirtied)
 
     const { state } = await ctx.source.readState(ref)

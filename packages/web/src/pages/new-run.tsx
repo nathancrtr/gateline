@@ -5,11 +5,12 @@
 // (AC2.3); the operator's own words are the only prose that lands in the brief
 // (AC2.1). Outcome/flash rendering for all five submission outcomes lives
 // here — decide.tsx is untouched (task 05 owns the Arm affordance only).
-import { useEffect, useMemo, useRef, useState } from 'react'
+
+import { planRunScaffold, type RunScaffold, ScaffoldError, SLUG_PATTERN } from '@gateline/core/record'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { planRunScaffold, ScaffoldError, SLUG_PATTERN, type RunScaffold } from '@gateline/core/record'
-import { ApiError, PROFILE_GATES, api, type Profile, type StageOutcomeView, type StagingSourceConfig } from '../api.ts'
+import { ApiError, api, PROFILE_GATES, type Profile, type StageOutcomeView, type StagingSourceConfig } from '../api.ts'
 import { Imp } from '../components/chips.tsx'
 import { PageStatus } from './inbox.tsx'
 
@@ -73,13 +74,14 @@ export function NewRunPage() {
   const source: StagingSourceConfig | null = sources.find((s) => s.id === sourceId) ?? sources[0] ?? null
 
   // Default the picker to the first configured source once config loads.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deliberately narrower than the full capture set — this only needs to notice the count changing (config loaded), not re-run when sourceId (which it sets) or the array reference changes.
   useEffect(() => {
     if (sourceId === null && sources[0]) setSourceId(sources[0].id)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sources.length])
 
   // A fresh draft per required-section list (only changes if the source
   // changes) — never carries stale keys from a previously selected source.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on source?.id on purpose — a fresh draft only when the selected source itself changes, not on every source/briefSections identity change.
   useEffect(() => {
     if (!source) return
     setSections((prev) => {
@@ -87,7 +89,6 @@ export function NewRunPage() {
       for (const heading of source.briefSections) next[heading] = prev[heading] ?? ''
       return next
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source?.id])
 
   useEffect(() => {
@@ -375,10 +376,10 @@ export function NewRunPage() {
             </p>
           </div>
 
-          <div className="mb-[22px]">
-            <label className="block text-[12px] text-muted mb-[7px]">
+          <fieldset className="mb-[22px]">
+            <legend className="block text-[12px] text-muted mb-[7px]">
               Profile · which gates the run carries
-            </label>
+            </legend>
             <div className="flex flex-wrap gap-2.5">
               {PROFILES.map((p) => (
                 <button
@@ -408,7 +409,7 @@ export function NewRunPage() {
                 in the record preview.
               </p>
             )}
-          </div>
+          </fieldset>
 
           <div className="mb-[22px] max-w-[220px]">
             <label htmlFor="budget" className="block text-[12px] text-muted mb-[5px]">
@@ -541,7 +542,6 @@ export function NewRunPage() {
           slug={slug}
           profile={profile}
           scaffold={scaffold}
-          scaffoldError={scaffoldError}
           ready={ready}
           sections={sections}
           sectionEntries={sectionEntries}
@@ -557,7 +557,6 @@ function RecordPreview({
   slug,
   profile,
   scaffold,
-  scaffoldError,
   ready,
   sections,
   sectionEntries,
@@ -567,7 +566,6 @@ function RecordPreview({
   slug: string
   profile: Profile
   scaffold: RunScaffold | null
-  scaffoldError: string | null
   ready: boolean
   sections: Record<string, string>
   sectionEntries: string[]

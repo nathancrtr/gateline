@@ -1,8 +1,9 @@
 // SSE freshness: one EventSource; every "change" event (a ref moved in some
 // watched repo) invalidates all queries. The repo is the database — the UI
 // only ever revalidates, never patches state locally.
-import { useEffect } from 'react'
+
 import { useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 
 export function useLiveInvalidation(): void {
   const queryClient = useQueryClient()

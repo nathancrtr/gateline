@@ -6,10 +6,11 @@
 // the whole relay chain end to end (AC7.1, AC7.2, AC9.2) and that R7's lease
 // semantics need no new mechanism: `this.jobs` (engine.ts) already gates
 // `sweepStale` for a live remote dispatch exactly like a live local one.
-import { describe, expect, it } from 'vitest'
+
 import { LocalGitSource } from '@gateline/core'
 import { createApp } from '@gateline/server'
 import { buildRunnerApi } from '@gateline/server/main'
+import { describe, expect, it } from 'vitest'
 import { Engine } from '../src/engine.ts'
 import { parseLedger } from '../src/observe.ts'
 import { RemoteDispatcher } from '../src/runner-dispatcher.ts'

@@ -25,10 +25,12 @@
     "dev": "npm run dev -w @gateline/server",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json && tsc -p web/tsconfig.json",
+    "lint": "biome check .",
     "check-lockfile": "node scripts/check-lockfile.mjs",
     "fixture": "node fixtures/src/main.ts"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.5.13",
     "@playwright/test": "^1.61.1",
     "@types/node": "^24.0.0",
     "typescript": "^5.8.0",

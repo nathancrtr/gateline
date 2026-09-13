@@ -3,8 +3,9 @@
 // role → profile → model resolution, the P5 avoid_vendor_of pins it must
 // enforce at dispatch time, and the pricing/estimate maps that drive metering
 // and the pre-flight budget check.
+
+import { type Git, resolveFrameworkRoots } from '@gateline/core/sources'
 import { parse as parseYaml } from 'yaml'
-import { resolveFrameworkRoots, type Git } from '@gateline/core/sources'
 
 export interface RegistryProfile {
   default: string

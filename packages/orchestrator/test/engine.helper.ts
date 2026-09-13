@@ -3,11 +3,11 @@
 // script plays the agent: write artifacts, commit, report usage), and a
 // reconcile loop that drives the engine to a fixed point.
 import { execFileSync, spawnSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { hostname, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { type DecisionInput, LocalGitSource, planDecision, type RunRef } from '@gateline/core'
 import { expect } from 'vitest'
-import { LocalGitSource, planDecision, type DecisionInput, type RunRef } from '@gateline/core'
 import type { Engine } from '../src/engine.ts'
 import type { Registry } from '../src/registry.ts'
 import type { Dispatcher, DispatchOutcome, DispatchRequest } from '../src/seam.ts'
@@ -231,7 +231,7 @@ export class FakeDispatcher implements Dispatcher {
   }
 }
 
-export const toyRef = (dir: string): RunRef => ({ source: 'human', slug: 'toy', ref: 'run/toy', kind: 'branch', branch: 'run/toy' })
+export const toyRef = (_dir: string): RunRef => ({ source: 'human', slug: 'toy', ref: 'run/toy', kind: 'branch', branch: 'run/toy' })
 
 /** A human decision through core's own write path — never the engine's. */
 export async function humanDecide(dir: string, input: DecisionInput): Promise<void> {

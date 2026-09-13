@@ -13,9 +13,10 @@
 // own bytes and a finding reference names a finding the reviewer raised.
 // Ordering findings by the report's own severity label is quoting; computing a
 // verified/unverified ratio would not be, and is out of scope permanently.
-import { type Lexicon } from './lexicon.ts'
+
 import { verdictLines } from '../record/validate.ts'
-import { SEVERITY_RANK, parseReview, type ReviewFinding } from './review.ts'
+import type { Lexicon } from './lexicon.ts'
+import { parseReview, type ReviewFinding, SEVERITY_RANK } from './review.ts'
 
 export interface EvidenceAnchor {
   /** Run-relative artifact path. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { contractFor, extractAudience, extractSections, missingSections, validateArtifact, type ContractTemplates } from '../src/index.ts'
+import { type ContractTemplates, contractFor, extractAudience, extractSections, missingSections, validateArtifact } from '../src/index.ts'
 
 const noTemplates: ContractTemplates = { read: async () => null }
 

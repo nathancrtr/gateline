@@ -6,8 +6,8 @@ import { parse as parseYaml } from 'yaml'
 import { z } from 'zod'
 import { Git } from '../sources/git.ts'
 import { LocalGitSource, readFileIfExists, repoToplevel } from '../sources/local-source.ts'
-import { LocalOnlyPushConflictError } from '../sources/source.ts'
 import type { RunSource } from '../sources/source.ts'
+import { LocalOnlyPushConflictError } from '../sources/source.ts'
 
 // Re-exported from its original home so `@gateline/core/view-model` and the
 // root export keep the same surface; the class itself now sits in the sources
@@ -69,7 +69,10 @@ async function pushWhenOriginExists(top: string): Promise<boolean> {
 /** Caches one `git config` read per source: `resolveMode` may consult origin-exists twice (rules 2d and 3). */
 function memoizedOriginExists(top: string): () => Promise<boolean> {
   let cached: Promise<boolean> | null = null
-  return () => cached ?? (cached = pushWhenOriginExists(top))
+  return () => {
+    cached ??= pushWhenOriginExists(top)
+    return cached
+  }
 }
 
 /**

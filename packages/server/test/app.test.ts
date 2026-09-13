@@ -1,10 +1,10 @@
 // Route tests over the fixture source (plan §9).
 import { execFileSync } from 'node:child_process'
 import { rm } from 'node:fs/promises'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { generateFixtureRepo, type FixtureRepo } from '@gateline/fixtures'
 import { LocalGitSource, parseRunState, SLUG_PATTERN, validateArtifact, writeEngineHealth } from '@gateline/core'
+import { type FixtureRepo, generateFixtureRepo } from '@gateline/fixtures'
 import type { Hono } from 'hono'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createApp } from '../src/app.ts'
 import { API_VERSION } from '../src/contract.ts'
 
@@ -12,7 +12,9 @@ let fixture: FixtureRepo
 let source: LocalGitSource
 let app: Hono
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
+// `any` here is deliberate: these helpers front dozens of assertions against
+// varying response shapes across this whole file; noExplicitAny is off for
+// this file in biome.json rather than repeating that decision per call site.
 const get = async (path: string) => {
   const res = await app.request(path)
   return { status: res.status, body: (await res.json()) as any }

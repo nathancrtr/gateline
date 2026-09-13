@@ -1,6 +1,6 @@
 // Where a lexicon card opens (#311): inward, never past the pane that clips it.
 import { describe, expect, it } from 'vitest'
-import { cardPlacement, CARD_WIDTH } from '../src/components/lexicon.tsx'
+import { CARD_WIDTH, cardPlacement } from '../src/components/lexicon.tsx'
 
 const pane = { left: 216, right: 776 } // the Record reader at an 800px viewport
 

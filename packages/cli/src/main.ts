@@ -6,50 +6,51 @@ import { existsSync, realpathSync } from 'node:fs'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import { createInterface } from 'node:readline/promises'
-import { Command, Option } from 'commander'
+import { fileURLToPath } from 'node:url'
 import {
   armRefusal,
   BUILTIN_SECTIONS,
+  BURDENS,
+  type Burden,
   buildLexicon,
   buildPortfolio,
-  BURDENS,
   CLOSURE_MEANINGS,
   CLOSURES,
+  type Closure,
   DecisionError,
+  type DecisionInput,
   DISPOSITIONS,
+  type Disposition,
   ensureDraftPr,
   extractSections,
   formatDuration,
-  loadSources,
-  LocalOnlyPushConflictError,
-  missingSections,
-  planDecision,
-  planRunScaffold,
-  PROFILE_GATES,
-  PROFILES,
-  resolveCodeRepo,
-  resolveId,
-  ScaffoldError,
-  scanIds,
-  SLUG_PATTERN,
-  SUPERSEDE_EXIT_CODE,
-  type Burden,
-  type Closure,
-  type DecisionInput,
-  type Disposition,
   type GateId,
   type Identity,
   type InboxItem,
+  LocalOnlyPushConflictError,
+  loadSources,
+  missingSections,
   type Phase,
+  PROFILE_GATES,
+  PROFILES,
   type Profile,
+  planDecision,
+  planRunScaffold,
   type RunRef,
+  type RunScaffold,
   type RunSource,
+  resolveCodeRepo,
+  resolveId,
+  ScaffoldError,
+  SLUG_PATTERN,
+  SUPERSEDE_EXIT_CODE,
+  scanIds,
   validateArtifact,
   workItemIncomplete,
   workItemPath,
 } from '@gateline/core'
+import { Command, Option } from 'commander'
 
 const program = new Command()
 program.name('gateline').description('Gate frontend for artifact-driven agent pipelines').version('0.1.0')
@@ -661,7 +662,7 @@ export async function stageNewRun(flags: NewFlags): Promise<number> {
     }
   }
 
-  let scaffold
+  let scaffold: RunScaffold
   try {
     scaffold = planRunScaffold({
       slug,

@@ -8,15 +8,15 @@ import { rmSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ensureDraftPr,
-  loadSources,
   LocalGitSource,
+  loadSources,
+  type PrProvider,
   planDecision,
   planSyncForSource,
-  summarizeRun,
-  type PrProvider,
   type RunRef,
+  summarizeRun,
 } from '../src/index.ts'
-import { dropFixture, makeFixture, type FixtureContext } from './fixture.helper.ts'
+import { dropFixture, type FixtureContext, makeFixture } from './fixture.helper.ts'
 
 let ctx: FixtureContext
 const cleanups: string[] = []

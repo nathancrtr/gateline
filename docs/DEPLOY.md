@@ -136,8 +136,8 @@ fly deploy
 fly scale count 1   # the clone on the volume is single-writer
 ```
 
-`fly.toml` is gitignored: it names your instance and belongs to you, not to
-the framework.
+`fly.toml` is gitignored: it names your instance and belongs to you rather
+than to the framework.
 
 ## Cloudflare Tunnel + Access
 
@@ -268,14 +268,14 @@ visible, not quiet.
 1. Your repo's `registry/models.yaml` must bind roles to **real model IDs**
    with real pricing — the orchestrator dispatches whatever the registry
    names, and template registries ship with illustrative placeholders.
-2. `fly secrets set ANTHROPIC_API_KEY=...` (API billing, not a login
+2. `fly secrets set ANTHROPIC_API_KEY=...` (API billing rather than a login
    session), and set `ORCH_SPEND_LIMIT_USD` in `fly.toml`'s `[env]`.
 3. Prove the plumbing before real dispatch: from the machine, run the
    one-prompt live smoke (`fly ssh console`, then `ORCH_LIVE_SMOKE=1` per
    `packages/orchestrator/README.md`) — it costs cents and verifies
    auth + usage metering in the real environment.
 4. First live work should be a **toy run** with humans at every gate
-   (ORCHESTRATOR.md §10 M2) — not a real feature.
+   (ORCHESTRATOR.md §10 M2), rather than a real feature.
 
 **Stopping it.** Pausing a run in the UI (`phase: paused`) stops new
 dispatches for that run; in-flight work lands harmlessly. `ORCH_ENABLED=0` +

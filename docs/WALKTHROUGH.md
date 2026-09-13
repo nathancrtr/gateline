@@ -99,8 +99,8 @@ its review so the range is well-defined.
 
 Sometimes the implementer needed a file the task never declared — the code is
 right, the boundary was wrong. The reviewer flags it (correctly) under Boundaries.
-The defect lives in the **plan layer**, so the fix belongs there, not in the review
-artifacts:
+The defect lives in the **plan layer**, so the fix belongs there rather than in
+the review artifacts:
 
 1. **Widen the task.** Add the file(s) to `file_contact_surface` in
    `runs/<slug>/tasks/NN-<name>.yaml`. You approved the plan at G1, so widening it
@@ -110,7 +110,7 @@ artifacts:
    why. `notes:` is append-only; it is what the next review round reads.
 3. **Leave `review-NN.md` alone.** Review reports are append-only history, and
    deleting a finding changes nothing anyway: every round re-derives the boundary
-   check from the task file and the diff, not from the previous report.
+   check from the task file and the diff, rather than from the previous report.
 4. **Reset via the round machinery**, exactly as for any `request-changes`: bump
    `review_rounds` in `state.yaml`, re-dispatch the implementer with the review
    report path (with the surface widened and the code already correct, its job is
@@ -153,7 +153,7 @@ judgment call for you.
 
 The report ends with one overall `**Verdict:** pass | fail | escalate` line (the
 word alone). `escalate` is the verifier's escalation channel: a failure that
-traces to the spec or plan, not the code. Treat it exactly like a reviewer's
+traces to the spec or plan rather than the code. Treat it like a reviewer's
 `escalate` — resolve it before deciding G2, and expect the v1 orchestrator to
 pause on it (rule D24). `fail` does not pause; it is yours to weigh at G2, and
 Gatehouse quotes the verdict and the non-verified rows on the card.

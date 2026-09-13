@@ -453,7 +453,10 @@ describe('what holds today (the properties the walk relies on)', () => {
     for (const seed of [11, 23]) {
       const { dir, clock } = makeToyRepo({ budget: 200 })
       let x = seed
-      const rand = () => ((x = (x * 1103515245 + 12345) % 2147483648) / 2147483648)
+      const rand = () => {
+        x = (x * 1103515245 + 12345) % 2147483648
+        return x / 2147483648
+      }
       let failNext = false
       const dispatcher = new FakeDispatcher((req) => {
         // One dispatch in eight fails outright; the rest cooperate.

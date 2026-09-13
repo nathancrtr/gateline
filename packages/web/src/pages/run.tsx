@@ -19,7 +19,7 @@ import { isAuditSection, itemCount } from '../fold.ts'
 import { gateCardState } from '../gate-state.ts'
 import { DIFF_SELECTION, decideTargetIndex, landingArtifact, resolveSurface, type Surface } from '../landing.ts'
 import { PROFILE_PHASES, api, formatAge, formatWhen, type InboxItem, type Phase, type RunDetailResponse, type RunSummary } from '../api.ts'
-import { AgeBadge, BudgetMeter, KeyHints, KindChip, PhaseChip, PhaseSpine, ValidationBadge } from '../components/chips.tsx'
+import { AgeBadge, BudgetMeter, Imp, KeyHints, KindChip, PhaseChip, PhaseSpine, ValidationBadge } from '../components/chips.tsx'
 import { BOUNCED_INSTRUCTION, DecidePanel, INFLIGHT_INSTRUCTION, ROUND_CAP_INSTRUCTION } from '../components/decide.tsx'
 import { CloseRunPanel, ClosureRecordBlock } from '../components/close-run.tsx'
 import { DiffView } from '../components/diff-view.tsx'
@@ -122,7 +122,7 @@ export function visibleProblems(item: InboxItem): string[] {
  * unchanged: its instruction is a button.
  */
 export function cardInstruction(item: InboxItem): { text: string; tone: string } | null {
-  if (item.kind === 'round-cap') return { text: ROUND_CAP_INSTRUCTION, tone: 'text-[#4d4742]' }
+  if (item.kind === 'round-cap') return { text: ROUND_CAP_INSTRUCTION, tone: 'text-ink' }
   if (gateCardState(item) === 'inflight') return { text: INFLIGHT_INSTRUCTION, tone: 'font-medium text-muted' }
   if (item.kind === 'gate' && !item.reviewable) return { text: BOUNCED_INSTRUCTION, tone: 'font-medium text-bad' }
   return null
@@ -279,24 +279,30 @@ export function RunPage() {
   // carrying no other content.
   const header = (
     <header className="mb-6">
-      <h1 className="mb-1.5 font-sans text-[46px] font-semibold leading-[1.06] tracking-[-0.02em]">{summary.slug}</h1>
-      <p className="font-mono text-[12.5px] text-muted leading-[1.6]">
-        {genesisIntake && genesisCommit && (
-          <>
-            staged by{' '}
-            {genesisIntake.staged_by ? (
-              <span className="font-medium text-[#4d4742]">{genesisIntake.staged_by}</span>
-            ) : null}
-            {genesisIntake.staged_by ? ' · ' : ''}
-            {formatWhen(genesisCommit.time)}
-            {genesisProvenance.length > 0 && <> · from {genesisProvenance.join(' · ')}</>}
-            {' · '}
-          </>
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
+        <h1 className="text-[28px] font-semibold leading-[1.15] text-ink">{summary.slug}</h1>
+        <p className="min-w-0 font-mono text-[12.5px] leading-[1.6] text-muted">
+          {genesisIntake && genesisCommit && (
+            <>
+              staged by{' '}
+              {genesisIntake.staged_by ? <span className="font-medium text-ink">{genesisIntake.staged_by}</span> : null}
+              {genesisIntake.staged_by ? ' · ' : ''}
+              {formatWhen(genesisCommit.time)}
+              {genesisProvenance.length > 0 && <> · from {genesisProvenance.join(' · ')}</>}
+              {' · '}
+            </>
+          )}
+          <BranchRef refName={summary.ref} kind={summary.kind} url={detail.branchUrl} />
+        </p>
+        {/* A run at rest keeps its chip beside the spine rather than in it:
+            "not moving" is not a position in the sequence. */}
+        {atRest && (
+          <span className="ml-auto">
+            <PhaseChip phase={summary.phase} pausedReason={summary.pausedReason} closure={summary.closure} />
+          </span>
         )}
-        <BranchRef refName={summary.ref} kind={summary.kind} url={detail.branchUrl} />
-      </p>
+      </div>
       <div className="mt-[18px] flex flex-col items-start gap-2.5">
-        {atRest && <PhaseChip phase={summary.phase} pausedReason={summary.pausedReason} closure={summary.closure} />}
         {/* No sequence on an unreadable record (#294). Every cell of the spine
             is derived from `state.yaml`; when it will not parse, the summary
             falls back to defaults and the spine draws a confident full-profile
@@ -328,12 +334,12 @@ export function RunPage() {
   // one gesture away on the Record and History surfaces too, where the card is
   // a tab click rather than a scroll.
   const stateErrorBlock = detail.stateError ? (
-    <div className="mb-6 rounded-md border border-bad-line bg-bad-bg px-3.5 py-3">
+    <div className="mb-6 border border-bad-line bg-bad-bg px-3.5 py-3">
       <p className="text-[13px] font-semibold text-bad">Malformed run state</p>
       {detail.stateRaw && (
         <pre
           title={detail.stateError}
-          className="mt-2.5 overflow-x-auto rounded-[4px] bg-inset p-2.5 font-mono text-[11.5px] leading-[1.5] text-ink"
+          className="mt-2.5 overflow-x-auto bg-inset p-2.5 font-mono text-[11.5px] leading-[1.5] text-ink"
         >{detail.stateRaw}</pre>
       )}
     </div>
@@ -423,7 +429,7 @@ function SurfaceTab({
       onClick={() => onSelect(surface)}
       data-surface={surface}
       aria-current={active ? 'page' : undefined}
-      className={`px-4 py-2.5 text-[13.5px] font-medium border-b-2 -mb-px transition-colors ${
+      className={`px-4 py-2.5 text-[13.5px] font-medium border-b-2 -mb-px ${
         active ? 'border-accent text-ink font-semibold' : 'border-transparent text-muted hover:text-ink'
       }`}
     >
@@ -458,14 +464,14 @@ function SurfaceTab({
 function RunMetadata({ summary, board }: { summary: RunSummary; board: React.ReactNode }) {
   const diverged = summary.aheadOfOrigin != null && summary.aheadOfOrigin > 0
   return (
-    <div data-run-metadata className="flex flex-wrap items-start gap-x-14 gap-y-7 text-[13px]">
+    <div data-run-metadata className="flex flex-wrap items-start gap-x-10 gap-y-7 text-[13px]">
       {board && <div className="min-w-0 max-w-[420px] flex-1 basis-[230px]">{board}</div>}
       {/* No 420px cap on this one: a strip wants the width a column did not,
           and the facts fit on one line only if it may take what the board
           leaves. Below about 1000px it wraps to two, which is the same
           graceful thing the rest of this band does. */}
       <section className="min-w-0 flex-1 basis-[340px]">
-        <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted pb-1.5">Vitals</div>
+        <div className="font-mono text-[10px] text-muted pb-1.5">Vitals</div>
         <div
           data-vitals
           className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-line py-[7px] font-mono text-[12.5px] text-muted"
@@ -583,14 +589,20 @@ function NeedsYouCard({
       <>
         {chipPaths.map((p) => {
           const report = isReviewPath(p) ? reports?.find((r) => r.path === p) : undefined
+          const verdicts = (report?.rounds ?? []).map((r) => r.verdict).filter((v): v is NonNullable<typeof v> => v !== null)
+          const verdictArc =
+            verdicts.length === 0 ? null : verdicts.length > 1 && verdicts[0] !== verdicts[verdicts.length - 1] ? `${verdicts[0]} → ${verdicts[verdicts.length - 1]}` : verdicts[verdicts.length - 1]
           return (
             <Link
               key={p}
               to={`/runs/${item.source}/${item.slug}?tab=record&artifact=${encodeURIComponent(p)}`}
-              className="inline-flex items-center gap-1.5 rounded-xs border border-line-cool bg-surface px-2 py-0.5 font-mono text-[11.5px] text-muted hover:border-accent hover:text-accent-deep"
+              className="imp hover:bg-inset"
             >
               {p}
-              {report && report.rounds.length > 0 && <VerdictChip verdicts={report.rounds.map((r) => r.verdict)} />}
+              {/* The verdict rides inside the same impression as the name, in
+                  the name-plus-code grammar: a chip nested in a chip stood
+                  4px taller than its neighbours (measured, 2026-09-04). */}
+              {verdictArc && <span className="text-muted"> · {verdictArc}</span>}
             </Link>
           )
         })}
@@ -602,40 +614,32 @@ function NeedsYouCard({
   // claiming the human's attention for work that is already moving.
   const gateState = gateCardState(item)
   const inflight = gateState === 'inflight' ? item.inflight : null
-  const chrome = inflight
-    ? 'grid-cols-[4px_1fr] bg-[#f7f5f0] border border-line'
-    : item.reviewable
-      ? 'grid-cols-[4px_1fr] bg-accent-tint border border-[#e9d3c4] shadow-[var(--shadow-lift)]'
-      : 'grid-cols-[4px_1fr] bg-bad-bg border border-bad-line'
+  // Three impressions for three states (#159). Something to decide is the
+  // filled mark; a card waiting on a machine is dotted, at rest; a bounced
+  // packet is hatched. The card itself is not boxed: it is a posting on the
+  // page, ruled above, with its evidence and its affordance below.
   // No overflow-hidden on the card: the lexicon hover card (#252) is
-  // absolutely positioned and would be clipped by it. The accent rail rounds
-  // its own left corners instead, which is all the clip was ever doing.
+  // absolutely positioned and would be clipped by it.
   return (
     <section
-      className={`relative grid rounded-lg ${chrome}`}
+      className="relative border-t border-ink pt-5 first:border-t-0 first:pt-1"
       data-needs-card
       data-card-state={gateState ?? undefined}
       data-sent-here={sentHere ? 'true' : undefined}
       ref={cardRef}
       tabIndex={-1}
     >
-      <span
-        className={`w-[4px] self-stretch rounded-l-[7px] ${inflight ? 'bg-faint' : item.reviewable ? 'bg-accent' : 'bg-bad'}`}
-        aria-hidden="true"
-      />
-      <div className="min-w-0 px-6 py-4">
+      <div className="min-w-0">
         <div className="flex items-center gap-3 flex-wrap">
           {inflight ? (
-            <span className="inline-flex items-center gap-2 font-mono text-[11px] tracking-[0.12em] uppercase text-muted bg-white border border-line-cool px-[9px] py-[3px] rounded-xs">
-              <span className="inline-block w-[7px] h-[7px] rounded-full border border-current" />
-              Waiting on {inflight.role}
+            <Imp tone="dot">
+              waiting on {inflight.role}
               {item.gate ? ` · ${item.gate}` : ''}
-            </span>
+            </Imp>
+          ) : gateState === 'bounced' ? (
+            <Imp tone="hatch">bounced{item.gate ? ` · ${item.gate}` : ''}</Imp>
           ) : (
-            <span className="inline-flex items-center gap-2 font-mono text-[11px] tracking-[0.12em] uppercase text-accent-deep bg-white border border-[#e9d3c4] px-[9px] py-[3px] rounded-xs">
-              <span className="inline-block w-[7px] h-[7px] rounded-full bg-accent" />
-              Needs you{item.gate ? ` · ${item.gate}` : ''}
-            </span>
+            <Imp tone="fill">needs you{item.gate ? ` · ${item.gate}` : ''}</Imp>
           )}
           {/* On a gate the KindChip says `● G2` eight pixels from a chip that
               already says `NEEDS YOU · G2` (#294) — two markers, one fact. Every
@@ -648,21 +652,21 @@ function NeedsYouCard({
             <AgeBadge label={ageLabel} urgent={urgent} />
           </span>
         </div>
-        <h2 className="mt-2 mb-1.5 font-sans text-[24px] font-semibold leading-[1.2] tracking-[-0.015em] text-ink">
+        <h2 className="mt-3 mb-1.5 text-[22px] font-semibold leading-[1.2] text-ink">
           <CitedText>{item.title}</CitedText>
         </h2>
         {!restated &&
           (diagnostic ? (
-            <pre className="max-w-[76ch] overflow-x-auto whitespace-pre-wrap font-mono text-[12.5px] leading-[1.55] text-[#4d4742]">
+            <pre className="max-w-[var(--measure)] overflow-x-auto whitespace-pre-wrap font-mono text-[12.5px] leading-[1.55] text-ink">
               {item.detail}
             </pre>
           ) : (
-            <p className="max-w-[76ch] text-[14.5px] text-[#4d4742] leading-[1.55]">
+            <p className="max-w-[var(--measure)] text-[14.5px] text-ink leading-[1.55]">
               <CitedText>{item.detail}</CitedText>
             </p>
           ))}
         {instruction && (
-          <p data-card-instruction className={`mt-1.5 max-w-[76ch] text-[14.5px] leading-[1.55] ${instruction.tone}`}>
+          <p data-card-instruction className={`mt-1.5 max-w-[var(--measure)] text-[14.5px] leading-[1.55] ${instruction.tone}`}>
             {instruction.text}
           </p>
         )}
@@ -751,28 +755,25 @@ function TaskBoard({ state, roundCap }: { state: NonNullable<RunDetailResponse['
   const doneCount = state.tasks.filter((t) => t.status === 'done').length
   return (
     <section className="text-[13px]">
-      <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-muted pb-1.5">
+      <div className="font-mono text-[10px] text-muted pb-1.5">
         Task board · {doneCount} / {state.tasks.length} done
       </div>
       {state.tasks.map((t) => {
         const capped = t.review_rounds >= roundCap
-        const statusChip = capped
-          ? 'font-bold text-bad bg-bad-bg border-bad-line'
-          : t.status === 'done'
-            ? 'text-ok bg-ok-bg border-ok-line'
-            : 'text-muted bg-inset border-line'
+        const tone = capped ? 'mark' : t.status === 'done' ? 'fill' : t.status === 'pending' ? 'dot' : ''
         return (
           <div key={t.id} className="flex items-center justify-between gap-3 py-[7px] border-t border-line">
             <span className="min-w-0 truncate font-mono text-[12.5px] font-medium text-ink">{t.id}</span>
             <span className="flex shrink-0 items-center gap-1.5">
               {t.review_rounds > 0 && (
-                <span className={`font-mono text-[11.5px] tabular-nums ${capped ? 'font-bold text-bad' : 'text-muted'}`} title="review rounds">
+                <span className={`font-mono text-[11.5px] tabular-nums ${capped ? 'font-semibold text-warn' : 'text-muted'}`} title="review rounds">
                   ⟲{t.review_rounds}
                 </span>
               )}
-              <span className={`rounded-xs border px-2 py-0.5 text-[11px] font-semibold ${statusChip}`}>
-                {t.status === 'done' ? '✓ ' : ''}{t.status}
-              </span>
+              <Imp tone={tone}>
+                {t.status === 'done' ? '✓ ' : ''}
+                {t.status}
+              </Imp>
             </span>
           </div>
         )
@@ -852,7 +853,7 @@ function RecordSurface({
           </div>
         </div>
         {!showDiff && current && detail.validations[current] && !detail.validations[current].ok && (
-          <div className="mx-[18px] mt-3.5 rounded-sm border border-bad-line bg-bad-bg px-3 py-2.5 text-[12px] text-bad max-lg:mt-2.5">
+          <div className="mx-[18px] mt-3.5 border border-bad-line bg-bad-bg px-3 py-2.5 text-[12px] text-bad max-lg:mt-2.5">
             Fails its {detail.validations[current].contract} contract — missing: {detail.validations[current].missing.join(', ')}
           </div>
         )}
@@ -872,7 +873,7 @@ function RecordSurface({
 
 /** The picker's two section labels. Full-width rail below, an inline caption in
  *  the strip above the reader. */
-const NAV_LABEL = 'font-mono text-[10.5px] tracking-[0.12em] uppercase text-muted px-[18px] pb-2.5'
+const NAV_LABEL = 'font-mono text-[10.5px] text-muted px-[18px] pb-2.5'
 
 /**
  * One picker entry, in both of the picker's shapes — and the artifact entries
@@ -882,13 +883,13 @@ const NAV_LABEL = 'font-mono text-[10.5px] tracking-[0.12em] uppercase text-mute
  * stacked. Only the mark and the tint depend on `active`; the shape never does.
  */
 export const RECORD_ENTRY_SHAPE =
-  'flex w-full items-center gap-2.5 px-[18px] py-2.5 text-left font-mono text-[12.5px] border-l-2 transition-colors ' +
+  'flex w-full items-center gap-2.5 px-[18px] py-2.5 text-left font-mono text-[12.5px] border-l-2 ' +
   'max-lg:w-auto max-lg:max-w-full max-lg:border-l-0 max-lg:border-b-2 max-lg:px-2 max-lg:py-1.5'
 
 export function navEntryClass(active: boolean) {
   return active
     ? `${RECORD_ENTRY_SHAPE} bg-accent-tint border-l-accent border-b-accent text-accent-deep font-semibold`
-    : `${RECORD_ENTRY_SHAPE} border-l-transparent border-b-transparent text-[#4d4742] hover:bg-inset hover:text-ink`
+    : `${RECORD_ENTRY_SHAPE} border-l-transparent border-b-transparent text-ink hover:bg-inset hover:text-ink`
 }
 
 /**
@@ -972,10 +973,10 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
   if (error) return <PageStatus text={(error as Error).message} bad />
   const { content, validation } = data!
   return (
-    <article className="bg-reading-bg py-10 px-14 relative min-h-0 max-lg:px-6 max-lg:py-7">
-      <div className="mx-auto max-w-[76ch]">
+    <article className="relative min-h-0 px-10 py-8 max-lg:px-4 max-lg:py-6">
+      <div className="max-w-[var(--measure)]">
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 font-mono text-[11.5px] text-muted pb-[18px] border-b border-line mb-[30px]">
-          <span className="text-[#4d4742]">runs/{slug}/{path}</span>
+          <span className="text-ink">runs/{slug}/{path}</span>
           <span
             className="ml-auto max-lg:ml-0 font-semibold"
             title={validation.contract ? `${validation.ok ? 'passes' : 'fails'} the ${validation.contract} contract` : undefined}
@@ -987,7 +988,7 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
           </span>
         </div>
         {!validation.ok && (
-          <p className="mb-4 rounded-sm border border-bad-line bg-bad-bg px-3 py-2 text-xs font-medium text-bad">
+          <p className="mb-4 border border-bad-line bg-bad-bg px-3 py-2 text-xs font-medium text-bad">
             Fails its {validation.contract} contract — missing: {validation.missing.join(', ')}
           </p>
         )}
@@ -1040,7 +1041,7 @@ function FoldedMarkdown({ content, path, audit }: { content: string; path: strin
             <summary className="flex cursor-pointer flex-wrap items-baseline gap-x-3 list-none [&::-webkit-details-marker]:hidden">
               {/* The heading's accessible name stays the heading; the glyph
                   and the count sit beside it, not inside it. */}
-              <span aria-hidden="true" className="inline-block text-[0.7em] text-muted transition-transform group-open:rotate-90">▶</span>
+              <span aria-hidden="true" className="inline-block text-[0.7em] text-muted group-open:rotate-90">▶</span>
               <h2 className="!my-0">{section.heading}</h2>
               <span className="font-sans text-[13px] text-muted">
                 {count.n} {count.unit} · audit-time, folded until opened
@@ -1133,15 +1134,23 @@ function HistoryTab({ history, src, slug }: { history: RunDetailResponse['histor
         key={h.oid}
         data-ledger-actor={e.actor}
         data-ledger-kind={e.kind}
-        className={`relative flex items-baseline gap-3 border-b border-line py-2.5 pl-7 text-sm last:border-b-0 before:absolute before:left-0.5 before:top-[15px] before:h-2.5 before:w-2.5 before:rounded-full before:border-2 before:content-[''] ${
+        className={`relative flex items-baseline gap-3 border-b border-line py-2.5 pl-7 text-sm last:border-b-0 before:absolute before:left-0.5 before:top-[15px] before:h-2.5 before:w-2.5 before:border before:content-[''] ${
           transition
-            ? 'before:border-accent before:bg-accent'
+            ? 'before:border-ink before:bg-ink'
             : decided
-              ? 'before:border-accent before:bg-inset'
-              : 'before:border-faint before:bg-inset'
+              ? 'before:border-ink before:bg-ground'
+              : 'before:border-dotted before:border-muted before:bg-ground'
         }`}
       >
-        <span className="w-32 shrink-0 font-mono text-[11.5px] tabular-nums text-faint">{formatWhen(h.time)}</span>
+        <span className="w-32 shrink-0 font-mono text-[11.5px] tabular-nums text-muted">{formatWhen(h.time)}</span>
+        {/* A human's own decision is stamped onto the ledger — the one mark
+            on this page that was pressed rather than printed. The words
+            beside it are still the commit subject, verbatim. */}
+        {decided && e.actor === 'human' && (
+          <Imp tone="fill stamped" className="shrink-0">
+            {e.gate ? `${e.gate} ${e.kind.replace('gate-', '')}` : e.kind.replace(/-/g, ' ')}
+          </Imp>
+        )}
         <span className={`min-w-0 flex-1 truncate text-[13px] ${LEDGER_TONE[e.actor] ?? ''}`} title={h.subject}>
           {e.detail}
         </span>
@@ -1154,7 +1163,7 @@ function HistoryTab({ history, src, slug }: { history: RunDetailResponse['histor
             on the v0 runs, whose subjects predate the bracketed form and
             where the endpoint reading `state.yaml` is the only source. */}
         {extra?.burden && burdenPillNeeded(e.detail, extra.burden) && (
-          <span className="shrink-0 rounded-xs border border-line px-1.5 py-px font-mono text-[10.5px] text-muted">{extra.burden}</span>
+          <span className="shrink-0 border border-line px-1.5 py-px font-mono text-[10.5px] text-muted">{extra.burden}</span>
         )}
         {e.actor === 'orchestrator' && (
           <span className="shrink-0 font-mono text-[10.5px] text-faint" title="committed under the orchestrator's bot identity">
@@ -1202,9 +1211,9 @@ function HistoryTab({ history, src, slug }: { history: RunDetailResponse['histor
               <li
                 data-ledger-span={r.count}
                 data-ledger-span-open={expanded ? 'true' : undefined}
-                className="relative flex items-baseline gap-3 border-b border-line py-2.5 pl-7 text-sm last:border-b-0 before:absolute before:left-0.5 before:top-[15px] before:h-2.5 before:w-2.5 before:rounded-full before:border-2 before:border-faint before:bg-inset before:content-['']"
+                className="relative flex items-baseline gap-3 border-b border-line py-2.5 pl-7 text-sm last:border-b-0 before:absolute before:left-0.5 before:top-[15px] before:h-2.5 before:w-2.5 before:border before:border-dotted before:border-muted before:bg-ground before:content-['']"
               >
-                <span className="w-32 shrink-0 font-mono text-[11.5px] tabular-nums text-faint">{formatWhen(history[r.from]!.time)}</span>
+                <span className="w-32 shrink-0 font-mono text-[11.5px] tabular-nums text-muted">{formatWhen(history[r.from]!.time)}</span>
                 <button
                   type="button"
                   onClick={() => setOpen((prev) => {

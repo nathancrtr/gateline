@@ -90,7 +90,7 @@ export function ClosureRecordBlock({
   const view = closureRecordView(closure)
 
   return (
-    <div className="mb-6 rounded-md border border-line bg-inset px-3.5 py-3" data-closure-record>
+    <div className="mb-6 border border-line bg-inset px-3.5 py-3" data-closure-record>
       <p className="text-[13px] font-semibold text-ink">
         Run closed —{' '}
         {view.gloss === null ? (
@@ -104,7 +104,7 @@ export function ClosureRecordBlock({
       </p>
       {view.malformed && <p className="mt-1 text-xs text-muted">{view.malformed}</p>}
       <dl className="mt-2 flex flex-wrap items-baseline gap-x-2 text-[13px] leading-[1.6]">
-        <dt className="shrink-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-faint">
+        <dt className="shrink-0 font-mono text-[10.5px] text-faint">
           Why <span aria-hidden="true">·</span>
         </dt>
         <dd className={`min-w-0 flex-1 ${view.reason === null ? 'text-faint' : 'text-ink'}`} data-closure-reason>
@@ -122,7 +122,7 @@ export function ClosureRecordBlock({
               onClick={() => mutation.mutate({ source, slug, action: 'reopen' })}
               disabled={mutation.isPending}
               data-decide="reopen-confirm"
-              className="rounded-full border border-accent bg-accent px-4 py-[7px] text-sm font-semibold text-on-solid transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              className="border border-accent bg-accent px-4 py-[7px] text-sm font-semibold text-on-solid hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               {mutation.isPending ? 'Committing…' : `Reopen ${slug}`}
             </button>
@@ -189,7 +189,7 @@ export function CloseRunPanel({ source, slug, phase }: { source: string; slug: s
   }
 
   return (
-    <div className="mt-7 rounded-md border border-line bg-inset px-3.5 py-3" data-close-run>
+    <div className="mt-7 border border-line bg-inset px-3.5 py-3" data-close-run>
       <p className="text-[13px] font-semibold text-ink">Close {slug}</p>
       <p className="mt-1 text-xs leading-[1.6] text-muted">
         The run stops here and leaves the inbox. {KEEPS_THE_RECORD}
@@ -197,14 +197,14 @@ export function CloseRunPanel({ source, slug, phase }: { source: string; slug: s
       {flash && <p className="mt-2 text-xs font-semibold text-bad">{flash}</p>}
 
       <fieldset className="mt-3">
-        <legend className="mb-[9px] font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted">
+        <legend className="mb-[9px] font-mono text-[10.5px] font-semibold text-muted">
           Why does it end here? (recorded with the closure)
         </legend>
         <div className="flex flex-col gap-2">
           {CLOSURES.map((o) => (
             <label
               key={o}
-              className={`flex cursor-pointer items-baseline gap-2 rounded-[5px] border px-3 py-2 text-sm transition-colors ${
+              className={`flex cursor-pointer items-baseline gap-2 border px-3 py-2 text-sm ${
                 closure === o ? 'border-accent bg-accent-soft font-semibold text-accent' : 'border-line bg-surface hover:border-accent'
               }`}
             >
@@ -223,7 +223,7 @@ export function CloseRunPanel({ source, slug, phase }: { source: string; slug: s
         onChange={(e) => setReason(e.target.value)}
         placeholder="Why? This is the comment on the disposition, and the only account of why the run ends here — required."
         rows={2}
-        className="mt-3 w-full resize-y rounded-[5px] border border-line bg-surface px-[11px] py-[9px] text-sm placeholder:text-faint"
+        className="mt-3 w-full resize-y border border-line bg-surface px-[11px] py-[9px] text-sm placeholder:text-faint"
       />
 
       <div className="mt-3 flex gap-2">
@@ -232,14 +232,14 @@ export function CloseRunPanel({ source, slug, phase }: { source: string; slug: s
           onClick={submit}
           disabled={!closure || !reason.trim() || mutation.isPending}
           data-decide="close-confirm"
-          className="rounded-full border border-bad bg-bad px-4 py-[7px] text-sm font-semibold text-on-solid transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          className="border border-bad bg-bad px-4 py-[7px] text-sm font-semibold text-on-solid hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {mutation.isPending ? 'Committing…' : closure ? `Close as ${closure}` : 'Close run'}
         </button>
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="rounded-full border border-line bg-surface px-4 py-[7px] text-sm font-semibold text-muted transition-all hover:border-accent hover:text-ink"
+          className="border border-line bg-surface px-4 py-[7px] text-sm font-semibold text-muted hover:border-accent hover:text-ink"
         >
           Cancel
         </button>

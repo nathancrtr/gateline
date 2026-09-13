@@ -92,7 +92,7 @@ test('entry + stage: Portfolio → New run → fill the brief → land on the ru
   await expect(navLinks).toHaveCount(3)
   await expect(navLinks).toHaveText(['Inbox', 'Portfolio', 'Metrics'])
 
-  await page.getByRole('link', { name: '+ New run' }).click()
+  await page.getByRole('link', { name: 'New run' }).click()
   await expect(page).toHaveURL(/\/portfolio\/new$/)
 
   await expect(page.locator('#title')).toBeVisible()

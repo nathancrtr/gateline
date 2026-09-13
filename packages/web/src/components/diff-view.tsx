@@ -25,7 +25,7 @@ export function DiffView({ files, surface }: { files: DiffFile[]; surface?: Surf
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-        <p className="font-mono text-[11px] uppercase tracking-wide text-muted">{grouped ? 'diff by declared contact surface' : 'diff'}</p>
+        <p className="font-mono text-[11px] text-muted">{grouped ? 'diff by declared contact surface' : 'diff'}</p>
         <span className="font-mono text-[11px] text-faint">
           {sum.files} file{sum.files === 1 ? '' : 's'} · <span className="text-ok">+{sum.additions}</span>{' '}
           <span className="text-bad">−{sum.deletions}</span>
@@ -36,7 +36,7 @@ export function DiffView({ files, surface }: { files: DiffFile[]; surface?: Surf
           all. Either way the diff still renders — it is a G2 artifact — but it
           renders unlabelled, saying what it looked for and did not find. */}
       {surface?.withheld && (
-        <p className="rounded-[4px] border border-warn-line bg-warn-bg px-2.5 py-2 text-[12px] leading-[1.5] text-warn" data-surface-withheld>
+        <p className="border border-warn-line bg-warn-bg px-2.5 py-2 text-[12px] leading-[1.5] text-warn" data-surface-withheld>
           Contact-surface grouping withheld — {surface.withheld} The full diff is below, in git's order.
         </p>
       )}
@@ -45,7 +45,7 @@ export function DiffView({ files, surface }: { files: DiffFile[]; surface?: Surf
           boundary the approver has to go looking for is not a check. */}
       {undeclared.length > 0 && (
         <section data-undeclared>
-          <div className="mb-2 rounded-[4px] border border-warn-line bg-warn-bg px-2.5 py-2">
+          <div className="mb-2 border border-warn-line bg-warn-bg px-2.5 py-2">
             <p className="text-[12.5px] font-medium leading-[1.5] text-warn">
               {undeclared.length} changed file{undeclared.length === 1 ? '' : 's'} outside every declared contact surface
             </p>
@@ -123,7 +123,7 @@ function FileHeader({ file }: { file: DiffFile }) {
 
 function FileDiff({ file }: { file: DiffFile }) {
   return (
-    <section className="overflow-hidden rounded-[6px] border border-line bg-surface">
+    <section className="overflow-hidden border border-line bg-surface">
       <FileHeader file={file} />
       <div className="overflow-x-auto">
         <table className="w-full border-collapse font-mono text-xs leading-5">

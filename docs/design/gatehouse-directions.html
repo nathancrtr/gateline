@@ -1,0 +1,754 @@
+<title>Gatehouse Directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,600;1,6..72,400;1,6..72,600&display=swap" rel="stylesheet">
+<style>
+/* ---------- the lightbox around the mockups (deliberately single-theme) ---------- */
+:root { --lb-bg:#232321; --lb-ink:#E6E3DC; --lb-mute:#9E9A90; --lb-line:#3A3A37; }
+html, body { background: var(--lb-bg); }
+body { color: var(--lb-ink); font: 13px/1.5 Inter, system-ui, sans-serif; margin:0; min-height:100vh; }
+#bar { position: sticky; top:0; z-index: 5; background: var(--lb-bg); border-bottom:1px solid var(--lb-line); padding: 10px 24px 8px; display:flex; flex-direction:column; gap:6px; }
+#bar .row { display:flex; align-items:baseline; gap: 18px; flex-wrap: wrap; }
+#bar .t { font-weight:600; font-size:14px; margin-right: 6px; }
+#bar .sub { color: var(--lb-mute); }
+.tabs { display:flex; gap: 2px; flex-wrap: wrap; }
+.tabs button { background:none; border:0; color: var(--lb-mute); font: 500 13px Inter, sans-serif; padding: 4px 10px; cursor:pointer; border-bottom: 2px solid transparent; }
+.tabs button:hover { color: var(--lb-ink); }
+.tabs button[aria-pressed="true"] { color: var(--lb-ink); border-bottom-color: var(--lb-ink); }
+.tabs button:focus-visible { outline: 2px solid #C9C5BB; outline-offset: 2px; }
+#gate { color: var(--lb-mute); font: 12px/1.5 "JetBrains Mono", monospace; }
+#gate b { color: var(--lb-ink); font-weight: 600; }
+#stage { padding: 20px 24px 40px; overflow-x:auto; }
+.frame { width:1280px; margin: 0 auto; box-shadow: 0 0 0 1px #000; }
+.cmp { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; align-items:start; }
+.cmp > div { min-width: 0; }
+.cmp .cap { color: var(--lb-mute); font-size:12px; margin: 0 0 8px; }
+.cmp .cap b { color: var(--lb-ink); }
+.scaler { overflow:hidden; width: 100%; }
+.scaler .frame { transform-origin: top left; margin:0; }
+
+/* ---------- shared structure inside a mockup ---------- */
+.app { display:grid; grid-template-columns: 210px 1fr; min-height: 900px; font: 14px/1.5 Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+.app a { color: inherit; text-decoration: none; }
+.mono { font-family: "JetBrains Mono", ui-monospace, monospace; }
+.num { font-variant-numeric: tabular-nums; }
+.read { font-family: Newsreader, Georgia, serif; font-size: 16.5px; line-height: 1.68; max-width: var(--measure); }
+.read h2 { font: 600 22px/1.2 Inter, sans-serif; margin: 28px 0 10px; }
+.read h3 { font: 600 15px/1.3 Inter, sans-serif; margin: 22px 0 8px; }
+.read p { margin: 0 0 14px; }
+.read ul { margin: 0 0 14px; padding-left: 1.3em; }
+.read li { margin: 0 0 5px; }
+.read code { font: 0.86em "JetBrains Mono", monospace; }
+.read .ac { font-family: "JetBrains Mono", monospace; font-size: 12px; margin-right: 6px; }
+.hint { font: 10.5px/1.7 "JetBrains Mono", monospace; text-align:right; }
+.hint kbd { font: inherit; padding: 0 3px; border: 1px solid currentColor; }
+.srow { display:flex; align-items:center; gap: 12px; }
+.grow { flex: 1; }
+.right { text-align: right; }
+.small { font-size: 12.5px; }
+.sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+
+/* ============ Direction A (A1 the impression, A2 the stamp rack) ============ */
+.d-a { --bg:#DCDCD4; --page:#ECECE4; --ink:#2C343C; --imp:#1C2424; --muted:#4C5454; --rule:#A4ACB4; --red:#A46C6C; --measure: 640px; }
+.d-a2 { --c-phase:#8CA4C4; --c-human:#F4BCC4; --c-rest:#BCBCAC; --c-gate:#CC4434; --c-gate-text:#FDFBFB; }
+.d-a .app { background: var(--bg); color: var(--ink); }
+.d-a .rack { padding: 26px 0 26px 22px; display:flex; flex-direction:column; gap: 22px; }
+.d-a .word { font-weight: 600; font-size: 15px; letter-spacing: -0.005em; }
+.d-a .word small { display:block; font-weight: 400; font-size: 12px; color: var(--muted); }
+.d-a .rack nav { display:flex; flex-direction:column; gap: 4px; padding-right: 22px; }
+.d-a .rack nav a { display:flex; align-items:center; gap: 8px; padding: 4px 0; color: var(--muted); }
+.d-a .rack nav a .imp { min-width: 20px; text-align:center; }
+.d-a .rack nav a.on { color: var(--ink); }
+.d-a .rack .foot { margin-top:auto; font: 10.5px/1.6 "JetBrains Mono", monospace; color: var(--muted); padding-right: 22px; }
+.d-a .page { margin: 22px 22px 22px 0; background: var(--page); padding: 26px 30px 30px; min-height: 800px; box-sizing: border-box; }
+.d-a h1 { font: 600 20px/1.25 Inter, sans-serif; margin: 0; letter-spacing: -0.005em; }
+.d-a .lead { color: var(--muted); font-size: 13.5px; max-width: 620px; margin: 4px 0 0; }
+.d-a .muted { color: var(--muted); }
+.d-a .ledger { border-top: 1px solid var(--rule); margin-top: 18px; }
+.d-a .ledger .r { display:grid; align-items:start; border-bottom: 1px solid var(--rule); }
+.d-a .ledger .c { padding: 11px 12px 11px 0; min-width: 0; }
+.d-a .ledger .c.post { border-left: 1.5px solid var(--red); padding-left: 12px; }
+.d-a .ledger .hd .c { padding: 6px 12px 6px 0; font-size: 11.5px; color: var(--muted); }
+.d-a .ledger .foot { display:flex; justify-content:space-between; padding: 8px 0; font-size: 12px; color: var(--muted); }
+.d-a .imp { display:inline-block; font: 500 11px/1 "JetBrains Mono", monospace; padding: 4px 6px 3px; border: 1.5px solid currentColor; letter-spacing: .02em; white-space: nowrap; vertical-align: middle; }
+.d-a .imp.fill { background: var(--imp); color: var(--page); border-color: var(--imp); }
+.d-a .imp.dot { border-style: dotted; color: var(--muted); }
+.d-a .imp.struck { text-decoration: line-through; }
+.d-a .imp.hatch { padding-left: 16px; background: repeating-linear-gradient(-45deg, currentColor 0 1px, transparent 1px 4px) left / 10px 100% no-repeat; }
+.d-a .imp.stamped { transform: rotate(-1.6deg); filter: url(#grain); }
+.d-a .imp.red { color: var(--red); border-color: var(--red); }
+.d-a .imp.red.fill { background: var(--red); color: var(--page); }
+.d-a .filters { display:flex; gap: 6px; margin-top: 20px; flex-wrap: wrap; }
+.d-a .filters .imp { color: var(--muted); }
+.d-a .filters .imp.on { color: var(--ink); }
+.d-a .title { font-weight: 600; font-size: 15px; }
+.d-a .kicker { font: 500 11px/1.4 "JetBrains Mono", monospace; color: var(--muted); }
+.d-a .btn { display:inline-block; font: 600 13px/1 Inter, sans-serif; padding: 9px 14px; border: 1.5px solid var(--imp); background: var(--imp); color: var(--page); }
+.d-a .btn.quiet { background: transparent; color: var(--ink); border-color: var(--ink); }
+.d-a .spine { display:flex; align-items:flex-start; gap: 6px; margin-top: 16px; }
+.d-a .spine .cell { display:flex; flex-direction:column; align-items:center; gap: 3px; }
+.d-a .spine .cell .note { font: 10.5px/1.2 "JetBrains Mono", monospace; color: var(--muted); text-align:center; height: 26px; }
+.d-a .spine .link { flex: 1; max-width: 60px; min-width: 8px; height: 1px; background: var(--rule); margin-top: 11px; }
+.d-a .spine .cur { color: var(--red); border-color: var(--red); border-style: dashed; }
+.d-a .vitals { display:grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 22px; padding-bottom: 20px; border-bottom: 1px solid var(--rule); }
+.d-a .board .r { display:grid; grid-template-columns: 1fr auto auto; gap: 12px; padding: 6px 0; border-top: 1px solid var(--rule); align-items:center; font-size: 13px; }
+.d-a .tabs2 { display:flex; gap: 22px; border-bottom: 1px solid var(--rule); margin-top: 18px; }
+.d-a .tabs2 a { padding: 8px 0; color: var(--muted); font-weight: 500; }
+.d-a .tabs2 a.on { color: var(--ink); box-shadow: inset 0 -2px 0 var(--ink); }
+.d-a .post-col { display:grid; grid-template-columns: 1fr 300px; gap: 0; margin-top: 18px; }
+.d-a .post-col .main { padding-right: 28px; }
+.d-a .post-col .post { border-left: 1.5px solid var(--red); padding-left: 22px; }
+.d-a .packet { display:flex; flex-wrap:wrap; gap: 6px; margin-top: 12px; }
+.d-a .reading { display:grid; grid-template-columns: 220px 1fr; gap: 28px; margin-top: 18px; }
+.d-a .arts { display:flex; flex-direction:column; border-top: 1px solid var(--rule); }
+.d-a .arts a { display:flex; justify-content:space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--rule); font: 12.5px "JetBrains Mono", monospace; color: var(--muted); }
+.d-a .arts a.on { color: var(--ink); font-weight: 600; }
+.d-a .reg .r { grid-template-columns: 96px 150px 110px 1fr 90px; }
+.d-a .reg .c { padding-top: 7px; padding-bottom: 7px; font-size: 13px; }
+.d-a .pf .r { grid-template-columns: 44px 180px 180px 226px 60px 60px 150px 80px; }
+.d-a .gates { display:inline-flex; gap: 4px; }
+.d-a .meter { position:relative; height: 8px; width: 140px; border: 1px solid var(--rule); display:inline-block; vertical-align: middle; }
+.d-a .meter i { display:block; height:100%; background: var(--ink); }
+.d-a .meter i.over { background: var(--red); }
+.d-a .meter b { position:absolute; left: 90%; top:-4px; bottom:-4px; width: 2px; background: var(--red); }
+.d-a .mix { display:inline-flex; height: 12px; width: 180px; gap: 2px; vertical-align: middle; }
+.d-a .mix i { display:block; height:100%; border: 1px solid var(--ink); box-sizing: border-box; }
+.d-a .mix .s1 { background: var(--ink); }
+.d-a .mix .s2 { background-image: repeating-linear-gradient(-45deg, var(--ink) 0 1px, transparent 1px 4px); }
+.d-a .mix .s3 { background-image: radial-gradient(var(--ink) 0.8px, transparent 0.9px); background-size: 4px 4px; }
+.d-a .mix .s0 { border-style: dotted; }
+.d-a .legend { display:flex; gap: 18px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+.d-a .legend i { display:inline-block; width: 12px; height: 12px; border: 1px solid var(--ink); vertical-align: -2px; margin-right: 5px; box-sizing: border-box; }
+.d-a .hbar { display:grid; grid-template-columns: 60px 1fr 40px; gap: 12px; align-items:center; font-size: 12.5px; margin: 6px 0; }
+.d-a .hbar .track { height: 14px; border: 1px solid var(--rule); }
+.d-a .hbar .track i { display:block; height:100%; background: var(--ink); }
+.d-a .hbar .track i.cap { background: var(--red); }
+.d-a .form { display:grid; grid-template-columns: 1fr 500px; gap: 40px; margin-top: 18px; }
+.d-a label.f { display:block; font-size: 12px; color: var(--muted); margin-top: 14px; }
+.d-a .in { display:block; width: 100%; box-sizing:border-box; border: 1px solid var(--rule); background: var(--page); padding: 7px 9px; font: 14px Inter, sans-serif; color: var(--ink); margin-top: 4px; }
+.d-a .in.ta { min-height: 74px; font-family: Newsreader, serif; font-size: 15px; }
+.d-a .preview { border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); padding: 18px 0; background-image: linear-gradient(var(--rule) 1px, transparent 1px); background-size: 100% 26px; background-position: 0 6px; }
+.d-a .preview .g { font: 600 18px/1.35 Inter, sans-serif; margin-top: 10px; }
+.d-a .preview .files { margin-top: 18px; font: 12.5px "JetBrains Mono", monospace; }
+.d-a .preview .files .r { display:flex; gap: 10px; padding: 5px 0; border-bottom: 1px dashed var(--rule); }
+.d-a .hint { color: var(--muted); margin-top: 10px; }
+/* A2: the stamp bodies, class-coloured, edge-on */
+.d-a2 .pick[data-class] { border-color: transparent; color: var(--ink); box-shadow: 2px 2px 0 var(--imp); }
+.d-a2 .pick[data-class="phase"] { background: var(--c-phase); }
+.d-a2 .pick[data-class="human"] { background: var(--c-human); }
+.d-a2 .pick[data-class="rest"] { background: var(--c-rest); }
+.d-a2 .pick[data-class="gate"] { background: var(--c-gate); color: var(--c-gate-text); }
+.d-a2 .pick[data-class="phase"].dot { box-shadow: none; border: 1.5px dotted var(--muted); background: transparent; color: var(--muted); }
+.d-a2 .filters .imp.on { box-shadow: 2px 2px 0 var(--imp); }
+
+/* ============ Direction B (the visa page) ============ */
+.d-b { --bg:#D4B48C; --sheet:#DCDCDC; --ink:#242424; --muted:#4C3C2C; --band:#243C04; --blue:#0444B4; --olive:#443C04; --cardrule:#B8946C; --measure: 640px; }
+.d-b .app { background: var(--bg); color: var(--ink); }
+.d-b .cover { position: relative; padding: 34px 22px 26px; display:flex; flex-direction:column; gap: 24px; overflow:hidden; }
+.d-b .cover::before { content:""; position:absolute; top:0; left:0; width: 150px; height: 150px; background: linear-gradient(135deg, transparent 0 30px, var(--band) 30px 60px, transparent 60px); }
+.d-b .word { font: 800 15px/1 Inter, sans-serif; letter-spacing: .09em; text-transform: uppercase; margin-top: 18px; }
+.d-b .word small { display:block; font: 400 12px/1.4 Inter, sans-serif; text-transform:none; letter-spacing: 0; color: var(--muted); margin-top: 6px; }
+.d-b .cover nav { display:flex; flex-direction:column; gap: 2px; border-top: 1px solid var(--ink); padding-top: 12px; }
+.d-b .cover nav a { display:flex; justify-content:space-between; padding: 5px 0; font-size: 14.5px; }
+.d-b .cover nav a.on { font-weight: 700; }
+.d-b .cover .field { font-size: 12px; color: var(--muted); border-top: 1px solid var(--ink); padding-top: 10px; }
+.d-b .cover .field b { display:block; color: var(--ink); font-weight: 600; font-size: 13.5px; }
+.d-b .cover .foot { margin-top:auto; font: 10.5px/1.6 "JetBrains Mono", monospace; color: var(--muted); }
+.d-b .page { padding: 30px 40px 40px; min-height: 800px; box-sizing:border-box; }
+.d-b h1 { font: italic 400 34px/1.1 Newsreader, Georgia, serif; margin: 0; }
+.d-b .lead { color: var(--muted); font-size: 13.5px; max-width: 620px; margin: 8px 0 0; }
+.d-b .muted { color: var(--muted); }
+.d-b .rows { border-top: 1px solid var(--ink); margin-top: 20px; }
+.d-b .rows .r { display:grid; align-items:start; border-bottom: 1px solid var(--cardrule); }
+.d-b .rows .c { padding: 12px 12px 12px 0; min-width:0; }
+.d-b .rows .hd .c { padding: 6px 12px 6px 0; font-size: 11.5px; color: var(--muted); }
+.d-b .rows .foot { display:flex; justify-content:space-between; padding: 8px 0; font-size: 12px; color: var(--muted); }
+.d-b .stamp { display:inline-block; background: var(--sheet); color: var(--blue); font: 600 11px/1 "JetBrains Mono", monospace; letter-spacing: .02em; padding: 6px 8px 5px; outline: 2px dotted var(--bg); outline-offset: -4px; white-space: nowrap; vertical-align: middle; }
+.d-b .stamp.fill { background: var(--blue); color: var(--sheet); outline-color: var(--sheet); }
+.d-b .stamp.dot { background: transparent; color: var(--muted); outline: 1.5px dotted var(--muted); outline-offset: 0; padding: 5px 8px 4px; }
+.d-b .stamp.struck { text-decoration: line-through; color: var(--olive); }
+.d-b .stamp.hatch { padding-left: 18px; background-image: repeating-linear-gradient(-45deg, var(--blue) 0 1px, transparent 1px 4px); background-size: 10px 100%; background-repeat: no-repeat; background-position: left; }
+.d-b .stamp.olive { color: var(--olive); }
+.d-b .stamp.stamped { transform: rotate(-2deg); }
+.d-b .sheet { background: var(--sheet); color: var(--ink); padding: 22px 26px; outline: 2px dotted var(--bg); outline-offset: -5px; }
+.d-b .filters { display:flex; gap: 6px; margin-top: 20px; flex-wrap: wrap; }
+.d-b .filters .stamp { color: var(--muted); background: transparent; outline: 1.5px dotted var(--muted); outline-offset: 0; }
+.d-b .filters .stamp.on { background: var(--sheet); color: var(--blue); outline: 2px dotted var(--bg); outline-offset: -4px; }
+.d-b .title { font-weight: 600; font-size: 15px; }
+.d-b .kicker { font: 500 11px/1.4 "JetBrains Mono", monospace; color: var(--muted); }
+.d-b .btn { display:inline-block; font: 700 12px/1 "JetBrains Mono", monospace; letter-spacing: .04em; padding: 10px 14px; background: var(--blue); color: var(--sheet); outline: 2px dotted var(--sheet); outline-offset: -4px; }
+.d-b .btn.quiet { background: transparent; color: var(--ink); outline: 1.5px solid var(--ink); outline-offset: 0; }
+.d-b .spine { display:flex; align-items:flex-start; gap: 6px; margin-top: 16px; }
+.d-b .spine .cell { display:flex; flex-direction:column; align-items:center; gap: 3px; }
+.d-b .spine .cell .note { font: 10.5px/1.2 "JetBrains Mono", monospace; color: var(--muted); text-align:center; height: 26px; }
+.d-b .spine .link { flex: 1; max-width: 60px; min-width: 8px; height: 1px; background: var(--ink); margin-top: 12px; }
+.d-b .ph { display:inline-block; font: 500 12px/1 Inter, sans-serif; padding: 6px 8px; border: 1px solid var(--ink); }
+.d-b .ph.past { color: var(--muted); border-color: var(--cardrule); }
+.d-b .ph.cur { border-style: dashed; font-weight: 700; }
+.d-b .ph.fut { color: var(--muted); border-style: dotted; }
+.d-b .vitals { display:grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 22px; padding-bottom: 20px; border-bottom: 1px solid var(--ink); }
+.d-b .board .r { display:grid; grid-template-columns: 1fr auto auto; gap: 12px; padding: 6px 0; border-top: 1px solid var(--cardrule); align-items:center; font-size: 13px; }
+.d-b .tabs2 { display:flex; gap: 22px; border-bottom: 1px solid var(--ink); margin-top: 18px; }
+.d-b .tabs2 a { padding: 8px 0; color: var(--muted); font-weight: 500; }
+.d-b .tabs2 a.on { color: var(--ink); font-weight: 700; box-shadow: inset 0 -2px 0 var(--ink); }
+.d-b .visa { margin-top: 22px; }
+.d-b .visa .pn { text-align:center; font: 12px "JetBrains Mono", monospace; color: var(--muted); }
+.d-b .visa h2 { font: italic 400 26px/1.15 Newsreader, serif; margin: 6px 0 4px; }
+.d-b .visa .instr { font-size: 13.5px; color: var(--muted); max-width: 620px; }
+.d-b .visa .sheet { margin-top: 16px; max-width: 760px; }
+.d-b .packet { display:flex; flex-wrap:wrap; gap: 8px; margin-top: 12px; }
+.d-b .reading { display:grid; grid-template-columns: 220px 1fr; gap: 28px; margin-top: 18px; }
+.d-b .arts { display:flex; flex-direction:column; border-top: 1px solid var(--ink); }
+.d-b .arts a { display:flex; justify-content:space-between; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--cardrule); font: 12.5px "JetBrains Mono", monospace; color: var(--muted); }
+.d-b .arts a.on { color: var(--ink); font-weight: 600; }
+.d-b .reg .r { grid-template-columns: 96px 150px 110px 1fr 100px; }
+.d-b .reg .c { padding-top: 8px; padding-bottom: 8px; font-size: 13px; }
+.d-b .pf .r { grid-template-columns: 44px 180px 190px 236px 56px 56px 150px 70px; }
+.d-b .gates { display:inline-flex; gap: 4px; }
+.d-b .meter { position:relative; height: 8px; width: 140px; border: 1px solid var(--ink); display:inline-block; vertical-align: middle; background: var(--sheet); }
+.d-b .meter i { display:block; height:100%; background: var(--blue); }
+.d-b .meter i.over { background: var(--olive); }
+.d-b .meter b { position:absolute; left: 90%; top:-4px; bottom:-4px; width: 2px; background: var(--ink); }
+.d-b .mix { display:inline-flex; height: 12px; width: 180px; gap: 2px; vertical-align: middle; }
+.d-b .mix i { display:block; height:100%; border: 1px solid var(--blue); box-sizing: border-box; background-color: var(--sheet); }
+.d-b .mix .s1 { background-color: var(--blue); }
+.d-b .mix .s2 { background-image: repeating-linear-gradient(-45deg, var(--blue) 0 1px, transparent 1px 4px); }
+.d-b .mix .s3 { background-image: radial-gradient(var(--blue) 0.8px, transparent 0.9px); background-size: 4px 4px; }
+.d-b .mix .s0 { border-style: dotted; border-color: var(--muted); background-color: transparent; }
+.d-b .legend { display:flex; gap: 18px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+.d-b .legend i { display:inline-block; width: 12px; height: 12px; border: 1px solid var(--blue); vertical-align: -2px; margin-right: 5px; box-sizing: border-box; background-color: var(--sheet); }
+.d-b .hbar { display:grid; grid-template-columns: 60px 1fr 40px; gap: 12px; align-items:center; font-size: 12.5px; margin: 6px 0; }
+.d-b .hbar .track { height: 14px; border: 1px solid var(--ink); background: var(--sheet); }
+.d-b .hbar .track i { display:block; height:100%; background: var(--blue); }
+.d-b .hbar .track i.cap { background: var(--olive); }
+.d-b .form { display:grid; grid-template-columns: 1fr 500px; gap: 40px; margin-top: 18px; }
+.d-b label.f { display:block; font-size: 12px; color: var(--muted); margin-top: 14px; }
+.d-b .in { display:block; width: 100%; box-sizing:border-box; border: 1px solid var(--ink); background: var(--sheet); padding: 7px 9px; font: 14px Inter, sans-serif; color: var(--ink); margin-top: 4px; }
+.d-b .in.ta { min-height: 74px; font-family: Newsreader, serif; font-size: 15px; }
+.d-b .specimen { position: relative; overflow: hidden; }
+.d-b .specimen::after { content: "SPECIMEN"; position:absolute; right: -10px; top: 46%; transform: rotate(-14deg); font: 800 30px/1 Inter, sans-serif; letter-spacing: .12em; color: var(--ink); opacity: .55; pointer-events:none; }
+.d-b .preview .g { font: 600 18px/1.35 Inter, sans-serif; margin-top: 10px; }
+.d-b .preview .files { margin-top: 18px; font: 12.5px "JetBrains Mono", monospace; }
+.d-b .preview .files .r { display:flex; gap: 10px; padding: 5px 0; border-bottom: 1px dashed var(--cardrule); }
+.d-b .hint { color: var(--muted); margin-top: 10px; }
+.d-b .band-src { display:inline-block; background: var(--band); color: var(--sheet); font: 600 11px/1 "JetBrains Mono", monospace; padding: 4px 7px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="grain" x="-5%" y="-5%" width="110%" height="110%">
+    <feTurbulence type="fractalNoise" baseFrequency="1.1" numOctaves="2" seed="7" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="1.3" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<div id="bar">
+  <div class="row">
+    <span class="t">Gatehouse — three directions</span>
+    <span class="sub">Real content from this repository's runs. Type is held constant (Inter · Newsreader · JetBrains Mono) so only ground, structure and marks vary.</span>
+  </div>
+  <div class="row">
+    <div class="tabs" id="dirs" role="tablist" aria-label="Direction"></div>
+    <div class="tabs" id="screens" role="tablist" aria-label="Screen" style="margin-left:auto"></div>
+  </div>
+  <div id="gate"></div>
+</div>
+<div id="stage"></div>
+
+<script>
+/* ------------------------------------------------------------------ content */
+const C = {
+  approver: 'Nathan Carter',
+  inbox: [
+    { kind:'gate', gate:'G3', bounced:true, title:'G3 — Ship it?', run:'gateline/runner-agent', detail:'Packet malformed — bounced, not reviewable', note:'Bounced — packet fails its contract; no approval is offered.', age:'38d', stale:true },
+    { kind:'staged', title:'Run staged: awaiting arm', run:'gateline/budget-guards', detail:'Arm to start the run — dispatch begins and the budget starts metering', age:'37d', stale:true },
+    { kind:'escalation', title:'Escalation from orchestrator', run:'gateline/csvpeek', detail:'reviewer escalated task 02-cli-shell — see review-02.md', age:'37d', stale:true },
+    { kind:'paused', title:'Run paused: escalation', run:'gateline/inbox-decide-link', detail:'Resume the run, or close it with a disposition saying why it ends here', age:'34d', stale:true },
+  ],
+  filters: [['All',4],['gate',1],['escalation',1],['round-cap',0],['paused',1],['staged',1],['malformed',0]],
+  run: {
+    slug:'csvpeek', branch:'run/csvpeek', source:'gateline', profile:'full', phase:'paused', reason:'escalation',
+    spine: [
+      {t:'phase', name:'spec', state:'past'}, {t:'gate', g:'G0', state:'approved', by:'Nathan Carter', at:'2026-07-15'},
+      {t:'phase', name:'plan', state:'past'}, {t:'gate', g:'G1', state:'approved', by:'Nathan Carter', at:'2026-07-26'},
+      {t:'phase', name:'implement', state:'current'}, {t:'phase', name:'integrate', state:'future'},
+      {t:'gate', g:'G2', state:'future'}, {t:'phase', name:'release', state:'future'}, {t:'gate', g:'G3', state:'future'}, {t:'phase', name:'done', state:'future'},
+    ],
+    tasks: [ ['01-core-logic', 3, 'review-approved'], ['02-cli-shell', 2, 'in-review'], ['03-unit-tests', 1, 'in-review'], ['04-cli-tests', 0, 'pending'] ],
+    budget: { spent: 31, limit: 30, over: true }, maxRounds: 3, updated: '37d ago',
+    counts: { decide: 1, record: 11, history: 50 },
+    card: { kind:'escalation', title:'Escalation from orchestrator', detail:'reviewer escalated task 02-cli-shell — see review-02.md', meta:'02-cli-shell · in-review · review round 2/3', packet:[['state.yaml',''],['review-02.md','request-changes → escalate']], waiting:'37d', action:'Resolve' },
+    artifacts: ['intent-brief.md','spec.md','plan.md','tasks/01-core-logic.yaml','tasks/02-cli-shell.yaml','tasks/03-unit-tests.yaml','tasks/04-cli-tests.yaml','review-01.md','review-02.md','review-03.md','state.yaml'],
+    history: [
+      ['2026-07-26','orchestrator','metered','implementer(03-unit-tests r2) $2.61'],
+      ['2026-07-26','orchestrator','escalated','paused: escalation — reviewer escalated task 02-cli-shell — see review-02.md'],
+      ['2026-07-26','orchestrator','advanced','02-cli-shell rounds → 2'],
+      ['2026-07-26','orchestrator','metered','reviewer(02-cli-shell r2) $2.32'],
+      ['2026-07-26','orchestrator','dispatched','implementer(03-unit-tests r2)'],
+      ['2026-07-26','orchestrator','advanced','03-unit-tests rounds → 1'],
+      ['2026-07-26','orchestrator','metered','reviewer(03-unit-tests r1) $2.53'],
+      ['2026-07-26','orchestrator','dispatched','reviewer(02-cli-shell r2)'],
+      ['2026-07-26','Nathan Carter','G1 approved','light correction — notes attached', true],
+      ['2026-07-15','Nathan Carter','G0 approved','confirmation — looked right as delivered', true],
+    ],
+  },
+  spec: {
+    title: 'Specification: CSV Peek', contract: 'spec · produced by Analyst · consumed by Architect, Reviewer, Verifier · gate G0',
+    context: '<code>apps/</code> already holds three prior single-file, stdlib-only CLIs with the same shape this brief asks for (<code>wordfreq</code>, <code>mdtoc</code>, <code>dupefind</code>): one <code>.py</code> file, <code>argparse</code>, non-zero exit + stderr message (never a traceback) on bad input, and <code>pytest</code> tests alongside it. There is no existing <code>apps/csvpeek/</code> — this is greenfield within that established convention, not a conflict with it. The brief names four things a “peek” must surface — row count, columns, per-column data type, and common values per column — none of which are defined further in the brief; each is made concrete below and in Assumptions.',
+    reqs: [
+      { id:'R1', name:'CLI file input', body:'The tool must run as a Python 3 script invoked from the shell, taking a required positional argument: the path to a CSV file to inspect.', ac:[['AC1.1','Running <code>python3 csvpeek.py path/to/existing.csv</code> (an existing, readable CSV file) exits with status code 0.'],['AC1.2','Running <code>python3 csvpeek.py</code> with no file argument exits with a non-zero status code and prints a usage/error message to stderr.']] },
+      { id:'R2', name:'Row count', body:'The tool must report how many data rows the file contains, not counting the header row (see the header ASSUMPTION below).', ac:[['AC2.1','Given a CSV with one header line and 5 data rows, the output reports the row count as 5 (the header row is excluded from that count).'],['AC2.2','Given a CSV with a header line and 0 data rows, the output reports the row count as 0 and exits 0 (not an error; see R10).']] },
+      { id:'R3', name:'Column identification', body:'The tool must report the set and left-to-right order of columns, named from the header row.', ac:[['AC3.1','Given header <code>name,age,city</code>, the output lists the three columns <code>name</code>, <code>age</code>, <code>city</code>, in that order.']] },
+      { id:'R4', name:'Delimiter detection', body:'The tool must not assume comma is always the delimiter; it must use <code>csv.Sniffer</code> (per the brief’s explicit allowance) to detect the delimiter actually in use.', ac:[['AC4.1','Given a semicolon-delimited file with header <code>name;age;city</code> and matching data rows, the output identifies 3 columns, not one column containing literal semicolons.']] },
+    ],
+  },
+  portfolio: {
+    total: 19,
+    rows: [
+      { slug:'inbox-decide-link', needs:1, phase:'paused', reason:'escalation', profile:'patch', gates:{G1:'approved',G2:'pending'}, tasks:'0/1', rounds:0, budget:[16,20], age:'34d' },
+      { slug:'state-contract-split-2', phase:'done', profile:'standard', gates:{G0:'approved',G1:'approved',G2:'approved'}, tasks:'0/4', rounds:2, budget:[42,50], age:'35d' },
+      { slug:'review-parsing', phase:'done', profile:'patch', gates:{G1:'approved',G2:'approved'}, tasks:'0/1', rounds:2, budget:[17,30], age:'35d' },
+      { slug:'writestate-kill-window', phase:'done', profile:'standard', gates:{G0:'approved',G1:'approved',G2:'approved'}, tasks:'0/2', rounds:1, budget:[13,50], age:'36d' },
+      { slug:'fleetview-design', phase:'done', profile:'full', gates:{G0:'approved',G1:'approved',G2:'approved',G3:'approved'}, tasks:'0/11', rounds:2, budget:[153,200], age:'37d' },
+      { slug:'csvpeek', needs:1, phase:'paused', reason:'escalation', profile:'full', gates:{G0:'approved',G1:'approved',G2:'pending',G3:'pending'}, tasks:'0/4', rounds:3, budget:[31,30], over:true, age:'37d' },
+      { slug:'budget-guards', needs:1, phase:'staged', profile:'standard', gates:{G0:'pending',G1:'pending',G2:'pending'}, tasks:'—', rounds:'—', budget:null, age:'37d' },
+      { slug:'escalation-visibility-2', phase:'done', profile:'standard', gates:{G0:'approved',G1:'approved',G2:'approved'}, tasks:'0/5', rounds:2, budget:[39,50], age:'37d' },
+      { slug:'state-contract-split', phase:'paused', reason:'gate-declined', profile:'full', gates:{G0:'declined',G1:'pending',G2:'pending',G3:'pending'}, tasks:'—', rounds:'—', budget:null, age:'38d' },
+      { slug:'runner-agent', needs:1, phase:'release', profile:'full', gates:{G0:'approved',G1:'approved',G2:'approved',G3:'bounced'}, tasks:'0/6', rounds:2, budget:[58,80], age:'38d' },
+    ],
+  },
+  newrun: {
+    title:'CSV importer', slug:'csv-importer', profile:'standard', budget:40, source:'gateline',
+    sections: [['Problem','Teams paste CSV exports into the tool by hand and the importer silently drops rows whose delimiter is not a comma.'],['Motivation','Every support thread this month traces back to one of these silent drops; the fix is small and the evidence is already in the tickets.'],['Constraints','Stdlib only, single file, tests beside it, no change to the export format.'],['Out of scope','']],
+    commit:'state(csv-importer): staged by Nathan Carter', key:'4b1c9e2a-7f3d-4c58-9a1e-0d2f6b8c3e11', lines: 24,
+  },
+  metrics: {
+    gates: [ ['G0',16,0.88,false,[9,5,2,0],'7m'], ['G1',16,1.00,true,[10,4,1,1],'1m'], ['G2',14,0.93,true,[8,3,2,1],'16m'], ['G3',4,1.00,false,[1,0,0,3],'21m'] ],
+    rounds: [ ['0',2],['1',32],['2',28],['3+ (cap)',4] ],
+    budget: [ ['gateline/agents-md-adapter',50,3.97,true],['gateline/budget-guards',60,0,false],['gateline/creation-seam',60,104.54,true],['gateline/csvpeek',30,30.59,true],['gateline/dupefind',50,12.15,true],['gateline/escalation-visibility',50,0,false] ],
+  },
+};
+const KIND_CLASS = { gate:'gate', escalation:'human', 'round-cap':'human', paused:'rest', staged:'rest', malformed:'human' };
+const GATE_STATE = { approved:'fill', declined:'struck', pending:'', future:'dot', bounced:'hatch' };
+const GATE_GLYPH = { approved:'✓', declined:'✕', pending:'·', future:'·', bounced:'⚠' };
+const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+
+/* ------------------------------------------------------------------ direction A */
+const A = {};
+A.imp = (text, cls='', dc='') => `<span class="imp ${cls} ${dc?'pick':''}" ${dc?`data-class="${dc}"`:''}>${text}</span>`;
+A.shell = (active, body) => `
+<div class="app">
+  <aside class="rack">
+    <div class="word">Gatehouse<small>pipeline decisions</small></div>
+    <nav>
+      <a class="${active==='inbox'?'on':''}">${A.imp('4', active==='inbox'?'fill':'')} Inbox</a>
+      <a class="${active==='portfolio'?'on':''}">${A.imp('19', active==='portfolio'?'fill':'')} Portfolio</a>
+      <a class="${active==='metrics'?'on':''}">${A.imp('§', active==='metrics'?'fill':'')} Metrics</a>
+    </nav>
+    <div class="foot">The repo is the database.<br>Every view renders git.</div>
+  </aside>
+  <main class="page">${body}</main>
+</div>`;
+A.kind = (it) => {
+  if (it.kind==='gate') return A.imp(`${it.gate} · gate`, it.bounced?'hatch':'', 'gate');
+  return A.imp(it.kind, it.kind==='staged'?'dot':'', KIND_CLASS[it.kind]);
+};
+A.inbox = () => A.shell('inbox', `
+  <h1>Inbox</h1>
+  <p class="lead">Pending human decisions across every run, oldest first. Open the run to read the packet and decide.</p>
+  <div class="filters">${C.filters.map(([l,n],i)=>A.imp(`${l} ${n}`, i===0?'on':'', i>0?KIND_CLASS[l]||'human':'')).join('')}</div>
+  <div class="ledger">
+    <div class="r hd" style="grid-template-columns: 150px 1fr 110px;"><div class="c">kind</div><div class="c">entry</div><div class="c post">waiting</div></div>
+    ${C.inbox.map(it => `
+    <div class="r" style="grid-template-columns: 150px 1fr 110px;">
+      <div class="c">${A.kind(it)}</div>
+      <div class="c">
+        <div><span class="title">${esc(it.title)}</span> <span class="mono small muted" style="margin-left:8px">${it.run}</span></div>
+        <div class="muted small" style="margin-top:2px">${esc(it.detail)}</div>
+        ${it.note ? `<div class="small" style="margin-top:6px"><b>Bounced</b> — packet fails its contract; no approval is offered.</div>` : ''}
+      </div>
+      <div class="c post mono small num ${it.stale?'':'muted'}">${it.stale?'⏱ ':''}${it.age}</div>
+    </div>`).join('')}
+    <div class="foot"><span>4 entries · nothing here expires</span><span class="mono">oldest first</span></div>
+  </div>
+  <div class="hint"><kbd>j</kbd> down · <kbd>k</kbd> up · <kbd>enter</kbd> open</div>`);
+A.spine = () => `<div class="spine">${C.run.spine.map((c,i) => {
+  const link = i>0 ? '<div class="link"></div>' : '';
+  if (c.t==='phase') return link + `<div class="cell">${A.imp(c.name, c.state==='current'?'cur':c.state==='future'?'dot':'', 'phase')}<div class="note"></div></div>`;
+  return link + `<div class="cell">${A.imp(`${c.g} ${GATE_GLYPH[c.state]}`, GATE_STATE[c.state], '')}<div class="note">${c.by?`${c.by}<br>${c.at}`:''}</div></div>`;
+}).join('')}</div>`;
+A.runHead = (tab) => `
+  <h1 style="font-size:28px">${C.run.slug}</h1>
+  <div class="mono small muted">branch ${C.run.branch} · ${C.run.source}</div>
+  <div style="margin-top:14px">${A.imp('paused · escalation', 'dot', 'rest')}</div>
+  ${A.spine()}
+  <div class="vitals">
+    <div class="board">
+      <div class="kicker" style="padding-bottom:6px">task board · 0 / 4 done</div>
+      ${C.run.tasks.map(([id,r,s]) => `<div class="r"><span class="mono">${id}</span><span class="mono muted small">${r?`⟲${r}`:''}</span>${A.imp(s, s==='pending'?'dot':s==='review-approved'?'fill':'')}</div>`).join('')}
+    </div>
+    <div>
+      <div class="kicker" style="padding-bottom:6px">vitals</div>
+      <div class="srow small" style="margin-top:6px"><span class="muted" style="width:90px">Budget</span><span class="meter"><i class="over" style="width:100%"></i></span><span class="mono num"><b>$31 / $30</b> · over</span></div>
+      <div class="srow small" style="margin-top:8px"><span class="muted" style="width:90px">Max rounds</span><span class="mono num"><b>3</b></span></div>
+      <div class="srow small" style="margin-top:8px"><span class="muted" style="width:90px">Updated</span><span class="mono num">37d ago</span></div>
+    </div>
+  </div>
+  <div class="tabs2">
+    <a class="${tab==='decide'?'on':''}">Decide <span class="mono small">1</span></a>
+    <a class="${tab==='record'?'on':''}">Record <span class="mono small">11</span></a>
+    <a class="${tab==='history'?'on':''}">History <span class="mono small">50</span></a>
+  </div>`;
+A.decide = () => A.shell('inbox', A.runHead('decide') + `
+  <div class="post-col">
+    <div class="main">
+      <div class="srow">${A.imp('needs you', 'fill')} ${A.imp('escalation', '', 'human')}</div>
+      <h2 style="font: 600 22px/1.2 Inter; margin: 12px 0 4px">${C.run.card.title}</h2>
+      <p style="margin:0">${esc(C.run.card.detail)}</p>
+      <div class="mono small muted" style="margin-top:6px">${C.run.card.meta}</div>
+      <div class="packet">${C.run.card.packet.map(([p,v]) => A.imp(v ? `${p} · ${v}` : p)).join('')}</div>
+    </div>
+    <div class="post">
+      <div class="kicker">posting · waiting 37d</div>
+      <p class="small" style="margin:10px 0 14px">Read both sides, then unblock: resolve with a disposition, or edit the spec and let the loop retry.</p>
+      <a class="btn">Resolve</a>
+      <div class="hint" style="text-align:left"><kbd>a</kbd> resolve · <kbd>e</kbd> next artifact · <kbd>esc</kbd> inbox</div>
+    </div>
+  </div>
+  <div class="right small" style="margin-top:40px"><a class="muted" style="text-decoration:underline">Close this run…</a></div>`);
+A.record = () => A.shell('inbox', A.runHead('record') + `
+  <div class="reading">
+    <div>
+      <div class="kicker" style="padding-bottom:6px">the record, in the order it was written</div>
+      <div class="arts">${C.run.artifacts.map(p => `<a class="${p==='spec.md'?'on':''}"><span>${p}</span><span>${p==='spec.md'||p==='plan.md'||p==='intent-brief.md'?'✓':''}</span></a>`).join('')}</div>
+    </div>
+    <div>
+      <div class="kicker">${C.spec.contract}</div>
+      <div class="read">
+        <h2 style="margin-top:10px;font-size:26px">${C.spec.title}</h2>
+        <h3>Context</h3><p>${C.spec.context}</p>
+        <h3>Requirements</h3>
+        ${C.spec.reqs.map(r => `<h3 style="margin-top:18px"><span class="ac">${r.id}</span>${r.name}</h3><p>${r.body}</p><ul>${r.ac.map(([id,t]) => `<li><span class="ac">${id}</span>${t}</li>`).join('')}</ul>`).join('')}
+      </div>
+    </div>
+  </div>`);
+A.history = () => A.shell('inbox', A.runHead('history') + `
+  <div class="ledger reg">
+    <div class="r hd"><div class="c">date</div><div class="c">by</div><div class="c">verb</div><div class="c">entry</div><div class="c post">cost</div></div>
+    ${C.run.history.map(([d,who,v,t,human]) => `
+    <div class="r">
+      <div class="c mono num">${d}</div>
+      <div class="c ${human?'':'muted'}">${who}</div>
+      <div class="c">${human ? A.imp(v, 'fill stamped') : `<span class="mono muted">${v}</span>`}</div>
+      <div class="c ${human?'':'muted'}">${esc(t)}</div>
+      <div class="c post mono num right muted">${(t.match(/\$[\d.]+/)||[''])[0]}</div>
+    </div>`).join('')}
+    <div class="foot"><span>10 of 50 entries shown</span><span class="mono">newest first · $7.46 metered on this page</span></div>
+  </div>`);
+A.gateCells = (row) => `<span class="gates">${Object.entries(row.gates).map(([g,s]) => A.imp(`${g} ${GATE_GLYPH[s]}`, GATE_STATE[s])).join('')}</span>`;
+A.phase = (row) => {
+  if (row.phase==='done') return A.imp('done', 'fill');
+  if (row.phase==='staged') return A.imp('staged', 'dot', 'rest');
+  if (row.phase==='paused') return A.imp(`paused · ${row.reason}`, 'dot', 'rest');
+  return A.imp(row.phase, '', 'phase');
+};
+A.portfolio = () => A.shell('portfolio', `
+  <div class="srow"><h1 class="grow">Portfolio</h1><a class="btn">New run</a></div>
+  <p class="lead">Each run's progress through its gates, recomputed from its branch. Open a run when one calls for you.</p>
+  <div class="ledger pf">
+    <div class="r hd"><div class="c">you</div><div class="c">run</div><div class="c">phase</div><div class="c">gates</div><div class="c right">tasks</div><div class="c right">rounds</div><div class="c post">budget</div><div class="c right">updated</div></div>
+    ${C.portfolio.rows.map(r => `
+    <div class="r">
+      <div class="c">${r.needs ? A.imp(String(r.needs), 'fill') : ''}</div>
+      <div class="c"><div class="mono" style="font-weight:600">${r.slug}</div><div class="mono small muted">gateline · ${r.profile}</div></div>
+      <div class="c">${A.phase(r)}</div>
+      <div class="c">${A.gateCells(r)}</div>
+      <div class="c mono num right small">${r.tasks}</div>
+      <div class="c mono num right small ${r.rounds===3?'':'muted'}">${r.rounds===3?'<b>3</b>':r.rounds}</div>
+      <div class="c post small">${r.budget ? `<span class="meter" style="width:90px"><i class="${r.over?'over':''}" style="width:${Math.min(100, r.budget[0]/r.budget[1]*100)}%"></i></span><div class="mono num ${r.over?'':'muted'}">$${r.budget[0]} / $${r.budget[1]}${r.over?' · <b>over</b>':''}</div>` : '<span class="mono muted">unmetered</span>'}</div>
+      <div class="c mono num right small muted">${r.age}</div>
+    </div>`).join('')}
+    <div class="foot"><span>10 of 19 runs shown · 4 need you</span><span class="mono">approved ${A.imp('✓','fill')} declined ${A.imp('✕','struck')} pending ${A.imp('·')} bounced ${A.imp('⚠','hatch')} absent ${A.imp('·','dot')}</span></div>
+  </div>`);
+A.newrun = () => A.shell('portfolio', `
+  <h1>Stage a run</h1>
+  <p class="lead">Author the intent brief, choose a profile and a budget. The record the server will commit assembles itself on the right. Staging commits that record and nothing more.</p>
+  <div class="form">
+    <div>
+      <label class="f">Title<input class="in" value="${C.newrun.title}"></label>
+      <label class="f">Slug <span class="mono">run/${C.newrun.slug}</span><input class="in mono" value="${C.newrun.slug}"></label>
+      <div class="srow" style="gap:20px">
+        <label class="f grow">Profile<div class="srow" style="margin-top:6px">${['patch','standard','full'].map(p => A.imp(p, p===C.newrun.profile?'fill':'', 'rest')).join('')}</div></label>
+        <label class="f" style="width:140px">Budget ceiling (USD)<input class="in mono num" value="${C.newrun.budget}"></label>
+      </div>
+      ${C.newrun.sections.map(([h,t]) => `<label class="f"><span class="mono">## ${h}</span>${t?'':' <span class="muted">· required</span>'}<textarea class="in ta">${esc(t)}</textarea></label>`).join('')}
+      <div style="margin-top:20px"><a class="btn">Stage this run</a> <span class="small muted" style="margin-left:10px">Creates run/csv-importer and commits the record shown. Nothing dispatches, nothing is spent.</span></div>
+    </div>
+    <div>
+      <div class="kicker">the record this stages · 3 of 4 sections filled</div>
+      <div class="preview" style="margin-top:8px">
+        <div class="mono small muted">new branch <b class="ink">run/${C.newrun.slug}</b> off main</div>
+        <div class="g">${A.imp('genesis · not ready', 'dot')}<br>${C.newrun.commit}</div>
+        <div class="mono small muted">[client-key: ${C.newrun.key}]</div>
+        <div class="small" style="margin-top:8px"><b>${C.approver}</b> <span class="muted">author &amp; committer</span></div>
+        <div class="files">
+          <div class="r"><span>runs/${C.newrun.slug}/state.yaml</span><span class="muted">${C.newrun.lines} lines · new</span></div>
+          <div class="r"><span>runs/${C.newrun.slug}/intent-brief.md</span><span class="muted">3 of 4 · new</span></div>
+          ${C.newrun.sections.map(([h,t]) => `<div class="r" style="border:0;padding:2px 0 2px 18px"><span class="${t?'':'muted'}">${t?'✓':'·'} ${h}</span></div>`).join('')}
+        </div>
+      </div>
+    </div>
+  </div>`);
+A.metrics = () => A.shell('metrics', `
+  <h1>Metrics</h1>
+  <p class="lead">Computed from state.yaml history — nothing is logged separately. Sustained approval above 90% means a gate is over-triggering; its scope should move down the tier ladder.</p>
+  <div class="ledger" style="max-width:900px">
+    <div class="r hd" style="grid-template-columns:60px 80px 260px 240px 1fr"><div class="c">gate</div><div class="c right">decisions</div><div class="c">approval rate</div><div class="c">burden mix</div><div class="c post">median latency</div></div>
+    ${C.metrics.gates.map(([g,n,rate,over,mix,lat]) => `
+    <div class="r" style="grid-template-columns:60px 80px 260px 240px 1fr">
+      <div class="c mono" style="font-weight:600">${g}</div>
+      <div class="c mono num right">${n}</div>
+      <div class="c"><span class="meter"><i class="${over?'over':''}" style="width:${rate*100}%"></i><b></b></span> <span class="mono num small">${Math.round(rate*100)}%</span> ${over?A.imp('over-triggering?','red'):''}</div>
+      <div class="c"><span class="mix">${mix.map((v,i) => v?`<i class="s${i===3?0:i+1}" style="flex:${v}"></i>`:'').join('')}</span></div>
+      <div class="c post mono num">${lat}</div>
+    </div>`).join('')}
+    <div class="legend"><span><i class="s1" style="background:var(--ink)"></i>confirmation</span><span><i style="background-image:repeating-linear-gradient(-45deg,var(--ink) 0 1px,transparent 1px 3px)"></i>light correction</span><span><i style="background-image:radial-gradient(var(--ink) .8px,transparent .9px);background-size:3px 3px"></i>heavy correction</span><span><i style="border-style:dotted"></i>unrecorded (predates burden capture)</span><span style="margin-left:auto">┃ 90% threshold</span></div>
+  </div>
+  <h2 style="font:600 15px Inter;margin:34px 0 4px">Review rounds per task</h2>
+  <p class="lead" style="margin:0 0 10px">Round 4 escalates by rule; tasks at 3+ usually mean a spec ambiguity, not an implementation defect.</p>
+  <div style="max-width:460px">${C.metrics.rounds.map(([l,n]) => `<div class="hbar"><span class="mono right muted">${l}</span><span class="track"><i class="${l.startsWith('3')?'cap':''}" style="width:${n/32*100}%"></i></span><span class="mono num">${n}</span></div>`).join('')}</div>
+  <h2 style="font:600 15px Inter;margin:34px 0 4px">Budget honesty</h2>
+  <p class="lead" style="margin:0 0 4px">Spend is whatever the run's orchestrator recorded. “Never updated” is a real finding.</p>
+  <div class="ledger" style="max-width:760px">
+    <div class="r hd" style="grid-template-columns:1fr 90px 130px 200px"><div class="c">run</div><div class="c right">limit</div><div class="c post right">recorded spend</div><div class="c">metering</div></div>
+    ${C.metrics.budget.map(([r,l,s,u]) => `<div class="r" style="grid-template-columns:1fr 90px 130px 200px"><div class="c mono small">${r}</div><div class="c mono num right small">$${l}</div><div class="c post mono num right small">$${s}</div><div class="c small">${u ? A.imp('✓ updated during the run') : A.imp('never updated','hatch')}</div></div>`).join('')}
+  </div>`);
+
+/* ------------------------------------------------------------------ direction B */
+const B = {};
+B.stamp = (text, cls='') => `<span class="stamp ${cls}">${text}</span>`;
+B.shell = (active, body) => `
+<div class="app">
+  <aside class="cover">
+    <div class="word">Gatehouse<small>certificate of decisions<br>for the gateline pipeline</small></div>
+    <nav>
+      <a class="${active==='inbox'?'on':''}"><span>Inbox</span><span class="mono">4</span></a>
+      <a class="${active==='portfolio'?'on':''}"><span>Portfolio</span><span class="mono">19</span></a>
+      <a class="${active==='metrics'?'on':''}"><span>Metrics</span><span></span></a>
+    </nav>
+    <div class="field">Titulaire<b>${C.approver}</b></div>
+    <div class="field">Source<b><span class="band-src">gateline</span></b></div>
+    <div class="foot">The repo is the database.<br>Every view renders git.</div>
+  </aside>
+  <main class="page">${body}</main>
+</div>`;
+B.kind = (it) => {
+  if (it.kind==='gate') return B.stamp(`${it.gate} · GATE`, it.bounced?'hatch':'');
+  if (it.kind==='staged') return B.stamp('STAGED', 'dot');
+  return B.stamp(it.kind.toUpperCase(), it.kind==='paused'?'olive':'');
+};
+B.inbox = () => B.shell('inbox', `
+  <h1>Inbox</h1>
+  <p class="lead">Pending human decisions across every run, oldest first. Open the run to read the packet and decide.</p>
+  <div class="filters">${C.filters.map(([l,n],i)=>B.stamp(`${l.toUpperCase()} ${n}`, i===0?'on':'')).join('')}</div>
+  <div class="rows">
+    <div class="r hd" style="grid-template-columns: 160px 1fr 110px;"><div class="c">kind</div><div class="c">entry</div><div class="c right">waiting</div></div>
+    ${C.inbox.map(it => `
+    <div class="r" style="grid-template-columns: 160px 1fr 110px;">
+      <div class="c">${B.kind(it)}</div>
+      <div class="c">
+        <div><span class="title">${esc(it.title)}</span> <span class="mono small muted" style="margin-left:8px">${it.run}</span></div>
+        <div class="muted small" style="margin-top:2px">${esc(it.detail)}</div>
+        ${it.note ? `<div class="small" style="margin-top:6px"><b>Bounced</b> — packet fails its contract; no approval is offered.</div>` : ''}
+      </div>
+      <div class="c mono small num right">${it.stale?'⏱ ':''}${it.age}</div>
+    </div>`).join('')}
+    <div class="foot"><span>4 entries · nothing here expires</span><span class="mono">oldest first</span></div>
+  </div>
+  <div class="hint muted"><kbd>j</kbd> down · <kbd>k</kbd> up · <kbd>enter</kbd> open</div>`);
+B.spine = () => `<div class="spine">${C.run.spine.map((c,i) => {
+  const link = i>0 ? '<div class="link"></div>' : '';
+  if (c.t==='phase') return link + `<div class="cell"><span class="ph ${c.state==='current'?'cur':c.state==='past'?'past':'fut'}">${c.name}</span><div class="note"></div></div>`;
+  return link + `<div class="cell">${B.stamp(`${c.g} ${GATE_GLYPH[c.state]}`, GATE_STATE[c.state])}<div class="note">${c.by?`${c.by}<br>${c.at}`:''}</div></div>`;
+}).join('')}</div>`;
+B.runHead = (tab) => `
+  <div class="srow" style="align-items:baseline"><h1 style="font-style:normal;font-family:Inter;font-weight:800;font-size:26px;letter-spacing:.06em;text-transform:uppercase">${C.run.slug}</h1><span class="mono small muted">branch ${C.run.branch}</span></div>
+  <div style="margin-top:12px">${B.stamp('PAUSED · ESCALATION','olive')}</div>
+  ${B.spine()}
+  <div class="vitals">
+    <div class="board">
+      <div class="kicker" style="padding-bottom:6px">task board · 0 / 4 done</div>
+      ${C.run.tasks.map(([id,r,s]) => `<div class="r"><span class="mono">${id}</span><span class="mono muted small">${r?`⟲${r}`:''}</span>${B.stamp(s.toUpperCase(), s==='pending'?'dot':s==='review-approved'?'fill':'')}</div>`).join('')}
+    </div>
+    <div>
+      <div class="kicker" style="padding-bottom:6px">vitals</div>
+      <div class="srow small" style="margin-top:6px"><span class="muted" style="width:90px">Budget</span><span class="meter"><i class="over" style="width:100%"></i></span><span class="mono num"><b>$31 / $30</b> · over</span></div>
+      <div class="srow small" style="margin-top:8px"><span class="muted" style="width:90px">Max rounds</span><span class="mono num"><b>3</b></span></div>
+      <div class="srow small" style="margin-top:8px"><span class="muted" style="width:90px">Updated</span><span class="mono num">37d ago</span></div>
+    </div>
+  </div>
+  <div class="tabs2">
+    <a class="${tab==='decide'?'on':''}">Decide <span class="mono small">1</span></a>
+    <a class="${tab==='record'?'on':''}">Record <span class="mono small">11</span></a>
+    <a class="${tab==='history'?'on':''}">History <span class="mono small">50</span></a>
+  </div>`;
+B.decide = () => B.shell('inbox', B.runHead('decide') + `
+  <div class="visa">
+    <div class="pn">— 1 of 1 —</div>
+    <h2>${C.run.card.title}</h2>
+    <div class="instr">Read both sides, then unblock: resolve with a disposition, or edit the spec and let the loop retry.</div>
+    <div class="sheet">
+      <div class="srow">${B.stamp('ESCALATION')} <span class="mono small muted" style="margin-left:auto">waiting 37d</span></div>
+      <p style="margin:12px 0 0;font-size:15px">${esc(C.run.card.detail)}</p>
+      <div class="mono small muted" style="margin-top:6px">${C.run.card.meta}</div>
+      <div class="packet">${C.run.card.packet.map(([p,v]) => B.stamp(v ? `${p} · ${v.toUpperCase()}` : p, 'hollow')).join('')}</div>
+      <div class="srow" style="margin-top:18px"><a class="btn">RESOLVE</a><span class="hint muted grow" style="text-align:left"><kbd>a</kbd> resolve · <kbd>e</kbd> next artifact · <kbd>esc</kbd> inbox</span></div>
+    </div>
+  </div>
+  <div class="right small" style="margin-top:40px"><a class="muted" style="text-decoration:underline">Close this run…</a></div>`);
+B.record = () => B.shell('inbox', B.runHead('record') + `
+  <div class="reading">
+    <div>
+      <div class="kicker" style="padding-bottom:6px">the record, in the order it was written</div>
+      <div class="arts">${C.run.artifacts.map(p => `<a class="${p==='spec.md'?'on':''}"><span>${p}</span><span>${p==='spec.md'||p==='plan.md'||p==='intent-brief.md'?'✓':''}</span></a>`).join('')}</div>
+    </div>
+    <div class="sheet" style="padding:34px 40px">
+      <div class="kicker">${C.spec.contract}</div>
+      <div class="read">
+        <h2 style="margin-top:10px;font: italic 400 30px/1.15 Newsreader, serif">${C.spec.title}</h2>
+        <h3>Context</h3><p>${C.spec.context}</p>
+        <h3>Requirements</h3>
+        ${C.spec.reqs.map(r => `<h3 style="margin-top:18px"><span class="ac">${r.id}</span>${r.name}</h3><p>${r.body}</p><ul>${r.ac.map(([id,t]) => `<li><span class="ac">${id}</span>${t}</li>`).join('')}</ul>`).join('')}
+      </div>
+    </div>
+  </div>`);
+B.history = () => B.shell('inbox', B.runHead('history') + `
+  <div class="rows reg">
+    <div class="r hd"><div class="c">date</div><div class="c">by</div><div class="c">verb</div><div class="c">entry</div><div class="c right">cost</div></div>
+    ${C.run.history.map(([d,who,v,t,human]) => `
+    <div class="r">
+      <div class="c mono num">${d}</div>
+      <div class="c ${human?'':'muted'}">${who}</div>
+      <div class="c">${human ? B.stamp(v.toUpperCase(), 'fill stamped') : `<span class="mono muted">${v}</span>`}</div>
+      <div class="c ${human?'':'muted'}">${esc(t)}</div>
+      <div class="c mono num right muted">${(t.match(/\$[\d.]+/)||[''])[0]}</div>
+    </div>`).join('')}
+    <div class="foot"><span>10 of 50 entries shown</span><span class="mono">newest first · $7.46 metered on this page</span></div>
+  </div>`);
+B.gateCells = (row) => `<span class="gates">${Object.entries(row.gates).map(([g,s]) => B.stamp(`${g} ${GATE_GLYPH[s]}`, GATE_STATE[s])).join('')}</span>`;
+B.phase = (row) => {
+  if (row.phase==='done') return B.stamp('DONE', 'fill');
+  if (row.phase==='staged') return B.stamp('STAGED', 'dot');
+  if (row.phase==='paused') return B.stamp(`PAUSED · ${row.reason.toUpperCase()}`, 'olive');
+  return `<span class="ph cur">${row.phase}</span>`;
+};
+B.portfolio = () => B.shell('portfolio', `
+  <div class="srow" style="align-items:baseline"><h1 class="grow">Portfolio</h1><a class="btn">NEW RUN</a></div>
+  <p class="lead">Each run's progress through its gates, recomputed from its branch. Open a run when one calls for you.</p>
+  <div class="rows pf">
+    <div class="r hd"><div class="c">you</div><div class="c">run</div><div class="c">phase</div><div class="c">gates</div><div class="c right">tasks</div><div class="c right">rounds</div><div class="c">budget</div><div class="c right">updated</div></div>
+    ${C.portfolio.rows.map(r => `
+    <div class="r">
+      <div class="c">${r.needs ? B.stamp(String(r.needs), 'fill') : ''}</div>
+      <div class="c"><div class="mono" style="font-weight:600">${r.slug}</div><div class="mono small muted">gateline · ${r.profile}</div></div>
+      <div class="c">${B.phase(r)}</div>
+      <div class="c">${B.gateCells(r)}</div>
+      <div class="c mono num right small">${r.tasks}</div>
+      <div class="c mono num right small ${r.rounds===3?'':'muted'}">${r.rounds===3?'<b>3</b>':r.rounds}</div>
+      <div class="c small">${r.budget ? `<span class="meter" style="width:90px"><i class="${r.over?'over':''}" style="width:${Math.min(100, r.budget[0]/r.budget[1]*100)}%"></i></span><div class="mono num ${r.over?'':'muted'}">$${r.budget[0]} / $${r.budget[1]}${r.over?' · <b>over</b>':''}</div>` : '<span class="mono muted">unmetered</span>'}</div>
+      <div class="c mono num right small muted">${r.age}</div>
+    </div>`).join('')}
+    <div class="foot"><span>10 of 19 runs shown · 4 need you</span><span class="mono">approved ${B.stamp('✓','fill')} declined ${B.stamp('✕','struck')} pending ${B.stamp('·')} bounced ${B.stamp('⚠','hatch')} absent ${B.stamp('·','dot')}</span></div>
+  </div>`);
+B.newrun = () => B.shell('portfolio', `
+  <h1>Stage a run</h1>
+  <p class="lead">Author the intent brief, choose a profile and a budget. The record the server will commit assembles itself on the right, as a specimen until you stage it.</p>
+  <div class="form">
+    <div>
+      <label class="f">Title<input class="in" value="${C.newrun.title}"></label>
+      <label class="f">Slug <span class="mono">run/${C.newrun.slug}</span><input class="in mono" value="${C.newrun.slug}"></label>
+      <div class="srow" style="gap:20px">
+        <label class="f grow">Profile<div class="srow" style="margin-top:6px">${['patch','standard','full'].map(p => B.stamp(p.toUpperCase(), p===C.newrun.profile?'fill':'dot')).join('')}</div></label>
+        <label class="f" style="width:140px">Budget ceiling (USD)<input class="in mono num" value="${C.newrun.budget}"></label>
+      </div>
+      ${C.newrun.sections.map(([h,t]) => `<label class="f"><span class="mono">## ${h}</span>${t?'':' <span class="muted">· required</span>'}<textarea class="in ta">${esc(t)}</textarea></label>`).join('')}
+      <div style="margin-top:20px"><a class="btn">STAGE THIS RUN</a> <span class="small muted" style="margin-left:10px">Creates run/csv-importer and commits the record shown. Nothing dispatches, nothing is spent.</span></div>
+    </div>
+    <div>
+      <div class="kicker">the record this stages · 3 of 4 sections filled</div>
+      <div class="sheet specimen preview" style="margin-top:8px">
+        <div class="mono small muted">new branch <b>run/${C.newrun.slug}</b> off main</div>
+        <div class="g">${B.stamp('GENESIS · NOT READY', 'dot')}<br>${C.newrun.commit}</div>
+        <div class="mono small muted">[client-key: ${C.newrun.key}]</div>
+        <div class="small" style="margin-top:8px"><b>${C.approver}</b> <span class="muted">author &amp; committer</span></div>
+        <div class="files">
+          <div class="r"><span>runs/${C.newrun.slug}/state.yaml</span><span class="muted">${C.newrun.lines} lines · new</span></div>
+          <div class="r"><span>runs/${C.newrun.slug}/intent-brief.md</span><span class="muted">3 of 4 · new</span></div>
+          ${C.newrun.sections.map(([h,t]) => `<div class="r" style="border:0;padding:2px 0 2px 18px"><span class="${t?'':'muted'}">${t?'✓':'·'} ${h}</span></div>`).join('')}
+        </div>
+      </div>
+    </div>
+  </div>`);
+B.metrics = () => B.shell('metrics', `
+  <h1>Metrics</h1>
+  <p class="lead">Computed from state.yaml history — nothing is logged separately. Sustained approval above 90% means a gate is over-triggering; its scope should move down the tier ladder.</p>
+  <div class="rows" style="max-width:900px">
+    <div class="r hd" style="grid-template-columns:60px 80px 260px 240px 1fr"><div class="c">gate</div><div class="c right">decisions</div><div class="c">approval rate</div><div class="c">burden mix</div><div class="c right">median latency</div></div>
+    ${C.metrics.gates.map(([g,n,rate,over,mix,lat]) => `
+    <div class="r" style="grid-template-columns:60px 80px 260px 240px 1fr">
+      <div class="c mono" style="font-weight:600">${g}</div>
+      <div class="c mono num right">${n}</div>
+      <div class="c"><span class="meter"><i class="${over?'over':''}" style="width:${rate*100}%"></i><b></b></span> <span class="mono num small">${Math.round(rate*100)}%</span> ${over?B.stamp('OVER-TRIGGERING?','olive'):''}</div>
+      <div class="c"><span class="mix">${mix.map((v,i) => v?`<i class="s${i===3?0:i+1}" style="flex:${v}"></i>`:'').join('')}</span></div>
+      <div class="c mono num right">${lat}</div>
+    </div>`).join('')}
+    <div class="legend"><span><i style="background-color:var(--blue)"></i>confirmation</span><span><i style="background-image:repeating-linear-gradient(-45deg,var(--blue) 0 1px,transparent 1px 3px)"></i>light correction</span><span><i style="background-image:radial-gradient(var(--blue) .8px,transparent .9px);background-size:3px 3px"></i>heavy correction</span><span><i style="border-style:dotted;border-color:var(--muted);background:transparent"></i>unrecorded (predates burden capture)</span><span style="margin-left:auto">┃ 90% threshold</span></div>
+  </div>
+  <h2 style="font: italic 400 24px Newsreader, serif;margin:34px 0 4px">Review rounds per task</h2>
+  <p class="lead" style="margin:0 0 10px">Round 4 escalates by rule; tasks at 3+ usually mean a spec ambiguity, not an implementation defect.</p>
+  <div style="max-width:460px">${C.metrics.rounds.map(([l,n]) => `<div class="hbar"><span class="mono right muted">${l}</span><span class="track"><i class="${l.startsWith('3')?'cap':''}" style="width:${n/32*100}%"></i></span><span class="mono num">${n}</span></div>`).join('')}</div>
+  <h2 style="font: italic 400 24px Newsreader, serif;margin:34px 0 4px">Budget honesty</h2>
+  <p class="lead" style="margin:0 0 4px">Spend is whatever the run's orchestrator recorded. “Never updated” is a real finding.</p>
+  <div class="rows" style="max-width:760px">
+    <div class="r hd" style="grid-template-columns:1fr 90px 130px 220px"><div class="c">run</div><div class="c right">limit</div><div class="c right">recorded spend</div><div class="c">metering</div></div>
+    ${C.metrics.budget.map(([r,l,s,u]) => `<div class="r" style="grid-template-columns:1fr 90px 130px 220px"><div class="c mono small">${r}</div><div class="c mono num right small">$${l}</div><div class="c mono num right small">$${s}</div><div class="c small">${u ? B.stamp('✓ UPDATED DURING THE RUN') : B.stamp('NEVER UPDATED','hatch')}</div></div>`).join('')}
+  </div>`);
+
+/* ------------------------------------------------------------------ app */
+const DIRS = [
+  { id:'a1', cls:'d-a', label:'A1 · The impression', gate:'ground <b>#DCDCD4</b> 85% — outside the near-white band · ink <b>#2C343C</b> hue 210 — outside the burned bands · muted 5.6 on ground, 6.5 on page · red rule 3.1 / 3.6 (non-text) · impression #1C2424 flagged hue 180 at sat 12 (justified in the memo: measured, never used for text)' },
+  { id:'a2', cls:'d-a d-a2', label:'A2 · The stamp rack', gate:'A1 plus four class fills — pink hue 351, slate 210, cream, vermilion hue 6 — all outside the burned bands · ink on fills 7.7 / 4.9 / 6.6 · gate stamp text 4.6 · fills clear the page by their ink edge, not by contrast (1.2–2.2)' },
+  { id:'b', cls:'d-b', label:'B · The visa page', gate:'ground <b>#D4B48C</b> 69% — outside the near-white band, <b>inside the amber band</b> (sampled, justified) · stamp blue <b>#0444B4</b> hue 218 — <b>inside the cobalt band</b> (sampled, justified; olive #443C04 is the alternative) · ink 7.9 on card, 11.3 on sheet · muted 5.4 / 7.7' },
+  { id:'cmp', cls:'', label:'Compare all three', gate:'' },
+];
+const SCREENS = [ ['inbox','Inbox'], ['decide','Run · Decide'], ['record','Run · Record'], ['history','Run · History'], ['portfolio','Portfolio'], ['newrun','New run'], ['metrics','Metrics'] ];
+const R = { a1: A, a2: A, b: B };
+let dir = 'a1', screen = 'inbox';
+try { dir = localStorage.getItem('gh-dir') || dir; screen = localStorage.getItem('gh-screen') || screen; } catch (e) {}
+
+function tabs(el, items, cur, on) {
+  el.innerHTML = items.map(([id,label]) => `<button role="tab" aria-pressed="${id===cur}" data-id="${id}">${label}</button>`).join('');
+  el.querySelectorAll('button').forEach(b => b.addEventListener('click', () => on(b.dataset.id)));
+}
+function frame(d, s) { return `<div class="frame ${d.cls}">${R[d.id][s]()}</div>`; }
+function render() {
+  tabs(document.getElementById('dirs'), DIRS.map(d => [d.id, d.label]), dir, (id) => { dir = id; save(); render(); });
+  tabs(document.getElementById('screens'), SCREENS, screen, (id) => { screen = id; save(); render(); });
+  const d = DIRS.find(x => x.id === dir);
+  document.getElementById('gate').innerHTML = d.gate ? `gate · ${d.gate}` : 'gate · one screen, three directions, same content and type — see each direction\'s own line for its numbers';
+  const stage = document.getElementById('stage');
+  if (dir !== 'cmp') { stage.innerHTML = frame(d, screen); return; }
+  stage.innerHTML = `<div class="cmp">${DIRS.slice(0,3).map(x => `<div><p class="cap"><b>${x.label}</b></p><div class="scaler">${frame(x, screen)}</div></div>`).join('')}</div>`;
+  requestAnimationFrame(fit);
+}
+function fit() {
+  document.querySelectorAll('.cmp .scaler').forEach(sc => {
+    const f = sc.querySelector('.frame'); const w = sc.clientWidth; const k = w / 1280;
+    f.style.transform = `scale(${k})`; sc.style.height = (f.offsetHeight * k) + 'px';
+  });
+}
+function save() { try { localStorage.setItem('gh-dir', dir); localStorage.setItem('gh-screen', screen); } catch (e) {} }
+window.addEventListener('resize', () => { if (dir === 'cmp') fit(); });
+render();
+</script>

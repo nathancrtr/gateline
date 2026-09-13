@@ -52,7 +52,7 @@ export function Inline({ children }: { children: string }) {
           <CitedText>{m[1]}</CitedText>
         </strong>
       ) : (
-        <code key={key++} className="rounded-xs bg-inset px-1 font-mono text-[11px] text-accent-deep">
+        <code key={key++} className="bg-inset px-1 font-mono text-[11px] text-accent-deep">
           {m[2]}
         </code>
       ),
@@ -76,8 +76,8 @@ export const plainQuote = (text: string) =>
 /** The frame every decide packet draws itself in, and the label it hangs on
  *  the frame. Shared so the pending state and the loaded state of one packet
  *  cannot drift apart — the whole point of #299 is that they are one card. */
-export const PACKET_FRAME = 'mt-3.5 rounded-[5px] border border-line bg-inset px-3 py-2.5'
-export const PACKET_LABEL = 'font-mono text-[11px] uppercase tracking-wide text-muted'
+export const PACKET_FRAME = 'mt-3.5 border border-line bg-inset px-3 py-2.5'
+export const PACKET_LABEL = 'font-mono text-[11px] text-muted'
 
 /**
  * The in-flight body of a decide packet (#299).
@@ -135,7 +135,7 @@ export function VerdictChip({ verdicts, compact = false }: { verdicts: (Verdict 
   const arc = shown.length > 1 && !compact
   return (
     <span
-      className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-full border px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none ${VERDICT_TONE[last]}`}
+      className={`inline-flex shrink-0 items-center whitespace-nowrap border px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none ${VERDICT_TONE[last]}`}
       title={shown.length > 1 ? `rounds: ${shown.join(' → ')}` : `verdict: ${last}`}
     >
       {arc ? `${shown[0]} → ${last}` : last}
@@ -147,7 +147,7 @@ export function VerdictChip({ verdicts, compact = false }: { verdicts: (Verdict 
 function SeverityChip({ finding }: { finding: ReviewFinding }) {
   return (
     <span
-      className={`inline-flex shrink-0 items-center rounded-xs border px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none ${SEVERITY_TONE[finding.severity]}`}
+      className={`inline-flex shrink-0 items-center border px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none ${SEVERITY_TONE[finding.severity]}`}
       title={finding.severityText || finding.severity}
     >
       {finding.severityText || finding.severity}
@@ -186,7 +186,7 @@ export function FindingCard({
   // caller that folded it.
   const collapsible = finding.resolution !== null || defaultOpen === false
   return (
-    <li className={`rounded-[5px] border px-3 py-2 ${resolved ? 'border-line bg-surface' : 'border-line bg-inset'}`} data-finding={finding.id}>
+    <li className={`border px-3 py-2 ${resolved ? 'border-line bg-surface' : 'border-line bg-inset'}`} data-finding={finding.id}>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
         <span className={`shrink-0 font-mono text-[11.5px] font-semibold ${resolved ? 'text-faint' : 'text-ink'}`}>{finding.id}</span>
         <SeverityChip finding={finding} />
@@ -219,7 +219,7 @@ export function FindingCard({
           {collapsible && (
             <button
               onClick={() => setOpen((v) => !v)}
-              className={`shrink-0 rounded-full border px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none ${
+              className={`shrink-0 border px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none ${
                 finding.resolution === null
                   ? 'border-line bg-surface text-muted'
                   : resolved
@@ -262,7 +262,7 @@ export function FindingCard({
 function Field({ label, children }: { label: string; children: string }) {
   return (
     <div className="flex flex-wrap gap-x-2">
-      <dt className="shrink-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-faint">{label}</dt>
+      <dt className="shrink-0 font-mono text-[10.5px] text-faint">{label}</dt>
       <dd className="min-w-0 flex-1 text-muted">
         <Inline>{children}</Inline>
       </dd>
@@ -296,9 +296,9 @@ export function FindingsPanel({ src, slug, path }: { src: string; slug: string; 
   if (!report) return null
   const standing = report.findings.filter((f) => f.resolution?.state !== 'resolved')
   return (
-    <section className="mb-4 rounded-[5px] border border-line bg-surface px-3 py-2.5" data-findings>
+    <section className="mb-4 border border-line bg-surface px-3 py-2.5" data-findings>
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-        <p className="font-mono text-[11px] uppercase tracking-wide text-muted">
+        <p className="font-mono text-[11px] text-muted">
           Findings{report.task ? ` · ${report.task}` : ''}
         </p>
         <VerdictChip verdicts={report.rounds.map((r) => r.verdict)} />

@@ -59,7 +59,7 @@ export function RoundCapPanel({ src, slug, task }: { src: string; slug: string; 
     return (
       <section className={PACKET_FRAME} data-round-cap>
         <p className={PACKET_LABEL}>Rounds — composed from the record</p>
-        <p className="mt-2 rounded-[4px] border border-warn-line bg-warn-bg px-2.5 py-2 text-[12px] leading-[1.5] text-warn" data-rounds-withheld>
+        <p className="mt-2 border border-warn-line bg-warn-bg px-2.5 py-2 text-[12px] leading-[1.5] text-warn" data-rounds-withheld>
           Round comparison withheld — {comparison.reason}.
         </p>
         <div className="mt-2" data-round-reports>
@@ -68,7 +68,7 @@ export function RoundCapPanel({ src, slug, task }: { src: string; slug: string; 
               <Link
                 key={r.path}
                 to={artifactLink(src, slug, r.path)}
-                className="rounded-xs border border-line-cool bg-surface px-2 py-0.5 font-mono text-[11px] text-muted hover:border-accent hover:text-accent-deep"
+                className="border border-line-cool bg-surface px-2 py-0.5 font-mono text-[11px] text-muted hover:border-accent hover:text-accent-deep"
               >
                 {r.path}
               </Link>
@@ -149,9 +149,9 @@ function Group({
 }) {
   return (
     <div className="mt-2.5" data-round-group={kind}>
-      <p className="font-mono text-[10.5px] uppercase tracking-[0.06em] text-faint">
+      <p className="font-mono text-[10.5px] text-faint">
         {label}
-        {hint && <span className="ml-1.5 normal-case tracking-normal text-muted">· {hint}</span>}
+        {hint && <span className="ml-1.5 normal-case text-muted">· {hint}</span>}
       </p>
       {items.length === 0 ? (
         empty && <p className="mt-1 text-[12px] text-muted">{empty}</p>
@@ -165,7 +165,7 @@ function Group({
               note={
                 <span className="contents">
                   <span
-                    className={`shrink-0 rounded-full border px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none ${NOTE_TONE[item.note]}`}
+                    className={`shrink-0 border px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none ${NOTE_TONE[item.note]}`}
                     title={item.disposition ? plainQuote(item.disposition) : undefined}
                   >
                     {item.note}
@@ -196,7 +196,7 @@ function Group({
 function ExtraDisposition({ text }: { text: string }) {
   return (
     <div className="flex flex-wrap gap-x-2">
-      <dt className="shrink-0 font-mono text-[10.5px] uppercase tracking-[0.06em] text-faint">Disposition</dt>
+      <dt className="shrink-0 font-mono text-[10.5px] text-faint">Disposition</dt>
       <dd className="min-w-0 flex-1 text-muted">
         <Inline>{unbulleted(text)}</Inline>
       </dd>

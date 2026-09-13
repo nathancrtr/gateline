@@ -12,11 +12,21 @@ orchestrator running (nothing dispatches, nothing is billed):
 cd packages && node cli/src/main.ts ui --repo .. --no-open --port 4312
 ```
 
-Capture each screen in a real browser at a 1728×963 viewport (the SPA races a
-headless screenshot), hide the "orchestrator not running" alert
-(`main [role="alert"] { display: none }`), and scale to 1280 wide. Pad every
-frame to 1280×720 on the page ground `#faf7f2` before cutting the GIF — frames
-of unequal size silently collapse to one — then:
+Capture each screen at a 1728×963 viewport with the "orchestrator not
+running" alert hidden (`main [role="alert"] { display: none }`).
+`packages/web/scripts/capture-readme.mjs` does this with Playwright's
+Chromium, awaiting each page on the element that proves it rendered rather
+than on a timer — a bare headless screenshot races the SPA:
+
+```sh
+cd packages && node web/scripts/capture-readme.mjs http://127.0.0.1:4312 /tmp/shots
+```
+
+Scale each frame to 1280 wide; `run-escalation-detail.png` is
+`crop=802:624:330:0` of the scaled escalation frame. Pad every frame to
+1280×720 on the page ground `#f3f3ee` (the token `--color-ground` in
+`packages/web/src/styles.css`) before cutting the GIF — frames of unequal
+size silently collapse to one — then:
 
 ```sh
 ffmpeg -framerate 1/3.5 -start_number 1 -i seq/%02d.png \

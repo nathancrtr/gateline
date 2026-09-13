@@ -309,13 +309,13 @@ export function DecidePanel({
       {mode === 'approve' && (
         <div className="flex flex-col gap-3">
           <fieldset>
-            <legend className="mb-[9px] font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted">How much work was this review? (recorded with the approval)</legend>
+            <legend className="mb-[9px] text-[12px] text-muted">How much work was this review? (recorded with the approval)</legend>
             <div className="flex flex-wrap gap-2">
               {BURDEN_OPTIONS.map((o) => (
                 <label
                   key={o.value}
-                  className={`flex cursor-pointer items-baseline gap-2 rounded-[5px] border px-3 py-2 text-sm transition-colors ${
-                    burden === o.value ? 'border-accent bg-accent-soft font-semibold text-accent' : 'border-line bg-inset hover:border-accent'
+                  className={`flex cursor-pointer items-baseline gap-2 border px-3 py-2 text-sm ${
+                    burden === o.value ? 'border-ink bg-accent-tint font-semibold text-ink' : 'border-line hover:border-ink'
                   }`}
                 >
                   <input
@@ -325,7 +325,7 @@ export function DecidePanel({
                     checked={burden === o.value}
                     onChange={() => setBurden(o.value)}
                   />
-                  <span className={`font-mono text-[11px] ${burden === o.value ? 'text-accent' : 'text-faint'}`}>{o.key}</span>
+                  <span className="font-mono text-[11px] text-muted">{o.key}</span>
                   <span>
                     {o.label}
                     <span className="ml-1.5 text-xs font-normal text-muted">{o.hint}</span>
@@ -388,15 +388,15 @@ export function DecidePanel({
         <div className="flex flex-col gap-3">
           <NotesField value={notes} onChange={setNotes} autoFocus placeholder="Disposition — what unblocks the run, recorded on the escalation. Required." />
           <fieldset>
-            <legend className="mb-[9px] font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted">
+            <legend className="mb-[9px] text-[12px] text-muted">
               Route the run on resolve (optional — unset leaves the engine's default)
             </legend>
             <div className="flex flex-wrap gap-2">
               {DISPOSITION_OPTIONS.map((o) => (
                 <label
                   key={o.value}
-                  className={`flex cursor-pointer items-baseline gap-2 rounded-[5px] border px-3 py-2 text-sm transition-colors ${
-                    disposition === o.value ? 'border-accent bg-accent-soft font-semibold text-accent' : 'border-line bg-inset hover:border-accent'
+                  className={`flex cursor-pointer items-baseline gap-2 border px-3 py-2 text-sm ${
+                    disposition === o.value ? 'border-ink bg-accent-tint font-semibold text-ink' : 'border-line hover:border-ink'
                   }`}
                 >
                   <input
@@ -425,7 +425,7 @@ export function DecidePanel({
 
       {mode === 'resume' && (
         <div className="flex flex-col gap-3">
-          <p className="rounded-[5px] border border-line bg-inset px-[11px] py-[9px] text-sm leading-[1.6] text-muted">
+          <p className="border-t border-b border-line py-[9px] text-sm leading-[1.6] text-muted">
             <b className="text-ink">{item.slug}</b> stopped because its next dispatch would exceed{' '}
             {item.costLimitUsd != null ? (
               <>
@@ -440,7 +440,7 @@ export function DecidePanel({
             is written in the same commit as the resume.
           </p>
           <label className="flex items-baseline gap-2 text-sm">
-            <span className="font-mono text-[10.5px] font-semibold uppercase tracking-[0.08em] text-muted">New cost_limit_usd</span>
+            <span className="text-[12px] text-muted">New cost_limit_usd</span>
             <input
               type="number"
               min={0}
@@ -449,7 +449,7 @@ export function DecidePanel({
               onChange={(e) => setCostLimit(e.target.value)}
               autoFocus
               data-decide="cost-limit"
-              className="w-32 rounded-[5px] border border-line bg-inset px-[11px] py-[7px] font-mono text-sm tabular-nums"
+              className="input-well w-32 px-[11px] py-[7px] font-mono text-sm tabular-nums"
             />
             {item.costLimitUsd != null && !limitRaised && costLimit !== '' && (
               <span className="text-xs text-bad">must be above ${item.costLimitUsd}</span>
@@ -466,7 +466,7 @@ export function DecidePanel({
 
       {mode === 'arm' && (
         <div className="flex flex-col gap-3">
-          <p className="rounded-[5px] border border-line bg-inset px-[11px] py-[9px] text-sm leading-[1.6] text-muted">
+          <p className="border-t border-b border-line py-[9px] text-sm leading-[1.6] text-muted">
             Arming moves <b className="text-ink">{item.slug}</b> out of staged rest: dispatch begins and the budget starts
             metering. The orchestrator picks it up on its next tick. This is the act that spends — staging spent nothing.
           </p>
@@ -487,17 +487,8 @@ function Button({
   danger,
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { primary?: boolean; danger?: boolean }) {
-  const tone = primary
-    ? 'border-accent bg-accent text-on-solid shadow-[0_0_12px_var(--glow)] hover:opacity-90'
-    : danger
-      ? 'border-bad bg-bad text-on-solid hover:opacity-90'
-      : 'border-line bg-inset text-muted hover:text-ink hover:border-accent'
-  return (
-    <button
-      {...props}
-      className={`rounded-full border px-4 py-[7px] text-sm font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-40 ${tone}`}
-    />
-  )
+  const tone = primary ? '' : danger ? 'btn-danger' : 'btn-quiet'
+  return <button {...props} className={`btn ${tone}`} />
 }
 
 function NotesField({
@@ -518,15 +509,15 @@ function NotesField({
       placeholder={placeholder}
       autoFocus={autoFocus}
       rows={2}
-      className="w-full resize-y rounded-[5px] border border-line bg-inset px-[11px] py-[9px] text-sm placeholder:text-faint"
+      className="input-well w-full resize-y px-[11px] py-[9px] text-sm placeholder:text-muted"
     />
   )
 }
 
 function Flash({ kind, text }: { kind: 'ok' | 'conflict' | 'error'; text: string }) {
-  const tone = kind === 'ok' ? 'bg-ok-soft text-ok' : kind === 'conflict' ? 'bg-warn-soft text-warn' : 'bg-bad-soft text-bad'
+  const tone = kind === 'ok' ? 'border-ink text-ink' : 'border-mark text-warn'
   return (
-    <p className={`mb-2 rounded-[5px] px-3 py-2 text-xs font-semibold ${tone}`} role="status">
+    <p className={`mb-2 border-t border-b py-2 text-xs font-semibold ${tone}`} role="status">
       {text}
     </p>
   )

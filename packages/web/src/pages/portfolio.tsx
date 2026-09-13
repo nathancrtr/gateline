@@ -3,15 +3,14 @@ import { type ReactNode, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { api, formatAge, type RunSummary } from '../api.ts'
-import { BudgetMeter, GateLedger, PhaseChip } from '../components/chips.tsx'
+import { BudgetMeter, GateLedger, Imp, PhaseChip } from '../components/chips.tsx'
 import { PageStatus } from './inbox.tsx'
 import { EdgeFade, useScrollCue } from '../scroll-cue.tsx'
 
-// Candidate A header: sans, medium weight, tight letter-spacing.
-const TH =
-  'text-left font-sans font-medium text-[11px] tracking-[0.1em] uppercase text-muted px-3 py-3.5 border-b border-line whitespace-nowrap'
-const TD = 'px-3 py-[14px]'
-const NUM = 'px-3 py-[14px] text-right font-mono text-[12.5px] tabular-nums text-[#4d4742]'
+// The ledger's column heads: small, muted, on the rule.
+const TH = 'text-left font-sans font-normal text-[11.5px] text-muted pr-2.5 pb-1.5 border-b border-ink whitespace-nowrap'
+const TD = 'pr-2.5 py-[12px] border-b border-line align-top'
+const NUM = 'pr-2.5 py-[12px] border-b border-line align-top text-right font-mono text-[12.5px] tabular-nums text-ink'
 
 /**
  * What the mark at the left edge of a run row says (#297).
@@ -45,31 +44,23 @@ export { scrollCue } from '../scroll-cue.tsx'
 /**
  * The table's pane: the same contained horizontal scroll as before, plus the
  * cue that says it is scrolling. The fade sits above the rows rather than in
- * the pane's background, so a tinted row (a malformed run) cannot paint over
- * it, and the hint line spells out in words what the fade only implies.
+ * the pane's background, and the hint line spells out in words what the fade
+ * only implies.
  */
 function ScrollPane({ children, label }: { children: ReactNode; label: string }) {
   const ref = useRef<HTMLDivElement>(null)
   const cue = useScrollCue(ref)
   const clipped = cue.left || cue.right
   return (
-    <div className="mt-[30px]">
+    <div className="mt-[22px]">
       <div className="relative">
-        <div
-          ref={ref}
-          className="overflow-x-auto rounded-lg border border-line bg-inset p-[6px]"
-          {...(clipped ? { role: 'region', 'aria-label': label, tabIndex: 0 } : {})}
-        >
+        <div ref={ref} className="overflow-x-auto" {...(clipped ? { role: 'region', 'aria-label': label, tabIndex: 0 } : {})}>
           {children}
         </div>
-        {cue.left && <EdgeFade edge="left" radius="rounded-l-lg" />}
-        {cue.right && <EdgeFade edge="right" radius="rounded-r-lg" />}
+        {cue.left && <EdgeFade edge="left" radius="" />}
+        {cue.right && <EdgeFade edge="right" radius="" />}
       </div>
-      {clipped && (
-        <p className="mt-[7px] text-[11.5px] text-muted">
-          Wider than the pane — scroll sideways for the remaining columns.
-        </p>
-      )}
+      {clipped && <p className="mt-[7px] text-[11.5px] text-muted">Wider than the pane — scroll sideways for the remaining columns.</p>}
     </div>
   )
 }
@@ -77,26 +68,22 @@ function ScrollPane({ children, label }: { children: ReactNode; label: string })
 /**
  * The left-edge mark. Fixed width so every slug starts at the same x: the
  * marks then read as a rail down the left edge, which is the scan the page
- * exists for. A quiet run leaves the slot empty — absence says it, and a
- * dashed placeholder on every calm row was noise competing with the badges.
+ * exists for. A quiet run leaves the slot empty — absence says it.
  */
 function NeedsYou({ mark }: { mark: NeedsYouMark }) {
-  if (mark.kind === 'quiet') return <span aria-hidden="true" className="w-[38px] shrink-0" />
+  if (mark.kind === 'quiet') return <span aria-hidden="true" className="w-[34px] shrink-0" />
   if (mark.kind === 'escalation') {
     return (
-      <span
-        className="mt-[3px] w-[38px] shrink-0 whitespace-nowrap font-mono text-[11px] font-semibold text-bad"
-        title={mark.label}
-      >
+      <span className="mt-[3px] w-[34px] shrink-0 whitespace-nowrap font-mono text-[11px] font-semibold text-warn" title={mark.label}>
         {mark.count} esc
       </span>
     )
   }
   return (
-    <span className="mt-px w-[38px] shrink-0" title={mark.label}>
-      <span className="inline-flex h-[22px] min-w-[22px] items-center justify-center rounded-full border border-[#8a3a1e] bg-accent px-[6px] font-sans text-[12px] font-bold tabular-nums text-white">
+    <span className="w-[34px] shrink-0" title={mark.label}>
+      <Imp tone="fill" className="tabular-nums">
         {mark.count}
-      </span>
+      </Imp>
     </span>
   )
 }
@@ -107,13 +94,13 @@ export function PortfolioPage() {
   if (isLoading) {
     return (
       <div>
-        <div className="overflow-hidden rounded-lg border border-line bg-inset p-[6px]">
+        <div className="border-t border-ink">
           {[130, 110, 150].map((w, i) => (
-            <div key={i} className="flex items-center gap-4 border-b border-line px-3 py-[14px] last:border-b-0">
-              <span className="skel h-[22px] w-[22px] rounded-full" />
+            <div key={i} className="flex items-center gap-4 border-b border-line py-[12px]">
+              <span className="skel h-[21px] w-[22px]" />
               <span className="skel h-[14px]" style={{ width: w }} />
               <span className="skel h-[14px] w-[60px]" />
-              <span className="skel h-[22px] w-[120px]" />
+              <span className="skel h-[21px] w-[120px]" />
               <span className="skel h-[14px] flex-1" />
             </div>
           ))}
@@ -124,147 +111,87 @@ export function PortfolioPage() {
   }
   if (error) return <PageStatus text={`Could not load runs: ${(error as Error).message}`} bad />
   const { runs, now } = data!
+  const needs = runs.filter((r) => needsYouMark(r).kind !== 'quiet').length
 
   return (
     <div>
-      <div className="font-mono text-[12px] uppercase tracking-[0.14em] text-accent-deep mb-[10px]">
-        All runs · all sources
+      <div className="flex flex-wrap items-baseline gap-4">
+        <h1 className="text-[20px] font-semibold leading-[1.25] text-ink">Portfolio</h1>
+        <Link to="/portfolio/new" className="btn ml-auto self-center">
+          New run
+        </Link>
       </div>
-      <div className="flex items-baseline gap-[18px] flex-wrap">
-        <h1 className="font-sans text-[50px] font-semibold leading-[1.04] tracking-[-0.02em] text-ink">
-          Portfolio
-        </h1>
-        <div className="ml-auto flex gap-[28px] items-baseline">
-          <div className="flex flex-col items-end">
-            <span className="font-sans font-medium text-[34px] text-ink leading-none tracking-[-0.02em] tabular-nums">
-              {runs.length}
-            </span>
-            <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-muted">
-              runs
-            </span>
-          </div>
-          <Link
-            to="/portfolio/new"
-            className="inline-flex items-center gap-2 font-sans text-[13.5px] font-semibold px-4 py-[9px] rounded-sm bg-accent text-white border border-[#8a3a1e] shadow-[var(--shadow-soft)] hover:bg-[#8e3d20] self-center"
-          >
-            <span className="font-normal text-[16px] leading-none">+</span>{' '}
-            New run
-          </Link>
-        </div>
-      </div>
-      <p className="mt-3 max-w-[62ch] text-[15px] leading-[1.6] text-[#4d4742]">
-        The gate ledger is the heart of the portfolio: each run's progress
-        through its phase gates, recomputed live from its branch. Scan calmly;
-        open a run when one calls for your attention.
-      </p>
-
-      {/* Gate cell legend */}
-      <div className="flex gap-[18px] items-center mt-[14px] flex-wrap text-[12px] text-muted">
-        <span className="flex items-center gap-[6px]">
-          <span className="inline-block h-[14px] w-[14px] rounded-[4px] border border-ok-line bg-ok-bg" />
-          approved ✓
-        </span>
-        <span className="flex items-center gap-[6px]">
-          <span className="inline-block h-[14px] w-[14px] rounded-[4px] border border-bad-line bg-bad-bg" />
-          declined ✕
-        </span>
-        <span className="flex items-center gap-[6px]">
-          <span className="inline-block h-[14px] w-[14px] rounded-[4px] border border-dashed border-pend-line bg-pend-bg" />
-          pending ·
-        </span>
-        <span className="flex items-center gap-[6px]">
-          <span className="inline-block h-[14px] w-[14px] rounded-[4px] border border-dashed border-bad-line bg-bad-bg" />
-          bounced
-        </span>
-        <span className="flex items-center gap-[6px]">
-          <span className="inline-block h-[14px] w-[14px] rounded-[4px] border border-dashed border-line-cool bg-transparent" />
-          gate absent
-        </span>
-      </div>
+      <p className="mt-1 text-[13px] text-muted">Each run's progress through its gates, recomputed from its branch.</p>
 
       {runs.length === 0 ? (
-        <div className="mt-[30px] rounded-lg border border-dashed border-line-cool bg-surface px-[60px] py-[60px] text-center">
-          <span className="flex justify-center mb-3.5" aria-hidden="true">
-            <span className="gate-sigil text-accent">
-            <svg viewBox="0 0 24 24" width="44" height="44">
-              <rect x="3.5" y="3" width="2.6" height="18" rx="1.3" fill="currentColor" />
-              <rect x="17.9" y="3" width="2.6" height="18" rx="1.3" fill="currentColor" />
-              <rect x="3.5" y="8.6" width="17" height="2.2" rx="1.1" fill="currentColor" />
+        <div className="mt-[22px] border-t border-ink px-2 py-16 text-center">
+          <span className="gate-sigil mb-3 block" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="36" height="36">
+              <rect x="3.5" y="3" width="2.6" height="18" fill="currentColor" />
+              <rect x="17.9" y="3" width="2.6" height="18" fill="currentColor" />
+              <rect x="3.5" y="8.6" width="17" height="2.2" fill="currentColor" />
             </svg>
           </span>
-          </span>
-          <h3 className="font-sans font-semibold text-[32px] tracking-[-0.02em] mt-[14px] mb-2 text-ink">
-            No runs staged yet.
-          </h3>
-          <p className="text-muted max-w-[48ch] mx-auto mb-[18px] text-[15px]">
-            The pipeline is empty — no branches under{' '}
-            <code className="font-mono">run/</code>. Stage the first run and the
-            agents will begin at the spec gate.
+          <h3 className="text-[20px] font-semibold text-ink">No runs staged yet.</h3>
+          <p className="mx-auto mt-1.5 mb-4 max-w-[48ch] text-[13.5px] text-muted">
+            The pipeline is empty — no branches under <code className="font-mono">run/</code>. Stage the first run and the agents
+            will begin at the spec gate.
           </p>
-          <Link
-            to="/portfolio/new"
-            className="inline-flex items-center gap-2 font-sans text-[13.5px] font-semibold px-4 py-[9px] rounded-sm bg-accent text-white border border-[#8a3a1e] shadow-[var(--shadow-soft)] hover:bg-[#8e3d20]"
-          >
-            <span className="font-normal text-[16px] leading-none">+</span>{' '}
+          <Link to="/portfolio/new" className="btn">
             Stage the first run
           </Link>
         </div>
       ) : (
         <ScrollPane label="Runs, by source">
-          <table className="w-full min-w-[780px] border-separate border-spacing-0 text-[13.5px]">
+          <table className="w-full min-w-[760px] border-separate border-spacing-0 text-[13.5px]">
             <thead>
               <tr>
-                <th className={TH}>Needs you · Run</th>
-                <th className={TH}>Phase</th>
-                <th className={TH}>Gates</th>
-                <th className={`${TH} text-right`}>Tasks</th>
-                <th className={`${TH} text-right`}>Rounds</th>
-                <th className={TH}>Budget</th>
-                <th className={`${TH} text-right`}>Updated</th>
+                <th className={TH}>
+                  <span className="sr-only">Needs you</span>
+                </th>
+                <th className={TH}>run</th>
+                <th className={TH}>phase</th>
+                <th className={TH}>gates</th>
+                <th className={`${TH} text-right`}>tasks</th>
+                <th className={`${TH} text-right`}>rounds</th>
+                <th className={TH}>budget</th>
+                <th className={`${TH} text-right`}>updated</th>
               </tr>
             </thead>
             <tbody>
               {runs.map((run) => (
-                <tr
-                  key={`${run.source}/${run.slug}`}
-                  className={`border-b border-line last:border-b-0 transition-colors hover:bg-[#fbf8f3] ${
-                    run.malformed ? 'bg-[#fbf3ed]' : ''
-                  }`}
-                >
-                  <td className={`${TD} min-w-[190px]`}>
-                    <div className="flex items-start gap-[9px]">
+                <tr key={`${run.source}/${run.slug}`} className="hover:bg-inset">
+                  <td className={`${TD} w-[34px]`}>
+                    {/* The wrapper is what the geometry sweep measures the
+                        mark through (`td > div > span`), so it stays. */}
+                    <div className="flex">
                       <NeedsYou mark={needsYouMark(run)} />
-                      <div className="min-w-0">
-                        <Link
-                          to={`/runs/${run.source}/${run.slug}`}
-                          className="font-mono text-[13.5px] font-medium text-ink hover:underline"
-                        >
-                          {run.slug}
-                        </Link>
-                        <div className="font-mono text-[11.5px] text-muted mt-[2px]">
-                          {run.source}
-                        </div>
-                        {run.malformed && (
-                          <div className="font-mono text-[11.5px] text-bad mt-[3px] before:content-['✕_']">
-                            {run.malformed}
-                          </div>
-                        )}
-                        {run.aheadOfOrigin != null && run.aheadOfOrigin > 0 && (run.behindOrigin ?? 0) > 0 ? (
-                          <span
-                            className="mt-1 inline-flex font-mono text-[11.5px] font-semibold px-[7px] py-[2px] rounded-sm border border-bad-line bg-bad-bg text-bad"
-                            title={`${run.ref} has diverged from origin: ${run.aheadOfOrigin} local-only commit(s), ${run.behindOrigin} on origin only — reconcile the branch (#99)`}
-                          >
-                            ↑{run.aheadOfOrigin}↓{run.behindOrigin}
-                          </span>
-                        ) : run.aheadOfOrigin != null && run.aheadOfOrigin > 0 ? (
-                          <span
-                            className="mt-1 inline-flex font-mono text-[11.5px] font-semibold px-[7px] py-[2px] rounded-sm border border-warn-line bg-warn-bg text-warn"
-                            title={`${run.aheadOfOrigin} commit(s) on ${run.ref} not yet pushed — origin consumers see an older run`}
-                          >
-                            ↑{run.aheadOfOrigin}
-                          </span>
-                        ) : null}
+                    </div>
+                  </td>
+                  <td className={`${TD} min-w-[170px]`}>
+                    <div className="min-w-0">
+                      <Link to={`/runs/${run.source}/${run.slug}`} className="font-mono text-[13.5px] font-semibold text-ink hover:underline">
+                        {run.slug}
+                      </Link>
+                      <div className="mt-[2px] font-mono text-[11.5px] text-muted">
+                        {run.source} · {run.profile}
                       </div>
+                      {run.malformed && (
+                        <div className="mt-[3px] font-mono text-[11.5px] text-warn before:content-['✕_']">{run.malformed}</div>
+                      )}
+                      {run.aheadOfOrigin != null && run.aheadOfOrigin > 0 && (run.behindOrigin ?? 0) > 0 ? (
+                        <Imp
+                          tone="mark"
+                          className="mt-1"
+                          title={`${run.ref} has diverged from origin: ${run.aheadOfOrigin} local-only commit(s), ${run.behindOrigin} on origin only — reconcile the branch (#99)`}
+                        >
+                          ↑{run.aheadOfOrigin}↓{run.behindOrigin}
+                        </Imp>
+                      ) : run.aheadOfOrigin != null && run.aheadOfOrigin > 0 ? (
+                        <Imp className="mt-1" title={`${run.aheadOfOrigin} commit(s) on ${run.ref} not yet pushed — origin consumers see an older run`}>
+                          ↑{run.aheadOfOrigin}
+                        </Imp>
+                      ) : null}
                     </div>
                   </td>
                   <td className={TD}>
@@ -277,29 +204,46 @@ export function PortfolioPage() {
                     {run.tasks.total ? (
                       <>
                         <span className="text-ink">{run.tasks.done}</span>
-                        /{run.tasks.total}
+                        <span className="text-muted">/{run.tasks.total}</span>
                       </>
                     ) : (
-                      '—'
+                      <span className="text-muted">—</span>
                     )}
                   </td>
-                  <td
-                    className={`${NUM} ${
-                      run.tasks.maxRounds >= run.tasks.roundCap ? 'font-semibold text-bad' : 'text-muted'
-                    }`}
-                  >
+                  <td className={`${NUM} ${run.tasks.maxRounds >= run.tasks.roundCap ? 'font-semibold text-warn' : 'text-muted'}`}>
                     {run.tasks.total ? run.tasks.maxRounds : '—'}
                   </td>
                   <td className={TD}>
                     <BudgetMeter limit={run.budget.limit} spent={run.budget.spent} />
                   </td>
-                  <td className={`${NUM} text-muted text-[12.5px]`}>
-                    {formatAge(run.updatedAt, now)}
-                  </td>
+                  <td className={`${NUM} text-[12.5px] text-muted`}>{formatAge(run.updatedAt, now)}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <div className="flex flex-wrap items-baseline justify-between gap-2 pt-2 text-[12px] text-muted">
+            <span className="tabular-nums">
+              {runs.length} {runs.length === 1 ? 'run' : 'runs'}
+              {needs > 0 ? ` · ${needs} need${needs === 1 ? 's' : ''} you` : ''}
+            </span>
+            <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span>
+                approved <Imp tone="fill">✓</Imp>
+              </span>
+              <span>
+                declined <Imp tone="struck">✕</Imp>
+              </span>
+              <span>
+                pending <Imp>·</Imp>
+              </span>
+              <span>
+                bounced <Imp tone="hatch">⚠</Imp>
+              </span>
+              <span>
+                not reached <Imp tone="dot">·</Imp>
+              </span>
+            </span>
+          </div>
         </ScrollPane>
       )}
     </div>

@@ -23,7 +23,7 @@ export function EvidenceRollupPanel({ src, slug }: { src: string; slug: string }
   // below this panel, so nothing is lost.
   if (data.withheld) {
     return (
-      <p className="mt-3 rounded-[5px] border border-line bg-inset px-3 py-2.5 text-xs leading-[1.5] text-muted" data-evidence-withheld>
+      <p className="mt-3 border border-line bg-inset px-3 py-2.5 text-xs leading-[1.5] text-muted" data-evidence-withheld>
         Evidence citations not computed — {data.withheld}
       </p>
     )
@@ -33,8 +33,8 @@ export function EvidenceRollupPanel({ src, slug }: { src: string; slug: string }
   const uncited = defined.filter((c) => c.evidence.length === 0 && !c.result)
   const cited = defined.filter((c) => c.evidence.length > 0 || c.result)
   return (
-    <section className="mt-3 rounded-[5px] border border-line bg-inset px-3 py-2.5 text-xs" data-evidence-rollup>
-      <p className="font-mono text-[11px] uppercase tracking-wide text-muted">Evidence citations — computed from the record</p>
+    <section className="mt-3 border border-line bg-inset px-3 py-2.5 text-xs" data-evidence-rollup>
+      <p className="font-mono text-[11px] text-muted">Evidence citations — computed from the record</p>
       <ReportVerdict rollup={data} />
       {uncited.length > 0 && (
         <div className="mt-2">
@@ -284,7 +284,7 @@ function EvidenceBody({ block, restated }: { block: string; restated: string }) 
         segment.kind === 'code' ? (
           <pre
             key={i}
-            className="mt-1 overflow-x-auto rounded-[4px] border border-line bg-inset p-2 font-mono text-[11.5px] leading-[1.5] text-ink"
+            className="mt-1 overflow-x-auto border border-line bg-inset p-2 font-mono text-[11.5px] leading-[1.5] text-ink"
           >
             {segment.text}
           </pre>
@@ -320,7 +320,7 @@ function CriterionPacket({
   const raised = c.findings.map((ref) => ({ ref, finding: findings.get(`${ref.artifact}#${ref.id}`) }))
   return (
     <li
-      className={`rounded-[5px] border px-3 py-2.5 ${cited || !hasVerification ? 'border-line bg-surface' : 'border-warn-line bg-warn-bg'}`}
+      className={`border px-3 py-2.5 ${cited || !hasVerification ? 'border-line bg-surface' : 'border-warn-line bg-warn-bg'}`}
       data-criterion={c.id}
     >
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -414,7 +414,7 @@ function UnattributedFindings({
   )
   return (
     <div className="mt-3" data-unattributed-findings>
-      <p className="font-mono text-[11px] uppercase tracking-wide text-muted">
+      <p className="font-mono text-[11px] text-muted">
         Findings citing no criterion
         <Link className="ml-2 normal-case text-accent underline underline-offset-2" to={artifactLink(src, slug, loose[0]!.path)}>
           open the reports
@@ -434,7 +434,7 @@ function ReportsPacket({ reports, src, slug }: { reports: ReviewReport[]; src: s
   return (
     <ul className="mt-2 flex flex-col gap-2">
       {reports.map((r) => (
-        <li key={r.path} className="rounded-[5px] border border-line bg-surface px-3 py-2.5" data-report={r.path}>
+        <li key={r.path} className="border border-line bg-surface px-3 py-2.5" data-report={r.path}>
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
             <Link className="font-mono text-[11.5px] font-semibold text-accent underline underline-offset-2" to={artifactLink(src, slug, r.path)}>
               {r.path}
@@ -518,7 +518,7 @@ export function G2Packet({ src, slug, profile }: { src: string; slug: string; pr
           the grammar does not match, say which grammar and stand down — the
           report itself renders as its own markdown one click away. */}
       {rollup.withheld && (
-        <p className="mt-2 rounded-[4px] border border-warn-line bg-warn-bg px-2.5 py-2 text-[12px] leading-[1.5] text-warn" data-withheld>
+        <p className="mt-2 border border-warn-line bg-warn-bg px-2.5 py-2 text-[12px] leading-[1.5] text-warn" data-withheld>
           Criterion view withheld — {rollup.withheld}{' '}
           <Link className="text-accent underline underline-offset-2" to={artifactLink(src, slug, 'verification-report.md')}>
             read verification-report.md
@@ -562,7 +562,7 @@ function BoundaryCheck({ src, slug }: { src: string; slug: string }) {
 
   return (
     <p className="mt-2.5 border-t border-line pt-2 text-[12px] leading-[1.55] text-muted" data-boundary-check>
-      <span className="font-mono text-[11px] uppercase tracking-wide text-muted">boundary</span>{' '}
+      <span className="font-mono text-[11px] text-muted">boundary</span>{' '}
       <span className="text-ink">{line.changed}</span> changed file{line.changed === 1 ? '' : 's'};{' '}
       {line.undeclared.length === 0 ? (
         <>every one falls under a declared contact surface.</>

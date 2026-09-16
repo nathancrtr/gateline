@@ -90,15 +90,15 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   each section's audience.** An artifact missing a required section is malformed —
   consuming agents bounce it, never guess. A contract's `AUDIENCE:` line names the
   sections that are audit-time evidence rather than decide-time reading; Gatehouse
-  folds those to their heading, and the line is contract meaning, not a UI
+  folds those to their heading, and the line is contract meaning; it is not a UI
   setting. Two rule families are equally normative and equally bounceable: the
   **ID/heading grammar** tooling parses (`### R<n> — <name>`, criteria beginning
   `AC<n>.<m> — `) and the **READABILITY rules** on human-facing sections (plain-words
   opening sentence, one idea per paragraph, lists instead of semicolon chains, name
   before cite). Breaches are bounced with the rule cited.
 * **Run profiles are fixed sets, not knobs.** There is no per-run role or gate
-  toggle; if a profile doesn't fit, pick the next heavier one. Profile upgrades are
-  one-way and human-decided (a human edits `profile:` and resumes — the reconciler
+  toggle; if a profile doesn't fit, pick the next heavier one. Profile upgrades
+  are one-way and human-decided (a human edits `profile:` and resumes — the reconciler
   derives the backfill); downgrading mid-run is forbidden, and an engine that
   observes a profile lighter than the gates already decided escalates.
 * **One authority per deployment, and the blessed checkout stays on the default
@@ -188,15 +188,19 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
 * Historian sweeps are gate-less mini-runs (`runs/historian-<date>/`, no
   `state.yaml`); merging the sweep branch is the approval, and its `sweep.yaml` on
   the default branch is what makes the next sweep's interval derivable.
-* Route framework fixes by kind: agent misbehavior → the role spec (`roles/*.md`,
-  then re-render); a malformed or ambiguous handoff → the contract (`contracts/*`);
-  a model or vendor change → `registry/models.yaml`; orchestrator behavior →
-  `packages/orchestrator` (design: ORCHESTRATOR.md); what a human sees or
-  clicks → `packages/{core,server,web,cli}` (design: FRONTEND.md; `core` is
-  layered record → sources → view-model, and derivation stays a pure function of
-  committed state); integration workflow → `scripts/integrate.py` + the copy manifest
-  (design: INTEGRATION.md); deployment posture → TOPOLOGY.md; hosting → `deploy/`
-  (recipe: DEPLOY.md); sweep scheduling → `orchestrator.yaml`.
+* Route framework fixes by kind:
+  * agent misbehavior → the role spec (`roles/*.md`, then re-render)
+  * a malformed or ambiguous handoff → the contract (`contracts/*`)
+  * a model or vendor change → `registry/models.yaml`
+  * orchestrator behavior → `packages/orchestrator` (design: ORCHESTRATOR.md)
+  * what a human sees or clicks → `packages/{core,server,web,cli}` (design:
+    FRONTEND.md; `core` is layered record → sources → view-model, and derivation
+    stays a pure function of committed state)
+  * integration workflow → `scripts/integrate.py` + the copy manifest
+    (design: INTEGRATION.md)
+  * deployment posture → TOPOLOGY.md
+  * hosting → `deploy/` (recipe: DEPLOY.md)
+  * sweep scheduling → `orchestrator.yaml`
 * Do not add AI-attribution trailers (e.g. `Co-Authored-By: Claude ...`) to commits.
 
 ---

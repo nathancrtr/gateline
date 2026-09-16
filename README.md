@@ -95,7 +95,7 @@ npm install && npm run build      # builds the Gatehouse SPA once
 ```
 
 The linked CLI runs from this tree — keep the checkout on `main` (it is the
-operator's instrument, not something the host repo depends on).
+operator's instrument; the host repo does not depend on it).
 
 ### 2. Integrate into an existing codebase
 
@@ -113,7 +113,7 @@ open-source one.
 and ask it to *use the integrator subagent for run `runs/000-integration`,
 producing `integration-profile.md` per `contracts/integration-profile.md`*.
 Review what it produces — the environment probe and the drafted overlays are
-exactly the "how should agents behave in this house" decision (gate GI) — then
+the "how should agents behave in this house" decision (gate GI) — then
 prove the result:
 
 ```sh

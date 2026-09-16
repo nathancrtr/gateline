@@ -4,7 +4,7 @@ The visual design of Gatehouse, gateline's cockpit, and where each decision
 came from. This document holds the *reasoning*; the token contract with
 per-token provenance lives beside the code in
 [`packages/web/DESIGN.md`](../packages/web/DESIGN.md) once a direction is
-built. Earlier rounds are kept at the end as history, not deleted.
+built. Earlier rounds are kept at the end as history.
 
 Process: `~/.claude/skills/seeded-design` (every visual property is sampled
 from an artifact outside the model, derived from a sampled value, or forced
@@ -96,7 +96,7 @@ set are in `~/Downloads/gatehouse-seeds/` (not in the repository).
 | Artifact | A rack of Japanese *kanjō-kamoku* rubber stamps (account titles with their chart-of-accounts codes) on ruled ledger paper, one stamp face-down beside its impression |
 | Source | https://commons.wikimedia.org/wiki/File:Account_title_stamp_2025-04-22.jpg |
 | Licence | CC0 — may be reproduced in this repository |
-| Chosen because | It is a closed vocabulary of bookkeeping categories, each one a name plus a code, colour-coded **by class of account, never by judgement**, and every entry in the book is the same one-ink impression of one of them. That is exactly the shape of this product's fixed vocabulary: phases, gates, inbox kinds, burdens. |
+| Chosen because | It is a closed vocabulary of bookkeeping categories, each one a name plus a code, colour-coded **by class of account, never by judgement**, and every entry in the book is the same one-ink impression of one of them. That is the shape of this product's fixed vocabulary: phases, gates, inbox kinds, burdens. |
 
 What was measured (native, 3876×2907):
 
@@ -117,14 +117,13 @@ What the artifact does beyond colour:
 1. **Colour lives on the stamp, not on the page.** The body of each stamp
    says which class of thing it is; the impression it leaves is one ink. A
    reader of the book never meets pink or slate — they meet a name and a
-   number in black on ruled paper. Colour is an index for picking, not a
-   message on the record.
+   number in black on ruled paper. Colour is an index for picking.
 2. **Every entry is name + code.** `減価償却費 · 766`. Nothing on the page is
    a bare word. That is the `G2 — Does the evidence support merging?` habit
    this product already has, made typographic.
 3. **State as texture.** A worn stamp prints unevenly. An impression is
    visibly a *stamped* thing, distinct from the ruled structure of the page
-   and from handwriting. A fourth state needs a texture, not a fourth hue.
+   and from handwriting. A fourth state needs a texture.
 4. **The rules do the separating.** Blue-grey horizontals, one red vertical.
    No boxes, no cards, no shadows.
 
@@ -135,7 +134,7 @@ What the artifact does beyond colour:
 | Artifact | A specimen French Nansen passport (certificate of identity and travel for stateless refugees), cover and visa pages 7–9 with International Nansen Office revenue stamps affixed |
 | Source | https://www.loc.gov/item/2021667890/ (World Digital Library; original at the UN Office at Geneva Library) |
 | Licence | Library of Congress: no known restrictions, free to use and reuse |
-| Chosen because | It is a document whose whole job is to be stamped at gates by named officials, and its pages are designed as empty ledgers for those stamps to accumulate on, each stamp a fee paid and a passage recorded. The green band is a category mark, not decoration. |
+| Chosen because | It is a document whose whole job is to be stamped at gates by named officials, and its pages are designed as empty ledgers for those stamps to accumulate on, each stamp a fee paid and a passage recorded. The green band is a category mark. |
 
 What was measured (native, 5743×1991):
 
@@ -239,8 +238,8 @@ the page is the honest rendering of "the repo is the database".
 | accent | `#A46C6C` | the red rule, doing double duty: the gate on the table |
 
 The audit reads `#1C2424` as hue 180 at saturation 12 and flags the teal
-band; it is the measured impression under the photograph's cool light, not a
-chosen teal, and it is never used for text — `#2C343C` is.
+band; it is the measured impression under the photograph's cool light rather
+than a chosen teal, and it is never used for text — `#2C343C` is.
 
 **Type.** The artifact's own lettering is a Japanese gothic with wide,
 lining, tabular Latin numerals doing the code work. What that argues for in
@@ -348,14 +347,14 @@ surface.
 | role | hex | provenance |
 |---|---|---|
 | ground | `#D4B48C` | sampled, the card stock, 35% of the image, **69%** lightness |
-| reading surface | `#DCDCDC` | sampled, the stamp paper, 86% — long text is read on the affixed sheet, never on the card; the sheet computes 1.4 against the card and is bounded by its perforated edge, not by contrast |
+| reading surface | `#DCDCDC` | sampled, the stamp paper, 86% — long text is read on the affixed sheet; it computes 1.4 against the card and is bounded by its perforated edge, not by contrast |
 | ink | `#242424` | sampled, the letterpress; 7.9 on the card, 11.3 on the sheet |
 | muted | `#4C3C2C` | derived from ink along the card's hue; 5.4 on the card, 7.7 on the sheet |
 | band | `#243C04` | sampled, the green diagonal, 39% of its crop — a source/category mark; 6.2 on the card |
 | stamp ink | `#0444B4` | sampled, the Russian-refugee stamps, 6.5% of the stamp crop; 6.2 on the sheet, and it never sits on the card (4.3 there) |
 | second ink | `#443C04` | sampled, the Armenian-refugee stamps' olive; 5.7 on the card |
 
-Two values need writing down now rather than later. The ground's hue (30)
+Two values need writing down now. The ground's hue (30)
 is inside the register's amber band and the stamp blue (218) is inside its
 cobalt band. Both are **sampled**, at the proportions above, and neither
 is the default the band was written for — the band catches terracotta
@@ -391,7 +390,7 @@ from being read for an hour.
 
 **What it costs.** A dark warm ground is the boldest move available and the
 easiest to tire of; every chip and every rule has to be re-measured against
-69% instead of 96%, and most of what shipped will not survive that. The
+the new 69% ground, and most of what shipped will not survive that. The
 white reading sheet on card is a two-surface system, so anything that
 straddles both (the lexicon hover card, the packet chips) is designed
 twice. And it gives the public README a look that is unmistakable, which is
@@ -402,7 +401,7 @@ either the point or the problem.
 ## For the human
 
 - Killing all three is a valid outcome and means the seeds were wrong.
-- Mix structure, not colour: A1's page with B's "decision as an affixed
+- Mix structure: A1's page with B's "decision as an affixed
   object" is a legitimate mix; A2's stamp colours on B's card is not.
 - The question to ask of each: *could a competitor ship this?*
 
@@ -420,7 +419,7 @@ the gate-redesign brief, which reframed the product as a reading environment.
 `runs/gate-redesign/` (PR #197): warm paper `#FAF7F1`, terracotta
 `#A04423`, Inter chrome, Newsreader reading body, JetBrains Mono, Primer
 tinted chips, gate sigil. Reference board: Stripe, Primer, Raycast, Vercel,
-Linear, Sentry. Judged against the seeded-design register on 2026-09-04: the
+Linear, Sentry. Judged against the seeded-design register on 2026-09-04: it lands in the
 Anthropic cream-and-terracotta cluster almost exactly, with a ground shared
 to within a few units by the maintainer's other two products. The run record
 is historical and is not edited; this document supersedes its rationale.

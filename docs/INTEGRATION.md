@@ -24,7 +24,7 @@ adversarial review of this revision is applied
 Adopting the framework in a host repository is currently a hand procedure: copy the
 portable trees, edit the registry, invent project policy, hand-write provenance
 notices, manually probe the environment, manually check that a teammate can dispatch
-an agent. The pilot's Phase 0 executed exactly this, and its retro is a catalog of
+an agent. The pilot's Phase 0 executed this, and its retro is a catalog of
 what hand-integration costs:
 
 1. **No version record.** A copied tree doesn't say which framework commit it came
@@ -47,12 +47,11 @@ what hand-integration costs:
    criterion for an integration, and nothing runs it.
 
 Every one of these recurs for the next host repo. Integration should be a **product
-surface of the framework** — designed, versioned, and validated — not a procedure in
-one operator's head.
+surface of the framework** — designed, versioned, and validated.
 
 The prediction has since been tested: a second integration hand-executed *this
 design* (lockfile, forks mechanism, provenance split) against a non-SDLC host.
-The mechanisms held — the fork entry and checksums worked exactly as specified —
+The mechanisms held — the fork entry and checksums worked as specified —
 and the retro added cost categories v0.1 missed, folded in below: deciding which
 files are core-layer is itself judgment the tool must encode (§2), provenance for
 private non-redistributing hosts (§5), vocabulary the renderer can't validate
@@ -92,7 +91,7 @@ How should framework files travel into a host repo?
 
 | Mechanism | Verdict | Why |
 |-----------|---------|-----|
-| **Vendored copy + lockfile** | **Recommended** | Works in private/offline repos; divergence is *expected* — host-local policy is a legitimate layer, not an error — and the lockfile makes it visible instead of silent; upgrade is a real 3-way merge (§6) |
+| **Vendored copy + lockfile** | **Recommended** | Works in private/offline repos; divergence is *expected* — host-local policy is a legitimate layer, not an error — and the lockfile makes it visible; upgrade is a real 3-way merge (§6) |
 | Git submodule | Rejected | Couples host clones to framework repo access; role specs must be readable in-tree by agents that start cold; submodule UX taxes every operator |
 | Git subtree | Rejected for now | Better than submodule, but merges core and project layers into one history; revisit if lockfile bookkeeping proves painful |
 | Package registry (pip/npm) | Rejected for now, **for the core trees** | Infrastructure not needed at 1–3 repos; the natural v2 once the repo is public — the project posture already names "published package releases" as an eventual adoption channel, and the runnable components (below) are the artifacts that will want it first |
@@ -122,14 +121,14 @@ overlay, or record the file as a deliberate fork (the lock gains a `forks:` entr
 which becomes the review agenda at upgrade time). Forked files keep their
 **pristine upstream copy** under the prefix — field practice at integration #2,
 now design: the retained copy is the fork's recorded base, `validate` checksums
-the fork against *it* rather than against upstream HEAD, and `upgrade` uses it as
+the fork against *it*, not upstream HEAD, and `upgrade` uses it as
 the 3-way merge base with no network fetch (§6).
 
 One more thing the lock pins down: **what travels is a tagged release, not a
-working copy.** The framework is a dependency with downstream consumers, not a lab
-whose copies drift by nature — consumers integrate against a version they can name,
-and the upstream owes them the tagging discipline that implies (§11). This debt is
-now overdue rather than theoretical: no tag exists, so integration #2 had to pin a
+working copy.** The framework is a dependency with downstream consumers; it does not
+behave like a lab whose copies drift by nature. Consumers integrate against a version
+they can name, and the upstream owes them the tagging discipline that implies (§11). This debt is
+now overdue: no tag exists, so integration #2 had to pin a
 bare commit hash and record the missing release as a retro item. The first tagged
 release therefore sits at the head of the build queue, immediately *behind* the
 state-contract split (§11's sequencing note — tagging first would freeze the
@@ -145,10 +144,9 @@ deliberately do not vendor:
 - **The gate frontend** (`packages/`: the web UI, `gateline` CLI, and server) and
   **the v1 orchestrator** (`packages/orchestrator`) run *from the
   framework checkout or release*, pointed at host repos via `--repo` / the
-  multi-repo config. They are operators' instruments over host state, not host
-  files; a Node ≥ 24 workspace has no business being checked into every adopting
-  repo, and copying it would recreate the drift problem the lockfile exists to
-  solve.
+  multi-repo config. They are operators' instruments over host state; a Node ≥ 24
+  workspace has no business being checked into every adopting repo, and copying it
+  would recreate the drift problem the lockfile exists to solve.
 - The evidence that this works: pointed read-only at integration #2's non-SDLC
   host, every frontend read surface — discovery, run enumeration, CLI, inbox, API,
   bounce discipline — generalized with **zero code changes**. The single boundary
@@ -193,25 +191,25 @@ host-repo/
 
 **What the field did with this model.** Integration #2 adopted a *minimal core
 set* — the renderer, the render-staleness CI check, and the one contract its runs
-consume — placed at the host's repo root rather than under the prefix, with
+consume — placed at the host's repo root, with
 `.gateline/` holding only metadata (the lock, upstream copies of forked files, the
 framework license text). Its own roles, contracts, registry, and adapter manifest
 are instance-local originals that follow framework conventions, recorded in the
-lock as an instance-layer note rather than as copies. Two lessons folded into the
+lock as an instance-layer note. Two lessons folded into the
 design: (a) **partial adoption is the normal case** — the copy manifest (§2) is a
 menu, and the lock records the subset taken; (b) the prefix question is real —
 in-tree paths (`roles/`, `contracts/`) are what rendered agents and the renderer
 already expect, and a host whose *own* content is framework-shaped may
 legitimately keep the prefix for metadata only. `init` keeps `--prefix` as the
-knob; the lock, not the directory layout, is the authoritative record of what is
-core versus instance.
+knob; the lock is the authoritative record of what is core versus instance, and
+the directory layout carries no such meaning.
 
 **Renderer change required:** `render-agents.py` composes each agent body as
 *role spec + `overlays/_all.md` + `overlays/<role>.md`* (in that order, with marked
 splice boundaries), and resolves paths relative to its own location so the same
 script runs vendored. Policy text lives only in overlays; manifests stay pure
 mapping (tool aliases, model spellings, frontmatter shape) — this makes the Phase 0
-layering mistake structurally impossible rather than remembered. Overlay
+layering mistake structurally impossible. Overlay
 splicing and path-relativity are now built into `render-agents.py` (a
 comment-only stub splices nothing, so a repo with no overlays renders
 byte-identical); instance-vocabulary validation remains open (question 6).
@@ -282,7 +280,7 @@ python3 <framework-release>/scripts/integrate.py init <target-repo> \
   endorsed root layout: core files at the conventional in-tree paths (`roles/`,
   `contracts/`, `scripts/`) with `--prefix` holding metadata only (lock, retained
   upstream copies, framework license). Rendered agents and the renderer expect the
-  in-tree paths either way; the lock, not the layout, is the record of what is core.
+  in-tree paths either way; which files are core is a lock question (§4).
 - Copies the taken subset, seeds registry/manifests, seeds overlay stubs for the
   taken roles only, writes the lockfile, renders agents, wires the
   render-staleness CI check.
@@ -341,7 +339,7 @@ consumes the freshly scaffolded tree plus the host repo, and produces
 
 The Integrator then **drafts the project layer directly** — `overlays/_all.md`,
 per-role overlays, registry bindings, any contract fork — since those files are
-exactly the profile's conclusions made executable.
+the profile's conclusions made executable.
 
 ### Stage 2 — Gate GI (human)
 
@@ -367,8 +365,8 @@ teammate runs it too:
   `validate --smoke-report runs/000-integration/` checks the artifact. Headless
   dispatch is no longer hypothetical — the orchestrator's dispatch seam
   (ORCHESTRATOR.md §5) is the implementation validate will ride once live dispatch
-  is verified — but it stays a v1 nicety, not a blocker.
-- **Frontend read check (new since v0.1; an operator step, not part of
+  is verified — but it stays a v1 nicety.
+- **Frontend read check (new since v0.1; an operator step outside
   `validate`):** point the gate frontend at the host — `gateline status --repo
   <host>` from the framework checkout — and confirm the smoke run renders without
   bounces. `validate` (stdlib Python) prints the command; it does not run a Node
@@ -376,7 +374,7 @@ teammate runs it too:
   lands, a host with instance gate vocabulary bounces by design and the check's
   pass criterion applies only to SDLC-shaped hosts. This one command exercises
   the full read path (discovery, state parse, contract validation) end-to-end,
-  and it is exactly the check that caught the state-schema boundary at
+  and it is the check that caught the state-schema boundary at
   integration #2.
 
 Integration is *done* when validate passes for someone other than the operator who
@@ -389,7 +387,7 @@ ran init.
 1. Establish the **base** for 3-way merges from the retained upstream copies the
    lock records (§3) — no network fetch, so `upgrade` runs from a release tarball
    in a private/offline host. When run from a git checkout instead, fetching the
-   lock's pinned ref is a cross-check, not a dependency. (Locks written before
+   lock's pinned ref serves as a cross-check, not a dependency. (Locks written before
    the first tagged release pin a bare commit; `upgrade` reads either form and
    records the new release's tag when it bumps the lock.)
 2. Unforked taken files: replaced. Forked files: merged against their recorded
@@ -404,7 +402,7 @@ not push upstream (assume maintainer-only authorship until a contribution policy
 exists). And it is a rule of the path, not a courtesy, that host-confidential
 content never travels upstream: a retro lesson is redacted to its
 framework-general observation before it leaves the host. What the lockfile adds is the census — *which* repos run *which*
-version, so a retro lesson can say exactly who needs the upgrade. When a third repo
+version, so a retro lesson can say who needs the upgrade. When a third repo
 adopts and the core wants to become org-shared infrastructure (Future
 Consideration #1), this lock/upgrade machinery is the substrate that promotion
 builds on; nothing here needs to be undone.
@@ -428,23 +426,23 @@ change in the host:
 
 Until a host migrates, `validate --prefix .agentic` still checks the directory
 layout, but the provenance markers will not match — re-running `init` is the
-supported path, not hand-editing the markers.
+supported path; hand-editing the markers is not.
 
 ## 7. Generated vs. copied
 
 The brief's open question — does integration include *generating* project-specific
 agent/contract/context definitions? Answer: yes for the project layer, never for the
-core, and the generation is gated agent work, not templating.
+core; the generation is gated agent work.
 
 | Artifact | Produced by | Rationale |
 |----------|------------|-----------|
 | Roles, contracts, scripts (core) | Copied verbatim | A generated role spec is a day-one invisible fork of the framework |
-| Registry bindings, adapter manifests | Seeded template → project-owned | Mapping, not judgment; small and stable |
+| Registry bindings, adapter manifests | Seeded template → project-owned | Mapping; small and stable |
 | Overlays (`_all.md`, per-role) | **Generated by the Integrator**, human-gated | Pure judgment: they encode the probe's conclusions |
 | `integration-profile.md` | **Generated by the Integrator** | The judgment artifact itself |
 | Provenance, README, CI wiring | Templated by the tool | Mechanical |
-| Genuinely new project roles (P6) | Not generated | Adding a role is a team decision; the workflow leaves room but doesn't presume. Integration #2's experience: four instance roles fit the role-spec format with zero schema changes — the format travels even where the SDLC content doesn't |
-| Gate frontend, orchestrator | **Neither copied nor generated** — run from the pinned framework release against the host (§3) | Runnable tools, not portable trees; vendoring a Node workspace recreates the drift problem |
+| New project roles (P6) | Not generated | Adding a role is a team decision; the workflow leaves room but doesn't presume. Integration #2's experience: four instance roles fit the role-spec format with zero schema changes — the format travels even where the SDLC content doesn't |
+| Gate frontend, orchestrator | **Neither copied nor generated** — run from the pinned framework release against the host (§3) | Vendoring a Node workspace would recreate the drift problem the lockfile solves |
 
 ## 8. Ergonomics target
 
@@ -462,11 +460,10 @@ Two tool invocations, one agent dispatch, one PR. The tool travels into
 it depends on the framework source except at `upgrade` time. The **operator's
 cockpit** is a different matter under the two-channel model (§3): the gate
 frontend and the orchestrator run from the framework checkout/release for as long
-as the operator uses them — a standing instrument on the operator's machine, not
-a dependency of the host tree — and Stage 3's frontend read check is an operator
-step from that checkout. Everything that travels into the host stays stdlib-only
-Python 3.11+, same constraint as the renderer and for the same reason: host
-machines' interpreters vary, and the integration tool is precisely the thing that
+as the operator uses them — a standing instrument on the operator's machine —
+and Stage 3's frontend read check is an operator step from that checkout. Everything that travels into the host stays
+stdlib-only Python 3.11+, same constraint as the renderer and for the same reason:
+host machines' interpreters vary, and the integration tool is the thing that
 runs *before* the environment probe has fixed anything.
 
 ## 9. Failure modes and mitigations
@@ -478,7 +475,7 @@ runs *before* the environment probe has fixed anything.
 | Host headers stamped onto framework files | init writes exclusions + notices; validate checks; agents instructed to escalate, never comply |
 | Host conventions unreadable to cold-start agents (e.g., gitignored) | Probe checks readability from a fresh clone; profile requires a committed conventions source |
 | Stale rendered agents | Render-staleness CI seeded by init (as in this repo) |
-| Smoke run passes, real run fails | validate is necessary, not sufficient; the first real run stays supervised (the pilot's Phase 1 discipline is unchanged) |
+| Smoke run passes, real run fails | validate is a necessary check, but passing it does not guarantee success; the first real run stays supervised (the pilot's Phase 1 discipline is unchanged) |
 | Version drift across adopting repos | Lockfile census; upgrade is cheap enough to actually run |
 | Integrator hallucinates policy the host doesn't have | Every guardrail in the profile must trace to a probe finding or a cited host policy; untraceable rules are malformed (consumer bounces, per contract discipline) |
 | Framework tooling's compiled-in schema rejects a compliant host's runs | State validated against the host's own `contracts/state.yaml` per the frontend's R3 rule (`packages/README.md`; state-contract split, active run); until it lands, foreign-schema runs render loudly as bounced, never silently wrong |
@@ -527,7 +524,8 @@ about-to-fork shape as v1.0's frozen interface.
   renderer overlay support + path-relativity; `integrate.py init|validate`
   (static checks only); the lockfile per §3's normative schema, shipped as a JSON
   Schema beside the tool (the format is field-tested — two hand-written instances
-  exist — but §3 is the reference, not any private host's file);
+  exist — but §3 remains the reference, and no private host's file substitutes
+  for it);
   `roles/integrator.md` + `contracts/integration-profile.md`; canned smoke brief. Release contents are
   Apache-2.0 by construction; once the commercial-boundary convention lands
   (active run), release tooling additionally excludes `ee/` paths. Acceptance

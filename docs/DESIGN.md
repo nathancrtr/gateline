@@ -43,10 +43,10 @@ Three consequences fall out of that one decision:
 | P5 | **Decorrelate where it counts.** Reviewer and Verifier should bind to a *different vendor* than the Implementer whose work they check. | Same model grading its own homework |
 | P6 | **Extend by adding roles, not tuning knobs.** New need → new role spec + contract. | Sprawling per-agent configuration surfaces |
 
-P5 deserves a note: it is the strongest technical argument for the cross-vendor
-requirement. Models from the same family share blind spots — an error the implementer's
-model reliably makes is often an error the same model reliably fails to catch. Binding
-review/verification to a different lineage decorrelates failure modes cheaply.
+P5 is the strongest technical argument for the cross-vendor requirement. Models from
+the same family share blind spots — an error the implementer's model reliably makes is
+often an error the same model reliably fails to catch. Binding review/verification to a
+different lineage decorrelates failure modes cheaply.
 
 ## 3. The role roster
 
@@ -69,21 +69,21 @@ the surrounding prose (docs, changelog, tracker) with that record.
 
 Notes on the roster:
 
-- **Orchestrator is a role, not a requirement.** In v0 operating mode a human plays it
-  (see §7). Automating it is an upgrade, not a prerequisite.
+- **Orchestrator is a role, and a human may play it.** In v0 operating mode one
+  does (see §7). Automating it is an upgrade the pipeline does not require.
 - **Implementer is the only role that scales horizontally.** N implementers run in
   parallel on N independent work items; the Architect's job includes cutting tasks so
   their file-contact surfaces don't overlap.
-- **Reviewer and Verifier are deliberately separate.** Review is reading (does this code
+- **Reviewer and Verifier are separate roles.** Review is reading (does this code
   say the right thing?); verification is running (does this system do the right thing?).
   Collapsing them recreates the rubber-stamp reviews we see in human teams.
 - **Historian is the worked example of P6, and it landed as predicted:** when changelog
   and doc drift became painful, adding the role cost `roles/historian.md`, a
   `contracts/docs-delta.md` contract, and a registry binding — no change to any other
-  role or contract. It differs from the gate roles in two deliberate ways: it is
-  *scheduled*, not gate-driven (`orchestrator.yaml` `schedules:`; each sweep is a
-  mini-run `runs/historian-<date>/` on its own branch), and its human approval is the
-  sweep branch's review-and-merge rather than a numbered gate.
+  role or contract. It differs from the gate roles in two deliberate ways: a
+  schedule drives it (`orchestrator.yaml` `schedules:`; each sweep is a mini-run
+  `runs/historian-<date>/` on its own branch), and its human approval is the
+  sweep branch's review-and-merge.
 
 Full specs live in [`roles/`](../roles/) — one file per role, with mission, operating
 instructions, definition of done, and explicit escalation triggers.
@@ -111,10 +111,10 @@ Rules that keep the loop safe:
 
 - **Iteration cap.** Implementer ⇄ Reviewer cycles are capped at **3 rounds** per work
   item. Round 4 is an automatic escalation to the human with both sides' artifacts —
-  agents arguing past three rounds are almost always stuck on an ambiguity in the spec,
-  which is a G0/G1 defect, not an implementation defect.
+  agents arguing past three rounds are almost always stuck on an ambiguity in the
+  spec; that defect sits at G0/G1, upstream of the implementation.
 - **Budget cap.** Each run carries a token/cost budget in `state.yaml`; exhaustion
-  pauses the pipeline rather than degrading quality silently. In v1 every dispatch is
+  pauses the pipeline. In v1 every dispatch is
   metered automatically through the orchestrator's dispatch seam into
   `budget.ledger[]`, with a pre-flight cap check (ORCHESTRATOR.md §6) — the wordfreq
   pilot proved the earlier honor-system approach silently records nothing. *Remaining
@@ -140,12 +140,12 @@ which roles run and which gates exist. Three profiles, fixed sets, heaviest last
 Any run of any profile can also end at `closed` — the terminal state for a run a human
 ends short of `done`, carrying a typed disposition
 (`already-delivered | superseded | obsolete | abandoned`) and a reason. It is a rest
-state overlaid on the sequence rather than a step in it: nothing derives from a closed
+state overlaid on the sequence: nothing derives from a closed
 run, and closing deletes nothing (ORCHESTRATOR.md §4.5).
 
 - **`patch`** — bug fixes and small bounded changes. The human authors the intent
   brief *and* a single work item (`tasks/01-*.yaml`) at init: the analyst/architect
-  judgment being skipped is the human's to supply, not the engine's to improvise.
+  judgment being skipped is the human's to supply; the engine must not improvise it.
   G1 approves brief + work item together (the G0/G1 questions collapse into one
   "is this the change we want, scoped this way?"), then Implementer ⇄ Reviewer as
   usual, and G2 merges. No Verifier: wanting independent verification is itself
@@ -168,7 +168,7 @@ Mechanics and guardrails:
 - **Profiles are fixed sets, not knobs.** There is no per-run role toggle or
   gate toggle (P6, and the charter's flexibility-over-customizability). If a
   profile doesn't fit, pick the next heavier one.
-- **Reduced profiles change the review baseline explicitly.** In `patch` there is
+- **Reduced profiles change the review baseline.** In `patch` there is
   no `spec.md`/`plan.md`; the intent brief and the work item are the standard the
   Reviewer reviews against, and the dispatch names them as such. Contracts are
   otherwise unchanged.
@@ -182,7 +182,7 @@ Mechanics and guardrails:
   edit adds the newly required gate entries (undecided); an absent entry parses
   as undecided anyway, so forgetting one degrades gracefully. Downgrading
   mid-run is forbidden — an engine that observes a profile lighter than the
-  gates already decided escalates rather than guessing.
+  gates already decided escalates.
 
 ### 4.2 Closed vocabulary, open table — why the sets are fixed
 
@@ -193,8 +193,8 @@ want one more gate, and from maintainers who fear having shipped one too few.
 
 A run record is a set of claims. `profile: standard` claims exactly which gates
 had to be decided, by name, before the run reached `done` — and that claim is
-checkable only because the profile→gates mapping is fixed by the framework, not
-by the deployment. Make the gate set configurable and every check degrades from
+checkable only because the profile→gates mapping is fixed by the framework.
+Make the gate set configurable and every check degrades from
 "were the required approvals given?" to "were the approvals this deployment
 chose to require given?": the record stops being comparable across
 repositories, and a reader must audit the configuration before the evidence
@@ -222,7 +222,7 @@ explicit. Two kinds of role wear one name:
 
 - **Evidence-bearing positions.** Implementer, Reviewer, Verifier, and the
   Orchestrator-as-emitter are positions the record's claims are *about*: the P5
-  decorrelation claim is precisely "the parties that reviewed and verified were
+  decorrelation claim is "the parties that reviewed and verified were
   bound to a different vendor than the party that authored," and the record
   must name those positions for the claim to be stated at all. These are as
   closed as the gates.
@@ -231,23 +231,23 @@ explicit. Two kinds of role wear one name:
   their identity: G0's meaning is "a named human approved this spec," not "an
   Analyst produced it." Here the roster is a curated realization, closed in
   this repository by governance (the AGENTS.md invariant: maintainer decision,
-  recorded in an issue) rather than by anything structural — vocabulary growth
+  recorded in an issue), not by anything structural — vocabulary growth
   stays maintainer-gated and versioned, never adopter-configured.
 
 For host repositories adding roles through the overlay layer (INTEGRATION.md),
 the extension rule that follows is: **open table, closed gates.** An
 adopter-defined role may produce a contracted artifact that lands on an
 *existing* gate's table as additional evidence; it may never mint, remove, or
-substitute a gate. More roles mean richer gate decisions, not more gate
-decisions. A host whose runs are not SDLC-shaped (the state contract's
-core/extension split, INTEGRATION.md §4) may declare its own checkpoint
-vocabulary, but those names live in the instance's declared namespace — never
-`G<n>` — and carry whatever weight the instance assigns them; the framework's
-profile claims are not available to them.
+substitute a gate. More roles enrich a gate decision; they never add one. A host
+whose runs are not SDLC-shaped (the state contract's core/extension split,
+INTEGRATION.md §4) may declare its own checkpoint vocabulary, but those names
+live in the instance's declared namespace — never `G<n>` — and carry whatever
+weight the instance assigns them; the framework's profile claims are not
+available to them.
 
-One more boundary, learned from practice: a role is a contract position —
-defined by what it consumes, produces, and refuses to do, and by where it sits
-relative to a gate — not a persona. A reusable prompt ("a designer to critique
+One more boundary, learned from practice: a role is a contract position rather
+than a persona — defined by what it consumes, produces, and refuses to do, and
+by where it sits relative to a gate. A reusable prompt ("a designer to critique
 this screen") that consumes nothing contracted and produces nothing contracted
 is a useful *companion agent*, but it is not a role, and checking it into
 `roles/` would dilute what membership there asserts. Companions belong in a
@@ -264,17 +264,17 @@ set.
 ## 5. Artifact contracts
 
 Every handoff artifact has a template in [`contracts/`](../contracts/). Templates are
-deliberately short — they specify *required sections*, not prose style. An artifact
-missing a required section is malformed and the consuming agent's first duty is to
-bounce it, not to guess.
+short by design — they specify *required sections*. An artifact
+missing a required section is malformed, and the consuming agent's first duty is to
+bounce it, never to guess.
 
-Contracts also carry **budgets**: concision is a contract property, not a style hope.
-The rules are uniform — never restate an artifact you can reference (requirement
-numbers, file:line); evidence is pasted in full only for failures; no process
-narrative. This matters three ways: verbose artifacts dilute the signal for their
-model readers and beget verbose downstream artifacts (agents mirror the register they
-read), they tax the gate humans who are the system's deliberate bottleneck, and they
-are paid for repeatedly — once as output, then as input to every downstream reader.
+Contracts also carry **budgets**, so concision is an enforced contract property.
+The rules are uniform — never restate an artifact you can reference
+(requirement numbers, file:line); evidence is pasted in full only for failures; no
+process narrative. Verbose artifacts dilute the signal for their model readers and
+beget verbose downstream artifacts (agents mirror the register they read). They also
+tax the gate humans who are the system's deliberate bottleneck, and they are paid for
+repeatedly — once as output, then as input to every downstream reader.
 
 | Artifact | Producer → Consumer | Contract |
 |----------|--------------------|----------|
@@ -322,7 +322,7 @@ apply to a new hire.
 **v1 — agent-orchestrated.** The Orchestrator role is bound to a model and a scheduler
 (cron, CI trigger, or long-running session). Humans interact only at gates. Promotion
 criterion: the team has run enough v0 cycles that gate reviews have become
-confirmations rather than corrections. The v1 design — a stateless reconciler over
+confirmations, not corrections. The v1 design — a stateless reconciler over
 `state.yaml` with an adapter-shaped dispatch seam and automated budget metering — is
 specified in [ORCHESTRATOR.md](ORCHESTRATOR.md) and implemented in
 [`packages/orchestrator`](../packages/orchestrator/) (runbook in
@@ -339,14 +339,14 @@ maps them onto a specific harness:
 | Adapter | Status | What it maps |
 |---------|--------|--------------|
 | [`adapters/claude-code/`](../adapters/claude-code/) | **Built (the skeleton)** | role specs → `.claude/agents/*.md` subagents; runnable today by every operator |
-| [`adapters/copilot-cli/`](../adapters/copilot-cli/) | **Built** | role specs → `.github/agents/*.agent.md` custom agents; also the adapter that fully honors P5 — Copilot CLI hosts Anthropic/OpenAI/Google models natively, so Reviewer/Verifier bind to a genuinely different vendor than Implementer |
+| [`adapters/copilot-cli/`](../adapters/copilot-cli/) | **Built** | role specs → `.github/agents/*.agent.md` custom agents; also the adapter that fully honors P5 — Copilot CLI hosts Anthropic/OpenAI/Google models natively, so Reviewer/Verifier bind to a different vendor than Implementer |
 | [`adapters/opencode/`](../adapters/opencode/) | **Built** | role specs → `.opencode/agents/*.md` agents, scoped by deny-by-default permission maps; the any-provider adapter — opencode spells models as `provider/model-id` across its full provider catalog (including local models), so any registry binding or P5 pin is expressible per role |
 | *(orchestrated dispatch)* | **Resolved — no separate adapter tree** | v1's orchestrator is a framework component that consumes the adapters above through a `headless` section in each manifest (invocation template + usage-report parsing spec); a new runner still costs one manifest. See [ORCHESTRATOR.md](ORCHESTRATOR.md) §5 |
 
 Adapter rule: an adapter may *narrow* a role (fewer tools, tighter permissions) but
 never *widen* it. The role spec is the ceiling.
 
-Adapter agent files are **rendered, not written**: `scripts/render-agents.py`
+Adapter agent files are **rendered**, never hand-written: `scripts/render-agents.py`
 generates them from the role specs plus a per-adapter `manifest.json` (frontmatter
 shape, abstract-capability→tool map, runner model spellings), and a CI check fails
 stale renders. A new runner costs one manifest (~30 lines); the roles are never
@@ -361,7 +361,7 @@ restated per-runner.
 | Context contamination (agent B inherits agent A's mistaken assumptions) | P1: artifacts only; no shared conversations; each agent starts cold from files |
 | Merge conflicts between parallel implementers | Architect must declare file-contact surfaces per task; overlapping tasks are serialized |
 | Parallel implementers observe each other's mid-flight (broken) states in a shared working tree | Disjoint surfaces limit the damage (observed harmlessly in the wordfreq run); the v1 orchestrator isolates each parallel implementer in a per-task worktree with serial fold-back (ORCHESTRATOR.md §5.3). v0 human dispatch still shares one tree |
-| Spec drift (implementation quietly diverges from spec) | Reviewer and Verifier receive `spec.md` directly, not the implementer's summary of it |
+| Spec drift (implementation quietly diverges from spec) | Reviewer and Verifier receive `spec.md` directly, never the implementer's summary of it |
 | Silent budget burn | Per-run budget in `state.yaml`; exhaustion pauses, never degrades |
 | Malformed handoffs | Contracts define required sections; consumers bounce, never guess |
 
@@ -374,11 +374,11 @@ restated per-runner.
 
 ## 11. Roadmap to the Future Considerations
 
-**Up the org chain (#1):** the pieces that become shared org infrastructure are exactly
-the runtime-neutral ones — the registry becomes an org model-governance service, `roles/`
+**Up the org chain (#1):** the pieces that become shared org infrastructure are the
+runtime-neutral ones — the registry becomes an org model-governance service, `roles/`
 becomes a shared role library teams import and narrow, and gate approvals in `state.yaml`
 become policy hooks (e.g., "G3 requires someone with release authority"). The design
-keeps these as plain files precisely so that promotion is a lift, not a rewrite.
+keeps these as plain files so that promotion means lifting them, with nothing to rewrite.
 
 **Concrete pilot (#2):** run v0 mode against a real, bounded change in a production
 repo: write an intent brief for a small feature, let Analyst→Architect→Implementer→

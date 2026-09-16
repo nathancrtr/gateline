@@ -5,8 +5,8 @@ Thanks for your interest in gateline. Here is the honest state of things.
 ## Code contributions: not yet
 
 gateline is currently **maintainer-authored by policy**, not by accident. Settling a
-contribution policy (CLA or DCO) is a deliberate prerequisite to accepting
-outside code, because it preserves licensing options that matter for the
+contribution policy (CLA or DCO) is a prerequisite to accepting outside
+code, because it preserves licensing options that matter for the
 project's long-term health. Until that lands, pull requests from outside the
 maintainer will be read with gratitude and closed without merging — file the
 substance as an issue instead, and it will be credited if it becomes a change.
@@ -17,18 +17,17 @@ The most valuable contributions right now:
 
 - **Integration reports.** You ran `integrate.py init` on a real repo — what
   broke, what surprised you, what the Integrator's profile got wrong. This is
-  the feedback the framework is explicitly designed to absorb.
+  the feedback the framework is designed to absorb.
 - **Run evidence.** You drove a pipeline run and an agent misbehaved, a
   contract was ambiguous, or a gate presented badly. Note which artifact was
   malformed and which role produced it.
 - **Design findings.** Places where DESIGN.md's principles conflict with what
   you observed in practice.
 
-One thing to know about how fixes land here: framework fixes are routed by
-kind. Agent misbehavior goes to the role spec (`roles/*.md`); a malformed or
-ambiguous handoff goes to the contract (`contracts/*`); a model or vendor
-change goes to `registry/models.yaml`. Issues that identify the layer save a
-round-trip.
+Framework fixes are routed by kind. Agent misbehavior goes to the role spec
+(`roles/*.md`); a malformed or ambiguous handoff goes to the contract
+(`contracts/*`); a model or vendor change goes to `registry/models.yaml`.
+Issues that identify the layer save a round-trip.
 
 ## Working in this repo
 

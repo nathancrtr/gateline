@@ -13,8 +13,8 @@ loads `.claude/agents/*.md` at session start (verify with `/agents`; restart the
 session if you created or edited them mid-session), and when your message names a
 subagent, the main session spawns it with your text as its dispatch prompt. It runs
 cold in its own context, under its own model and restricted tools, and reports back.
-Naming the agent explicitly matters: it guarantees delegation instead of the main
-session doing the role's work itself with its full toolset.
+Naming the agent explicitly matters: it guarantees delegation. Without it, the
+main session may do the role's work itself, with its own full toolset.
 
 ## 0. Set up the run
 
@@ -99,8 +99,7 @@ its review so the range is well-defined.
 
 Sometimes the implementer needed a file the task never declared — the code is
 right, the boundary was wrong. The reviewer flags it (correctly) under Boundaries.
-The defect lives in the **plan layer**, so the fix belongs there, not in the review
-artifacts:
+The defect lives in the **plan layer**, so the fix belongs there:
 
 1. **Widen the task.** Add the file(s) to `file_contact_surface` in
    `runs/<slug>/tasks/NN-<name>.yaml`. You approved the plan at G1, so widening it
@@ -110,7 +109,7 @@ artifacts:
    why. `notes:` is append-only; it is what the next review round reads.
 3. **Leave `review-NN.md` alone.** Review reports are append-only history, and
    deleting a finding changes nothing anyway: every round re-derives the boundary
-   check from the task file and the diff, not from the previous report.
+   check from the task file and the diff.
 4. **Reset via the round machinery**, exactly as for any `request-changes`: bump
    `review_rounds` in `state.yaml`, re-dispatch the implementer with the review
    report path (with the surface widened and the code already correct, its job is
@@ -121,8 +120,8 @@ Hand-widening the surface yourself (steps 1–4 above) remains valid v0 practice
 nothing about the orchestrated path below deprecates it.
 
 **The orchestrated path (v1, issue #190).** When the reviewer's verdict is
-`escalate` rather than `request-changes` — the finding is a decomposition defect,
-not something an implementer round can fix — resolve the escalation with
+`escalate` — the finding is a decomposition defect no implementer round can
+fix — resolve the escalation with
 `--disposition re-plan` (`gateline resolve-escalation <slug> <index> --note "…" --disposition re-plan`,
 or the web decide card's "Re-plan" option). The engine dispatches the **architect**
 in amendment mode, carrying the review report path and your resolution note: the
@@ -130,7 +129,7 @@ architect amends `plan.md` with a dated ADR and, if the finding names a surface 
 decomposition defect, may widen the affected task's `file_contact_surface` in
 `tasks/*.yaml` itself — checking it against every other task's surface and
 serializing any overlap via `depends_on`, exactly as step 1 above describes, just
-performed by the architect rather than by you.
+performed by the architect, not by you.
 
 The widening does not take effect silently. Once the amendment lands, the engine
 raises a *fresh* escalation naming the task, pauses, and waits for you to
@@ -153,7 +152,7 @@ judgment call for you.
 
 The report ends with one overall `**Verdict:** pass | fail | escalate` line (the
 word alone). `escalate` is the verifier's escalation channel: a failure that
-traces to the spec or plan, not the code. Treat it exactly like a reviewer's
+traces to the spec or plan. Treat it like a reviewer's
 `escalate` — resolve it before deciding G2, and expect the v1 orchestrator to
 pause on it (rule D24). `fail` does not pause; it is yours to weigh at G2, and
 Gatehouse quotes the verdict and the non-verified rows on the card.

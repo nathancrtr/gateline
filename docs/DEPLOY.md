@@ -50,9 +50,8 @@ Two more properties worth knowing:
 The image (`deploy/Dockerfile`, entrypoint `deploy/entrypoint.sh`) contains
 the server, the built SPA, git, and cloudflared. The base image, cloudflared
 binary, and `@anthropic-ai/claude-code` CLI are all pinned (by digest,
-checksum, and version respectively, each overridable via build `ARG`s) rather
-than tracking `latest`, so the image is reproducible and bumps are
-deliberate. On boot it:
+checksum, and version respectively, each overridable via build `ARG`s), so the
+image is reproducible and bumps are deliberate. On boot it:
 
 1. Clones `REPO_URL` onto the volume (first boot only) and detaches `HEAD`,
    so no branch is checked out and every local branch can fast-forward.
@@ -70,7 +69,7 @@ ref becomes a live update in the UI (the ref watcher feeds SSE).
 
 If you also run Gatehouse locally against your own checkout, both instances
 write through git's compare-and-swap: a conflicting decision fails loudly and
-re-presents rather than corrupting state.
+re-presents, without corrupting state.
 
 ## Configuration reference
 
@@ -136,8 +135,8 @@ fly deploy
 fly scale count 1   # the clone on the volume is single-writer
 ```
 
-`fly.toml` is gitignored: it names your instance and belongs to you, not to
-the framework.
+`fly.toml` is gitignored: it names your instance and belongs to you rather
+than to the framework.
 
 ## Cloudflare Tunnel + Access
 
@@ -220,7 +219,7 @@ it in favor of `up`.
 
 **Merge-updates (self-supersede, [ORCHESTRATOR.md](ORCHESTRATOR.md) §13).**
 The engine notices a `git pull` in the checkout it runs from at its next
-tick boundary and exits (`75`) rather than silently keep serving stale code.
+tick boundary and exits (`75`), so the process never quietly serves stale code.
 That mechanism does not reach the hosted process on *this* recipe: the image
 bakes `packages/` in at build time with no `.git` above it (the Dockerfile
 copies only `packages/` and `deploy/`, and `.dockerignore` excludes `.git`),
@@ -248,7 +247,7 @@ the orchestrator's watcher picks the change up within seconds.
 * `--push` — every orchestrator commit goes to origin. The machine is
   disposable; origin is the record.
 * `--require-budget` — a run without `budget.cost_limit_usd` escalates and
-  pauses instead of dispatching. No ceiling, no dispatch.
+  pauses. No ceiling, no dispatch.
 * `--spend-limit-usd $ORCH_SPEND_LIMIT_USD` — a host-wide cap across all
   active runs, on top of the per-run caps. Set it. It bounds what the host
   spends per rolling window (`--spend-window`, default 24 hours), so a
@@ -256,7 +255,7 @@ the orchestrator's watcher picks the change up within seconds.
   has moved on — the engine never pauses a run for it, and Gatehouse shows
   the held-back runs on the engine chip rather than as escalations (#97).
 
-If your harness bills through a flat subscription rather than per-token,
+If your harness bills through a flat subscription,
 `ORCH_NO_BUDGET_ENFORCEMENT=1` swaps `--require-budget` for
 `--no-budget-enforcement`: metering (the ledger, `cost_spent_usd`) continues
 unconditionally, but no cap ever pauses dispatch (#109). The orchestrator
@@ -268,8 +267,8 @@ visible, not quiet.
 1. Your repo's `registry/models.yaml` must bind roles to **real model IDs**
    with real pricing — the orchestrator dispatches whatever the registry
    names, and template registries ship with illustrative placeholders.
-2. `fly secrets set ANTHROPIC_API_KEY=...` (API billing, not a login
-   session), and set `ORCH_SPEND_LIMIT_USD` in `fly.toml`'s `[env]`.
+2. `fly secrets set ANTHROPIC_API_KEY=...`, and set `ORCH_SPEND_LIMIT_USD` in
+   `fly.toml`'s `[env]`.
 3. Prove the plumbing before real dispatch: from the machine, run the
    one-prompt live smoke (`fly ssh console`, then `ORCH_LIVE_SMOKE=1` per
    `packages/orchestrator/README.md`) — it costs cents and verifies

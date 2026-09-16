@@ -5,7 +5,7 @@ The [ORCHESTRATOR.md](../../docs/ORCHESTRATOR.md) design, implemented: a
 Triggers fire an idempotent tick that reads `state.yaml` at the run branch tip,
 derives the next action from committed files alone, executes it, CAS-commits,
 and exits. Gate waits are rest states and cost nothing. Humans interact only at
-gates and escalations, through the frontend or `gateline` CLI, exactly as before.
+gates and escalations, through the frontend or `gateline` CLI, as before.
 
 Rules it is built to be checked against:
 
@@ -18,9 +18,9 @@ Rules it is built to be checked against:
   decision grammar (`G2 approved by <name>`) is reserved for humans.
 - **Every model invocation flows through the dispatch seam** and is metered
   into `budget.ledger[]`; enforcement is a pre-flight cap check that pauses
-  (`budget-exhausted`), never degrades. Enforcement — not metering — can be
+  (`budget-exhausted`), never degrades. Enforcement can be
   switched off with `--no-budget-enforcement` (also on `gateline up`) for
-  flat-rate-billed harnesses (#109); the ledger records either way.
+  flat-rate-billed harnesses (#109); metering cannot — the ledger records either way.
 - **R2 scoping:** the frontend's "exactly one write path" governs the human
   surfaces (web, CLI, server — still dispatch-free). The orchestrator is the
   sanctioned machine co-writer, a sibling consumer of the same `@gateline/core`
@@ -54,17 +54,15 @@ node orchestrator/src/main.ts --repo ~/repos/myproject \
 node orchestrator/src/main.ts --repo ~/repos/myproject sweep historian
 ```
 
-**Merge-updates.** `watch` (and `gateline up`, its co-located twin) checks the
-code checkout it runs from at each heartbeat/startup tick boundary; once a
-`git pull` there fast-forwards past the commit the process started on, it
-drains in-flight dispatches and exits `75` (`SUPERSEDE_EXIT_CODE`,
-docs/ORCHESTRATOR.md §13 — self-supersede, #141) instead of continuing to
-reconcile on stale code. Pair `watch` with a supervisor (systemd
-`RestartForceExitStatus=75`, launchd `KeepAlive`, or the Fly recipe's own
-restart loop) for hands-off merge-updates; unsupervised, the process just
-stops and waits for a manual restart. `gateline upgrade` is the one-command
-update: refuses on a dirty tree, `git pull --ff-only`, then `npm install` if
-`HEAD` moved.
+**Merge-updates.** `watch` (and `gateline up`, its co-located twin) checks the code
+checkout it runs from at each heartbeat/startup tick boundary; once a `git pull`
+there fast-forwards past the commit the process started on, it drains in-flight
+dispatches and exits `75` (`SUPERSEDE_EXIT_CODE`, docs/ORCHESTRATOR.md §13 —
+self-supersede, #141). Pair `watch` with a supervisor (systemd
+`RestartForceExitStatus=75`, launchd `KeepAlive`, or the Fly recipe's own restart
+loop) for hands-off merge-updates; unsupervised, the process just stops and waits
+for a manual restart. `gateline upgrade` is the one-command update: refuses on a
+dirty tree, `git pull --ff-only`, then `npm install` if `HEAD` moved.
 
 Scheduled roles (design §4.6): when the target repo commits an
 `orchestrator.yaml` with a `schedules:` section, every tick also reconciles
@@ -76,7 +74,7 @@ the branch waits for a human to review the docs-delta and merge. No
 
 Driving a live toy run end-to-end (the M2 exit criterion):
 
-1. Create the run by hand exactly as in WALKTHROUGH.md §0 (branch,
+1. Create the run by hand as in WALKTHROUGH.md §0 (branch,
    `runs/<slug>/`, intent brief, `state.yaml` with a real
    `budget.cost_limit_usd`), commit.
 2. Start `watch`. The orchestrator dispatches the Analyst and rests at G0.
@@ -143,7 +141,7 @@ has earned trust (design §10).
 | `derive.ts` | The derivation table (D0–D19 + DB): observation → rest / dispatch / record / escalate. Pure; one test per row. |
 | `observe.ts` | One immutable snapshot per run from committed files: validations, review verdicts, decline events, bounce counts, the ledger. |
 | `engine.ts` | The execute half: commit-then-launch (the CAS intent commit is the duplicate-dispatch guard), closing bookkeeping with real usage, stale-dispatch aging, per-run write serialization, and the harvest-commit (#182) that rescues a non-isolated role's uncommitted artifacts before its checkout is torn down. |
-| `capabilities.ts` | Reads `roles/<role>.md` frontmatter for `capabilities: [...]` (#182): the engine's only signal for which roles have no shell and must be told the orchestrator will harvest their work rather than to commit it themselves. |
+| `capabilities.ts` | Reads `roles/<role>.md` frontmatter for `capabilities: [...]` (#182): the engine's only signal for which roles have no shell and must be told the orchestrator will harvest their work for them. |
 | `seam.ts` + `manifest.ts` | `dispatch()` driven entirely by adapters' `headless` manifest sections; a new runner costs one manifest. |
 | `router.ts` | Dispatch-time P5: `avoid_vendor_of` routes reviewer/verifier to an adapter on a different vendor than the implementer; refuses when two adapters both violate the pin; advisory when one single-vendor adapter makes it unsatisfiable. |
 | `workspace.ts` | Run checkouts as disposable worktrees; per-task isolation for parallel implementers with serial fold-back. A fold classifies its own failure (`conflict \| dirty \| contention \| infra`): only a content conflict is a plan defect and escalates, the rest retry. Before the rebase it harvest-commits whatever is uncommitted inside the task's file-contact surface (#184), then discards the tracked dirt outside it and names both that and the untracked files the worktree removal will drop. A failed fold keeps its task branch for inspection. |
@@ -152,10 +150,10 @@ has earned trust (design §10).
 | `shadow.ts` | M1: replay history, derived vs actual, disagreements dispositioned (see `shadow-wordfreq.md`). |
 
 Crash recovery: job handles are never committed (host ephemera). A `dispatched`
-ledger entry with no living job and no artifact is exactly the crash signature;
+ledger entry with no living job and no artifact is the crash signature;
 the heartbeat ages it out (metered at the static estimate, marked `failed`) and
 the next derivation re-dispatches — one retry, then escalate. Kill the process
-anywhere; restart converges (`test/hardening.test.ts` drills exactly this).
+anywhere; restart converges (`test/hardening.test.ts` drills this).
 
 ## Autonomy gate
 

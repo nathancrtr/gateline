@@ -1,6 +1,6 @@
 # DESIGN.md — Gatehouse
 
-The token contract. Later work reads this rather than re-deciding. A value
+The token contract. Later work reads this. A value
 that is not here was not decided; a value here without provenance was
 chosen, which is the one forbidden move.
 
@@ -41,7 +41,7 @@ set of decisions nobody sourced.
 **What the seed does beyond colour, and what this contract keeps of it.**
 Colour lives on the stamp and never on the page: a reader of the book meets
 one ink on ruled paper. Every entry is a name plus a code. A worn stamp
-prints unevenly, so a state can be a texture rather than a hue. And the
+prints unevenly, so a state can be a texture. And the
 rules do the separating — no boxes, no cards, no shadows.
 
 ## Tokens
@@ -107,7 +107,7 @@ actual pixel is on every screen, one step down from the page.
 ### Why there is no red text at the mark's own value
 
 The column rule as sampled, `#A46C6C`, computes 3.8 on the ground: enough
-for a mark, not for text. So the red exists twice — `--color-mark` as
+for a mark; it is not enough for text. So the red exists twice — `--color-mark` as
 sampled, for the dashed position cell, the over-budget bar and the
 threshold tick, and `--color-warn` darkened along the same hue to 4.5 for
 the words beside them. Hue 0 is outside every burned band.
@@ -125,7 +125,7 @@ comparison isolated ground, structure and marks. It is the next pass, seeded
 from the artifact's own lettering (a gothic with wide, lining, tabular
 figures doing the code work), and it includes vendoring: a self-hosted
 cockpit should not phone a font CDN. Until that pass lands, this table
-records that the chrome face was inherited, not chosen.
+records that the chrome face was inherited.
 
 ## Layout grammar
 
@@ -156,7 +156,7 @@ code) in one ink, told apart by texture: filled for a decision taken, hollow
 for pending, struck for declined, hatched at the leading edge for bounced,
 dotted for a state not reached or a run at rest, dashed in the red for the
 position a run stands at. A human's own decision on the History ledger is
-pressed rather than printed — set 1.6° askew and roughened with an SVG
+pressed — set 1.6° askew and roughened with an SVG
 displacement filter — because it is the one mark on the page a person made.
 There is no ok/warn/bad hue; the word and the texture carry it.
 
@@ -181,7 +181,7 @@ Beyond the shared register in the skill:
 1. **Single theme.** No dark theme until a dark-ground artifact is sampled
    (2026-09-04).
 2. **The ground is `#F3F3EE`**, inside the band and near curricle's, with
-   the justification above; not reopened by the audit's flag.
+   the justification above; the audit's flag does not reopen it.
 3. **The semantic quartet is collapsed** to ink plus one red. `ok` and
    `info` resolve to the ink; `warn` and `bad` to the red text token. The
    product's own rule that status is carried in form is what makes this
@@ -194,9 +194,9 @@ Beyond the shared register in the skill:
    found in the browser).
 7. **The accent stays provisional.** The maintainer does not favour the
    grey-and-dusty-red pairing long term and expects "something a little
-   livelier"; that is a future seeded pass, not a free choice, and the
+   livelier"; that is a future seeded pass, and the
    mockups were not regenerated for it.
-8. **Type is inherited, not chosen** — see *Type*; the next pass.
+8. **Type is inherited** — see *Type*; the next pass.
 
 ## Contrast
 

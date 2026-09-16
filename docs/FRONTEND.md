@@ -39,7 +39,7 @@ Two structural observations drive everything below:
    asynchronous decisions on packets of evidence, arriving from multiple concurrent
    runs, needing routing to a *named* human, and needing their outcome recorded
    durably. That is the shape of a code-review queue or an approvals inbox — a
-   well-studied shape — not the shape of a conversation.
+   well-studied shape.
 2. **The human is the system's deliberate bottleneck, so the frontend's metric is
    decision quality per human-minute.** The contracts already optimize the *content*
    for this (concision budgets, required sections, evidence-for-failures-only). The
@@ -75,12 +75,12 @@ covers the decision interactions unevenly well:
 | I5/I6 monitoring | Agent HQ / mission control ([github.blog](https://github.blog/news-insights/company-news/welcome-home-agents/), [orchestration guide](https://github.blog/ai-and-ml/github-copilot/how-to-orchestrate-agents-using-mission-control/)) — assign, steer, and track agents from web/VS Code/CLI/mobile | **Partial, and strategically misaligned** — see below |
 | I8 metrics | PR timestamps give review latency; nothing knows about gate burden, rounds, or cost | **Poor** |
 
-**The Agent HQ caveat.** GitHub's mission control is the platform's answer to exactly
-our I5/I6 — and it manages *sessions of GitHub-integrated agents* (Copilot plus
+**The Agent HQ caveat.** GitHub's mission control is the platform's answer to our
+I5/I6 — and it manages *sessions of GitHub-integrated agents* (Copilot plus
 vendor agents running in GitHub's harness). Our pipeline is artifact-driven and
 harness-plural by principle (P2/P3): roles bind to models per the registry, and run
 in whichever adapter the team chose. Committing our monitoring surface to Agent HQ
-would couple us to one runtime exactly the way we refused to couple roles to one
+would couple us to one runtime the way we refused to couple roles to one
 vendor. Use it opportunistically (if a dispatch happens to run as a Copilot coding
 agent, its session view is free); don't build on it as *the* frontend. The
 harness-neutral thing to monitor is the thing we own: `state.yaml`.
@@ -105,7 +105,7 @@ break the audit-trail property that justified files-in-git in the first place.
 - **The harness UIs are the orchestrator's cockpit (I7), and only that.** Claude Code
   (desktop workspaces with parallel sessions, agent teams —
   [docs](https://code.claude.com/docs/en/agent-teams)) is where the v0 human
-  orchestrator dispatches and steers. This is genuinely good now — parallel-session
+  orchestrator dispatches and steers. This is good now — parallel-session
   management got first-class UI in 2026 — and we should ride it. Its limits define
   the dashboard's job, §5.
 - **Purpose-built approval-inbox tooling** (LangChain's
@@ -116,7 +116,7 @@ break the audit-trail property that justified files-in-git in the first place.
   accept/edit/reject/respond affordances configured per interrupt type. But each is
   coupled to its runtime's interrupt mechanism. Our "interrupt" is a file state
   (`phase` awaiting a gate; an `escalations[]` entry with `resolved: false`), so the
-  pattern ports; the tooling doesn't. Borrow the UX, not the stack.
+  pattern ports; the tooling doesn't. Borrow the UX, leave the stack.
 
 ## 4. Design principles for the human side
 
@@ -138,7 +138,7 @@ requirements a frontend will be judged against, whatever its form:
 3. **Decisions are recorded with name, timestamp, and correction category as a side
    effect of deciding.** Gate burden (confirmation / light / heavy correction) is the
    pilot's headline metric and the v1 promotion criterion; if capturing it is a
-   separate manual step it will silently not happen, exactly as `cost_spent_usd`
+   separate manual step it will silently not happen, as `cost_spent_usd`
    didn't in the wordfreq run.
 4. **Watch the approval rate.** Sustained >90% approvals at some gate means that gate
    is over-triggering (or reviews have gone reflexive) and its scope should move down
@@ -147,7 +147,7 @@ requirements a frontend will be judged against, whatever its form:
    trust-ladder mechanism from DESIGN.md §7 made measurable: gates don't disappear at
    v1, they get cheaper as their approval rates earn it.
 5. **Escalations age visibly.** An unresolved escalation is a stalled run burning
-   nothing but calendar; the queue must show age and route to a person, not a channel.
+   nothing but calendar; the queue must show age and route to a person.
 6. **Every rendered view is disposable.** The repo is the database. Any frontend that
    accretes state of its own (its own approval store, its own run status) has forked
    the source of truth and will drift, like `review_rounds` did across two files in
@@ -192,7 +192,7 @@ opposite to the intuition:
 - The History view is **already half a ledger** — it marks phase transitions from each
   commit's `state.yaml`. The decision data is already built and served, in
   `collectRunDecisions` and `GET /api/runs/:src/:slug/decisions`, and History simply
-  does not read it. Converting it is wiring, not a rebuild.
+  does not read it. Converting it is wiring.
 - The scoped diff was **further away than it looked**. `file_contact_surface` is
   written by `record/scaffold.ts` and required by `record/validate.ts`, and nothing
   parsed `tasks/*.yaml` into the view model. It needed a browser-safe core leaf
@@ -220,7 +220,7 @@ That last point forked, and one arm of it is a one-way door:
   derivation pure, but changes the record shape, which is a format-freeze decision.
   Still open, still #248.
 
-Two costs are accepted explicitly rather than left to degrade:
+Two costs are accepted:
 
 - **The diff is contractually part of G2's packet** (DESIGN.md §4). It stays renderable
   in Gatehouse for that reason. Retiring the *generic* renderer is not the same as
@@ -231,8 +231,8 @@ Two costs are accepted explicitly rather than left to degrade:
 
 ### 4.2 The run page's surfaces (#258)
 
-The run page offers three surfaces, and they are named for what a human does, not for
-where the bytes are kept. The bar they replaced — `Artifacts | Diff | History` — was a
+The run page offers three surfaces, and they are named for what a human does rather
+than for where the bytes are kept. The bar they replaced — `Artifacts | Diff | History` — was a
 filesystem listing standing in for the job at a gate.
 
 - **Decide** — whatever is on the table, composed for the gate it belongs to. Present
@@ -247,8 +247,8 @@ filesystem listing standing in for the job at a gate.
 Two consequences worth stating, because both were load-bearing before:
 
 - **The change reads inside Record, not beside it.** It is not an artifact — nothing
-  under `runs/<slug>/` produced it — so it sits under its own heading rather than in
-  the file list, and it earns its place only as the surface-scoped view (principle 7).
+  under `runs/<slug>/` produced it — so it sits under its own heading, and it earns
+  its place only as the surface-scoped view (principle 7).
   G2's packet still routes to it by the boundary fact, per §4.1.
 - **A URL that names a retired tab still resolves, and is rewritten in place.**
   `?tab=artifacts` is the record, `?tab=diff` is the record with the change open, and
@@ -288,9 +288,9 @@ than reconciling them: the spec defines it, the plan's table maps it to tasks, a
 work item claims it. A requirement a task claims but the table omits is a different
 fact from one nothing mentions, and flattening them would hide the difference.
 
-Presence, not verdicts, as for G2. No coverage percentage and no plan score. An
-overlap a `depends_on` orders is shown as ordered rather than hidden — two tasks may
-touch one file by design, and that call is the approver's.
+Presence, as for G2. No coverage percentage and no plan score. An overlap a
+`depends_on` orders is shown as ordered — two tasks may touch one file by design, and
+that call is the approver's.
 
 A `patch` run has no `plan.md` and no spec, so its G1 keeps the brief-plus-work-item
 view unchanged. Where the plan carries no mapping table, or the work items follow a
@@ -300,11 +300,11 @@ shape it looked for — the contracts' bounce rule, turned on the UI.
 ### 4.4 The round-cap surface (#257)
 
 A round cap asks one narrow question: three rounds, still not converged, so which
-finding keeps coming back? The surface answers it by comparing the last two rounds
-rather than by listing the files they live in.
+finding keeps coming back? The surface answers it by comparing the last two rounds,
+not by listing the files they live in.
 
-DESIGN.md §4 says the answer is usually a spec ambiguity rather than an implementation
-defect. That is a claim a human can only test by holding two rounds side by side, and
+DESIGN.md §4 says the answer is usually a spec ambiguity, a defect upstream of the
+implementation. That is a claim a human can only test by holding two rounds side by side, and
 the card that preceded this offered five filename chips into a one-at-a-time reader —
 a memory exercise at the one decision whose whole question is a comparison.
 
@@ -330,7 +330,7 @@ of the record unreachable, which no view here may do.
 
 The header shows a run's position as one sequence: the profile's phases left to right,
 with its gates drawn as the transitions between them. A gate is what moves a run from
-one phase to the next, and the header now says so in its arrangement rather than in
+one phase to the next, and the header now says so in its arrangement, not in
 prose.
 
 What that replaced said the same four facts three times — an eyebrow reading
@@ -338,7 +338,7 @@ What that replaced said the same four facts three times — an eyebrow reading
 and a GATES column in the rail below. None of them said that gates are the
 transitions, so the page had to spell out in words what it could not show in shape.
 
-Four rules keep the spine a rendering of the record rather than a reading of it:
+Four rules keep the spine a rendering of the record, not a reading of it:
 
 - **The profile is the shape.** `patch` shows four phases and two gates; `full` shows
   six and four. A gate absent from the profile is absent from the spine — never an
@@ -353,9 +353,8 @@ Four rules keep the spine a rendering of the record rather than a reading of it:
   still stands somewhere, so the spine marks where — the phase of its first unapproved
   gate — and the chip beside it says why it is not moving. Nothing is on the table
   while a run is at rest, so no gate reads as pending. A closed run's chip carries its
-  disposition rather than the bare word "closed": the terminal phase exists precisely
-  so the record says why, and a chip that only said "closed" would put the untyped
-  state back on the screen.
+  disposition: the terminal phase exists so the record says why, and a chip that only
+  said "closed" would put the untyped state back on the screen.
 
 ### 4.6 Closing a run (#200)
 
@@ -370,15 +369,15 @@ The form requires both halves of the record: a typed disposition
 asserts) and a reason. Neither is optional, and the confirm button names the
 disposition it is about to write. A closed run shows the closure record in its place
 — who closed it, when, why — with `Reopen this run…` beneath it, because a closure is
-a decision rather than a deletion and reversing it is another commit, not an undo.
+a decision, not a deletion, and reversing it is another commit; there is no undo.
 
 The panel says what closing does *not* do, because that is the question a destructive-
-looking control raises: the branch, the run directory, and every artifact stay exactly
+looking control raises: the branch, the run directory, and every artifact stay
 where they are.
 
-The header is also laid out for the 800–1000px band rather than degrading into it: the
-spine fills the width it is given, and the rail's columns grow instead of stacking into
-the left half of the viewport.
+The header is also laid out for the 800–1000px band: the spine fills the width it is
+given, and the rail's columns grow instead of stacking into the left half of the
+viewport.
 
 ### 4.7 Audit-time sections fold (#217)
 
@@ -397,7 +396,7 @@ each audit-time H2 as a fold showing the heading and a count (rows, items, or
 paragraphs: arithmetic over the text), and opens it in place to the verbatim
 section. An H1 opens a section of its own, so a review's appended round and its
 verdict never sit under the previous round's fold. A contract with no annotation
-renders the artifact whole, through one call, exactly as before.
+renders the artifact whole, through one call, as before.
 
 This is the first surface to encode the standing rule from #261 in code: a view
 may reorder, group, fold, badge, and diff, but every word shown comes byte-identical
@@ -453,7 +452,7 @@ and the "should we build" question mostly answers itself — *provided we stage 
 ## 6. Recommended shape: three stages with promotion criteria
 
 Evidence-gated stages, in the same spirit as the pilot phases. Each stage is fully
-usable; each promotion is triggered by felt pain, not anticipation.
+usable; each promotion is triggered by felt pain.
 
 **Stage A — GitHub-native + harness cockpit (the pilot runs on this; build ≈ 0).**
 G2 = protected PR review; G3 = protected environment + `workflow_dispatch`; G0/G1 =
@@ -483,8 +482,8 @@ gate decision mis-recorded by hand.
 A small hosted app that adds what static rendering can't: authenticated decision
 actions (the single write path, as API commits), routing/rotation for gate duty, SLA
 aging and paging on stalled escalations, approval-rate and gate-burden trend charts,
-cost meters fed by the automated metering that v1 requires anyway. This — not Stage
-B — is where "a group of teams of humans" is served: approver pools, per-team
+cost meters fed by the automated metering that v1 requires anyway. Stage C, rather
+than Stage B, is where "a group of teams of humans" is served: approver pools, per-team
 portfolio filters, org-level policy hooks ("G3 requires release authority") from
 DESIGN.md §11. *Promotion trigger from B:* gate duty shared by ≥3 humans or framework
 live in ≥3 repos, and Stage B's inbox demonstrably missing SLAs.

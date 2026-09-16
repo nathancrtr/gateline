@@ -233,7 +233,7 @@ SDLC into agent roles that adopters can adapt and expand as needed.
 
 ## Project posture
 
-* This is a fully open-source project (Apache-2.0) with a single maintainer. The repository is private only until the framework settles into a usable state; after that, consumers adopt it via the public repository and/or published package releases.
+* This is a fully open-source project (Apache-2.0) with a single maintainer. The repository has been public since 2026-09-16; consumers adopt it from the public repository, and published package releases remain a later step.
 * Downstream organizations — including any organization the maintainer works with — consume the framework as an ordinary open-source dependency. Assume maintainer-only code authorship; settling a contribution policy (CLA/DCO) is a prerequisite to accepting outside contributors.
 * This repository must remain consumer-agnostic: no document, issue, commit, or artifact in it may reference a specific downstream organization.
 

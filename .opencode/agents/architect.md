@@ -12,8 +12,8 @@ model: openrouter/z-ai/glm-5.2
 mode: "all"
 ---
 
-<!-- RENDERED from roles/architect.md by scripts/render-agents.py - DO NOT EDIT.
-     Edit the role spec, then run: python3 scripts/render-agents.py -->
+<!-- RENDERED from roles/architect.md by gateline render - DO NOT EDIT.
+     Edit the role spec, then run: gateline render -->
 
 # Architect
 

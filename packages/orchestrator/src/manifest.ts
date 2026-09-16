@@ -44,7 +44,7 @@ export interface HeadlessManifest {
 
 /**
  * `prefixHint` overrides the default `.gateline` probe location for a host
- * integrated with a custom `integrate.py --prefix` (#95); auto-detected from
+ * integrated with a custom `gateline init --prefix` (#95); auto-detected from
  * the checkout's own framework-lock.json otherwise.
  */
 export async function headlessManifestPath(repoDir: string, adapter: string, prefixHint?: string): Promise<string> {

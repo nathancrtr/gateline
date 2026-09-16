@@ -50,7 +50,7 @@ export class LocalGitSource implements RunSource {
    * bookkeeping and human decisions stay distinguishable at a glance.
    *
    * `options.frameworkPrefix` overrides the default `.gateline` probe location
-   * for a host integrated with a custom `integrate.py --prefix` (#94).
+   * for a host integrated with a custom `gateline init --prefix` (#94).
    *
    * `options.localOnly` forces push off (belt-and-braces — `loadSources`
    * already resolves `push: false` under local-only) and is what

@@ -7,7 +7,7 @@
 **Checklist**
 - [ ] `gateline render --check` passes (rendered agents current)
 - [ ] No vendor or model names in `roles/` or `contracts/`
-- [ ] Vendored tooling stays stdlib-only, Python 3.11-compatible
-- [ ] Tests pass: `pytest scripts/test_integrate.py` (and `npm test` in
-      `packages/` if it's touched)
+- [ ] `packages/framework` still takes no runtime dependencies
+- [ ] Tests pass: `npm test` in `packages/` (add `npm run typecheck` and
+      `npm run lint` when you touch the workspace)
 - [ ] No retro-edits to completed runs under `runs/`

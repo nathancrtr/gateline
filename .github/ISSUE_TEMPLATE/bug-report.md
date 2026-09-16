@@ -9,7 +9,7 @@ labels: bug
 **What you expected**
 
 **Reproduction**
-<!-- Commands run and output. For integrate.py issues, include the lockfile
+<!-- Commands run and output. For `gateline init` issues, include the lockfile
      (redact your repo paths if you like) and your --take/--layout/--provenance
      flags. -->
 

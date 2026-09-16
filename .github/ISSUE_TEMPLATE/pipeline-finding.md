@@ -8,7 +8,7 @@ labels: pipeline-finding
 - [ ] Role spec (`roles/*.md`) — an agent exceeded or misread its contract
 - [ ] Contract (`contracts/*`) — a handoff artifact was malformed or ambiguous
 - [ ] Registry (`registry/models.yaml`) — model binding or capability profile
-- [ ] Integration (`scripts/integrate.py`, INTEGRATION.md workflow)
+- [ ] Integration (`gateline init|validate|fork`, INTEGRATION.md workflow)
 - [ ] Gatehouse / orchestrator (`packages/`)
 - [ ] Not sure
 

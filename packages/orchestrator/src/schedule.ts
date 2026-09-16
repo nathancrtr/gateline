@@ -177,7 +177,7 @@ export interface SchedulerConfig {
   registry: Registry | null
   /**
    * Override the `.gateline` default when this repo was integrated with a
-   * custom `integrate.py --prefix` (#95) — otherwise auto-detected.
+   * custom `gateline init --prefix` (#95) — otherwise auto-detected.
    */
   frameworkPrefix?: string
   /** Dispatch wall clock before the sweep job is killed (default 30 min). */

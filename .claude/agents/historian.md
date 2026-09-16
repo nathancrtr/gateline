@@ -5,8 +5,8 @@ tools: Read, Grep, Glob, Write, Edit, Bash
 model: haiku
 ---
 
-<!-- RENDERED from roles/historian.md by scripts/render-agents.py - DO NOT EDIT.
-     Edit the role spec, then run: python3 scripts/render-agents.py -->
+<!-- RENDERED from roles/historian.md by gateline render - DO NOT EDIT.
+     Edit the role spec, then run: gateline render -->
 
 # Historian
 

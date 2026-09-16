@@ -81,7 +81,7 @@ export function parseRegistry(text: string): Registry {
 /**
  * Registry at a rev (default branch normally) — null when the repo has none.
  * `prefixHint` overrides the default `.gateline` probe location for a host
- * integrated with a custom `integrate.py --prefix` (#95).
+ * integrated with a custom `gateline init --prefix` (#95).
  */
 export async function loadRegistry(git: Git, rev: string, prefixHint?: string): Promise<Registry | null> {
   const { registry: registryRoot } = await resolveFrameworkRoots(git, rev, prefixHint)

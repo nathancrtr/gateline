@@ -12,8 +12,8 @@ model: openrouter/deepseek/deepseek-v4-pro
 mode: "all"
 ---
 
-<!-- RENDERED from roles/analyst.md by scripts/render-agents.py - DO NOT EDIT.
-     Edit the role spec, then run: python3 scripts/render-agents.py -->
+<!-- RENDERED from roles/analyst.md by gateline render - DO NOT EDIT.
+     Edit the role spec, then run: gateline render -->
 
 # Analyst
 

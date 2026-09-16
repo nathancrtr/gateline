@@ -1,11 +1,7 @@
 {
-  "_comment": "The copy manifest (docs/INTEGRATION.md §2): the list of core-layer files a release offers a host. 'always' travels with every take; groups are the menu --take selects from. integrate.py init records the taken subset in the host's framework-lock.json. Until non-SDLC content exists upstream, --take all and --take sdlc resolve to the same set.",
-  "version": 1,
+  "_comment": "The copy manifest (docs/INTEGRATION.md §2): the list of core-layer files a release offers a host. 'always' travels with every take; groups are the menu --take selects from. `gateline init` records the taken subset in the host's framework-lock.json. What travels is content only — role specs, contracts, templates. The framework's own tooling is not vendored: it runs from the checkout the lock pins (INTEGRATION.md §3, the two-channel model). Until non-SDLC content exists upstream, --take all and --take sdlc resolve to the same set.",
+  "version": 2,
   "always": [
-    "scripts/render-agents.py",
-    "scripts/integrate.py",
-    "scripts/copy-manifest.json",
-    "scripts/framework-lock.schema.json",
     "roles/integrator.md",
     "contracts/integration-profile.md"
   ],

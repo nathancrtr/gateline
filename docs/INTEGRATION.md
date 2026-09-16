@@ -7,9 +7,9 @@ maintained outside this repository; framework-general findings are tracked as
 issues here) — and two framework components that postdate the draft shipped:
 the gate frontend ([FRONTEND.md](FRONTEND.md), `packages/`) and the v1
 orchestrator ([ORCHESTRATOR.md](ORCHESTRATOR.md)). A v0 of the tooling now
-ships: `integrate.py init|validate|fork`, the copy manifest, the normative lock
-schema, and renderer overlay splicing (`scripts/`, tested by
-`scripts/test_integrate.py`); the tagged release, instance-vocabulary
+ships: `gateline init|validate|fork`, the copy manifest, the normative lock
+schema, and renderer overlay splicing (`packages/framework`, tested by
+`packages/framework/test/`); the tagged release, instance-vocabulary
 validation (open question 6), and `upgrade` remain open — §11 tracks them, and
 [INTEGRATION-PLAN.md](INTEGRATION-PLAN.md) sequences the build. A round-1
 adversarial review of this revision is applied
@@ -71,8 +71,9 @@ judgment/mechanics line:
 | Write provenance notices and header-sweep exclusions | Extend contracts (e.g., a required ticket-reference field) |
 | Run well-formedness checks | Decide the validation envelope (what's locally provable vs. `unverifiable`) |
 
-This split is the design. The mechanical half becomes a **tool** (`integrate.py`,
-stdlib-only like the renderer). The judgment half becomes a **role with a contract
+This split is the design. The mechanical half becomes a **tool**
+(`packages/framework`, dependency-free like the renderer it contains — see §8).
+The judgment half becomes a **role with a contract
 and a human gate** — the framework onboards itself the same way it builds software.
 Integration is a run.
 
@@ -99,7 +100,7 @@ How should framework files travel into a host repo?
 
 The Phase 0 decision — copy, don't submodule — was right. What was missing is the
 lockfile, `.gateline/framework-lock.json`. Its schema is normative *here* — and
-ships as a JSON Schema beside `integrate.py` — because the field instances live in
+ships as `scripts/framework-lock.schema.json` — because the field instances live in
 private hosts this repository cannot point at:
 
 - `source` — repo; pinned ref (a tag once releases exist, a bare commit before);
@@ -137,9 +138,8 @@ about-to-fork schema), and the first `upgrade` must accept commit-pinned locks
 
 ### Vendored trees are not the only channel
 
-v0.1 assumed everything that travels is a file copy. Two framework components
-that shipped since are **runnable tools, not portable trees**, and they
-deliberately do not vendor:
+v0.1 assumed everything that travels is a file copy. The framework's runnable
+components are **tools, not portable trees**, and they deliberately do not vendor:
 
 - **The gate frontend** (`packages/`: the web UI, `gateline` CLI, and server) and
   **the v1 orchestrator** (`packages/orchestrator`) run *from the
@@ -147,6 +147,10 @@ deliberately do not vendor:
   multi-repo config. They are operators' instruments over host state; a Node ≥ 24
   workspace has no business being checked into every adopting repo, and copying it
   would recreate the drift problem the lockfile exists to solve.
+- **The integration tooling itself** (`packages/framework`) joined them. v0.1 had
+  it vendor into `.gateline/scripts/`; §8 records why that was the wrong trade and
+  what replaced it. It carries no dependencies, so running it from the checkout
+  costs an adopter nothing an install would have saved.
 - The evidence that this works: pointed read-only at integration #2's non-SDLC
   host, every frontend read surface — discovery, run enumeration, CLI, inbox, API,
   bounce discipline — generalized with **zero code changes**. The single boundary
@@ -170,7 +174,6 @@ host-repo/
 ├── .gateline/
 │   ├── roles/               # CORE — copied verbatim, never edited in host
 │   ├── contracts/           # CORE — ditto (forks allowed but lock-recorded)
-│   ├── scripts/             # CORE — renderer + integrate.py travel with the copy
 │   ├── registry/models.yaml # SEEDED — template on init, then project-owned
 │   ├── adapters/*/manifest.json # SEEDED — per-runner, then project-owned
 │   ├── overlays/            # PROJECT — the only writable policy surface
@@ -204,15 +207,15 @@ legitimately keep the prefix for metadata only. `init` keeps `--prefix` as the
 knob; the lock is the authoritative record of what is core versus instance, and
 the directory layout carries no such meaning.
 
-**Renderer change required:** `render-agents.py` composes each agent body as
+**Renderer change required:** the renderer composes each agent body as
 *role spec + `overlays/_all.md` + `overlays/<role>.md`* (in that order, with marked
-splice boundaries), and resolves paths relative to its own location so the same
-script runs vendored. Policy text lives only in overlays; manifests stay pure
-mapping (tool aliases, model spellings, frontmatter shape) — this makes the Phase 0
-layering mistake structurally impossible. Overlay
-splicing and path-relativity are now built into `render-agents.py` (a
-comment-only stub splices nothing, so a repo with no overlays renders
-byte-identical); instance-vocabulary validation remains open (question 6).
+splice boundaries), and resolves paths from the core-layer root the lock records,
+so the same code renders a host under either layout. Policy text lives only in
+overlays; manifests stay pure mapping (tool aliases, model spellings, frontmatter
+shape) — this makes the Phase 0 layering mistake structurally impossible. Overlay
+splicing and layout-relativity are built in (a comment-only stub splices nothing,
+so a repo with no overlays renders byte-identical); instance-vocabulary validation
+remains open (question 6).
 
 **Vocabulary is part of the layering, and today nothing validates it.**
 Integration #2 added a capability (`web`) to its manifest's `tool_map` and
@@ -259,13 +262,13 @@ issues; none forced a fork.
 Four stages; the first and last are the tool, the middle two are the framework's own
 run pattern. Everything lands as **one scaffold PR** in the host repo.
 
-### Stage 0 — `integrate.py init` (mechanical, minutes)
+### Stage 0 — `gateline init` (mechanical, minutes)
 
 Run from a pinned framework release — a tagged checkout or its release tarball,
 never someone's working copy — pointed at the target:
 
 ```
-python3 <framework-release>/scripts/integrate.py init <target-repo> \
+gateline init <target-repo> \
     [--take all|sdlc|<file list>] [--layout prefixed|root] [--prefix .gateline] \
     [--provenance redistribute|private] [--adapters auto]
 ```
@@ -278,7 +281,7 @@ python3 <framework-release>/scripts/integrate.py init <target-repo> \
   in the lock; everything downstream (overlay stubs, validate, smoke) scopes to it.
 - `--layout` chooses between the prefixed tree (§4 diagram) and the field's
   endorsed root layout: core files at the conventional in-tree paths (`roles/`,
-  `contracts/`, `scripts/`) with `--prefix` holding metadata only (lock, retained
+  `contracts/`) with `--prefix` holding metadata only (lock, retained
   upstream copies, framework license). Rendered agents and the renderer expect the
   in-tree paths either way; which files are core is a lock question (§4).
 - Copies the taken subset, seeds registry/manifests, seeds overlay stubs for the
@@ -347,7 +350,7 @@ The scaffold PR review, G0-shaped: *"Is this how agents should behave in this
 house?"* On the table: `integration-profile.md`, the overlays, the registry, the
 lockfile. A named human approves, recorded in the profile like any gate.
 
-### Stage 3 — `integrate.py validate` (mechanical again)
+### Stage 3 — `gateline validate` (mechanical again)
 
 The Phase 0 exit criterion, made executable and cheap enough that the *second*
 teammate runs it too:
@@ -369,8 +372,9 @@ teammate runs it too:
 - **Frontend read check (new since v0.1; an operator step outside
   `validate`):** point the gate frontend at the host — `gateline status --repo
   <host>` from the framework checkout — and confirm the smoke run renders without
-  bounces. `validate` (stdlib Python) prints the command; it does not run a Node
-  toolchain it doesn't ship. Precondition: the state-contract split — until it
+  bounces. `validate` prints the command rather than running it: reading a host's
+  runs needs the cockpit's own dependencies, which is the second channel's job,
+  not this one's. Precondition: the state-contract split — until it
   lands, a host with instance gate vocabulary bounces by design and the check's
   pass criterion applies only to SDLC-shaped hosts. This one command exercises
   the full read path (discovery, state parse, contract validation) end-to-end,
@@ -382,7 +386,7 @@ ran init.
 
 ## 6. Upgrades and flowback
 
-`integrate.py upgrade`, run from a newer pinned framework release:
+`gateline upgrade`, run from a newer pinned framework release:
 
 1. Establish the **base** for 3-way merges from the retained upstream copies the
    lock records (§3) — no network fetch, so `upgrade` runs from a release tarball
@@ -419,10 +423,10 @@ change in the host:
    `.github/workflows/agentic-render-check.yml` to `gateline-render-check.yml`.
 2. Delete the old NOTICE section including its
    `<!-- agentic-framework-provenance:start/end -->` markers, then re-run
-   `integrate.py init` from the pinned framework ref (idempotent: it rewrites
+   `gateline init` from the pinned framework ref (idempotent: it rewrites
    the managed section between the new markers and refreshes `.gateline/`
    metadata in place).
-3. `python3 .gateline/scripts/integrate.py validate` to re-prove the invariants.
+3. `gateline validate` to re-prove the invariants.
 
 Until a host migrates, `validate --prefix .agentic` still checks the directory
 layout, but the provenance markers will not match — re-running `init` is the
@@ -436,35 +440,48 @@ core; the generation is gated agent work.
 
 | Artifact | Produced by | Rationale |
 |----------|------------|-----------|
-| Roles, contracts, scripts (core) | Copied verbatim | A generated role spec is a day-one invisible fork of the framework |
+| Roles and contracts (core) | Copied verbatim | A generated role spec is a day-one invisible fork of the framework |
 | Registry bindings, adapter manifests | Seeded template → project-owned | Mapping; small and stable |
 | Overlays (`_all.md`, per-role) | **Generated by the Integrator**, human-gated | Pure judgment: they encode the probe's conclusions |
 | `integration-profile.md` | **Generated by the Integrator** | The judgment artifact itself |
 | Provenance, README, CI wiring | Templated by the tool | Mechanical |
 | New project roles (P6) | Not generated | Adding a role is a team decision; the workflow leaves room but doesn't presume. Integration #2's experience: four instance roles fit the role-spec format with zero schema changes — the format travels even where the SDLC content doesn't |
-| Gate frontend, orchestrator | **Neither copied nor generated** — run from the pinned framework release against the host (§3) | Vendoring a Node workspace would recreate the drift problem the lockfile solves |
+| Gate frontend, orchestrator, integration tooling | **Neither copied nor generated** — run from the pinned framework release against the host (§3) | Vendoring an executable would recreate the drift problem the lockfile solves; §8 |
 
 ## 8. Ergonomics target
 
 The whole operator surface, from zero to gate-ready, should be:
 
 ```
-python3 <framework-release>/scripts/integrate.py init ~/repos/my-app
+gateline init ~/repos/my-app
 cd ~/repos/my-app        # dispatch the Integrator with the prompt init printed
-python3 .gateline/scripts/integrate.py validate
+gateline validate
 # open the scaffold PR
 ```
 
-Two tool invocations, one agent dispatch, one PR. The tool travels into
-`.gateline/scripts/`, so the **host repo** is self-sufficient: nothing checked into
-it depends on the framework source except at `upgrade` time. The **operator's
-cockpit** is a different matter under the two-channel model (§3): the gate
-frontend and the orchestrator run from the framework checkout/release for as long
-as the operator uses them — a standing instrument on the operator's machine —
-and Stage 3's frontend read check is an operator step from that checkout. Everything that travels into the host stays
-stdlib-only Python 3.11+, same constraint as the renderer and for the same reason:
-host machines' interpreters vary, and the integration tool is the thing that
-runs *before* the environment probe has fixed anything.
+Two tool invocations, one agent dispatch, one PR.
+
+**No framework executable travels.** v0.1 had the tool vendor itself into
+`.gateline/scripts/` so the host repo would be self-sufficient. It isn't the right
+trade: a vendored tool is a second copy to keep in step, which is the drift problem
+the lockfile exists to solve, and it made the host's interpreter the framework's
+problem. What the host holds is content — role specs, contracts, templates — and
+the tooling runs from the checkout the lock pins, the same channel the cockpit uses
+(§3). The host's render-staleness CI follows: the workflow `init` writes checks out
+that pinned ref and runs the renderer from it, so the pin is exercised on every
+push rather than only at `upgrade` time.
+
+That makes **one** dependency constraint carry the whole load, and it is why
+`packages/framework` may import nothing beyond `node:` builtins and its own
+modules. This code runs in three places where nothing has been installed: a host's
+CI, an operator's first integration, and any machine the environment probe has not
+fixed yet. It is the same constraint the stdlib-only Python carried, for the same
+reason, in the runtime the rest of the toolchain already uses.
+
+The **operator's cockpit** is the other half of the two-channel model: the gate
+frontend and the orchestrator run from the framework checkout for as long as the
+operator uses them, a standing instrument on their machine, and Stage 3's frontend
+read check is an operator step from that checkout.
 
 ## 9. Failure modes and mitigations
 
@@ -521,9 +538,9 @@ about-to-fork shape as v1.0's frozen interface.
 - **v0:** a first **versioned, tagged release** of the framework — the lockfile's
   `version` field needs something real to pin before the first arms-length
   adoption (both existing integrations pin bare commits; the debt is live);
-  renderer overlay support + path-relativity; `integrate.py init|validate`
+  renderer overlay support + path-relativity; `gateline init|validate`
   (static checks only); the lockfile per §3's normative schema, shipped as a JSON
-  Schema beside the tool (the format is field-tested — two hand-written instances
+  Schema at `scripts/framework-lock.schema.json` (the format is field-tested — two hand-written instances
   exist — but §3 remains the reference, and no private host's file substitutes
   for it);
   `roles/integrator.md` + `contracts/integration-profile.md`; canned smoke brief. Release contents are

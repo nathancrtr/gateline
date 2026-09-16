@@ -1,5 +1,5 @@
 // Regression for #95: the orchestrator must dispatch correctly against a
-// host integrated via `integrate.py init --layout prefixed` (the tool's own
+// host integrated via `gateline init --layout prefixed` (the tool's own
 // default) — registry, adapter manifests, run state, and prompt text all
 // have to agree on where the framework actually lives, not assume repo root.
 import { execFileSync } from 'node:child_process'

@@ -1,4 +1,4 @@
-// Regression for #94: a source integrated via `integrate.py init --layout
+// Regression for #94: a source integrated via `gateline init --layout
 // prefixed` (the tool's own default) must read exactly like an equivalent
 // root-layout repo — same runs, same states, same artifacts — instead of the
 // #83 failure class (silent empty inbox from an unresolved path assumption).

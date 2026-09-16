@@ -25,7 +25,7 @@ Two proofs, in dependency order:
    pointed at the host, with the audit trail landing in the host's git history.
 
 **The plan's exit criterion** (deliberately stricter than "validate passes"):
-`integrate.py validate` passes on integration #2, *and* at least one real gate
+`gateline validate` passes on integration #2, *and* at least one real gate
 decision on that host is recorded through its Gatehouse instance — named human,
 timestamp, CAS commit — with no hand edit of `state.yaml`. That is the
 INTEGRATION.md Stage-3 discipline ("done when validate passes for someone other
@@ -64,7 +64,7 @@ from "typo'd"). Stays stdlib-only, Python 3.11+.
 `--check` green); a fixture host with overlays + instance vocabulary renders
 correctly; an undeclared capability or gate name fails the render.
 
-### W2 — `integrate.py init | validate`, the copy manifest, the Integrator
+### W2 — `gateline init | validate`, the copy manifest, the Integrator
 
 The tool per INTEGRATION.md §5 as revised: `--take`/`--layout`/`--provenance`,
 copy manifest shipped with the release, lock written per §3's normative schema
@@ -93,7 +93,7 @@ and the versioning decision — recommendation: start semver at `v0.3.0` to matc
 the docs' version narrative rather than resetting to 0.1.0, since two field
 locks already cite "v0.2". Decide the `runs/` tree fan-out (#31) before cutting,
 per that issue's own note.
-**Exit:** an operator can run `integrate.py init` from the tag's
+**Exit:** an operator can run `gateline init` from the tag's
 checkout/tarball with no reference to `main`; both field locks have something
 real to re-pin to.
 
@@ -127,7 +127,7 @@ maintainer-mediated and redacted, as INTEGRATION.md §6 requires).
   `instance_layer`, and `provenance_mode: private` are recorded per the
   normative schema. If the host's lifecycle values exceed what the extension
   expresses, the fork stays and shrinks — record, don't force.
-- **P2 — validate.** `integrate.py validate` on the host: checksums over the
+- **P2 — validate.** `gateline validate` on the host: checksums over the
   taken subset, provenance mode `private` matches its NOTICE pattern, renders
   current, state parses against the host's own contract, instance vocabulary
   (`web` capability; `publish`/`none` gates) declared.

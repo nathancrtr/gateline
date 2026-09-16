@@ -62,8 +62,8 @@ over a real repository: [Setup](#setup), below.
 | [`roles/`](roles/) | Runtime-neutral role specs (mission, instructions, escalation triggers) | ✅ core |
 | [`contracts/`](contracts/) | Templates for every handoff artifact (spec, plan, task, reports, state) | ✅ core |
 | [`registry/models.yaml`](registry/models.yaml) | The only place vendor/model IDs exist; roles bind via capability profiles | ✅ core |
-| [`packages/framework/`](packages/framework/) | Reads role specs and adapter manifests, and renders every adapter's agent files (`gateline render`); CI-checked, and dependency-free so it runs with nothing installed | product component |
-| [`scripts/render-agents.py`](scripts/render-agents.py) | The same renderer in its original form, still vendored into host repos until the integration tooling ports too | ✅ core |
+| [`packages/framework/`](packages/framework/) | Reads role specs and adapter manifests, renders every adapter's agent files, and integrates the framework into a host repo (`gateline render\|init\|validate\|fork`); dependency-free, so it runs with nothing installed | product component |
+| [`scripts/copy-manifest.json`](scripts/copy-manifest.json) | The core-layer files a release offers a host, and the menu `--take` selects from | ✅ core |
 | [`adapters/claude-code/`](adapters/claude-code/) | First runtime binding: role specs → `.claude/agents/` subagents | per-runtime |
 | [`.claude/agents/`](.claude/agents/) | The rendered subagents (runnable in Claude Code today) | per-runtime |
 | [`adapters/copilot-cli/`](adapters/copilot-cli/) | Second runtime binding: role specs → `.github/agents/*.agent.md` custom agents | per-runtime |
@@ -75,16 +75,16 @@ over a real repository: [Setup](#setup), below.
 ## Setup
 
 The shortest path from nothing to a working install: vendor the framework into a
-host repo with `integrate.py`, then run the cockpit over it with `gateline up`.
+host repo with `gateline init`, then run the cockpit over it with `gateline up`.
 Every step below is rehearsed against the current tree. No tagged release exists
 yet, so the source is a clone of `main`; once the first release tags, a pinned
 release replaces the clone as the canonical source
 ([INTEGRATION.md §3](docs/INTEGRATION.md)).
 
-**Prerequisites:** `git`; Python ≥ 3.11 (stdlib only — the integration tool has no
-dependencies); Node ≥ 24 for the cockpit; and an agent runner logged in on your
+**Prerequisites:** `git`; Node ≥ 24; and an agent runner logged in on your
 machine (Claude Code in the examples — the Copilot CLI and opencode adapters
-render the same agents).
+render the same agents). The integration tooling has no dependencies of its own,
+so it runs from a bare checkout before anything is installed.
 
 ### 1. Install
 
@@ -101,14 +101,22 @@ operator's instrument; the host repo does not depend on it).
 ### 2. Integrate into an existing codebase
 
 ```sh
-python3 <checkout>/scripts/integrate.py init ~/repos/my-app --provenance private
+gateline init ~/repos/my-app --provenance private
 ```
 
 One command: it detects the runners present in the host, vendors the portable
 core under `.gateline/`, seeds the model registry and policy overlays, renders
-the agents, and writes the lockfile. `--provenance` has no default on purpose —
-state the host's posture: `private` for a closed host, `redistribute` for an
-open-source one.
+the agents, writes the lockfile, and adds a CI check that fails on stale renders.
+`--provenance` has no default on purpose — state the host's posture: `private`
+for a closed host, `redistribute` for an open-source one.
+
+What lands in the host is **content only** — role specs, contracts, templates.
+No framework executable is vendored, so there is nothing in the host to keep in
+step with this checkout. The tooling runs from the checkout the lock pins, and
+the CI check `init` writes pins the same ref
+([INTEGRATION.md §3](docs/INTEGRATION.md)). Before you have installed the
+cockpit, the same command is
+`node <checkout>/packages/framework/src/main.ts init ~/repos/my-app --provenance private`.
 
 `init` prints the one dispatch that remains: open your runner in the host repo
 and ask it to *use the integrator subagent for run `runs/000-integration`,
@@ -118,8 +126,7 @@ the "how should agents behave in this house" decision (gate GI) — then
 prove the result:
 
 ```sh
-cd ~/repos/my-app
-python3 .gateline/scripts/integrate.py validate   # checksums, renders, provenance
+gateline validate ~/repos/my-app   # checksums, renders, provenance
 ```
 
 ### 3. Spin up

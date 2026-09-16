@@ -1,6 +1,6 @@
 // #182: the engine's only signal for "does this role have a shell" is the
 // role spec's own frontmatter — there is no adapter-side capability map. A
-// prefixed layout (integrate.py init --layout prefixed) must resolve too,
+// prefixed layout (gateline init --layout prefixed) must resolve too,
 // since roles/ travels under the metadata prefix same as adapters/contracts.
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

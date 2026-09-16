@@ -111,7 +111,7 @@ export class Clock {
 export interface ToyRepoOpts {
   budget?: number
   /**
-   * `prefixed` mirrors `integrate.py init --layout prefixed` (#95): contracts
+   * `prefixed` mirrors `gateline init --layout prefixed` (#95): contracts
    * and runs live under `prefix/` alongside a minimal framework-lock.json,
    * so a source must probe rather than assume root layout.
    */

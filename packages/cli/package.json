@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@gateline/core": "*",
+    "@gateline/framework": "*",
     "@gateline/server": "*",
     "commander": "^14.0.0",
     "@gateline/orchestrator": "*"

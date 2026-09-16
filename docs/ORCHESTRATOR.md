@@ -719,7 +719,7 @@ hosted Fly recipe, DEPLOY.md) baked into a container image with no `.git` above 
 inert: there is nothing to watch.
 
 **Operator flow.** `git pull` in the checkout — by hand, or via `gateline
-upgrade` (below) — is the only input; the engine never pulls on its own.
+self-update` (below) — is the only input; the engine never pulls on its own.
 `CodeTreeMonitor` notices at the next tick boundary (heartbeat or startup,
 the same gating `syncFromRemote` uses, §4.2), and once a clean fast-forward is
 confirmed the loop drains in-flight work and exits `75`. Under a supervisor
@@ -760,7 +760,7 @@ restart" is the only steady state left to describe).
   actual fix.
 
 **What stays human-owned.** The engine never calls `git pull`; the update
-input is always an operator action (a manual pull, or `gateline upgrade`).
+input is always an operator action (a manual pull, or `gateline self-update`).
 Resolving a paused code tree — finishing the rebase, cleaning the working
 tree, switching back to the default branch — and restarting afterward are
 both human acts. None of this touches the gate grammar in §4.3 or §7: gate
@@ -780,7 +780,7 @@ launchd example plist for this deployment is deliberately deferred (tracked
 on #141); `packages/orchestrator/README.md`'s trigger-packaging
 section carries one for `tick`, which doesn't need updating for this.
 
-**`gateline upgrade`.** Convenience layered over the same mechanism:
+**`gateline self-update`.** Convenience layered over the same mechanism:
 refuses on a dirty tree, `git pull --ff-only`, then `npm install` — and,
 when the workspace carries the web app, `npm run build`: the server serves
 `packages/web/dist`, the one part of the tree that does not run from

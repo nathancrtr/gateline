@@ -65,6 +65,8 @@ gateline pause <slug> [--reason …]
 gateline resume <slug> [--phase …]       phase derived from the gate ledger if omitted
 gateline sync [--live]                   copy approved PR reviews into undecided G2 entries
 gateline ui [--demo] [--port N]          serve the web app
+gateline render [repo] [--check]         re-render the adapter agent files
+gateline self-update                     pull + rebuild the checkout this CLI runs from
 ```
 
 Global: `--repo <path>` (repeatable) overrides source discovery.
@@ -170,6 +172,13 @@ hold the line, and they catch different failures:
   are tested (`web/test/bundle-guard.test.ts`) because the first draft matched
   `node:` loosely and fired on minified object literals — a guard that cries
   wolf gets deleted, and one that matches nothing passes forever.
+
+`@gateline/framework` carries a third guard of the same family, for a different
+reason: it has **no dependencies at all**, because a host repository's
+render-staleness CI runs it with nothing installed (INTEGRATION.md §8). It may
+import `node:` builtins and its own modules, and nothing else. That is why it is
+a package rather than a layer inside `core`, whose `yaml` and `zod` would defeat
+the point.
 
 `@gateline/core` and `@gateline/server` are **dev**Dependencies of `web` on
 purpose: web takes types from them, which erase at build, plus the record-layer

@@ -346,7 +346,7 @@ maps them onto a specific harness:
 Adapter rule: an adapter may *narrow* a role (fewer tools, tighter permissions) but
 never *widen* it. The role spec is the ceiling.
 
-Adapter agent files are **rendered**, never hand-written: `scripts/render-agents.py`
+Adapter agent files are **rendered**, never hand-written: `gateline render`
 generates them from the role specs plus a per-adapter `manifest.json` (frontmatter
 shape, abstract-capability→tool map, runner model spellings), and a CI check fails
 stale renders. A new runner costs one manifest (~30 lines); the roles are never

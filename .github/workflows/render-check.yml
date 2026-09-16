@@ -1,5 +1,10 @@
 name: Rendered agents up to date
 
+# No `npm install` step, and that is the design, not an oversight:
+# @gateline/framework has no runtime dependencies so that a host repository can
+# run this same check with nothing installed (docs/INTEGRATION.md §8). If this
+# job ever needs an install, the dependency that forced it is the bug.
+
 on:
   pull_request:
   push:
@@ -10,5 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - name: Verify rendered agent files match role specs
-        run: python3 scripts/render-agents.py --check
+        run: node packages/framework/src/main.ts render --check

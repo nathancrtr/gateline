@@ -17,12 +17,12 @@ and dispatches role agents one handoff at a time.
 | `roles/ops.md` | `.github/agents/ops.agent.md` | balanced → `claude-sonnet-5` | `read, search, edit, execute` (pipeline/config only, by instruction) |
 | `roles/orchestrator.md` | **you** (v0) | — | the main `copilot` session, driven by a human |
 
-Agent profiles are **generated, never hand-edited**: `scripts/render-agents.py`
+Agent profiles are **generated, never hand-edited**: the renderer
 renders each one from its role spec (the body, verbatim — custom agents start cold,
 so the role spec doubles as the inlined instructions) plus this adapter's
 [`manifest.json`](manifest.json) (frontmatter shape, tool-alias map, model
 spellings). After changing a role spec or the manifest, run
-`python3 scripts/render-agents.py`; CI (`render-check.yml`) fails any PR whose
+`gateline render`; CI (`render-check.yml`) fails any PR whose
 rendered files are stale, so drift is structurally impossible.
 
 Model identifiers above are **illustrative**, same convention as

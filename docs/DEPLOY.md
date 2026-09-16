@@ -231,7 +231,7 @@ while-loop restarts the orchestrator on any crash today, and would equally
 absorb a self-supersede exit if this process ever ran from a live git
 checkout. Where the mechanism is live end to end is the bare local twin:
 `gateline up`, run directly from the blessed git checkout, notices a pull (by
-hand, or `gateline upgrade`) and — having no supervisor of its own — exits
+hand, or `gateline self-update`) and — having no supervisor of its own — exits
 `75` and waits for the operator to restart it by hand. Gatehouse's drift
 chip renders the engine's loaded commit against the checkout's on-disk
 `HEAD` from the heartbeat either way, whenever one is present.

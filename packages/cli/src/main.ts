@@ -475,7 +475,7 @@ export interface InteractiveNewResult {
  * required sections (offering a re-edit rather than padding, R3), and
  * requires an explicit `stage? [y/N]` confirmation. Returns null when the
  * human declines to stage or abandons a re-edit loop — the caller refuses;
- * this never commits on its own. Factored out (the `runUpgrade` precedent)
+ * this never commits on its own. Factored out (the `runSelfUpdate` precedent)
  * so the editor/prompt seam is unit-testable without a real TTY.
  */
 export async function runInteractiveNew(
@@ -540,7 +540,7 @@ function realInteractiveIO(): InteractiveNewIO & { close(): void } {
 /**
  * `gateline new`'s body (flags-first, TTY fallback — AC2.1–2.3/AC3.1–3.2).
  * Returns the process exit code the caller should use; never calls
- * `process.exit` itself (the `runUpgrade` precedent).
+ * `process.exit` itself (the `runSelfUpdate` precedent).
  */
 export async function stageNewRun(flags: NewFlags): Promise<number> {
   if (!(PROFILES as readonly string[]).includes(flags.profile)) {
@@ -1003,10 +1003,26 @@ program
     },
   )
 
-// --- upgrade -------------------------------------------------------------------
+// --- framework ----------------------------------------------------------------
+
+// The operator's spelling of the renderer. A host repository's CI runs the
+// same code as `node <framework>/packages/framework/src/main.ts render`, which
+// needs nothing installed; this needs the workspace, and is the form a person
+// types (AGENTS.md: rendered agent files are never hand-edited).
+program
+  .command('render')
+  .description("re-render every adapter's agent files from the role specs and manifests")
+  .argument('[repo]', 'repository to render (default: the current directory)')
+  .option('--check', 'write nothing; exit 1 if any rendered file is stale (the check CI runs)')
+  .action(async (repo: string | undefined, flags: { check?: boolean }) => {
+    const { runRender } = await import('@gateline/framework')
+    process.exit(await runRender(repo ?? process.cwd(), flags.check === true))
+  })
+
+// --- self-update -------------------------------------------------------------------
 
 /**
- * `gateline upgrade`'s body, factored out of the command action so it can be
+ * `gateline self-update`'s body, factored out of the command action so it can be
  * driven directly against an arbitrary repo dir (tests, manual transcripts)
  * without going through `resolveCodeRepo(import.meta.url)` — which always
  * resolves to the checkout this module itself lives in.
@@ -1014,10 +1030,10 @@ program
  * Returns the process exit code the caller should use; never calls
  * `process.exit` itself.
  */
-export async function runUpgrade(repoDir: string, log: (line: string) => void = (line) => console.log(line)): Promise<number> {
+export async function runSelfUpdate(repoDir: string, log: (line: string) => void = (line) => console.log(line)): Promise<number> {
   const dirty = execFileSync('git', ['-C', repoDir, 'status', '--porcelain'], { encoding: 'utf8' })
   if (dirty.trim()) {
-    console.error(`gateline upgrade: ${repoDir} has uncommitted changes — commit or stash them before upgrading`)
+    console.error(`gateline self-update: ${repoDir} has uncommitted changes — commit or stash them before upgrading`)
     return 1
   }
 
@@ -1032,7 +1048,7 @@ export async function runUpgrade(repoDir: string, log: (line: string) => void = 
   }
 
   // The workspace lives at packages/ since the frontend/ → packages/ rename
-  // (#133); frontend/ remains as a fallback so `gateline upgrade` run from a
+  // (#133); frontend/ remains as a fallback so `gateline self-update` run from a
   // pre-rename checkout can still cross the rename.
   const packagesPkg = join(repoDir, 'packages', 'package.json')
   const frontendPkg = join(repoDir, 'frontend', 'package.json')
@@ -1047,7 +1063,7 @@ export async function runUpgrade(repoDir: string, log: (line: string) => void = 
   if (workspaceDir) {
     const npmCode = await streamCommand('npm', ['install'], workspaceDir)
     if (npmCode !== 0) {
-      console.error(`gateline upgrade: npm install failed in ${workspaceDir} (exit ${npmCode})`)
+      console.error(`gateline self-update: npm install failed in ${workspaceDir} (exit ${npmCode})`)
       return npmCode
     }
     // The web app is the one part of the tree that does NOT run from source:
@@ -1062,7 +1078,7 @@ export async function runUpgrade(repoDir: string, log: (line: string) => void = 
     if (webPkg) {
       const buildCode = await streamCommand('npm', ['run', 'build'], workspaceDir)
       if (buildCode !== 0) {
-        console.error(`gateline upgrade: npm run build failed in ${workspaceDir} (exit ${buildCode})`)
+        console.error(`gateline self-update: npm run build failed in ${workspaceDir} (exit ${buildCode})`)
         return buildCode
       }
     }
@@ -1085,15 +1101,15 @@ function streamCommand(cmd: string, args: string[], cwd: string): Promise<number
 }
 
 program
-  .command('upgrade')
+  .command('self-update')
   .description('git pull --ff-only the code checkout this CLI/engine runs from, then npm install if it moved (docs/ORCHESTRATOR.md merge-update lifecycle)')
   .action(async () => {
     const repoDir = resolveCodeRepo(import.meta.url)
     if (!repoDir) {
-      console.error('gateline upgrade: this install is not a git checkout — nothing to `git pull` (e.g. installed from a published package)')
+      console.error('gateline self-update: this install is not a git checkout — nothing to `git pull` (e.g. installed from a published package)')
       process.exit(1)
     }
-    process.exit(await runUpgrade(repoDir))
+    process.exit(await runSelfUpdate(repoDir))
   })
 
 program
@@ -1130,7 +1146,7 @@ function table(rows: Record<string, string>[], cols: string[]): void {
 
 // Only parse argv when this module is the process entrypoint (the bin
 // shebang, or `node .../main.ts ...` as cli.test.ts spawns it) — not when
-// something imports it as a library, e.g. to drive `runUpgrade` directly
+// something imports it as a library, e.g. to drive `runSelfUpdate` directly
 // against a scratch repo without going through argv/resolveCodeRepo at all.
 // Compare realpaths, not strings: the global `gateline` bin is an npm-link
 // symlink chain to this file, and Node's ESM loader realpaths the entry

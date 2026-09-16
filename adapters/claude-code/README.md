@@ -16,11 +16,11 @@ the human drives the main session as Orchestrator and dispatches role subagents.
 | `roles/ops.md` | `.claude/agents/ops.md` | balanced → `sonnet` | edit + bash (pipeline/config only, by instruction) |
 | `roles/orchestrator.md` | **you** (v0) | — | the main Claude Code session, driven by a human |
 
-Subagents are **generated, never hand-edited**: `scripts/render-agents.py` renders
+Subagents are **generated, never hand-edited**: the renderer builds
 each one from its role spec (the body, verbatim — subagents start cold, so the role
 spec doubles as the inlined instructions) plus this adapter's
 [`manifest.json`](manifest.json) (frontmatter shape, tool map, model spellings).
-After changing a role spec or the manifest, run `python3 scripts/render-agents.py`;
+After changing a role spec or the manifest, run `gateline render`;
 CI (`render-check.yml`) fails any PR whose rendered files are stale, so drift is
 structurally impossible. Supporting a new runner costs one manifest, not six
 hand-adapted agent files.

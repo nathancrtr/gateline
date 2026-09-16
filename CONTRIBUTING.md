@@ -33,7 +33,7 @@ Issues that identify the layer save a round-trip.
 
 - `.claude/agents/`, `.github/agents/`, and `.opencode/agents/` are rendered
   files — never hand-edit them. Edit the source role spec or adapter manifest,
-  then run `python3 scripts/render-agents.py` (CI fails stale renders).
+  then run `gateline render` (CI fails stale renders).
 - Tests: `pytest scripts/test_integrate.py` for the integration tool,
   `npm test` in `packages/` for Gatehouse and the orchestrator (Node ≥ 24),
   `pytest apps/wordfreq` for pipeline-run output.

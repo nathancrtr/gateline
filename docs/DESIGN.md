@@ -11,7 +11,7 @@ the gate frontend and the v1 orchestrator it describes in §7 are implemented (`
 
 ## 1. The shift this design makes
 
-In the chatbot workflow you all know, the developer is the integration point: you hold
+In the chatbot workflow you already know, the developer is the integration point: you hold
 the plan in your head, feed the model context piece by piece, and validate every output
 before it touches the repo. That works — but it caps throughput at one conversation, and
 none of the intermediate reasoning survives the session.

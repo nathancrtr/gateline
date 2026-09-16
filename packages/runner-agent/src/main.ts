@@ -22,7 +22,7 @@ program
   .option('--work-dir <path>', 'directory disposable workspaces are created under', process.cwd())
   .option('--poll-interval <seconds>', 'seconds between polls of the control plane', '5')
   .option('--repo-url <url>', 'fallback git remote URL, used only when the control plane cannot determine one itself')
-  .option('--gateline-prefix <prefix>', 'metadata prefix override for an integrate.py --prefix host (default: auto-detected per clone)')
+  .option('--gateline-prefix <prefix>', 'metadata prefix override for an gateline init --prefix host (default: auto-detected per clone)')
   .parse(process.argv)
 
 const opts = program.opts<{

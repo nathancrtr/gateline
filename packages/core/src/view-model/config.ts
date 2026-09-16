@@ -28,7 +28,7 @@ const sourceEntrySchema = z.object({
   fetch_interval: z.number().positive().optional(),
   /**
    * Override the `.gateline` default when this source was integrated with a
-   * custom `integrate.py --prefix` (#94) — otherwise auto-detected.
+   * custom `gateline init --prefix` (#94) — otherwise auto-detected.
    */
   gateline_prefix: z.string().optional(),
 })

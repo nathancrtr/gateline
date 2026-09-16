@@ -13,10 +13,11 @@ Please do not open public issues for suspected vulnerabilities.
 
 The security-relevant surfaces of gateline are:
 
-- **`scripts/integrate.py` and `scripts/render-agents.py`** — these run on
-  operator machines against operator repos. Anything that could make them
-  write outside the target repo, execute unexpected code, or misrepresent
-  provenance is in scope.
+- **`packages/framework` (`gateline init|validate|fork|render`)** — this runs on
+  operator machines against operator repos, and the workflow it writes into a
+  host checks out a pinned framework ref in that host's CI. Anything that could
+  make it write outside the target repo, execute unexpected code, pin a ref the
+  lock does not record, or misrepresent provenance is in scope.
 - **Gatehouse (`packages/`)** — the server binds to localhost by design;
   anything that widens that exposure, bypasses the single write path, or lets
   a non-human author a gate entry is in scope.

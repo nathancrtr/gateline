@@ -13,7 +13,7 @@ import { type AdapterManifest, listAdapters, loadAdapterManifest } from './adapt
 import { FrameworkError, parseList, parseRole, requireFrontmatter } from './role.ts'
 
 export function renderHeader(role: string): string {
-  return `<!-- RENDERED from roles/${role}.md by scripts/render-agents.py - DO NOT EDIT.\n     Edit the role spec, then run: python3 scripts/render-agents.py -->`
+  return `<!-- RENDERED from roles/${role}.md by gateline render - DO NOT EDIT.\n     Edit the role spec, then run: gateline render -->`
 }
 
 const HTML_COMMENT = /<!--[\s\S]*?-->/g

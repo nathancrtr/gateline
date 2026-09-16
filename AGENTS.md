@@ -9,9 +9,9 @@ through the import in [`CLAUDE.md`](CLAUDE.md).
 
 This repository **is the product**: a runtime-neutral framework of SDLC agent roles
 (`roles/`), handoff contracts (`contracts/`), a model registry (`registry/`), thin
-runtime adapters (`adapters/`), host-repo integration tooling (`scripts/`), and the
-framework's product components under `packages/` — the gate frontend (web, CLI,
-server over `@gateline/core`) and the v1 orchestrator
+runtime adapters (`adapters/`), and the framework's product components under
+`packages/` — the gate frontend (web, CLI, server over `@gateline/core`), the
+host-repo integration tooling (`packages/framework`) and the v1 orchestrator
 (`packages/orchestrator`), with a hosted single-user deployment recipe
 under `deploy/`. Application code under `apps/` is the output of pipeline runs, kept
 as evidence — not software being maintained for its own sake.
@@ -57,7 +57,7 @@ adapters are built: `claude-code`, `copilot-cli`, and `opencode` (the any-provid
 one). The gate frontend (Gatehouse) and the v1 orchestrator are implemented and
 co-located by design — `gateline up` runs both over a single clone, which is the
 blessed topology; the hosted recipe under `deploy/` remains a documented self-host
-option. Integration tooling v0 (`scripts/integrate.py`) ships `init|validate|fork`.
+option. Integration tooling ships as `gateline init|validate|fork`.
 Autonomy remains gated on the DESIGN.md §7 promotion criterion.
 
 ## Invariants — check before editing
@@ -84,14 +84,14 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   with nothing installed, before the environment probe has fixed anything
   (INTEGRATION.md §8). A dependency that forces an install step in
   `render-check.yml` is the bug, not the workflow.
-* **`scripts/render-agents.py` and `scripts/integrate.py` stay stdlib-only and
-  Python 3.11-compatible** (JSON manifests, no third-party imports) for the same
-  reason, while they last. The renderer now has a TypeScript port in
-  `packages/framework` and both are CI-enforced against the same rendered files;
-  keep them in step until the integration tooling ports too and the Python goes.
-* **A new portable core file must be added to `scripts/copy-manifest.json`**, or
-  releases never offer it to host repos. `python3 scripts/integrate.py validate`
-  re-proves the static integration invariants.
+* **What travels into a host repo is content, never an executable.** Role specs,
+  contracts and templates vendor; the tooling runs from the framework checkout the
+  host's lock pins (INTEGRATION.md §3, the two-channel model). A new portable core
+  file must be added to `scripts/copy-manifest.json` or releases never offer it to
+  host repos, and `gateline validate` re-proves the static integration invariants.
+* **The workflow `gateline init` writes into a host is a managed file.** It pins the
+  framework ref the lock records, so re-running `init` rewrites it. Host-local CI
+  changes belong in a different workflow file.
 * **Contracts specify required sections, concision budgets, normative grammar, and
   each section's audience.** An artifact missing a required section is malformed —
   consuming agents bounce it, never guess. A contract's `AUDIENCE:` line names the
@@ -142,9 +142,7 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
 * Re-render adapter agent files after any `roles/` or manifest change:
   `gateline render` (verify with `--check` — the same check CI runs). CI runs it as
   `node packages/framework/src/main.ts render --check`, which needs nothing
-  installed. `python3 scripts/render-agents.py` is the same renderer in its original
-  form and stays until the integration tooling ports too; both are CI-enforced, so
-  either one leaves the tree correct
+  installed — the form to reach for before `npm install` has happened
 * Run the frontend/orchestrator tests: `npm test` in `packages/` (typecheck:
   `npm run typecheck`; e2e: `npm run build && npx playwright test`; lint:
   `npm run lint`; needs `npm install` once, Node ≥ 24)
@@ -171,9 +169,10 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
 * Run the tests for pipeline-run output: `pytest apps/<app>` — one app per
   invocation (`wordfreq`, `mdtoc`, `dupefind`); the apps' identically named test
   modules collide when pytest collects `apps/` in one pass
-* Run the integration-tooling tests: `pytest scripts/test_integrate.py`
-* Integrate the framework into a host repo:
-  `python3 scripts/integrate.py init|validate|fork` (see INTEGRATION.md)
+* Integrate the framework into a host repo: `gateline init|validate|fork` (see
+  INTEGRATION.md). The same commands run with nothing installed as
+  `node packages/framework/src/main.ts <cmd>`, which is how an operator integrates
+  before setting up the cockpit. Their tests are part of `npm test`
 * CI: `render-check` (stale renders), `packages-ci` (lockfile platform check,
   typecheck, vitest, build, Playwright e2e), `deploy-image` (Docker build + container smoke test; triggered
   by `deploy/**` or `packages/**` changes)
@@ -208,7 +207,7 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   * what a human sees or clicks → `packages/{core,server,web,cli}` (design:
     FRONTEND.md; `core` is layered record → sources → view-model, and derivation
     stays a pure function of committed state)
-  * integration workflow → `scripts/integrate.py` + the copy manifest
+  * integration workflow → `packages/framework` + the copy manifest
     (design: INTEGRATION.md)
   * deployment posture → TOPOLOGY.md
   * hosting → `deploy/` (recipe: DEPLOY.md)

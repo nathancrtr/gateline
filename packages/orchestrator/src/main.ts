@@ -27,7 +27,7 @@ program
   .option('--repo <path>', 'repository to operate on (default: cwd)', process.cwd())
   .option(
     '--gateline-prefix <prefix>',
-    'metadata prefix of an integrate.py --layout prefixed host, when not the .gateline default',
+    'metadata prefix of an gateline init --layout prefixed host, when not the .gateline default',
   )
   .option(
     '--adapter <name>',

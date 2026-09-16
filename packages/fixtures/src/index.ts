@@ -640,7 +640,7 @@ const CONTRACTS: Record<string, string> = {
 
 export interface FixtureLayoutOpts {
   /**
-   * `prefixed` mirrors `integrate.py init --layout prefixed` (its own
+   * `prefixed` mirrors `gateline init --layout prefixed` (its own
    * default): runs/contracts live under `prefix/` and a minimal
    * framework-lock.json records it, so a source must probe rather than
    * assume root layout (#94). Defaults to `root`, the shape every existing

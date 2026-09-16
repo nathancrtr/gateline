@@ -13,8 +13,8 @@ model: openrouter/moonshotai/kimi-k2.6
 mode: "all"
 ---
 
-<!-- RENDERED from roles/reviewer.md by scripts/render-agents.py - DO NOT EDIT.
-     Edit the role spec, then run: python3 scripts/render-agents.py -->
+<!-- RENDERED from roles/reviewer.md by gateline render - DO NOT EDIT.
+     Edit the role spec, then run: gateline render -->
 
 # Reviewer
 

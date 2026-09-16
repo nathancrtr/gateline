@@ -1019,6 +1019,60 @@ program
     process.exit(await runRender(repo ?? process.cwd(), flags.check === true))
   })
 
+// Integration (docs/INTEGRATION.md §5). These also run with nothing installed,
+// as `node <framework>/packages/framework/src/main.ts <cmd>` — the path an
+// operator takes before they have set up the cockpit.
+program
+  .command('init')
+  .description('scaffold the framework into a host repository')
+  .argument('<target>', 'the host repository')
+  .option('--take <subset>', 'all | a copy-manifest group | a comma-separated file list', 'all')
+  .addOption(new Option('--layout <layout>', 'where core files land').choices(['prefixed', 'root']).default('prefixed'))
+  .option('--prefix <dir>', 'the metadata prefix directory', '.gateline')
+  .addOption(
+    new Option('--provenance <mode>', "the host's posture; no default on purpose")
+      .choices(['redistribute', 'private'])
+      .makeOptionMandatory(),
+  )
+  .option('--adapters <list>', 'auto | a comma-separated adapter list', 'auto')
+  .action(
+    async (target: string, flags: { take: string; layout: string; prefix: string; provenance: string; adapters: string }) => {
+      const { runInit } = await import('@gateline/framework')
+      process.exit(
+        await runInit({
+          target,
+          provenance: flags.provenance as 'redistribute' | 'private',
+          take: flags.take,
+          layout: flags.layout as 'prefixed' | 'root',
+          prefix: flags.prefix,
+          adapters: flags.adapters,
+        }),
+      )
+    },
+  )
+
+program
+  .command('validate')
+  .description('re-prove the static integration invariants of a host repository')
+  .argument('[target]', 'the host repository (default: the current directory)')
+  .option('--prefix <dir>', 'the metadata prefix directory', '.gateline')
+  .action(async (target: string | undefined, flags: { prefix: string }) => {
+    const { runValidate } = await import('@gateline/framework')
+    process.exit(await runValidate(target ?? process.cwd(), flags.prefix))
+  })
+
+program
+  .command('fork')
+  .description('record a deliberate divergence of a core file before you edit it')
+  .argument('<file>', 'host-relative path of the taken core file')
+  .requiredOption('--reason <text>', 'why this host cannot use the core copy')
+  .option('--target <path>', 'the host repository', '.')
+  .option('--prefix <dir>', 'the metadata prefix directory', '.gateline')
+  .action(async (file: string, flags: { reason: string; target: string; prefix: string }) => {
+    const { runFork } = await import('@gateline/framework')
+    process.exit(await runFork({ target: flags.target, file, reason: flags.reason, prefix: flags.prefix }))
+  })
+
 // --- self-update -------------------------------------------------------------------
 
 /**

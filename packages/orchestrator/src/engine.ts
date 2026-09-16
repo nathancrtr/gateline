@@ -36,7 +36,7 @@ export interface EngineConfig {
   registry: Registry | null
   /**
    * Override the `.gateline` default when this repo was integrated with a
-   * custom `integrate.py --prefix` (#95) — otherwise auto-detected.
+   * custom `gateline init --prefix` (#95) — otherwise auto-detected.
    */
   frameworkPrefix?: string
   /** Dispatch wall clock per role before the job is killed (default 30 min). */

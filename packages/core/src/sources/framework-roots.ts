@@ -1,8 +1,8 @@
 // Where a source's core-layer trees actually live. Most repos keep the
-// framework at their own root; a repo integrated via `integrate.py init`
+// framework at their own root; a repo integrated via `gateline init`
 // (the tool's own default: --layout prefixed --prefix .gateline) keeps them
 // under a metadata prefix instead. Probing framework-lock.json (which
-// integrate.py always writes, regardless of layout) is how a consumer tells
+// gateline init always writes, regardless of layout) is how a consumer tells
 // the two apart without being told which one it is.
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'

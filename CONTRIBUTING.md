@@ -15,7 +15,7 @@ substance as an issue instead, and it will be credited if it becomes a change.
 
 The most valuable contributions right now:
 
-- **Integration reports.** You ran `integrate.py init` on a real repo — what
+- **Integration reports.** You ran `gateline init` on a real repo — what
   broke, what surprised you, what the Integrator's profile got wrong. This is
   the feedback the framework is designed to absorb.
 - **Run evidence.** You drove a pipeline run and an agent misbehaved, a
@@ -34,11 +34,12 @@ Issues that identify the layer save a round-trip.
 - `.claude/agents/`, `.github/agents/`, and `.opencode/agents/` are rendered
   files — never hand-edit them. Edit the source role spec or adapter manifest,
   then run `gateline render` (CI fails stale renders).
-- Tests: `pytest scripts/test_integrate.py` for the integration tool,
-  `npm test` in `packages/` for Gatehouse and the orchestrator (Node ≥ 24),
-  `pytest apps/wordfreq` for pipeline-run output.
-- Everything that vendors into host repos stays stdlib-only, Python
-  3.11-compatible.
+- Tests: `npm test` in `packages/` covers the framework tooling, Gatehouse and
+  the orchestrator (Node ≥ 24); `pytest apps/wordfreq` covers pipeline-run
+  output.
+- `packages/framework` takes no runtime dependencies. A host repository's CI
+  runs its renderer with nothing installed, so an import from outside `node:`
+  builtins breaks every adopting repository rather than this one.
 - No vendor or model name may appear in `roles/` or `contracts/`; concrete
   model IDs live only in `registry/models.yaml`.
 - Completed runs under `runs/` are historical records — never retro-edit them.

@@ -55,7 +55,7 @@ export interface OrchestratorOptions {
   repoDir: string
   /** Headless adapter names; the first is the default runner (default: claude-code). */
   adapters?: string[]
-  /** Metadata prefix of an integrate.py --prefix host, when not `.gateline`. */
+  /** Metadata prefix of an gateline init --prefix host, when not `.gateline`. */
   frameworkPrefix?: string
   /** Push every orchestrator commit to origin — origin is the record. */
   push?: boolean

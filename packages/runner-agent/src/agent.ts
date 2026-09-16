@@ -257,7 +257,7 @@ export interface ExecuteIntentOptions {
   adapter: string
   workDir: string
   /** Framework-metadata prefix override, forwarded to `loadHeadlessManifest`
-   *  (integrate.py --prefix hosts, #95); undefined auto-detects. */
+   *  (gateline init --prefix hosts, #95); undefined auto-detects. */
   prefixHint?: string
   /** Injection seams for tests — production callers never set these. */
   createWorkspaceImpl?: (opts: CreateWorkspaceOptions) => Promise<Workspace>

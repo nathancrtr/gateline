@@ -12,3 +12,6 @@ __pycache__/
 
 # Playwright leaves this behind after a run; it is a scratch file, not evidence.
 /test-results/
+
+# Finder scatters these through any directory it has been opened in.
+.DS_Store

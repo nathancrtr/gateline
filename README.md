@@ -49,6 +49,46 @@ orchestrator stopped and its "not running" banner hidden.*
 pipeline by hand: [`docs/WALKTHROUGH.md`](docs/WALKTHROUGH.md) · then put it
 over a real repository: [Setup](#setup), below.
 
+## Where it sits
+
+Neighbours worth knowing about, surveyed 2026-07-09 and tracked as issues since:
+
+- **[GitHub Spec Kit](https://github.com/github/spec-kit)** walks one assistant
+  through `specify → plan → tasks → implement`, and renders its templates into
+  some thirty runtimes. The phases look much like gateline's; the difference is
+  what a handoff *is*. Spec Kit's are steps a developer takes an assistant
+  through in a session. gateline's are artifacts committed to a branch, produced
+  by separately bound roles, each gate approved by a named human in
+  `state.yaml`. Its project **constitution** — standing constraints every phase
+  must answer to — is the best idea in this list that gateline does not have
+  ([#1](https://github.com/nathancrtr/gateline/issues/1)), and its renderer is
+  what to read before anyone writes a fourth adapter
+  ([#2](https://github.com/nathancrtr/gateline/issues/2)).
+- **[BMAD-METHOD](https://github.com/bmad-code-org/BMAD-METHOD)** scales ceremony
+  to the size of the change. gateline took that outright: run profiles —
+  `patch | standard | full` — are BMAD's idea, credited as such in
+  [#4](https://github.com/nathancrtr/gateline/issues/4). What gateline adds is
+  that the profile is declared once in `state.yaml`, so a gate the profile does
+  not include is *absent* from the record rather than skipped in it, and
+  upgrading to a heavier profile is one-way and human-decided.
+- **[AWS AI-DLC](https://aws.amazon.com/blogs/devops/ai-driven-development-life-cycle/)**
+  shares the central inversion — agents propose, humans validate at named
+  checkpoints — and is better than gateline at saying what the human is actually
+  validating at each one ([#3](https://github.com/nathancrtr/gateline/issues/3)).
+- **[ACP](https://agentclientprotocol.com)** and **[AGENTS.md](https://agents.md)**
+  are seams rather than competitors. If either becomes the way runtimes are
+  addressed, one adapter replaces the per-tool file formats under `adapters/`
+  ([#5](https://github.com/nathancrtr/gateline/issues/5),
+  [#6](https://github.com/nathancrtr/gateline/issues/6)). The adapter layer is
+  kept thin so that swap stays cheap.
+
+The commitment that is hard to retrofit, and the reason this is a separate
+thing: **no vendor or model name appears in `roles/` or `contracts/`.** A role is
+a contract over files, a model is a line in
+[`registry/models.yaml`](registry/models.yaml), and a runtime is an adapter that
+may narrow a role but never widen it. The cockpit, the orchestrator and the
+metering all read the same committed record.
+
 ## Repo map
 
 | Path | What it is | Portable? |

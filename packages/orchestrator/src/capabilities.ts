@@ -1,18 +1,22 @@
 // Role capability reader (#182): whether a role has a shell lives only in
 // `roles/<role>.md` frontmatter — there is no adapter-side signal for it, so
 // the engine reads the role specs directly to decide who can commit their
-// own work and who needs a harvest. Lenient by design: a missing roles dir,
-// an unreadable file, or an absent `capabilities:` line yields no entry, and
-// callers treat an unknown role as shell-ful — the conservative default,
-// since promising a harvest for a role the engine can't scope correctly
-// would be worse than just leaving the (harmless, for a shell-ful role)
-// commit instruction in place.
+// own work and who needs a harvest.
+//
+// The parse itself belongs to @gateline/framework, which is the same reader the
+// renderer uses. That matters more than the few lines it saves: a role spec the
+// renderer understands is now, by construction, one the engine understands, so
+// the two cannot disagree about what a frontmatter block says.
+//
+// Lenient by design: a missing roles dir, an unreadable or malformed file, or an
+// absent `capabilities:` line yields no entry, and callers treat an unknown role
+// as shell-ful — the conservative default, since promising a harvest for a role
+// the engine can't scope correctly would be worse than just leaving the
+// (harmless, for a shell-ful role) commit instruction in place.
 import { readdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { resolveFrameworkRootsFromDisk } from '@gateline/core/sources'
-
-const FRONTMATTER_RE = /^---\n([\s\S]*?)\n---/
-const CAPABILITIES_RE = /^capabilities:\s*\[([^\]]*)\]/m
+import { parseList, parseRole } from '@gateline/framework'
 
 export async function loadRoleCapabilities(repoDir: string, prefixHint?: string): Promise<Map<string, Set<string>>> {
   const caps = new Map<string, Set<string>>()
@@ -28,18 +32,12 @@ export async function loadRoleCapabilities(repoDir: string, prefixHint?: string)
   for (const file of files) {
     const role = file.slice(0, -'.md'.length)
     try {
-      const raw = await readFile(join(rolesDir, file), 'utf8')
-      const frontmatter = FRONTMATTER_RE.exec(raw)
-      if (!frontmatter) continue
-      const line = CAPABILITIES_RE.exec(frontmatter[1]!)
-      if (!line) continue
-      const list = line[1]!
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-      caps.set(role, new Set(list))
+      const { frontmatter } = parseRole(await readFile(join(rolesDir, file), 'utf8'), `roles/${file}`)
+      const declared = frontmatter.capabilities
+      if (declared === undefined) continue
+      caps.set(role, new Set(parseList(declared)))
     } catch {
-      // unreadable file: no entry, hasShell() defaults it shell-ful
+      // unreadable or malformed: no entry, hasShell() defaults it shell-ful
     }
   }
   return caps

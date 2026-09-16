@@ -203,7 +203,9 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   * a malformed or ambiguous handoff → the contract (`contracts/*`)
   * a model or vendor change → `registry/models.yaml`
   * orchestrator behavior → `packages/orchestrator` (design: ORCHESTRATOR.md)
-  * how role specs and manifests are read or rendered → `packages/framework`
+  * how role specs and manifests are read or rendered → `packages/framework`, which
+    is the only reader of either; `core` and `orchestrator` narrow its output rather
+    than parsing those files again
   * what a human sees or clicks → `packages/{core,server,web,cli}` (design:
     FRONTEND.md; `core` is layered record → sources → view-model, and derivation
     stays a pure function of committed state)

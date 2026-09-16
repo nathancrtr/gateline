@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@gateline/core": "*",
+    "@gateline/framework": "*",
     "commander": "^14.0.0",
     "yaml": "^2.8.0"
   },

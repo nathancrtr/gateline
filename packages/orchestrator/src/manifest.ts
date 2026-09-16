@@ -2,9 +2,9 @@
 // manifest.json says how to invoke its harness non-interactively and how to
 // read the usage its harness reports. The seam is generic over this — a new
 // runner still costs one manifest, never orchestrator code.
-import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { resolveFrameworkRootsFromDisk } from '@gateline/core/sources'
+import { readAdapterManifest } from '@gateline/framework'
 
 // Re-exported so a working-tree-only consumer (runner-agent/src/agent.ts,
 // which never imports @gateline/core directly) can resolve its own clone's
@@ -54,7 +54,7 @@ export async function headlessManifestPath(repoDir: string, adapter: string, pre
 
 export async function loadHeadlessManifest(repoDir: string, adapter: string, prefixHint?: string): Promise<HeadlessManifest> {
   const path = await headlessManifestPath(repoDir, adapter, prefixHint)
-  const raw = JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
+  const raw = await readAdapterManifest(path)
   const headless = raw.headless as Record<string, unknown> | undefined
   if (!headless) throw new Error(`adapter "${adapter}" has no headless section in ${path} — it cannot be dispatched`)
   const usage = (headless.usage_report ?? {}) as Record<string, unknown>

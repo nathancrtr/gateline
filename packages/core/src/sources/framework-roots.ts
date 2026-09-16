@@ -6,6 +6,7 @@
 // the two apart without being told which one it is.
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { coreRootFromLock, DEFAULT_FRAMEWORK_PREFIX as FRAMEWORK_PREFIX } from '@gateline/framework'
 import type { Git } from './git.ts'
 
 export interface FrameworkRoots {
@@ -19,31 +20,27 @@ export interface FrameworkRoots {
   roles: string
 }
 
-export const DEFAULT_FRAMEWORK_PREFIX = '.gateline'
+// Re-exported so consumers of this module need not also import the package that
+// writes the lock; the value is the tool's own default and lives there.
+export const DEFAULT_FRAMEWORK_PREFIX = FRAMEWORK_PREFIX
 
-const ROOT_LAYOUT: FrameworkRoots = { runs: 'runs', contracts: 'contracts', registry: 'registry', adapters: 'adapters', roles: 'roles' }
-
-function rootsForPrefix(prefix: string): FrameworkRoots {
-  return {
-    runs: `${prefix}/runs`,
-    contracts: `${prefix}/contracts`,
-    registry: `${prefix}/registry`,
-    adapters: `${prefix}/adapters`,
-    roles: `${prefix}/roles`,
-  }
-}
-
+/**
+ * Reading the lock's layout is `gateline init`'s own question, so
+ * `@gateline/framework` answers it — the package that writes the lock is the one
+ * that knows how to read it, and a layout it starts recording cannot be one this
+ * module silently misreads. What stays here is the mapping from that single core
+ * root to the five trees this repository's consumers ask for by name.
+ */
 function rootsFromLock(raw: string | null, prefix: string): FrameworkRoots {
-  if (raw === null) return ROOT_LAYOUT
-  let lock: { layout?: unknown; prefix?: unknown }
-  try {
-    lock = JSON.parse(raw)
-  } catch {
-    return ROOT_LAYOUT
+  const core = coreRootFromLock(raw, prefix)
+  const under = (tree: string) => (core ? `${core}/${tree}` : tree)
+  return {
+    runs: under('runs'),
+    contracts: under('contracts'),
+    registry: under('registry'),
+    adapters: under('adapters'),
+    roles: under('roles'),
   }
-  if (lock.layout !== 'prefixed') return ROOT_LAYOUT
-  const resolvedPrefix = typeof lock.prefix === 'string' ? lock.prefix : prefix
-  return rootsForPrefix(resolvedPrefix)
 }
 
 /**

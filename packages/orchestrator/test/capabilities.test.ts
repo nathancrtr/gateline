@@ -2,9 +2,10 @@
 // role spec's own frontmatter — there is no adapter-side capability map. A
 // prefixed layout (gateline init --layout prefixed) must resolve too,
 // since roles/ travels under the metadata prefix same as adapters/contracts.
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { hasShell, loadRoleCapabilities } from '../src/capabilities.ts'
 
@@ -68,6 +69,39 @@ describe('loadRoleCapabilities', () => {
     writeFileSync(join(dir, '.gateline', 'framework-lock.json'), JSON.stringify({ layout: 'prefixed', prefix: '.gateline' }))
     const caps = await loadRoleCapabilities(dir)
     expect(hasShell(caps, 'analyst')).toBe(false)
+  })
+})
+
+// The point of reading role specs through @gateline/framework rather than a
+// second regex: the engine and the renderer cannot disagree about a frontmatter
+// block. A role the renderer understands but this reader drops would silently
+// default to shell-ful and lose its harvest, so assert coverage against the
+// real specs rather than fixtures only.
+describe('against this repository’s own role specs', () => {
+  const REPO = fileURLToPath(new URL('../../../', import.meta.url))
+
+  it('drops no role spec that declares capabilities', async () => {
+    // Expectation derived by grep, independently of the parser under test: a
+    // role goes missing here only because the parse failed, never because the
+    // spec is silent. The Orchestrator is legitimately silent — it drives the
+    // pipeline rather than being dispatched into it — so it is absent by right.
+    const specs = readdirSync(join(REPO, 'roles')).filter((f) => f.endsWith('.md'))
+    const declaring = specs
+      .filter((f) => /^capabilities:/m.test(readFileSync(join(REPO, 'roles', f), 'utf8')))
+      .map((f) => f.slice(0, -'.md'.length))
+      .sort()
+    const caps = await loadRoleCapabilities(REPO)
+    expect(declaring.length).toBeGreaterThan(0)
+    expect([...caps.keys()].sort()).toEqual(declaring)
+    expect(declaring).not.toContain('orchestrator')
+  })
+
+  it('agrees with the frontmatter on who has a shell', async () => {
+    const caps = await loadRoleCapabilities(REPO)
+    expect(hasShell(caps, 'analyst')).toBe(false)
+    expect(hasShell(caps, 'architect')).toBe(false)
+    expect(hasShell(caps, 'implementer')).toBe(true)
+    expect(hasShell(caps, 'reviewer')).toBe(true)
   })
 })
 

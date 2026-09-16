@@ -61,7 +61,7 @@ dispatches and exits `75` (`SUPERSEDE_EXIT_CODE`, docs/ORCHESTRATOR.md §13 —
 self-supersede, #141). Pair `watch` with a supervisor (systemd
 `RestartForceExitStatus=75`, launchd `KeepAlive`, or the Fly recipe's own restart
 loop) for hands-off merge-updates; unsupervised, the process just stops and waits
-for a manual restart. `gateline upgrade` is the one-command update: refuses on a
+for a manual restart. `gateline self-update` is the one-command update: refuses on a
 dirty tree, `git pull --ff-only`, then `npm install` if `HEAD` moved.
 
 Scheduled roles (design §4.6): when the target repo commits an

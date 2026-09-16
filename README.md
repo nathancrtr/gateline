@@ -62,7 +62,8 @@ over a real repository: [Setup](#setup), below.
 | [`roles/`](roles/) | Runtime-neutral role specs (mission, instructions, escalation triggers) | ✅ core |
 | [`contracts/`](contracts/) | Templates for every handoff artifact (spec, plan, task, reports, state) | ✅ core |
 | [`registry/models.yaml`](registry/models.yaml) | The only place vendor/model IDs exist; roles bind via capability profiles | ✅ core |
-| [`scripts/render-agents.py`](scripts/render-agents.py) | Renders every adapter's agent files from `roles/` + each adapter's `manifest.json`; CI-checked | ✅ core |
+| [`packages/framework/`](packages/framework/) | Reads role specs and adapter manifests, and renders every adapter's agent files (`gateline render`); CI-checked, and dependency-free so it runs with nothing installed | product component |
+| [`scripts/render-agents.py`](scripts/render-agents.py) | The same renderer in its original form, still vendored into host repos until the integration tooling ports too | ✅ core |
 | [`adapters/claude-code/`](adapters/claude-code/) | First runtime binding: role specs → `.claude/agents/` subagents | per-runtime |
 | [`.claude/agents/`](.claude/agents/) | The rendered subagents (runnable in Claude Code today) | per-runtime |
 | [`adapters/copilot-cli/`](adapters/copilot-cli/) | Second runtime binding: role specs → `.github/agents/*.agent.md` custom agents | per-runtime |

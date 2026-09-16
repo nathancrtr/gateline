@@ -1,0 +1,20 @@
+{
+  "name": "@gateline/framework",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "The framework file layer: role specs, adapter manifests, agent rendering. Zero runtime dependencies on purpose — a host repo's render-staleness CI runs this with nothing installed.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nathancrtr/gateline.git",
+    "directory": "packages/framework"
+  },
+  "author": "Nathan Carter",
+  "bin": {
+    "gateline-framework": "./src/main.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

@@ -64,7 +64,7 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
 
 * **`.claude/agents/`, `.github/agents/`, and `.opencode/agents/` are rendered
   files; never hand-edit them.** Edit the source role spec (`roles/<role>.md`) or the adapter's
-  `manifest.json`, then run `python3 scripts/render-agents.py`. CI
+  `manifest.json`, then run `gateline render`. CI
   (`.github/workflows/render-check.yml`) fails any PR with stale renders.
 * **No vendor or model name may appear in `roles/` or `contracts/`** (principle P2).
   Concrete model IDs live only in `registry/models.yaml`; changing a binding there
@@ -79,10 +79,16 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   `contracts/` is never a pipeline outcome. The rationale, the
   evidence-position/production-role distinction, and the adopter extension rule
   ("open table, closed gates") are recorded in DESIGN.md §4.2.
+* **`packages/framework` takes no runtime dependencies** — `node:` builtins and its
+  own modules, nothing else — so a host repository's render-staleness CI runs it
+  with nothing installed, before the environment probe has fixed anything
+  (INTEGRATION.md §8). A dependency that forces an install step in
+  `render-check.yml` is the bug, not the workflow.
 * **`scripts/render-agents.py` and `scripts/integrate.py` stay stdlib-only and
-  Python 3.11-compatible** (JSON manifests, no third-party imports) so they run on
-  any operator's machine — including before the environment probe has fixed
-  anything (INTEGRATION.md §8).
+  Python 3.11-compatible** (JSON manifests, no third-party imports) for the same
+  reason, while they last. The renderer now has a TypeScript port in
+  `packages/framework` and both are CI-enforced against the same rendered files;
+  keep them in step until the integration tooling ports too and the Python goes.
 * **A new portable core file must be added to `scripts/copy-manifest.json`**, or
   releases never offer it to host repos. `python3 scripts/integrate.py validate`
   re-proves the static integration invariants.
@@ -134,7 +140,11 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
 ## Commands
 
 * Re-render adapter agent files after any `roles/` or manifest change:
-  `python3 scripts/render-agents.py` (verify with `--check` — the same check CI runs)
+  `gateline render` (verify with `--check` — the same check CI runs). CI runs it as
+  `node packages/framework/src/main.ts render --check`, which needs nothing
+  installed. `python3 scripts/render-agents.py` is the same renderer in its original
+  form and stays until the integration tooling ports too; both are CI-enforced, so
+  either one leaves the tree correct
 * Run the frontend/orchestrator tests: `npm test` in `packages/` (typecheck:
   `npm run typecheck`; e2e: `npm run build && npx playwright test`; lint:
   `npm run lint`; needs `npm install` once, Node ≥ 24)
@@ -147,8 +157,9 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
     (`already-delivered | superseded | obsolete | abandoned`); `reopen` undoes it
   * create a run — `new` stages `runs/<slug>/` on its branch; `arm <slug>` starts it
   * serve — `up [--repo <path>]` (Gatehouse + engine over one clone, the blessed
-    topology), `ui` (viewer only), `upgrade` (pull + rebuild the web dist, then let
-    the running engine self-supersede)
+    topology), `ui` (viewer only), `self-update` (pull + rebuild the web dist, then
+    let the running engine self-supersede)
+  * render — `render [repo]` re-renders that tree's adapter agent files
 * Verify the orchestrator without dispatching: `gateline-orchestrator tick --dry-run`
   or `shadow <slug>` (replay a finished run); `watch` and `sweep <role>` are live
 * Try unmerged frontend changes: from that branch's worktree, `npm install &&
@@ -193,6 +204,7 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   * a malformed or ambiguous handoff → the contract (`contracts/*`)
   * a model or vendor change → `registry/models.yaml`
   * orchestrator behavior → `packages/orchestrator` (design: ORCHESTRATOR.md)
+  * how role specs and manifests are read or rendered → `packages/framework`
   * what a human sees or clicks → `packages/{core,server,web,cli}` (design:
     FRONTEND.md; `core` is layered record → sources → view-model, and derivation
     stays a pure function of committed state)

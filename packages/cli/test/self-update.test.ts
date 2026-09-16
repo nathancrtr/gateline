@@ -1,4 +1,4 @@
-// runUpgrade against scratch repos, with a fake `npm` on PATH recording its
+// runSelfUpdate against scratch repos, with a fake `npm` on PATH recording its
 // invocations — pins the contract that an upgrade rebuilds the web dist (the
 // one part of the tree that does not run from source; a stale dist serves the
 // previous UI over current APIs, invisibly).
@@ -8,7 +8,7 @@ import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { runUpgrade } from '../src/main.ts'
+import { runSelfUpdate } from '../src/main.ts'
 
 let root: string
 let binDir: string
@@ -61,7 +61,7 @@ afterAll(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-describe('gateline upgrade', () => {
+describe('gateline self-update', () => {
   it('pulls, installs, and rebuilds the web dist when the workspace carries the web app (packages/ layout)', async () => {
     const work = scratchRepo('with-web', {
       'packages/package.json': '{"name":"ws"}',
@@ -69,7 +69,7 @@ describe('gateline upgrade', () => {
     })
     await rm(npmLog, { force: true })
     const lines: string[] = []
-    const code = await runUpgrade(work, (l) => lines.push(l))
+    const code = await runSelfUpdate(work, (l) => lines.push(l))
     expect(code).toBe(0)
     expect(npmCalls()).toEqual(['install', 'run build'])
     expect(lines.join('\n')).toMatch(/upgraded [0-9a-f]{7}\.\.[0-9a-f]{7}/)
@@ -82,7 +82,7 @@ describe('gateline upgrade', () => {
     })
     await rm(npmLog, { force: true })
     const lines: string[] = []
-    const code = await runUpgrade(work, (l) => lines.push(l))
+    const code = await runSelfUpdate(work, (l) => lines.push(l))
     expect(code).toBe(0)
     expect(npmCalls()).toEqual(['install', 'run build'])
     expect(lines.join('\n')).toMatch(/upgraded [0-9a-f]{7}\.\.[0-9a-f]{7}/)
@@ -91,7 +91,7 @@ describe('gateline upgrade', () => {
   it('installs without building when there is no web package', async () => {
     const work = scratchRepo('no-web', { 'frontend/package.json': '{"name":"ws"}' })
     await rm(npmLog, { force: true })
-    const code = await runUpgrade(work, () => {})
+    const code = await runSelfUpdate(work, () => {})
     expect(code).toBe(0)
     expect(npmCalls()).toEqual(['install'])
   })
@@ -100,11 +100,11 @@ describe('gateline upgrade', () => {
     const work = scratchRepo('bare-repo', { 'README.md': 'hi' })
     await rm(npmLog, { force: true })
     const lines: string[] = []
-    expect(await runUpgrade(work, (l) => lines.push(l))).toBe(0)
+    expect(await runSelfUpdate(work, (l) => lines.push(l))).toBe(0)
     expect(npmCalls()).toEqual([])
     expect(lines.join('\n')).toContain('skipping npm install')
 
     writeFileSync(join(work, 'dirty.txt'), 'uncommitted')
-    expect(await runUpgrade(work, () => {})).toBe(1)
+    expect(await runSelfUpdate(work, () => {})).toBe(1)
   })
 })

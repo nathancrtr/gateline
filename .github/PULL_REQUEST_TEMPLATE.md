@@ -5,7 +5,7 @@
 **What this changes and why**
 
 **Checklist**
-- [ ] `python3 scripts/render-agents.py --check` passes (rendered agents current)
+- [ ] `gateline render --check` passes (rendered agents current)
 - [ ] No vendor or model names in `roles/` or `contracts/`
 - [ ] Vendored tooling stays stdlib-only, Python 3.11-compatible
 - [ ] Tests pass: `pytest scripts/test_integrate.py` (and `npm test` in

@@ -26,16 +26,26 @@ export interface AdapterManifest {
   model_overrides?: Record<string, string>
   /** Extra frontmatter keys, serialised as JSON scalars. */
   extra_frontmatter?: Record<string, unknown>
+  /** Dispatch seam (ORCHESTRATOR.md §5.2); read there, passed through here. */
+  headless?: unknown
 }
 
-export async function loadAdapterManifest(path: string): Promise<AdapterManifest> {
-  let raw: unknown
+/**
+ * The manifest exactly as written, with no interpretation. This is the one
+ * place an adapter manifest is read from disk: the renderer narrows it to the
+ * mapping fields below, the orchestrator narrows it to `headless`, and neither
+ * needs its own copy of "find the file, parse it, say which file failed".
+ */
+export async function readAdapterManifest(path: string): Promise<Record<string, unknown>> {
   try {
-    raw = JSON.parse(await readFile(path, 'utf8'))
+    return JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
   } catch (e) {
     throw new FrameworkError(`${path}: ${e instanceof Error ? e.message : String(e)}`)
   }
-  const manifest = raw as Partial<AdapterManifest>
+}
+
+export async function loadAdapterManifest(path: string): Promise<AdapterManifest> {
+  const manifest = (await readAdapterManifest(path)) as Partial<AdapterManifest>
   for (const key of ['adapter', 'output_dir', 'filename', 'tools_style'] as const) {
     if (typeof manifest[key] !== 'string') throw new FrameworkError(`${path}: missing or non-string '${key}'`)
   }

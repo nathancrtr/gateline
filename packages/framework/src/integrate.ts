@@ -17,6 +17,7 @@ import { dirname, join, posix, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 
+import { readAdapterManifest } from './adapter.ts'
 import { type CopyManifest, loadCopyManifest, offered, resolveTake } from './copy-manifest.ts'
 import {
   type FrameworkLock,
@@ -367,13 +368,10 @@ async function seedProjectLayers(args: {
     const dest = join(coreRoot, 'adapters', adapter, 'manifest.json')
     if (await exists(dest)) continue
     await mkdir(dirname(dest), { recursive: true })
-    // Parsed raw, not through the typed reader: the seeded copy must keep every
+    // Read raw, not through the typed narrowing: the seeded copy must keep every
     // key the upstream manifest carries — `headless`, the `_comment_*` notes —
     // and only narrow `roles` to what this host took.
-    const manifest = JSON.parse(await readFile(join(source, 'adapters', adapter, 'manifest.json'), 'utf8')) as Record<
-      string,
-      unknown
-    >
+    const manifest = await readAdapterManifest(join(source, 'adapters', adapter, 'manifest.json'))
     const taken = (manifest.roles as string[]).filter((r) => roles.includes(r))
     if (roles.includes('integrator') && !taken.includes('integrator')) taken.push('integrator')
     manifest.roles = taken

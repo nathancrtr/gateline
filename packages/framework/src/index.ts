@@ -1,4 +1,4 @@
-export { type AdapterManifest, listAdapters, loadAdapterManifest, type ToolsStyle } from './adapter.ts'
+export { type AdapterManifest, listAdapters, loadAdapterManifest, readAdapterManifest, type ToolsStyle } from './adapter.ts'
 export { runFork, runInit, runRender, runValidate } from './cli.ts'
 export { type CopyManifest, loadCopyManifest, offered, resolveTake } from './copy-manifest.ts'
 export {

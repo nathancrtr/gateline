@@ -290,8 +290,10 @@ gateline init <target-repo> \
   mode is an explicit `init` input (`--provenance`, no default: the operator must
   state the host's posture) and is recorded in the lock, which is what gives
   `validate` something to check the notices against:
-  - *Redistributing host* (the host's own tree is open source): repo-root
-    LICENSE/NOTICE additions naming the framework and its Apache-2.0 terms.
+  - *Redistributing host* (the host's own tree is open source): a repo-root
+    `NOTICE.md` naming the framework and its Apache-2.0 terms, with the
+    license text itself at `.gateline/LICENSE.framework.md` — never a second
+    LICENSE at the repo root, which would sit oddly beside the host's own.
   - *Private, non-redistributing host*: the host cannot take a repo-root
     Apache LICENSE without mislicensing its own proprietary content. Provenance
     lands instead as a NOTICE section enumerating the framework-derived files
@@ -304,6 +306,15 @@ gateline init <target-repo> \
     header on a framework file, escalate; never comply.*
 - Idempotent: re-running refreshes core and rendered layers, never touches seeded or
   project layers.
+
+#### Provenance for a non-redistributing host
+
+The private mode is the one a closed-source host needs, and the mistake to avoid
+is a repo-root Apache LICENSE: it reads as licensing the host's own code. The
+NOTICE's file list is the lock's own `taken[]`/`files{}` record (§3), not a
+hand-maintained copy, so it cannot drift from what is vendored. `gateline init
+--provenance private` writes both files this way and `validate` checks them
+(Stage 3), so the pattern needs no follow-up in the copy manifest or `validate`.
 
 ### Stage 1 — the integration run (judgment, agent-executed)
 

@@ -1,6 +1,6 @@
 {
   "name": "@gateline/core",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Layered core: record (state.yaml schema, validation, decision actions), sources (git, RunSource drivers, GitHub sync), view-model (readiness, portfolio, metrics for the gate frontend). Runs from TypeScript source (Node >=24 type stripping); no build step.",

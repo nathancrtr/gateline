@@ -164,7 +164,7 @@ rendered agents and git — start at [WALKTHROUGH.md](docs/WALKTHROUGH.md).
 
 ## Status
 
-v0.2 — the design has been exercised end-to-end by three human-orchestrated G0→G3
+v0.3 — the design has been exercised end-to-end by three human-orchestrated G0→G3
 runs (`runs/wordfreq/`, `runs/mdtoc/`, `runs/dupefind/`, each with adversarial review
 cycles and independent verification — the shadow-agreement evidence for the v1 trust
 ladder), and since then by orchestrator-driven runs against this repository itself;

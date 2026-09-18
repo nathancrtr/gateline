@@ -1,6 +1,6 @@
 {
   "name": "@gateline/cli",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "gateline \u2014 the gate frontend in terminal form: status, inbox, and the same single decision write path.",

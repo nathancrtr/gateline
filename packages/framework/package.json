@@ -1,6 +1,6 @@
 {
   "name": "@gateline/framework",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "The framework file layer: role specs, adapter manifests, agent rendering. Zero runtime dependencies on purpose — a host repo's render-staleness CI runs this with nothing installed.",

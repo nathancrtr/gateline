@@ -10,7 +10,7 @@ const program = new Command()
 program
   .name('gateline-runner-agent')
   .description('Workstation agent: polls a control plane for dispatch intents, executes them in a disposable clone, and reports outcomes back.')
-  .version('0.1.0')
+  .version('0.3.0')
   .requiredOption('--control-plane <url>', 'base URL of the control plane server (the @gateline/server instance exposing /api/runner/*)')
   .requiredOption('--token <token>', 'runner service token (matches the control plane\'s RUNNER_TOKEN)')
   // No default here on purpose (R8, AC8.1): a hardcoded adapter name in this

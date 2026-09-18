@@ -23,7 +23,7 @@ const program = new Command()
 program
   .name('gateline-orchestrator')
   .description('Stateless reconciler for artifact-driven agent pipelines (docs/ORCHESTRATOR.md)')
-  .version('0.1.0')
+  .version('0.3.0')
   .option('--repo <path>', 'repository to operate on (default: cwd)', process.cwd())
   .option(
     '--gateline-prefix <prefix>',

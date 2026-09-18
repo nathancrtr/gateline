@@ -8,6 +8,15 @@ naming change call the web UI *FleetView* and the framework *ADS*; the slugs
 `fleetview-design` and `fleetview-intake`, and their branches, keep those names
 permanently. Current names are in [`AGENTS.md`](../AGENTS.md).
 
+The tree is flat by decision, not by default (#31, decided 2026-09-18). The slug is
+the run's one identity — the branch `run/<slug>`, every CLI command, the URL
+`/runs/<source>/<slug>`, and every cross-reference in the contracts use it — and a
+dated fan-out (`runs/<yyyy>/<slug>/`) would put a second coordinate under all of
+them for a scale no repository is near. What bounds the live tree is the archival
+tier (#32): completed runs leave `runs/` as bundles when a repository approaches
+hundreds of them, and the framework lock's version field makes any later layout
+change a versioned migration rather than a silent break.
+
 ```
 runs/<slug>/
 ├── state.yaml               # phase, gate ledger, budgets, task statuses (Orchestrator-owned)

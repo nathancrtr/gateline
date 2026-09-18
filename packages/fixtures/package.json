@@ -1,6 +1,6 @@
 {
   "name": "@gateline/fixtures",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Generates a demo git repository with pipeline runs in every interesting state — used by tests and `gateline ui --demo`.",

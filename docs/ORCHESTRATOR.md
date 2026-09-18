@@ -137,7 +137,7 @@ implementation time (one test per row, like the frontend's); its shape:
 | Review verdict `escalate` | Escalate; pause. Resolving the escalation *after* the verdict landed — after in the record's own order (see below) — routes by the LATEST matching resolution's optional `disposition` (issues #189, #190): `re-review` dispatches the re-review round immediately — an explicit human override of the #188 zero-delta guard; `return-to-implement` sends the task back to the implementer with the review report, or on to a verify round if the implementer already responded (whose-turn logic keyed off the resolution's own commit, mirroring the request-changes row above); `re-plan` sends the finding to the architect's amendment mode (see the next row); no disposition named falls back to the legacy behavior — a re-review round only once a real commit (anything other than `state.yaml`) has also landed after the verdict, else rest naming the fix that still needs to land (issue #188) |
 | Disposition `re-plan` | Dispatch the architect in amendment mode, carrying the review report path and the resolution note (rule D22) — an architect already in flight rests instead, same as any other in-flight producer. Once the amendment lands (`plan.md` or a `tasks/*.yaml` touched after the resolution's commit), the engine raises a *fresh* escalation naming `task <id>` and pauses for human acknowledgment (rule D23, issue #190) — the architect proposes, the human still disposes. That acknowledgment escalation's own resolution (typically `return-to-implement`) is just another resolution matching the same `task <id>` text, so the LATEST-matching-resolution rule above picks it up and routes through the ordinary machinery unchanged |
 | Verification verdict `escalate` (rule D24, #152) | Escalate; pause. The verifier's own channel, mirroring the reviewer's: `**Verdict:** escalate` on the verification report means a failure traces to the spec, the plan, or the gate process. A resolution landing after the report returns the packet to the table for the G2 human, failed rows and all — there is no round to re-run, so no disposition routing applies. `pass` and `fail` never pause: `fail` is the G2 human's to weigh, and the gate surface quotes the report's verdict and its non-verified rows so a non-clean report never reads as a clean pass. Reports that predate the verdict line behave as before |
-| Implementer dispatch fails | Return the task to `pending` for its one retry; a second failure marks the task `failed` (nothing reads it as in-flight), escalates, and pauses. Resolving the escalation *after* the last failed attempt returns the task to `pending` — a fresh round supersedes the failure (issue #147). The escalation is worded from the facts: a fatal first failure says so, and `failed twice` only when the ledger shows two (#114) |
+| Implementer dispatch fails | Return the task to `pending` for its one retry; the retry is the same attempt at the same work, so on a runner that keeps sessions it continues the failed attempt's (#181, §4.4). A second failure marks the task `failed` (nothing reads it as in-flight), escalates, and pauses. Resolving the escalation *after* the last failed attempt returns the task to `pending` — a fresh round supersedes the failure (issue #147). The escalation is worded from the facts: a fatal first failure says so, and `failed twice` only when the ledger shows two (#114) |
 | A role returns ok and lands nothing (#343) | Rule DL, the landing cap — `BOUNCE_CAP`'s twin. Half this table re-dispatches on the *absence* of an expected change and counts nothing, so an agent that returns `ok` without committing (an analyst that reads the decline notes and concludes the spec already answers them; a reviewer that times out without writing) is a success to the close path and a no-op to derivation, re-dispatched every tick until `cost_limit_usd` trips. The ledger already carries what is needed: per (role, task), the dispatches that closed ok and were opened after the artifact they existed to land last moved. For a producer that artifact is the gate's packet; for a task-scoped role it is the task's whole record — its work item and the reviews of it — because an implementer's real product is code, which lives outside the run directory and the observation cannot see, so the response note and the reviewer's answer to that round are the marks the round leaves here. At `LANDING_CAP` of them the engine escalates and pauses, naming the role, the count and the artifact. Two facts reset the count — the artifact moving, and a human resolving that escalation — so resolve-and-resume does not walk straight back into the cap. The check sits inside the one gated dispatch path, ahead of the budget pre-flight: raising the limit is the wrong answer to a role that is not producing |
 | Task status `in-progress` with no open ledger entry (#350) | Record the task back to `pending` (rule D25). The engine never writes `in-progress` — the contract lists it for v0 and hand-written records — and reading it as in flight made it a rest nothing could age: no dispatch behind it, no gate waiting on it, and readiness showing a run that needs nothing. With no open entry there is no work to be in the middle of, so the loop takes the task back |
 | Dispatch refused before spawn (#154, #155) | A refusal is not a failure: the ledger entry closes at `$0` with `refused: true`, counts toward no retry, and raises no escalation. The run branch held by a checkout the orchestrator does not own is caught earlier still — probed before the intent commit (rule `CH`) and deferred like the resource cap, nothing written, re-derived once the checkout is released; the heartbeat carries the condition, remedy first |
@@ -268,10 +268,25 @@ instances, or a tick racing its own heartbeat, serialize on the ref update — t
 loser re-reads, sees `dispatched`, and rests. A crash between steps 1 and 2 leaves a
 `dispatched` entry with no living job and no artifact; the heartbeat detects
 that signature and re-dispatches — agents are disposable by design (DESIGN.md §1), so
-a lost dispatch costs a retry, never corruption. Job handles (PIDs, harness session
-ids) are deliberately **not** committed: they are host-specific ephemera, treated as
-cache — the loop must always be able to reconstruct reality by probing, because git
-is the only authoritative store (the frontend's R1, inherited).
+a lost dispatch costs a retry, never corruption. Job handles (PIDs, the dispatcher's
+own tables) are deliberately **not** committed: they are host-specific ephemera,
+treated as cache — the loop must always be able to reconstruct reality by probing,
+because git is the only authoritative store (the frontend's R1, inherited).
+
+The one thing about a live harness the record does keep is its session id (#181), on
+the ledger entry, and the distinction is worth naming because it looks like the
+exception. A handle is something the loop would *read state from*; a session id is
+something it hands back. Nothing is derived from it, no rule reads it, and a run whose
+entries carry none behaves exactly as before. So a retry of the same role+task+round
+continues the agent's prior session rather than starting one — the second attempt
+keeps the files the first read and the approaches it ruled out, instead of spending
+minutes and real money re-deriving them (the `runs/runner-agent` incident: an
+architect redispatched ten-plus times, each one from nothing). A *new* round is a new
+attempt with new input, so it starts fresh; the triple changes and no entry matches.
+A session the harness will not take costs one fresh dispatch and nothing else: the
+seam re-runs without the flags, the engine logs that it did, and an optimization
+never costs a dispatch. Which flag continues a session, and where to read one, is
+the adapter's to say (§5.2) — a runner whose manifest says neither never resumes.
 
 The CAS does not guard the *job*, and until #349 nothing did. "No living job" was
 read from one process's own table, so a second engine against the same runs — the
@@ -448,7 +463,12 @@ runtimes what the registry is to models.
 
 Each adapter's `manifest.json` — today the source for rendering agent files — gains
 a `headless` section: the invocation template (command, how the agent and model are
-named, output format flags) and the usage-report parsing spec. The adapter rule
+named, output format flags) and the usage-report parsing spec. Two optional keys
+describe a runner that keeps sessions (#181): `session_field`, the dotted path where
+its output names the session, and `resume_args`, the argv fragment that continues one,
+with `{session}` filled in. Both are the adapter's own vocabulary — the seam knows
+only that some runners have a thing worth continuing, and a manifest declaring
+neither never resumes. The adapter rule
 stands (narrow, never widen), and a new runner still costs one manifest. This
 **resolves DESIGN.md §8's reserved `adapters/orchestrated/` row**: v1 needs no
 separate orchestrated adapter tree, because the orchestrator is a framework

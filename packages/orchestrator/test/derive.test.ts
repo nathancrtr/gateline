@@ -76,6 +76,7 @@ const closedOk = (role: string, task: string | null, at: string): LedgerEntry =>
   failed: false,
   refused: false,
   engine: null,
+  session: null,
 })
 
 /**
@@ -112,6 +113,7 @@ const failedAttempt = (task: string, at: string): LedgerEntry => ({
   failed: true,
   refused: false,
   engine: null,
+  session: null,
 })
 
 describe('the derivation table, one rule per row', () => {

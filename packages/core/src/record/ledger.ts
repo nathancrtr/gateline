@@ -44,6 +44,17 @@ export interface BudgetLedgerEntry {
    * window and another engine's only once no live job could still hold it.
    */
   engine: string | null
+  /**
+   * The harness's own session for this dispatch (#181), when its adapter says
+   * how to read one. Adapter-neutral by name because only the adapter knows
+   * what a session is; a runner that has none leaves this null.
+   *
+   * A retry of the same role+task+round resumes it, so the second attempt
+   * starts from what the first had already worked out instead of re-reading
+   * the same files. It is a hint, never a handle: a session the harness will
+   * not take costs a fresh dispatch and nothing else.
+   */
+  session: string | null
 }
 
 /**
@@ -80,6 +91,7 @@ export function parseLedger(state: RunState | null): BudgetLedgerEntry[] {
       failed: e.failed === true,
       refused: e.refused === true,
       engine: typeof e.engine === 'string' && e.engine !== '' ? e.engine : null,
+      session: typeof e.session === 'string' && e.session !== '' ? e.session : null,
     })
   }
   return entries

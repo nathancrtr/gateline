@@ -92,6 +92,16 @@ budget:
                           # process's job (leave it alone). Absent on entries
                           # written by hand or before the key existed, which the
                           # sweep treats as its own.
+                          # `session: <id>` — what the runner called this
+                          # dispatch's own agent session, when that runner has
+                          # such a thing. A retry of the same role+task+round
+                          # resumes it, so the second attempt keeps what the
+                          # first worked out instead of re-deriving it; a new
+                          # round starts fresh. It is a hint and never a
+                          # handle: nothing is derived from it, and a session
+                          # the runner will not take costs one fresh dispatch
+                          # and nothing else. Absent for runners with no
+                          # session of their own.
                           # v0: append by hand
                           # from harness usage output (a smaller, more concrete ask
                           # than maintaining a total); v1: the dispatch seam appends

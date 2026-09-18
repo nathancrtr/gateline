@@ -69,6 +69,12 @@
       "--auto"
     ],
     "dispatch_prompt": "{body}",
+    "_comment_resume": "Same-round retry resume (#181). Every `--format json` event opencode emits carries the session it belongs to at the top level (`{type, timestamp, sessionID, ...}`), so session_field reads it off any line; the seam records it on the dispatch's ledger entry, and a retry of the same role+task+round passes resume_args to continue that session instead of re-deriving the whole exploration from nothing. `-s/--session <id>` is 'session id to continue' (verified against `opencode run --help`, v1.18.5); `--continue` is the no-id sibling ('continue the last session') and is redundant when an id is given. A session opencode no longer holds exits 1 with 'Session not found' and no JSON — the seam reads that as a refused resume and re-dispatches fresh.",
+    "session_field": "sessionID",
+    "resume_args": [
+      "--session",
+      "{session}"
+    ],
     "usage_report": {
       "format": "ndjson-sum",
       "line_filter": {

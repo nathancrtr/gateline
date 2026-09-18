@@ -302,6 +302,36 @@ function standingRefusals(
 }
 
 /**
+ * The harness session a retry of this exact dispatch should continue (#181),
+ * or null to start fresh.
+ *
+ * A retry of the same role+task+round is the same attempt at the same work, so
+ * the second try is worth far more if it keeps what the first had already
+ * worked out — the files it read, the approaches it ruled out — instead of
+ * re-deriving them from nothing. A *new* round is a new attempt with new input
+ * (a review verdict, a bounce), and starts fresh: the triple changes, and no
+ * entry matches.
+ *
+ * Only the most recent entry for the triple is consulted. If it carries no
+ * session, the runner has none to give and nothing older is worth reviving.
+ * A prior entry from a different adapter is ignored too — a session id means
+ * nothing to the harness that did not open it.
+ */
+function priorSession(
+  ledger: LedgerEntry[],
+  intent: { role: string; task: string | null; round: number | null },
+  adapter: string,
+): string | null {
+  for (let i = ledger.length - 1; i >= 0; i--) {
+    const e = ledger[i]!
+    if (e.role !== intent.role || e.task !== (intent.task ?? null) || e.round !== (intent.round ?? null)) continue
+    if (e.adapter !== null && e.adapter !== adapter) return null
+    return e.session
+  }
+  return null
+}
+
+/**
  * A dispatch the engine is holding back without writing anything (#97): a
  * ceiling that clears itself — the resource cap (MC), the host spend window
  * (HB) — defers rather than pauses, so nothing in `state.yaml` says why the
@@ -1068,6 +1098,8 @@ export class Engine {
     // each other's mid-flight state.
     const managesOwnWorkspace = this.cfg.dispatcher.managesOwnWorkspace === true
     const isolate = !managesOwnWorkspace && intent.role === 'implementer' && intent.task !== null
+    const resumeSession = priorSession(obs.ledger, intent, this.cfg.dispatcher.adapterFor?.(intent.role) ?? this.cfg.dispatcher.adapter)
+    if (resumeSession) this.log(`${ref.slug}: ${intent.role}${intent.task ? `(${intent.task})` : ''} retrying — resuming harness session ${resumeSession}`)
     const job = (async () => {
       let outcome: DispatchOutcome
       // Whether the harness was ever asked to run (#155). Everything before
@@ -1098,7 +1130,10 @@ export class Engine {
           branch: ref.branch,
           task: intent.task,
           round: intent.round,
+          resumeSession,
         })
+        if (outcome.resumeRefused)
+          this.log(`${ref.slug}: ${intent.role} could not resume session ${resumeSession} — dispatched fresh instead`)
         if (isolate) {
           // The fold's own harvest (#184): the isolated counterpart of the
           // harvest-commit below. The task's declared file-contact surface is
@@ -1264,6 +1299,11 @@ export class Engine {
           doc.setIn(['budget', 'ledger', index, 'cost_usd'], cost)
           if (!outcome.ok && !refused) doc.setIn(['budget', 'ledger', index, 'failed'], true)
           if (refused) doc.setIn(['budget', 'ledger', index, 'refused'], true)
+          // What the harness called this dispatch (#181), for a same-round
+          // retry to resume. Written only when there is one: a runner with no
+          // notion of a session leaves the key off rather than writing null.
+          if (typeof outcome.session === 'string' && outcome.session !== '')
+            doc.setIn(['budget', 'ledger', index, 'session'], outcome.session)
           const spent = ledger.reduce((sum, e, i) => sum + (i === index ? cost : (e.cost_usd ?? 0)), 0)
           doc.setIn(['budget', 'cost_spent_usd'], round2(spent))
           if (outcome.ok && intent.role === 'implementer' && intent.task) {

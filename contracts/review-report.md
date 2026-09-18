@@ -26,19 +26,18 @@
      are evidence, read when trust is in question, and Gatehouse folds them to
      their heading until opened. Unlisted sections are decide-time.
      AUDIENCE: Coverage=audit; Boundary check=audit
-     VERIFY ROUND (normative — round ≥ 2; the shape
-     `packages/core/src/view-model/review.ts` parses): a verify round does not
+     VERIFY ROUND (normative — round ≥ 2): a verify round does not
      re-derive the full review. Scope is the implementer's response note, the
      diff's changed hunks since the round you're checking, and the disposition
      of each prior finding. Disposition each prior finding in one compact line
      instead of restating it — grammar `- **F<n> — resolved|stands** —
-     <one-line reason>`; "stands" covers a finding that is not resolved,
-     whatever word your dispatch used for it, because the parser's
-     `ReviewResolution.state` reads only those two. A defect the delta
-     introduces — in the changed hunks, or in a fix itself — is a full new
-     finding (`### F<n> — <severity> — <title>`, the same fields as any other),
-     never a third disposition word: a fix earns the same scrutiny as new
-     code, never less. See the example below Findings. -->
+     <one-line reason>`; "stands" is the only word for a finding that is not
+     resolved; tooling reads exactly these two disposition words and no
+     others. A defect the delta introduces — in the changed hunks, or in a fix
+     itself — is a full new finding (`### F<n> — <severity> — <title>`, the
+     same fields as any other), never a third disposition word: a fix earns
+     the same scrutiny as new code, never less. See the example below
+     Findings. -->
 
 **Verdict:** approve | request-changes | escalate
 **Round:** <n of 3>

@@ -60,9 +60,12 @@
   <p>No flags.</p>
 
   <h3><code>gateline inbox</code></h3>
-  <p>Lists everything that needs a human, oldest first. Undecided gates,
-  open escalations, and bounced (malformed) packets — each printed with its
-  kind, age, run slug, and title. Bounced packets are prefixed
+  <p>Lists everything that needs a human, oldest first. Six kinds of item
+  appear: undecided gates (<code>gate</code>), open escalations
+  (<code>escalation</code>), round-cap pauses (<code>round-cap</code>), other
+  paused runs (<code>paused</code>), staged runs awaiting <code>arm</code>
+  (<code>staged</code>), and bounced packets (<code>malformed</code>) — each
+  printed with its kind, age, run slug, and title. Bounced packets are prefixed
   <code>✕ BOUNCED: &lt;problem&gt;</code>. A gate whose producer is in flight
   again prints <code>⋯ SUPERSEDED: &lt;detail&gt;</code> under the item.</p>
 
@@ -108,7 +111,10 @@
   producing role, so the next iteration has something concrete to address.</p>
 
   <h3><code>gateline resolve-escalation &lt;slug&gt; &lt;index&gt;</code></h3>
-  <p>Resolves an escalation by its zero-based index (from the inbox).
+  <p>Resolves an escalation by its zero-based index: the entry's position
+  in the run's <code>escalations[]</code> list in <code>state.yaml</code>.
+  The inbox lists open escalations but prints no index, so count from the
+  file.
   <code>--note &lt;text&gt;</code> required. <code>--disposition</code> accepts
   an optional machine-actionable route:
   <code>re-review</code> |
@@ -121,7 +127,9 @@
   <code>budget-exhausted</code> |
   <code>round-cap</code> |
   <code>escalation</code> |
-  <code>gate-declined</code> (defaults to <code>escalation</code>).</p>
+  <code>gate-declined</code> (defaults to <code>escalation</code>). The list
+  is the help text's convention, not a validated enum: any string except
+  <code>staged</code> is accepted and written to <code>paused_reason</code>.</p>
 
   <h3><code>gateline resume &lt;slug&gt;</code></h3>
   <p>Resumes a paused run. The target phase is derived from the gate ledger
@@ -173,7 +181,7 @@
       <tr><td><code>--slug</code></td><td>prompted</td><td>Grammar <code>[a-z0-9][a-z0-9-]*</code> — branch- and path-safe</td></tr>
       <tr><td><code>--title</code></td><td>prompted</td><td>Human-visible run title</td></tr>
       <tr><td><code>--profile</code></td><td><code>standard</code></td><td><code>patch | standard | full</code></td></tr>
-      <tr><td><code>--brief-file</code></td><td>template</td><td>Path to an operator-authored intent-brief.md</td></tr>
+      <tr><td><code>--brief-file</code></td><td>template (TTY only)</td><td>Path to an operator-authored intent-brief.md. Required when stdin is not a terminal; only the interactive path drafts from the template and opens an editor</td></tr>
       <tr><td><code>--task-file</code></td><td>stub</td><td>Patch profile only: the human-authored work item, staged as <code>tasks/01-&lt;slug&gt;.yaml</code>. Without it a patch run stages a stub, and <code>arm</code> refuses until it is written</td></tr>
       <tr><td><code>--budget</code></td><td><code>50</code></td><td>Cost ceiling in USD</td></tr>
       <tr><td><code>--key</code></td><td>—</td><td>Idempotency / replay client key</td></tr>
@@ -209,7 +217,9 @@
   deployment and the blessed topology. Starts the server (Hono-based, port
   4310 default) and the engine in the same process. The engine watches the
   code tree for fast-forward upgrades and self-supersedes (exit 75) on
-  update. Exactly one <code>--repo</code> is allowed.</p>
+  update. Exactly one <code>--repo</code> is allowed, and it goes before
+  <code>up</code> (it is the CLI's only global option); every flag below is an
+  option of <code>up</code> and follows it.</p>
   <!-- evidence: docs/TOPOLOGY.md §3.1; packages/cli/src/main.ts; packages/core/src/sources/code-tree.ts -->
 
   <p>Key flags:</p>
@@ -258,9 +268,12 @@
 
   <h2 id="gateline-orchestrator">gateline-orchestrator</h2>
   <p>The v1 engine's CLI, installed at <code>gateline-orchestrator</code>.
-  The two binaries share most global flags, but each has its own.
-  Shared: <code>--repo</code>, <code>--adapter</code> (repeatable; later ones
-  satisfy <code>avoid_vendor_of</code> pins),
+  The two binaries take most of the same flags, but in different places:
+  on <code>gateline-orchestrator</code> they are global options, while
+  <code>gateline</code>'s only global option is <code>--repo</code> and the
+  rest are options of the <code>up</code> subcommand that must follow
+  <code>up</code>. Common to both: <code>--repo</code>, <code>--adapter</code>
+  (repeatable; later ones satisfy <code>avoid_vendor_of</code> pins),
   <code>--push</code>/<code>--local-only</code>,
   <code>--spend-limit-usd</code>, <code>--spend-window</code>,
   <code>--no-budget-enforcement</code>,
@@ -268,9 +281,11 @@
   The orchestrator adds <code>--require-budget</code> (refuse dispatch on any
   run missing <code>budget.cost_limit_usd</code>) and
   <code>--gateline-prefix</code> (for hosts that integrated with a custom
-  prefix); <code>gateline up</code> adds server flags as globals (<code>--port</code>,
-  <code>--host</code>, <code>--heartbeat</code>, <code>--no-open</code>) that
-  the engine does not have.</p>
+  prefix); <code>gateline up</code> adds the server options
+  <code>--port</code>, <code>--host</code> and <code>--no-open</code>, which
+  the engine does not have. <code>--heartbeat</code> exists on both, as an
+  <code>up</code> option and as an option of
+  <code>gateline-orchestrator watch</code>.</p>
   <!-- evidence: packages/orchestrator/src/main.ts; packages/cli/src/main.ts -->
 
   <h3><code>gateline-orchestrator tick</code></h3>

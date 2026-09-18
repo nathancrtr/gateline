@@ -45,8 +45,9 @@
   organization's approved models and re-verify pricing. The manifest model
   spellings quoted below are configuration examples, not guaranteed
   live bindings. The opencode adapter specifically marks its Kimi binding as
-  TEMPORARY (<code>adapters/opencode/manifest.json</code>), pending a
-  future model release. The OpenRouter pricing entries back the token-based
+  TEMPORARY (<code>adapters/opencode/manifest.json</code>): its comment says
+  to revisit the binding once Kimi K3's open weights land on 2026-07-27, a
+  date now past, so the binding is pending that revisit. The OpenRouter pricing entries back the token-based
   metering fallback; opencode reports real cost directly today, so they are
   not the live path (<code>registry/models.yaml</code>).</p>
 
@@ -183,11 +184,15 @@
   </table>
   <!-- evidence: docs/DESIGN.md §2; adapters/claude-code/README.md; adapters/copilot-cli/README.md; adapters/opencode/manifest.json -->
 
-  <p>Dispatch-time enforcement: the orchestrator's dispatch seam
-  <em>refuses</em> to bind Reviewer or Verifier to the Implementer's vendor.
-  This is enforced via the <code>avoid_vendor_of</code> registry pins, not
-  by convention. Later <code>--adapter</code> flags are how those pins are
-  satisfied.</p>
+  <p>Dispatch-time enforcement: with more than one adapter configured, the
+  orchestrator's dispatch seam <em>refuses</em> to bind Reviewer or Verifier
+  to the Implementer's vendor (<code>VendorPinError</code>), so the
+  <code>avoid_vendor_of</code> registry pins are enforced rather than
+  conventional. With a single adapter (the default <code>gateline up</code>
+  with one <code>--adapter</code>) the pin is unsatisfiable and stays
+  advisory: the router dispatches on the implementer's vendor and logs a P5
+  advisory once per role. Later <code>--adapter</code> flags are how those
+  pins are satisfied.</p>
 
   <h2 id="renderer-constraints">Renderer constraints</h2>
   <ul>

@@ -98,7 +98,7 @@
     artifacts; gates G0–G3 are human decisions over those artifacts; the
     implement/review loop is capped at three rounds.</figcaption>
     <svg class="diagram-svg" viewBox="0 0 1020 370" role="img" aria-labelledby="title-run-lifecycle">
-      <title id="title-run-lifecycle">Pipeline diagram: eight roles, four gates, one run from intent brief to release, with a state file band and human markers at each gate.</title>
+      <title id="title-run-lifecycle">Pipeline diagram: six roles, four gates, one run from intent brief to release, with a state file band and human markers at each gate.</title>
       <defs>
         <marker id="arr-rl" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="currentColor"/></marker>
         <marker id="arr-rl-accent" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" class="d-accent"/></marker>
@@ -252,9 +252,15 @@
   one entry per gate with who approved, when, notes, and an optional
   <strong>burden</strong> rating of how much work the review took; task
   statuses and review-round counts; and an append-only escalation list.
-  Everything a human or an engine needs in order to decide what happens next is
-  read from this file.</p>
-  <p>Every artifact in the tree follows a contract from <code>contracts/</code>:
+  A human or an engine decides what happens next from this file, the artifacts
+  committed beside it, and the branch order in which they landed.</p>
+  <p>Two rows of the tree are not roster output. <code>ux-research.md</code>
+  and <code>design/</code> come from extension positions that design runs such
+  as <code>runs/fleetview-design/</code> prototyped inside their own records,
+  as DESIGN.md §4.2 allows; they are not roles, and only the eight roster roles
+  have contracts. <code>retro.md</code> is human notes and has no contract
+  either.</p>
+  <p>Every artifact the roster's roles hand off follows a contract from <code>contracts/</code>:
   required sections, concision budgets, a parseable ID and heading grammar, and
   readability rules for the sections a human reads. All of these are equally
   bounceable. An artifact missing a required section is malformed, and the
@@ -371,9 +377,11 @@
   <!-- evidence: AGENTS.md; packages/cli/src/main.ts; contracts/state.yaml; packages/core/src/sources/pr-description.ts -->
   <p>That pull request is generated from the run's own artifacts — the intent
   brief first, then the spec once it lands — and it refreshes as the run
-  progresses, until a human edits the body. The edit removes a marker comment
-  from the description, and ownership of the text passes to the human
-  permanently. The PR stays a draft, carrying a do-not-merge banner, until the
+  progresses, until a human edits the body. The generated body carries a
+  hidden marker comment, <code>&lt;!-- gateline:draft-pr --&gt;</code>. Once
+  the marker is gone, which a rewrite of the body normally removes, the text
+  belongs to the human, and the framework never touches the title or body
+  again. The PR stays a draft, carrying a do-not-merge banner, until the
   run reaches <code>done</code>. A closed run's banner names its disposition
   instead.</p>
 
@@ -383,8 +391,8 @@
   sets its cadence — in this repository, a sweep every seven days with a $5
   pre-flight cost cap. A due sweep is dispatched as a mini-run,
   <code>runs/historian-&lt;date&gt;/</code> on branch
-  <code>run/historian-&lt;date&gt;</code>, carrying a one-entry ledger and
-  deliberately no <code>state.yaml</code>, so sweeps stay out of the gate
+  <code>run/historian-&lt;date&gt;</code>, carrying a one-entry ledger in
+  <code>sweep.yaml</code> and deliberately no <code>state.yaml</code>, so sweeps stay out of the gate
   machinery entirely. Its approval is not a numbered gate: a human reviews the
   <code>docs-delta.md</code> and merges the sweep branch — and that merge is
   the approval.</p>

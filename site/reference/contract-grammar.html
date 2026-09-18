@@ -44,7 +44,7 @@
     <tbody>
       <tr><td><code>spec.md</code></td><td>Analyst</td><td>Architect, Reviewer, Verifier</td><td>G0</td></tr>
       <tr><td><code>plan.md</code></td><td>Architect</td><td>Implementers, Reviewer</td><td>G1</td></tr>
-      <tr><td><code>work-item.yaml</code></td><td>Architect (or the human, in <code>patch</code>)</td><td>Implementers</td><td>G1</td></tr>
+      <tr><td><code>work-item.yaml</code></td><td>Architect (or the human, in <code>patch</code>)</td><td>Exactly one Implementer</td><td>G1</td></tr>
       <tr><td><code>review-report.md</code></td><td>Reviewer</td><td>Implementer, gate G2</td><td>—</td></tr>
       <tr><td><code>verification-report.md</code></td><td>Verifier</td><td>gate G2</td><td>—</td></tr>
       <tr><td><code>release-plan.md</code></td><td>Ops</td><td>gate G3</td><td>—</td></tr>
@@ -55,6 +55,8 @@
     </tbody>
   </table>
   <!-- evidence: contracts/ (10 files); docs/DESIGN.md §3 -->
+  <p>The Gate column is DESIGN.md §4.1's mapping of artifacts to gates; the
+  contract files themselves name no gate.</p>
 
   <p>All contracts declare required sections. An artifact missing a required
   section is malformed — the consuming agent bounces it, never guesses.
@@ -149,7 +151,9 @@
 
   <p>The <code>spec.md</code>, <code>plan.md</code>,
   <code>verification-report.md</code> and <code>release-plan.md</code>
-  contracts declare a shared five‑rule READABILITY set:</p>
+  contracts declare a five‑rule READABILITY set with the same substance
+  (<code>release-plan.md</code> words (c) and (e) slightly differently, its
+  (e) covering environments as well as ids and files):</p>
   <ol type="a">
     <li><strong>Plain-words opening sentence.</strong> The first sentence
       states the takeaway in plain words — no code spans, paths, or
@@ -211,8 +215,8 @@
         <td><code>state(my-fix): reopened to implement by nthncrtr (was closed as abandoned)</code></td>
       </tr>
       <tr>
-        <td>Orchestrator (bot only)</td>
-        <td><code>state(&lt;slug&gt;): &lt;verb&gt; …</code> — exactly the set: <code>dispatched | bounced | advanced | escalated | paused | metered | harvested …</code></td>
+        <td>Orchestrator (bot identity)</td>
+        <td><code>state(&lt;slug&gt;): &lt;verb&gt; …</code> — the union of the two sources' lists: <code>dispatched | bounced | advanced | escalated | paused | metered | harvested</code> (<code>contracts/state.yaml</code> lists the first six with a trailing "…"; ORCHESTRATOR.md §4.3 adds <code>harvested</code>). Sweep commits use <code>sweep(&lt;slug&gt;): dispatched | metered</code>. <code>paused</code> is also a human form (<code>paused by &lt;name&gt;</code>); only the author distinguishes them.</td>
         <td><code>state(creation-seam): dispatched implementer task 02-unit-tests</code></td>
       </tr>
     </tbody>
@@ -221,7 +225,8 @@
   <p>The CLI's other decisions write in the same style without being
   reserved forms: <code>G&lt;N&gt; declined by &lt;name&gt;</code>,
   <code>escalation #&lt;i&gt; resolved by &lt;name&gt;</code>,
-  <code>paused by &lt;name&gt; (&lt;reason&gt;)</code> and
+  <code>paused by &lt;name&gt; (&lt;reason&gt;)</code> (the one verb both
+  writers use) and
   <code>resumed to &lt;phase&gt; by &lt;name&gt;</code>.</p>
 
   <p>The orchestrator commits under a dedicated bot identity

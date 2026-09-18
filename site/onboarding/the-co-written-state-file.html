@@ -30,7 +30,8 @@
   input to any decision. This module is what you build on top of that. One file,
   <code>runs/&lt;slug&gt;/state.yaml</code>, is the entire control plane of a run
   in both directions: a human edits it through Gatehouse or the
-  <code>gateline</code> CLI, an engine edits it on every tick, neither has a lock.
+  <code>gateline</code> CLI, an engine edits it on every tick that has
+  something to record, neither has a lock.
   Making that safe takes four ideas.</p>
   <!-- evidence: docs/ORCHESTRATOR.md §4.5, §7; contracts/state.yaml -->
 
@@ -116,7 +117,8 @@ profile: standard # patch | standard | full (DESIGN.md §4.1)</code></pre>
 
   <p>Legality is checked there too, before any write is attempted. Approving a
   gate outside the run's profile throws; approving an already-decided gate
-  throws, pointing at the resume path that re-opens it; approving without a
+  throws, and for a declined gate the message points at the resume path that
+  re-opens it; approving without a
   burden rating throws, because the burden is the metric the autonomy criterion
   is measured on. Two later refusals follow the same pattern. A run a human has
   ended with <code>gateline close</code> sits at <code>phase: closed</code> with
@@ -130,8 +132,8 @@ profile: standard # patch | standard | full (DESIGN.md §4.1)</code></pre>
 
   <h2 id="one-write-path-two-ways-to-take-it">One write path, two ways to take it</h2>
 
-  <p><code>writeState</code> is the only writer. Its docblock calls it "the
-  single write path": resolve the branch, read the state file at the tip, apply
+  <p><code>writeState</code> is the only writer. Its interface docblock calls
+  it "the single write path": resolve the branch, read the state file at the tip, apply
   the mutation to a document, land the result with compare-and-swap
   semantics.</p>
   <!-- evidence: packages/core/src/sources/source.ts; packages/core/src/sources/local-source.ts; runs/writestate-kill-window/intent-brief.md -->

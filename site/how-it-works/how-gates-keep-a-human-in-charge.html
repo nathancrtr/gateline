@@ -47,7 +47,11 @@
   <p>The load-bearing safety property is structural. The engine has
   <em>no code path</em> that writes <code>gates.*.approved</code>: "the
   orchestrator never approves a gate" is not an instruction a model is asked to
-  follow but a property the code cannot violate. A run's <code>closure</code>
+  follow but a property the code cannot violate. The one gate entry a
+  machine writes is the pull-request approval sync, which copies a human
+  reviewer's PR approval into G2 under that reviewer's name; it runs in
+  Gatehouse's server and <code>gateline sync</code>, never in the engine. A
+  run's <code>closure</code>
   block sits on the same read-only list, so the engine can pause a run and
   never end one. The role spec says the same in
   its own grammar — the Orchestrator owns the gates in the sense that it
@@ -94,7 +98,9 @@
   <pre><code>c4b9d95 state(creation-seam): G2 approved by Nathan Carter [burden: confirmation]
 fdef5f2 state(creation-seam): metered verifier $3.11</code></pre>
   <p>The <code>creation-seam</code> record shows both hands in the same file:
-  ledger entries written by the engine with true per-dispatch token counts, and
+  ledger entries written by the engine, each carrying the dispatch's cost and
+  the token counts the harness reported (the input count leaves out cached
+  context, so the cost column is the one to trust), and
   gate entries written by the named human, each carrying a burden rating of how
   much work the review took. Its engine commits carry the bot name of their
   day, <code>agentic-orchestrator</code>. <!-- historical-name --> Finished runs keep the author that
@@ -209,8 +215,10 @@ fdef5f2 state(creation-seam): metered verifier $3.11</code></pre>
   <p>The control plane has one authority per deployment. Gatehouse and the
   engine run as one supervised unit over one clone — the <code>gateline
   up</code> topology — with one sync loop and one push path; the git host's
-  origin is the linearization point, so a dispatch is armed only once its
-  intent commit has been accepted by origin. A deployment can also run
+  origin is the linearization point, so a dispatch whose intent commit origin
+  rejects is never launched. An origin that is merely unreachable does not
+  block the launch, because the clone is only ahead, and a later accepted push
+  carries the commit. A deployment can also run
   local-only, with no push, no fetch, and no GitHub calls
   (<code>gateline up --local-only</code>); it is a named, first-class
   topology. The rule was learned from

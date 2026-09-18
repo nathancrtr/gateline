@@ -29,9 +29,11 @@
     and is the single source of truth for a pipeline run: its phase, profile,
     budget, gate decisions, task bookkeeping, and escalations. Every consumer
     — the Gatehouse frontend, the CLI, and the v1 orchestrator — reads this
-    file alone to derive what comes next. It is co-written by a named human
+    file first to derive what comes next, together with the artifacts and
+    <code>tasks/*.yaml</code> on the run branch (the <code>tasks:</code> block
+    mirrors those files). It is co-written by a named human
     (gate decisions) and the orchestrator (bookkeeping) under a structured
-    contract; no other state lives anywhere else.
+    contract; no run state lives outside the run directory.
     <!-- evidence: contracts/state.yaml; packages/core/src/record/schema.ts; runs/README.md -->
   </p>
 
@@ -56,8 +58,8 @@
         <td><code>patch | standard | full</code>. <strong>Absent → <code>full</code></strong> — the default is heaviest, not lightest, so every pre-profile run record keeps its meaning unchanged.</td>
       </tr>
       <tr>
-        <td><code>paused_reason</code></td><td>when paused</td><td>enum</td>
-        <td><code>budget-exhausted | round-cap | escalation | gate-declined | staged</code>. Set when <code>phase: paused</code>; <code>null</code> otherwise. The schema also knows <code>slug-landed</code>, set when <code>runs/&lt;slug&gt;/</code> has already shipped on the default branch; the contract comment does not list it yet.</td>
+        <td><code>paused_reason</code></td><td>when paused</td><td>string</td>
+        <td>A free string. The conventional values are <code>budget-exhausted | round-cap | escalation | gate-declined | staged</code> (the contract comment's list) plus <code>slug-landed</code>, which the engine sets when <code>runs/&lt;slug&gt;/</code> has already shipped on the default branch and the contract comment does not list yet. The schema does not enforce the list: <code>gateline approve --hold &lt;reason&gt;</code> writes the operator's free-text reason here. Set when <code>phase: paused</code>; <code>null</code> otherwise.</td>
       </tr>
       <tr>
         <td><code>closure</code></td><td>when closed</td><td>object</td>
@@ -193,7 +195,8 @@
 
   <h2 id="co-writer-contract">Co-writer contract</h2>
   <p>All writes to <code>state.yaml</code> follow a seven-point co-writer
-  contract:</p>
+  contract (ORCHESTRATOR.md §7 introduces it as "six conventions" but
+  numbers seven; the seven are listed here):</p>
   <!-- evidence: docs/ORCHESTRATOR.md §7; packages/core/src/sources/git.ts -->
   <ol>
     <li><strong>CAS ref updates.</strong> Every write is a compare-and-swap
@@ -216,7 +219,10 @@
       <code>reopened to &lt;phase&gt; by &lt;name&gt; (was closed as …)</code>.
       The orchestrator uses bookkeeping verbs under a
       dedicated bot identity: <code>dispatched | bounced | advanced |
-      escalated | paused | metered | harvested …</code>.</li>
+      escalated | paused | metered | harvested …</code>. <code>paused</code>
+      is shared: <code>gateline pause</code> writes
+      <code>paused by &lt;name&gt; (&lt;reason&gt;)</code> under the human's
+      identity, and only the author distinguishes the two.</li>
     <li><strong>review_rounds in state.yaml only.</strong> No other file
       carries it.</li>
     <li><strong>Phase/status values within contract enums.</strong> No

@@ -58,7 +58,7 @@
   tree, commit, tag. <code>gitglossary(7)</code> defines an
   <strong>object</strong> as "the unit of storage in Git. It is uniquely
   identified by the SHA-1 of its contents. Consequently, an object cannot be
-  changed." A <strong>tree</strong> is "an object containing a list of file names
+  changed." A <strong>tree object</strong> is "an object containing a list of file names
   and modes along with refs to the associated blob and/or tree objects", and a
   <strong>commit</strong> names one tree plus its metadata.</p>
   <!-- evidence: gitglossary(7); packages/core/src/sources/git.ts -->
@@ -375,7 +375,7 @@ second writer: exit=128</code></pre>
 run: dupefind
 branch: run/dupefind
 phase: done               # spec | plan | implement | integrate | release | done | paused</code></pre>
-    <p>Note the third line. The file names a branch
+    <p>Note the fifth line. The file names a branch
     <code>run/dupefind</code> that no longer exists anywhere in the repository —
     the run merged and the branch was pruned. Its record survives on
     <code>main</code> regardless, because the record was never the branch; it
@@ -525,9 +525,10 @@ unknown commit:  exit=128</code></pre>
 
   <p>Worktree awareness changes the write path here.
   <code>Git.worktrees</code> parses <code>git worktree list --porcelain</code>
-  into paths and branches, and four separate decisions consult it — from which
-  branches may be fetched to whether a rejected push may be rolled back. The
-  governing sentence is a code comment: if the branch is checked out somewhere,
+  into paths and branches, and decisions across core and the orchestrator
+  consult it — from which branches may be fetched to whether a rejected push
+  may be rolled back. The governing sentence is a code comment in
+  <code>writeState</code>: if the branch is checked out somewhere,
   an <code>update-ref</code> behind its back would leave that checkout silently
   diverged.</p>
 

@@ -281,6 +281,28 @@ export function parseRunState(text: string): StateParseResult {
   return { state: result.data, error: null }
 }
 
+/**
+ * `escalations:` read on its own, independent of whether the rest of the file
+ * matches the contract (#49). A malformed run still renders loudly — nothing
+ * here changes that — but for a governance surface an unresolved escalation is
+ * the one fact worth a best-effort read even when `parseRunState` already gave
+ * up on the whole document. Never throws: unparsable YAML, a missing
+ * `escalations:` key, or one that itself fails `escalationSchema` all resolve
+ * to no escalations, the same as a well-formed file with none, so a caller
+ * already showing "malformed" gets no second failure mode to handle.
+ */
+export function bestEffortEscalations(text: string): Escalation[] {
+  let raw: unknown
+  try {
+    raw = parseYaml(text)
+  } catch {
+    return []
+  }
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return []
+  const result = z.array(escalationSchema).safeParse((raw as Record<string, unknown>).escalations)
+  return result.success ? result.data : []
+}
+
 /** Gate awaiting a decision: neither approved nor decided-by-anyone yet. */
 export function gateUndecided(g: GateEntry): boolean {
   return !g.approved && g.by === null

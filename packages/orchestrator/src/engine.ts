@@ -1079,7 +1079,7 @@ export class Engine {
         const checkout = managesOwnWorkspace
           ? null
           : isolate
-            ? await ensureTaskCheckout(this.cfg.repoDir, ref.branch, intent.task!)
+            ? await ensureTaskCheckout(this.cfg.repoDir, ref.branch, intent.task!, { log: (line) => this.log(`${ref.slug}: ${line}`) })
             : { path: await ensureRunCheckout(this.cfg.repoDir, ref.branch), branch: ref.branch }
         const taskFile = intent.task ? (obs.taskFiles.get(intent.task) ?? null) : null
         const taskPath = taskFile?.path ?? null

@@ -9,6 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Identity } from '@gateline/core/record'
 import { Git } from '@gateline/core/sources'
+import { type SeedOptions, seedDependencies } from './deps.ts'
 
 // Parallel dispatches for one run share its checkout; single-flight the
 // worktree creation so concurrent jobs don't race `git worktree add`.
@@ -16,6 +17,16 @@ const inFlight = new Map<string, Promise<string>>()
 
 /** The marker every orchestrator-owned worktree path carries; anything else holding a run branch is someone's. */
 const OWN_MARKER = 'gateline-orchestrator'
+
+/**
+ * Where the orchestrator keeps the worktree named `name` for `repoDir`. One
+ * formula, because `ensureTaskCheckout` has to be able to name the run
+ * checkout's path (its warm dependency store, #229) without creating it.
+ */
+function worktreePath(repoDir: string, name: string): string {
+  const repoKey = createHash('sha256').update(repoDir).digest('hex').slice(0, 12)
+  return join(tmpdir(), OWN_MARKER, repoKey, name)
+}
 
 /**
  * The run branch is checked out somewhere the orchestrator does not own — a
@@ -67,8 +78,7 @@ export function ensureRunCheckout(repoDir: string, branch: string): Promise<stri
 
 async function createRunCheckout(repoDir: string, branch: string): Promise<string> {
   const git = new Git(repoDir)
-  const repoKey = createHash('sha256').update(repoDir).digest('hex').slice(0, 12)
-  const path = join(tmpdir(), 'gateline-orchestrator', repoKey, branch.replace(/\//g, '-'))
+  const path = worktreePath(repoDir, branch.replace(/\//g, '-'))
 
   const worktrees = await git.worktrees()
   const existing = worktrees.find((w) => w.branch === `refs/heads/${branch}`)
@@ -119,11 +129,10 @@ export interface TaskCheckout {
 
 const taskBranchName = (runBranch: string, task: string) => `${runBranch}--task/${task}`
 
-export async function ensureTaskCheckout(repoDir: string, runBranch: string, task: string): Promise<TaskCheckout> {
+export async function ensureTaskCheckout(repoDir: string, runBranch: string, task: string, seed: SeedOptions = {}): Promise<TaskCheckout> {
   const git = new Git(repoDir)
   const branch = taskBranchName(runBranch, task)
-  const repoKey = createHash('sha256').update(repoDir).digest('hex').slice(0, 12)
-  const path = join(tmpdir(), 'gateline-orchestrator', repoKey, branch.replace(/\//g, '-'))
+  const path = worktreePath(repoDir, branch.replace(/\//g, '-'))
 
   // A leftover branch from a crashed dispatch is stale by definition — the
   // heartbeat re-dispatches from the current run tip, never resumes it.
@@ -133,6 +142,12 @@ export async function ensureTaskCheckout(repoDir: string, runBranch: string, tas
   if (await git.revParse(`refs/heads/${branch}`)) await git.run(['branch', '-D', branch])
 
   await git.run(['worktree', 'add', '-b', branch, path, runBranch])
+  // A git worktree carries tracked files only, so a fresh one has no
+  // dependencies at all and the implementer's first act is a cold install
+  // (#229). Seed them instead, from the run checkout if it has them and the
+  // repository otherwise — a private tree either way, so the isolation the
+  // worktree exists for is untouched.
+  await seedDependencies(path, [worktreePath(repoDir, runBranch.replace(/\//g, '-')), repoDir], seed)
   return { path, branch }
 }
 
@@ -417,10 +432,9 @@ export async function foldHarvestBranch(
   harvest: { branch: string; base: string },
 ): Promise<FoldResult> {
   const git = new Git(repoDir)
-  const repoKey = createHash('sha256').update(repoDir).digest('hex').slice(0, 12)
   const localBranch = `harvest-${harvest.branch.replace(/\//g, '-')}`
   const fetchRef = `refs/gateline-harvest/${localBranch}`
-  const path = join(tmpdir(), 'gateline-orchestrator', repoKey, localBranch)
+  const path = worktreePath(repoDir, localBranch)
 
   // The origin branch is this fold's retained copy on every failure path: it
   // is what the escalated human recovers from (F9), so name it in the result.

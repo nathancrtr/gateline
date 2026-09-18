@@ -532,14 +532,20 @@ autonomy multiplies the cost of a missing meter. The design:
   section says how to read its usage output, normalized to one record shape.
 - **The record is a ledger, not a running total.**
   `budget.ledger[]` in `state.yaml`:
-  `{at, role, task, round, adapter, model, tokens_in, tokens_out, cost_usd}`.
+  `{at, role, task, round, adapter, model, tokens_in, tokens_out, cost_usd}`, plus
+  two optional keys — `tokens_cache_read` / `tokens_cache_write` — on a runner
+  whose manifest reports prompt-cache tokens separately from ordinary input
+  (#75); absent otherwise, and on every entry written before the keys existed.
   `cost_spent_usd` becomes the derived sum, updated in the same closing commit as
   the dispatch bookkeeping. Append-only facts survive races and audits; running
   totals don't.
 - **Prices live in the registry.** `registry/models.yaml` gains a `pricing:` map
-  (model ID → $/Mtok in/out). The registry is already the only file where model IDs
-  exist, so it is the only correct home for their prices — illustrative values,
-  org-pinned like the IDs themselves.
+  (model ID → $/Mtok in/out), with optional per-model `cache_read`/`cache_write`
+  rates a dispatch's cache tokens price at when the registry publishes them,
+  falling back to the ordinary input rate for a model with no cache entry. The
+  registry is already the only file where model IDs exist, so it is the only
+  correct home for their prices — illustrative values, org-pinned like the IDs
+  themselves.
 - **Enforcement is pre-flight.** Before any dispatch: ledger sum + the registry's
   static per-role estimate (`dispatch_estimates_usd`; resolved question 2 — static
   for v1, trailing ledger averages a possible later upgrade) against

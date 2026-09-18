@@ -36,9 +36,12 @@ pricing:
   # The v1 orchestrator prices each dispatch's usage from this map into the
   # run's budget.ledger[] (docs/ORCHESTRATOR.md §6). A model with no entry
   # here cannot be metered; the dispatch seam refuses it rather than guessing.
-  anthropic/claude-fable-5:   {usd_per_mtok_in: 10, usd_per_mtok_out: 50}
-  anthropic/claude-sonnet-5:  {usd_per_mtok_in: 3,  usd_per_mtok_out: 15}
-  anthropic/claude-haiku-4-5: {usd_per_mtok_in: 1,  usd_per_mtok_out: 5}
+  # `cache_read`/`cache_write` are optional, per-model published prompt-cache
+  # rates (cache_write at the 5-minute ephemeral rate, the harness default);
+  # a model with no entry for one prices those tokens as ordinary input (#75).
+  anthropic/claude-fable-5:   {usd_per_mtok_in: 10, usd_per_mtok_out: 50, cache_read: 1,    cache_write: 12.50}
+  anthropic/claude-sonnet-5:  {usd_per_mtok_in: 3,  usd_per_mtok_out: 15, cache_read: 0.20, cache_write: 2.50}
+  anthropic/claude-haiku-4-5: {usd_per_mtok_in: 1,  usd_per_mtok_out: 5,  cache_read: 0.10, cache_write: 1.25}
 
   # Reference rates for the opencode adapter's open-weight bindings
   # (adapters/opencode/manifest.json). The opencode adapter reports real

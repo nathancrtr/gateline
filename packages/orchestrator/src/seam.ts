@@ -30,6 +30,13 @@ export interface DispatchOutcome {
   costUsd: number | null
   tokensIn: number | null
   tokensOut: number | null
+  /**
+   * Cache-read/cache-write token counts, when the harness's manifest says how
+   * to read them (claude-code does; a harness/manifest that doesn't leaves
+   * these undefined, same as an absent `fields.tokens_cache_read`).
+   */
+  tokensCacheRead?: number | null
+  tokensCacheWrite?: number | null
   error: string | null
   /** Retrying cannot help (e.g. a fold conflict = plan defect): escalate now. */
   fatal?: boolean
@@ -125,7 +132,15 @@ export class HeadlessDispatcher implements Dispatcher {
     if (this.manifest.usage.format === 'static-estimate') {
       // No per-invocation usage from this harness (yet): the engine meters
       // this dispatch at the registry's static estimate, tokens null.
-      return { ok: !error && !timedOut && !aborted, costUsd: null, tokensIn: null, tokensOut: null, error: failure }
+      return {
+        ok: !error && !timedOut && !aborted,
+        costUsd: null,
+        tokensIn: null,
+        tokensOut: null,
+        tokensCacheRead: null,
+        tokensCacheWrite: null,
+        error: failure,
+      }
     }
 
     if (this.manifest.usage.format === 'ndjson-sum') {
@@ -136,6 +151,8 @@ export class HeadlessDispatcher implements Dispatcher {
           costUsd: null,
           tokensIn: null,
           tokensOut: null,
+          tokensCacheRead: null,
+          tokensCacheWrite: null,
           error: failure ?? 'harness produced no parseable JSON output',
         }
       }
@@ -149,6 +166,8 @@ export class HeadlessDispatcher implements Dispatcher {
         costUsd: sumField(matching, fields.cost_usd),
         tokensIn: sumField(matching, fields.tokens_in),
         tokensOut: sumField(matching, fields.tokens_out),
+        tokensCacheRead: sumField(matching, fields.tokens_cache_read),
+        tokensCacheWrite: sumField(matching, fields.tokens_cache_write),
         error: failure ?? (harnessError ? String(resultText ?? 'harness reported an error') : null),
       }
     }
@@ -160,6 +179,8 @@ export class HeadlessDispatcher implements Dispatcher {
         costUsd: null,
         tokensIn: null,
         tokensOut: null,
+        tokensCacheRead: null,
+        tokensCacheWrite: null,
         error: failure ?? 'harness produced no parseable JSON output',
       }
     }
@@ -176,6 +197,8 @@ export class HeadlessDispatcher implements Dispatcher {
       costUsd: num(fields.cost_usd),
       tokensIn: num(fields.tokens_in),
       tokensOut: num(fields.tokens_out),
+      tokensCacheRead: num(fields.tokens_cache_read),
+      tokensCacheWrite: num(fields.tokens_cache_write),
       error: failure ?? (harnessError ? String(resultText ?? 'harness reported an error') : null),
     }
   }

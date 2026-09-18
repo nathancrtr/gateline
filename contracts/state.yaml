@@ -75,7 +75,16 @@ budget:
   ledger: []              # append-only, one entry per model invocation:
                           #   {at, role, task, round, adapter, model,
                           #    tokens_in, tokens_out, cost_usd}
-                          # task/round null when not applicable. Two optional
+                          # task/round null when not applicable. Two more
+                          # optional keys, present only when the runner
+                          # reports them separately from ordinary input
+                          # tokens: `tokens_cache_read` / `tokens_cache_write`
+                          # — tokens served from (or written to) a prompt
+                          # cache, typically billed at a different rate than
+                          # fresh input. Absent on a runner that doesn't
+                          # report the split, and on any entry written before
+                          # these keys existed — a reader treats a missing key
+                          # as "unknown", never as zero. Two optional
                           # flags close an entry that did not succeed:
                           # `failed: true` — the harness ran and did not
                           # complete (crash, timeout, aged out); cost_usd is

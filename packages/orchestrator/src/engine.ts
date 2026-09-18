@@ -1261,6 +1261,8 @@ export class Engine {
         (doc) => {
           doc.setIn(['budget', 'ledger', index, 'tokens_in'], outcome.tokensIn)
           doc.setIn(['budget', 'ledger', index, 'tokens_out'], outcome.tokensOut)
+          if (outcome.tokensCacheRead != null) doc.setIn(['budget', 'ledger', index, 'tokens_cache_read'], outcome.tokensCacheRead)
+          if (outcome.tokensCacheWrite != null) doc.setIn(['budget', 'ledger', index, 'tokens_cache_write'], outcome.tokensCacheWrite)
           doc.setIn(['budget', 'ledger', index, 'cost_usd'], cost)
           if (!outcome.ok && !refused) doc.setIn(['budget', 'ledger', index, 'failed'], true)
           if (refused) doc.setIn(['budget', 'ledger', index, 'refused'], true)
@@ -1400,7 +1402,14 @@ export class Engine {
     const model = resolveModel(this.cfg.registry, role)
     const price = model ? this.cfg.registry.pricing[model] : undefined
     if (!price) return null
-    return round2((outcome.tokensIn / 1e6) * price.usd_per_mtok_in + (outcome.tokensOut / 1e6) * price.usd_per_mtok_out)
+    let cost = (outcome.tokensIn / 1e6) * price.usd_per_mtok_in + (outcome.tokensOut / 1e6) * price.usd_per_mtok_out
+    // Cache reads/writes price at their own rate when the registry publishes
+    // one for this model; a model with no published rate has its cache
+    // tokens priced as ordinary input — the same treatment they got before
+    // they were visible at all.
+    if (outcome.tokensCacheRead) cost += (outcome.tokensCacheRead / 1e6) * (price.cache_read ?? price.usd_per_mtok_in)
+    if (outcome.tokensCacheWrite) cost += (outcome.tokensCacheWrite / 1e6) * (price.cache_write ?? price.usd_per_mtok_in)
+    return round2(cost)
   }
 }
 

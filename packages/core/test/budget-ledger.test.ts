@@ -11,7 +11,11 @@ const withLedger = (ledger: unknown): RunState =>
   ({ budget: { cost_limit_usd: 25, cost_spent_usd: 0, ledger } }) as unknown as RunState
 
 describe('parseLedger', () => {
-  it('reads a full entry as written', () => {
+  // #75: this entry predates tokens_cache_read/tokens_cache_write — no such
+  // keys at all, not even null — and still has to parse cleanly, with those
+  // fields degrading to null rather than the entry (or the whole ledger)
+  // failing to validate.
+  it('reads a full entry as written, and a historical entry with no cache-token keys still validates', () => {
     const state = withLedger([
       {
         at: '2026-07-22T10:00:00Z',
@@ -37,6 +41,8 @@ describe('parseLedger', () => {
         model: 'a-model',
         tokens_in: 1200,
         tokens_out: 900,
+        tokens_cache_read: null,
+        tokens_cache_write: null,
         cost_usd: 0.42,
         failed: false,
         refused: false,
@@ -60,6 +66,16 @@ describe('parseLedger', () => {
     // must lose one field, not the whole run.
     const [e] = parseLedger(withLedger([{ role: 'ops', at: 7, round: 'two', cost_usd: 'free' }]))
     expect(e).toMatchObject({ role: 'ops', at: null, round: null, cost_usd: null, failed: false })
+  })
+
+  // #75: optional, present only when the dispatch seam's adapter reports
+  // prompt-cache tokens separately from ordinary input.
+  it('reads tokens_cache_read/tokens_cache_write when present, and degrades a wrong-typed value to null', () => {
+    expect(parseLedger(withLedger([{ role: 'implementer', tokens_cache_read: 8000, tokens_cache_write: 500 }]))[0]).toMatchObject({
+      tokens_cache_read: 8000,
+      tokens_cache_write: 500,
+    })
+    expect(parseLedger(withLedger([{ role: 'implementer', tokens_cache_read: 'lots' }]))[0]!.tokens_cache_read).toBeNull()
   })
 
   it('reads a YAML timestamp that parsed as a Date', () => {

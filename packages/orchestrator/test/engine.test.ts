@@ -11,6 +11,7 @@ import { LocalGitSource } from '@gateline/core'
 import { describe, expect, it, vi } from 'vitest'
 import { Engine } from '../src/engine.ts'
 import { parseLedger } from '../src/observe.ts'
+import type { Registry } from '../src/registry.ts'
 import { removeRunCheckout } from '../src/workspace.ts'
 import {
   agentCommit,
@@ -480,11 +481,13 @@ describe('usage parsing (seam)', () => {
       is_error: false,
       result: 'done',
       total_cost_usd: 0.0421,
-      usage: { input_tokens: 1200, output_tokens: 340 },
+      usage: { input_tokens: 1200, output_tokens: 340, cache_read_input_tokens: 8000, cache_creation_input_tokens: 500 },
     })
     const parsed = parseJsonOutput(stdout)
     expect(dig(parsed, 'total_cost_usd')).toBe(0.0421)
     expect(dig(parsed, 'usage.input_tokens')).toBe(1200)
+    expect(dig(parsed, 'usage.cache_read_input_tokens')).toBe(8000)
+    expect(dig(parsed, 'usage.cache_creation_input_tokens')).toBe(500)
     expect(dig(parsed, 'is_error')).toBe(false)
   })
 
@@ -496,8 +499,94 @@ describe('usage parsing (seam)', () => {
     expect(cc.command[0]).toBe('claude')
     expect(cc.usage.format).toBe('json-stdout')
     expect(cc.usage.fields?.cost_usd).toBe('total_cost_usd')
+    expect(cc.usage.fields?.tokens_cache_read).toBe('usage.cache_read_input_tokens')
+    expect(cc.usage.fields?.tokens_cache_write).toBe('usage.cache_creation_input_tokens')
     const copilot = await loadHeadlessManifest(repoRoot, 'copilot-cli')
     expect(copilot.command[0]).toBe('copilot')
     expect(copilot.usage.format).toBe('static-estimate')
+  })
+
+  it('a HeadlessDispatcher configured with cache fields picks them up when present', async () => {
+    const { HeadlessDispatcher } = await import('../src/seam.ts')
+    const manifest = {
+      adapter: 'toy-sh',
+      command: ['sh', '-c', 'echo \'{"cost":1.5,"in":10,"out":20,"cache_read":7,"cache_write":3}\''],
+      dispatchPrompt: '{body}',
+      usage: {
+        format: 'json-stdout' as const,
+        fields: { cost_usd: 'cost', tokens_in: 'in', tokens_out: 'out', tokens_cache_read: 'cache_read', tokens_cache_write: 'cache_write' },
+      },
+      modelMap: {},
+      modelOverrides: {},
+      modelVendors: {},
+    }
+    const outcome = await new HeadlessDispatcher(manifest).dispatch({ cwd: '/tmp', role: 'implementer', body: 'x', timeoutMs: 30_000 })
+    expect(outcome.tokensCacheRead).toBe(7)
+    expect(outcome.tokensCacheWrite).toBe(3)
+  })
+
+  it('leaves cache token fields undefined when the manifest names none', async () => {
+    const { HeadlessDispatcher } = await import('../src/seam.ts')
+    const manifest = {
+      adapter: 'toy-sh',
+      command: ['sh', '-c', 'echo \'{"cost":1.5,"in":10,"out":20}\''],
+      dispatchPrompt: '{body}',
+      usage: { format: 'json-stdout' as const, fields: { cost_usd: 'cost', tokens_in: 'in', tokens_out: 'out' } },
+      modelMap: {},
+      modelOverrides: {},
+      modelVendors: {},
+    }
+    const outcome = await new HeadlessDispatcher(manifest).dispatch({ cwd: '/tmp', role: 'implementer', body: 'x', timeoutMs: 30_000 })
+    // Same "unmeasured" null every other usage field falls back to when the
+    // manifest names no path for it (tokens_in/tokens_out do the same).
+    expect(outcome.tokensCacheRead).toBeNull()
+    expect(outcome.tokensCacheWrite).toBeNull()
+  })
+})
+
+describe('computeCost prices cache tokens (#75)', () => {
+  it("uses the registry's cache rates when the model publishes them", async () => {
+    const { dir, clock } = makeToyRepo()
+    const registryWithCache: Registry = {
+      ...TEST_REGISTRY,
+      pricing: {
+        ...TEST_REGISTRY.pricing,
+        'anthropic/claude-sonnet-5': { usd_per_mtok_in: 3, usd_per_mtok_out: 15, cache_read: 0.3, cache_write: 3.75 },
+      },
+    }
+    const dispatcher = new FakeDispatcher((req) => {
+      agentCommit(req.cwd, clock, { 'runs/toy/spec.md': SPEC }, 'toy: spec')
+      return { costUsd: null, tokensIn: 1_000_000, tokensOut: 1_000_000, tokensCacheRead: 2_000_000, tokensCacheWrite: 500_000 }
+    })
+    const engine = makeEngine(dir, dispatcher, { registry: registryWithCache })
+    const source = new LocalGitSource('check', dir)
+    try {
+      await reconcile(engine)
+      const { state } = await source.readState(toyRef(dir))
+      const [entry] = parseLedger(state)
+      // analyst -> balanced -> anthropic/claude-sonnet-5: 1Mtok*$3 + 1Mtok*$15 + 2Mtok*$0.3 + 0.5Mtok*$3.75 = 20.475, rounded to cents
+      expect(entry!.cost_usd).toBeCloseTo(20.48, 2)
+    } finally {
+      await removeRunCheckout(dir, 'run/toy')
+    }
+  })
+
+  it('falls back to the ordinary input rate when the registry has no cache rate for the model', async () => {
+    const { dir, clock } = makeToyRepo()
+    const dispatcher = new FakeDispatcher((req) => {
+      agentCommit(req.cwd, clock, { 'runs/toy/spec.md': SPEC }, 'toy: spec')
+      return { costUsd: null, tokensIn: 1_000_000, tokensOut: 0, tokensCacheRead: 1_000_000, tokensCacheWrite: 0 }
+    })
+    const engine = makeEngine(dir, dispatcher) // TEST_REGISTRY publishes no cache_read/cache_write
+    const source = new LocalGitSource('check', dir)
+    try {
+      await reconcile(engine)
+      const { state } = await source.readState(toyRef(dir))
+      const [entry] = parseLedger(state)
+      // 1Mtok fresh input @ $3 + 1Mtok cache-read priced as ordinary input @ $3 = $6
+      expect(entry!.cost_usd).toBeCloseTo(6, 5)
+    } finally {
+      await removeRunCheckout(dir, 'run/toy')
+    }
   })
 })

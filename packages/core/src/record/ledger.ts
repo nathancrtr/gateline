@@ -28,6 +28,14 @@ export interface BudgetLedgerEntry {
   model: string | null
   tokens_in: number | null
   tokens_out: number | null
+  /**
+   * Optional (#75): cache-read/cache-write token counts, when the dispatch
+   * seam's adapter reports them. Null on any entry that predates this field
+   * or whose harness doesn't report cache usage — same degrade-to-null
+   * defensiveness as every other ledger field.
+   */
+  tokens_cache_read: number | null
+  tokens_cache_write: number | null
   cost_usd: number | null
   failed: boolean
   /** Closed without a process ever spawning (#155): $0, not a failure, not a retry spent. */
@@ -76,6 +84,8 @@ export function parseLedger(state: RunState | null): BudgetLedgerEntry[] {
       model: typeof e.model === 'string' ? e.model : null,
       tokens_in: typeof e.tokens_in === 'number' ? e.tokens_in : null,
       tokens_out: typeof e.tokens_out === 'number' ? e.tokens_out : null,
+      tokens_cache_read: typeof e.tokens_cache_read === 'number' ? e.tokens_cache_read : null,
+      tokens_cache_write: typeof e.tokens_cache_write === 'number' ? e.tokens_cache_write : null,
       cost_usd: typeof e.cost_usd === 'number' ? e.cost_usd : null,
       failed: e.failed === true,
       refused: e.refused === true,

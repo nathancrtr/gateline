@@ -63,7 +63,9 @@
       "fields": {
         "cost_usd": "total_cost_usd",
         "tokens_in": "usage.input_tokens",
-        "tokens_out": "usage.output_tokens"
+        "tokens_out": "usage.output_tokens",
+        "tokens_cache_read": "usage.cache_read_input_tokens",
+        "tokens_cache_write": "usage.cache_creation_input_tokens"
       },
       "error_field": "is_error",
       "result_field": "result"

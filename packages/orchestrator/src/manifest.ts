@@ -28,7 +28,14 @@ export interface HeadlessManifest {
      * agent turn — e.g. opencode's `step_finish` — reports cost/tokens
      * per turn, not as a single running total).
      */
-    fields?: { cost_usd?: string; tokens_in?: string; tokens_out?: string }
+    fields?: {
+      cost_usd?: string
+      tokens_in?: string
+      tokens_out?: string
+      /** Optional: absent for a harness/model that doesn't report cache tokens. */
+      tokens_cache_read?: string
+      tokens_cache_write?: string
+    }
     /** ndjson-sum only: a line is summed iff every dotted-path field here matches (as a string). */
     lineFilter?: Record<string, string>
     errorField?: string

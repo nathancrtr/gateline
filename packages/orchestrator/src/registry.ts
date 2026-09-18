@@ -20,6 +20,14 @@ export interface RegistryBinding {
 export interface ModelPrice {
   usd_per_mtok_in: number
   usd_per_mtok_out: number
+  /**
+   * Optional: a model with no published cache rate leaves these absent, and
+   * computeCost() (engine.ts) falls back to pricing that model's cache
+   * tokens as ordinary input — exactly what happens today, before any cache
+   * token count is visible at all.
+   */
+  cache_read?: number
+  cache_write?: number
 }
 
 export interface Registry {
@@ -67,7 +75,12 @@ export function parseRegistry(text: string): Registry {
   for (const [model, p] of Object.entries(obj(raw?.pricing))) {
     const price = obj(p)
     if (typeof price.usd_per_mtok_in === 'number' && typeof price.usd_per_mtok_out === 'number')
-      pricing[model] = { usd_per_mtok_in: price.usd_per_mtok_in, usd_per_mtok_out: price.usd_per_mtok_out }
+      pricing[model] = {
+        usd_per_mtok_in: price.usd_per_mtok_in,
+        usd_per_mtok_out: price.usd_per_mtok_out,
+        ...(typeof price.cache_read === 'number' ? { cache_read: price.cache_read } : {}),
+        ...(typeof price.cache_write === 'number' ? { cache_write: price.cache_write } : {}),
+      }
   }
 
   const estimates: Record<string, number> = {}

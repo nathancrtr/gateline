@@ -116,16 +116,21 @@ the words beside them. Hue 0 is outside every burned band.
 
 | | family | source |
 |---|---|---|
-| Reading | Newsreader | held from the previous round |
-| Chrome | Inter | held from the previous round — **a register default, not a decision** |
-| Mono | JetBrains Mono | held from the previous round |
+| Reading | Newsreader | held from the previous round — vendored, `public/fonts/newsreader/` |
+| Chrome | Inter | held from the previous round — **a register default, not a decision** — vendored, `public/fonts/inter/` |
+| Mono | JetBrains Mono | held from the previous round — vendored, `public/fonts/jetbrains-mono/` |
 
 Type was deliberately held constant through the direction mockups so the
 comparison isolated ground, structure and marks. It is the next pass, seeded
 from the artifact's own lettering (a gothic with wide, lining, tabular
-figures doing the code work), and it includes vendoring: a self-hosted
-cockpit should not phone a font CDN. Until that pass lands, this table
-records that the chrome face was inherited.
+figures doing the code work). Vendoring shipped ahead of that pass (#358):
+the three faces above are self-hosted `@font-face` rules in
+[`src/styles.css`](src/styles.css) with each family's OFL license text beside
+its `.woff2` files, so a self-hosted cockpit no longer phones a font CDN and
+the deploy image carries what it needs with no network at build or runtime.
+Until the type pass lands, this table records that the chrome face was
+inherited — vendoring only changed where the bytes come from, not which
+faces are chosen.
 
 ## Layout grammar
 

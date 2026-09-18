@@ -41,6 +41,7 @@ describe('parseLedger', () => {
         failed: false,
         refused: false,
         engine: 'workstation:4242',
+        session: null,
       },
     ])
   })

@@ -12,6 +12,13 @@ export interface DispatchRequest {
   /** Run-specific prompt body; the adapter's template wraps it. */
   body: string
   timeoutMs: number
+  /**
+   * A prior harness session to continue (#181), set by the engine when this is
+   * a retry of the same role+task+round and the previous attempt reported one.
+   * The seam passes it only to an adapter whose manifest declares `resume_args`;
+   * every other runner ignores it and starts fresh, as does a new round.
+   */
+  resumeSession?: string | null
   /** Run identity (optional): the engine always sets these; HeadlessDispatcher ignores them. */
   slug?: string
   branch?: string
@@ -31,6 +38,18 @@ export interface DispatchOutcome {
   tokensIn: number | null
   tokensOut: number | null
   error: string | null
+  /**
+   * The harness's own session for this dispatch (#181), when its manifest says
+   * where to read one. The engine records it on the ledger entry, so a retry of
+   * the same role+task+round can resume where this attempt got to.
+   */
+  session?: string | null
+  /**
+   * A resume was asked for and the harness would not take it, so the dispatch
+   * ran fresh instead (#181). The engine logs it; nothing else changes — every
+   * other field here belongs to the fresh attempt.
+   */
+  resumeRefused?: boolean
   /** Retrying cannot help (e.g. a fold conflict = plan defect): escalate now. */
   fatal?: boolean
   /**
@@ -105,11 +124,44 @@ export class HeadlessDispatcher implements Dispatcher {
   }
 
   async dispatch(req: DispatchRequest): Promise<DispatchOutcome> {
+    const resume = this.resumeArgv(req)
+    const first = await this.attempt(req, resume)
+    // A resume the harness would not take (#181): an unknown flag, or a
+    // session it no longer holds. It never reached the agent — the process
+    // failed and no session id came back — so nothing was spent, and nothing
+    // is lost by starting over. A resume is an optimization, and an
+    // optimization may never cost a dispatch. A timeout or an operator abort
+    // is excluded: that is the dispatch itself going wrong, and re-running
+    // would spend a second timeout's wall clock proving it.
+    const refused =
+      resume !== null && this.manifest.sessionField !== undefined && !first.outcome.ok && !first.outcome.session && !first.ended
+    if (!refused) return first.outcome
+    const fresh = await this.attempt(req, null)
+    return { ...fresh.outcome, resumeRefused: true }
+  }
+
+  /**
+   * The argv fragment that continues `req.resumeSession`, or null when there
+   * is nothing to resume or this runner cannot. The template lives in the
+   * adapter's manifest, so the seam stays neutral about what a session is.
+   */
+  private resumeArgv(req: DispatchRequest): string[] | null {
+    const session = req.resumeSession
+    const template = this.manifest.resumeArgs
+    if (!session || !template || template.length === 0) return null
+    return template.map((a) => a.replaceAll('{session}', session))
+  }
+
+  /** One harness run. `ended` marks a timeout or an operator abort — a failure the seam itself caused. */
+  private async attempt(req: DispatchRequest, resume: string[] | null): Promise<{ outcome: DispatchOutcome; ended: boolean }> {
     const prompt = this.manifest.dispatchPrompt.replaceAll('{role}', req.role).replaceAll('{body}', req.body)
-    const argv = this.manifest.command.map((a) => a.replaceAll('{prompt}', prompt).replaceAll('{role}', req.role))
+    const argv = [...this.manifest.command, ...(resume ?? [])].map((a) =>
+      a.replaceAll('{prompt}', prompt).replaceAll('{role}', req.role),
+    )
     const [cmd, ...args] = argv
 
     const { stdout, error, timedOut, aborted } = await runHarness(cmd!, args, req.cwd, req.timeoutMs, this.live, this.abortedPids)
+    const ended = timedOut || aborted
     // execFile's generic "Command failed: <argv>" hides what actually
     // happened; a timeout or an operator abort is a failure the seam itself
     // caused, so name it — the ledger and the escalation both carry this
@@ -125,18 +177,23 @@ export class HeadlessDispatcher implements Dispatcher {
     if (this.manifest.usage.format === 'static-estimate') {
       // No per-invocation usage from this harness (yet): the engine meters
       // this dispatch at the registry's static estimate, tokens null.
-      return { ok: !error && !timedOut && !aborted, costUsd: null, tokensIn: null, tokensOut: null, error: failure }
+      return { ended, outcome: { ok: !error && !ended, costUsd: null, tokensIn: null, tokensOut: null, error: failure, session: null } }
     }
 
     if (this.manifest.usage.format === 'ndjson-sum') {
       const events = parseNdjson(stdout)
+      const session = sessionFrom(events, this.manifest.sessionField)
       if (events.length === 0) {
         return {
-          ok: false,
-          costUsd: null,
-          tokensIn: null,
-          tokensOut: null,
-          error: failure ?? 'harness produced no parseable JSON output',
+          ended,
+          outcome: {
+            ok: false,
+            costUsd: null,
+            tokensIn: null,
+            tokensOut: null,
+            error: failure ?? 'harness produced no parseable JSON output',
+            session,
+          },
         }
       }
       const matching = events.filter((e) => matchesLineFilter(e, this.manifest.usage.lineFilter))
@@ -145,22 +202,30 @@ export class HeadlessDispatcher implements Dispatcher {
       const harnessError = this.manifest.usage.errorField ? dig(last, this.manifest.usage.errorField) === true : false
       const resultText = this.manifest.usage.resultField ? dig(last, this.manifest.usage.resultField) : null
       return {
-        ok: !error && !timedOut && !aborted && !harnessError,
-        costUsd: sumField(matching, fields.cost_usd),
-        tokensIn: sumField(matching, fields.tokens_in),
-        tokensOut: sumField(matching, fields.tokens_out),
-        error: failure ?? (harnessError ? String(resultText ?? 'harness reported an error') : null),
+        ended,
+        outcome: {
+          ok: !error && !ended && !harnessError,
+          costUsd: sumField(matching, fields.cost_usd),
+          tokensIn: sumField(matching, fields.tokens_in),
+          tokensOut: sumField(matching, fields.tokens_out),
+          error: failure ?? (harnessError ? String(resultText ?? 'harness reported an error') : null),
+          session,
+        },
       }
     }
 
     const parsed = parseJsonOutput(stdout)
     if (!parsed) {
       return {
-        ok: false,
-        costUsd: null,
-        tokensIn: null,
-        tokensOut: null,
-        error: failure ?? 'harness produced no parseable JSON output',
+        ended,
+        outcome: {
+          ok: false,
+          costUsd: null,
+          tokensIn: null,
+          tokensOut: null,
+          error: failure ?? 'harness produced no parseable JSON output',
+          session: null,
+        },
       }
     }
     const fields = this.manifest.usage.fields ?? {}
@@ -172,11 +237,15 @@ export class HeadlessDispatcher implements Dispatcher {
     const harnessError = this.manifest.usage.errorField ? dig(parsed, this.manifest.usage.errorField) === true : false
     const resultText = this.manifest.usage.resultField ? dig(parsed, this.manifest.usage.resultField) : null
     return {
-      ok: !error && !timedOut && !aborted && !harnessError,
-      costUsd: num(fields.cost_usd),
-      tokensIn: num(fields.tokens_in),
-      tokensOut: num(fields.tokens_out),
-      error: failure ?? (harnessError ? String(resultText ?? 'harness reported an error') : null),
+      ended,
+      outcome: {
+        ok: !error && !ended && !harnessError,
+        costUsd: num(fields.cost_usd),
+        tokensIn: num(fields.tokens_in),
+        tokensOut: num(fields.tokens_out),
+        error: failure ?? (harnessError ? String(resultText ?? 'harness reported an error') : null),
+        session: sessionFrom([parsed], this.manifest.sessionField),
+      },
     }
   }
 }
@@ -280,6 +349,22 @@ export function parseNdjson(stdout: string): unknown[] {
     }
   }
   return events
+}
+
+/**
+ * The harness's own session id, read at the dotted path its manifest names
+ * (#181). One invocation is one session, so the first id seen is the answer;
+ * later events repeat it. Null when the adapter names no path, or when the
+ * harness died before it had a session to report — which is exactly the case
+ * a refused resume looks like.
+ */
+export function sessionFrom(events: unknown[], path?: string): string | null {
+  if (!path) return null
+  for (const event of events) {
+    const v = dig(event, path)
+    if (typeof v === 'string' && v !== '') return v
+  }
+  return null
 }
 
 /** True iff every dotted-path field in `filter` matches that event (string-compared). No filter matches everything. */

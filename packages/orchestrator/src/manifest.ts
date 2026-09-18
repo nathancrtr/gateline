@@ -40,6 +40,18 @@ export interface HeadlessManifest {
   modelOverrides: Record<string, string>
   /** spelling → vendor, for the dispatch-time avoid_vendor_of check. */
   modelVendors: Record<string, string>
+  /**
+   * Dotted path to the harness's own session id in its output (#181). The
+   * seam records whatever it finds there on the dispatch's ledger entry; a
+   * runner whose manifest omits this never reports a session.
+   */
+  sessionField?: string
+  /**
+   * argv fragment that makes this harness continue a prior session, with
+   * `{session}` replaced by the recorded id. Absent → this runner never
+   * resumes, and a retry is simply a fresh dispatch.
+   */
+  resumeArgs?: string[]
 }
 
 /**
@@ -81,6 +93,8 @@ export async function loadHeadlessManifest(repoDir: string, adapter: string, pre
     modelMap: strMap(raw.model_map),
     modelOverrides: strMap(raw.model_overrides),
     modelVendors: strMap(raw.model_vendors),
+    sessionField: typeof headless.session_field === 'string' ? headless.session_field : undefined,
+    resumeArgs: Array.isArray(headless.resume_args) ? headless.resume_args.map(String) : undefined,
   }
 }
 

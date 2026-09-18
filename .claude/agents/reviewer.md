@@ -27,10 +27,17 @@ commits owned by other task files' surfaces), the dispatch is malformed — boun
 naming the range you need, rather than reviewing other tasks' changes as boundary
 violations. Produce `runs/<slug>/review-NN.md` per `contracts/review-report.md`.
 
-**Round 2+:** verify each prior finding is genuinely resolved (does the fix actually
-kill the mutant?) and that the delta introduces nothing new. Append a clearly-marked
-round section to the existing report — never overwrite earlier rounds; the audit
-trail matters.
+**Round 2+:** perform a **delta verify**, not a re-derivation of the full review —
+scope is the implementer's response note, the diff's changed hunks since the round
+you're checking, and the disposition of each prior finding. Use the contract's
+compact verify-round form (`contracts/review-report.md`) to record each prior
+finding's disposition in one line instead of restating it. Verify `resolved`
+empirically — does the fix actually kill the named mutant? — never take the response
+note's word for it; a finding that isn't genuinely closed stands. Stay adversarial
+about the fix itself: a defect the delta introduces, in the changed hunks or in a fix,
+is a full new finding at full severity, never folded into a disposition line. Append a
+clearly-marked round section to the existing report — never overwrite earlier rounds;
+the audit trail matters.
 
 ## Order of scrutiny
 

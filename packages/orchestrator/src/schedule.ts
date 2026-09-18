@@ -301,7 +301,9 @@ export class Scheduler {
     const { runs: runsRoot, contracts: contractsRoot } = await this.frameworkRoots()
 
     const branch = `run/${slug}`
-    const model = this.cfg.registry ? resolveModel(this.cfg.registry, entry.role) : null
+    const model = this.cfg.registry
+      ? resolveModel(this.cfg.registry, entry.role, this.cfg.dispatcher.manifestFor?.(entry.role))
+      : null
     const marker = [
       `# Sweep dispatch marker — written by the orchestrator (schedule.ts); the`,
       `# sweep's one-entry ledger. Merging this branch is the human approval and`,

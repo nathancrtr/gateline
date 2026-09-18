@@ -77,6 +77,14 @@ export interface Dispatcher {
   readonly managesOwnWorkspace?: boolean
   /** The adapter that would run this role (routing dispatchers differ per role). */
   adapterFor?(role: string): string
+  /**
+   * The manifest of the adapter that would run this role, when this
+   * dispatcher carries one — registry.ts's resolveModel() reads it to spell
+   * the resolved model the way that adapter actually invokes it. Undefined
+   * for a dispatcher with no manifest (RemoteDispatcher, a test double),
+   * which resolveModel() treats as "use the registry's own default".
+   */
+  manifestFor?(role: string): HeadlessManifest | undefined
   dispatch(req: DispatchRequest): Promise<DispatchOutcome>
   /**
    * Operator force-drain (#150): SIGKILL every live harness process group.
@@ -102,6 +110,11 @@ export class HeadlessDispatcher implements Dispatcher {
   constructor(manifest: HeadlessManifest) {
     this.adapter = manifest.adapter
     this.manifest = manifest
+  }
+
+  /** One manifest for every role — this dispatcher runs a single adapter. */
+  manifestFor(): HeadlessManifest {
+    return this.manifest
   }
 
   abortAll(): number {

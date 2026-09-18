@@ -6,6 +6,7 @@
 
 import { type Git, resolveFrameworkRoots } from '@gateline/core/sources'
 import { parse as parseYaml } from 'yaml'
+import type { HeadlessManifest } from './manifest.ts'
 
 export interface RegistryProfile {
   default: string
@@ -35,11 +36,23 @@ export function vendorOf(modelId: string): string {
   return modelId.split('/')[0] ?? modelId
 }
 
-/** The concrete model a role resolves to, before any P5 constraint. */
-export function resolveModel(registry: Registry, role: string): string | null {
+/**
+ * The concrete model a role resolves to, before any P5 constraint. The
+ * registry stays the authority for role → profile (P2: roles/contracts never
+ * name vendors); a dispatch's adapter manifest may still spell that profile's
+ * model differently — this mirrors the render-time rule
+ * (packages/framework/src/render.ts: `model_overrides[role] ?? model_map[profile]`)
+ * so the ledger's `model` field and computeCost()'s pricing lookup key on
+ * what actually ran, not on the registry's own illustrative default. Falls
+ * back to that default when `manifest` is omitted or has no entry for the
+ * role or profile — a dispatcher that carries no manifest (RemoteDispatcher,
+ * a test double) resolves exactly as before this adapter-aware form existed.
+ */
+export function resolveModel(registry: Registry, role: string, manifest?: HeadlessManifest): string | null {
   const binding = registry.bindings[role]
   if (!binding) return null
-  return registry.profiles[binding.profile]?.default ?? null
+  const spelling = manifest?.modelOverrides[role] ?? manifest?.modelMap[binding.profile]
+  return spelling ?? registry.profiles[binding.profile]?.default ?? null
 }
 
 export function parseRegistry(text: string): Registry {

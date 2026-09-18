@@ -89,6 +89,12 @@ export class RoutingDispatcher implements Dispatcher {
     return this.route(role).adapter
   }
 
+  /** The manifest of whichever adapter `route(role)` would send this role to. */
+  manifestFor(role: string): HeadlessManifest {
+    const decision = this.route(role)
+    return this.adapters.find((a) => a.manifest.adapter === decision.adapter)!.manifest
+  }
+
   async dispatch(req: DispatchRequest): Promise<DispatchOutcome> {
     const decision = this.route(req.role) // throws VendorPinError when unsatisfiable with 2+ adapters
     if (decision.advisory && !this.warned.has(req.role)) {

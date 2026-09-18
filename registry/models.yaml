@@ -40,10 +40,13 @@ pricing:
   anthropic/claude-sonnet-5:  {usd_per_mtok_in: 3,  usd_per_mtok_out: 15}
   anthropic/claude-haiku-4-5: {usd_per_mtok_in: 1,  usd_per_mtok_out: 5}
 
-  # Reference rates for the opencode adapter's open-weight bindings
-  # (adapters/opencode/manifest.json). The opencode adapter reports real
-  # per-dispatch cost itself, so these entries are not on the metering path
-  # today (see issue #359 for the underlying resolveModel() gap).
+  # Rates for the opencode adapter's open-weight bindings
+  # (adapters/opencode/manifest.json). resolveModel() is adapter-aware (#359):
+  # a dispatch keys its pricing lookup on the adapter's own model_map/
+  # model_overrides spelling, so these entries key correctly whenever
+  # opencode's usage report ever stops carrying its own per-dispatch cost and
+  # falls back to token-based metering. Today opencode reports real cost
+  # directly, so these entries back that fallback rather than the live path.
   openrouter/z-ai/glm-5.2:            {usd_per_mtok_in: 0.78,  usd_per_mtok_out: 2.45}
   openrouter/deepseek/deepseek-v4-pro:   {usd_per_mtok_in: 0.435, usd_per_mtok_out: 0.87}
   openrouter/deepseek/deepseek-v4-flash: {usd_per_mtok_in: 0.09,  usd_per_mtok_out: 0.18}

@@ -560,6 +560,16 @@ autonomy multiplies the cost of a missing meter. The design:
   (model ID → $/Mtok in/out). The registry is already the only file where model IDs
   exist, so it is the only correct home for their prices — illustrative values,
   org-pinned like the IDs themselves.
+- **Model resolution is adapter-aware.** The registry stays the authority for role →
+  profile (P2: no vendor names in `roles/` or `contracts/`); `resolveModel()`
+  (`registry.ts`) then lets the dispatch's adapter manifest re-spell that profile's
+  model, mirroring the render-time rule (`model_overrides[role] ?? model_map[profile]`,
+  `packages/framework/src/render.ts`) and falling back to the registry's own default
+  only when the manifest has no entry. The resolved id is what lands in the ledger's
+  `model` field and what the pricing lookup keys on — so an adapter whose manifest
+  spells a profile's model in its own vocabulary (opencode's OpenRouter slugs, Claude
+  Code's `sonnet`/`fable`/`haiku` shorthand) is priced and recorded as what actually ran,
+  not as the registry's illustrative default.
 - **Enforcement is pre-flight.** Before any dispatch: ledger sum + the registry's
   static per-role estimate (`dispatch_estimates_usd`; resolved question 2 — static
   for v1, trailing ledger averages a possible later upgrade) against

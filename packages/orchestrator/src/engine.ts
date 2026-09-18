@@ -1044,7 +1044,9 @@ export class Engine {
                   task: intent.task,
                   round: intent.round,
                   adapter: this.cfg.dispatcher.adapterFor?.(intent.role) ?? this.cfg.dispatcher.adapter,
-                  model: this.cfg.registry ? resolveModel(this.cfg.registry, intent.role) : null,
+                  model: this.cfg.registry
+                    ? resolveModel(this.cfg.registry, intent.role, this.cfg.dispatcher.manifestFor?.(intent.role))
+                    : null,
                   // Who is holding this open (#349) — the only thing that lets a
                   // later sweep tell an orphan from another process's live job.
                   engine: this.engineId,
@@ -1437,7 +1439,7 @@ export class Engine {
 
   private computeCost(role: string, outcome: DispatchOutcome): number | null {
     if (outcome.tokensIn === null || outcome.tokensOut === null || !this.cfg.registry) return null
-    const model = resolveModel(this.cfg.registry, role)
+    const model = resolveModel(this.cfg.registry, role, this.cfg.dispatcher.manifestFor?.(role))
     const price = model ? this.cfg.registry.pricing[model] : undefined
     if (!price) return null
     return round2((outcome.tokensIn / 1e6) * price.usd_per_mtok_in + (outcome.tokensOut / 1e6) * price.usd_per_mtok_out)

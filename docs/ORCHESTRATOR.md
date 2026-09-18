@@ -271,7 +271,7 @@ that signature and re-dispatches — agents are disposable by design (DESIGN.md 
 a lost dispatch costs a retry, never corruption. Job handles (PIDs, harness session
 ids) are deliberately **not** committed: they are host-specific ephemera, treated as
 cache — the loop must always be able to reconstruct reality by probing, because git
-is the only store (the frontend's R1, inherited).
+is the only authoritative store (the frontend's R1, inherited).
 
 The CAS does not guard the *job*, and until #349 nothing did. "No living job" was
 read from one process's own table, so a second engine against the same runs — the

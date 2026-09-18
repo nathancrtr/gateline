@@ -10,5 +10,9 @@
   "readme": "none",
   "name": "gateline — API reference",
   "includeVersion": false,
+  "customCss": "assets/typedoc.css",
+  "hideGenerator": true,
+  "lightHighlightTheme": "light-plus",
+  "darkHighlightTheme": "light-plus",
   "logLevel": "Verbose"
 }

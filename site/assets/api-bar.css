@@ -1,27 +1,27 @@
 /* === gateline docs bar for the generated API section =======================
    Injected into every page under api/ by scripts/build-site.py, so the
    TypeDoc output is reachable from the rest of the documentation site and
-   links back into it. This file is the only styling layered on top of the
-   TypeDoc theme; it deliberately reuses TypeDoc's own colour variables so it
-   follows whichever theme the reader has selected.
+   links back into it. It is the site header (assets/site.css .site-header)
+   drawn on top of TypeDoc's page: the 3px ink band, the gate|line wordmark,
+   the section links in the UI face, and the active section in signal blue.
+
+   The @font-face rules live in assets/typedoc.css, which TypeDoc links on
+   every api/ page before this file; the family names here resolve to those.
+   The colours repeat assets/site.css by value. Keep the two in step.
    ========================================================================== */
 
 :root {
-  --gateline-accent: #0d7377;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --gateline-accent: #5bc0c4;
-  }
-}
-
-:root[data-theme="light"] {
-  --gateline-accent: #0d7377;
-}
-
-:root[data-theme="dark"] {
-  --gateline-accent: #5bc0c4;
+  --gl-bar-ground: #ffffff;
+  --gl-bar-ink: #0b0c0c;
+  --gl-bar-muted: #4f5459;
+  --gl-bar-line: #c8cacc;
+  --gl-bar-accent: #1d70b8;
+  --gl-bar-focus: #ffdd00;
+  --gl-bar-font-ui: "Atkinson Hyperlegible Next", "Public Sans", Arial, sans-serif;
+  --gl-bar-font-mark: "Overpass", "Public Sans", Arial, sans-serif;
+  --gl-bar-h: 56px;
+  --gl-bar-frame-w: 1320px;
+  --gl-bar-gutter: 24px;
 }
 
 .gateline-docsbar {
@@ -29,77 +29,163 @@
   top: 0;
   left: 0;
   z-index: 3;
+  box-sizing: border-box;
   display: flex;
-  align-items: center;
-  gap: 1rem;
-  height: 2.5rem;
-  padding: 0 1.25rem;
-  background: var(--color-background);
-  border-bottom: 1px solid var(--color-accent);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
-    sans-serif;
-  font-size: 0.8rem;
-  overflow-x: auto;
-  scrollbar-width: none;
+  align-items: stretch;
+  gap: 28px;
+  height: var(--gl-bar-h);
+  padding: 0 max(var(--gl-bar-gutter), calc((100% - var(--gl-bar-frame-w)) / 2 + var(--gl-bar-gutter)));
+  background: var(--gl-bar-ground);
+  border-top: 3px solid var(--gl-bar-ink);
+  border-bottom: 1px solid var(--gl-bar-line);
+  font-family: var(--gl-bar-font-ui);
+  font-size: 0.875rem;
+  line-height: 1;
 }
 
-.gateline-docsbar::-webkit-scrollbar {
-  display: none;
-}
-
-/* TypeDoc's own toolbar is sticky at top: 0 — sit it below this bar. */
+/* TypeDoc's own toolbar (search, title, menu) is sticky at top: 0 — it sits
+   under this bar. */
 .tsd-page-toolbar {
-  top: 2.5rem !important;
+  top: var(--gl-bar-h);
 }
 
+/* Wordmark: "gate|line", the same generated-content treatment as the site
+   header; the markup is the plain word, the halves are drawn with empty alt
+   text and the bar between them is a 2px accent rule. */
 .gateline-docsbar-mark {
   flex: 0 0 auto;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--color-text);
+  display: inline-flex;
+  align-items: center;
+  margin-right: auto;
+  font-size: 0;
+  color: var(--gl-bar-ink);
   text-decoration: none;
 }
 
-.gateline-docsbar-mark:hover {
-  color: var(--gateline-accent);
+.gateline-docsbar-mark::before,
+.gateline-docsbar-mark::after {
+  display: inline-block;
+  font-family: var(--gl-bar-font-mark);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--gl-bar-ink);
+}
+
+.gateline-docsbar-mark::before {
+  content: "gate";
+  content: "gate" / "";
+  padding-right: 0.28em;
+  border-right: 2px solid var(--gl-bar-accent);
+}
+
+.gateline-docsbar-mark::after {
+  content: "line";
+  content: "line" / "";
+  padding-left: 0.28em;
+}
+
+.gateline-docsbar-mark:hover::before,
+.gateline-docsbar-mark:hover::after {
+  color: var(--gl-bar-accent);
+}
+
+.gateline-docsbar-mark:focus-visible {
+  outline: 3px solid var(--gl-bar-focus);
+  outline-offset: 4px;
+  background: none;
 }
 
 .gateline-docsbar-nav {
   display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  flex: 1 1 auto;
+  align-items: stretch;
+  gap: 28px;
+  flex: 0 1 auto;
+  min-width: 0;
   white-space: nowrap;
 }
 
-.gateline-docsbar-nav a {
-  padding: 0.2rem 0.5rem;
-  border-radius: 5px;
-  color: var(--color-text-aside);
+.gateline-docsbar-nav a,
+.gateline-docsbar-here {
+  display: flex;
+  align-items: center;
+  margin-bottom: -1px;               /* the active rule sits on the hairline */
+  border-bottom: 2px solid transparent;
+  font-weight: 500;
+  color: var(--gl-bar-muted);
   text-decoration: none;
+  white-space: nowrap;
 }
 
 .gateline-docsbar-nav a:hover {
-  color: var(--gateline-accent);
-  background: var(--color-background-secondary);
+  color: var(--gl-bar-ink);
+  text-decoration: none;
 }
 
+.gateline-docsbar-nav a:focus-visible {
+  outline: 3px solid var(--gl-bar-focus);
+  outline-offset: -3px;
+  background: var(--gl-bar-focus);
+  color: var(--gl-bar-ink);
+}
+
+/* "API reference" is the active section: the same mark as the site nav. */
 .gateline-docsbar-here {
   flex: 0 0 auto;
-  padding-left: 0.5rem;
-  border-left: 1px solid var(--color-accent);
-  color: var(--gateline-accent);
-  font-weight: 600;
-  white-space: nowrap;
+  color: var(--gl-bar-accent);
+  border-bottom-color: var(--gl-bar-accent);
 }
 
-@media (max-width: 640px) {
-  .gateline-docsbar {
-    gap: 0.6rem;
-    padding: 0 0.75rem;
+/* Phone: two rows — wordmark, then the section links on their own hairline —
+   and the bar stops being sticky, as the site header does below 600px.
+   TypeDoc's toolbar then takes the top of the viewport. */
+@media (max-width: 599px) {
+  :root {
+    --gl-bar-gutter: 16px;
   }
 
+  .gateline-docsbar {
+    position: static;
+    height: auto;
+    flex-wrap: wrap;
+    gap: 0;
+  }
+
+  .gateline-docsbar-mark {
+    height: 48px;
+  }
+
+  .gateline-docsbar-mark::before,
+  .gateline-docsbar-mark::after {
+    font-size: 1.125rem;
+  }
+
+  .gateline-docsbar-nav {
+    flex-basis: 100%;
+    gap: 20px;
+    height: 40px;
+    border-top: 1px solid var(--gl-bar-line);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .gateline-docsbar-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .gateline-docsbar-nav a {
+    margin-bottom: 0;
+  }
+
+  /* Five links do not fit in 390px. The wordmark is already the link home,
+     and the active-section marker is dropped as the site header drops it. */
+  .gateline-docsbar-nav a:first-child,
   .gateline-docsbar-here {
     display: none;
+  }
+
+  .tsd-page-toolbar {
+    top: 0;
   }
 }

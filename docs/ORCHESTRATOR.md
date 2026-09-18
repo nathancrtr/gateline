@@ -469,6 +469,32 @@ component that *consumes* adapters through their manifests (amendment list, §8)
   the run branch serially — mechanical while file-contact surfaces are disjoint,
   which the Architect already guarantees; an actual conflict escalates as a plan
   defect.
+- **Source isolation and dependency isolation are separate concerns** (#229). The
+  worktree exists so two implementers never see each other's half-written code.
+  It is not a reason for each to own a private install of third-party packages:
+  those are identical across worktrees by construction, pinned by the one
+  lockfile all of them share. A fresh worktree carries tracked files only, so
+  taking that literally meant a cold `npm install` on every dispatch and every
+  review round — the cost that burned a role timeout in #229.
+
+  So a new task worktree is **seeded** from a warm dependency store instead. The
+  store is the run checkout's installed tree if it has one and the repository's
+  otherwise, and the package directories are found by their shape — a
+  `package.json` with a `node_modules` beside it, at the repo root or one level
+  down — rather than by a fixed path, so a host repo's own layout works the same
+  way. The seed is a clone where the filesystem offers one (`cp -Rc` on APFS:
+  134 MB in about a second), a plain copy where it does not, and skipped when
+  the tree is too large for a host that cannot clone. Skipping is not a failure:
+  the dispatch log says which case it was, and the implementer installs as
+  before.
+
+  Every seeded tree is private, so the isolation the worktree exists for is
+  untouched — no dispatch can observe or mutate another's dependencies. One
+  wrinkle is load-bearing: a clone follows symlinks, which would turn the
+  workspace links under `node_modules/@scope/` into stale copies of packages the
+  implementer is editing, and the `node_modules/.bin` entries into scripts whose
+  relative requires resolve from the wrong directory. Every symlink in the
+  source tree is therefore re-created in the copy.
 - **The fold harvests before it discards** (#184). A task worktree is removed the
   moment its fold finishes, so anything the implementer left uncommitted there
   dies with it, tracked or untracked alike. The fold therefore commits whatever

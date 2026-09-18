@@ -1,3 +1,4 @@
+export * from './deps.ts'
 export * from './derive.ts'
 export * from './engine.ts'
 export * from './harvest.ts'

@@ -310,16 +310,12 @@ gateline init <target-repo> \
 
 #### Provenance for a non-redistributing host
 
-This is the mode a private, closed-source host actually needs, and it's easy to
-reach for the redistributing pattern out of habit: don't add an Apache LICENSE
-at the repo root — it would read as licensing the host's own proprietary code,
-not just the framework's. The two files above are what to add instead, and the
-lock is what keeps the NOTICE cheap to trust: the file list it refers to is the
-lock's own `taken[]`/`files{}` record (§3), not a hand-maintained copy, so the
-NOTICE can't drift from what's actually vendored. `gateline init --provenance
-private` already writes both files this way, and `validate` already checks
-them (Stage 3, below); this pattern needs no follow-up in the copy manifest or
-`validate` — both already carry it.
+The private mode is the one a closed-source host needs, and the mistake to avoid
+is a repo-root Apache LICENSE: it reads as licensing the host's own code. The
+NOTICE's file list is the lock's own `taken[]`/`files{}` record (§3), not a
+hand-maintained copy, so it cannot drift from what is vendored. `gateline init
+--provenance private` writes both files this way and `validate` checks them
+(Stage 3), so the pattern needs no follow-up in the copy manifest or `validate`.
 
 ### Stage 1 — the integration run (judgment, agent-executed)
 

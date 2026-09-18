@@ -148,10 +148,15 @@ requirements a frontend will be judged against, whatever its form:
    v1, they get cheaper as their approval rates earn it.
 5. **Escalations age visibly.** An unresolved escalation is a stalled run burning
    nothing but calendar; the queue must show age and route to a person.
-6. **Every rendered view is disposable.** The repo is the database. Any frontend that
-   accretes state of its own (its own approval store, its own run status) has forked
-   the source of truth and will drift, like `review_rounds` did across two files in
-   the wordfreq run.
+6. **Git is the only authoritative store; a derived store is sanctioned, never owned.**
+   The framing is event sourcing: git is the event store, and every rendered view —
+   inbox, portfolio, gate card — is a projection recomputed from it. A derived store
+   (a portfolio cache, a metrics index) earns a place if and only if deleting it loses
+   nothing and it is fully rebuildable from git alone; Gerrit's NoteDB sets the
+   precedent, pairing all review state in git with a Lucene index rebuilt from it that
+   nobody calls a second database. Anything that fails that test has forked the
+   source of truth and will drift, like `review_rounds` did across two files in the
+   wordfreq run.
 7. **A local view earns its place only by saying something the git host structurally
    cannot.** The test is not "does the host also do this?" — the host does almost
    everything also. It is whether the view depends on knowledge the host does not

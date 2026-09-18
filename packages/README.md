@@ -10,8 +10,10 @@ Design: [docs/FRONTEND.md](../docs/FRONTEND.md) · Plan:
 
 ## The three rules
 
-- **R1 — The repo is the only database.** Every view is recomputed from git;
-  deleting `packages/` loses nothing. The app owns no store, ever.
+- **R1 — Git is the only authoritative store.** Every view is recomputed from
+  git; deleting `packages/` loses nothing today. A derived store (cache, index)
+  is sanctioned only under the rebuildability rule in
+  [FRONTEND.md §4](../docs/FRONTEND.md), principle 6 — none exists in this build.
 - **R2 — Exactly one write path.** The only mutation in the system is a commit
   editing one run's `state.yaml`: gate decisions, escalation resolutions,
   pause/resume. No dispatch, no artifact edits, no second channel. Writes are

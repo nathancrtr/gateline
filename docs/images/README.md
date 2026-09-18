@@ -22,6 +22,14 @@ than on a timer — a bare headless screenshot races the SPA:
 cd packages && node web/scripts/capture-readme.mjs http://127.0.0.1:4312 /tmp/shots
 ```
 
+The script discovers the source id from `GET /api/health` at capture time;
+pass it as a third argument if the server has multiple sources and you need
+a specific one:
+
+```sh
+cd packages && node web/scripts/capture-readme.mjs http://127.0.0.1:4312 /tmp/shots gateline
+```
+
 Scale each frame to 1280 wide; `run-escalation-detail.png` is
 `crop=802:624:330:0` of the scaled escalation frame. Pad every frame to
 1280×720 on the page ground `#f3f3ee` (the token `--color-ground` in

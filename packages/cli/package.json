@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "gateline \u2014 the gate frontend in terminal form: status, inbox, and the same single decision write path.",
+  "description": "gateline — the gate frontend in terminal form: status, inbox, and the same single decision write path.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -20,9 +20,9 @@
   "dependencies": {
     "@gateline/core": "*",
     "@gateline/framework": "*",
+    "@gateline/orchestrator": "*",
     "@gateline/server": "*",
-    "commander": "^14.0.0",
-    "@gateline/orchestrator": "*"
+    "commander": "^15.0.0"
   },
   "devDependencies": {
     "@gateline/fixtures": "*"

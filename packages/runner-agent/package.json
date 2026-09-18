@@ -1,6 +1,6 @@
 {
   "name": "@gateline/runner-agent",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Workstation agent (ORCHESTRATOR.md / TOPOLOGY.md §3.3, run \"runner-agent\"): polls a control plane for dispatch intents, executes them in a disposable git clone, and reports outcomes back — the control plane remains the sole writer (R5).",

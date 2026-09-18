@@ -1,6 +1,6 @@
 # gateline — Design
 
-**Status:** v0.2 — the design has been exercised end-to-end by three human-orchestrated
+**Status:** v0.3 — the design has been exercised end-to-end by three human-orchestrated
 G0→G3 runs (`runs/wordfreq/`, `runs/mdtoc/`, `runs/dupefind/` — the shadow-agreement
 evidence for the v1 trust ladder), and since then by orchestrator-driven runs against
 the framework itself (`runs/creation-seam/`, `runs/web-staging/`, `runs/fleetview-design/`);

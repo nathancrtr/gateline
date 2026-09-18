@@ -53,7 +53,7 @@ import {
 import { Command, Option } from 'commander'
 
 const program = new Command()
-program.name('gateline').description('Gate frontend for artifact-driven agent pipelines').version('0.1.0')
+program.name('gateline').description('Gate frontend for artifact-driven agent pipelines').version('0.3.0')
 // Repeatable, single-value: a variadic <path...> would swallow the subcommand.
 program.option(
   '--repo <path>',

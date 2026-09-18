@@ -128,13 +128,12 @@ the 3-way merge base with no network fetch (§6).
 One more thing the lock pins down: **what travels is a tagged release, not a
 working copy.** The framework is a dependency with downstream consumers; it does not
 behave like a lab whose copies drift by nature. Consumers integrate against a version
-they can name, and the upstream owes them the tagging discipline that implies (§11). This debt is
-now overdue: no tag exists, so integration #2 had to pin a
-bare commit hash and record the missing release as a retro item. The first tagged
-release therefore sits at the head of the build queue, immediately *behind* the
-state-contract split (§11's sequencing note — tagging first would freeze the
-about-to-fork schema), and the first `upgrade` must accept commit-pinned locks
-(§6).
+they can name, and the upstream owes them the tagging discipline that implies (§11).
+The first tagged release is `v0.3.0` (2026-09-18). Locks written before it pin a
+bare commit hash — integration #2 did, and recorded the missing release as a retro
+item — so `upgrade` accepts commit-pinned locks (§6). The state-contract split
+(#48) lands as a later release; a host that forked the pre-split contract merges
+through the ordinary 3-way path when it upgrades.
 
 ### Vendored trees are not the only channel
 

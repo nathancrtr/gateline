@@ -1,6 +1,6 @@
 {
   "name": "@gateline/server",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Localhost HTTP layer over @gateline/core: JSON reads, the single decision write path, SSE freshness, and the built SPA.",

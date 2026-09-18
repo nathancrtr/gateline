@@ -35,6 +35,11 @@ dupefind shadow replay). Round 3 without convergence → escalate.
   task file's `notes:`). Needing a file outside it means STOP and escalate — a
   parallel implementer may own that file.
 - Match the codebase: idioms, naming, comment density, test patterns.
+- When the task's deliverable is a test suite, verify each acceptance criterion's
+  required fixture actually discriminates: hand-patch the mutant it's meant to catch
+  into a scratch copy of the implementation, confirm the fixture fails, then revert
+  the scratch copy. Do this before you report — a fixture you haven't watched fail is
+  unproven, whatever it asserts.
 - Done means: the task's acceptance tests pass AND the project's existing suite
   passes. Run both; paste the results into your report.
 - Record deviations and discoveries in the task file's `notes:` (append-only) — that
@@ -50,4 +55,5 @@ dupefind shadow replay). Round 3 without convergence → escalate.
 ## Report back
 
 What you built, test results (pasted), any deviations logged in notes, and the exact
-files changed.
+files changed. For a test-suite task, name each fixture you hand-verified against its
+mutant and confirm the kill.

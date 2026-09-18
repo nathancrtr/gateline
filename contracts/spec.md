@@ -44,7 +44,15 @@
 
 ## Assumptions
 <!-- Each ambiguity in the brief, with the resolution you chose. The G0
-     reviewer vetoes these here, cheaply. If none, say "none". -->
+     reviewer vetoes these here, cheaply. If none, say "none". An assumption
+     that encodes an external system's behavior — a platform's rendering
+     rules, a library's runtime default, an API's documented contract —
+     names whether that behavior was verified against the live system or
+     derived from documentation/reasoning; a plausible-looking derivation is
+     exactly what a confirmation-grade review waves through. When the brief
+     admits two readings, name both and tee the choice up for G0 instead of
+     resolving it silently — G0 can veto a stated choice, never a hidden
+     one. -->
 - **ASSUMPTION:** <ambiguity> → resolved as <choice> because <reason>
 
 ## Out of scope

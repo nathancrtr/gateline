@@ -25,7 +25,19 @@
      sections are what the G2 approver weighs at the gate; audit-time sections
      are evidence, read when trust is in question, and Gatehouse folds them to
      their heading until opened. Unlisted sections are decide-time.
-     AUDIENCE: Coverage=audit; Boundary check=audit -->
+     AUDIENCE: Coverage=audit; Boundary check=audit
+     VERIFY ROUND (normative — round ≥ 2): a verify round does not
+     re-derive the full review. Scope is the implementer's response note, the
+     diff's changed hunks since the round you're checking, and the disposition
+     of each prior finding. Disposition each prior finding in one compact line
+     instead of restating it — grammar `- **F<n> — resolved|stands** —
+     <one-line reason>`; "stands" is the only word for a finding that is not
+     resolved; tooling reads exactly these two disposition words and no
+     others. A defect the delta introduces — in the changed hunks, or in a fix
+     itself — is a full new finding (`### F<n> — <severity> — <title>`, the
+     same fields as any other), never a third disposition word: a fix earns
+     the same scrutiny as new code, never less. See the example below
+     Findings. -->
 
 **Verdict:** approve | request-changes | escalate
 **Round:** <n of 3>
@@ -38,6 +50,25 @@
 - **Failure scenario:** <concrete inputs/state → wrong output or crash.
   If you can't construct one, mark the finding PLAUSIBLE.>
 - **Requirement:** <spec/plan reference this violates, if applicable>
+
+<!-- Round ≥ 2 appends below round 1, never overwriting it — see VERIFY ROUND
+     above. Shape (fenced here so it reads as an example, not live headings): -->
+```
+# Round 2
+
+**Verdict:** approve | request-changes | escalate
+**Round:** 2 of 3
+**Diff reviewed:** <delta since the round-1 diff>
+
+## Verify round
+- **F1 — resolved** — <one line: what changed, why the mutant now fails>
+- **F2 — stands** — <one line: why the fix doesn't close it>
+
+### F3 — major — <a defect the delta itself introduced>
+- **Where:** `path/to/file.py:200`
+- **Failure scenario:** <as above>
+- **Requirement:** <as above>
+```
 
 ## Coverage
 <!-- What you checked and found clean — the G2 human relies on this, not just

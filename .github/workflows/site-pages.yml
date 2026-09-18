@@ -1,0 +1,74 @@
+name: Publish docs site
+
+# Builds site/ and publishes it to GitHub Pages on every push to main that
+# touches the site or the packages (the API reference is generated from
+# packages/ at build time and is never committed). Pull requests run the
+# same build without deploying, so a stale shell or a retired name fails the
+# PR rather than the deploy.
+
+on:
+  pull_request:
+    paths:
+      - 'site/**'
+      - 'packages/**'
+      - '.github/workflows/site-pages.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'packages/**'
+      - '.github/workflows/site-pages.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: site-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: |
+            packages/package-lock.json
+            site/package-lock.json
+      - name: Install package workspace (TypeDoc reads its types)
+        run: npm ci
+        working-directory: packages
+      - name: Install site tooling
+        run: npm ci
+        working-directory: site
+      - name: Retired names stay out of the prose
+        run: python3 site/scripts/check-names.py
+      - name: Page shells match the manifest
+        run: python3 site/scripts/build-site.py --check
+      - name: Generate the API reference and re-render its shell
+        run: npm run docs:api
+        working-directory: site
+      - name: Assemble the published tree (pages and assets only)
+        run: |
+          rsync -a --exclude node_modules --exclude .research --exclude scripts \
+            --exclude 'package*.json' --exclude typedoc.json --exclude README.md \
+            site/ _site/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

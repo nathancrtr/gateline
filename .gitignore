@@ -15,3 +15,7 @@ __pycache__/
 
 # Finder scatters these through any directory it has been opened in.
 .DS_Store
+
+# Public docs site: generated API docs and local tooling are built, never committed
+site/api/
+site/node_modules/

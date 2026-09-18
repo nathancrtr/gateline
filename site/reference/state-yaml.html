@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>state.yaml reference — gateline</title>
+  <meta name="description" content="Field-by-field reference for runs/&lt;slug&gt;/state.yaml, the single source of truth for a pipeline run.">
+  <link rel="stylesheet" href="../assets/site.css">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="site-header">
+  <a class="wordmark" href="../index.html">gateline</a>
+  <nav class="site-nav" aria-label="Sections">
+    <a href="../how-it-works/index.html">How It Works</a>
+    <a href="../onboarding/index.html">Onboarding</a>
+    <a href="../reference/index.html" class="active" aria-current="true">Reference</a>
+    <a href="../api/index.html">API</a>
+  </nav>
+</header>
+<div class="layout">
+<main id="content">
+  <h1>state.yaml reference</h1>
+<!-- content:start -->
+<article class="doc">
+<p class="lede">
+    <code>state.yaml</code> lives at <code>runs/&lt;slug&gt;/state.yaml</code>
+    and is the single source of truth for a pipeline run: its phase, profile,
+    budget, gate decisions, task bookkeeping, and escalations. Every consumer
+    — the Gatehouse frontend, the CLI, and the v1 orchestrator — reads this
+    file alone to derive what comes next. It is co-written by a named human
+    (gate decisions) and the orchestrator (bookkeeping) under a structured
+    contract; no other state lives anywhere else.
+    <!-- evidence: contracts/state.yaml; packages/core/src/record/schema.ts; runs/README.md -->
+  </p>
+
+  <h2 id="top-level-keys">Top-level keys</h2>
+  <table>
+    <thead><tr><th>Key</th><th>Required</th><th>Type</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>run</code></td><td>yes</td><td>string</td>
+        <td>The run slug, e.g. <code>dupefind</code>.</td>
+      </tr>
+      <tr>
+        <td><code>branch</code></td><td>yes</td><td>string</td>
+        <td>The run's branch, e.g. <code>run/dupefind</code>.</td>
+      </tr>
+      <tr>
+        <td><code>phase</code></td><td>yes</td><td>enum</td>
+        <td>One of <code>spec | plan | implement | integrate | release | done | paused | closed</code>. Reduced profiles skip phases per their gate set. <code>done</code> and <code>closed</code> are both terminal: <code>done</code> finished its pipeline, <code>closed</code> was ended short of it by a human.</td>
+      </tr>
+      <tr>
+        <td><code>profile</code></td><td>no</td><td>enum</td>
+        <td><code>patch | standard | full</code>. <strong>Absent → <code>full</code></strong> — the default is heaviest, not lightest, so every pre-profile run record keeps its meaning unchanged.</td>
+      </tr>
+      <tr>
+        <td><code>paused_reason</code></td><td>when paused</td><td>enum</td>
+        <td><code>budget-exhausted | round-cap | escalation | gate-declined | staged</code>. Set when <code>phase: paused</code>; <code>null</code> otherwise. The schema also knows <code>slug-landed</code>, set when <code>runs/&lt;slug&gt;/</code> has already shipped on the default branch; the contract comment does not list it yet.</td>
+      </tr>
+      <tr>
+        <td><code>closure</code></td><td>when closed</td><td>object</td>
+        <td>Required when <code>phase: closed</code>, absent otherwise. See <a href="#closure-record">Closure record</a>.</td>
+      </tr>
+      <tr>
+        <td><code>intake</code></td><td>no</td><td>object</td>
+        <td>Optional staging provenance — written once at staging time and never edited after. Contains <code>source</code>, <code>ref</code>, <code>url</code>, <code>client_key</code>, <code>staged_by</code>.</td>
+      </tr>
+      <tr>
+        <td><code>budget</code></td><td>no</td><td>object</td>
+        <td>Cost tracking: <code>cost_limit_usd</code> (exhaustion pauses, never silently degrades), <code>cost_spent_usd</code> (derived from ledger), and <code>ledger[]</code> (append-only, one entry per model invocation).</td>
+      </tr>
+      <tr>
+        <td><code>gates</code></td><td>yes</td><td>map</td>
+        <td>One entry per gate in the profile's gate set (<code>G0</code>–<code>G3</code>). A gate outside the profile is absent, never auto-approved; a gate inside the profile that is missing makes the file malformed. Written ONLY by named humans.</td>
+      </tr>
+      <tr>
+        <td><code>tasks</code></td><td>no</td><td>list</td>
+        <td>Task bookkeeping — the <strong>only</strong> home of <code>review_rounds</code>. Each entry has <code>id</code>, <code>status</code>, and <code>review_rounds</code>.</td>
+      </tr>
+      <tr>
+        <td><code>escalations</code></td><td>no</td><td>list</td>
+        <td>Append-only escalation records: <code>at</code>, <code>from_role</code>, <code>reason</code>, <code>resolved</code>, and optional <code>disposition</code>.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2 id="profiles-and-their-gate-sets">Profiles and their gate sets</h2>
+  <p>Three profiles, fixed sets — not knobs. A gate that does not exist for
+  the profile is <strong>absent, never auto-approved</strong>. An absent gate
+  entry parses as <em>undecided</em> — it can never masquerade as approved.</p>
+  <!-- evidence: docs/DESIGN.md §4.1; packages/core/src/record/schema.ts -->
+
+  <table>
+    <thead><tr><th>Profile</th><th>Gates</th><th>Phases</th></tr></thead>
+    <tbody>
+      <tr><td><code>patch</code></td><td>G1, G2</td><td><code>plan → implement → integrate → done</code></td></tr>
+      <tr><td><code>standard</code></td><td>G0, G1, G2</td><td><code>spec → plan → implement → integrate → done</code></td></tr>
+      <tr><td><code>full</code></td><td>G0, G1, G2, G3</td><td><code>spec → plan → implement → integrate → release → done</code></td></tr>
+    </tbody>
+  </table>
+
+  <p><code>paused</code> and <code>closed</code> are rest states every profile
+  can reach from any phase in its sequence.</p>
+
+  <p>Profile upgrades are one-way and human-decided — a human edits
+  <code>profile:</code> to a heavier value and resumes; the reconciler derives
+  the backfill. Downgrading mid-run is forbidden, and an engine that
+  observes a profile lighter than the already-decided gates escalates rather
+  than guessing (rule D21).</p>
+
+  <h2 id="gate-entry-shape">Gate entry shape</h2>
+  <table>
+    <thead><tr><th>Key</th><th>Type</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>approved</code></td><td>boolean</td><td>Whether the gate has been approved</td></tr>
+      <tr><td><code>by</code></td><td>string | null</td><td>The named human who decided</td></tr>
+      <tr><td><code>at</code></td><td>string | null</td><td>ISO-8601 timestamp of the decision</td></tr>
+      <tr><td><code>notes</code></td><td>string | null</td><td>Approval or decline notes</td></tr>
+      <tr><td><code>burden</code></td><td>enum | null</td><td>How much work the review took: <code>confirmation | light-correction | heavy-correction</code>. The pilot's headline metric for the v1 trust ladder.</td></tr>
+    </tbody>
+  </table>
+  <!-- evidence: contracts/state.yaml; packages/core/src/record/schema.ts -->
+
+  <h2 id="closure-record">Closure record</h2>
+  <p>A run a human ends short of <code>done</code> carries a
+  <code>closure</code> block beside <code>phase: closed</code>. Only the named
+  human who closed the run writes it; <code>gateline reopen</code> clears it
+  in a commit of its own. Closing deletes nothing: the branch, the run
+  directory and every artifact stay put.</p>
+  <!-- evidence: contracts/state.yaml; packages/core/src/record/schema.ts -->
+  <table>
+    <thead><tr><th>Key</th><th>Type</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>as</code></td><td>enum</td><td>The typed disposition: <code>already-delivered | superseded | obsolete | abandoned</code></td></tr>
+      <tr><td><code>by</code></td><td>string</td><td>The named human; never a bot identity</td></tr>
+      <tr><td><code>at</code></td><td>string</td><td>ISO-8601 timestamp</td></tr>
+      <tr><td><code>reason</code></td><td>string</td><td>Required — the comment on the disposition</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="budget-ledger">Budget ledger</h2>
+  <p>The <code>budget.ledger[]</code> is append-only — one entry per model
+  invocation. Each entry carries:</p>
+  <!-- evidence: contracts/state.yaml; packages/core/src/record/ledger.ts -->
+  <table>
+    <thead><tr><th>Key</th><th>Type</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>at</code></td><td>string</td><td>ISO-8601 timestamp</td></tr>
+      <tr><td><code>role</code></td><td>string</td><td>Role name</td></tr>
+      <tr><td><code>task</code></td><td>string | null</td><td>Task id, null when not applicable</td></tr>
+      <tr><td><code>round</code></td><td>number | null</td><td>Review round, null when not applicable</td></tr>
+      <tr><td><code>adapter</code></td><td>string</td><td>Adapter name</td></tr>
+      <tr><td><code>model</code></td><td>string</td><td>Concrete model ID used</td></tr>
+      <tr><td><code>tokens_in</code></td><td>number | null</td><td>Input tokens consumed. Null in v0 records where the harness reports combined tokens only.</td></tr>
+      <tr><td><code>tokens_out</code></td><td>number | null</td><td>Output tokens consumed. Null when not split by the harness.</td></tr>
+      <tr><td><code>cost_usd</code></td><td>number | null</td><td>Cost in USD. An entry with <code>cost_usd: null</code> and no <code>failed</code> flag is an open entry: an agent in flight.</td></tr>
+      <tr><td><code>failed</code></td><td>boolean | absent</td><td>Optional flag the v1 engine writes when the harness ran and did not complete (crash, timeout, aged out). <code>cost_usd</code> is real usage when known, else the registry estimate.</td></tr>
+      <tr><td><code>refused</code></td><td>boolean | absent</td><td>Optional: no process was spawned (a held checkout, a preflight error). <code>cost_usd</code> is 0, and the entry counts as neither a failure nor a retry.</td></tr>
+      <tr><td><code>engine</code></td><td>string | absent</td><td>Optional: which orchestrator process opened the entry, as <code>&lt;hostname&gt;:&lt;pid&gt;</code>, so the stale sweep can tell a crashed process's orphan from a live one's job.</td></tr>
+      <tr><td><code>session</code></td><td>string | absent</td><td>Optional: the runner's own session id; a retry of the same role, task and round resumes it. A hint, never a handle.</td></tr>
+    </tbody>
+  </table>
+
+  <p>The schema's <code>budgetSchema</code> uses <code>.passthrough()</code>;
+  <code>parseLedger</code> in <code>packages/core/src/record/ledger.ts</code>
+  reads the entries defensively.</p>
+
+  <p>Facts, not running totals — <code>cost_spent_usd</code> is derived, so
+  races and audits survive. In v0 the ledger is hand-appended from harness
+  usage output; in v1 the dispatch seam appends entries automatically.</p>
+
+  <h2 id="task-entries">Task entries</h2>
+  <p>Each task entry mirrors <code>tasks/*.yaml</code> status. Status is one of:
+  <code>pending | dispatched | failed | in-progress | in-review |
+  review-approved | verified | done</code>.
+  <code>review_rounds</code> lives here and here only — no other artifact
+  tracks it. The engine reads <code>in-progress</code> as in flight only
+  alongside an open ledger entry for the task, and otherwise returns the
+  task to <code>pending</code>.</p>
+  <!-- evidence: contracts/state.yaml; packages/core/src/record/schema.ts -->
+
+  <h2 id="escalation-entries">Escalation entries</h2>
+  <p>Append-only. Each escalation carries:
+  <code>at</code>, <code>from_role</code>, <code>reason</code>,
+  <code>resolved</code> (boolean), <code>resolved_by</code>,
+  <code>resolved_at</code>, <code>resolution</code>, and
+  <code>disposition</code> — one of
+  <code>re-review | return-to-implement | re-plan</code> (optional
+  machine-actionable route for the engine; absent → engine default).</p>
+  <!-- evidence: contracts/state.yaml; packages/core/src/record/schema.ts -->
+
+  <h2 id="co-writer-contract">Co-writer contract</h2>
+  <p>All writes to <code>state.yaml</code> follow a seven-point co-writer
+  contract:</p>
+  <!-- evidence: docs/ORCHESTRATOR.md §7; packages/core/src/sources/git.ts -->
+  <ol>
+    <li><strong>CAS ref updates.</strong> Every write is a compare-and-swap
+      — the writer reads the tip, produces a comment-preserving mutation,
+      and calls <code>git update-ref</code> with the expected-old OID. A
+      CAS refusal means a concurrent write landed; the engine re-derives from
+      the new tip, and the CLI reports the refusal for the human to rerun.</li>
+    <li><strong>Comment-preserving YAML.</strong> Edits use document-level
+      APIs that preserve comments and formatting; the writer never
+      re-serializes from scratch.</li>
+    <li><strong>ISO-8601 timestamps.</strong> All <code>at</code> fields are
+      machine-written in ISO-8601; a bare date parses but decision-latency
+      metrics degrade.</li>
+    <li><strong>Structured commit grammar.</strong> Human decisions use
+      five reserved forms:
+      <code>state(&lt;slug&gt;): G&lt;N&gt; approved by &lt;name&gt; [burden: …]</code>,
+      <code>staged by &lt;name&gt; [client-key: &lt;key&gt;]</code>,
+      <code>armed by &lt;name&gt;</code>,
+      <code>closed by &lt;name&gt; [disposition: …]</code>, and
+      <code>reopened to &lt;phase&gt; by &lt;name&gt; (was closed as …)</code>.
+      The orchestrator uses bookkeeping verbs under a
+      dedicated bot identity: <code>dispatched | bounced | advanced |
+      escalated | paused | metered | harvested …</code>.</li>
+    <li><strong>review_rounds in state.yaml only.</strong> No other file
+      carries it.</li>
+    <li><strong>Phase/status values within contract enums.</strong> No
+      ad-hoc values.</li>
+    <li><strong>Only the gate on the table can be decided.</strong> A gate
+      decision is legal only for the profile's first un-approved gate, and
+      only while the run stands in one of the phases that gate is decided in.
+      The CLI, the API and the PR-approval sync all refuse anything else.</li>
+  </ol>
+
+  <h2 id="gate-authorship-structural-not-behavioral">Gate authorship — structural, not behavioral</h2>
+  <p>The orchestrator <strong>has no code path</strong> that writes
+  <code>gates.*.approved</code> or <code>closure</code>. Gate entries and the
+  closure record are reserved for named humans
+  — it is structural, not a behavioral promise. The engine's role is to
+  derive the next action from committed state, not to decide. The role spec
+  itself states this: the orchestrator <em>presents</em> gates but
+  <em>never approves</em> them, and halts until a named human records an
+  approval.</p>
+  <!-- evidence: docs/ORCHESTRATOR.md §3; AGENTS.md "Invariants"; roles/orchestrator.md -->
+</article>
+<!-- content:end -->
+<nav class="pager" aria-label="Previous and next page">
+  <a class="pager-prev" href="../reference/cli.html"><span class="pager-label">Previous</span><span class="pager-title">CLI reference</span></a>
+  <a class="pager-next" href="../reference/orchestrator-yaml.html"><span class="pager-label">Next</span><span class="pager-title">orchestrator.yaml reference</span></a>
+</nav>
+</main>
+<aside class="toc" aria-labelledby="toc-heading">
+  <p class="toc-title" id="toc-heading">On this page</p>
+  <ul class="toc-list">
+    <li><a href="#top-level-keys">Top-level keys</a></li>
+    <li><a href="#profiles-and-their-gate-sets">Profiles and their gate sets</a></li>
+    <li><a href="#gate-entry-shape">Gate entry shape</a></li>
+    <li><a href="#closure-record">Closure record</a></li>
+    <li><a href="#budget-ledger">Budget ledger</a></li>
+    <li><a href="#task-entries">Task entries</a></li>
+    <li><a href="#escalation-entries">Escalation entries</a></li>
+    <li><a href="#co-writer-contract">Co-writer contract</a></li>
+    <li><a href="#gate-authorship-structural-not-behavioral">Gate authorship — structural, not behavioral</a></li>
+  </ul>
+</aside>
+<nav class="sidebar" aria-label="All documentation">
+  <p class="sidebar-title">Documentation</p>
+  <p class="sidebar-section"><a href="../how-it-works/index.html">How It Works</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../how-it-works/index.html">Overview</a></li>
+    <li><a href="../how-it-works/how-a-run-works.html">How a run works</a></li>
+    <li><a href="../how-it-works/how-gates-keep-a-human-in-charge.html">How gates keep a human in charge</a></li>
+    <li><a href="../how-it-works/how-gateline-stays-vendor-neutral.html">How gateline stays vendor-neutral</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../onboarding/index.html">Onboarding</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../onboarding/index.html">Overview</a></li>
+    <li><a href="../onboarding/git-plumbing.html">1. Git, down to the plumbing</a></li>
+    <li><a href="../onboarding/the-co-written-state-file.html">2. The co-written state file</a></li>
+    <li><a href="../onboarding/contracts-and-their-parsers.html">3. Contracts and their parsers</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../reference/index.html">Reference</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../reference/index.html">Overview</a></li>
+    <li><a href="../reference/cli.html">CLI</a></li>
+    <li><a href="../reference/state-yaml.html" aria-current="page">state.yaml</a></li>
+    <li><a href="../reference/orchestrator-yaml.html">orchestrator.yaml</a></li>
+    <li><a href="../reference/adapter-manifests.html">Adapter manifests</a></li>
+    <li><a href="../reference/contract-grammar.html">Contract grammar</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../api/index.html">API</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../api/index.html">Browse generated API docs</a></li>
+  </ul>
+</nav>
+</div>
+<footer class="site-footer">
+  gateline is an open-source framework (Apache-2.0). &copy; the gateline maintainers.
+  <span class="footer-sep">&middot;</span>
+  <a href="../index.html">Documentation home</a>
+</footer>
+</body>
+</html>

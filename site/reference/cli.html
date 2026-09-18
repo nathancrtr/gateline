@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CLI reference — gateline</title>
+  <meta name="description" content="The gateline CLI surface: global flags, all subcommands, and the companion orchestrator and runner-agent binaries.">
+  <link rel="stylesheet" href="../assets/site.css">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="site-header">
+  <a class="wordmark" href="../index.html">gateline</a>
+  <nav class="site-nav" aria-label="Sections">
+    <a href="../how-it-works/index.html">How It Works</a>
+    <a href="../onboarding/index.html">Onboarding</a>
+    <a href="../reference/index.html" class="active" aria-current="true">Reference</a>
+    <a href="../api/index.html">API</a>
+  </nav>
+</header>
+<div class="layout">
+<main id="content">
+  <h1>CLI reference</h1>
+<!-- content:start -->
+<article class="doc">
+<p class="lede">
+    The <code>gateline</code> command is the gate frontend in terminal form:
+    it lets a human operator inspect runs, record gate decisions, stage new
+    runs, integrate the framework into a host repository, and serve the
+    Gatehouse web UI. A companion binary,
+    <code>gateline-orchestrator</code>, provides the v1 engine outside a web
+    context. Both are installed by <code>npm install</code> in the framework
+    workspace (<code>packages/</code>, Node 24 or later), run from TypeScript
+    source, and read committed pipeline state directly — no running server
+    required for the inspect/decide/create groups. Five binaries ship in all.
+    The other three, <code>gateline-runner-agent</code>,
+    <code>gateline-framework</code> and <code>gateline-fixture</code>, are
+    covered at the end.
+    <!-- evidence: AGENTS.md "Commands"; packages/cli/src/main.ts; packages/orchestrator/src/main.ts -->
+  </p>
+
+  <h2 id="gateline-global-flags">gateline — global flags</h2>
+  <p><code>--repo &lt;path&gt;</code> (repeatable) — repository to read runs from.
+  Defaults to the config file (<code>~/.config/gateline/config.yaml</code>),
+  then the current working directory. <code>-V, --version</code> prints the
+  version (0.3.0).</p>
+  <!-- evidence: packages/cli/src/main.ts -->
+
+  <h2 id="inspect-commands">Inspect commands</h2>
+
+  <h3><code>gateline status</code></h3>
+  <p>Prints a portfolio table: one row per run showing its phase, gate status
+  (✓/✕/· per <code>PROFILE_GATES</code>), task count (done/total), updated age,
+  and number of items that need a human decision. Also notes how many inbox
+  items await. The phase cell carries a suffix when the run is at rest:
+  <code>(&lt;paused_reason&gt;)</code> for a paused run and
+  <code>(&lt;closure.as&gt;)</code> for a closed one.</p>
+  <!-- evidence: packages/cli/src/main.ts -->
+  <p>No flags.</p>
+
+  <h3><code>gateline inbox</code></h3>
+  <p>Lists everything that needs a human, oldest first. Undecided gates,
+  open escalations, and bounced (malformed) packets — each printed with its
+  kind, age, run slug, and title. Bounced packets are prefixed
+  <code>✕ BOUNCED: &lt;problem&gt;</code>. A gate whose producer is in flight
+  again prints <code>⋯ SUPERSEDED: &lt;detail&gt;</code> under the item.</p>
+
+  <h3><code>gateline show &lt;slug&gt; [artifact]</code></h3>
+  <p>Prints a run artifact. Without an artifact, lists all artifact paths.
+  With <code>--refs</code> (one of <code>first-line</code> (default),
+  <code>full</code>, <code>off</code>), prints cited R/AC/ADR definitions as
+  footnotes, with their definitions fetched from the run's own
+  <code>spec.md</code> and <code>plan.md</code>. <code>--source &lt;id&gt;</code>
+  disambiguates the slug when the same slug exists in multiple sources.</p>
+
+  <h2 id="decide-commands">Decide commands</h2>
+  <p>All decide commands share the same CAS-based write path. They read
+  <code>state.yaml</code> at the run's branch tip, plan a comment-preserving
+  mutation, and commit with a structured message. If a concurrent write
+  moved the ref, the command prints <code>refused (ref-moved): …</code> and
+  exits 2; rerun it. Every other refusal exits 1. A gate decision is
+  accepted only for the gate on the table: the profile's first un-approved
+  gate, while the run stands in one of that gate's phases.</p>
+  <!-- evidence: packages/core/src/record/actions.ts; packages/core/src/sources/git.ts; docs/ORCHESTRATOR.md §7 -->
+
+  <h3><code>gateline approve &lt;slug&gt; &lt;gate&gt;</code></h3>
+  <p>Records a named human's gate approval. Required: <code>--burden</code> —
+  one of
+  <code>confirmation</code> |
+  <code>light-correction</code> |
+  <code>heavy-correction</code> (the pilot's headline metric; prompted
+  interactively if the session is a TTY and the flag is omitted). Optional:
+  <code>--notes</code>, <code>--source</code>.</p>
+
+  <p><code>--no-advance</code> records the approval without moving the phase
+  — useful when a later gate must also be decided before work resumes.</p>
+
+  <p><code>--hold &lt;reason&gt;</code> implements approve-and-hold: signs the
+  gate and sets <code>phase: paused</code> in the same commit, so a human
+  decision blocking the next phase does not let the engine race ahead. This
+  is the dispatch-safe way to wait. The commit message becomes
+  <code>state(&lt;slug&gt;): G&lt;N&gt; approved by &lt;name&gt; [burden: …] and held (&lt;reason&gt;)</code>.</p>
+
+  <h3><code>gateline decline &lt;slug&gt; &lt;gate&gt;</code></h3>
+  <p>Pauses the run as <code>gate-declined</code>. <code>--reason &lt;text&gt;</code>
+  is <strong>required</strong> — this is the correction channel back to the
+  producing role, so the next iteration has something concrete to address.</p>
+
+  <h3><code>gateline resolve-escalation &lt;slug&gt; &lt;index&gt;</code></h3>
+  <p>Resolves an escalation by its zero-based index (from the inbox).
+  <code>--note &lt;text&gt;</code> required. <code>--disposition</code> accepts
+  an optional machine-actionable route:
+  <code>re-review</code> |
+  <code>return-to-implement</code> |
+  <code>re-plan</code>. Omitting it falls back to the engine's default
+  guarded re-review.</p>
+
+  <h3><code>gateline pause &lt;slug&gt;</code></h3>
+  <p>Pauses a run with an optional <code>--reason</code>, one of
+  <code>budget-exhausted</code> |
+  <code>round-cap</code> |
+  <code>escalation</code> |
+  <code>gate-declined</code> (defaults to <code>escalation</code>).</p>
+
+  <h3><code>gateline resume &lt;slug&gt;</code></h3>
+  <p>Resumes a paused run. The target phase is derived from the gate ledger
+  (<code>deriveResumePhase</code> walks the profile's gates and finds the
+  first not-yet-approved one) unless overridden via
+  <code>--phase spec|plan|implement|integrate|release</code>. Resuming a
+  <code>gate-declined</code> run re-opens the declined gate.
+  <code>--cost-limit &lt;usd&gt;</code> writes a new
+  <code>budget.cost_limit_usd</code> in the same commit, and is required to
+  resume from a <code>budget-exhausted</code> pause.</p>
+
+  <h3><code>gateline close &lt;slug&gt;</code></h3>
+  <p>Ends a run short of <code>done</code>. Both flags are required:
+  <code>--as</code> is the typed disposition, one of
+  <code>already-delivered</code> |
+  <code>superseded</code> |
+  <code>obsolete</code> |
+  <code>abandoned</code>, and <code>--reason &lt;text&gt;</code> is the
+  comment on it. The commit writes <code>phase: closed</code> and the
+  <code>closure</code> block under the message
+  <code>state(&lt;slug&gt;): closed by &lt;name&gt; [disposition: …]</code>.
+  Nothing is deleted.</p>
+
+  <h3><code>gateline reopen &lt;slug&gt;</code></h3>
+  <p>Undoes a closure. The run returns to the phase its gate ledger derives,
+  under the message <code>state(&lt;slug&gt;): reopened to &lt;phase&gt; by
+  &lt;name&gt; (was closed as &lt;disposition&gt;)</code>.</p>
+
+  <h3><code>gateline sync</code></h3>
+  <p>Copies PR-review approvals into <code>state.yaml</code> G2 entries for
+  sources that support it (currently GitHub sources with
+  <code>gh</code> access). Prints the plan by default; pass
+  <code>--live</code> to apply. <code>--source</code> filters to one source.
+  Prints <code>local-only: nothing to sync</code> for sources without a remote.
+  Sync obeys the same gate-on-the-table rule as the decide commands.</p>
+
+  <h2 id="create-commands">Create commands</h2>
+
+  <h3><code>gateline new</code></h3>
+  <p>Stages a run — creates the branch, writes <code>intent-brief.md</code>
+  and <code>state.yaml</code> — but leaves it <strong>inert</strong> (phase
+  <code>paused</code>, reason <code>staged</code>). The run is not dispatchable
+  until <code>gateline arm</code> starts it.</p>
+  <!-- evidence: AGENTS.md "Conventions"; packages/cli/src/main.ts -->
+
+  <table>
+    <thead><tr><th>Flag</th><th>Default</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><code>--slug</code></td><td>prompted</td><td>Grammar <code>[a-z0-9][a-z0-9-]*</code> — branch- and path-safe</td></tr>
+      <tr><td><code>--title</code></td><td>prompted</td><td>Human-visible run title</td></tr>
+      <tr><td><code>--profile</code></td><td><code>standard</code></td><td><code>patch | standard | full</code></td></tr>
+      <tr><td><code>--brief-file</code></td><td>template</td><td>Path to an operator-authored intent-brief.md</td></tr>
+      <tr><td><code>--task-file</code></td><td>stub</td><td>Patch profile only: the human-authored work item, staged as <code>tasks/01-&lt;slug&gt;.yaml</code>. Without it a patch run stages a stub, and <code>arm</code> refuses until it is written</td></tr>
+      <tr><td><code>--budget</code></td><td><code>50</code></td><td>Cost ceiling in USD</td></tr>
+      <tr><td><code>--key</code></td><td>—</td><td>Idempotency / replay client key</td></tr>
+      <tr><td><code>--source</code></td><td>—</td><td>Source id when several are configured</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <strong>Profile landmine:</strong> the CLI's <code>--profile</code> defaults
+    to <code>standard</code>, but a <code>state.yaml</code> with no
+    <code>profile:</code> field is a <code>full</code> run — the contract
+    default is heaviest, not lightest. Do not conflate the two layers.
+  </div>
+
+  <p>The interactive TTY fallback (when slug, title, or brief are missing)
+  uses <code>$VISUAL</code>/<code>$EDITOR</code> (fallback <code>vi</code>) for
+  the intent brief, validates required sections, and demands an explicit
+  <code>stage? [y/N]</code> confirmation. Invalid slugs are rejected before
+  the edit session, not after, so the human's authored brief is never
+  discarded.</p>
+
+  <h3><code>gateline arm &lt;slug&gt;</code></h3>
+  <p>Starts a staged run at the profile's first undecided-gate phase. It
+  refuses a patch run whose work item is still the stub. After
+  the write succeeds, it makes a best-effort call to ensure a draft PR
+  exists (title/description generated from run artifacts, refreshed until a
+  human edits the body).</p>
+
+  <h2 id="serve-commands">Serve commands</h2>
+
+  <h3><code>gateline up</code></h3>
+  <p>Gatehouse + v1 orchestrator over one clone — the single-authority
+  deployment and the blessed topology. Starts the server (Hono-based, port
+  4310 default) and the engine in the same process. The engine watches the
+  code tree for fast-forward upgrades and self-supersedes (exit 75) on
+  update. Exactly one <code>--repo</code> is allowed.</p>
+  <!-- evidence: docs/TOPOLOGY.md §3.1; packages/cli/src/main.ts; packages/core/src/sources/code-tree.ts -->
+
+  <p>Key flags:</p>
+  <ul>
+    <li><code>--port</code>/<code>--host</code> — bind address (defaults: 4310, 127.0.0.1)</li>
+    <li><code>--adapter</code> (repeatable) — headless adapters; first is the default runner</li>
+    <li><code>--spend-limit-usd</code> — defer new dispatches while projected spend across all active runs inside the window exceeds this (a rate limit, never a pause)</li>
+    <li><code>--spend-window</code> — the rolling window the limit measures over, in hours (default 24)</li>
+    <li><code>--no-budget-enforcement</code> — meter but never pause on budgets</li>
+    <li><code>--push</code> / <code>--no-push</code> / <code>--local-only</code> — push mode (<code>--no-push</code> is an alias for <code>--local-only</code>)</li>
+    <li><code>--heartbeat</code> — engine interval (default 180s)</li>
+    <li><code>--role-timeout</code> — wall clock per dispatch (default 1800s)</li>
+    <li><code>--max-concurrent-dispatches</code> — parallelism cap (default 2, 0 disables)</li>
+    <li><code>--no-open</code> — skip launching the browser</li>
+  </ul>
+
+  <h3><code>gateline ui</code></h3>
+  <p>Viewer-only web app on localhost — no engine, no dispatch. Flags:
+  <code>--port</code>, <code>--host</code>, <code>--demo</code> (generated
+  throwaway repo), <code>--no-open</code>.</p>
+
+  <h3><code>gateline self-update</code></h3>
+  <p><code>git pull --ff-only</code> the code checkout this CLI runs from,
+  then <code>npm install</code> (and <code>npm run build</code> for the web
+  dist) if HEAD moved. Refuses on a dirty tree, and when the install is not a
+  git checkout. A running engine exits 75 at its next tick boundary so it
+  can be restarted on the new code.</p>
+
+  <h2 id="integrate-commands">Integrate commands</h2>
+  <p>Four commands carry the framework into a host repository and keep it
+  honest there. Each has a dependency-free twin in
+  <code>gateline-framework</code> (below) with the same flags.</p>
+  <!-- evidence: packages/framework/src/main.ts; docs/INTEGRATION.md §5 -->
+
+  <table>
+    <thead><tr><th>Command</th><th>Flags (default)</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>render [repo]</code></td><td><code>--check</code></td><td>Re-render every adapter's agent files from role specs and manifests. <code>--check</code> writes nothing and exits 1 if any rendered file is stale — the check CI runs</td></tr>
+      <tr><td><code>init &lt;target&gt;</code></td><td><code>--take &lt;subset&gt;</code> (<code>all</code>), <code>--layout prefixed|root</code> (<code>prefixed</code>), <code>--prefix &lt;dir&gt;</code> (<code>.gateline</code>), <code>--provenance redistribute|private</code> (required, no default), <code>--adapters &lt;list&gt;</code> (<code>auto</code>)</td><td>Scaffold the framework into a host: writes the lock, provenance, overlay stubs and <code>.github/workflows/gateline-render-check.yml</code></td></tr>
+      <tr><td><code>validate [target]</code></td><td><code>--prefix &lt;dir&gt;</code> (<code>.gateline</code>)</td><td>Re-prove the static integration invariants: lock, checksums, provenance, overlay stubs, renders current</td></tr>
+      <tr><td><code>fork &lt;file&gt;</code></td><td><code>--reason &lt;text&gt;</code> (required), <code>--target &lt;path&gt;</code> (<code>.</code>), <code>--prefix &lt;dir&gt;</code> (<code>.gateline</code>)</td><td>Record a deliberate divergence of a taken core file before editing it</td></tr>
+    </tbody>
+  </table>
+
+  <hr>
+
+  <h2 id="gateline-orchestrator">gateline-orchestrator</h2>
+  <p>The v1 engine's CLI, installed at <code>gateline-orchestrator</code>.
+  The two binaries share most global flags, but each has its own.
+  Shared: <code>--repo</code>, <code>--adapter</code> (repeatable; later ones
+  satisfy <code>avoid_vendor_of</code> pins),
+  <code>--push</code>/<code>--local-only</code>,
+  <code>--spend-limit-usd</code>, <code>--spend-window</code>,
+  <code>--no-budget-enforcement</code>,
+  <code>--role-timeout</code>, <code>--max-concurrent-dispatches</code>.
+  The orchestrator adds <code>--require-budget</code> (refuse dispatch on any
+  run missing <code>budget.cost_limit_usd</code>) and
+  <code>--gateline-prefix</code> (for hosts that integrated with a custom
+  prefix); <code>gateline up</code> adds server flags as globals (<code>--port</code>,
+  <code>--host</code>, <code>--heartbeat</code>, <code>--no-open</code>) that
+  the engine does not have.</p>
+  <!-- evidence: packages/orchestrator/src/main.ts; packages/cli/src/main.ts -->
+
+  <h3><code>gateline-orchestrator tick</code></h3>
+  <p>One reconcile pass: sync from origin, derive each active run's next
+  action, dispatch or wait, run the scheduler's sweep tick, and exit. With
+  <code>--dry-run</code>, prints derived actions and moves no refs at all
+  — the safe way to verify engine behavior without running live agents.</p>
+
+  <h3><code>gateline-orchestrator watch</code></h3>
+  <p>Resident mode: ref watcher + heartbeat + completions. Runs continuously,
+  waking on branch changes and at the heartbeat interval. <code>--heartbeat</code>
+  overrides the default 180s. It also runs the code-tree monitor, which
+  exits 75 on a clean fast-forward of the checkout.</p>
+
+  <h3><code>gateline-orchestrator sweep &lt;role&gt;</code></h3>
+  <p>Force a scheduled sweep now for the named role, ignoring dueness
+  but not the other schedule guards (enabled, open sweep, same-day,
+  cost cap). Exits 1 when the role has no schedule.</p>
+
+  <h3><code>gateline-orchestrator shadow &lt;slug&gt;</code></h3>
+  <p>Replay a finished run's history against the current engine logic,
+  comparing derived vs. actual actions at each step. Used for the v1 trust
+  ladder's M1 milestone verification. <code>--ref</code> selects a specific
+  rev (default: the run branch, else the default branch).</p>
+
+  <hr>
+
+  <h2 id="gateline-runner-agent">gateline-runner-agent</h2>
+  <p>A third binary, <code>gateline-runner-agent</code>, implements the
+  workstation half of the remote-dispatch relay: it polls a control plane
+  server's <code>/api/runner/*</code> endpoints for dispatch intents,
+  executes them in a disposable git clone, and reports outcomes back. It has
+  no subcommands.</p>
+  <!-- evidence: packages/runner-agent/src/main.ts; docs/TOPOLOGY.md §3.3 -->
+
+  <table>
+    <thead><tr><th>Flag</th><th>Default</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>--control-plane &lt;url&gt;</code></td><td>required</td><td>Base URL of the control plane server</td></tr>
+      <tr><td><code>--token &lt;token&gt;</code></td><td>required</td><td>Runner service token; matches the server's <code>RUNNER_TOKEN</code></td></tr>
+      <tr><td><code>--adapter &lt;name&gt;</code></td><td>required</td><td>Adapter whose manifest governs the command this agent runs</td></tr>
+      <tr><td><code>--work-dir &lt;path&gt;</code></td><td>cwd</td><td>Directory disposable workspaces are created under</td></tr>
+      <tr><td><code>--poll-interval &lt;seconds&gt;</code></td><td><code>5</code></td><td>Seconds between polls</td></tr>
+      <tr><td><code>--repo-url &lt;url&gt;</code></td><td>—</td><td>Fallback git remote, used only when the control plane cannot determine one</td></tr>
+      <tr><td><code>--gateline-prefix &lt;prefix&gt;</code></td><td>auto-detected</td><td>Metadata prefix override for a prefixed host</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="gateline-framework-and-gateline-fixture">gateline-framework and gateline-fixture</h2>
+  <p><code>gateline-framework</code> (<code>packages/framework</code>) is the
+  dependency-free entry point for <code>render</code>, <code>init</code>,
+  <code>validate</code> and <code>fork</code>, long flags only. It runs with
+  nothing installed, which is why a host repository's CI invokes it as
+  <code>node packages/framework/src/main.ts render --check</code>.
+  <code>gateline-fixture</code> (<code>packages/fixtures</code>) generates the
+  demo repository behind <code>gateline ui --demo</code> and the tests; it
+  takes an optional target directory and prints the path it made.</p>
+  <!-- evidence: packages/framework/src/main.ts; packages/fixtures/src/main.ts -->
+</article>
+<!-- content:end -->
+<nav class="pager" aria-label="Previous and next page">
+  <a class="pager-prev" href="../reference/index.html"><span class="pager-label">Previous</span><span class="pager-title">Reference</span></a>
+  <a class="pager-next" href="../reference/state-yaml.html"><span class="pager-label">Next</span><span class="pager-title">state.yaml reference</span></a>
+</nav>
+</main>
+<aside class="toc" aria-labelledby="toc-heading">
+  <p class="toc-title" id="toc-heading">On this page</p>
+  <ul class="toc-list">
+    <li><a href="#gateline-global-flags">gateline — global flags</a></li>
+    <li><a href="#inspect-commands">Inspect commands</a></li>
+    <li><a href="#decide-commands">Decide commands</a></li>
+    <li><a href="#create-commands">Create commands</a></li>
+    <li><a href="#serve-commands">Serve commands</a></li>
+    <li><a href="#integrate-commands">Integrate commands</a></li>
+    <li><a href="#gateline-orchestrator">gateline-orchestrator</a></li>
+    <li><a href="#gateline-runner-agent">gateline-runner-agent</a></li>
+    <li><a href="#gateline-framework-and-gateline-fixture">gateline-framework and gateline-fixture</a></li>
+  </ul>
+</aside>
+<nav class="sidebar" aria-label="All documentation">
+  <p class="sidebar-title">Documentation</p>
+  <p class="sidebar-section"><a href="../how-it-works/index.html">How It Works</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../how-it-works/index.html">Overview</a></li>
+    <li><a href="../how-it-works/how-a-run-works.html">How a run works</a></li>
+    <li><a href="../how-it-works/how-gates-keep-a-human-in-charge.html">How gates keep a human in charge</a></li>
+    <li><a href="../how-it-works/how-gateline-stays-vendor-neutral.html">How gateline stays vendor-neutral</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../onboarding/index.html">Onboarding</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../onboarding/index.html">Overview</a></li>
+    <li><a href="../onboarding/git-plumbing.html">1. Git, down to the plumbing</a></li>
+    <li><a href="../onboarding/the-co-written-state-file.html">2. The co-written state file</a></li>
+    <li><a href="../onboarding/contracts-and-their-parsers.html">3. Contracts and their parsers</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../reference/index.html">Reference</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../reference/index.html">Overview</a></li>
+    <li><a href="../reference/cli.html" aria-current="page">CLI</a></li>
+    <li><a href="../reference/state-yaml.html">state.yaml</a></li>
+    <li><a href="../reference/orchestrator-yaml.html">orchestrator.yaml</a></li>
+    <li><a href="../reference/adapter-manifests.html">Adapter manifests</a></li>
+    <li><a href="../reference/contract-grammar.html">Contract grammar</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../api/index.html">API</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../api/index.html">Browse generated API docs</a></li>
+  </ul>
+</nav>
+</div>
+<footer class="site-footer">
+  gateline is an open-source framework (Apache-2.0). &copy; the gateline maintainers.
+  <span class="footer-sep">&middot;</span>
+  <a href="../index.html">Documentation home</a>
+</footer>
+</body>
+</html>

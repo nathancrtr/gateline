@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How a run works — gateline</title>
+  <meta name="description" content="The G0–G3 run lifecycle, the run directory as pipeline state, profiles, two-step creation, and historian sweeps.">
+  <link rel="stylesheet" href="../assets/site.css">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="site-header">
+  <a class="wordmark" href="../index.html">gateline</a>
+  <nav class="site-nav" aria-label="Sections">
+    <a href="../how-it-works/index.html" class="active" aria-current="true">How It Works</a>
+    <a href="../onboarding/index.html">Onboarding</a>
+    <a href="../reference/index.html">Reference</a>
+    <a href="../api/index.html">API</a>
+  </nav>
+</header>
+<div class="layout">
+<main id="content">
+  <h1>How a run works</h1>
+<!-- content:start -->
+<article class="doc">
+  <p class="lede">A gateline run is one change — a feature, a fix, a piece of
+  maintenance — carried from a one-page brief to a merged branch by a chain of
+  specialized agents, with a named human approving at each phase boundary.
+  Everything the run is, everything it has done, and everything it is waiting
+  on lives in a single directory of files committed to git.</p>
+  <!-- evidence: docs/DESIGN.md §1, §4; runs/README.md -->
+
+  <h2 id="from-conversation-to-artifacts">From conversation to artifacts</h2>
+  <p>In the chatbot workflow most engineers know, the developer is the
+  integration point: you hold the plan in your head, feed the model context
+  piece by piece, and validate every output before it touches the repo. It
+  works, but throughput caps at one conversation, and none of the intermediate
+  reasoning survives the session. gateline moves the integration point into
+  durable, typed artifacts committed to git: agents never share a conversation,
+  they share contracts. Each role consumes specific files, produces specific
+  files, and a human approves at phase boundaries. The pipeline's state
+  <em>is</em> the repo.</p>
+  <!-- evidence: docs/DESIGN.md §1 -->
+  <p>Three properties fall out of that one decision. Any agent is replaceable
+  mid-flight — if an implementer's work is unusable, you discard its branch and
+  re-run the work item, because the spec and plan it worked from are unchanged
+  on disk. Models and runtimes are swappable independently of roles, because a
+  role spec says what an agent must consume, produce, and refuse to do — never
+  which vendor's model executes it. And the record is free: every decision,
+  review finding, and verification result is a file with git history, so "why
+  did we build it this way?" has a <code>git log</code> answer.</p>
+
+  <h2 id="the-lifecycle-four-gates">The lifecycle: four gates</h2>
+  <p>At full weight a run passes four <strong>gates</strong>, each a named
+  human's recorded decision that closes a phase. The Analyst turns
+  the intent brief into a testable spec; at <strong>G0</strong> the human
+  answers "is this what we actually want built?" The Architect turns the spec
+  into a technical plan cut into work items; at <strong>G1</strong>, "is this
+  how we'd want it built, in safe parallel pieces?" Each work item then loops
+  between an Implementer and a Reviewer, and a Verifier exercises the finished
+  change end to end; at <strong>G2</strong>, "does the evidence support
+  merging?" Finally the Ops role prepares release and rollback plans; at
+  <strong>G3</strong>, "ship it?"</p>
+  <!-- evidence: docs/DESIGN.md §3, §4; docs/ORCHESTRATOR.md §4.2; runs/dupefind/state.yaml -->
+  <table>
+    <thead>
+      <tr><th>Gate</th><th>The human's question</th><th>On the table</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>G0</strong> — Spec</td><td>Is this what we actually want
+        built?</td><td><code>intent-brief.md</code>, <code>spec.md</code></td></tr>
+      <tr><td><strong>G1</strong> — Plan</td><td>Is this how we'd want it built,
+        cut into safe parallel pieces?</td><td><code>plan.md</code>,
+        <code>tasks/*.yaml</code>, ADRs</td></tr>
+      <tr><td><strong>G2</strong> — Change</td><td>Does the evidence support
+        merging?</td><td>diff, review report, verification report</td></tr>
+      <tr><td><strong>G3</strong> — Release</td><td>Ship it?</td><td>release
+        plan, rollback plan</td></tr>
+    </tbody>
+  </table>
+  <p>Two caps keep the loop safe. Implementer ⇄ Reviewer cycles are capped at
+  three rounds per work item; a fourth round becomes an automatic escalation to
+  the human with both sides' artifacts — agents arguing past three rounds are
+  almost always stuck on an ambiguity in the spec, which is a G0 or G1 defect,
+  not an implementation defect. The cap has an exit: resolving that
+  escalation grants the loop one more round, and the engine asks again for
+  each extra round. And each run carries a cost budget whose
+  exhaustion pauses the pipeline rather than letting quality degrade
+  silently.</p>
+  <p>Reviewer and Verifier are deliberately separate roles. Review is reading —
+  does this code say the right thing? Verification is running — does the system
+  do the right thing? Collapsing them recreates the rubber-stamp reviews seen
+  in human teams.</p>
+
+  <figure class="diagram" data-diagram="run-lifecycle">
+    <figcaption>A full-weight run from intent brief to release. Roles produce
+    artifacts; gates G0–G3 are human decisions over those artifacts; the
+    implement/review loop is capped at three rounds.</figcaption>
+    <svg class="diagram-svg" viewBox="0 0 1020 370" role="img" aria-labelledby="title-run-lifecycle">
+      <title id="title-run-lifecycle">Pipeline diagram: eight roles, four gates, one run from intent brief to release, with a state file band and human markers at each gate.</title>
+      <defs>
+        <marker id="arr-rl" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="currentColor"/></marker>
+        <marker id="arr-rl-accent" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" class="d-accent"/></marker>
+      </defs>
+      <!-- Nodes: intent brief -->
+      <rect x="18" y="40" width="78" height="38" rx="8" class="d-bg" stroke="currentColor" stroke-width="1.2"/>
+      <text x="57" y="56" text-anchor="middle" class="d-bold">intent brief</text>
+      <text x="57" y="69" text-anchor="middle" class="d-small d-faint">human-authored</text>
+      <!-- Arrow -->
+      <line x1="96" y1="59" x2="112" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
+      <!-- Analyst -->
+      <rect x="114" y="40" width="72" height="38" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="150" y="56" text-anchor="middle" class="d-bold">Analyst</text>
+      <text x="150" y="69" text-anchor="middle" class="d-small d-faint">→ spec.md</text>
+      <!-- Arrow -->
+      <line x1="186" y1="59" x2="202" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
+      <!-- G0 Diamond -->
+      <rect x="206" y="37" width="52" height="44" rx="4" transform="rotate(45 232 59)" fill="none" class="d-accent-stroke" stroke-width="1.5"/>
+      <text x="232" y="58" text-anchor="middle" class="d-bold d-accent-fill">G0</text>
+      <text x="232" y="83" text-anchor="middle" class="d-small d-faint">Is this what we actually want built?</text>
+      <!-- HUMAN marker -->
+      <text x="232" y="320" text-anchor="middle" class="d-accent-fill d-bold" font-size="8">HUMAN</text>
+      <text x="232" y="333" text-anchor="middle" class="d-small d-faint">named human approves</text>
+      <!-- Arrow -->
+      <line x1="258" y1="59" x2="274" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
+      <!-- Architect -->
+      <rect x="276" y="40" width="86" height="38" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="319" y="56" text-anchor="middle" class="d-bold">Architect</text>
+      <text x="319" y="69" text-anchor="middle" class="d-small d-faint">→ plan.md + tasks/*.yaml</text>
+      <!-- Arrow -->
+      <line x1="362" y1="59" x2="378" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
+      <!-- G1 Diamond -->
+      <rect x="382" y="37" width="52" height="44" rx="4" transform="rotate(45 408 59)" fill="none" class="d-accent-stroke" stroke-width="1.5"/>
+      <text x="408" y="58" text-anchor="middle" class="d-bold d-accent-fill">G1</text>
+      <text x="408" y="83" text-anchor="middle" class="d-small d-faint">safe parallel pieces?</text>
+      <!-- HUMAN marker -->
+      <text x="408" y="320" text-anchor="middle" class="d-accent-fill d-bold" font-size="8">HUMAN</text>
+      <text x="408" y="333" text-anchor="middle" class="d-small d-faint">named human approves</text>
+      <!-- Arrow into container -->
+      <line x1="434" y1="59" x2="452" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
+      <!-- Container: per work item -->
+      <rect x="454" y="12" width="310" height="116" rx="8" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="5 3"/>
+      <rect x="454" y="12" width="140" height="18" rx="3" fill="var(--bg-subtle,#f6f7f8)" stroke="none"/>
+      <text x="524" y="25" text-anchor="middle" class="d-small">per work item, in parallel</text>
+      <!-- Implementer -->
+      <rect x="464" y="52" width="72" height="34" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="500" y="73" text-anchor="middle" class="d-bold">Implementer</text>
+      <!-- Arrow: diff -->
+      <line x1="536" y1="69" x2="552" y2="69" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
+      <text x="544" y="65" text-anchor="middle" class="d-small">diff</text>
+      <!-- Reviewer -->
+      <rect x="554" y="52" width="72" height="34" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="590" y="73" text-anchor="middle" class="d-bold">Reviewer</text>
+      <!-- Return arrow -->
+      <path d="M590,50 C590,32 500,32 500,50" fill="none" class="d-accent-stroke" stroke-width="1.2" marker-end="url(#arr-rl-accent)"/>
+      <text x="545" y="38" text-anchor="middle" class="d-small d-accent-fill">request-changes · ≤ 3 rounds</text>
+      <!-- Branch: round 4 escalate -->
+      <line x1="545" y1="44" x2="545" y2="58" stroke="currentColor" stroke-width="0.8"/>
+      <text x="545" y="95" text-anchor="middle" class="d-small">round 4 → escalate to human</text>
+      <!-- Arrow to Verifier -->
+      <line x1="626" y1="69" x2="642" y2="69" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
+      <text x="634" y="65" text-anchor="middle" class="d-small">report</text>
+      <!-- Verifier -->
+      <rect x="644" y="52" width="72" height="34" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="680" y="73" text-anchor="middle" class="d-bold">Verifier</text>
+      <text x="680" y="107" text-anchor="middle" class="d-small d-faint">→ verification-report.md</text>
+      <!-- Arrow out of container -->
+      <line x1="716" y1="69" x2="750" y2="69" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
+      <!-- G2 Diamond -->
+      <rect x="754" y="37" width="52" height="44" rx="4" transform="rotate(45 780 59)" fill="none" class="d-accent-stroke" stroke-width="1.5"/>
+      <text x="780" y="58" text-anchor="middle" class="d-bold d-accent-fill">G2</text>
+      <text x="780" y="83" text-anchor="middle" class="d-small d-faint">evidence supports merging?</text>
+      <!-- HUMAN marker -->
+      <text x="780" y="320" text-anchor="middle" class="d-accent-fill d-bold" font-size="8">HUMAN</text>
+      <text x="780" y="333" text-anchor="middle" class="d-small d-faint">named human merges</text>
+      <!-- Arrow -->
+      <line x1="806" y1="59" x2="822" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
+      <!-- Ops -->
+      <rect x="824" y="40" width="58" height="38" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="853" y="56" text-anchor="middle" class="d-bold">Ops</text>
+      <text x="853" y="69" text-anchor="middle" class="d-small d-faint">→ release-plan.md</text>
+      <!-- Arrow -->
+      <line x1="882" y1="59" x2="898" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
+      <!-- G3 Diamond -->
+      <rect x="902" y="37" width="52" height="44" rx="4" transform="rotate(45 928 59)" fill="none" class="d-accent-stroke" stroke-width="1.5"/>
+      <text x="928" y="58" text-anchor="middle" class="d-bold d-accent-fill">G3</text>
+      <text x="928" y="83" text-anchor="middle" class="d-small d-faint">ship it?</text>
+      <!-- HUMAN marker -->
+      <text x="928" y="320" text-anchor="middle" class="d-accent-fill d-bold" font-size="8">HUMAN</text>
+      <text x="928" y="333" text-anchor="middle" class="d-small d-faint">named human approves</text>
+      <!-- Arrow -->
+      <line x1="954" y1="59" x2="966" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
+      <!-- released -->
+      <rect x="968" y="40" width="48" height="38" rx="8" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="992" y="63" text-anchor="middle" class="d-bold">released</text>
+
+      <!-- State band -->
+      <rect x="0" y="235" width="1020" height="3" fill="currentColor" opacity="0.3"/>
+      <text x="10" y="260" class="d-mono">runs/&lt;slug&gt;/state.yaml</text>
+      <text x="1000" y="260" text-anchor="end" class="d-small d-faint">every step commits</text>
+      <!-- Dotted connectors -->
+      <line x1="150" y1="78" x2="150" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
+      <line x1="232" y1="81" x2="232" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
+      <line x1="319" y1="78" x2="319" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
+      <line x1="408" y1="81" x2="408" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
+      <line x1="500" y1="86" x2="500" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
+      <line x1="590" y1="86" x2="590" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
+      <line x1="680" y1="86" x2="680" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
+      <line x1="780" y1="81" x2="780" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
+      <line x1="853" y1="78" x2="853" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
+      <line x1="928" y1="81" x2="928" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
+    </svg>
+  </figure>
+
+  <p>The lifecycle is exercised, not aspirational. <code>runs/dupefind/</code>,
+  a completed human-orchestrated run at full weight (its state file predates
+  the profile field, and an absent <code>profile:</code> means
+  <code>full</code>), shows the shape the lifecycle leaves behind: three work
+  items each verified after two review rounds, a hand-appended budget ledger of
+  sixteen entries totaling $12.15 against a $50 limit, four gates approved by
+  the same named human with the first three noting
+  <code>burden: confirmation</code> in their notes, and zero escalations.</p>
+
+  <h2 id="the-run-directory-is-the-state">The run directory is the state</h2>
+  <p>A run lives at <code>runs/&lt;slug&gt;/</code> on its own branch,
+  <code>run/&lt;slug&gt;</code>, and the directory <em>is</em> the pipeline's
+  state — no state lives anywhere else. Artifacts are committed as they are
+  produced, so the git history is the record of what happened, in order. Once a
+  run merges, its directory is a historical record and is never
+  retro-edited.</p>
+  <!-- evidence: runs/README.md; contracts/state.yaml; docs/DESIGN.md §5; AGENTS.md -->
+  <pre><code>runs/&lt;slug&gt;/
+├── state.yaml               # phase, profile, gates, budget, tasks, escalations
+├── intent-brief.md          # human-authored input
+├── spec.md                  # Analyst            → gate G0
+├── ux-research.md           # UX Researcher                  (design runs only)
+├── design/
+│   └── &lt;candidate&gt;/         # one Designer each              (design runs only)
+├── plan.md                  # Architect           → gate G1
+├── tasks/
+│   └── NN-name.yaml         # one work item per Implementer
+├── review-NN.md             # Reviewer, per task, per round
+├── verification-report.md   # Verifier            → gate G2
+├── release-plan.md          # Ops                 → gate G3
+└── retro.md                 # human observations after the run</code></pre>
+  <p>At the center is <code>state.yaml</code>, the run's spine. It records the
+  phase and profile; the budget as an append-only <strong>ledger</strong> — one
+  entry per model invocation, carrying timestamp, role, task, round, adapter,
+  model, tokens, and cost — from which totals are derived rather than
+  maintained, so concurrent writers and later audits survive; the gate ledger,
+  one entry per gate with who approved, when, notes, and an optional
+  <strong>burden</strong> rating of how much work the review took; task
+  statuses and review-round counts; and an append-only escalation list.
+  Everything a human or an engine needs in order to decide what happens next is
+  read from this file.</p>
+  <p>Every artifact in the tree follows a contract from <code>contracts/</code>:
+  required sections, concision budgets, a parseable ID and heading grammar, and
+  readability rules for the sections a human reads. All of these are equally
+  bounceable. An artifact missing a required section is malformed, and the
+  consuming agent's first duty is to bounce it back to its producer, never to
+  guess. A breach of a readability rule is bounced the same way, with the rule
+  cited. The handoffs therefore fail loudly or not at all.</p>
+
+  <h2 id="profiles-ceremony-scaled-to-the-change">Profiles: ceremony scaled to the change</h2>
+  <p>Not every change should pay for the full pipeline. A <strong>run
+  profile</strong> declares, per run, which roles run and which gates exist.
+  There are three profiles, they are fixed sets, and they nest:</p>
+  <!-- evidence: docs/DESIGN.md §4.1; docs/ORCHESTRATOR.md §4.5; packages/core/src/record/schema.ts; packages/cli/src/main.ts; runs/creation-seam/state.yaml -->
+  <table>
+    <thead>
+      <tr><th>Profile</th><th>Roles that run</th><th>Gates</th><th>Phase
+        sequence</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>patch</code></td><td>Implementer, Reviewer</td><td>G1,
+        G2</td><td>plan → implement → integrate → done</td></tr>
+      <tr><td><code>standard</code></td><td>+ Analyst, Architect,
+        Verifier</td><td>G0–G2</td><td>spec → plan → implement → integrate →
+        done</td></tr>
+      <tr><td><code>full</code></td><td>all eight</td><td>G0–G3</td><td>spec →
+        plan → implement → integrate → release → done</td></tr>
+    </tbody>
+  </table>
+  <p>Every sequence ends at <code>done</code>, and every profile can also end
+  at <code>closed</code>, the second terminal phase. A named human ends a run
+  short of <code>done</code> with <code>gateline close &lt;slug&gt; --as
+  &lt;disposition&gt; --reason &lt;text&gt;</code>, where the disposition is
+  one of <code>already-delivered</code>, <code>superseded</code>,
+  <code>obsolete</code>, or <code>abandoned</code>. The engine never closes a
+  run. Closing deletes nothing, and <code>gateline reopen</code> undoes it in
+  a commit of its own.</p>
+  <p><code>patch</code> is for bug fixes and small bounded changes: the human
+  authors the intent brief <em>and</em> the single work item at creation
+  (<code>gateline new --task-file &lt;path&gt;</code> stages it as
+  <code>tasks/01-&lt;slug&gt;.yaml</code>), G1
+  approves both together, and there is no Verifier — wanting independent
+  verification is itself evidence the change is <code>standard</code>-weight.
+  <code>standard</code> is the workhorse for feature-sized changes that ship by
+  merging; it drops Ops and G3 because for most repository work the merge
+  <em>is</em> the release. <code>full</code> is the complete pipeline, for when
+  deployment is a distinct, risky act that needs a release and rollback
+  plan.</p>
+  <p>The guardrails matter more than the menu. Profiles are fixed sets, not
+  knobs: there is no per-run role or gate toggle, so if a profile doesn't fit
+  you pick the next heavier one. The gate ledger carries exactly the profile's
+  gates; a gate outside the profile is absent, never auto-approved. Upgrades
+  are one-way and human-decided — the human edits <code>profile:</code> to a
+  heavier value and resumes, and the missing work derives as ordinary
+  dispatches — while downgrading mid-run is forbidden, and an engine that
+  observes one escalates rather than guesses.</p>
+  <p class="callout">Two defaults live at different layers and are easy to
+  conflate. A <code>state.yaml</code> with no <code>profile:</code> field is a
+  <code>full</code> run — the heaviest profile, so every pre-profile record
+  keeps its meaning. The <code>gateline new</code> command, one layer up,
+  defaults to <code>--profile standard</code> for runs it stages. The record's
+  default protects history; the tool's default matches the common case.</p>
+  <p>Records are historical, so older runs show older shapes. The
+  orchestrator-driven <code>runs/creation-seam/</code> — a
+  <code>standard</code> run — lists a G3 entry that today's contract would
+  omit: present but undecided, a compatibility shim for a parser written before
+  per-profile gate sets. It is harmless precisely because of the rule above —
+  an undecided or absent gate can never masquerade as approved.</p>
+
+  <figure class="diagram" data-diagram="profile-ladder">
+    <figcaption>The three profiles are fixed, nested sets. Each heavier profile
+    adds roles and gates; a run can only move up the ladder, by human
+    decision.</figcaption>
+    <svg class="diagram-svg" viewBox="0 0 620 240" role="img" aria-labelledby="title-profile-ladder">
+      <title id="title-profile-ladder">Three run profiles as nested bars: patch, standard, full. Each adds roles and gates. Upgrades are human-decided; downgrades are forbidden.</title>
+      <!-- Bar: patch -->
+      <rect x="100" y="20" width="360" height="36" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="88" y="42" text-anchor="end" class="d-bold">patch</text>
+      <text x="115" y="42" class="d-bold">Implementer · Reviewer</text>
+      <text x="330" y="42" class="d-accent-fill">G1 · G2</text>
+      <!-- Bar: standard -->
+      <rect x="100" y="70" width="440" height="36" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="88" y="92" text-anchor="end" class="d-bold">standard</text>
+      <text x="115" y="92">Implementer · Reviewer</text>
+      <text x="270" y="92" class="d-accent-fill"> · Analyst · Architect · Verifier</text>
+      <text x="330" y="92">G1 · G2</text>
+      <text x="410" y="92" class="d-accent-fill"> · G0</text>
+      <!-- Bar: full -->
+      <rect x="100" y="120" width="500" height="36" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="88" y="142" text-anchor="end" class="d-bold">full</text>
+      <text x="115" y="142">Implementer · Reviewer · Analyst · Architect · Verifier</text>
+      <text x="430" y="142" class="d-accent-fill"> · all eight roles</text>
+      <text x="330" y="135">G1 · G2 · G0</text>
+      <text x="435" y="135" class="d-accent-fill"> · G3</text>
+      <!-- Annotations -->
+      <text x="600" y="40" text-anchor="end" class="d-small d-faint">fixed sets, not knobs</text>
+      <text x="600" y="52" text-anchor="end" class="d-small d-faint">— no per-run toggles</text>
+      <!-- Upgrade arrow -->
+      <line x1="60" y1="55" x2="60" y2="155" class="d-accent-stroke" stroke-width="1.8" marker-end="url(#arr-rl-accent)"/>
+      <text x="52" y="105" text-anchor="end" class="d-small d-accent-fill" transform="rotate(-90 52 105)">upgrade: human edit profile: + resume</text>
+      <!-- Downgrade note -->
+      <text x="70" y="188" text-anchor="end" class="d-small d-faint">downgrade: forbidden</text>
+      <text x="70" y="200" text-anchor="end" class="d-small d-faint">— the engine escalates</text>
+      <!-- Caption -->
+      <text x="100" y="225" class="d-small d-faint">no profile: field in state.yaml = full</text>
+    </svg>
+  </figure>
+
+  <h2 id="creating-a-run-stage-then-arm">Creating a run: stage, then arm</h2>
+  <p>A run is created in two steps. <code>gateline new</code> stages the record
+  — branch, intent brief, state file — in a paused, inert state
+  (<code>paused_reason: staged</code>) for human review; nothing can dispatch
+  against a staged run. <code>gateline arm</code> is what makes it
+  dispatchable: it starts the run at the profile's first undecided-gate phase
+  and ensures the run's draft pull request exists.</p>
+  <!-- evidence: AGENTS.md; packages/cli/src/main.ts; contracts/state.yaml; packages/core/src/sources/pr-description.ts -->
+  <p>That pull request is generated from the run's own artifacts — the intent
+  brief first, then the spec once it lands — and it refreshes as the run
+  progresses, until a human edits the body. The edit removes a marker comment
+  from the description, and ownership of the text passes to the human
+  permanently. The PR stays a draft, carrying a do-not-merge banner, until the
+  run reaches <code>done</code>. A closed run's banner names its disposition
+  instead.</p>
+
+  <h2 id="the-gate-less-exception-historian-sweeps">The gate-less exception: historian sweeps</h2>
+  <p>One role runs outside the gate lifecycle. The Historian is scheduled, not
+  gate-driven: committed policy in the repo-root <code>orchestrator.yaml</code>
+  sets its cadence — in this repository, a sweep every seven days with a $5
+  pre-flight cost cap. A due sweep is dispatched as a mini-run,
+  <code>runs/historian-&lt;date&gt;/</code> on branch
+  <code>run/historian-&lt;date&gt;</code>, carrying a one-entry ledger and
+  deliberately no <code>state.yaml</code>, so sweeps stay out of the gate
+  machinery entirely. Its approval is not a numbered gate: a human reviews the
+  <code>docs-delta.md</code> and merges the sweep branch — and that merge is
+  the approval.</p>
+  <!-- evidence: docs/ORCHESTRATOR.md §4.6; runs/README.md; orchestrator.yaml; roles/historian.md -->
+
+  <p>The gates are where the design concentrates its weight: the next page,
+  <a href="how-gates-keep-a-human-in-charge.html">how gates keep a human in
+  charge</a>, covers who may write them and how that hold survives automation.
+  For field-level detail see the
+  <a href="../reference/state-yaml.html">state.yaml reference</a>; for command
+  flags, the <a href="../reference/cli.html">CLI reference</a>.</p>
+</article>
+<!-- content:end -->
+<nav class="pager" aria-label="Previous and next page">
+  <a class="pager-prev" href="../how-it-works/index.html"><span class="pager-label">Previous</span><span class="pager-title">How It Works</span></a>
+  <a class="pager-next" href="../how-it-works/how-gates-keep-a-human-in-charge.html"><span class="pager-label">Next</span><span class="pager-title">How gates keep a human in charge</span></a>
+</nav>
+</main>
+<aside class="toc" aria-labelledby="toc-heading">
+  <p class="toc-title" id="toc-heading">On this page</p>
+  <ul class="toc-list">
+    <li><a href="#from-conversation-to-artifacts">From conversation to artifacts</a></li>
+    <li><a href="#the-lifecycle-four-gates">The lifecycle: four gates</a></li>
+    <li><a href="#the-run-directory-is-the-state">The run directory is the state</a></li>
+    <li><a href="#profiles-ceremony-scaled-to-the-change">Profiles: ceremony scaled to the change</a></li>
+    <li><a href="#creating-a-run-stage-then-arm">Creating a run: stage, then arm</a></li>
+    <li><a href="#the-gate-less-exception-historian-sweeps">The gate-less exception: historian sweeps</a></li>
+  </ul>
+</aside>
+<nav class="sidebar" aria-label="All documentation">
+  <p class="sidebar-title">Documentation</p>
+  <p class="sidebar-section"><a href="../how-it-works/index.html">How It Works</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../how-it-works/index.html">Overview</a></li>
+    <li><a href="../how-it-works/how-a-run-works.html" aria-current="page">How a run works</a></li>
+    <li><a href="../how-it-works/how-gates-keep-a-human-in-charge.html">How gates keep a human in charge</a></li>
+    <li><a href="../how-it-works/how-gateline-stays-vendor-neutral.html">How gateline stays vendor-neutral</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../onboarding/index.html">Onboarding</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../onboarding/index.html">Overview</a></li>
+    <li><a href="../onboarding/git-plumbing.html">1. Git, down to the plumbing</a></li>
+    <li><a href="../onboarding/the-co-written-state-file.html">2. The co-written state file</a></li>
+    <li><a href="../onboarding/contracts-and-their-parsers.html">3. Contracts and their parsers</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../reference/index.html">Reference</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../reference/index.html">Overview</a></li>
+    <li><a href="../reference/cli.html">CLI</a></li>
+    <li><a href="../reference/state-yaml.html">state.yaml</a></li>
+    <li><a href="../reference/orchestrator-yaml.html">orchestrator.yaml</a></li>
+    <li><a href="../reference/adapter-manifests.html">Adapter manifests</a></li>
+    <li><a href="../reference/contract-grammar.html">Contract grammar</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../api/index.html">API</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../api/index.html">Browse generated API docs</a></li>
+  </ul>
+</nav>
+</div>
+<footer class="site-footer">
+  gateline is an open-source framework (Apache-2.0). &copy; the gateline maintainers.
+  <span class="footer-sep">&middot;</span>
+  <a href="../index.html">Documentation home</a>
+</footer>
+</body>
+</html>

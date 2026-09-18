@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>orchestrator.yaml reference — gateline</title>
+  <meta name="description" content="The orchestrator.yaml schedule keys, interval grammar, and the S0–S4+SB sweep derivation rules.">
+  <link rel="stylesheet" href="../assets/site.css">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="site-header">
+  <a class="wordmark" href="../index.html">gateline</a>
+  <nav class="site-nav" aria-label="Sections">
+    <a href="../how-it-works/index.html">How It Works</a>
+    <a href="../onboarding/index.html">Onboarding</a>
+    <a href="../reference/index.html" class="active" aria-current="true">Reference</a>
+    <a href="../api/index.html">API</a>
+  </nav>
+</header>
+<div class="layout">
+<main id="content">
+  <h1>orchestrator.yaml reference</h1>
+<!-- content:start -->
+<article class="doc">
+<p class="lede">
+    <code>orchestrator.yaml</code> lives at the repository root and declares the
+    <strong>schedules</strong> for periodic role dispatches — gate-less
+    "sweeps" that are not tied to a pipeline run. The first (and currently
+    only) scheduled role is the Historian, which periodically reconciles
+    documentation with run artifacts. This file is committed project policy,
+    not per-instance configuration: any orchestrator instance pointed at the
+    same repo derives the same sweeps.
+    <!-- evidence: orchestrator.yaml; AGENTS.md "Invariants"; docs/ORCHESTRATOR.md §4.6 -->
+  </p>
+
+  <h2 id="where-and-how-it-is-read">Where and how it is read</h2>
+  <p>The v1 orchestrator reads <code>orchestrator.yaml</code> from the
+  <strong>default-branch tip</strong> — never from a checkout and never
+  from the current branch. On each tick, the scheduler calls
+  <code>this.git.show(defaultBranch, 'orchestrator.yaml')</code>. If the
+  file is absent, the scheduler returns an empty schedule list. Parse
+  errors are logged, never guessed at — the bounce rule applied to config.</p>
+  <!-- evidence: packages/orchestrator/src/schedule.ts; docs/ORCHESTRATOR.md §4.6 -->
+
+  <h2 id="key-schedules">Key: <code>schedules</code></h2>
+  <p>A map of role name → schedule entry. Each entry has one required key and two optional keys:</p>
+  <!-- evidence: orchestrator.yaml; packages/orchestrator/src/schedule.ts -->
+
+  <table>
+    <thead><tr><th>Key</th><th>Required</th><th>Type</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>every</code></td>
+        <td>yes</td>
+        <td>string</td>
+        <td>Interval between sweeps: <code>&lt;n&gt;d | &lt;n&gt;h | &lt;n&gt;m</code>. Sub-daily intervals clamp to one sweep per day (the slug is date-grained). Example: <code>7d</code>. A missing or invalid value is a parse error and the role is skipped.</td>
+      </tr>
+      <tr>
+        <td><code>cost_limit_usd</code></td>
+        <td>no</td>
+        <td>number | absent</td>
+        <td>Pre-flight cap for one sweep dispatch. <strong>Absent → no cost-cap check at all</strong> (the SB rule is skipped when <code>cost_limit_usd</code> is null). When present, a role estimate from the registry exceeding this cap is a config defect — the scheduler skips rather than dispatching (rule SB).</td>
+      </tr>
+      <tr>
+        <td><code>enabled</code></td>
+        <td>no</td>
+        <td>boolean</td>
+        <td>Whether sweeps for this role are active. Default <code>true</code>. Disabled → rest (rule S0).</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2 id="interval-grammar">Interval grammar</h2>
+  <p>Intervals are parsed by <code>parseEvery()</code> in
+  <code>schedule.ts</code>. The grammar is
+  <code>^(\d+)([dhm])$</code> — a positive integer followed by one of
+  <code>d</code>, <code>h</code>, or <code>m</code> (days, hours, minutes).
+  The input is trimmed first. The function returns milliseconds;
+  <code>null</code> when the value does not match the grammar or the integer
+  is zero, which the scheduler treats as a parse error.</p>
+  <!-- evidence: packages/orchestrator/src/schedule.ts -->
+
+  <h2 id="example">Example</h2>
+  <pre><code>schedules:
+  historian:
+    every: 7d
+    cost_limit_usd: 5
+    enabled: true</code></pre>
+
+  <h2 id="sweep-lifecycle">Sweep lifecycle</h2>
+  <p>A sweep is a gate-less mini-run — <code>runs/&lt;role&gt;-&lt;date&gt;/</code>
+  on branch <code>run/&lt;role&gt;-&lt;date&gt;</code>, seeded with a
+  <code>sweep.yaml</code> marker. It carries no <code>state.yaml</code> on
+  purpose: the gate engine and frontend recognize runs by
+  <code>state.yaml</code>, so sweeps stay out of the derivation table
+  entirely. The human surface is the branch itself — review the docs-delta
+  and doc edits, merge to approve (the P4 principle), and the merged marker
+  on the default branch makes the next sweep's interval derivable.</p>
+  <!-- evidence: runs/README.md; orchestrator.yaml; docs/ORCHESTRATOR.md §4.6 -->
+
+  <p>The marker carries these fields:</p>
+  <table>
+    <thead><tr><th>Field</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>sweep</code>, <code>role</code></td><td>The sweep slug and the scheduled role</td></tr>
+      <tr><td><code>every</code>, <code>at</code></td><td>The interval in force and the dispatch time (ISO-8601)</td></tr>
+      <tr><td><code>covering_since</code></td><td>The point the previous merged sweep covered up to; <code>null</code> on a first sweep</td></tr>
+      <tr><td><code>adapter</code>, <code>model</code>, <code>cost_limit_usd</code></td><td>What ran and under what cap</td></tr>
+      <tr><td><code>tokens_in</code>, <code>tokens_out</code>, <code>cost_usd</code></td><td>Real usage, written by the closing commit; <code>null</code> until then</td></tr>
+      <tr><td><code>failed</code></td><td>Present only when the dispatch did not complete, with the truncated error</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="sweep-derivation-rules-s0s4-sb">Sweep derivation rules (S0–S4+SB)</h2>
+  <p>The scheduler applies one rule per schedule entry per tick; each rule
+  has a test in <code>test/schedule.test.ts</code>:</p>
+  <!-- evidence: packages/orchestrator/src/schedule.ts; packages/orchestrator/test/schedule.test.ts -->
+  <table>
+    <thead><tr><th>Rule</th><th>Condition</th><th>Action</th></tr></thead>
+    <tbody>
+      <tr><td>S0</td><td>Schedule disabled</td><td>Rest — no sweep for this role</td></tr>
+      <tr><td>S1</td><td>A sweep branch for this role is open (unmerged)</td><td>Rest — one in flight or awaiting human review per role</td></tr>
+      <tr><td>S2</td><td>Interval since the last merged sweep has not elapsed</td><td>Rest — not yet due</td></tr>
+      <tr><td>S3</td><td>Today's sweep branch already exists</td><td>Rest — duplicate guard; sub-daily intervals clamp to daily</td></tr>
+      <tr><td>SB</td><td>Role estimate exceeds the schedule's cost cap</td><td>Skip + warn — a config defect, not a dispatch</td></tr>
+      <tr><td>S4</td><td>Otherwise (none of the above)</td><td>Dispatch the sweep</td></tr>
+    </tbody>
+  </table>
+
+  <p>S1 and S3 read local branches and remote-tracking refs
+  (<code>refs/remotes/*/run/&lt;name&gt;</code>) alike, and the caller
+  fetches with <code>--prune</code> first, so a sweep open only on origin
+  still counts as open.</p>
+
+  <p>The dispatch itself follows commit-then-launch: the intent commit seeds
+  the sweep branch with its marker, created from <code>ZERO_OID</code> so two
+  instances racing the same schedule resolve at the ref — the loser rests.
+  After the agent completes, a closing commit records real usage into the
+  marker.</p>
+</article>
+<!-- content:end -->
+<nav class="pager" aria-label="Previous and next page">
+  <a class="pager-prev" href="../reference/state-yaml.html"><span class="pager-label">Previous</span><span class="pager-title">state.yaml reference</span></a>
+  <a class="pager-next" href="../reference/adapter-manifests.html"><span class="pager-label">Next</span><span class="pager-title">Adapter manifest reference</span></a>
+</nav>
+</main>
+<aside class="toc" aria-labelledby="toc-heading">
+  <p class="toc-title" id="toc-heading">On this page</p>
+  <ul class="toc-list">
+    <li><a href="#where-and-how-it-is-read">Where and how it is read</a></li>
+    <li><a href="#key-schedules">Key: schedules</a></li>
+    <li><a href="#interval-grammar">Interval grammar</a></li>
+    <li><a href="#example">Example</a></li>
+    <li><a href="#sweep-lifecycle">Sweep lifecycle</a></li>
+    <li><a href="#sweep-derivation-rules-s0s4-sb">Sweep derivation rules (S0–S4+SB)</a></li>
+  </ul>
+</aside>
+<nav class="sidebar" aria-label="All documentation">
+  <p class="sidebar-title">Documentation</p>
+  <p class="sidebar-section"><a href="../how-it-works/index.html">How It Works</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../how-it-works/index.html">Overview</a></li>
+    <li><a href="../how-it-works/how-a-run-works.html">How a run works</a></li>
+    <li><a href="../how-it-works/how-gates-keep-a-human-in-charge.html">How gates keep a human in charge</a></li>
+    <li><a href="../how-it-works/how-gateline-stays-vendor-neutral.html">How gateline stays vendor-neutral</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../onboarding/index.html">Onboarding</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../onboarding/index.html">Overview</a></li>
+    <li><a href="../onboarding/git-plumbing.html">1. Git, down to the plumbing</a></li>
+    <li><a href="../onboarding/the-co-written-state-file.html">2. The co-written state file</a></li>
+    <li><a href="../onboarding/contracts-and-their-parsers.html">3. Contracts and their parsers</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../reference/index.html">Reference</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../reference/index.html">Overview</a></li>
+    <li><a href="../reference/cli.html">CLI</a></li>
+    <li><a href="../reference/state-yaml.html">state.yaml</a></li>
+    <li><a href="../reference/orchestrator-yaml.html" aria-current="page">orchestrator.yaml</a></li>
+    <li><a href="../reference/adapter-manifests.html">Adapter manifests</a></li>
+    <li><a href="../reference/contract-grammar.html">Contract grammar</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../api/index.html">API</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../api/index.html">Browse generated API docs</a></li>
+  </ul>
+</nav>
+</div>
+<footer class="site-footer">
+  gateline is an open-source framework (Apache-2.0). &copy; the gateline maintainers.
+  <span class="footer-sep">&middot;</span>
+  <a href="../index.html">Documentation home</a>
+</footer>
+</body>
+</html>

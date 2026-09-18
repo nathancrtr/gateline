@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reference — gateline</title>
+  <meta name="description" content="Exact shapes for adopter tooling: the CLI surface, the state and orchestrator schemas, adapter manifests, and the artifact contract grammar.">
+  <link rel="stylesheet" href="../assets/site.css">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="site-header">
+  <a class="wordmark" href="../index.html">gateline</a>
+  <nav class="site-nav" aria-label="Sections">
+    <a href="../how-it-works/index.html">How It Works</a>
+    <a href="../onboarding/index.html">Onboarding</a>
+    <a href="../reference/index.html" class="active" aria-current="true">Reference</a>
+    <a href="../api/index.html">API</a>
+  </nav>
+</header>
+<div class="layout">
+<main id="content">
+  <h1>Reference</h1>
+<!-- content:start -->
+<article class="doc">
+  <p class="lede">Reference pages document exact shapes: the commands an
+  operator runs, the schemas that tooling parses, the manifest keys that bind a
+  runtime, and the grammars that make an artifact well-formed or malformed.
+  They are written to be checked against the source, not read end to end — each
+  one opens with a plain-language statement of what the thing is and who
+  touches it, then gets specific.</p>
+
+  <p>If you are looking for why any of this is shaped the way it is, that
+  belongs to <a href="../how-it-works/index.html">How It Works</a>. If you are
+  looking for the TypeScript interfaces behind the CLI and the engine, that is
+  the generated <a href="../api/index.html">API documentation</a>.</p>
+
+  <h2 id="the-pages">The pages</h2>
+</article>
+
+<div class="hub-list">
+  <div class="hub-item">
+    <div class="hub-body">
+      <h3><a href="cli.html">CLI reference</a></h3>
+      <p>The <code>gateline</code> command is the gate frontend in terminal form.
+      Every subcommand across the inspect, decide (including <code>close</code>
+      and <code>reopen</code>), create, serve and integrate
+      (<code>render</code>, <code>init</code>, <code>validate</code>,
+      <code>fork</code>) groups, with
+      purpose and key flags, plus the <code>gateline-orchestrator</code> engine
+      binary, the <code>gateline-runner-agent</code> dispatch relay, and the
+      dependency-free <code>gateline-framework</code> entry point.</p>
+    </div>
+  </div>
+
+  <div class="hub-item">
+    <div class="hub-body">
+      <h3><a href="state-yaml.html">state.yaml</a></h3>
+      <p>The run-state contract, field by field: phases, the three profiles and
+      their gate sets, the gate entry shape including <code>burden</code>, the
+      closure record, the
+      append-only budget ledger, task entries and review rounds, escalations and
+      dispositions, and the co-writer rules both writers obey.</p>
+    </div>
+  </div>
+
+  <div class="hub-item">
+    <div class="hub-body">
+      <h3><a href="orchestrator-yaml.html">orchestrator.yaml</a></h3>
+      <p>Schedules for periodic, gate-less role dispatches. The
+      <code>schedules.&lt;role&gt;</code> keys, the interval grammar, where and
+      when the engine reads the file, and the sweep derivation rules.</p>
+    </div>
+  </div>
+
+  <div class="hub-item">
+    <div class="hub-body">
+      <h3><a href="adapter-manifests.html">Adapter manifests</a></h3>
+      <p>The manifest schema key by key, as a union across the three shipped
+      adapters; how <code>gateline render</code> consumes role specs and manifests to write
+      a runner's agent files; the deny-by-default permission map and the
+      narrow-never-widen rule.</p>
+    </div>
+  </div>
+
+  <div class="hub-item">
+    <div class="hub-body">
+      <h3><a href="contract-grammar.html">Contract grammar</a></h3>
+      <p>The ten artifact contracts and their two normative rule families — the
+      ID and heading grammars, and the READABILITY rules for human-facing
+      sections — plus the <code>AUDIENCE:</code> line, the required-sections
+      discipline, the bounce-never-guess
+      rule, and the human-versus-orchestrator commit-message grammar.</p>
+    </div>
+  </div>
+</div>
+<!-- content:end -->
+<nav class="pager" aria-label="Previous and next page">
+  <a class="pager-prev" href="../onboarding/contracts-and-their-parsers.html"><span class="pager-label">Previous</span><span class="pager-title">Contracts and their parsers</span></a>
+  <a class="pager-next" href="../reference/cli.html"><span class="pager-label">Next</span><span class="pager-title">CLI reference</span></a>
+</nav>
+</main>
+<nav class="sidebar" aria-label="All documentation">
+  <p class="sidebar-title">Documentation</p>
+  <p class="sidebar-section"><a href="../how-it-works/index.html">How It Works</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../how-it-works/index.html">Overview</a></li>
+    <li><a href="../how-it-works/how-a-run-works.html">How a run works</a></li>
+    <li><a href="../how-it-works/how-gates-keep-a-human-in-charge.html">How gates keep a human in charge</a></li>
+    <li><a href="../how-it-works/how-gateline-stays-vendor-neutral.html">How gateline stays vendor-neutral</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../onboarding/index.html">Onboarding</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../onboarding/index.html">Overview</a></li>
+    <li><a href="../onboarding/git-plumbing.html">1. Git, down to the plumbing</a></li>
+    <li><a href="../onboarding/the-co-written-state-file.html">2. The co-written state file</a></li>
+    <li><a href="../onboarding/contracts-and-their-parsers.html">3. Contracts and their parsers</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../reference/index.html">Reference</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../reference/index.html" aria-current="page">Overview</a></li>
+    <li><a href="../reference/cli.html">CLI</a></li>
+    <li><a href="../reference/state-yaml.html">state.yaml</a></li>
+    <li><a href="../reference/orchestrator-yaml.html">orchestrator.yaml</a></li>
+    <li><a href="../reference/adapter-manifests.html">Adapter manifests</a></li>
+    <li><a href="../reference/contract-grammar.html">Contract grammar</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../api/index.html">API</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../api/index.html">Browse generated API docs</a></li>
+  </ul>
+</nav>
+</div>
+<footer class="site-footer">
+  gateline is an open-source framework (Apache-2.0). &copy; the gateline maintainers.
+  <span class="footer-sep">&middot;</span>
+  <a href="../index.html">Documentation home</a>
+</footer>
+</body>
+</html>

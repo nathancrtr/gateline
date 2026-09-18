@@ -1,0 +1,17 @@
+{
+  "name": "gateline-site",
+  "private": true,
+  "type": "module",
+  "description": "gateline public documentation \u2014 static site plus TypeDoc-generated API docs",
+  "scripts": {
+    "docs:api": "typedoc --options typedoc.json --tsconfig ../packages/tsconfig.json --entryPoints ../packages/core/src/index.ts --entryPoints ../packages/core/src/record/index.ts --entryPoints ../packages/core/src/sources/index.ts --entryPoints ../packages/core/src/view-model/index.ts --entryPoints ../packages/server/src/app.ts --entryPoints ../packages/server/src/main.ts --entryPoints ../packages/cli/src/main.ts --entryPoints ../packages/orchestrator/src/index.ts --entryPoints ../packages/runner-agent/src/agent.ts --entryPoints ../packages/framework/src/index.ts",
+    "postdocs:api": "python3 scripts/build-site.py",
+    "build": "python3 scripts/build-site.py",
+    "check": "python3 scripts/build-site.py --check",
+    "check:names": "python3 scripts/check-names.py"
+  },
+  "devDependencies": {
+    "typedoc": "^0.27.0",
+    "typescript": "^5.8.0"
+  }
+}

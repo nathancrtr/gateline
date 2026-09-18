@@ -1,0 +1,1374 @@
+/* === gateline documentation site — shared stylesheet ===
+   Technical-book aesthetic: neutral ink-and-white base, deep-teal accent,
+   system font stack, monospace for code, prefers-color-scheme dark variant.
+   No external assets, no JavaScript required. */
+
+:root {
+  --bg: #ffffff;
+  --bg-subtle: #f6f7f8;
+  --fg: #1a1a1a;
+  --fg-muted: #555555;
+  --fg-faint: #888888;
+  --accent: #0d7377;
+  --accent-muted: #3a9b9f;
+  --accent-bg: #e6f4f4;
+  --border: #d0d4d8;
+  --border-subtle: #e6e8eb;
+  --code-bg: #f0f1f3;
+  --code-fg: #1a1a1a;
+  --callout-bg: #fafafa;
+  --callout-border: #e6e8eb;
+  --exercise-bg: #fdf8f0;
+  --exercise-border: #e8dcc6;
+  --exercise-rule: #8f6318;
+  --exercise-output-bg: #f7f4ee;
+  --check-bg: #f2f9f9;
+  --check-border: #c4e0e0;
+  --check-label: #0a5f62;
+  --note-bg: #f5f5fb;
+  --note-border: #d5d5ea;
+  --note-rule: #4a4a9c;
+  --measure: 72ch;
+  --line-height: 1.75;
+  --header-height: 3.5rem;
+  /* Foreground for text sitting on an --accent fill. The accent inverts
+     between themes, so this has to invert with it. */
+  --on-accent: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1a1a1d;
+    --bg-subtle: #202124;
+    --fg: #e4e4e6;
+    --fg-muted: #a0a4ab;
+    --fg-faint: #6b6f76;
+    --accent: #5bc0c4;
+    --accent-muted: #3a9b9f;
+    --accent-bg: #1a2e2f;
+    --border: #3a3c40;
+    --border-subtle: #2a2c30;
+    --code-bg: #25262a;
+    --code-fg: #e4e4e6;
+    --callout-bg: #202124;
+    --callout-border: #2a2c30;
+    --exercise-bg: #26221b;
+    --exercise-border: #3d3629;
+    --exercise-rule: #d9a94e;
+    --exercise-output-bg: #1f1c16;
+    --check-bg: #1c2628;
+    --check-border: #33474a;
+    --check-label: #7fd2d5;
+    --note-bg: #1e1e2b;
+    --note-border: #35354d;
+    --note-rule: #9a9ae0;
+    /* --accent is a light teal in dark mode, so accent fills take dark ink. */
+    --on-accent: #10262a;
+  }
+}
+
+/* ---- reset & base -------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 105%;
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  line-height: var(--line-height);
+  color: var(--fg);
+  background: var(--bg);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- header -------------------------------------------------------------- */
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  height: var(--header-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(6px);
+}
+
+.wordmark {
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.wordmark:hover {
+  color: var(--accent);
+}
+
+.site-nav {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.site-nav a {
+  padding: 0.35rem 0.75rem;
+  border-radius: 5px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--fg-muted);
+  text-decoration: none;
+  transition: color 0.15s, background 0.15s;
+}
+
+.site-nav a:hover,
+.site-nav a.active {
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+/* ---- main content area --------------------------------------------------- */
+
+main {
+  flex: 1;
+  width: 100%;
+  max-width: 56rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem;
+}
+
+/* ---- landing page -------------------------------------------------------- */
+
+.landing-intro {
+  max-width: var(--measure);
+  margin: 2rem 0 3rem;
+}
+
+.landing-intro h1 {
+  font-size: 2.25rem;
+  font-weight: 700;
+  line-height: 1.25;
+  margin-bottom: 0.75rem;
+  color: var(--fg);
+}
+
+.landing-intro .lede {
+  font-size: 1.15rem;
+  color: var(--fg-muted);
+  line-height: var(--line-height);
+}
+
+.section-nav {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: 1.5rem;
+  margin: 3rem 0 2rem;
+}
+
+.section-nav-card {
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+  transition: border-color 0.15s;
+}
+
+.section-nav-card h2 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.section-nav-card h2 a {
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.section-nav-card h2 a:hover {
+  color: var(--accent);
+}
+
+.section-nav-card p {
+  font-size: 0.9rem;
+  color: var(--fg-muted);
+  line-height: 1.6;
+}
+
+/* ---- doc pages (reference & how-it-works) -------------------------------- */
+
+.doc {
+  max-width: var(--measure);
+}
+
+.doc h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-bottom: 0.75rem;
+  color: var(--fg);
+}
+
+.doc h2 {
+  font-size: 1.35rem;
+  font-weight: 600;
+  margin-top: 2.5rem;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--fg);
+}
+
+.doc h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-top: 1.75rem;
+  margin-bottom: 0.4rem;
+  color: var(--fg);
+}
+
+.doc p {
+  margin-bottom: 1rem;
+  color: var(--fg);
+}
+
+.doc .lede {
+  font-size: 1.1rem;
+  color: var(--fg-muted);
+  margin-bottom: 1.5rem;
+}
+
+.doc ul,
+.doc ol {
+  margin: 0 0 1rem 1.5rem;
+}
+
+.doc li {
+  margin-bottom: 0.35rem;
+}
+
+.doc li > ul,
+.doc li > ol {
+  margin-top: 0.35rem;
+}
+
+.doc a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.doc a:hover {
+  color: var(--accent-muted);
+}
+
+.doc code {
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+  font-size: 0.875em;
+  background: var(--code-bg);
+  color: var(--code-fg);
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+}
+
+.doc pre {
+  margin: 0 0 1.25rem;
+  padding: 1rem;
+  border-radius: 6px;
+  background: var(--code-bg);
+  border: 1px solid var(--border-subtle);
+  overflow-x: auto;
+}
+
+.doc pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.doc blockquote {
+  margin: 0 0 1.25rem;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid var(--accent);
+  background: var(--callout-bg);
+  border-radius: 0 6px 6px 0;
+  color: var(--fg-muted);
+  font-style: italic;
+}
+
+.doc table {
+  width: 100%;
+  margin: 0 0 1.5rem;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.doc th,
+.doc td {
+  text-align: left;
+  padding: 0.45rem 0.75rem;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: top;
+}
+
+.doc th {
+  font-weight: 600;
+  color: var(--fg-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.doc tr:last-child td {
+  border-bottom: none;
+}
+
+.doc hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2.5rem 0;
+}
+
+.doc figure {
+  margin: 1.25rem 0;
+}
+
+.doc figcaption {
+  font-size: 0.85rem;
+  color: var(--fg-muted);
+  margin-top: 0.35rem;
+}
+
+.doc .callout {
+  margin: 0 0 1.25rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--callout-border);
+  border-radius: 6px;
+  background: var(--callout-bg);
+  font-size: 0.925rem;
+  color: var(--fg-muted);
+}
+
+/* ---- footer -------------------------------------------------------------- */
+
+.site-footer {
+  padding: 1.25rem 1.5rem;
+  border-top: 1px solid var(--border);
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--fg-faint);
+}
+
+/* ---- responsive ---------------------------------------------------------- */
+
+@media (max-width: 600px) {
+  html {
+    font-size: 100%;
+  }
+
+  .site-header {
+    padding: 0 1rem;
+  }
+
+  /* four top-level sections have to fit a phone: tighten the links and let
+     the nav scroll rather than push the page sideways. */
+  .site-nav {
+    gap: 0;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .site-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .site-nav a {
+    padding: 0.35rem 0.4rem;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+
+  main {
+    padding: 1.5rem 1rem 3rem;
+  }
+
+  .landing-intro h1 {
+    font-size: 1.75rem;
+  }
+
+  .doc h1 {
+    font-size: 1.6rem;
+  }
+
+  .section-nav {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- diagram figures ---------------------------------------------------- */
+
+.doc figure.diagram {
+  margin: 2rem 0;
+  max-width: var(--measure);
+  overflow-x: auto;
+}
+
+.diagram-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 11px;
+  color: var(--fg);
+}
+
+.diagram-svg .d-bg {
+  fill: var(--bg-subtle);
+}
+
+.diagram-svg .d-accent {
+  fill: var(--accent);
+  stroke: var(--accent);
+}
+
+.diagram-svg .d-accent-stroke {
+  stroke: var(--accent);
+}
+
+.diagram-svg .d-accent-fill {
+  fill: var(--accent);
+}
+
+.diagram-svg .d-mono {
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+  font-size: 9px;
+}
+
+.diagram-svg .d-bold {
+  font-weight: 600;
+}
+
+.diagram-svg .d-small {
+  font-size: 9px;
+}
+
+.diagram-svg .d-faint {
+  fill: var(--fg-faint);
+}
+
+.diagram-svg .d-dashed {
+  stroke-dasharray: 4 3;
+}
+
+/* A figure may ship two drawings of the same diagram — a wide layout and a
+   layout restacked for the small breakpoint — when scaling the wide one down
+   would make its labels illegible. Exactly one is ever displayed. */
+.diagram-svg.d-narrow-only {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .diagram-svg.d-wide-only {
+    display: none;
+  }
+
+  .diagram-svg.d-narrow-only {
+    display: block;
+  }
+}
+
+/* ---- page-level h1 (outside .doc, used by how-it-works pages) ------------ */
+
+main > h1 {
+  max-width: var(--measure);
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.3;
+  margin-bottom: 1.5rem;
+  color: var(--fg);
+}
+
+/* ---- onboarding: additional .doc typography ------------------------------ */
+
+/* Opt-in on a <pre> that would otherwise run off the bottom of the screen.
+   Plain <pre> is unchanged. */
+.doc pre.long {
+  max-height: 30rem;
+  overflow-y: auto;
+}
+
+/* Definition-style lists: term on its own line, indented body. Used for
+   glossing plumbing commands, refspec fields, and contract keys. */
+.doc dl {
+  margin: 0 0 1.25rem;
+}
+
+.doc dt {
+  margin-top: 0.9rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.doc dt:first-child {
+  margin-top: 0;
+}
+
+.doc dd {
+  margin: 0.2rem 0 0 1.25rem;
+  color: var(--fg-muted);
+}
+
+.doc dd > p {
+  margin-bottom: 0.5rem;
+  color: inherit;
+}
+
+.doc dd > p:last-child {
+  margin-bottom: 0;
+}
+
+/* ---- onboarding: runnable exercise --------------------------------------- */
+
+.doc .exercise {
+  margin: 1.75rem 0;
+  padding: 1rem 1.25rem 1.15rem;
+  border: 1px solid var(--exercise-border);
+  border-left: 4px solid var(--exercise-rule);
+  border-radius: 0 6px 6px 0;
+  background: var(--exercise-bg);
+}
+
+.doc .exercise > h3,
+.doc .exercise > .exercise-label {
+  margin: 0 0 0.5rem;
+  font-size: 0.775rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--exercise-rule);
+}
+
+.doc .exercise > p {
+  margin-bottom: 0.85rem;
+  font-size: 0.95rem;
+}
+
+.doc .exercise > p:last-child,
+.doc .exercise > pre:last-child {
+  margin-bottom: 0;
+}
+
+.doc .exercise ul,
+.doc .exercise ol {
+  font-size: 0.95rem;
+  margin-bottom: 0.85rem;
+}
+
+/* Commands: the default code panel, kept opaque against the tinted block. */
+.doc .exercise pre {
+  margin-bottom: 0.85rem;
+  border-color: var(--exercise-border);
+}
+
+/* Expected output: visually demoted from the command above it, and labelled
+   by its own ::before so the reader never has to guess which is which. */
+.doc .exercise .exercise-output {
+  margin: 0 0 0.85rem;
+  padding: 0.85rem 1rem;
+  border: 1px dashed var(--exercise-border);
+  border-radius: 6px;
+  background: var(--exercise-output-bg);
+}
+
+.doc .exercise .exercise-output::before {
+  content: "Expected output";
+  display: block;
+  margin-bottom: 0.4rem;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.doc .exercise .exercise-output code {
+  background: none;
+  padding: 0;
+  font-size: 0.825rem;
+  line-height: 1.55;
+  color: var(--fg-muted);
+}
+
+.doc .exercise .exercise-output:last-child {
+  margin-bottom: 0;
+}
+
+/* ---- onboarding: check your understanding -------------------------------- */
+
+.doc .check {
+  margin: 1.75rem 0;
+  padding: 0.9rem 1.25rem 1rem;
+  border: 1px solid var(--check-border);
+  border-radius: 6px;
+  background: var(--check-bg);
+}
+
+.doc .check > h3,
+.doc .check > .check-label {
+  margin: 0 0 0.4rem;
+  font-size: 0.775rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--check-label);
+}
+
+.doc .check > p {
+  margin-bottom: 0.6rem;
+  font-size: 0.925rem;
+  color: var(--fg-muted);
+}
+
+.doc .check ol,
+.doc .check ul {
+  margin: 0 0 0 1.25rem;
+  font-size: 0.925rem;
+  color: var(--fg);
+}
+
+.doc .check li {
+  margin-bottom: 0.3rem;
+}
+
+.doc .check li:last-child {
+  margin-bottom: 0;
+}
+
+/* ---- onboarding: maintainer note ----------------------------------------- */
+
+.doc .maintainer-note {
+  margin: 1.75rem 0;
+  padding: 0.85rem 1.25rem 0.9rem;
+  border-left: 3px solid var(--note-rule);
+  border-top: 1px solid var(--note-border);
+  border-right: 1px solid var(--note-border);
+  border-bottom: 1px solid var(--note-border);
+  border-radius: 0 6px 6px 0;
+  background: var(--note-bg);
+}
+
+.doc .maintainer-note > h3,
+.doc .maintainer-note > .note-label {
+  margin: 0 0 0.35rem;
+  font-size: 0.775rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--note-rule);
+}
+
+.doc .maintainer-note > p {
+  margin-bottom: 0.6rem;
+  font-size: 0.95rem;
+  font-style: italic;
+  color: var(--fg-muted);
+}
+
+.doc .maintainer-note > p:last-child {
+  margin-bottom: 0;
+}
+
+.doc .maintainer-note code {
+  font-style: normal;
+}
+
+/* ---- onboarding: section index module list ------------------------------- */
+
+.module-list-heading {
+  max-width: var(--measure);
+  margin-top: 2.5rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.module-list {
+  max-width: var(--measure);
+  margin: 2rem 0 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.module-item {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+}
+
+.module-item .module-number {
+  flex: 0 0 auto;
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+  font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.6;
+  color: var(--fg-faint);
+}
+
+.module-item .module-body {
+  min-width: 0;
+}
+
+.module-item h2 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  line-height: 1.5;
+  margin-bottom: 0.1rem;
+}
+
+.module-item h2 a {
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.module-item h2 a:hover {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.module-item p {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--fg-muted);
+}
+
+.module-item.planned {
+  border-style: dashed;
+  background: none;
+}
+
+.module-item.planned h2,
+.module-item.planned .module-number {
+  color: var(--fg-faint);
+}
+
+.module-item.planned p {
+  color: var(--fg-faint);
+}
+
+.module-tag {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  vertical-align: 0.12em;
+  white-space: nowrap;
+  color: var(--fg-faint);
+}
+
+.module-tag.exercises {
+  border-color: var(--exercise-rule);
+  color: var(--exercise-rule);
+}
+
+@media (max-width: 600px) {
+  .module-item {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+}
+
+/* ==========================================================================
+   Navigational shell — added with the site build (scripts/build-site.py).
+   Sidebar, on-this-page TOC, prev/next pager, and the landing-page furniture.
+   Everything here is generated markup; edit site.json or the build script
+   rather than hand-editing the pages that use these classes.
+   ========================================================================== */
+
+/* ---- skip link ----------------------------------------------------------- */
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 20;
+  padding: 0.6rem 1rem;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 0.875rem;
+  text-decoration: none;
+  border-radius: 0 0 6px 0;
+}
+
+.skip-link:focus {
+  left: 0;
+}
+
+/* ---- three-column documentation layout ----------------------------------- */
+
+/* Source order is main → toc → sidebar so that a narrow viewport gets the
+   content first and the site index last, with no JavaScript disclosure. The
+   grid re-places them on wide screens. */
+.layout {
+  flex: 1;
+  width: 100%;
+  max-width: 86rem;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  display: grid;
+  grid-template-columns: 15.5rem minmax(0, 1fr) 14rem;
+  column-gap: 3rem;
+  align-items: start;
+}
+
+.layout > main {
+  grid-column: 2;
+  grid-row: 1;
+  max-width: none;
+  margin: 0;
+  padding: 2.5rem 0 4rem;
+}
+
+.layout > .sidebar,
+.layout > .toc {
+  grid-row: 1;
+  position: sticky;
+  top: calc(var(--header-height) + 1.5rem);
+  max-height: calc(100vh - var(--header-height) - 3rem);
+  overflow-y: auto;
+  padding: 2.5rem 0 2rem;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.layout > .sidebar {
+  grid-column: 1;
+  border-right: 1px solid var(--border-subtle);
+  padding-right: 1.25rem;
+}
+
+.layout > .toc {
+  grid-column: 3;
+}
+
+/* Anchors land below the sticky header rather than under it. */
+.doc h2,
+.doc h3 {
+  scroll-margin-top: calc(var(--header-height) + 1rem);
+}
+
+/* ---- sidebar ------------------------------------------------------------- */
+
+.sidebar-title,
+.toc-title {
+  margin-bottom: 0.75rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.sidebar-section {
+  margin: 1.5rem 0 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.sidebar-section:first-of-type {
+  margin-top: 0;
+}
+
+.sidebar-section a {
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.sidebar-section a:hover {
+  color: var(--accent);
+}
+
+.sidebar-list {
+  list-style: none;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.sidebar-list li {
+  margin: 0;
+}
+
+.sidebar-list a {
+  display: block;
+  padding: 0.25rem 0 0.25rem 0.75rem;
+  margin-left: -1px;
+  border-left: 2px solid transparent;
+  color: var(--fg-muted);
+  text-decoration: none;
+}
+
+.sidebar-list a:hover {
+  color: var(--accent);
+  border-left-color: var(--border);
+}
+
+.sidebar-list a[aria-current="page"] {
+  color: var(--accent);
+  font-weight: 600;
+  border-left-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+/* ---- on-this-page table of contents -------------------------------------- */
+
+.toc-list {
+  list-style: none;
+}
+
+.toc-list a {
+  display: block;
+  padding: 0.25rem 0;
+  color: var(--fg-muted);
+  text-decoration: none;
+}
+
+.toc-list a:hover {
+  color: var(--accent);
+}
+
+/* ---- prev/next pager ----------------------------------------------------- */
+
+.pager {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: var(--measure);
+  margin-top: 3.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.pager a {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.85rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-decoration: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.pager a:hover {
+  border-color: var(--accent-muted);
+  background: var(--bg-subtle);
+}
+
+.pager-spacer {
+  flex: 1 1 0;
+}
+
+.pager-next {
+  text-align: right;
+}
+
+.pager-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.pager-title {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--accent);
+  line-height: 1.35;
+}
+
+/* ---- landing: hero ------------------------------------------------------- */
+
+/* The landing page is the one page that is not a prose column: its card grids
+   need the room. Only the landing's <main> is a direct child of <body> — doc
+   pages nest theirs inside .layout — so this widens the landing alone, while
+   every prose block inside it stays clamped to --measure. */
+body > main {
+  max-width: 72rem;
+}
+
+.hero {
+  max-width: var(--measure);
+  margin: 1.5rem 0 3rem;
+}
+
+.hero h1 {
+  font-size: 3rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  margin-bottom: 0.75rem;
+}
+
+.hero-tagline {
+  font-size: 1.3rem;
+  line-height: 1.5;
+  color: var(--fg-muted);
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 1.75rem 0 1rem;
+}
+
+.button {
+  display: inline-block;
+  padding: 0.55rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.925rem;
+  font-weight: 500;
+  color: var(--fg);
+  text-decoration: none;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.button:hover {
+  border-color: var(--accent-muted);
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.button-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.button-primary:hover {
+  background: var(--accent-muted);
+  border-color: var(--accent-muted);
+  color: var(--on-accent);
+}
+
+.hero-note {
+  font-size: 0.85rem;
+  color: var(--fg-faint);
+}
+
+/* The landing intro is plain prose outside .doc, so it needs its own rhythm. */
+.landing-intro p {
+  margin-bottom: 1rem;
+}
+
+.landing-intro p:last-child {
+  margin-bottom: 0;
+}
+
+/* ---- landing: section headings and prose --------------------------------- */
+
+.landing-h2 {
+  max-width: var(--measure);
+  margin: 3.5rem 0 1.25rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 1.4rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.landing-prose {
+  max-width: var(--measure);
+  margin-bottom: 1.25rem;
+  color: var(--fg-muted);
+}
+
+.landing-table {
+  width: 100%;
+  max-width: var(--measure);
+  margin: 1.5rem 0 2rem;
+  border-collapse: collapse;
+  font-size: 0.925rem;
+}
+
+.landing-table th,
+.landing-table td {
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--border-subtle);
+  text-align: left;
+  vertical-align: top;
+}
+
+.landing-table th {
+  background: var(--bg-subtle);
+  font-weight: 600;
+}
+
+/* ---- landing: feature and path grids ------------------------------------- */
+
+.feature-grid,
+.path-grid {
+  display: grid;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.feature-grid {
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+}
+
+.path-grid {
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+}
+
+.feature,
+.path {
+  padding: 1.35rem 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-subtle);
+}
+
+.feature h3 {
+  margin-bottom: 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.feature p,
+.path p {
+  font-size: 0.9rem;
+  line-height: 1.65;
+  color: var(--fg-muted);
+}
+
+.path-label {
+  margin-bottom: 0.4rem;
+  font-size: 0.7rem !important;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent) !important;
+}
+
+.feature-link {
+  margin-top: 0.85rem;
+}
+
+.feature-link a {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.feature-link a:hover {
+  text-decoration: underline;
+}
+
+.provenance {
+  max-width: var(--measure);
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 0.875rem;
+  color: var(--fg-faint);
+}
+
+/* The landing card grid uses h3 now that the page has real h2 sections. */
+.section-nav-card h3 {
+  font-size: 1.05rem;
+  font-weight: 650;
+  margin-bottom: 0.35rem;
+}
+
+.section-nav-card h3 a {
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.section-nav-card h3 a:hover {
+  color: var(--accent);
+}
+
+/* ---- section hub pages --------------------------------------------------- */
+
+.hub-list {
+  max-width: var(--measure);
+  margin: 0 0 2.5rem;
+}
+
+.hub-item {
+  display: flex;
+  gap: 1.1rem;
+  padding: 1.35rem 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.hub-item:first-child {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.hub-number {
+  flex: 0 0 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.hub-body {
+  min-width: 0;
+}
+
+.hub-body h3 {
+  margin-bottom: 0.35rem;
+  font-size: 1.1rem;
+  font-weight: 650;
+}
+
+.hub-body h3 a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.hub-body h3 a:hover {
+  text-decoration: underline;
+}
+
+.hub-body p {
+  font-size: 0.925rem;
+  line-height: 1.65;
+  color: var(--fg-muted);
+}
+
+/* ---- footer -------------------------------------------------------------- */
+
+.footer-sep {
+  margin: 0 0.5rem;
+  opacity: 0.5;
+}
+
+.site-footer a {
+  color: var(--fg-muted);
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  color: var(--accent);
+}
+
+/* ---- shell responsive ---------------------------------------------------- */
+
+/* Below the three-column breakpoint the on-this-page list is dropped: the
+   sidebar still carries whole-site navigation, and the page's own headings
+   are a scroll away. */
+@media (max-width: 1180px) {
+  .layout {
+    grid-template-columns: 14rem minmax(0, 1fr);
+    column-gap: 2.5rem;
+  }
+
+  .layout > .toc {
+    display: none;
+  }
+}
+
+/* Single column: content first, then the pager, then the site index. */
+@media (max-width: 860px) {
+  .layout {
+    display: block;
+    padding: 0 1.25rem;
+  }
+
+  .layout > main {
+    padding-bottom: 2.5rem;
+  }
+
+  .layout > .sidebar {
+    position: static;
+    max-height: none;
+    overflow: visible;
+    padding: 1.75rem 0 2.5rem;
+    border-right: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .hero h1 {
+    font-size: 2.25rem;
+  }
+
+  .hero-tagline {
+    font-size: 1.1rem;
+  }
+
+  .pager {
+    flex-direction: column;
+  }
+
+  .pager-next {
+    text-align: left;
+  }
+
+  /* Reference tables carry code in every cell and cannot reflow below a few
+     hundred pixels. Let the table scroll inside itself rather than pushing
+     the page sideways. */
+  .doc table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 600px) {
+  .hero-actions {
+    gap: 0.5rem;
+  }
+
+  .button {
+    padding: 0.5rem 0.85rem;
+    font-size: 0.875rem;
+  }
+
+  .landing-table {
+    display: block;
+    overflow-x: auto;
+  }
+}

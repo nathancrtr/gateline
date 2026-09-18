@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Contract grammar reference — gateline</title>
+  <meta name="description" content="The artifact contracts, their ID and READABILITY rule families, and the commit-message grammar.">
+  <link rel="stylesheet" href="../assets/site.css">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="site-header">
+  <a class="wordmark" href="../index.html">gateline</a>
+  <nav class="site-nav" aria-label="Sections">
+    <a href="../how-it-works/index.html">How It Works</a>
+    <a href="../onboarding/index.html">Onboarding</a>
+    <a href="../reference/index.html" class="active" aria-current="true">Reference</a>
+    <a href="../api/index.html">API</a>
+  </nav>
+</header>
+<div class="layout">
+<main id="content">
+  <h1>Contract grammar reference</h1>
+<!-- content:start -->
+<article class="doc">
+<p class="lede">
+    Every artifact exchanged between agents is governed by a contract under
+    <code>contracts/</code>. Two rule families — ID/heading grammar and
+    READABILITY — are equally normative and equally bounceable: a consuming
+    agent's first duty when encountering a malformed artifact is to bounce
+    it, not to guess. A third tooling-parsed line, <code>AUDIENCE:</code>,
+    names the sections that are audit-time evidence rather than decide-time
+    reading; Gatehouse folds those to their heading. The commit messages
+    that touch <code>state.yaml</code>
+    follow a separate grammar, distinguishing human decisions from orchestrator
+    bookkeeping.
+    <!-- evidence: AGENTS.md "Invariants"; docs/DESIGN.md §5 -->
+  </p>
+
+  <h2 id="ten-contracts">Ten contracts</h2>
+  <table>
+    <thead><tr><th>Contract</th><th>Produced by</th><th>Consumed by</th><th>Gate</th></tr></thead>
+    <tbody>
+      <tr><td><code>spec.md</code></td><td>Analyst</td><td>Architect, Reviewer, Verifier</td><td>G0</td></tr>
+      <tr><td><code>plan.md</code></td><td>Architect</td><td>Implementers, Reviewer</td><td>G1</td></tr>
+      <tr><td><code>work-item.yaml</code></td><td>Architect (or the human, in <code>patch</code>)</td><td>Implementers</td><td>G1</td></tr>
+      <tr><td><code>review-report.md</code></td><td>Reviewer</td><td>Implementer, gate G2</td><td>—</td></tr>
+      <tr><td><code>verification-report.md</code></td><td>Verifier</td><td>gate G2</td><td>—</td></tr>
+      <tr><td><code>release-plan.md</code></td><td>Ops</td><td>gate G3</td><td>—</td></tr>
+      <tr><td><code>intent-brief.md</code></td><td>Human</td><td>Analyst (in <code>patch</code>, the Implementer and Reviewer directly)</td><td>—</td></tr>
+      <tr><td><code>state.yaml</code></td><td>Human + Orchestrator (co-written)</td><td>Everyone</td><td>—</td></tr>
+      <tr><td><code>docs-delta.md</code></td><td>Historian</td><td>Human (branch review)</td><td>—</td></tr>
+      <tr><td><code>integration-profile.md</code></td><td>Integrator</td><td>Human</td><td>GI</td></tr>
+    </tbody>
+  </table>
+  <!-- evidence: contracts/ (10 files); docs/DESIGN.md §3 -->
+
+  <p>All contracts declare required sections. An artifact missing a required
+  section is malformed — the consuming agent bounces it, never guesses.
+  Tooling in <code>packages/core/src/record/validate.ts</code>
+  implements required-section checks (<code>validateArtifact</code>,
+  <code>missingSections</code>, <code>extractSections</code>,
+  <code>BUILTIN_SECTIONS</code>). It reads the required sections from the
+  target repository's own <code>contracts/</code> at read time, with the
+  built-ins as the fallback, and the same module parses the
+  <code>AUDIENCE:</code> line (<code>extractAudience</code>) and the
+  verification verdict (<code>verdictLines</code>).</p>
+
+  <h2 id="rule-family-1-id-heading-grammar">Rule family 1 — ID/heading grammar</h2>
+  <p>The R, AC, and ADR shapes are parseable by tooling in
+  <code>packages/core/src/view-model/lexicon.ts</code>
+  and a deviation is a malformed artifact. The E‑block pattern
+  (<code>E&lt;k&gt; — AC&lt;n&gt;.&lt;m&gt;</code>) is parsed in a separate
+  module: <code>packages/core/src/view-model/evidence.ts</code>
+  (<code>E_HEADING</code>). The F‑finding shape
+  (<code>F&lt;n&gt; — &lt;severity&gt; — &lt;one‑line defect&gt;</code>) is
+  parsed by <code>packages/core/src/view-model/review.ts</code>
+  (<code>FINDING_HEADING</code>, which also tolerates
+  <code>### F1 (blocking) — …</code>), together with the round ≥ 2
+  disposition lines <code>- **F&lt;n&gt; — resolved|stands** — …</code>
+  (<code>RESOLUTION</code>). The review-report contract declares that
+  disposition grammar in its VERIFY ROUND block: tooling reads exactly those
+  two words and no others.</p>
+  <!-- evidence: contracts/spec.md; contracts/plan.md; contracts/verification-report.md; contracts/review-report.md; packages/core/src/view-model/lexicon.ts; packages/core/src/view-model/evidence.ts; packages/core/src/view-model/review.ts -->
+
+  <table>
+    <thead><tr><th>Artifact</th><th>Shape</th><th>Example</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>spec.md</code> — requirements</td>
+        <td><code>### R&lt;n&gt; — &lt;short name&gt;</code></td>
+        <td><code>### R4 — Run profiles are fixed sets</code></td>
+      </tr>
+      <tr>
+        <td><code>spec.md</code> — acceptance criteria</td>
+        <td>List item beginning <code>AC&lt;n&gt;.&lt;m&gt; — </code> (an optional <code>[ ]</code>/<code>[x]</code> checkbox may precede the id)</td>
+        <td><code>AC4.1 — A run without a profile field parses as full</code></td>
+      </tr>
+      <tr>
+        <td><code>plan.md</code> — decisions</td>
+        <td><code>### ADR-&lt;n&gt;: &lt;decision&gt;</code> (optional <code>(qualifier)</code>)</td>
+        <td><code>### ADR-3 (amended 2026-07-13): Keep the reviewer at G2</code></td>
+      </tr>
+      <tr>
+        <td><code>verification-report.md</code> — evidence blocks</td>
+        <td><code>### E&lt;k&gt; — AC&lt;n&gt;.&lt;m&gt;</code>; Criterion column carries bare <code>AC&lt;n&gt;.&lt;m&gt;</code>; one <code>**Verdict:** pass | fail | escalate</code> line</td>
+        <td><code>### E3 — AC4.1</code></td>
+      </tr>
+      <tr>
+        <td><code>review-report.md</code> — findings</td>
+        <td><code>### F&lt;n&gt; — &lt;severity&gt; — &lt;one-line defect&gt;</code></td>
+        <td><code>### F2 — blocking — Budget cap is not enforced in dispatch path</code></td>
+      </tr>
+      <tr>
+        <td><code>release-plan.md</code> — preamble</td>
+        <td>Bold-label lines <code>**Change released:**</code>, <code>**Environment:**</code>, <code>**Rollback trigger:**</code>, <code>**Rollback exercised:**</code>; Release steps as a numbered list</td>
+        <td><code>**Rollback exercised:** yes — restored the previous image on staging</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>The R/AC/ADR lexer in <code>lexicon.ts</code> extracts those three shapes with the
+  regular expressions <code>R_HEADING</code>, <code>ADR_HEADING</code>,
+  <code>AC_ITEM</code>. The id-reference pattern
+  <code>ID_PATTERN = \b(?:R\d+|AC\d+\.\d+|ADR-\d+)\b</code> is exported
+  as a regex source string so it can travel over an API as data.</p>
+
+  <h2 id="rule-family-2-readability-human-facing-sections">Rule family 2 — READABILITY (human-facing sections)</h2>
+  <p>Certain sections of each contract are designated "human-facing" —
+  the gate approver reads them as prose. Breaches are bounced like
+  grammar deviations, with the rule cited. These sections are:</p>
+  <!-- evidence: contracts/spec.md; contracts/plan.md; contracts/review-report.md; contracts/verification-report.md; contracts/release-plan.md -->
+  <ul>
+    <li><strong><code>spec.md</code> — Context:</strong> The problem, grounded
+      in the system as it exists. Target ~150 words, cap 250.</li>
+    <li><strong><code>plan.md</code> — Approach:</strong> The shape of the
+      solution. Cap 350 words. Also: each ADR's Rejected and Consequences
+      lines.</li>
+    <li><strong><code>review-report.md</code> — Coverage:</strong> What the
+      reviewer checked and found clean. Note: Coverage carries its own
+      three-rule set, not the five-rule set below (see next paragraph).</li>
+    <li><strong><code>verification-report.md</code> — Beyond the happy path,
+      Gaps:</strong> Probes and risks.</li>
+    <li><strong><code>release-plan.md</code> — CI health, Rollback plan,
+      Verification after release, Blast radius:</strong> What the G3
+      approver ships on.</li>
+  </ul>
+
+  <p>The <code>spec.md</code>, <code>plan.md</code>,
+  <code>verification-report.md</code> and <code>release-plan.md</code>
+  contracts declare a shared five‑rule READABILITY set:</p>
+  <ol type="a">
+    <li><strong>Plain-words opening sentence.</strong> The first sentence
+      states the takeaway in plain words — no code spans, paths, or
+      parenthetical cites.</li>
+    <li><strong>One idea per paragraph.</strong> At most 4 sentences and
+      120 words each.</li>
+    <li><strong>Lists, not semicolon chains.</strong> Three or more parallel
+      items become a bulleted list under a lead-in sentence.</li>
+    <li><strong>One claim per sentence.</strong> Never join clauses with a
+      semicolon.</li>
+    <li><strong>Name before cite.</strong> Give any id or file a noun phrase
+      on first use; at most one parenthetical <code>file:line</code> cite per
+      sentence; full path at first mention only — short name after.</li>
+  </ol>
+  <p><strong>Coverage (review-report.md) is different.</strong> Its READABILITY
+  block declares three rules, not five, with one unique shape: (a) open with
+  one plain‑words sentence stating overall coverage; (b) then the Coverage
+  table, one row per requirement or area checked — the table is the shape,
+  and a bullet list or a paragraph in its place is in breach; cites live in
+  the Where column, one per row, and the Mechanism column holds a clause,
+  never a chain; (c) name before cite, on first use in the opening sentence.
+  The columns are <code>Requirement | Where | Mechanism checked | Status</code>.
+  The same contract carries an <code>AUDIENCE:</code> line
+  (<code>Coverage=audit; Boundary check=audit</code>) and the normative
+  VERIFY ROUND block, beside BUDGET and ESCALATE SCOPE.</p>
+
+  <h2 id="commit-message-grammar-human-vs-orchestrator">Commit-message grammar (human vs. orchestrator)</h2>
+  <p>Every commit touching <code>state.yaml</code> follows structured
+  messages so the audit trail and metrics reader can distinguish human
+  decisions from machine bookkeeping:</p>
+  <!-- evidence: contracts/state.yaml; docs/ORCHESTRATOR.md §4.3; packages/core/src/record/actions.ts -->
+
+  <table>
+    <thead><tr><th>Writer</th><th>Grammar</th><th>Example</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Human (reserved)</td>
+        <td><code>state(&lt;slug&gt;): G&lt;N&gt; approved by &lt;name&gt; [burden: …]</code> — approve-and-hold appends <code> and held (&lt;reason&gt;)</code></td>
+        <td><code>state(creation-seam): G2 approved by Nathan Carter [burden: confirmation]</code></td>
+      </tr>
+      <tr>
+        <td>Human (reserved)</td>
+        <td><code>state(&lt;slug&gt;): staged by &lt;name&gt;</code> — optional <code>[client-key: &lt;key&gt;]</code> suffix</td>
+        <td><code>state(my-fix): staged by nthncrtr [client-key: ab12cd34]</code></td>
+      </tr>
+      <tr>
+        <td>Human (reserved)</td>
+        <td><code>state(&lt;slug&gt;): armed by &lt;name&gt;</code></td>
+        <td><code>state(my-fix): armed by nthncrtr</code></td>
+      </tr>
+      <tr>
+        <td>Human (reserved)</td>
+        <td><code>state(&lt;slug&gt;): closed by &lt;name&gt; [disposition: &lt;as&gt;]</code></td>
+        <td><code>state(my-fix): closed by nthncrtr [disposition: already-delivered]</code></td>
+      </tr>
+      <tr>
+        <td>Human (reserved)</td>
+        <td><code>state(&lt;slug&gt;): reopened to &lt;phase&gt; by &lt;name&gt; (was closed as &lt;disposition&gt;)</code></td>
+        <td><code>state(my-fix): reopened to implement by nthncrtr (was closed as abandoned)</code></td>
+      </tr>
+      <tr>
+        <td>Orchestrator (bot only)</td>
+        <td><code>state(&lt;slug&gt;): &lt;verb&gt; …</code> — exactly the set: <code>dispatched | bounced | advanced | escalated | paused | metered | harvested …</code></td>
+        <td><code>state(creation-seam): dispatched implementer task 02-unit-tests</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>The CLI's other decisions write in the same style without being
+  reserved forms: <code>G&lt;N&gt; declined by &lt;name&gt;</code>,
+  <code>escalation #&lt;i&gt; resolved by &lt;name&gt;</code>,
+  <code>paused by &lt;name&gt; (&lt;reason&gt;)</code> and
+  <code>resumed to &lt;phase&gt; by &lt;name&gt;</code>.</p>
+
+  <p>The orchestrator commits under a dedicated bot identity
+  (<code>gateline-orchestrator &lt;orchestrator@gateline.invalid&gt;</code>,
+  one per install), never a person's git
+  config. The human grammar is reserved — the engine has no code path that
+  writes <code>gates.*</code> or <code>closure</code>, and it never
+  impersonates a human in commit
+  messages. The metrics reader treats the human grammar as authoritative.</p>
+
+  <h2 id="tooling-that-enforces-the-grammar">Tooling that enforces the grammar</h2>
+  <ul>
+    <li><code>packages/core/src/view-model/lexicon.ts</code> —
+      parses R/ADR headings and AC list items at read time.
+      Browser-safe leaf — zero imports.</li>
+    <li><code>packages/core/src/view-model/evidence.ts</code> —
+      parses E‑block headings at read time (<code>E_HEADING</code>).</li>
+    <li><code>packages/core/src/view-model/review.ts</code> —
+      parses F-finding headings and the <code>resolved|stands</code>
+      dispositions of later rounds.</li>
+    <li><code>packages/core/src/record/validate.ts</code> —
+      validates required sections (<code>validateArtifact</code>,
+      <code>missingSections</code>, <code>extractSections</code>,
+      <code>BUILTIN_SECTIONS</code>), reads the <code>AUDIENCE:</code> line
+      (<code>extractAudience</code>) and the verification verdict
+      (<code>verdictLines</code>, shared by the engine and Gatehouse).</li>
+    <li><code>packages/orchestrator/src/review-report.ts</code> and
+      <code>verification-report.ts</code> — the engine's readers of the
+      review verdict and the verification verdict.</li>
+    <li><code>packages/core/src/record/actions.ts</code> —
+      the decision write path (<code>planDecision</code>) produces
+      comment-preserving mutations with structured commit messages for
+      every <code>DecisionAction</code>: <code>approve | decline |
+      resolve-escalation | pause | resume | arm | close | reopen</code>.</li>
+  </ul>
+  <!-- evidence: packages/core/src/view-model/lexicon.ts; packages/core/src/view-model/review.ts; packages/core/src/record/validate.ts; packages/core/src/record/actions.ts -->
+</article>
+<!-- content:end -->
+<nav class="pager" aria-label="Previous and next page">
+  <a class="pager-prev" href="../reference/adapter-manifests.html"><span class="pager-label">Previous</span><span class="pager-title">Adapter manifest reference</span></a>
+</nav>
+</main>
+<aside class="toc" aria-labelledby="toc-heading">
+  <p class="toc-title" id="toc-heading">On this page</p>
+  <ul class="toc-list">
+    <li><a href="#ten-contracts">Ten contracts</a></li>
+    <li><a href="#rule-family-1-id-heading-grammar">Rule family 1 — ID/heading grammar</a></li>
+    <li><a href="#rule-family-2-readability-human-facing-sections">Rule family 2 — READABILITY (human-facing sections)</a></li>
+    <li><a href="#commit-message-grammar-human-vs-orchestrator">Commit-message grammar (human vs. orchestrator)</a></li>
+    <li><a href="#tooling-that-enforces-the-grammar">Tooling that enforces the grammar</a></li>
+  </ul>
+</aside>
+<nav class="sidebar" aria-label="All documentation">
+  <p class="sidebar-title">Documentation</p>
+  <p class="sidebar-section"><a href="../how-it-works/index.html">How It Works</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../how-it-works/index.html">Overview</a></li>
+    <li><a href="../how-it-works/how-a-run-works.html">How a run works</a></li>
+    <li><a href="../how-it-works/how-gates-keep-a-human-in-charge.html">How gates keep a human in charge</a></li>
+    <li><a href="../how-it-works/how-gateline-stays-vendor-neutral.html">How gateline stays vendor-neutral</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../onboarding/index.html">Onboarding</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../onboarding/index.html">Overview</a></li>
+    <li><a href="../onboarding/git-plumbing.html">1. Git, down to the plumbing</a></li>
+    <li><a href="../onboarding/the-co-written-state-file.html">2. The co-written state file</a></li>
+    <li><a href="../onboarding/contracts-and-their-parsers.html">3. Contracts and their parsers</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../reference/index.html">Reference</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../reference/index.html">Overview</a></li>
+    <li><a href="../reference/cli.html">CLI</a></li>
+    <li><a href="../reference/state-yaml.html">state.yaml</a></li>
+    <li><a href="../reference/orchestrator-yaml.html">orchestrator.yaml</a></li>
+    <li><a href="../reference/adapter-manifests.html">Adapter manifests</a></li>
+    <li><a href="../reference/contract-grammar.html" aria-current="page">Contract grammar</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../api/index.html">API</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../api/index.html">Browse generated API docs</a></li>
+  </ul>
+</nav>
+</div>
+<footer class="site-footer">
+  gateline is an open-source framework (Apache-2.0). &copy; the gateline maintainers.
+  <span class="footer-sep">&middot;</span>
+  <a href="../index.html">Documentation home</a>
+</footer>
+</body>
+</html>

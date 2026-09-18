@@ -26,28 +26,27 @@
 <article class="doc">
   <p class="lede">Module 1 ended on a primitive and a limit: a compare-and-swap
   ref update lets two writers share a branch without a lock, and the structured
-  commit grammar is evidence for a human reading <code>git log</code> rather than
-  input to any decision. This module is what you build on top of that. One file,
+  commit grammar is evidence for a human reading <code>git log</code>, not input
+  to any decision. This
+  module is what you build on top of that. One file,
   <code>runs/&lt;slug&gt;/state.yaml</code>, is the entire control plane of a run
   in both directions: a human edits it through Gatehouse or the
   <code>gateline</code> CLI, an engine edits it on every tick that has
   something to record, neither has a lock.
   Making that safe takes four ideas.</p>
-  <!-- evidence: docs/ORCHESTRATOR.md §4.5, §7; contracts/state.yaml -->
 
   <p>The concept-level version is on
   <a href="../how-it-works/how-gates-keep-a-human-in-charge.html">how gates keep
   a human in charge</a>, with a
   <a href="../how-it-works/how-gates-keep-a-human-in-charge.html#cas-co-writer">figure
   of the two-writer loop</a>. This module goes underneath it: what the code
-  actually does, and why each choice makes the next one possible.</p>
+  does, and why each choice makes the next one possible.</p>
 
   <h2 id="a-file-whose-comments-are-normative">A file whose comments are normative</h2>
 
   <p>Start with the failure mode a naive implementation walks straight into.
   Parse the YAML into an object, change a field, serialize it back, commit. Every
   comment is gone, and so are the key order and the formatting.</p>
-  <!-- evidence: contracts/state.yaml; packages/core/src/sources/local-source.ts -->
 
   <p>For most configuration files that is a cosmetic loss. Here it destroys the
   record. <code>state.yaml</code>'s comments carry the contract: which values a
@@ -82,9 +81,9 @@ profile: standard # patch | standard | full (DESIGN.md §4.1)</code></pre>
 
   <h3>How it is done</h3>
 
-  <p>The mechanism is the document API of the <code>yaml</code> package rather
-  than its serialization API, and the distinction is worth learning as a general
-  technique. <code>parse</code> gives you plain JavaScript values — convenient,
+  <p>The mechanism is the document API of the <code>yaml</code> package, not its
+  serialization API, and the distinction is worth learning as a general technique.
+  <code>parse</code> gives you plain JavaScript values: convenient,
   lossy, correct for reading. <code>parseDocument</code> gives you a document
   that retains comments, anchors and formatting; you mutate it through
   <code>setIn</code>, and <code>toString</code> renders it back with everything
@@ -96,8 +95,9 @@ profile: standard # patch | standard | full (DESIGN.md §4.1)</code></pre>
   <code>parseDocument</code>, and its round trip is three lines.</p>
 
   <p>One honest boundary: the rule scopes to <code>state.yaml</code>, not to
-  every YAML file in the system. The scheduler's sweep marker is closed by
-  line-oriented regular-expression replacement — fine for a small file the
+  every YAML file in the system. The
+  scheduler's sweep marker is closed by
+  line-oriented regular-expression replacement: fine for a small file the
   scheduler wrote itself, and not the same discipline. Say
   "<code>state.yaml</code> is edited through the document API", not "YAML
   is".</p>
@@ -113,12 +113,11 @@ profile: standard # patch | standard | full (DESIGN.md §4.1)</code></pre>
   three things: a <code>mutate</code> function that edits a YAML document, the
   structured commit message that edit deserves, and a human-readable summary for
   confirmation prompts.</p>
-  <!-- evidence: packages/core/src/record/actions.ts -->
 
   <p>Legality is checked there too, before any write is attempted. Approving a
-  gate outside the run's profile throws; approving an already-decided gate
+  gate outside the run's profile throws. Approving an already-decided gate
   throws, and for a declined gate the message points at the resume path that
-  re-opens it; approving without a
+  re-opens it. Approving without a
   burden rating throws, because the burden is the metric the autonomy criterion
   is measured on. Two later refusals follow the same pattern. A run a human has
   ended with <code>gateline close</code> sits at <code>phase: closed</code> with
@@ -136,7 +135,6 @@ profile: standard # patch | standard | full (DESIGN.md §4.1)</code></pre>
   it "the single write path": resolve the branch, read the state file at the tip, apply
   the mutation to a document, land the result with compare-and-swap
   semantics.</p>
-  <!-- evidence: packages/core/src/sources/source.ts; packages/core/src/sources/local-source.ts; runs/writestate-kill-window/intent-brief.md -->
 
   <p>The first thing it does is refuse anonymity. If <code>git config
   user.name</code> and <code>user.email</code> are unset it returns a refusal
@@ -152,10 +150,10 @@ profile: standard # patch | standard | full (DESIGN.md §4.1)</code></pre>
   and a ref that moves during the attempt refuses with
   <code>ref-moved</code>.</p>
 
-  <p>Then it branches, and this is the constraint most worth understanding. If
-  no worktree holds the run branch, the write is pure plumbing exactly as module
+  <p>Then it branches, and this is the constraint that matters most. If
+  no worktree holds the run branch, the write is pure plumbing as module
   1 described: blob, tree, commit onto the tip, compare-and-swap ref update. If a
-  worktree <em>does</em> hold the branch, that sequence is illegal — moving the
+  worktree <em>does</em> hold the branch, that sequence is illegal: moving the
   ref would leave the checkout silently diverged. So the write goes
   <em>through</em> the checkout:
   <code>git commit -m &lt;msg&gt; -- &lt;statePath&gt;</code>, a pathspec commit
@@ -165,7 +163,7 @@ profile: standard # patch | standard | full (DESIGN.md §4.1)</code></pre>
   <figure class="diagram" data-diagram="state-write-paths">
     <figcaption>The single write path and the two routes it takes: plumbing
     when no checkout holds the branch, a pathspec commit through the checkout
-    when one does — with the write-ahead intent ref covering the gap in the
+    when one does, with the write-ahead intent ref covering the gap in the
     second route.</figcaption>
     <svg class="diagram-svg" viewBox="0 0 1020 960" role="img" aria-labelledby="title-state-write-paths">
       <title id="title-state-write-paths">One entry point, writeState, runs a shared prelude — identity check first, then fast-forward a local branch that is behind origin, resolve the tip and read the state file, then mutate the YAML document — before it forks on whether a worktree holds the branch. The left lane writes by plumbing and publishes with a compare-and-swap ref update; the right lane records a write-ahead intent ref and commits through the checkout. Both rejoin at one outcome, and six named refusals exit sideways.</title>
@@ -327,8 +325,8 @@ profile: standard # patch | standard | full (DESIGN.md §4.1)</code></pre>
     intent brief for the <code>writestate-kill-window</code> run records that on
     2026-07-23 the engine was killed between writing the state file into its
     checkout and committing it. Every later state write on that branch then
-    refused with <code>dirty-worktree</code> — correctly, since a checkout's
-    edits must never be clobbered — but the engine could not tell the dirt was
+    refused with <code>dirty-worktree</code> (correctly, since a checkout's
+    edits must never be clobbered), but the engine could not tell the dirt was
     its own half-finished write, so it looped while delivered review verdicts sat
     unrecorded. Recovery took a human hand-committing the file inside the
     engine's own checkout. The brief's line is the one I keep coming back to:
@@ -341,23 +339,22 @@ profile: standard # patch | standard | full (DESIGN.md §4.1)</code></pre>
   <p>There are six named ways for a write to refuse, and they are a type:
   <code>ref-moved</code>, <code>dirty-worktree</code>,
   <code>stale-checkout</code>, <code>no-branch</code>, <code>no-identity</code>,
-  <code>error</code>. Each carries an operator-facing message — the
+  <code>error</code>. Each carries an operator-facing message: the
   dirty-worktree refusal prints the exact commands to keep or discard the
   offending change. Refusal is a named outcome, not an exception.</p>
-  <!-- evidence: packages/core/src/sources/source.ts; packages/orchestrator/src/engine.ts -->
 
   <p>Exactly one of those six is worth retrying. The orchestrator's
   closing-bookkeeping loop logs and gives up for anything other than
-  <code>ref-moved</code> — the heartbeat will age the open entry. For
+  <code>ref-moved</code>: the heartbeat will age the open entry. For
   <code>ref-moved</code> the outer loop re-reads the tip and re-derives, bounded
   at five attempts. A retry loop that retried every failure would hammer a dirty
   checkout forever.</p>
 
-  <p>There is a genuine asymmetry between the two writers.
+  <p>There is an asymmetry between the two writers.
   <code>writeState</code> takes an optional <code>expectedTip</code>, which the
   docblock says "extends the CAS window back to the caller's read". The engine
   passes it, because it <em>derived</em> its action from a state read at the
-  start of the tick — if the branch moved in between, the derivation is stale and
+  start of the tick: if the branch moved in between, the derivation is stale and
   the commit must not land. Human surfaces omit it: a human's read happens inside
   the call. The machine holds the wider window and loses the race more often,
   which is the intended distribution of who yields to whom.</p>
@@ -401,12 +398,11 @@ phase: paused</code></pre>
   design states about every row of its derivation table: <em>each action is
   derivable from committed files alone, and each action is idempotent to
   re-derive — a tick interrupted anywhere converges on re-run.</em></p>
-  <!-- evidence: docs/ORCHESTRATOR.md §4.2, §4.4; packages/orchestrator/src/engine.ts -->
 
   <p>Two consequences fall out. First, the compare-and-swap doubles as the
   duplicate-dispatch guard: the dispatch protocol commits the <em>intent</em>
-  first — the task's status becomes <code>dispatched</code> and a ledger entry
-  opens — pushes that commit, and launches the job only once origin has
+  first (the task's status becomes <code>dispatched</code> and a ledger entry
+  opens), pushes that commit, and launches the job only once origin has
   accepted the push. Two engine instances serialize on the local ref update;
   the loser re-reads, sees <code>dispatched</code>, and rests. A push origin
   rejects launches nothing: on the plumbing route the engine drops the intent
@@ -419,10 +415,10 @@ phase: paused</code></pre>
   calls process ids and the dispatcher's own tables host-specific ephemera and
   treats them as cache, because the loop must always be able to reconstruct
   reality by probing: git is the only store. Two facts that look like handles
-  do go into the ledger entry, and the design draws the line explicitly. A
+  do go into the ledger entry, and the design draws the line. A
   <code>session</code> id is what the harness called the agent's session, so a
   retry of the same dispatch can resume it; nothing is derived from it, and it
-  is handed back rather than read. An <code>engine</code> field names the
+  is handed back, never read. An <code>engine</code> field names the
   process that opened the entry as <code>host:pid</code>, so a second engine
   can probe whether that process is still alive before treating the entry as
   an orphan. Neither is something the loop reads state from.</p>
@@ -430,18 +426,17 @@ phase: paused</code></pre>
   <h2 id="append-only-facts-derived-totals">Append-only facts, derived totals</h2>
 
   <p>The same idea applied to numbers is an append-only ledger. The budget block
-  of <code>state.yaml</code> holds one entry per model invocation — timestamp,
+  of <code>state.yaml</code> holds one entry per model invocation (timestamp,
   role, task, round, adapter, model, tokens, cost, plus the optional
   <code>failed</code>, <code>refused</code>, <code>session</code> and
-  <code>engine</code> keys — and a
+  <code>engine</code> keys) and a
   <code>cost_spent_usd</code> field the contract annotates as
   <em>derived: the sum of ledger[].cost_usd</em>.</p>
-  <!-- evidence: contracts/state.yaml; packages/orchestrator/src/engine.ts -->
 
   <p>The implementation honours that literally. When the engine closes a
   dispatch it writes the invocation's real token counts and cost into the ledger
   entry it opened, then recomputes the total by reducing over the <em>whole</em>
-  ledger — it never adds a number to the existing total. Two writers appending
+  ledger. It never adds a number to the existing total. Two writers appending
   concurrently cannot corrupt a total that nobody increments.</p>
 
   <div class="exercise">
@@ -461,10 +456,10 @@ git show main:runs/dupefind/state.yaml | grep 'cost_spent_usd:'</code></pre>
 
   <p>The ledger is not a hard cap. The budget limit is a pre-flight gate: before
   a dispatch the engine projects the ledger sum plus a per-role estimate against
-  the limit, and a projected exceedance pauses and escalates rather than trimming
-  the work to fit. The <code>creation-seam</code> record closes at
+  the limit, and a projected exceedance pauses and escalates, never trims the work to fit. The
+  <code>creation-seam</code> record closes at
   <code>cost_spent_usd: 104.54</code> against <code>cost_limit_usd: 60</code>
-  because that is what happened — the machine stopped, a human overrode, and the
+  because that is what happened: the machine stopped, a human overrode, and the
   ledger recorded both.</p>
 
   <h2 id="the-file-is-the-current-state-the-branch-is-the-record">The file is the current state; the branch is the record</h2>
@@ -472,17 +467,16 @@ git show main:runs/dupefind/state.yaml | grep 'cost_spent_usd:'</code></pre>
   <p>It is tempting to say <code>state.yaml</code> records every decision. It
   does not, and knowing why keeps you from writing a reader that silently misses
   things.</p>
-  <!-- evidence: packages/core/src/record/actions.ts; packages/orchestrator/src/observe.ts; packages/core/src/record/schema.ts -->
 
   <p>Declining a gate writes the decline into the entry and pauses the run.
   Resuming a gate-declined run <em>re-opens</em> that gate: the entry resets to
-  undecided. The decline is now absent at the branch tip — and present,
+  undecided. The decline is now absent at the branch tip and present,
   permanently, in the file's history, which is where the orchestrator finds the
   notes to bounce back to the producing role. The consumer walks that history
   looking, in each historical parse, for a gate that is not approved but does
   have a name attached.</p>
 
-  <p>That predicate encodes something worth stating on its own: a gate has three
+  <p>A gate has three
   states, not two. <em>Undecided</em> is not approved and has no name.
   <em>Declined</em> is not approved and has a name. <em>Approved</em> is
   approved. The schema normalizes an absent out-of-profile gate to undecided, and
@@ -499,7 +493,6 @@ git show main:runs/dupefind/state.yaml | grep 'cost_spent_usd:'</code></pre>
   &lt;orchestrator@gateline.invalid&gt;</code>, and never a person's git
   config. Finished runs keep the author that wrote them, so a run recorded
   before the rename shows the earlier bot name.</p>
-  <!-- evidence: docs/ORCHESTRATOR.md §4.3; packages/core/src/view-model/metrics.ts; packages/core/src/view-model/ledger.ts -->
 
   <div class="exercise">
     <h3>Exercise 4 — the partnership, counted</h3>
@@ -541,8 +534,8 @@ git log --format='%s' main -- runs/creation-seam \
   from the file. The grammar makes authorship auditable to a human reading
   <code>git log</code>, and Gatehouse renders it with a parser that never
   guesses.</em> The design docs describe the human decision grammar
-  as what the metrics reader treats as authoritative, which is true of the intent
-  — but the mechanism is the parsed file, and the difference matters if you are
+  as what the metrics reader treats as authoritative, which is true of the intent.
+  But the mechanism is the parsed file, and the difference matters if you are
   writing a consumer. The <code>dupefind</code> run is the illustration: its final
   commit reads
   <code>state(dupefind): G3 recorded N/A by nthncrtr; phase -&gt; done</code>,
@@ -571,8 +564,8 @@ git log --format='%s' main -- runs/creation-seam \
 
   <h2 id="further-reading">Further reading</h2>
 
-  <p>Read <code>packages/core/src/record/actions.ts</code> first — the
-  pure half, and short — then <code>writeState</code> in
+  <p>Read <code>packages/core/src/record/actions.ts</code> first (the
+  pure half, and short), then <code>writeState</code> in
   <code>packages/core/src/sources/local-source.ts</code>, where every
   primitive from <a href="git-plumbing.html">module 1</a> is used at once. The
   prose contracts are <code>docs/ORCHESTRATOR.md</code> §4.2, §4.3, §4.4 and §7;

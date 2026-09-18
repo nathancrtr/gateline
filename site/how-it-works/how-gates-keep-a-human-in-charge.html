@@ -27,23 +27,21 @@
   <p class="lede">In an orchestrator-driven run, the engine dispatches the
   agents, meters the spend, and moves the state file forward. The design's
   answer to "who is actually in charge?" has four parts: a prohibition built
-  into the code rather than instructed, a shared-file discipline both writers
-  obey, one authority per deployment, and an autonomy level that is earned and
-  measured instead of declared.</p>
-  <!-- evidence: docs/ORCHESTRATOR.md §1, §3, §7; docs/TOPOLOGY.md §3.1; docs/DESIGN.md §7 -->
+  into the code, a shared-file discipline both writers obey, one authority per
+  deployment, and an autonomy level that is earned and measured instead of
+  declared.</p>
 
   <h2 id="a-structural-never">A structural "never"</h2>
   <p>gateline has two operating modes. In v0 a human plays the Orchestrator
-  role — dispatching each agent by hand and moving <code>state.yaml</code>
+  role, dispatching each agent by hand and moving <code>state.yaml</code>
   through its phases. In v1 an engine executes the same role spec: the specs
   are identical in both modes, and only who executes
   <code>orchestrator.md</code> changes. The engine is a stateless
   <strong>reconciler</strong>. It wakes on a trigger, reads
   <code>state.yaml</code> at the run branch tip, derives the next action from
   committed files alone, executes it, commits, and exits. No conversation state
-  survives between wakes, so waiting at a gate costs nothing — a gate wait is
+  survives between wakes, so waiting at a gate costs nothing: a gate wait is
   simply a state from which no action derives.</p>
-  <!-- evidence: docs/DESIGN.md §7; docs/ORCHESTRATOR.md §2, §3, §4.5; roles/orchestrator.md; packages/orchestrator/README.md -->
   <p>The load-bearing safety property is structural. The engine has
   <em>no code path</em> that writes <code>gates.*.approved</code>: "the
   orchestrator never approves a gate" is not an instruction a model is asked to
@@ -53,46 +51,44 @@
   Gatehouse's server and <code>gateline sync</code>, never in the engine. A
   run's <code>closure</code>
   block sits on the same read-only list, so the engine can pause a run and
-  never end one. The role spec says the same in
-  its own grammar — the Orchestrator owns the gates in the sense that it
-  presents them, and it must halt until a named human records approval. And a
+  never end one. The role spec says the same in its own grammar: the
+  Orchestrator owns the gates in the sense that it presents them, and it must halt until a named human records approval. And a
   deterministic loop that meets a state it has no rule for escalates, where a
   model in the same position would improvise.</p>
 
   <h2 id="one-file-two-writers">One file, two writers</h2>
-  <p><code>state.yaml</code> is the entire control plane in both directions —
+  <p><code>state.yaml</code> is the entire control plane in both directions:
   there is no orchestrator API, config channel, or command queue. Humans speak
   through Gatehouse, the framework's web UI, and the <code>gateline</code> CLI;
   the engine speaks by advancing state that the human surfaces recognize as
   needing a person. Two writers on one file need rules, and the co-writer
-  contract supplies seven: every write is a compare-and-swap ref update; YAML
+  contract supplies seven. Every write is a compare-and-swap ref update. YAML
   edits preserve comments and formatting, through a document API rather than
-  re-serialization; timestamps are ISO-8601; commit messages follow a
-  structured grammar under distinguishable identities; review-round counts live
-  only in <code>state.yaml</code>; phase, status, and pause values stay
-  within the contract's enums; and a gate decision is legal only for the gate
-  on the table. That last rule means the profile's first undecided gate, while
-  the run stands in a phase that gate is decided in. Gatehouse, the CLI, the
+  re-serialization. Timestamps are written in ISO-8601 form. Commit messages
+  follow a structured grammar under distinguishable identities. Review-round counts live
+  only in <code>state.yaml</code>. Phase, status, and pause values stay within
+  the contract's enums. And a gate decision is legal only for the gate on the
+  table. That last rule means the profile's first undecided gate, while the run
+  stands in a phase that gate is decided in. Gatehouse, the CLI, the
   API, and the pull-request approval sync all refuse an out-of-order
   approval.</p>
-  <!-- evidence: docs/ORCHESTRATOR.md §4.3, §4.5, §7; contracts/state.yaml; packages/core/src/sources/git.ts; runs/creation-seam/state.yaml -->
   <p><strong>Compare-and-swap</strong> (CAS) is what makes the two writers
   safe. Each writer reads the branch tip, makes its edit, commits, and then
   updates the ref only if it still points at the commit it read. If the ref
-  moved — a human decided mid-tick, an agent committed — the update is
-  refused; the loser discards its work and re-derives from the new tip. A
-  refused write is the designed outcome of a race, not an error, and it is how
-  a human decision always wins: the engine never forces its bookkeeping
+  moved (a human decided mid-tick, an agent committed), the update is refused;
+  the loser discards its work and re-derives from the new tip. A refused write
+  is the designed outcome of a race, not an error, and it is how a human
+  decision always wins: the engine never forces its bookkeeping
   through.</p>
   <p>Provenance is legible at a glance. Engine commits are authored by a
   dedicated bot identity (<code>gateline-orchestrator</code>, one per install),
-  never a person's git config, and they use a reserved set of bookkeeping verbs
-  — <code>dispatched</code>, <code>bounced</code>, <code>advanced</code>,
+  never a person's git config, and they use a reserved set of bookkeeping
+  verbs: <code>dispatched</code>, <code>bounced</code>, <code>advanced</code>,
   <code>escalated</code>, <code>paused</code>, <code>metered</code>,
-  <code>harvested</code>. The decision grammar — <code>G2 approved by
+  <code>harvested</code>. The decision grammar (<code>G2 approved by
   &lt;name&gt;</code>, <code>staged by &lt;name&gt;</code>, <code>armed by
   &lt;name&gt;</code>, <code>closed by &lt;name&gt;</code>, <code>reopened to
-  &lt;phase&gt; by &lt;name&gt;</code> — is reserved for humans, and the
+  &lt;phase&gt; by &lt;name&gt;</code>) is reserved for humans, and the
   metrics reader treats it as authoritative. A run's branch history therefore
   reads like a transcript of the partnership:</p>
   <pre><code>c4b9d95 state(creation-seam): G2 approved by Nathan Carter [burden: confirmation]
@@ -184,37 +180,35 @@ fdef5f2 state(creation-seam): metered verifier $3.11</code></pre>
   model invocation flows through the dispatch seam and is metered into the
   run's budget ledger, and before any dispatch the engine projects the ledger
   sum plus a static per-role estimate against the run's cost limit. A projected
-  exceedance pauses the run as <code>budget-exhausted</code> and escalates —
-  exhaustion pauses the pipeline; it never degrades quality to fit the budget.
-  Resuming from that pause carries the budget decision: <code>gateline resume
+  exceedance pauses the run as <code>budget-exhausted</code> and escalates. The
+  engine never degrades quality to fit the budget. Resuming from that pause carries the budget decision: <code>gateline resume
   --cost-limit &lt;usd&gt;</code> writes a higher limit in the same commit as
   the phase restore, and a resume without one is refused, because the pause is
   a condition the engine recomputes on every tick.</p>
-  <!-- evidence: docs/DESIGN.md §4; docs/ORCHESTRATOR.md §4.2, §4.5, §6; packages/cli/src/main.ts; runs/creation-seam/state.yaml -->
   <p>Metering is unconditional, but enforcement is a switch. Operators on
   flat-rate-billed harnesses can start the engine with
   <code>--no-budget-enforcement</code>; the ledger, derived totals, and token
-  counts record regardless — pause-don't-degrade governs enforcement, not
+  counts record regardless. Pause-don't-degrade governs enforcement, not
   measurement. The <code>creation-seam</code> run shows both halves in one
   incident.</p>
   <p>With the ledger at $44.02, the engine projected $68.02 against the run's
   $60 limit, paused, and escalated. The human resolved the escalation by
   restarting the engine with budget enforcement disabled and resuming;
   metering kept running, and the record closes at $104.54 spent against the
-  original $60 limit — the machine's stop, the human's override, and the full
+  original $60 limit: the machine's stop, the human's override, and the full
   cost all legible in the same file.</p>
   <p class="callout"><strong>Approve-and-hold.</strong> Sometimes signing a
-  gate should not start the next phase — another human decision still stands
-  in between. <code>gateline approve --hold &lt;reason&gt;</code> signs the gate
+  gate should not start the next phase: another human decision still stands in
+  between. <code>gateline approve --hold &lt;reason&gt;</code> signs the gate
   and sets <code>phase: paused</code> in the same commit; the held run is an
   ordinary rest state, and resume releases it into whatever phase the gate
-  ledger implies. Signing and advancing are separate acts precisely so a
-  signature can never accidentally launch work.</p>
+  ledger implies. Signing and advancing are separate acts so that a signature
+  can never accidentally launch work.</p>
 
   <h2 id="one-authority-per-deployment">One authority per deployment</h2>
   <p>The control plane has one authority per deployment. Gatehouse and the
-  engine run as one supervised unit over one clone — the <code>gateline
-  up</code> topology — with one sync loop and one push path; the git host's
+  engine run as one supervised unit over one clone (the <code>gateline
+  up</code> topology) with one sync loop and one push path; the git host's
   origin is the linearization point, so a dispatch whose intent commit origin
   rejects is never launched. An origin that is merely unreachable does not
   block the launch, because the clone is only ahead, and a later accepted push
@@ -226,39 +220,36 @@ fdef5f2 state(creation-seam): metered verifier $3.11</code></pre>
   engine kept deriving against a stale budget limit, and machine bookkeeping
   and human decisions accumulated on divergent histories that needed manual
   repair.</p>
-  <!-- evidence: docs/TOPOLOGY.md §1, §3.1, §3.2, §3.5, §3.6; docs/ORCHESTRATOR.md §13; AGENTS.md -->
   <p>The blessed checkout stays on the default branch, and a code-tree monitor
   enforces it. Only a clean fast-forward of the default branch counts as an
-  update; on one, the engine drains in-flight work and exits with code 75 — a
+  update; on one, the engine drains in-flight work and exits with code 75: a
   deliberately ordinary "temporary failure" exit that a supervisor restarts
   onto the new code (unsupervised, the operator restarts it by hand). A dirty
   tree, a branch switch, or
-  any non-fast-forward movement pauses dispatch instead — the engine never
+  any non-fast-forward movement pauses dispatch instead. The engine never
   dispatches on mixed code, and it never pulls: updating is always an operator
   act (<code>git pull</code>, or <code>gateline self-update</code>). Unmerged
-  changes are tried from their own worktree with <code>gateline ui</code> —
-  never <code>up</code> — so unreviewed code is never put in charge of live,
+  changes are tried from their own worktree with <code>gateline ui</code>,
+  never <code>up</code>, so unreviewed code is never put in charge of live,
   metered dispatch.</p>
 
   <h2 id="autonomy-is-earned-and-measured">Autonomy is earned, and measured</h2>
   <p>The framework treats orchestration autonomy the way you would treat a new
   hire's: v0 exists so the team builds a calibrated sense of where agents are
   strong before granting routing autonomy. The promotion criterion is explicit
-  — gate reviews have become <em>confirmations rather than corrections</em> —
-  and it is measured, not vibes: the gate frontend records a
-  <strong>burden</strong> (<code>confirmation</code>,
+  (gate reviews have become <em>confirmations rather than corrections</em>),
+  and it is measured: the gate frontend records a <strong>burden</strong> (<code>confirmation</code>,
   <code>light-correction</code>, or <code>heavy-correction</code>) in the act
   of deciding, and hand-recorded decisions are expected to set it, so the
   criterion is checkable from the record where decisions flow through the
-  frontend — while older or hand-entered decisions may lack it.</p>
-  <!-- evidence: docs/DESIGN.md §7; docs/ORCHESTRATOR.md §10; contracts/state.yaml; packages/orchestrator/shadow-dupefind.md; AGENTS.md -->
+  frontend, while older or hand-entered decisions may lack it.</p>
   <p>Autonomy arrives across a milestone ladder, and the ladder has a gate of
   its own. M0 lands the contracts and a hand-kept ledger. M1 runs the engine in
-  <strong>shadow mode</strong> — a dry-run tick against finished v0 runs,
-  comparing each derived action to what the human orchestrator actually did;
+  <strong>shadow mode</strong> (a dry-run tick against finished v0 runs,
+  comparing each derived action to what the human orchestrator actually did);
   the bar was three full runs with every disagreement dispositioned as an
   engine bug or a design finding. M2 is the autonomous loop on one vendor, and
-  it could not begin until the promotion criterion was credibly met — a
+  it could not begin until the promotion criterion was credibly met: a
   sustained majority of <code>confirmation</code> burden across v0 gate
   decisions. M2 has since run: the engine has driven real runs against this
   repository, <code>creation-seam</code> among them, with humans acting only
@@ -340,8 +331,8 @@ fdef5f2 state(creation-seam): metered verifier $3.11</code></pre>
     </svg>
   </figure>
 
-  <p>The third page covers the other half of the trust story —
-  <a href="how-gateline-stays-vendor-neutral.html">how gateline stays
+  <p>The third page covers the other half of the trust story, <a
+  href="how-gateline-stays-vendor-neutral.html">how gateline stays
   vendor-neutral</a>, so no model or harness is baked into the pipeline. For
   the decision commands themselves, see the
   <a href="../reference/cli.html">CLI reference</a>; for every field the two

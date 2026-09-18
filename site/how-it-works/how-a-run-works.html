@@ -24,12 +24,11 @@
   <h1>How a run works</h1>
 <!-- content:start -->
 <article class="doc">
-  <p class="lede">A gateline run is one change — a feature, a fix, a piece of
-  maintenance — carried from a one-page brief to a merged branch by a chain of
+  <p class="lede">A gateline run is one change (a feature, a fix, a piece of maintenance)
+  carried from a one-page brief to a merged branch by a chain of
   specialized agents, with a named human approving at each phase boundary.
   Everything the run is, everything it has done, and everything it is waiting
   on lives in a single directory of files committed to git.</p>
-  <!-- evidence: docs/DESIGN.md §1, §4; runs/README.md -->
 
   <h2 id="from-conversation-to-artifacts">From conversation to artifacts</h2>
   <p>In the chatbot workflow most engineers know, the developer is the
@@ -41,9 +40,8 @@
   they share contracts. Each role consumes specific files, produces specific
   files, and a human approves at phase boundaries. The pipeline's state
   <em>is</em> the repo.</p>
-  <!-- evidence: docs/DESIGN.md §1 -->
   <p>Three properties fall out of that one decision. Any agent is replaceable
-  mid-flight — if an implementer's work is unusable, you discard its branch and
+  mid-flight: if an implementer's work is unusable, you discard its branch and
   re-run the work item, because the spec and plan it worked from are unchanged
   on disk. Models and runtimes are swappable independently of roles, because a
   role spec says what an agent must consume, produce, and refuse to do — never
@@ -62,7 +60,6 @@
   change end to end; at <strong>G2</strong>, "does the evidence support
   merging?" Finally the Ops role prepares release and rollback plans; at
   <strong>G3</strong>, "ship it?"</p>
-  <!-- evidence: docs/DESIGN.md §3, §4; docs/ORCHESTRATOR.md §4.2; runs/dupefind/state.yaml -->
   <table>
     <thead>
       <tr><th>Gate</th><th>The human's question</th><th>On the table</th></tr>
@@ -81,15 +78,14 @@
   </table>
   <p>Two caps keep the loop safe. Implementer ⇄ Reviewer cycles are capped at
   three rounds per work item; a fourth round becomes an automatic escalation to
-  the human with both sides' artifacts — agents arguing past three rounds are
-  almost always stuck on an ambiguity in the spec, which is a G0 or G1 defect,
-  not an implementation defect. The cap has an exit: resolving that
-  escalation grants the loop one more round, and the engine asks again for
-  each extra round. And each run carries a cost budget whose
-  exhaustion pauses the pipeline rather than letting quality degrade
-  silently.</p>
-  <p>Reviewer and Verifier are deliberately separate roles. Review is reading —
-  does this code say the right thing? Verification is running — does the system
+  the human with both sides' artifacts. Agents arguing past three rounds are
+  almost always stuck on an ambiguity in the spec, which is a G0 or G1 defect.
+  The cap has an exit: resolving that escalation grants the loop one more
+  round, and the engine asks again for each extra round. And each run carries a
+  cost budget whose exhaustion pauses the pipeline rather than letting quality
+  degrade silently.</p>
+  <p>Reviewer and Verifier are deliberately separate roles. Review is reading:
+  does this code say the right thing? Verification is running: does the system
   do the right thing? Collapsing them recreates the rubber-stamp reviews seen
   in human teams.</p>
 
@@ -213,7 +209,7 @@
     </svg>
   </figure>
 
-  <p>The lifecycle is exercised, not aspirational. <code>runs/dupefind/</code>,
+  <p>The lifecycle has been exercised end to end. <code>runs/dupefind/</code>,
   a completed human-orchestrated run at full weight (its state file predates
   the profile field, and an absent <code>profile:</code> means
   <code>full</code>), shows the shape the lifecycle leaves behind: three work
@@ -225,11 +221,10 @@
   <h2 id="the-run-directory-is-the-state">The run directory is the state</h2>
   <p>A run lives at <code>runs/&lt;slug&gt;/</code> on its own branch,
   <code>run/&lt;slug&gt;</code>, and the directory <em>is</em> the pipeline's
-  state — no state lives anywhere else. Artifacts are committed as they are
+  state; no state lives anywhere else. Artifacts are committed as they are
   produced, so the git history is the record of what happened, in order. Once a
   run merges, its directory is a historical record and is never
   retro-edited.</p>
-  <!-- evidence: runs/README.md; contracts/state.yaml; docs/DESIGN.md §5; AGENTS.md -->
   <pre><code>runs/&lt;slug&gt;/
 ├── state.yaml               # phase, profile, gates, budget, tasks, escalations
 ├── intent-brief.md          # human-authored input
@@ -245,13 +240,13 @@
 ├── release-plan.md          # Ops                 → gate G3
 └── retro.md                 # human observations after the run</code></pre>
   <p>At the center is <code>state.yaml</code>, the run's spine. It records the
-  phase and profile; the budget as an append-only <strong>ledger</strong> — one
-  entry per model invocation, carrying timestamp, role, task, round, adapter,
-  model, tokens, and cost — from which totals are derived rather than
-  maintained, so concurrent writers and later audits survive; the gate ledger,
-  one entry per gate with who approved, when, notes, and an optional
-  <strong>burden</strong> rating of how much work the review took; task
-  statuses and review-round counts; and an append-only escalation list.
+  phase and profile, and the budget as an append-only <strong>ledger</strong>
+  (one entry per model invocation, carrying timestamp, role, task, round,
+  adapter, model, tokens, and cost) from which totals are derived rather than
+  maintained, so concurrent writers and later audits survive. It also holds the
+  gate ledger (one entry per gate with who approved, when, notes, and an
+  optional <strong>burden</strong> rating of how much work the review took),
+  task statuses and review-round counts, and an append-only escalation list.
   A human or an engine decides what happens next from this file, the artifacts
   committed beside it, and the branch order in which they landed.</p>
   <p>Two rows of the tree are not roster output. <code>ux-research.md</code>
@@ -272,7 +267,6 @@
   <p>Not every change should pay for the full pipeline. A <strong>run
   profile</strong> declares, per run, which roles run and which gates exist.
   There are three profiles, they are fixed sets, and they nest:</p>
-  <!-- evidence: docs/DESIGN.md §4.1; docs/ORCHESTRATOR.md §4.5; packages/core/src/record/schema.ts; packages/cli/src/main.ts; runs/creation-seam/state.yaml -->
   <table>
     <thead>
       <tr><th>Profile</th><th>Roles that run</th><th>Gates</th><th>Phase
@@ -299,9 +293,9 @@
   <p><code>patch</code> is for bug fixes and small bounded changes: the human
   authors the intent brief <em>and</em> the single work item at creation
   (<code>gateline new --task-file &lt;path&gt;</code> stages it as
-  <code>tasks/01-&lt;slug&gt;.yaml</code>), G1
-  approves both together, and there is no Verifier — wanting independent
-  verification is itself evidence the change is <code>standard</code>-weight.
+  <code>tasks/01-&lt;slug&gt;.yaml</code>), G1 approves both together, and
+  there is no Verifier (wanting independent verification is itself evidence
+  the change is <code>standard</code>-weight).
   <code>standard</code> is the workhorse for feature-sized changes that ship by
   merging; it drops Ops and G3 because for most repository work the merge
   <em>is</em> the release. <code>full</code> is the complete pipeline, for when
@@ -311,22 +305,22 @@
   knobs: there is no per-run role or gate toggle, so if a profile doesn't fit
   you pick the next heavier one. The gate ledger carries exactly the profile's
   gates; a gate outside the profile is absent, never auto-approved. Upgrades
-  are one-way and human-decided — the human edits <code>profile:</code> to a
+  are one-way and human-decided (the human edits <code>profile:</code> to a
   heavier value and resumes, and the missing work derives as ordinary
-  dispatches — while downgrading mid-run is forbidden, and an engine that
-  observes one escalates rather than guesses.</p>
+  dispatches), while downgrading mid-run is forbidden, and an engine that
+  observes one escalates.</p>
   <p class="callout">Two defaults live at different layers and are easy to
   conflate. A <code>state.yaml</code> with no <code>profile:</code> field is a
-  <code>full</code> run — the heaviest profile, so every pre-profile record
+  <code>full</code> run, the heaviest profile, so every pre-profile record
   keeps its meaning. The <code>gateline new</code> command, one layer up,
   defaults to <code>--profile standard</code> for runs it stages. The record's
   default protects history; the tool's default matches the common case.</p>
   <p>Records are historical, so older runs show older shapes. The
-  orchestrator-driven <code>runs/creation-seam/</code> — a
-  <code>standard</code> run — lists a G3 entry that today's contract would
-  omit: present but undecided, a compatibility shim for a parser written before
-  per-profile gate sets. It is harmless precisely because of the rule above —
-  an undecided or absent gate can never masquerade as approved.</p>
+  orchestrator-driven <code>runs/creation-seam/</code> (a <code>standard</code>
+  run) lists a G3 entry that today's contract would omit: present but
+  undecided, a compatibility shim for a parser written before per-profile gate
+  sets. It is harmless because of the rule above: an undecided or absent gate
+  can never masquerade as approved.</p>
 
   <figure class="diagram" data-diagram="profile-ladder">
     <figcaption>The three profiles are fixed, nested sets. Each heavier profile
@@ -369,14 +363,13 @@
 
   <h2 id="creating-a-run-stage-then-arm">Creating a run: stage, then arm</h2>
   <p>A run is created in two steps. <code>gateline new</code> stages the record
-  — branch, intent brief, state file — in a paused, inert state
+  (branch, intent brief, state file) in a paused, inert state
   (<code>paused_reason: staged</code>) for human review; nothing can dispatch
   against a staged run. <code>gateline arm</code> is what makes it
   dispatchable: it starts the run at the profile's first undecided-gate phase
   and ensures the run's draft pull request exists.</p>
-  <!-- evidence: AGENTS.md; packages/cli/src/main.ts; contracts/state.yaml; packages/core/src/sources/pr-description.ts -->
-  <p>That pull request is generated from the run's own artifacts — the intent
-  brief first, then the spec once it lands — and it refreshes as the run
+  <p>That pull request is generated from the run's own artifacts (the intent
+  brief first, then the spec once it lands), and it refreshes as the run
   progresses, until a human edits the body. The generated body carries a
   hidden marker comment, <code>&lt;!-- gateline:draft-pr --&gt;</code>. Once
   the marker is gone, which a rewrite of the body normally removes, the text
@@ -386,17 +379,16 @@
   instead.</p>
 
   <h2 id="the-gate-less-exception-historian-sweeps">The gate-less exception: historian sweeps</h2>
-  <p>One role runs outside the gate lifecycle. The Historian is scheduled, not
-  gate-driven: committed policy in the repo-root <code>orchestrator.yaml</code>
-  sets its cadence — in this repository, a sweep every seven days with a $5
-  pre-flight cost cap. A due sweep is dispatched as a mini-run,
+  <p>One role runs outside the gate lifecycle. The Historian is scheduled:
+  committed policy in the repo-root <code>orchestrator.yaml</code> sets its
+  cadence (in this repository, a sweep every seven days with a $5 pre-flight
+  cost cap). A due sweep is dispatched as a mini-run,
   <code>runs/historian-&lt;date&gt;/</code> on branch
   <code>run/historian-&lt;date&gt;</code>, carrying a one-entry ledger in
   <code>sweep.yaml</code> and deliberately no <code>state.yaml</code>, so sweeps stay out of the gate
   machinery entirely. Its approval is not a numbered gate: a human reviews the
-  <code>docs-delta.md</code> and merges the sweep branch — and that merge is
-  the approval.</p>
-  <!-- evidence: docs/ORCHESTRATOR.md §4.6; runs/README.md; orchestrator.yaml; roles/historian.md -->
+  <code>docs-delta.md</code> and merges the sweep branch. That merge is the
+  approval.</p>
 
   <p>The gates are where the design concentrates its weight: the next page,
   <a href="how-gates-keep-a-human-in-charge.html">how gates keep a human in

@@ -24,35 +24,33 @@
   <div class="hero">
     <h1>gateline</h1>
     <p class="hero-tagline">Run the software development lifecycle as a team of
-    semi-autonomous agents — with a named human approving at every phase gate.</p>
+    semi-autonomous agents, with a named human approving at every phase gate.</p>
     <div class="hero-actions">
       <a class="button button-primary" href="how-it-works/how-a-run-works.html">How a run works</a>
       <a class="button" href="onboarding/index.html">Onboarding</a>
       <a class="button" href="reference/cli.html">CLI reference</a>
       <a class="button" href="api/index.html">API docs</a>
     </div>
-    <p class="hero-note">Open source, Apache-2.0. Static documentation — no
-    tracking, no external assets.</p>
+    <p class="hero-note">Open source, Apache-2.0. Static documentation with no tracking and no external assets.</p>
   </div>
 
   <div class="landing-intro">
     <p><strong>gateline</strong> is an open-source framework for running the
     software development lifecycle as a team of semi-autonomous agents, with named
     humans approving at phase gates. Agents never share a conversation; they share
-    typed artifacts in git — a spec, a plan, work items, review and verification
-    reports — so the pipeline's state is the repository, and every decision,
+    typed artifacts in git (a spec, a plan, work items, review and verification
+    reports), so the pipeline's state is the repository, and every decision,
     finding, and cost lands in a durable, inspectable record. <strong>Gatehouse</strong>
     is the web UI where humans review gate packets and record decisions; the
     <code>gateline</code> CLI and the v1 orchestrator engine run alongside it, and
     <code>gateline up</code> runs Gatehouse and the engine together over one clone.</p>
-    <!-- evidence: README.md; docs/DESIGN.md §1; docs/TOPOLOGY.md §3.1; AGENTS.md -->
 
     <p>It is built for engineers who already work with LLM coding assistants in a
     single chat stream and want the throughput of many agents without giving up
     accountable approval. You start human-orchestrated, driving each role by hand;
-    autonomy increases along a measured trust ladder and stays gated on evidence —
-    gate reviews that have become confirmations rather than corrections — never on
-    a version number.</p>
+    autonomy increases along a measured trust ladder and stays gated on evidence:
+    gate reviews that have become confirmations rather than corrections. A version
+    number grants no autonomy.</p>
 
     <p>The framework is at v0.3. The repository has been public since
     2026-09-16, and <code>v0.3.0</code> is its first tag. Published package
@@ -65,21 +63,19 @@
     <div class="feature">
       <h3>Artifacts, not conversations</h3>
       <p>Each role consumes specific files and produces specific files, and the
-      handoff between them is a contract rather than a chat transcript. An artifact
-      missing a required section is malformed, and the consuming agent's first duty
-      is to bounce it back to its producer, never to guess — so handoffs fail loudly
-      or not at all.</p>
-      <!-- evidence: docs/DESIGN.md §1, §2, §5, §6, §8; docs/ORCHESTRATOR.md §3; AGENTS.md -->
+      handoff between them is a contract. An artifact missing a required section
+      is malformed, and the consuming agent's first duty is to bounce it back to
+      its producer, never to guess. Handoffs fail loudly or not at all.</p>
       <p class="feature-link"><a href="how-it-works/how-a-run-works.html">How a run works →</a></p>
     </div>
 
     <div class="feature">
       <h3>Gates a machine cannot sign</h3>
       <p>The engine dispatches agents, meters spend, and moves the state file
-      forward — but it may not record a gate decision. It presents them and halts
-      until a named human records approval. That prohibition is built into the code
-      rather than instructed, and a deterministic loop that meets a state it has no
-      rule for escalates instead of improvising.</p>
+      forward, but it may not record a gate decision. It presents them and halts
+      until a named human records approval. That prohibition is built into the
+      code: the engine has no code path that writes an approval. A deterministic
+      loop that meets a state it has no rule for escalates to a human.</p>
       <p class="feature-link"><a href="how-it-works/how-gates-keep-a-human-in-charge.html">How gates keep a human in charge →</a></p>
     </div>
 
@@ -87,19 +83,18 @@
       <h3>Vendor-neutral by construction</h3>
       <p>No role knows which model executes it. Roles are contracts over files,
       models are bindings resolved in a single registry, and runtimes attach through
-      thin generated adapters — enforced as a repository invariant: no vendor or
-      model name may appear in <code>roles/</code> or <code>contracts/</code>.</p>
+      thin generated adapters. The separation is enforced as a repository invariant:
+      no vendor or model name may appear in <code>roles/</code> or <code>contracts/</code>.</p>
       <p class="feature-link"><a href="how-it-works/how-gateline-stays-vendor-neutral.html">How gateline stays vendor-neutral →</a></p>
     </div>
   </div>
 
   <h2 id="the-pipeline-at-a-glance" class="landing-h2">The pipeline at a glance</h2>
 
-  <p class="landing-prose">A run is one change — a feature, a fix, a piece of
-  maintenance — carried from a one-page brief to a merged branch. Four gates mark
+  <p class="landing-prose">A run is one change (a feature, a fix, a piece of
+  maintenance) carried from a one-page brief to a merged branch. Four gates mark
   the phase boundaries, and each one puts a specific question and a specific set of
   artifacts in front of a human.</p>
-  <!-- evidence: docs/DESIGN.md §1, §4, §4.1; runs/README.md -->
 
   <table class="landing-table">
     <thead>
@@ -119,17 +114,16 @@
   </table>
 
   <p class="landing-prose">Not every change should pay for the full pipeline. A run
-  profile declares, per run, which roles run and which gates exist —
-  <code>patch</code>, <code>standard</code>, and <code>full</code> are fixed sets,
-  and they nest.</p>
+  profile declares, per run, which roles run and which gates exist. <code>patch</code>,
+  <code>standard</code>, and <code>full</code> are fixed sets, and they nest.</p>
 
   <h2 id="start-where-you-are" class="landing-h2">Start where you are</h2>
 
   <div class="path-grid">
     <div class="path">
       <p class="path-label">New to gateline</p>
-      <p>Read the pipeline model end to end — the lifecycle, the gates, and the
-      vendor separation — before touching the code.</p>
+      <p>Read the pipeline model end to end (the lifecycle, the gates, and the vendor
+      separation) before touching the code.</p>
       <p class="feature-link"><a href="how-it-works/index.html">How It Works →</a></p>
     </div>
     <div class="path">
@@ -166,7 +160,8 @@
     </div>
     <div class="section-nav-card">
       <h3><a href="reference/index.html">Reference</a></h3>
-      <p>Commands, schemas, manifests, and contracts — the exact shapes adopter tooling builds against.</p>
+      <p>Commands, schemas, manifests, and contracts: the exact shapes adopter
+      tooling builds against.</p>
     </div>
     <div class="section-nav-card">
       <h3><a href="api/index.html">API</a></h3>

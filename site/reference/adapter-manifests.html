@@ -28,23 +28,22 @@
     Each adapter under <code>adapters/&lt;name&gt;/</code> carries a
     <code>manifest.json</code> that maps the framework's runtime-neutral role
     specs into a specific runner's vocabulary. Agent files are
-    <strong>rendered, not written</strong> — <code>gateline render</code>
+    <strong>rendered, not written</strong>: <code>gateline render</code>
     reads role specs and manifests, then writes the runner's agent files. The
     renderer lives in <code>packages/framework/src/render.ts</code>, and CI
     enforces staleness with
     <code>node packages/framework/src/main.ts render --check</code>, which
     needs nothing installed. An adapter may
     <em>narrow</em> a role (fewer tools, tighter permissions) but never
-    <em>widen</em> it — the role spec is the ceiling.
-    <!-- evidence: AGENTS.md "Invariants"; docs/DESIGN.md §8; packages/framework/src/render.ts -->
+    <em>widen</em> it. The role spec is the ceiling.
   </p>
 
-  <p class="callout"><strong>Honesty note — model IDs are ILLUSTRATIVE.</strong>
+  <p class="callout"><strong>Honesty note: model IDs are ILLUSTRATIVE.</strong>
   The registry's model IDs are marked ILLUSTRATIVE in
   <code>registry/models.yaml</code>: each adopter must pin their
   organization's approved models and re-verify pricing. The manifest model
-  spellings quoted below are configuration examples, not guaranteed
-  live bindings. The opencode adapter specifically marks its Kimi binding as
+  spellings quoted below are configuration examples, not guaranteed live
+  bindings. The opencode adapter specifically marks its Kimi binding as
   TEMPORARY (<code>adapters/opencode/manifest.json</code>): its comment says
   to revisit the binding once Kimi K3's open weights land on 2026-07-27, a
   date now past, so the binding is pending that revisit. The OpenRouter pricing entries back the token-based
@@ -75,7 +74,6 @@
       </tr>
     </tbody>
   </table>
-  <!-- evidence: docs/DESIGN.md §8; adapters/claude-code/manifest.json; adapters/copilot-cli/manifest.json; adapters/opencode/manifest.json -->
 
   <h2 id="manifest-schema-key-by-key-union-across-adapters">Manifest schema — key by key (union across adapters)</h2>
   <p>All three shipped manifests carry identical top-level
@@ -88,7 +86,6 @@
   <code>model_overrides</code> and <code>extra_frontmatter</code> are optional.
   The renderer never reads <code>model_vendors</code> or
   <code>headless</code>; the orchestrator does.</p>
-  <!-- evidence: packages/framework/src/adapter.ts; packages/orchestrator/src/manifest.ts -->
 
   <table>
     <thead><tr><th>Key</th><th>Purpose</th></tr></thead>
@@ -117,7 +114,6 @@
   own modules, nothing else. Manifests are JSON, and role frontmatter is read
   by a hand-rolled flat reader. That is what lets it run before the
   environment probe has fixed anything in a host repo.</p>
-  <!-- evidence: packages/framework/src/main.ts; packages/framework/src/role.ts; docs/INTEGRATION.md §8 -->
 
   <p><code>renderAll</code> lists the directories under <code>adapters/</code>
   that contain a <code>manifest.json</code>, sorted by name for stable output,
@@ -142,7 +138,7 @@
 
   <p>Mode <code>--check</code> (used by CI:
   <code>.github/workflows/render-check.yml</code>) reads existing rendered
-  files and exits 1 if any are stale — a stale-render CI failure
+  files and exits 1 if any are stale. A stale-render CI failure
   means the manifest or role spec was edited without re-rendering. A host
   repository gets the same check as
   <code>.github/workflows/gateline-render-check.yml</code> from
@@ -162,7 +158,6 @@
   declared capabilities are explicitly allowed. The
   function <code>renderPermissionMap</code> in <code>render.ts</code>
   implements this.</p>
-  <!-- evidence: docs/DESIGN.md §8; packages/framework/src/render.ts -->
 
   <h2 id="p5-decorrelation-per-adapter-gradient">P5 decorrelation — per-adapter gradient</h2>
   <table>
@@ -182,13 +177,11 @@
       </tr>
     </tbody>
   </table>
-  <!-- evidence: docs/DESIGN.md §2; adapters/claude-code/README.md; adapters/copilot-cli/README.md; adapters/opencode/manifest.json -->
 
   <p>Dispatch-time enforcement: with more than one adapter configured, the
   orchestrator's dispatch seam <em>refuses</em> to bind Reviewer or Verifier
   to the Implementer's vendor (<code>VendorPinError</code>), so the
-  <code>avoid_vendor_of</code> registry pins are enforced rather than
-  conventional. With a single adapter (the default <code>gateline up</code>
+  <code>avoid_vendor_of</code> registry pins are enforced, not conventional. With a single adapter (the default <code>gateline up</code>
   with one <code>--adapter</code>) the pin is unsatisfiable and stays
   advisory: the router dispatches on the implementer's vendor and logs a P5
   advisory once per role. Later <code>--adapter</code> flags are how those
@@ -196,7 +189,7 @@
 
   <h2 id="renderer-constraints">Renderer constraints</h2>
   <ul>
-    <li>No runtime dependencies — <code>node:</code> builtins only. A dependency that forces an install step in <code>render-check.yml</code> is the bug, not the workflow</li>
+    <li>No runtime dependencies: <code>node:</code> builtins only. A dependency that forces an install step in <code>render-check.yml</code> is the bug, not the workflow</li>
     <li>Node 24 or later</li>
     <li>JSON manifests, not YAML</li>
     <li>Overlay splicing: <code>overlays/_all.md</code> is spliced into every agent;
@@ -205,7 +198,6 @@
     <li>A rendering that encounters an unparseable manifest or missing
       frontmatter raises <code>FrameworkError</code> and exits 1 (no guesswork)</li>
   </ul>
-  <!-- evidence: AGENTS.md "Invariants"; packages/framework/src/render.ts; .github/workflows/render-check.yml -->
 </article>
 <!-- content:end -->
 <nav class="pager" aria-label="Previous and next page">

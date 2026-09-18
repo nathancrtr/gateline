@@ -1,7 +1,7 @@
 // Portfolio rows (interaction I6) and the cross-source inbox: pure
 // derivations over RunSource reads — nothing here is stored (rule R1).
 
-import { type ClosureRecord, type GateEntry, type Profile, ROUND_CAP, type RunState } from '../record/schema.ts'
+import { bestEffortEscalations, type ClosureRecord, type GateEntry, type Profile, ROUND_CAP, type RunState } from '../record/schema.ts'
 import type { RunRef, RunSource } from '../sources/source.ts'
 import { deriveReadiness, type InboxItem } from './readiness.ts'
 
@@ -64,13 +64,18 @@ export async function summarizeRun(
   source: RunSource,
   ref: RunRef,
 ): Promise<{ summary: RunSummary; items: InboxItem[] }> {
-  const { state, error } = await source.readState(ref)
+  const { state, error, raw } = await source.readState(ref)
   const { items } = await deriveReadiness(source, ref)
   const touched = await source.lastTouched(ref, [''])
   const aheadOfOrigin = (await source.aheadOfOrigin?.(ref)) ?? null
   const behindOrigin = (await source.behindOrigin?.(ref)) ?? null
 
   if (!state) {
+    // Best-effort (#49): `escalations:` read on its own even though the rest
+    // of the file fails the contract — the run stays loudly `malformed`
+    // below, this only keeps the one field a governance surface needs most
+    // from silently reading as zero.
+    const escalationsOpen = (raw ? bestEffortEscalations(raw) : []).filter((e) => !e.resolved).length
     return {
       summary: {
         source: ref.source,
@@ -84,7 +89,7 @@ export async function summarizeRun(
         profile: 'full',
         gates: emptyLedger(),
         tasks: { total: 0, done: 0, maxRounds: 0, roundCap: ROUND_CAP },
-        escalationsOpen: 0,
+        escalationsOpen,
         budget: { limit: null, spent: null },
         updatedAt: touched?.time ?? null,
         needsHuman: items.length,

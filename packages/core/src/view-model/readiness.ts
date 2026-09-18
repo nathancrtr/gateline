@@ -85,9 +85,11 @@
 import { isOpenDispatch, parseLedger, ROLE_TIMEOUT_MS } from '../record/ledger.ts'
 import {
   BUDGET_REASON,
+  bestEffortEscalations,
   CLOSED_PHASE,
   DECLINED_REASON,
   ESCALATION_REASON,
+  type Escalation,
   G2_COMPLETE_STATUSES,
   type GateId,
   g2PacketReady,
@@ -323,49 +325,17 @@ export function pausedInstruction(state: RunState): string {
   }
 }
 
-export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<RunReadiness> {
+/**
+ * Unresolved escalations as inbox items — shared by the well-formed path below
+ * and the best-effort read of a malformed run's own `escalations:` key (#49),
+ * so the two render identically. `escalationIndex` addresses `state.escalations`
+ * for the write path, which still requires the whole file to parse: resolving
+ * one of these on a run that is otherwise malformed meets the API's own
+ * "run state is malformed" refusal, same as any other write to it would.
+ */
+function escalationItems(ref: RunRef, escalations: Escalation[]): InboxItem[] {
   const items: InboxItem[] = []
-  const validations: Record<string, Validation> = {}
-  const { state, error } = await source.readState(ref)
-
-  if (!state) {
-    const touched = await source.lastTouched(ref, ['state.yaml'])
-    return {
-      items: [
-        {
-          kind: 'malformed',
-          gate: null,
-          source: ref.source,
-          slug: ref.slug,
-          title: 'Malformed run state',
-          detail: error ?? 'state.yaml unreadable',
-          since: touched?.time ?? null,
-          reviewable: false,
-          problems: [error ?? 'state.yaml unreadable'],
-          packet: ['state.yaml'],
-          inflight: null,
-          escalationIndex: null,
-        },
-      ],
-      validations,
-    }
-  }
-
-  // A closed run needs nothing from anyone — including the escalations and
-  // round caps below, which a closure answers wholesale rather than one by one.
-  if (state.phase === CLOSED_PHASE) return { items, validations }
-
-  const artifacts = await source.listArtifacts(ref)
-  const has = (p: string) => artifacts.includes(p)
-  const validate = async (path: string): Promise<Validation> => {
-    const content = (await source.readArtifact(ref, path)) ?? ''
-    const v = await validateArtifact(path, content, source.templates)
-    validations[path] = v
-    return v
-  }
-
-  // --- Escalations (surface regardless of phase; a stalled run burns calendar).
-  state.escalations.forEach((esc, i) => {
+  escalations.forEach((esc, i) => {
     if (esc.resolved) return
     const since = esc.at ? Math.floor(Date.parse(esc.at) / 1000) || null : null
     items.push({
@@ -383,6 +353,53 @@ export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<R
       escalationIndex: i,
     })
   })
+  return items
+}
+
+export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<RunReadiness> {
+  const items: InboxItem[] = []
+  const validations: Record<string, Validation> = {}
+  const { state, error, raw } = await source.readState(ref)
+
+  if (!state) {
+    const touched = await source.lastTouched(ref, ['state.yaml'])
+    items.push({
+      kind: 'malformed',
+      gate: null,
+      source: ref.source,
+      slug: ref.slug,
+      title: 'Malformed run state',
+      detail: error ?? 'state.yaml unreadable',
+      since: touched?.time ?? null,
+      reviewable: false,
+      problems: [error ?? 'state.yaml unreadable'],
+      packet: ['state.yaml'],
+      inflight: null,
+      escalationIndex: null,
+    })
+    // Best-effort (#49): the rest of the file failed the contract, but an
+    // unresolved escalation is worth surfacing on its own — read
+    // independently, never guessed at, and it changes nothing about the run
+    // still being loudly malformed above.
+    items.push(...escalationItems(ref, raw ? bestEffortEscalations(raw) : []))
+    return { items, validations }
+  }
+
+  // A closed run needs nothing from anyone — including the escalations and
+  // round caps below, which a closure answers wholesale rather than one by one.
+  if (state.phase === CLOSED_PHASE) return { items, validations }
+
+  const artifacts = await source.listArtifacts(ref)
+  const has = (p: string) => artifacts.includes(p)
+  const validate = async (path: string): Promise<Validation> => {
+    const content = (await source.readArtifact(ref, path)) ?? ''
+    const v = await validateArtifact(path, content, source.templates)
+    validations[path] = v
+    return v
+  }
+
+  // --- Escalations (surface regardless of phase; a stalled run burns calendar).
+  items.push(...escalationItems(ref, state.escalations))
 
   // --- Round-cap breaches.
   for (const task of state.tasks) {

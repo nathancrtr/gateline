@@ -3,7 +3,17 @@ import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { buildPortfolio, deriveReadiness, parseRunState, pausedInstruction, ROUND_CAP, type RunRef, type RunState } from '../src/index.ts'
+import {
+  bestEffortEscalations,
+  buildPortfolio,
+  deriveReadiness,
+  parseRunState,
+  pausedInstruction,
+  ROUND_CAP,
+  type RunRef,
+  type RunState,
+  summarizeRun,
+} from '../src/index.ts'
 import { dropFixture, type FixtureContext, makeFixture } from './fixture.helper.ts'
 
 /** The sentence a pause with nothing specific to say still gets. */
@@ -183,6 +193,33 @@ const entry = (role: string, agoMin: number, closed: boolean): string =>
   `at: "${new Date(Date.now() - agoMin * MIN).toISOString()}", role: ${role}, task: null, round: null, ` +
   `adapter: claude-code, model: m, tokens_in: null, tokens_out: null, cost_usd: ${closed ? '0.42' : 'null'}`
 
+/**
+ * A state.yaml with no `gates:` at all — full-schema parsing fails, same as
+ * `bad-state`, but the YAML itself is valid and `escalations:` is whatever the
+ * caller supplies (#49). This is the fixture the best-effort read exists for:
+ * a run that stays loudly malformed while its escalations are still readable.
+ */
+function addMalformedWithEscalations(dir: string, slug: string, escalationsYaml: string): void {
+  const git = (args: string[]) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' })
+  git(['checkout', '-q', '-b', `run/${slug}`, 'main'])
+  const runDir = join(dir, 'runs', slug)
+  mkdirSync(runDir, { recursive: true })
+  writeFileSync(
+    join(runDir, 'state.yaml'),
+    `run: ${slug}
+branch: run/${slug}
+phase: implement
+
+escalations:
+${escalationsYaml}
+`,
+    'utf8',
+  )
+  git(['add', '-A'])
+  git(['commit', '-q', '-m', `state(${slug}): artifacts`])
+  git(['checkout', '-q', 'main'])
+}
+
 beforeAll(async () => {
   ctx = await makeFixture()
   addPausedRun(ctx.repo.dir, 'staged-run', 'staged')
@@ -198,6 +235,15 @@ beforeAll(async () => {
   addLedgerRun(ctx.repo.dir, 'g0-producer-landed', { packetAgoMin: 60, ledger: [entry('analyst', 5, true)] })
   addLedgerRun(ctx.repo.dir, 'g0-other-role', { packetAgoMin: 60, ledger: [entry('architect', 5, false)] })
   addLedgerRun(ctx.repo.dir, 'g0-open-before-packet', { packetAgoMin: 60, ledger: [entry('analyst', 120, false)] })
+  addMalformedWithEscalations(
+    ctx.repo.dir,
+    'malformed-with-escalation',
+    `  - at: "${new Date(Date.now() - 5 * MIN).toISOString()}"
+    from_role: reviewer
+    reason: "contract dispute — needs a human"
+    resolved: false`,
+  )
+  addMalformedWithEscalations(ctx.repo.dir, 'malformed-bad-escalations', '  - reason: "missing the required resolved field"')
   refs = new Map((await ctx.source.listRuns()).map((r) => [r.slug, r]))
 })
 afterAll(() => dropFixture(ctx))
@@ -220,8 +266,10 @@ describe('run discovery', () => {
       'g1-pending',
       'g2-pending',
       'g3-pending',
+      'malformed-bad-escalations',
       'malformed-release',
       'malformed-spec',
+      'malformed-with-escalation',
       'patch-g1-pending',
       'patch-g2-pending',
       'paused-budget',
@@ -500,6 +548,74 @@ describe('readiness derivation (§2.3, one row per test)', () => {
   it('done run needs nothing', async () => {
     const items = await gateItem('done-merged')
     expect(items).toHaveLength(0)
+  })
+})
+
+/**
+ * #49: `escalations:` is read on its own even when the rest of state.yaml
+ * fails the contract. The run still renders loudly as malformed — that item
+ * is untouched — this only adds a best-effort read of the one key alongside
+ * it, both in the inbox (`deriveReadiness`) and the portfolio row
+ * (`summarizeRun`).
+ */
+describe('bestEffortEscalations (#49)', () => {
+  it('reads escalations: on its own, ignoring an otherwise-invalid document', () => {
+    const text = `run: toy
+phase: [this is
+  not: valid for phase, but escalations below never gets parsed
+`
+    expect(bestEffortEscalations(text)).toEqual([])
+  })
+
+  it('a well-formed list parses even though other required keys are absent', () => {
+    const result = bestEffortEscalations(`run: toy
+escalations:
+  - reason: "needs a human"
+    resolved: false
+  - reason: "already handled"
+    resolved: true
+    resolved_by: Operator
+`)
+    expect(result).toHaveLength(2)
+    expect(result[0]).toMatchObject({ reason: 'needs a human', resolved: false })
+    expect(result[1]).toMatchObject({ reason: 'already handled', resolved: true, resolved_by: 'Operator' })
+  })
+
+  it('no escalations key, a non-array value, and a list that fails its own schema all resolve to none', () => {
+    expect(bestEffortEscalations('run: toy\n')).toEqual([])
+    expect(bestEffortEscalations('run: toy\nescalations: not-a-list\n')).toEqual([])
+    expect(bestEffortEscalations('run: toy\nescalations:\n  - reason: "missing resolved"\n')).toEqual([])
+  })
+})
+
+describe('best-effort escalations independent of full state-schema validity (#49)', () => {
+  it('a well-formed escalations list surfaces alongside the malformed-run item', async () => {
+    const ref = refs.get('malformed-with-escalation')!
+    const { items } = await deriveReadiness(ctx.source, ref)
+    expect(items).toHaveLength(2)
+    expect(items[0]).toMatchObject({ kind: 'malformed', reviewable: false })
+    expect(items[1]).toMatchObject({
+      kind: 'escalation',
+      escalationIndex: 0,
+      title: 'Escalation from reviewer',
+      detail: 'contract dispute — needs a human',
+      reviewable: true,
+    })
+
+    const { summary } = await summarizeRun(ctx.source, ref)
+    expect(summary.malformed).not.toBeNull()
+    expect(summary.escalationsOpen).toBe(1)
+  })
+
+  it('a malformed escalations list stays at zero — no throw, no guess', async () => {
+    const ref = refs.get('malformed-bad-escalations')!
+    const { items } = await deriveReadiness(ctx.source, ref)
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ kind: 'malformed', reviewable: false })
+
+    const { summary } = await summarizeRun(ctx.source, ref)
+    expect(summary.malformed).not.toBeNull()
+    expect(summary.escalationsOpen).toBe(0)
   })
 })
 

@@ -1,7 +1,7 @@
 {
   "_comment": "Site manifest for scripts/build-site.py. Declares the nav, the sidebar tree, the reading order used for prev/next, and per-page <title>/description. Content lives in the page files themselves, between the content markers; this file owns everything around it.",
 
-  "wordmark": "gateline",
+  "wordmark": ["gate", "line"],
   "titleSuffix": " — gateline",
   "footer": "gateline is an open-source framework (Apache-2.0). &copy; the gateline maintainers.",
 
@@ -15,6 +15,7 @@
           "path": "index.html",
           "title": "gateline — artifact-driven, human-gated agent pipelines",
           "rawTitle": true,
+          "heading": "gateline",
           "nav": "Home",
           "layout": "landing",
           "description": "gateline is an open-source framework for running the software development lifecycle as a team of semi-autonomous agents, with named humans approving at phase gates."

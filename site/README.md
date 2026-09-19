@@ -35,7 +35,10 @@ python3 site/scripts/check-names.py          # exit 1 on a retired name
 ```
 
 To add, remove, reorder or retitle a page, edit `site.json` and rebuild; the
-manifest's order is the reading order for the pager.
+manifest's order is the reading order for the pager. Every page sits in the
+same frame, the landing included; its `"layout": "landing"` only drops the
+pager, and its `heading` is the `<h1>` where that should differ from the
+`<title>`.
 
 ## The API reference
 
@@ -50,6 +53,36 @@ npm run docs:api --prefix site
 
 `docs:api` runs TypeDoc and then the shell builder, so a regeneration cannot
 drop the back-to-site bar from the generated pages.
+
+## Design
+
+The site is set like signage: a white ground, ink lettering, one signal blue,
+and rules instead of boxes, after the tradition (British Rail's 1965 identity,
+GOV.UK's functional palette) whose whole job is guiding people through gates.
+Every colour has a job and there are no tints or ornaments beyond that; the
+3px ink band at the top and the `gate|line` wordmark are the only signage on a
+page. It is light-only (`color-scheme: light`), plain CSS, no JavaScript.
+
+`assets/site.css` is the token file and the whole stylesheet: the palette,
+the four type faces and the frame widths are the `:root` custom properties at
+the top, and every colour below is one of them. The wordmark is two spans,
+`<span>gate</span><span>line</span>`, that the builder emits from the manifest;
+the rule between them is a border, so assistive technology hears "gateline".
+
+Fonts are vendored under `assets/fonts/`, one folder per family with its
+licence beside it, and nothing loads from a font host. Public Sans (body and
+headings), Atkinson Hyperlegible Next (navigation, tables, labels), IBM Plex
+Mono (code) and Overpass (the wordmark) are all under the SIL Open Font
+License; `assets/fonts/README.md` records each family's version and source.
+
+The generated API pages are skinned, not themed: `assets/typedoc.css` (linked
+through `customCss` in `typedoc.json`) sets TypeDoc's `--light-color-*`
+variables to the site's tokens, sets the `--dark-color-*` variables to the
+same light values and hides the theme toggle, so a dark-OS visitor gets the
+light site, and restyles the fonts, frame, code panels and navigation.
+`assets/api-bar.css` styles the header that `build-site.py` injects into
+every `api/` page as the site header. When a token changes in `site.css`, the
+same value changes in those two files.
 
 ## Keeping it true
 

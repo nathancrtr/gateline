@@ -1,70 +1,181 @@
-/* === gateline documentation site — shared stylesheet ===
-   Technical-book aesthetic: neutral ink-and-white base, deep-teal accent,
-   system font stack, monospace for code, prefers-color-scheme dark variant.
-   No external assets, no JavaScript required. */
+/* === gateline documentation site — Direction B, "Gateline" ==================
+   White ground, ink lettering, one signal blue, everything ruled. Lineage:
+   British Rail 1965 (Rail Alphabet, Rail Blue + pearl grey), GOV.UK's
+   functional colours, Stripe's three-column frame, Go's grey ramp.
 
-:root {
-  --bg: #ffffff;
-  --bg-subtle: #f6f7f8;
-  --fg: #1a1a1a;
-  --fg-muted: #555555;
-  --fg-faint: #888888;
-  --accent: #0d7377;
-  --accent-muted: #3a9b9f;
-  --accent-bg: #e6f4f4;
-  --border: #d0d4d8;
-  --border-subtle: #e6e8eb;
-  --code-bg: #f0f1f3;
-  --code-fg: #1a1a1a;
-  --callout-bg: #fafafa;
-  --callout-border: #e6e8eb;
-  --exercise-bg: #fdf8f0;
-  --exercise-border: #e8dcc6;
-  --exercise-rule: #8f6318;
-  --exercise-output-bg: #f7f4ee;
-  --check-bg: #f2f9f9;
-  --check-border: #c4e0e0;
-  --check-label: #0a5f62;
-  --note-bg: #f5f5fb;
-  --note-border: #d5d5ea;
-  --note-rule: #4a4a9c;
-  --measure: 72ch;
-  --line-height: 1.75;
-  --header-height: 3.5rem;
-  /* Foreground for text sitting on an --accent fill. The accent inverts
-     between themes, so this has to invert with it. */
-  --on-accent: #ffffff;
+   Fonts, vendored under assets/fonts/ (see assets/fonts/README.md):
+     Public Sans                 400, 400 italic, 600, 700   body, headings
+     Atkinson Hyperlegible Next  400, 500, 700               nav, sidebar, rail,
+                                                             tables, captions,
+                                                             labels, diagrams
+     IBM Plex Mono               400, 500                    code (ligatures off)
+     Overpass                    700                         wordmark only
+   All four are OFL. Nothing on the site loads from a third-party host.
+   ========================================================================== */
+
+/* ---- fonts --------------------------------------------------------------- */
+
+/* Paths are relative to this file. font-display: swap — text renders in the
+   fallback face until the file arrives; the metrics are close enough that
+   the swap does not reflow the page much. */
+
+@font-face {
+  font-family: "Public Sans";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/public-sans/PublicSans-Regular.woff2") format("woff2");
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #1a1a1d;
-    --bg-subtle: #202124;
-    --fg: #e4e4e6;
-    --fg-muted: #a0a4ab;
-    --fg-faint: #6b6f76;
-    --accent: #5bc0c4;
-    --accent-muted: #3a9b9f;
-    --accent-bg: #1a2e2f;
-    --border: #3a3c40;
-    --border-subtle: #2a2c30;
-    --code-bg: #25262a;
-    --code-fg: #e4e4e6;
-    --callout-bg: #202124;
-    --callout-border: #2a2c30;
-    --exercise-bg: #26221b;
-    --exercise-border: #3d3629;
-    --exercise-rule: #d9a94e;
-    --exercise-output-bg: #1f1c16;
-    --check-bg: #1c2628;
-    --check-border: #33474a;
-    --check-label: #7fd2d5;
-    --note-bg: #1e1e2b;
-    --note-border: #35354d;
-    --note-rule: #9a9ae0;
-    /* --accent is a light teal in dark mode, so accent fills take dark ink. */
-    --on-accent: #10262a;
-  }
+@font-face {
+  font-family: "Public Sans";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/public-sans/PublicSans-Italic.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Public Sans";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("fonts/public-sans/PublicSans-SemiBold.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Public Sans";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/public-sans/PublicSans-Bold.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Atkinson Hyperlegible Next";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/atkinson-hyperlegible-next/AtkinsonHyperlegibleNext-Regular.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Atkinson Hyperlegible Next";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("fonts/atkinson-hyperlegible-next/AtkinsonHyperlegibleNext-Medium.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Atkinson Hyperlegible Next";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/atkinson-hyperlegible-next/AtkinsonHyperlegibleNext-Bold.woff2") format("woff2");
+}
+
+/* IBM Plex Mono ships split by script; Latin1 covers ASCII and Latin-1, Latin2
+   the extended Latin block. The ranges are the ones IBM's own CSS declares. */
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/ibm-plex-mono/IBMPlexMono-Regular-Latin1.woff2") format("woff2");
+  unicode-range: U+0020-007E, U+00A0-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2013-2014, U+2018-201A, U+201C-201E, U+2020-2022, U+2026, U+2030, U+2039-203A, U+2044, U+20AC, U+2122, U+2212, U+FB01-FB02;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/ibm-plex-mono/IBMPlexMono-Regular-Latin2.woff2") format("woff2");
+  unicode-range: U+0100-0101, U+0104-0130, U+0132-0151, U+0154-017F, U+018F, U+0192, U+01A0-01A1, U+01AF-01B0, U+01FA-01FF, U+0218-021B, U+0237, U+0259, U+1E80-1E85, U+1E9E, U+20A1, U+20A4, U+20A6, U+20A8-20AA, U+20AD-20AE, U+20B1-20B2, U+20B4-20B5, U+20B8-20BA, U+20BD, U+20BF;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("fonts/ibm-plex-mono/IBMPlexMono-Medium-Latin1.woff2") format("woff2");
+  unicode-range: U+0020-007E, U+00A0-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2013-2014, U+2018-201A, U+201C-201E, U+2020-2022, U+2026, U+2030, U+2039-203A, U+2044, U+20AC, U+2122, U+2212, U+FB01-FB02;
+}
+
+@font-face {
+  font-family: "IBM Plex Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("fonts/ibm-plex-mono/IBMPlexMono-Medium-Latin2.woff2") format("woff2");
+  unicode-range: U+0100-0101, U+0104-0130, U+0132-0151, U+0154-017F, U+018F, U+0192, U+01A0-01A1, U+01AF-01B0, U+01FA-01FF, U+0218-021B, U+0237, U+0259, U+1E80-1E85, U+1E9E, U+20A1, U+20A4, U+20A6, U+20A8-20AA, U+20AD-20AE, U+20B1-20B2, U+20B4-20B5, U+20B8-20BA, U+20BD, U+20BF;
+}
+
+@font-face {
+  font-family: "Overpass";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("fonts/overpass/Overpass-Bold.woff2") format("woff2");
+}
+
+/* ---- tokens -------------------------------------------------------------- */
+
+:root {
+  color-scheme: light;
+
+  /* Palette — every colour on the site is one of these. */
+  --color-ground: #ffffff;
+  --color-surface: #f2f3f4;          /* sidebar column, code panels, table heads */
+  --color-ink: #0b0c0c;
+  --color-muted: #4f5459;            /* 7.6:1 on ground */
+  --color-line: #c8cacc;             /* hairlines, 1px */
+  --color-line-strong: #0b0c0c;      /* 2px rules; 3px top band */
+  --color-accent: #1d70b8;           /* signal blue, 5.2:1: links, active nav */
+  --color-accent-hover: #0b3d78;
+  --color-accent-underline: #9cc1e3; /* prose link underlines */
+  --color-accent-on: #ffffff;
+  --color-approved: #0f7a52;         /* gate state only */
+  --color-declined: #c03030;         /* gate state / errors only; 5.7:1 on ground */
+  --color-focus: #ffdd00;            /* focus rings; "awaiting a human" */
+  --color-note-bg: #eaf2fa;
+  --color-note-label: #1d70b8;
+  --color-caution-bg: #fff8d6;
+  --color-caution-label: #7a6400;
+  --color-danger-bg: #fbeceb;
+  --color-danger-label: #c03030;     /* 4.9:1 on the danger tint */
+  --color-selection: #d6e6f5;
+
+  /* Code highlight tones (four, shared with the TypeDoc theme later). No page
+     in this set carries syntax markup yet, so these are declared, not used. */
+  --code-tone-1: var(--color-ink);
+  --code-tone-2: var(--color-accent);
+  --code-tone-3: var(--color-approved);
+  --code-tone-4: var(--color-muted);
+
+  /* Legacy names the inline SVG diagrams reference directly
+     (fill="var(--bg-subtle,…)", stroke="var(--fg-faint)"). Aliases, not new
+     colours: they resolve to surface and muted. */
+  --bg-subtle: var(--color-surface);
+  --fg-faint: var(--color-muted);
+
+  /* Type */
+  --font-body: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-ui: "Atkinson Hyperlegible Next", "Public Sans", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  --font-mark: "Overpass", "Public Sans", Arial, sans-serif;
+
+  /* Frame */
+  --frame-w: 1320px;   /* outer width, gutters included */
+  --gutter: 24px;
+  --sidebar-w: 256px;
+  --rail-w: 200px;
+  --col-gap: 48px;
+  --measure: 720px;
+  --header-h: 56px;
+  --band: 3px;
 }
 
 /* ---- reset & base -------------------------------------------------------- */
@@ -78,354 +189,578 @@
 }
 
 html {
-  font-size: 105%;
+  font-size: 100%;
   -webkit-text-size-adjust: 100%;
-  scroll-behavior: smooth;
+  overflow-x: clip; /* the sidebar surface bleeds left of the frame */
 }
 
 body {
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  line-height: var(--line-height);
-  color: var(--fg);
-  background: var(--bg);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  font-family: var(--font-body);
+  font-size: 1.0625rem;      /* 17px */
+  line-height: 1.53;         /* 26px */
+  color: var(--color-ink);
+  background: var(--color-ground);
+  font-kerning: normal;
+  -webkit-font-smoothing: antialiased;
 }
 
-/* ---- header -------------------------------------------------------------- */
+::selection {
+  background: var(--color-selection);
+  color: var(--color-ink);
+}
 
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+}
+
+/* Focus: the GOV.UK yellow, filled behind links so it is impossible to miss. */
+:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+a:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 0;
+  background: var(--color-focus);
+  text-decoration: none;
+  box-decoration-break: clone;
+}
+
+/* Ink on the yellow, whatever colour the link had (blue on yellow is 3.9:1).
+   !important because every link family sets its own colour later in the file. */
+a:focus-visible,
+a:focus-visible code,
+a:focus-visible .pager-title,
+a:focus-visible .pager-label {
+  color: var(--color-ink) !important;
+}
+
+/* ---- skip link ----------------------------------------------------------- */
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: calc(var(--band) + 8px);
+  z-index: 30;
+  padding: 6px 12px;
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
+  color: var(--color-accent-on);
+  background: var(--color-ink);
+  text-decoration: none;
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  left: var(--gutter);
+  background: var(--color-ink);
+  color: var(--color-accent-on);
+}
+
+/* ---- top bar ------------------------------------------------------------- */
+
+/* The 3px ink band across the top is the one piece of signage on every page.
+   Its horizontal padding lines the wordmark up with the frame below. */
 .site-header {
   position: sticky;
   top: 0;
   z-index: 10;
-  height: var(--header-height);
+  height: var(--header-h);
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: space-between;
-  padding: 0 1.5rem;
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
-  backdrop-filter: blur(6px);
+  gap: 24px;
+  padding: 0 max(var(--gutter), calc((100% - var(--frame-w)) / 2 + var(--gutter)));
+  background: var(--color-ground);
+  border-top: var(--band) solid var(--color-line-strong);
+  border-bottom: 1px solid var(--color-line);
 }
 
+/* Wordmark: "gate|line", the | in signal blue. The builder emits the word as
+   two spans, <span>gate</span><span>line</span>, so the accessible name is the
+   plain word and the line between the halves is a 2px accent rule rather than
+   a glyph. */
 .wordmark {
-  font-size: 1.15rem;
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mark);
+  font-size: 1.25rem;        /* 20px */
   font-weight: 700;
-  letter-spacing: 0.02em;
-  color: var(--fg);
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--color-ink);
   text-decoration: none;
 }
 
+.wordmark > span:first-child {
+  padding-right: 0.28em;
+  border-right: 2px solid var(--color-accent);
+}
+
+.wordmark > span:last-child {
+  padding-left: 0.28em;
+}
+
 .wordmark:hover {
-  color: var(--accent);
+  color: var(--color-accent);
+}
+
+.wordmark:focus-visible {
+  background: none;
+  outline-offset: 4px;
 }
 
 .site-nav {
   display: flex;
-  gap: 0.25rem;
+  align-items: stretch;
+  gap: 28px;
+  min-width: 0;
 }
 
 .site-nav a {
-  padding: 0.35rem 0.75rem;
-  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  margin-bottom: -1px;               /* the active rule sits on the hairline */
+  border-bottom: 2px solid transparent;
+  font-family: var(--font-ui);
   font-size: 0.875rem;
   font-weight: 500;
-  color: var(--fg-muted);
+  color: var(--color-muted);
   text-decoration: none;
-  transition: color 0.15s, background 0.15s;
+  white-space: nowrap;
 }
 
-.site-nav a:hover,
-.site-nav a.active {
-  color: var(--accent);
-  background: var(--accent-bg);
+.site-nav a:hover {
+  color: var(--color-ink);
 }
 
-/* ---- main content area --------------------------------------------------- */
+.site-nav a.active,
+.site-nav a[aria-current="true"] {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
 
-main {
+.site-nav a:focus-visible {
+  outline-offset: -3px;
+}
+
+/* ---- frame: three columns ------------------------------------------------ */
+
+/* Source order is main → toc → sidebar; the grid re-places them. The sidebar
+   column sits on a surface that runs the full page height and bleeds to the
+   left edge of the viewport (drawn by ::before), with a hairline where it
+   meets the content. */
+.layout {
+  position: relative;
+  isolation: isolate;
   flex: 1;
   width: 100%;
-  max-width: 56rem;
+  max-width: var(--frame-w);
   margin: 0 auto;
-  padding: 2.5rem 1.5rem 4rem;
-}
-
-/* ---- landing page -------------------------------------------------------- */
-
-.landing-intro {
-  max-width: var(--measure);
-  margin: 2rem 0 3rem;
-}
-
-.landing-intro h1 {
-  font-size: 2.25rem;
-  font-weight: 700;
-  line-height: 1.25;
-  margin-bottom: 0.75rem;
-  color: var(--fg);
-}
-
-.landing-intro .lede {
-  font-size: 1.15rem;
-  color: var(--fg-muted);
-  line-height: var(--line-height);
-}
-
-.section-nav {
+  padding: 0 var(--gutter);
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
-  gap: 1.5rem;
-  margin: 3rem 0 2rem;
+  grid-template-columns: var(--sidebar-w) minmax(0, 1fr) var(--rail-w);
+  column-gap: var(--col-gap);
+  align-items: start;
 }
 
-.section-nav-card {
-  padding: 1.5rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-subtle);
-  transition: border-color 0.15s;
+.layout::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 0;
+  bottom: 0;
+  left: -100vw;
+  right: calc(100% - var(--gutter) - var(--sidebar-w));
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-line);
 }
 
-.section-nav-card h2 {
-  font-size: 1.15rem;
-  font-weight: 600;
-  margin-bottom: 0.35rem;
+.layout > main {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  max-width: var(--measure);
+  padding: 40px 0 64px;
 }
 
-.section-nav-card h2 a {
-  color: var(--fg);
+.layout > .sidebar,
+.layout > .toc {
+  grid-row: 1;
+  position: sticky;
+  top: var(--header-h);
+  max-height: calc(100vh - var(--header-h));
+  overflow-y: auto;
+  padding: 40px 0 32px;
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.layout > .sidebar {
+  grid-column: 1;
+}
+
+.layout > .toc {
+  grid-column: 3;
+}
+
+/* ---- sidebar (site tree) ------------------------------------------------- */
+
+.sidebar-title,
+.toc-title {
+  margin: 0 0 12px;
+  padding-top: 8px;
+  border-top: 2px solid var(--color-line-strong);
+  font-weight: 700;
+  color: var(--color-ink);
+}
+
+.sidebar-title {
+  margin-right: 16px;
+}
+
+.sidebar-section {
+  margin: 20px 16px 4px 0;
+  font-weight: 700;
+}
+
+.sidebar-section:first-of-type {
+  margin-top: 0;
+}
+
+.sidebar-section a {
+  color: var(--color-ink);
   text-decoration: none;
 }
 
-.section-nav-card h2 a:hover {
-  color: var(--accent);
+.sidebar-section a:hover {
+  color: var(--color-accent);
 }
 
-.section-nav-card p {
-  font-size: 0.9rem;
-  color: var(--fg-muted);
-  line-height: 1.6;
+.sidebar-list {
+  list-style: none;
 }
 
-/* ---- doc pages (reference & how-it-works) -------------------------------- */
-
-.doc {
-  max-width: var(--measure);
+.sidebar-list a {
+  display: block;
+  padding: 4px 16px 4px 0;
+  margin-right: 0;
+  border-right: 3px solid transparent;
+  color: var(--color-muted);
+  text-decoration: none;
 }
 
-.doc h1 {
-  font-size: 2rem;
+.sidebar-list a:hover {
+  color: var(--color-ink);
+}
+
+/* Current page: the 3px signal rule on the sidebar's right edge, where the
+   surface meets the content. */
+.sidebar-list a[aria-current="page"] {
+  color: var(--color-accent);
   font-weight: 700;
-  line-height: 1.3;
-  margin-bottom: 0.75rem;
-  color: var(--fg);
+  border-right-color: var(--color-accent);
+}
+
+/* ---- right rail (on this page) ------------------------------------------- */
+
+.toc-list {
+  list-style: none;
+}
+
+.toc-list a {
+  display: block;
+  padding: 4px 0;
+  color: var(--color-muted);
+  text-decoration: none;
+}
+
+.toc-list a:hover {
+  color: var(--color-ink);
+}
+
+/* ---- page title ---------------------------------------------------------- */
+
+main > h1,
+.doc h1 {
+  margin: 0 0 16px;
+  font-size: 2rem;            /* 32px */
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+  color: var(--color-ink);
+}
+
+/* ---- prose --------------------------------------------------------------- */
+
+.doc h2,
+.doc h3,
+.doc h4 {
+  scroll-margin-top: calc(var(--header-h) + 16px);
+  color: var(--color-ink);
 }
 
 .doc h2 {
-  font-size: 1.35rem;
+  margin: 48px 0 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--color-line);
+  font-size: 1.5rem;          /* 24px */
   font-weight: 600;
-  margin-top: 2.5rem;
-  margin-bottom: 0.5rem;
-  padding-bottom: 0.25rem;
-  border-bottom: 1px solid var(--border-subtle);
-  color: var(--fg);
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.doc > h2:first-child {
+  margin-top: 24px;
 }
 
 .doc h3 {
-  font-size: 1.1rem;
+  margin: 32px 0 8px;
+  font-size: 1.125rem;        /* 18px */
   font-weight: 600;
-  margin-top: 1.75rem;
-  margin-bottom: 0.4rem;
-  color: var(--fg);
+  line-height: 1.3;
+}
+
+.doc h4 {
+  margin: 24px 0 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .doc p {
-  margin-bottom: 1rem;
-  color: var(--fg);
+  margin: 0 0 16px;
 }
 
 .doc .lede {
-  font-size: 1.1rem;
-  color: var(--fg-muted);
-  margin-bottom: 1.5rem;
+  margin-bottom: 24px;
+  font-size: 1.1875rem;       /* 19px */
+  line-height: 1.5;
+  color: var(--color-ink);
+}
+
+.doc strong {
+  font-weight: 600;
 }
 
 .doc ul,
 .doc ol {
-  margin: 0 0 1rem 1.5rem;
+  margin: 0 0 16px;
+  padding-left: 24px;
 }
 
 .doc li {
-  margin-bottom: 0.35rem;
+  margin-bottom: 6px;
 }
 
 .doc li > ul,
 .doc li > ol {
-  margin-top: 0.35rem;
+  margin: 6px 0 0;
+}
+
+.doc li::marker {
+  color: var(--color-muted);
 }
 
 .doc a {
-  color: var(--accent);
+  color: var(--color-accent);
   text-decoration: underline;
-  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--color-accent-underline);
+  text-underline-offset: 0.18em;
 }
 
 .doc a:hover {
-  color: var(--accent-muted);
+  color: var(--color-accent-hover);
+  text-decoration-color: var(--color-accent-hover);
 }
 
-.doc code {
-  font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
-  font-size: 0.875em;
-  background: var(--code-bg);
-  color: var(--code-fg);
-  padding: 0.1em 0.3em;
-  border-radius: 3px;
-}
-
-.doc pre {
-  margin: 0 0 1.25rem;
-  padding: 1rem;
-  border-radius: 6px;
-  background: var(--code-bg);
-  border: 1px solid var(--border-subtle);
-  overflow-x: auto;
-}
-
-.doc pre code {
-  background: none;
-  padding: 0;
-  font-size: 0.85rem;
-  line-height: 1.6;
+.doc hr {
+  margin: 48px 0;
+  border: 0;
+  border-top: 2px solid var(--color-line-strong);
 }
 
 .doc blockquote {
-  margin: 0 0 1.25rem;
-  padding: 0.75rem 1rem;
-  border-left: 3px solid var(--accent);
-  background: var(--callout-bg);
-  border-radius: 0 6px 6px 0;
-  color: var(--fg-muted);
-  font-style: italic;
+  margin: 0 0 16px;
+  padding: 0 0 0 20px;
+  border-left: 1px solid var(--color-line);
+  color: var(--color-muted);
 }
+
+/* Definition lists: term on its own line, body indented. */
+.doc dl {
+  margin: 0 0 16px;
+}
+
+.doc dt {
+  margin-top: 14px;
+  font-weight: 600;
+}
+
+.doc dt:first-child {
+  margin-top: 0;
+}
+
+.doc dd {
+  margin: 4px 0 0 24px;
+}
+
+.doc dd > p {
+  margin-bottom: 8px;
+}
+
+.doc dd > p:last-child {
+  margin-bottom: 0;
+}
+
+/* ---- code ---------------------------------------------------------------- */
+
+.doc code {
+  font-size: 0.875em;
+  padding: 0.05em 0.2em;
+  background: var(--color-surface);
+  border-radius: 3px;
+  color: var(--color-ink);
+}
+
+.doc a code {
+  color: inherit;
+}
+
+/* Code inside a heading is the heading; no panel behind it. */
+.doc h1 code,
+.doc h2 code,
+.doc h3 code,
+.doc h4 code {
+  padding: 0;
+  background: none;
+  font-size: 0.9em;
+}
+
+.doc pre {
+  margin: 0 0 20px;
+  padding: 12px 16px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 3px;
+  overflow-x: auto;
+  tab-size: 4;
+}
+
+.doc pre code {
+  display: block;
+  padding: 0;
+  background: none;
+  font-size: 0.875rem;        /* 14px */
+  line-height: 1.6;
+  color: var(--color-ink);
+}
+
+.doc pre.long {
+  max-height: 30rem;
+  overflow-y: auto;
+}
+
+/* ---- tables -------------------------------------------------------------- */
 
 .doc table {
   width: 100%;
-  margin: 0 0 1.5rem;
+  margin: 16px 0 24px;
   border-collapse: collapse;
-  font-size: 0.9rem;
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
 }
 
 .doc th,
 .doc td {
+  padding: 8px 12px;
   text-align: left;
-  padding: 0.45rem 0.75rem;
-  border-bottom: 1px solid var(--border-subtle);
   vertical-align: top;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.doc th:first-child,
+.doc td:first-child {
+  padding-left: 0;
 }
 
 .doc th {
-  font-weight: 600;
-  color: var(--fg-muted);
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-weight: 700;
+  color: var(--color-ink);
+  background: var(--color-surface);
+  border-bottom: 2px solid var(--color-line-strong);
 }
 
-.doc tr:last-child td {
-  border-bottom: none;
+.doc th:first-child {
+  padding-left: 12px;
 }
 
-.doc hr {
-  border: none;
-  border-top: 1px solid var(--border);
-  margin: 2.5rem 0;
+.doc td:first-child {
+  padding-left: 12px;
 }
+
+/* Code in cells wraps at its spaces: the grammar tables carry 50-character
+   commit subjects, and a table wider than the column pushes the page sideways. */
+.doc table code {
+  font-size: 0.9em;
+  white-space: normal;
+}
+
+/* First columns are names (gates, flags, keys); the longest in the set is
+   40 characters, so they are kept on one line. */
+.doc td:first-child {
+  white-space: nowrap;
+}
+
+/* Gate and state cells: a 6px filled square in the signal colour before the
+   text label. No page in this set carries state columns yet; the grammar is
+   here for the tables that will. */
+.state::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  vertical-align: 1px;
+  background: currentColor;
+}
+
+.state-approved { color: var(--color-approved); }
+.state-declined { color: var(--color-declined); }
+.state-waiting  { color: var(--color-caution-label); }
+
+/* ---- figures and diagrams ------------------------------------------------ */
 
 .doc figure {
-  margin: 1.25rem 0;
+  margin: 24px 0;
 }
 
 .doc figcaption {
-  font-size: 0.85rem;
-  color: var(--fg-muted);
-  margin-top: 0.35rem;
+  margin: 0 0 12px;
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--color-muted);
 }
-
-.doc .callout {
-  margin: 0 0 1.25rem;
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--callout-border);
-  border-radius: 6px;
-  background: var(--callout-bg);
-  font-size: 0.925rem;
-  color: var(--fg-muted);
-}
-
-/* ---- footer -------------------------------------------------------------- */
-
-.site-footer {
-  padding: 1.25rem 1.5rem;
-  border-top: 1px solid var(--border);
-  text-align: center;
-  font-size: 0.8rem;
-  color: var(--fg-faint);
-}
-
-/* ---- responsive ---------------------------------------------------------- */
-
-@media (max-width: 600px) {
-  html {
-    font-size: 100%;
-  }
-
-  .site-header {
-    padding: 0 1rem;
-  }
-
-  /* four top-level sections have to fit a phone: tighten the links and let
-     the nav scroll rather than push the page sideways. */
-  .site-nav {
-    gap: 0;
-    min-width: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .site-nav::-webkit-scrollbar {
-    display: none;
-  }
-
-  .site-nav a {
-    padding: 0.35rem 0.4rem;
-    font-size: 0.8rem;
-    white-space: nowrap;
-  }
-
-  main {
-    padding: 1.5rem 1rem 3rem;
-  }
-
-  .landing-intro h1 {
-    font-size: 1.75rem;
-  }
-
-  .doc h1 {
-    font-size: 1.6rem;
-  }
-
-  .section-nav {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ---- diagram figures ---------------------------------------------------- */
 
 .doc figure.diagram {
-  margin: 2rem 0;
-  max-width: var(--measure);
+  margin: 28px 0 32px;
+  padding: 16px 0 20px;
+  border-top: 1px solid var(--color-line);
+  border-bottom: 1px solid var(--color-line);
   overflow-x: auto;
 }
 
@@ -434,35 +769,44 @@ main {
   width: 100%;
   height: auto;
   max-width: 100%;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-ui);
   font-size: 11px;
-  color: var(--fg);
+  color: var(--color-ink);
+}
+
+/* Labels sit on connectors. A stroke in the ground colour, painted under the
+   glyphs, knocks the line out where the text crosses it. */
+.diagram-svg text {
+  paint-order: stroke;
+  stroke: var(--color-ground);
+  stroke-width: 3px;
+  stroke-linejoin: round;
 }
 
 .diagram-svg .d-bg {
-  fill: var(--bg-subtle);
+  fill: var(--color-surface);
 }
 
 .diagram-svg .d-accent {
-  fill: var(--accent);
-  stroke: var(--accent);
+  fill: var(--color-accent);
+  stroke: var(--color-accent);
 }
 
 .diagram-svg .d-accent-stroke {
-  stroke: var(--accent);
+  stroke: var(--color-accent);
 }
 
 .diagram-svg .d-accent-fill {
-  fill: var(--accent);
+  fill: var(--color-accent);
 }
 
 .diagram-svg .d-mono {
-  font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 9px;
 }
 
 .diagram-svg .d-bold {
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .diagram-svg .d-small {
@@ -470,16 +814,14 @@ main {
 }
 
 .diagram-svg .d-faint {
-  fill: var(--fg-faint);
+  fill: var(--color-muted);
 }
 
 .diagram-svg .d-dashed {
   stroke-dasharray: 4 3;
 }
 
-/* A figure may ship two drawings of the same diagram — a wide layout and a
-   layout restacked for the small breakpoint — when scaling the wide one down
-   would make its labels illegible. Exactly one is ever displayed. */
+/* A figure may ship a wide and a restacked narrow drawing; one is shown. */
 .diagram-svg.d-narrow-only {
   display: none;
 }
@@ -494,168 +836,148 @@ main {
   }
 }
 
-/* ---- page-level h1 (outside .doc, used by how-it-works pages) ------------ */
+/* ---- callouts ------------------------------------------------------------ */
 
-main > h1 {
-  max-width: var(--measure);
-  font-size: 2rem;
+/* Tinted surface, hairline, a small label; no coloured bar. The generic
+   .callout is a note; .caution and .danger are the two other tones. */
+.doc .callout,
+.callout {
+  margin: 0 0 20px;
+  padding: 12px 16px 14px;
+  background: var(--color-note-bg);
+  border: 1px solid var(--color-line);
+  border-radius: 3px;
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.callout::before {
+  content: "Note";
+  display: block;
+  margin-bottom: 4px;
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
   font-weight: 700;
-  line-height: 1.3;
-  margin-bottom: 1.5rem;
-  color: var(--fg);
+  color: var(--color-note-label);
 }
 
-/* ---- onboarding: additional .doc typography ------------------------------ */
-
-/* Opt-in on a <pre> that would otherwise run off the bottom of the screen.
-   Plain <pre> is unchanged. */
-.doc pre.long {
-  max-height: 30rem;
-  overflow-y: auto;
+.callout.caution {
+  background: var(--color-caution-bg);
 }
 
-/* Definition-style lists: term on its own line, indented body. Used for
-   glossing plumbing commands, refspec fields, and contract keys. */
-.doc dl {
-  margin: 0 0 1.25rem;
+.callout.caution::before {
+  content: "Caution";
+  color: var(--color-caution-label);
 }
 
-.doc dt {
-  margin-top: 0.9rem;
-  font-weight: 600;
-  color: var(--fg);
+.callout.danger {
+  background: var(--color-danger-bg);
 }
 
-.doc dt:first-child {
-  margin-top: 0;
+.callout.danger::before {
+  content: "Declined";
+  color: var(--color-danger-label);
 }
 
-.doc dd {
-  margin: 0.2rem 0 0 1.25rem;
-  color: var(--fg-muted);
+.callout > p {
+  margin-bottom: 8px;
 }
 
-.doc dd > p {
-  margin-bottom: 0.5rem;
-  color: inherit;
-}
-
-.doc dd > p:last-child {
+.callout > p:last-child {
   margin-bottom: 0;
 }
 
-/* ---- onboarding: runnable exercise --------------------------------------- */
+/* ---- onboarding: exercise ------------------------------------------------ */
 
+/* A ruled section on the white page: 2px ink rule above, hairline below. The
+   code panels inside keep their surface tint, so nothing sits on a tint. */
 .doc .exercise {
-  margin: 1.75rem 0;
-  padding: 1rem 1.25rem 1.15rem;
-  border: 1px solid var(--exercise-border);
-  border-left: 4px solid var(--exercise-rule);
-  border-radius: 0 6px 6px 0;
-  background: var(--exercise-bg);
+  margin: 32px 0;
+  padding: 14px 0 4px;
+  border-top: 2px solid var(--color-line-strong);
+  border-bottom: 1px solid var(--color-line);
 }
 
 .doc .exercise > h3,
 .doc .exercise > .exercise-label {
-  margin: 0 0 0.5rem;
-  font-size: 0.775rem;
+  margin: 0 0 10px;
+  font-size: 1.0625rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--exercise-rule);
+  line-height: 1.4;
+  color: var(--color-ink);
 }
 
 .doc .exercise > p {
-  margin-bottom: 0.85rem;
-  font-size: 0.95rem;
-}
-
-.doc .exercise > p:last-child,
-.doc .exercise > pre:last-child {
-  margin-bottom: 0;
+  margin-bottom: 14px;
 }
 
 .doc .exercise ul,
 .doc .exercise ol {
-  font-size: 0.95rem;
-  margin-bottom: 0.85rem;
+  margin-bottom: 14px;
 }
 
-/* Commands: the default code panel, kept opaque against the tinted block. */
 .doc .exercise pre {
-  margin-bottom: 0.85rem;
-  border-color: var(--exercise-border);
+  margin-bottom: 14px;
 }
 
-/* Expected output: visually demoted from the command above it, and labelled
-   by its own ::before so the reader never has to guess which is which. */
+/* Expected output: the 28px label row the spine describes, carrying its
+   label in muted; the panel is otherwise the ordinary code panel. */
 .doc .exercise .exercise-output {
-  margin: 0 0 0.85rem;
-  padding: 0.85rem 1rem;
-  border: 1px dashed var(--exercise-border);
-  border-radius: 6px;
-  background: var(--exercise-output-bg);
+  padding-top: 0;
 }
 
 .doc .exercise .exercise-output::before {
   content: "Expected output";
-  display: block;
-  margin-bottom: 0.4rem;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: var(--fg-faint);
+  display: flex;
+  align-items: center;
+  height: 28px;
+  margin: 0 -16px 10px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--color-line);
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-muted);
 }
 
 .doc .exercise .exercise-output code {
-  background: none;
-  padding: 0;
-  font-size: 0.825rem;
-  line-height: 1.55;
-  color: var(--fg-muted);
-}
-
-.doc .exercise .exercise-output:last-child {
-  margin-bottom: 0;
+  color: var(--color-muted);
 }
 
 /* ---- onboarding: check your understanding -------------------------------- */
 
 .doc .check {
-  margin: 1.75rem 0;
-  padding: 0.9rem 1.25rem 1rem;
-  border: 1px solid var(--check-border);
-  border-radius: 6px;
-  background: var(--check-bg);
+  margin: 32px 0;
+  padding: 12px 16px 14px;
+  background: var(--color-note-bg);
+  border: 1px solid var(--color-line);
+  border-radius: 3px;
 }
 
 .doc .check > h3,
 .doc .check > .check-label {
-  margin: 0 0 0.4rem;
-  font-size: 0.775rem;
+  margin: 0 0 8px;
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--check-label);
+  line-height: 1.45;
+  color: var(--color-note-label);
 }
 
 .doc .check > p {
-  margin-bottom: 0.6rem;
-  font-size: 0.925rem;
-  color: var(--fg-muted);
+  margin-bottom: 8px;
+  font-size: 1rem;
 }
 
 .doc .check ol,
 .doc .check ul {
-  margin: 0 0 0 1.25rem;
-  font-size: 0.925rem;
-  color: var(--fg);
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
 }
 
 .doc .check li {
-  margin-bottom: 0.3rem;
+  margin-bottom: 6px;
 }
 
 .doc .check li:last-child {
@@ -665,30 +987,27 @@ main > h1 {
 /* ---- onboarding: maintainer note ----------------------------------------- */
 
 .doc .maintainer-note {
-  margin: 1.75rem 0;
-  padding: 0.85rem 1.25rem 0.9rem;
-  border-left: 3px solid var(--note-rule);
-  border-top: 1px solid var(--note-border);
-  border-right: 1px solid var(--note-border);
-  border-bottom: 1px solid var(--note-border);
-  border-radius: 0 6px 6px 0;
-  background: var(--note-bg);
+  margin: 32px 0;
+  padding: 12px 16px 14px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: 3px;
 }
 
 .doc .maintainer-note > h3,
 .doc .maintainer-note > .note-label {
-  margin: 0 0 0.35rem;
-  font-size: 0.775rem;
+  margin: 0 0 6px;
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
-  color: var(--note-rule);
+  line-height: 1.45;
+  color: var(--color-muted);
 }
 
 .doc .maintainer-note > p {
-  margin-bottom: 0.6rem;
-  font-size: 0.95rem;
-  font-style: italic;
-  color: var(--fg-muted);
+  margin-bottom: 8px;
+  font-size: 1rem;
+  line-height: 1.55;
 }
 
 .doc .maintainer-note > p:last-child {
@@ -696,284 +1015,20 @@ main > h1 {
 }
 
 .doc .maintainer-note code {
-  font-style: normal;
+  background: var(--color-ground);
 }
 
-/* ---- onboarding: section index module list ------------------------------- */
-
-.module-list-heading {
-  max-width: var(--measure);
-  margin-top: 2.5rem;
-  padding-bottom: 0.25rem;
-  border-bottom: 1px solid var(--border-subtle);
-  font-size: 1.35rem;
-  font-weight: 600;
-  color: var(--fg);
-}
-
-.module-list {
-  max-width: var(--measure);
-  margin: 2rem 0 1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
-}
-
-.module-item {
-  display: flex;
-  gap: 1rem;
-  padding: 1rem 1.25rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-subtle);
-}
-
-.module-item .module-number {
-  flex: 0 0 auto;
-  font-family: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", "Fira Code", Menlo, Consolas, monospace;
-  font-size: 0.9rem;
-  font-weight: 600;
-  line-height: 1.6;
-  color: var(--fg-faint);
-}
-
-.module-item .module-body {
-  min-width: 0;
-}
-
-.module-item h2 {
-  font-size: 1.05rem;
-  font-weight: 600;
-  line-height: 1.5;
-  margin-bottom: 0.1rem;
-}
-
-.module-item h2 a {
-  color: var(--fg);
-  text-decoration: none;
-}
-
-.module-item h2 a:hover {
-  color: var(--accent);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.module-item p {
-  font-size: 0.9rem;
-  line-height: 1.6;
-  color: var(--fg-muted);
-}
-
-.module-item.planned {
-  border-style: dashed;
-  background: none;
-}
-
-.module-item.planned h2,
-.module-item.planned .module-number {
-  color: var(--fg-faint);
-}
-
-.module-item.planned p {
-  color: var(--fg-faint);
-}
-
-.module-tag {
-  display: inline-block;
-  margin-left: 0.5rem;
-  padding: 0.05rem 0.45rem;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  vertical-align: 0.12em;
-  white-space: nowrap;
-  color: var(--fg-faint);
-}
-
-.module-tag.exercises {
-  border-color: var(--exercise-rule);
-  color: var(--exercise-rule);
-}
-
-@media (max-width: 600px) {
-  .module-item {
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-}
-
-/* ==========================================================================
-   Navigational shell — added with the site build (scripts/build-site.py).
-   Sidebar, on-this-page TOC, prev/next pager, and the landing-page furniture.
-   Everything here is generated markup; edit site.json or the build script
-   rather than hand-editing the pages that use these classes.
-   ========================================================================== */
-
-/* ---- skip link ----------------------------------------------------------- */
-
-.skip-link {
-  position: absolute;
-  left: -9999px;
-  top: 0;
-  z-index: 20;
-  padding: 0.6rem 1rem;
-  background: var(--accent);
-  color: var(--on-accent);
-  font-size: 0.875rem;
-  text-decoration: none;
-  border-radius: 0 0 6px 0;
-}
-
-.skip-link:focus {
-  left: 0;
-}
-
-/* ---- three-column documentation layout ----------------------------------- */
-
-/* Source order is main → toc → sidebar so that a narrow viewport gets the
-   content first and the site index last, with no JavaScript disclosure. The
-   grid re-places them on wide screens. */
-.layout {
-  flex: 1;
-  width: 100%;
-  max-width: 86rem;
-  margin: 0 auto;
-  padding: 0 1.5rem;
-  display: grid;
-  grid-template-columns: 15.5rem minmax(0, 1fr) 14rem;
-  column-gap: 3rem;
-  align-items: start;
-}
-
-.layout > main {
-  grid-column: 2;
-  grid-row: 1;
-  max-width: none;
-  margin: 0;
-  padding: 2.5rem 0 4rem;
-}
-
-.layout > .sidebar,
-.layout > .toc {
-  grid-row: 1;
-  position: sticky;
-  top: calc(var(--header-height) + 1.5rem);
-  max-height: calc(100vh - var(--header-height) - 3rem);
-  overflow-y: auto;
-  padding: 2.5rem 0 2rem;
-  font-size: 0.85rem;
-  line-height: 1.5;
-}
-
-.layout > .sidebar {
-  grid-column: 1;
-  border-right: 1px solid var(--border-subtle);
-  padding-right: 1.25rem;
-}
-
-.layout > .toc {
-  grid-column: 3;
-}
-
-/* Anchors land below the sticky header rather than under it. */
-.doc h2,
-.doc h3 {
-  scroll-margin-top: calc(var(--header-height) + 1rem);
-}
-
-/* ---- sidebar ------------------------------------------------------------- */
-
-.sidebar-title,
-.toc-title {
-  margin-bottom: 0.75rem;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--fg-faint);
-}
-
-.sidebar-section {
-  margin: 1.5rem 0 0.4rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-
-.sidebar-section:first-of-type {
-  margin-top: 0;
-}
-
-.sidebar-section a {
-  color: var(--fg);
-  text-decoration: none;
-}
-
-.sidebar-section a:hover {
-  color: var(--accent);
-}
-
-.sidebar-list {
-  list-style: none;
-  border-left: 1px solid var(--border-subtle);
-}
-
-.sidebar-list li {
-  margin: 0;
-}
-
-.sidebar-list a {
-  display: block;
-  padding: 0.25rem 0 0.25rem 0.75rem;
-  margin-left: -1px;
-  border-left: 2px solid transparent;
-  color: var(--fg-muted);
-  text-decoration: none;
-}
-
-.sidebar-list a:hover {
-  color: var(--accent);
-  border-left-color: var(--border);
-}
-
-.sidebar-list a[aria-current="page"] {
-  color: var(--accent);
-  font-weight: 600;
-  border-left-color: var(--accent);
-  background: var(--accent-bg);
-}
-
-/* ---- on-this-page table of contents -------------------------------------- */
-
-.toc-list {
-  list-style: none;
-}
-
-.toc-list a {
-  display: block;
-  padding: 0.25rem 0;
-  color: var(--fg-muted);
-  text-decoration: none;
-}
-
-.toc-list a:hover {
-  color: var(--accent);
-}
-
-/* ---- prev/next pager ----------------------------------------------------- */
+/* ---- pager --------------------------------------------------------------- */
 
 .pager {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 32px;
   max-width: var(--measure);
-  margin-top: 3.5rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--border-subtle);
+  margin-top: 56px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-line);
+  font-family: var(--font-ui);
 }
 
 .pager a {
@@ -981,17 +1036,8 @@ main > h1 {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
-  padding: 0.85rem 1.1rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  gap: 2px;
   text-decoration: none;
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.pager a:hover {
-  border-color: var(--accent-muted);
-  background: var(--bg-subtle);
 }
 
 .pager-spacer {
@@ -1003,255 +1049,47 @@ main > h1 {
 }
 
 .pager-label {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--fg-faint);
+  font-size: 0.875rem;
+  color: var(--color-muted);
 }
 
 .pager-title {
-  font-size: 0.95rem;
-  font-weight: 500;
-  color: var(--accent);
+  font-size: 1rem;
+  font-weight: 700;
   line-height: 1.35;
+  color: var(--color-accent);
 }
 
-/* ---- landing: hero ------------------------------------------------------- */
-
-/* The landing page is the one page that is not a prose column: its card grids
-   need the room. Only the landing's <main> is a direct child of <body> — doc
-   pages nest theirs inside .layout — so this widens the landing alone, while
-   every prose block inside it stays clamped to --measure. */
-body > main {
-  max-width: 72rem;
-}
-
-.hero {
-  max-width: var(--measure);
-  margin: 1.5rem 0 3rem;
-}
-
-.hero h1 {
-  font-size: 3rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.1;
-  margin-bottom: 0.75rem;
-}
-
-.hero-tagline {
-  font-size: 1.3rem;
-  line-height: 1.5;
-  color: var(--fg-muted);
-}
-
-.hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin: 1.75rem 0 1rem;
-}
-
-.button {
-  display: inline-block;
-  padding: 0.55rem 1.1rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 0.925rem;
-  font-weight: 500;
-  color: var(--fg);
-  text-decoration: none;
-  transition: border-color 0.15s, background 0.15s, color 0.15s;
-}
-
-.button:hover {
-  border-color: var(--accent-muted);
-  color: var(--accent);
-  background: var(--accent-bg);
-}
-
-.button-primary {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--on-accent);
-}
-
-.button-primary:hover {
-  background: var(--accent-muted);
-  border-color: var(--accent-muted);
-  color: var(--on-accent);
-}
-
-.hero-note {
-  font-size: 0.85rem;
-  color: var(--fg-faint);
-}
-
-/* The landing intro is plain prose outside .doc, so it needs its own rhythm. */
-.landing-intro p {
-  margin-bottom: 1rem;
-}
-
-.landing-intro p:last-child {
-  margin-bottom: 0;
-}
-
-/* ---- landing: section headings and prose --------------------------------- */
-
-.landing-h2 {
-  max-width: var(--measure);
-  margin: 3.5rem 0 1.25rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--border-subtle);
-  font-size: 1.4rem;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-}
-
-.landing-prose {
-  max-width: var(--measure);
-  margin-bottom: 1.25rem;
-  color: var(--fg-muted);
-}
-
-.landing-table {
-  width: 100%;
-  max-width: var(--measure);
-  margin: 1.5rem 0 2rem;
-  border-collapse: collapse;
-  font-size: 0.925rem;
-}
-
-.landing-table th,
-.landing-table td {
-  padding: 0.6rem 0.9rem;
-  border: 1px solid var(--border-subtle);
-  text-align: left;
-  vertical-align: top;
-}
-
-.landing-table th {
-  background: var(--bg-subtle);
-  font-weight: 600;
-}
-
-/* ---- landing: feature and path grids ------------------------------------- */
-
-.feature-grid,
-.path-grid {
-  display: grid;
-  gap: 1.5rem;
-  margin-bottom: 1rem;
-}
-
-.feature-grid {
-  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
-}
-
-.path-grid {
-  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
-}
-
-.feature,
-.path {
-  padding: 1.35rem 1.5rem;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg-subtle);
-}
-
-.feature h3 {
-  margin-bottom: 0.5rem;
-  font-size: 1.05rem;
-  font-weight: 650;
-}
-
-.feature p,
-.path p {
-  font-size: 0.9rem;
-  line-height: 1.65;
-  color: var(--fg-muted);
-}
-
-.path-label {
-  margin-bottom: 0.4rem;
-  font-size: 0.7rem !important;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--accent) !important;
-}
-
-.feature-link {
-  margin-top: 0.85rem;
-}
-
-.feature-link a {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--accent);
-  text-decoration: none;
-}
-
-.feature-link a:hover {
+.pager a:hover .pager-title {
+  color: var(--color-accent-hover);
   text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
 }
 
-.provenance {
-  max-width: var(--measure);
-  margin-top: 3rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--border-subtle);
-  font-size: 0.875rem;
-  color: var(--fg-faint);
-}
-
-/* The landing card grid uses h3 now that the page has real h2 sections. */
-.section-nav-card h3 {
-  font-size: 1.05rem;
-  font-weight: 650;
-  margin-bottom: 0.35rem;
-}
-
-.section-nav-card h3 a {
-  color: var(--fg);
-  text-decoration: none;
-}
-
-.section-nav-card h3 a:hover {
-  color: var(--accent);
-}
-
-/* ---- section hub pages --------------------------------------------------- */
+/* ---- section hubs: ruled rows -------------------------------------------- */
 
 .hub-list {
   max-width: var(--measure);
-  margin: 0 0 2.5rem;
+  margin: 0 0 40px;
+  border-top: 1px solid var(--color-line);
 }
 
 .hub-item {
   display: flex;
-  gap: 1.1rem;
-  padding: 1.35rem 0;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.hub-item:first-child {
-  border-top: 1px solid var(--border-subtle);
+  gap: 20px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--color-line);
 }
 
 .hub-number {
-  flex: 0 0 2rem;
-  height: 2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: var(--accent-bg);
-  color: var(--accent);
-  font-size: 0.875rem;
+  flex: 0 0 32px;
+  padding-top: 2px;
+  font-family: var(--font-ui);
+  font-size: 1rem;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
 }
 
 .hub-body {
@@ -1259,51 +1097,213 @@ body > main {
 }
 
 .hub-body h3 {
-  margin-bottom: 0.35rem;
-  font-size: 1.1rem;
-  font-weight: 650;
+  margin: 0 0 6px;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.3;
 }
 
 .hub-body h3 a {
-  color: var(--accent);
+  color: var(--color-accent);
   text-decoration: none;
 }
 
 .hub-body h3 a:hover {
+  color: var(--color-accent-hover);
   text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
 }
 
 .hub-body p {
-  font-size: 0.925rem;
-  line-height: 1.65;
-  color: var(--fg-muted);
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+/* ---- onboarding: module list --------------------------------------------- */
+
+.module-list-heading {
+  max-width: var(--measure);
+  margin: 48px 0 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--color-line);
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.module-list {
+  max-width: var(--measure);
+  margin: 0 0 16px;
+}
+
+.module-item {
+  display: flex;
+  gap: 20px;
+  padding: 20px 0;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.module-item .module-number {
+  flex: 0 0 32px;
+  padding-top: 3px;
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+}
+
+.module-item .module-body {
+  min-width: 0;
+}
+
+.module-item h2 {
+  margin: 0 0 6px;
+  padding: 0;
+  border: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0;
+}
+
+.module-item h2 a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.module-item h2 a:hover {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+.module-item p {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.module-item.planned h2,
+.module-item.planned .module-number,
+.module-item.planned p {
+  color: var(--color-muted);
+}
+
+/* "Exercises" / "Planned": a plain word after the title, no badge. */
+.module-tag {
+  margin-left: 10px;
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--color-muted);
+  white-space: nowrap;
+}
+
+.module-tag::before {
+  content: "\00b7\00a0";
+}
+
+/* ---- landing page -------------------------------------------------------- */
+
+/* The landing sits in the interior frame and is the page's own site map: the
+   intro, then the four sections as ruled rows (name left, text right) in the
+   same grammar as the section hubs, then the licence note. */
+.section-nav {
+  max-width: var(--measure);
+  margin: 0 0 8px;
+}
+
+.section-nav-row {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  column-gap: 32px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.section-nav-row h3 {
+  grid-column: 1;
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--color-ink);
+}
+
+.section-nav-row h3 a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.section-nav-row h3 a:hover {
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+.section-nav-row p {
+  grid-column: 2;
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.doc .landing-note {
+  margin: 32px 0 8px;
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--color-muted);
+}
+
+.doc .provenance {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--color-muted);
 }
 
 /* ---- footer -------------------------------------------------------------- */
 
+.site-footer {
+  padding: 16px max(var(--gutter), calc((100% - var(--frame-w)) / 2 + var(--gutter))) 24px;
+  border-top: 1px solid var(--color-line);
+  font-family: var(--font-ui);
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--color-muted);
+  background: var(--color-ground);
+}
+
 .footer-sep {
-  margin: 0 0.5rem;
-  opacity: 0.5;
+  margin: 0 6px;
 }
 
 .site-footer a {
-  color: var(--fg-muted);
+  color: var(--color-accent);
   text-decoration: none;
 }
 
 .site-footer a:hover {
-  color: var(--accent);
+  color: var(--color-accent-hover);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
 }
 
-/* ---- shell responsive ---------------------------------------------------- */
+/* ---- responsive ---------------------------------------------------------- */
 
-/* Below the three-column breakpoint the on-this-page list is dropped: the
-   sidebar still carries whole-site navigation, and the page's own headings
-   are a scroll away. */
-@media (max-width: 1180px) {
+/* Two columns: the rail is dropped, the tree stays. */
+@media (max-width: 1279px) {
   .layout {
-    grid-template-columns: 14rem minmax(0, 1fr);
-    column-gap: 2.5rem;
+    grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+    column-gap: 40px;
   }
 
   .layout > .toc {
@@ -1311,64 +1311,132 @@ body > main {
   }
 }
 
-/* Single column: content first, then the pager, then the site index. */
-@media (max-width: 860px) {
+/* Single column: content first, then the site tree as an in-flow list on its
+   own surface band. */
+@media (max-width: 899px) {
+  :root {
+    --gutter: 16px;
+  }
+
   .layout {
     display: block;
-    padding: 0 1.25rem;
+  }
+
+  .layout::before {
+    display: none;
   }
 
   .layout > main {
-    padding-bottom: 2.5rem;
+    max-width: none;
+    padding: 28px 0 40px;
+  }
+
+  main > h1,
+  .doc h1 {
+    font-size: 1.75rem;       /* 28px */
   }
 
   .layout > .sidebar {
     position: static;
     max-height: none;
     overflow: visible;
-    padding: 1.75rem 0 2.5rem;
+    margin: 0 calc(-1 * var(--gutter));
+    padding: 24px var(--gutter) 32px;
+    background: var(--color-surface);
+    border-top: 1px solid var(--color-line);
+  }
+
+  .sidebar-title {
+    margin-right: 0;
+  }
+
+  .sidebar-list a {
     border-right: 0;
-    border-top: 1px solid var(--border);
+    padding-right: 0;
   }
 
-  .hero h1 {
-    font-size: 2.25rem;
-  }
-
-  .hero-tagline {
-    font-size: 1.1rem;
+  .sidebar-list a[aria-current="page"] {
+    border-right: 0;
   }
 
   .pager {
     flex-direction: column;
+    gap: 16px;
   }
 
   .pager-next {
     text-align: left;
   }
 
-  /* Reference tables carry code in every cell and cannot reflow below a few
-     hundred pixels. Let the table scroll inside itself rather than pushing
-     the page sideways. */
+  .section-nav-row {
+    display: block;
+  }
+
+  .section-nav-row h3 {
+    margin-bottom: 6px;
+  }
+
+  /* Reference tables carry code in every cell and cannot reflow; they scroll
+     inside themselves rather than pushing the page sideways. */
   .doc table {
     display: block;
-    width: 100%;
+    max-width: 100%;
     overflow-x: auto;
   }
 }
 
-@media (max-width: 600px) {
-  .hero-actions {
-    gap: 0.5rem;
+@media (max-width: 599px) {
+  /* Four section links do not fit beside the wordmark on a phone. The bar
+     becomes two rows — wordmark, then the section links on their own rule —
+     and stops being sticky, since two rows would take a fifth of the screen. */
+  .site-header {
+    position: static;
+    height: auto;
+    flex-wrap: wrap;
+    gap: 0;
   }
 
-  .button {
-    padding: 0.5rem 0.85rem;
+  .wordmark {
+    height: 48px;
+  }
+
+  .wordmark {
+    font-size: 1.125rem;
+  }
+
+  .site-nav {
+    flex-basis: 100%;
+    gap: 20px;
+    height: 40px;
+    border-top: 1px solid var(--color-line);
+  }
+
+  .site-nav a {
+    margin-bottom: 0;
     font-size: 0.875rem;
   }
 
-  .landing-table {
-    display: block;
-    overflow-x: auto;
+  .layout > main {
+    padding-top: 24px;
+  }
+
+  .doc h2,
+  .doc h3,
+  .doc h4 {
+    scroll-margin-top: 16px;
+  }
+
+  .doc h2 {
+    font-size: 1.375rem;      /* 22px */
+    margin-top: 40px;
+  }
+
+  .doc pre {
+    padding: 10px 12px;
+  }
+
+  .doc .exercise .exercise-output::before {
+    margin: 0 -12px 8px;
+    padding: 0 12px;
   }
 }

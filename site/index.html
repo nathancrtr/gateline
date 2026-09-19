@@ -11,7 +11,7 @@
 <body>
 <a class="skip-link" href="#content">Skip to content</a>
 <header class="site-header">
-  <a class="wordmark" href="index.html">gateline</a>
+  <a class="wordmark" href="index.html"><span>gate</span><span>line</span></a>
   <nav class="site-nav" aria-label="Sections">
     <a href="how-it-works/index.html">How It Works</a>
     <a href="onboarding/index.html">Onboarding</a>
@@ -19,160 +19,96 @@
     <a href="api/index.html">API</a>
   </nav>
 </header>
+<div class="layout">
 <main id="content">
+  <h1>gateline</h1>
 <!-- content:start -->
-  <div class="hero">
-    <h1>gateline</h1>
-    <p class="hero-tagline">Run the software development lifecycle as a team of
-    semi-autonomous agents, with a named human approving at every phase gate.</p>
-    <div class="hero-actions">
-      <a class="button button-primary" href="how-it-works/how-a-run-works.html">How a run works</a>
-      <a class="button" href="onboarding/index.html">Onboarding</a>
-      <a class="button" href="reference/cli.html">CLI reference</a>
-      <a class="button" href="api/index.html">API docs</a>
-    </div>
-    <p class="hero-note">Open source, Apache-2.0. Static documentation with no tracking and no external assets.</p>
+<article class="doc">
+  <p class="lede">Run the software development lifecycle as a team of
+  semi-autonomous agents, with a named human approving at every phase gate.</p>
+
+  <p><strong>gateline</strong> is an open-source framework for running the
+  software development lifecycle as a team of semi-autonomous agents, with named
+  humans approving at phase gates. Agents never share a conversation; they share
+  typed artifacts in git (a spec, a plan, work items, review and verification
+  reports), so the pipeline's state is the repository, and every decision,
+  finding, and cost lands in a durable, inspectable record. <strong>Gatehouse</strong>
+  is the web UI where humans review gate packets and record decisions; the
+  <code>gateline</code> CLI and the v1 orchestrator engine run alongside it, and
+  <code>gateline up</code> runs Gatehouse and the engine together over one clone.</p>
+
+  <p>It is built for engineers who already work with LLM coding assistants in a
+  single chat stream and want the throughput of many agents without giving up
+  accountable approval. You start human-orchestrated, driving each role by hand;
+  autonomy increases along a measured trust ladder and stays gated on evidence:
+  gate reviews that have become confirmations rather than corrections. A version
+  number grants no autonomy.</p>
+
+  <p>The framework is at v0.3. The repository has been public since
+  2026-09-16, and <code>v0.3.0</code> is its first tag. Published package
+  releases remain a later step.</p>
+
+  <h2 id="the-documentation-set">The documentation set</h2>
+</article>
+
+<div class="section-nav">
+  <div class="section-nav-row">
+    <h3><a href="how-it-works/index.html">How It Works</a></h3>
+    <p>The full pipeline model: phases, gates, profiles, the trust ladder, and how humans stay structurally in charge.</p>
   </div>
-
-  <div class="landing-intro">
-    <p><strong>gateline</strong> is an open-source framework for running the
-    software development lifecycle as a team of semi-autonomous agents, with named
-    humans approving at phase gates. Agents never share a conversation; they share
-    typed artifacts in git (a spec, a plan, work items, review and verification
-    reports), so the pipeline's state is the repository, and every decision,
-    finding, and cost lands in a durable, inspectable record. <strong>Gatehouse</strong>
-    is the web UI where humans review gate packets and record decisions; the
-    <code>gateline</code> CLI and the v1 orchestrator engine run alongside it, and
-    <code>gateline up</code> runs Gatehouse and the engine together over one clone.</p>
-
-    <p>It is built for engineers who already work with LLM coding assistants in a
-    single chat stream and want the throughput of many agents without giving up
-    accountable approval. You start human-orchestrated, driving each role by hand;
-    autonomy increases along a measured trust ladder and stays gated on evidence:
-    gate reviews that have become confirmations rather than corrections. A version
-    number grants no autonomy.</p>
-
-    <p>The framework is at v0.3. The repository has been public since
-    2026-09-16, and <code>v0.3.0</code> is its first tag. Published package
-    releases remain a later step.</p>
+  <div class="section-nav-row">
+    <h3><a href="onboarding/index.html">Onboarding</a></h3>
+    <p>The fluency layer for senior engineers new to the codebase: git plumbing, co-written files, and contract grammars, taught where gateline uses them.</p>
   </div>
-
-  <h2 id="three-ideas-do-the-work" class="landing-h2">Three ideas do the work</h2>
-
-  <div class="feature-grid">
-    <div class="feature">
-      <h3>Artifacts, not conversations</h3>
-      <p>Each role consumes specific files and produces specific files, and the
-      handoff between them is a contract. An artifact missing a required section
-      is malformed, and the consuming agent's first duty is to bounce it back to
-      its producer, never to guess. Handoffs fail loudly or not at all.</p>
-      <p class="feature-link"><a href="how-it-works/how-a-run-works.html">How a run works →</a></p>
-    </div>
-
-    <div class="feature">
-      <h3>Gates a machine cannot sign</h3>
-      <p>The engine dispatches agents, meters spend, and moves the state file
-      forward, but it may not record a gate decision. It presents them and halts
-      until a named human records approval. That prohibition is built into the
-      code: the engine has no code path that writes an approval. A deterministic
-      loop that meets a state it has no rule for escalates to a human.</p>
-      <p class="feature-link"><a href="how-it-works/how-gates-keep-a-human-in-charge.html">How gates keep a human in charge →</a></p>
-    </div>
-
-    <div class="feature">
-      <h3>Vendor-neutral by construction</h3>
-      <p>No role knows which model executes it. Roles are contracts over files,
-      models are bindings resolved in a single registry, and runtimes attach through
-      thin generated adapters. The separation is enforced as a repository invariant:
-      no vendor or model name may appear in <code>roles/</code> or <code>contracts/</code>.</p>
-      <p class="feature-link"><a href="how-it-works/how-gateline-stays-vendor-neutral.html">How gateline stays vendor-neutral →</a></p>
-    </div>
+  <div class="section-nav-row">
+    <h3><a href="reference/index.html">Reference</a></h3>
+    <p>Commands, schemas, manifests, and contracts: the exact shapes adopter
+    tooling builds against.</p>
   </div>
-
-  <h2 id="the-pipeline-at-a-glance" class="landing-h2">The pipeline at a glance</h2>
-
-  <p class="landing-prose">A run is one change (a feature, a fix, a piece of
-  maintenance) carried from a one-page brief to a merged branch. Four gates mark
-  the phase boundaries, and each one puts a specific question and a specific set of
-  artifacts in front of a human.</p>
-
-  <table class="landing-table">
-    <thead>
-      <tr><th>Gate</th><th>The human's question</th><th>On the table</th></tr>
-    </thead>
-    <tbody>
-      <tr><td><strong>G0</strong> — Spec</td><td>Is this what we actually want
-        built?</td><td><code>intent-brief.md</code>, <code>spec.md</code></td></tr>
-      <tr><td><strong>G1</strong> — Plan</td><td>Is this how we'd want it built,
-        cut into safe parallel pieces?</td><td><code>plan.md</code>,
-        <code>tasks/*.yaml</code>, ADRs</td></tr>
-      <tr><td><strong>G2</strong> — Change</td><td>Does the evidence support
-        merging?</td><td>diff, review report, verification report</td></tr>
-      <tr><td><strong>G3</strong> — Release</td><td>Ship it?</td><td>release
-        plan, rollback plan</td></tr>
-    </tbody>
-  </table>
-
-  <p class="landing-prose">Not every change should pay for the full pipeline. A run
-  profile declares, per run, which roles run and which gates exist. <code>patch</code>,
-  <code>standard</code>, and <code>full</code> are fixed sets, and they nest.</p>
-
-  <h2 id="start-where-you-are" class="landing-h2">Start where you are</h2>
-
-  <div class="path-grid">
-    <div class="path">
-      <p class="path-label">New to gateline</p>
-      <p>Read the pipeline model end to end (the lifecycle, the gates, and the vendor
-      separation) before touching the code.</p>
-      <p class="feature-link"><a href="how-it-works/index.html">How It Works →</a></p>
-    </div>
-    <div class="path">
-      <p class="path-label">Joining the codebase</p>
-      <p>Work through the fluency layer: git's object model, the co-written state
-      file, and the artifact contracts, each taught where the framework relies on it.</p>
-      <p class="feature-link"><a href="onboarding/index.html">Onboarding →</a></p>
-    </div>
-    <div class="path">
-      <p class="path-label">Building tooling against it</p>
-      <p>Go straight to the exact shapes: the CLI surface, the state and schedule
-      schemas, adapter manifests, and the contract grammar.</p>
-      <p class="feature-link"><a href="reference/index.html">Reference →</a></p>
-    </div>
-    <div class="path">
-      <p class="path-label">Working with the packages</p>
-      <p>Generated interface documentation for <code>@gateline/core</code>,
-      <code>@gateline/framework</code>, the orchestrator, server, CLI, and
-      runner agent.</p>
-      <p class="feature-link"><a href="api/index.html">API →</a></p>
-    </div>
+  <div class="section-nav-row">
+    <h3><a href="api/index.html">API</a></h3>
+    <p>TypeDoc-generated interface documentation for <code>@gateline/core</code>, <code>@gateline/framework</code>, the orchestrator, server, CLI, and runner agent.</p>
   </div>
+</div>
 
-  <h2 id="the-documentation-set" class="landing-h2">The documentation set</h2>
-
-  <div class="section-nav">
-    <div class="section-nav-card">
-      <h3><a href="how-it-works/index.html">How It Works</a></h3>
-      <p>The full pipeline model: phases, gates, profiles, the trust ladder, and how humans stay structurally in charge.</p>
-    </div>
-    <div class="section-nav-card">
-      <h3><a href="onboarding/index.html">Onboarding</a></h3>
-      <p>The fluency layer for senior engineers new to the codebase: git plumbing, co-written files, and contract grammars, taught where gateline uses them.</p>
-    </div>
-    <div class="section-nav-card">
-      <h3><a href="reference/index.html">Reference</a></h3>
-      <p>Commands, schemas, manifests, and contracts: the exact shapes adopter
-      tooling builds against.</p>
-    </div>
-    <div class="section-nav-card">
-      <h3><a href="api/index.html">API</a></h3>
-      <p>TypeDoc-generated interface documentation for <code>@gateline/core</code>, <code>@gateline/framework</code>, the orchestrator, server, CLI, and runner agent.</p>
-    </div>
-  </div>
-
+<article class="doc">
+  <p class="landing-note">Open source, Apache-2.0. Static documentation with no tracking and no external assets.</p>
   <p class="provenance"><em>gateline is created and maintained by Nathan Carter as
   an independent personal work, and released under the Apache-2.0 license.</em></p>
+</article>
 <!-- content:end -->
 </main>
+<nav class="sidebar" aria-label="All documentation">
+  <p class="sidebar-title">Documentation</p>
+  <p class="sidebar-section"><a href="how-it-works/index.html">How It Works</a></p>
+  <ul class="sidebar-list">
+    <li><a href="how-it-works/index.html">Overview</a></li>
+    <li><a href="how-it-works/how-a-run-works.html">How a run works</a></li>
+    <li><a href="how-it-works/how-gates-keep-a-human-in-charge.html">How gates keep a human in charge</a></li>
+    <li><a href="how-it-works/how-gateline-stays-vendor-neutral.html">How gateline stays vendor-neutral</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="onboarding/index.html">Onboarding</a></p>
+  <ul class="sidebar-list">
+    <li><a href="onboarding/index.html">Overview</a></li>
+    <li><a href="onboarding/git-plumbing.html">1. Git, down to the plumbing</a></li>
+    <li><a href="onboarding/the-co-written-state-file.html">2. The co-written state file</a></li>
+    <li><a href="onboarding/contracts-and-their-parsers.html">3. Contracts and their parsers</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="reference/index.html">Reference</a></p>
+  <ul class="sidebar-list">
+    <li><a href="reference/index.html">Overview</a></li>
+    <li><a href="reference/cli.html">CLI</a></li>
+    <li><a href="reference/state-yaml.html">state.yaml</a></li>
+    <li><a href="reference/orchestrator-yaml.html">orchestrator.yaml</a></li>
+    <li><a href="reference/adapter-manifests.html">Adapter manifests</a></li>
+    <li><a href="reference/contract-grammar.html">Contract grammar</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="api/index.html">API</a></p>
+  <ul class="sidebar-list">
+    <li><a href="api/index.html">Browse generated API docs</a></li>
+  </ul>
+</nav>
+</div>
 <footer class="site-footer">
   gateline is an open-source framework (Apache-2.0). &copy; the gateline maintainers.
   <span class="footer-sep">&middot;</span>

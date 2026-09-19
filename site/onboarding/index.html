@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Onboarding — gateline</title>
+  <meta name="description" content="The fluency layer: the advanced topics gateline depends on but never explains, each taught through the place in the codebase where it does real work.">
+  <link rel="stylesheet" href="../assets/site.css">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="site-header">
+  <a class="wordmark" href="../index.html">gateline</a>
+  <nav class="site-nav" aria-label="Sections">
+    <a href="../how-it-works/index.html">How It Works</a>
+    <a href="../onboarding/index.html" class="active" aria-current="true">Onboarding</a>
+    <a href="../reference/index.html">Reference</a>
+    <a href="../api/index.html">API</a>
+  </nav>
+</header>
+<div class="layout">
+<main id="content">
+  <h1>Onboarding</h1>
+<!-- content:start -->
+<article class="doc">
+  <p class="lede">This section is the fluency layer. It teaches the advanced
+  topics gateline depends on but never explains — the things a competent senior
+  engineer has usually had no occasion to learn — and it teaches each of them
+  through the specific place in this codebase where it does real work.</p>
+  <!-- evidence: CONTRIBUTING.md; docs/DESIGN.md -->
+
+  <p>The other three sections answer different questions.
+  <code>CONTRIBUTING.md</code> is policy: whether you can contribute and how a
+  fix gets routed.
+  <a href="../how-it-works/how-a-run-works.html">How It Works</a> is concepts:
+  what the design is and why it holds together.
+  <a href="../reference/cli.html">Reference</a> and the
+  <a href="../api/index.html">API</a> pages are exact shapes — flags, fields,
+  schemas, symbols. None of them covers the background knowledge those
+  documents take for granted. That gap is what these modules fill.</p>
+
+  <p>The audience is senior and above: engineers who can already read the
+  codebase but who have not previously needed git's object model, a
+  compare-and-swap write loop, or a grammar strict enough for a parser to
+  bounce. Beginner git material is deliberately absent — cloning, committing,
+  branching, and pushing are assumed. Each module opens with the general
+  concept, then walks the concrete anchors in the repository, then offers a
+  short set of questions you should be able to answer without looking anything
+  up.</p>
+
+  <div class="callout">
+    <p>Modules 1 and 2 carry runnable exercises. Have a terminal and a
+    throwaway git repository open before you start them; module 3 reads fine
+    away from a keyboard.</p>
+  </div>
+</article>
+
+  <h2 id="modules" class="module-list-heading">Modules</h2>
+
+  <div class="module-list">
+    <div class="module-item">
+      <div class="module-number">1</div>
+      <div class="module-body">
+        <h2 id="git-down-to-the-plumbingexercises"><a href="git-plumbing.html">Git, down to the plumbing</a><span class="module-tag exercises">Exercises</span></h2>
+        <p>Objects, refs, and refspecs; <code>update-ref</code> and
+        compare-and-swap; fast-forward-only as a policy primitive; reading a
+        file without checking its branch out; worktrees; and commit messages as
+        a protocol, and the limit of that idea.</p>
+      </div>
+    </div>
+
+    <div class="module-item">
+      <div class="module-number">2</div>
+      <div class="module-body">
+        <h2 id="the-co-written-state-fileexercises"><a href="the-co-written-state-file.html">The co-written state file</a><span class="module-tag exercises">Exercises</span></h2>
+        <p>YAML as a document rather than a serialization; compare-and-swap
+        write loops, refusal, and re-derivation; actions that stay idempotent
+        because they derive from committed state; append-only ledgers and
+        derived totals.</p>
+      </div>
+    </div>
+
+    <div class="module-item">
+      <div class="module-number">3</div>
+      <div class="module-body">
+        <h2 id="contracts-and-their-parsers"><a href="contracts-and-their-parsers.html">Contracts and their parsers</a></h2>
+        <p>The ID and heading grammars; the READABILITY rule family and how it
+        varies per contract; bouncing a malformed artifact instead of guessing
+        at it; where the parsers live, which shapes have none, and how to
+        evolve a contract without breaking them.</p>
+      </div>
+    </div>
+  </div>
+<!-- content:end -->
+<nav class="pager" aria-label="Previous and next page">
+  <a class="pager-prev" href="../how-it-works/how-gateline-stays-vendor-neutral.html"><span class="pager-label">Previous</span><span class="pager-title">How gateline stays vendor-neutral</span></a>
+  <a class="pager-next" href="../onboarding/git-plumbing.html"><span class="pager-label">Next</span><span class="pager-title">Git, down to the plumbing</span></a>
+</nav>
+</main>
+<nav class="sidebar" aria-label="All documentation">
+  <p class="sidebar-title">Documentation</p>
+  <p class="sidebar-section"><a href="../how-it-works/index.html">How It Works</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../how-it-works/index.html">Overview</a></li>
+    <li><a href="../how-it-works/how-a-run-works.html">How a run works</a></li>
+    <li><a href="../how-it-works/how-gates-keep-a-human-in-charge.html">How gates keep a human in charge</a></li>
+    <li><a href="../how-it-works/how-gateline-stays-vendor-neutral.html">How gateline stays vendor-neutral</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../onboarding/index.html">Onboarding</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../onboarding/index.html" aria-current="page">Overview</a></li>
+    <li><a href="../onboarding/git-plumbing.html">1. Git, down to the plumbing</a></li>
+    <li><a href="../onboarding/the-co-written-state-file.html">2. The co-written state file</a></li>
+    <li><a href="../onboarding/contracts-and-their-parsers.html">3. Contracts and their parsers</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../reference/index.html">Reference</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../reference/index.html">Overview</a></li>
+    <li><a href="../reference/cli.html">CLI</a></li>
+    <li><a href="../reference/state-yaml.html">state.yaml</a></li>
+    <li><a href="../reference/orchestrator-yaml.html">orchestrator.yaml</a></li>
+    <li><a href="../reference/adapter-manifests.html">Adapter manifests</a></li>
+    <li><a href="../reference/contract-grammar.html">Contract grammar</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../api/index.html">API</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../api/index.html">Browse generated API docs</a></li>
+  </ul>
+</nav>
+</div>
+<footer class="site-footer">
+  gateline is an open-source framework (Apache-2.0). &copy; the gateline maintainers.
+  <span class="footer-sep">&middot;</span>
+  <a href="../index.html">Documentation home</a>
+</footer>
+</body>
+</html>

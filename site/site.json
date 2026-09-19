@@ -1,0 +1,161 @@
+{
+  "_comment": "Site manifest for scripts/build-site.py. Declares the nav, the sidebar tree, the reading order used for prev/next, and per-page <title>/description. Content lives in the page files themselves, between the content markers; this file owns everything around it.",
+
+  "wordmark": "gateline",
+  "titleSuffix": " — gateline",
+  "footer": "gateline is an open-source framework (Apache-2.0). &copy; the gateline maintainers.",
+
+  "sections": [
+    {
+      "id": "home",
+      "label": "Home",
+      "inNav": false,
+      "pages": [
+        {
+          "path": "index.html",
+          "title": "gateline — artifact-driven, human-gated agent pipelines",
+          "rawTitle": true,
+          "nav": "Home",
+          "layout": "landing",
+          "description": "gateline is an open-source framework for running the software development lifecycle as a team of semi-autonomous agents, with named humans approving at phase gates."
+        }
+      ]
+    },
+    {
+      "id": "how-it-works",
+      "label": "How It Works",
+      "href": "how-it-works/index.html",
+      "pages": [
+        {
+          "path": "how-it-works/index.html",
+          "title": "How It Works",
+          "nav": "Overview",
+          "layout": "hub",
+          "description": "The pipeline model end to end: the run lifecycle, the gates that keep a named human in charge, and the separation that keeps the framework vendor-neutral."
+        },
+        {
+          "path": "how-it-works/how-a-run-works.html",
+          "title": "How a run works",
+          "nav": "How a run works",
+          "blurb": "One change, carried from a one-page brief to a merged branch: the four gates, the run directory as the whole of pipeline state, profiles, two-step creation, and the gate-less historian sweep.",
+          "description": "The G0–G3 run lifecycle, the run directory as pipeline state, profiles, two-step creation, and historian sweeps."
+        },
+        {
+          "path": "how-it-works/how-gates-keep-a-human-in-charge.html",
+          "title": "How gates keep a human in charge",
+          "nav": "How gates keep a human in charge",
+          "blurb": "A prohibition built into the code rather than instructed: who may write a gate, how two writers share one file, what happens at a cap, and how autonomy is earned and measured.",
+          "description": "Structural gate authorship, the co-writer contract, round caps and escalation, one-authority topology, and the trust ladder."
+        },
+        {
+          "path": "how-it-works/how-gateline-stays-vendor-neutral.html",
+          "title": "How gateline stays vendor-neutral",
+          "nav": "How gateline stays vendor-neutral",
+          "blurb": "Roles are contracts over files, models are bindings in a single registry, and adapters are rendered rather than written — with the cross-vendor decorrelation gradient stated honestly.",
+          "description": "Roles as contracts, the model registry, rendered adapters, and the honest per-adapter decorrelation gradient."
+        }
+      ]
+    },
+    {
+      "id": "onboarding",
+      "label": "Onboarding",
+      "href": "onboarding/index.html",
+      "pages": [
+        {
+          "path": "onboarding/index.html",
+          "title": "Onboarding",
+          "nav": "Overview",
+          "layout": "hub",
+          "description": "The fluency layer: the advanced topics gateline depends on but never explains, each taught through the place in the codebase where it does real work."
+        },
+        {
+          "path": "onboarding/git-plumbing.html",
+          "title": "Git, down to the plumbing",
+          "nav": "1. Git, down to the plumbing",
+          "blurb": "Git as a small transactional database: the object store, compare-and-swap ref updates, reading files without a checkout, fast-forward-only as a policy primitive, and worktrees.",
+          "description": "Git's object model, CAS ref updates, checkout-free reads, fast-forward-only, and worktrees — taught where gateline relies on them."
+        },
+        {
+          "path": "onboarding/the-co-written-state-file.html",
+          "title": "The co-written state file",
+          "nav": "2. The co-written state file",
+          "blurb": "One file with two writers: normative comments, mutations as data, a single write path, refusal as a return value, and append-only facts with derived totals.",
+          "description": "How runs/<slug>/state.yaml is safely co-written by a human and the orchestrator."
+        },
+        {
+          "path": "onboarding/contracts-and-their-parsers.html",
+          "title": "Contracts and their parsers",
+          "nav": "3. Contracts and their parsers",
+          "blurb": "Prose as a wire format: what a contract declares, the ID grammars and who parses them, why normative and parsed are independent, and how to evolve a contract safely.",
+          "description": "Artifact contracts as a two-audience format — the ID grammars, the READABILITY rule sets, and safe contract evolution."
+        }
+      ]
+    },
+    {
+      "id": "reference",
+      "label": "Reference",
+      "href": "reference/index.html",
+      "pages": [
+        {
+          "path": "reference/index.html",
+          "title": "Reference",
+          "nav": "Overview",
+          "layout": "hub",
+          "description": "Exact shapes for adopter tooling: the CLI surface, the state and orchestrator schemas, adapter manifests, and the artifact contract grammar."
+        },
+        {
+          "path": "reference/cli.html",
+          "title": "CLI reference",
+          "nav": "CLI",
+          "blurb": "Every gateline subcommand across the inspect, decide, create and serve groups, plus the gateline-orchestrator and gateline-runner-agent binaries.",
+          "description": "The gateline CLI surface: global flags, all subcommands, and the companion orchestrator and runner-agent binaries."
+        },
+        {
+          "path": "reference/state-yaml.html",
+          "title": "state.yaml reference",
+          "nav": "state.yaml",
+          "blurb": "The run-state contract field by field: phases, profiles and their gate sets, gate entries, the budget ledger, tasks, escalations, and the co-writer rules.",
+          "description": "Field-by-field reference for runs/<slug>/state.yaml, the single source of truth for a pipeline run."
+        },
+        {
+          "path": "reference/orchestrator-yaml.html",
+          "title": "orchestrator.yaml reference",
+          "nav": "orchestrator.yaml",
+          "blurb": "Schedules for periodic, gate-less role dispatches: the key shape, the interval grammar, where the engine reads the file, and the sweep derivation rules.",
+          "description": "The orchestrator.yaml schedule keys, interval grammar, and the S0–S4+SB sweep derivation rules."
+        },
+        {
+          "path": "reference/adapter-manifests.html",
+          "title": "Adapter manifest reference",
+          "nav": "Adapter manifests",
+          "blurb": "The manifest schema key by key across the three shipped adapters, how gateline render consumes it, and the narrow-never-widen permission rule.",
+          "description": "The adapter manifest schema, the render pipeline that consumes it, and the permission model."
+        },
+        {
+          "path": "reference/contract-grammar.html",
+          "title": "Contract grammar reference",
+          "nav": "Contract grammar",
+          "blurb": "The ten artifact contracts and their two normative rule families — ID/heading grammar and READABILITY — plus the human-vs-orchestrator commit-message grammar.",
+          "description": "The artifact contracts, their ID and READABILITY rule families, and the commit-message grammar."
+        }
+      ]
+    },
+    {
+      "id": "api",
+      "label": "API",
+      "href": "api/index.html",
+      "external": true,
+      "blurb": "TypeDoc-generated interface documentation for the @gateline/* packages: core, orchestrator, server, CLI, and runner agent.",
+      "pages": []
+    }
+  ],
+
+  "unlisted": [
+    {
+      "path": "404.html",
+      "title": "Page not found",
+      "layout": "hub",
+      "description": "That page does not exist on the gateline documentation site."
+    }
+  ]
+}

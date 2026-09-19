@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Git, down to the plumbing — gateline</title>
+  <meta name="description" content="Git's object model, CAS ref updates, checkout-free reads, fast-forward-only, and worktrees — taught where gateline relies on them.">
+  <link rel="stylesheet" href="../assets/site.css">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="site-header">
+  <a class="wordmark" href="../index.html">gateline</a>
+  <nav class="site-nav" aria-label="Sections">
+    <a href="../how-it-works/index.html">How It Works</a>
+    <a href="../onboarding/index.html" class="active" aria-current="true">Onboarding</a>
+    <a href="../reference/index.html">Reference</a>
+    <a href="../api/index.html">API</a>
+  </nav>
+</header>
+<div class="layout">
+<main id="content">
+  <h1>Git, down to the plumbing</h1>
+<!-- content:start -->
+<article class="doc">
+  <p class="lede">Most senior engineers know git as a workflow: branch, commit,
+  rebase, push. gateline uses it as something else — a small transactional
+  database that happens to store source code. The framework has no server, no
+  lock service, and no message queue; two independent writers edit one file
+  concurrently and neither can clobber the other. This module walks the git
+  primitives that make that possible, and for each one shows the place in the
+  codebase that would collapse without it.</p>
+  <!-- evidence: packages/core/src/sources/git.ts -->
+
+  <p>The thesis is written down in the repository, at the top of the module
+  that wraps the git CLI: <em>reads always address refs (never the working
+  tree); writes go through plumbing so no checkout is ever touched.</em> Not one
+  read method on the <code>Git</code> class in
+  <code>packages/core/src/sources/git.ts</code> takes a working-tree
+  path; the ones that read content take a revision. gateline can observe and
+  write a run branch that is checked out nowhere, on a machine whose working
+  tree is on some unrelated branch, mid-rebase, and dirty.</p>
+
+  <p><strong>Plumbing</strong> and <strong>porcelain</strong> are git's own
+  terms for its two command layers. Porcelain is the human interface —
+  <code>git commit</code>, <code>git merge</code>, <code>git pull</code> — and
+  it assumes a working tree and an index belonging to a person. Plumbing is the
+  scriptable layer underneath:
+  <code>hash-object</code>, <code>read-tree</code>, <code>write-tree</code>,
+  <code>commit-tree</code>, <code>update-ref</code>. <code>git-commit-tree(1)</code>
+  says as much in its own description — <em>"This is usually not what an end
+  user wants to run directly."</em></p>
+
+  <h2 id="objects-a-content-addressed-database-that-happens-to-store-code">Objects: a content-addressed database that happens to store code</h2>
+
+  <p>A git repository is an object store with exactly four object types — blob,
+  tree, commit, tag. <code>gitglossary(7)</code> defines an
+  <strong>object</strong> as "the unit of storage in Git. It is uniquely
+  identified by the SHA-1 of its contents. Consequently, an object cannot be
+  changed." A <strong>tree object</strong> is "an object containing a list of file names
+  and modes along with refs to the associated blob and/or tree objects", and a
+  <strong>commit</strong> names one tree plus its metadata.</p>
+  <!-- evidence: gitglossary(7); packages/core/src/sources/git.ts -->
+
+  <p>Two consequences do most of the work here. The object id is a function of
+  the content, so identical content anywhere in history is one object. And
+  <em>names and modes live in the tree, not in the blob</em> — which is why
+  building a commit programmatically takes more than writing a blob: you must
+  also produce a tree binding the blob to a path and a file mode.</p>
+
+  <div class="exercise">
+    <h3>Exercise 1 — objects, in a repository you can throw away</h3>
+    <p>Build a scratch repository and look at what git actually stored. The
+    object ids are reproducible because the identity and the commit dates are
+    pinned; unpinned, only the commit id would vary — the blob id is a pure
+    function of the bytes.</p>
+<pre><code>d=$(mktemp -d)/objects; git init -q -b main "$d" &amp;&amp; cd "$d"
+git config user.email demo@example.invalid &amp;&amp; git config user.name demo
+git config commit.gpgsign false
+export GIT_AUTHOR_DATE='2026-01-01T00:00:00+0000' GIT_COMMITTER_DATE='2026-01-01T00:00:00+0000'
+printf 'one\n' &gt; f.txt &amp;&amp; git add f.txt &amp;&amp; git commit -qm c1
+printf 'one\n' | git hash-object --stdin   # id of the content, computed without a repo
+git rev-parse HEAD:f.txt                   # id git stored for that path
+git cat-file -p HEAD                       # a commit is a tree plus metadata
+git ls-tree HEAD                           # the tree carries the name and the mode</code></pre>
+<pre class="exercise-output"><code>5626abf0f72e58d7a153368ba57db4c673c0e171
+5626abf0f72e58d7a153368ba57db4c673c0e171
+tree 7385b9ca65269b27de63aea3ddff716dd768c253
+author demo &lt;demo@example.invalid&gt; 1767225600 +0000
+committer demo &lt;demo@example.invalid&gt; 1767225600 +0000
+
+c1
+100644 blob 5626abf0f72e58d7a153368ba57db4c673c0e171	f.txt</code></pre>
+    <p>The first two lines are the same forty characters: <code>hash-object</code>
+    computed the id of four bytes on standard input, and <code>rev-parse</code>
+    asked the repository what it had stored at that path. Note what
+    <code>cat-file -p HEAD</code> does <em>not</em> contain: the filename. Only
+    <code>ls-tree</code> shows it, alongside the mode <code>100644</code>.</p>
+  </div>
+
+  <figure class="diagram" data-diagram="git-object-model">
+    <figcaption>The four-layer addressing chain gateline reads and writes:
+    a ref names a commit, a commit names a tree, a tree binds names and modes
+    to blobs. Only the ref is mutable.</figcaption>
+    <svg class="diagram-svg" viewBox="0 0 880 400" role="img" aria-labelledby="title-git-object-model">
+      <title id="title-git-object-model">Four columns left to right — refs, commits, trees, blobs — split by a mutability divider. Refs are the only mutable layer; commits, trees and blobs are immutable and content-addressed. The tree binds modes and object ids to names, and one state.yaml blob is reachable from two histories, each commit reaching it through a tree of its own.</title>
+      <defs>
+        <marker id="arr-gom" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="currentColor"/></marker>
+        <marker id="arr-gom-faint" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="var(--fg-faint)"/></marker>
+        <marker id="arr-gom-accent" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" class="d-accent-fill"/></marker>
+      </defs>
+
+      <!-- The mutability divider: the figure's first accent element -->
+      <rect x="112" y="4" width="140" height="20" rx="3" fill="var(--bg-subtle,#f6f7f8)" class="d-accent-stroke" stroke-width="1.2"/>
+      <text x="182" y="18" text-anchor="middle" class="d-small d-accent-fill">the only thing that changes</text>
+      <line x1="182" y1="24" x2="182" y2="344" class="d-accent-stroke" stroke-width="1.5"/>
+      <text x="174" y="360" text-anchor="end" class="d-small d-faint">mutable</text>
+      <text x="190" y="360" class="d-small d-faint">immutable — content-addressed</text>
+
+      <!-- Column 1: refs, the only mutable layer -->
+      <text x="8" y="40" class="d-bold d-accent-fill">mutable — a name that points</text>
+      <ellipse cx="84" cy="62" rx="74" ry="9" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <path d="M10,62 L10,84 A74,9 0 0 0 158,84 L158,62" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="84" y="78" text-anchor="middle" class="d-mono">refs/heads/main</text>
+      <ellipse cx="84" cy="112" rx="74" ry="9" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <path d="M10,112 L10,134 A74,9 0 0 0 158,134 L158,112" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="84" y="128" text-anchor="middle" class="d-mono">refs/heads/run/&lt;slug&gt;</text>
+      <text x="8" y="166" class="d-small d-faint">update-ref moves these,</text>
+      <text x="8" y="178" class="d-small d-faint">and nothing else</text>
+
+      <!-- ref -> commit -->
+      <line x1="160" y1="74" x2="206" y2="82" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-gom)"/>
+      <text x="193" y="64" class="d-small">points at</text>
+      <line x1="160" y1="124" x2="206" y2="178" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-gom)"/>
+      <text x="192" y="148" class="d-small">points at</text>
+
+      <!-- Column 2: commits -->
+      <rect x="210" y="48" width="132" height="76" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="276" y="64" text-anchor="middle" class="d-bold">commit</text>
+      <text x="276" y="77" text-anchor="middle" class="d-mono">a7c3f1e…</text>
+      <text x="218" y="92" class="d-small d-faint">tree</text>
+      <text x="218" y="103" class="d-small d-faint">parent</text>
+      <text x="218" y="114" class="d-small d-faint">author / committer</text>
+      <rect x="210" y="152" width="132" height="76" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="276" y="168" text-anchor="middle" class="d-bold">commit</text>
+      <text x="276" y="181" text-anchor="middle" class="d-mono">4f2a1e8…</text>
+      <text x="218" y="196" class="d-small d-faint">tree</text>
+      <text x="218" y="207" class="d-small d-faint">parent</text>
+      <text x="218" y="218" class="d-small d-faint">author / committer</text>
+
+      <!-- the parent edge: dashed, to a small faint box -->
+      <path d="M216,124 C190,170 188,220 214,264" fill="none" stroke="var(--fg-faint)" stroke-width="1.2" stroke-dasharray="4 3" marker-end="url(#arr-gom-faint)"/>
+      <text x="218" y="250" class="d-small d-faint">parent</text>
+      <rect x="190" y="268" width="126" height="26" rx="4" fill="none" stroke="var(--fg-faint)" stroke-width="1"/>
+      <text x="253" y="285" text-anchor="middle" class="d-small d-faint">parent commit</text>
+      <text x="253" y="306" text-anchor="middle" class="d-small d-faint">history</text>
+
+      <!-- commit -> tree -->
+      <line x1="344" y1="80" x2="396" y2="62" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-gom)"/>
+      <text x="370" y="54" text-anchor="middle" class="d-small">tree</text>
+
+      <!-- Column 3: the tree, and the table that binds names and modes to ids -->
+      <rect x="400" y="44" width="260" height="26" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="530" y="62" text-anchor="middle" class="d-bold">tree</text>
+      <text x="406" y="88" class="d-small d-faint">mode + object id</text>
+      <text x="561" y="88" class="d-small d-faint">name</text>
+      <rect x="400" y="96" width="260" height="102" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <line x1="400" y1="130" x2="660" y2="130" stroke="currentColor" stroke-width="0.8"/>
+      <line x1="400" y1="164" x2="660" y2="164" stroke="currentColor" stroke-width="0.8"/>
+      <line x1="555" y1="96" x2="555" y2="198" stroke="currentColor" stroke-width="0.8"/>
+      <text x="406" y="117" class="d-mono">100644 blob 7086065…</text>
+      <text x="561" y="117" class="d-mono">intent-brief.md</text>
+      <text x="406" y="151" class="d-mono">100644 blob b9d94cd…</text>
+      <text x="561" y="151" class="d-mono">state.yaml</text>
+      <text x="406" y="185" class="d-mono">040000 tree 6771cf5…</text>
+      <text x="561" y="185" class="d-mono">tasks</text>
+
+      <!-- tree -> each blob -->
+      <line x1="662" y1="113" x2="726" y2="113" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-gom)"/>
+      <line x1="662" y1="147" x2="726" y2="147" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-gom)"/>
+      <line x1="662" y1="181" x2="726" y2="181" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-gom)"/>
+
+      <!-- Column 4: blobs, and the subtree that recurses -->
+      <rect x="730" y="98" width="120" height="30" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="790" y="112" text-anchor="middle" class="d-bold">blob</text>
+      <text x="790" y="124" text-anchor="middle" class="d-mono">7086065…</text>
+      <rect x="730" y="132" width="120" height="30" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="790" y="146" text-anchor="middle" class="d-bold">blob</text>
+      <text x="790" y="158" text-anchor="middle" class="d-mono">b9d94cd…</text>
+      <rect x="730" y="166" width="120" height="30" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="790" y="180" text-anchor="middle" class="d-bold">tree</text>
+      <text x="790" y="192" text-anchor="middle" class="d-mono">6771cf5…</text>
+      <path d="M758,197 C746,226 834,226 822,199" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-gom)"/>
+      <text x="790" y="240" text-anchor="middle" class="d-small d-faint">subtree</text>
+
+      <!-- the lower commit's own tree: the shared blob is reached through it -->
+      <line x1="344" y1="196" x2="396" y2="220" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-gom)"/>
+      <text x="372" y="202" text-anchor="middle" class="d-small">tree</text>
+      <rect x="400" y="212" width="150" height="30" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="475" y="232" text-anchor="middle" class="d-bold">tree</text>
+      <text x="400" y="256" class="d-small d-faint">a different tree, the same state.yaml blob</text>
+
+      <!-- the shared object: the figure's second accent element -->
+      <path d="M552,228 C630,235 686,212 722,166" fill="none" class="d-accent-stroke" stroke-width="1.1" marker-end="url(#arr-gom-accent)"/>
+      <text x="530" y="288" text-anchor="middle" class="d-small d-accent-fill">same content = one object, reachable from two histories</text>
+
+      <!-- bottom annotation -->
+      <text x="8" y="386" class="d-small d-faint"><tspan class="d-mono">git show &lt;rev&gt;:&lt;path&gt;</tspan> walks this chain — no checkout, no index</text>
+    </svg>
+  </figure>
+
+  <h3>Where gateline lives on this</h3>
+
+  <p>The worked example is <code>writeTreeWithBlob</code> in
+  <code>git.ts</code>, docblocked as building "a tree that is
+  <code>baseCommit</code>'s tree with one blob replaced, without touching any
+  index or working tree the user owns". It points <code>GIT_INDEX_FILE</code> at
+  a temporary file, runs <code>read-tree</code>,
+  <code>update-index --add --cacheinfo 100644,&lt;blob&gt;,&lt;path&gt;</code>
+  and <code>write-tree</code> against that scratch index, and deletes the
+  directory in a <code>finally</code>. <code>git(1)</code> documents
+  <code>GIT_INDEX_FILE</code> as specifying "an alternate index file", and that
+  is the whole of it — the variable relocates the index and changes nothing
+  else. The operator's index at <code>$GIT_DIR/index</code> is left unread and
+  unwritten.</p>
+
+  <p><code>commitTree</code> then makes the commit, setting
+  <code>GIT_AUTHOR_NAME</code>, <code>GIT_AUTHOR_EMAIL</code>,
+  <code>GIT_COMMITTER_NAME</code> and <code>GIT_COMMITTER_EMAIL</code> from an
+  optional identity argument. That is how the orchestrator commits under its own
+  bot identity without ever mutating <code>git config</code> — a design that
+  switched <code>git config user.name</code> instead would be writing shared,
+  persistent state that any concurrent human commit would inherit.</p>
+
+  <h2 id="refs-mutable-pointers-and-the-one-operation-that-makes-them-safe">Refs: mutable pointers, and the one operation that makes them safe</h2>
+
+  <p>Objects are immutable, so everything that changes in a repository changes
+  in the refs. <code>gitglossary(7)</code> defines a <strong>ref</strong> as "a
+  name that points to an object name or another ref", and adds the rule that
+  matters for library design:
+  "The ref namespace is hierarchical. Ref names must either start with refs/ or
+  be located in the root of the hierarchy." A branch is nothing but a ref under
+  <code>refs/heads/</code> — and because names only have to start with
+  <code>refs/</code>, a program can carve out a namespace nothing else will
+  collide with. gateline uses <code>refs/gateline/wip/&lt;branch&gt;</code> to
+  hold a write-ahead intent commit while a state write is in flight: a ref no
+  branch reaches, keeping an object alive without putting it in anybody's
+  history.</p>
+  <!-- evidence: gitglossary(7); git-update-ref(1); packages/core/src/sources/git.ts; packages/core/src/sources/local-source.ts -->
+
+  <p>A <strong>pseudoref</strong> is the exception you have to know about; the
+  glossary defines it as "a ref that has different semantics than normal refs. These refs can be read via
+  normal Git commands, but cannot be written to by commands like
+  git-update-ref(1)." <code>MERGE_HEAD</code> and <code>FETCH_HEAD</code> are
+  pseudorefs, which is why gateline's code-tree monitor <em>tests for the
+  existence of</em> <code>MERGE_HEAD</code> rather than transacting on it.</p>
+
+  <h3>The three-argument <code>update-ref</code></h3>
+
+  <p>Here is the primitive the whole framework rests on. Most engineers have
+  only ever met <code>update-ref</code> in its two-argument form, a blunt
+  "point this ref here". <code>git-update-ref(1)</code> states the
+  three-argument form exactly:</p>
+
+  <blockquote>Given three arguments, stores the &lt;new-oid&gt; in the
+  &lt;ref&gt;, possibly dereferencing the symbolic refs, after verifying that
+  the current value of the &lt;ref&gt; matches &lt;old-oid&gt;. E.g. git
+  update-ref refs/heads/master &lt;new-oid&gt; &lt;old-oid&gt; updates the
+  master branch head to &lt;new-oid&gt; only if its current value is
+  &lt;old-oid&gt;. You can specify 40 "0" or an empty string as &lt;old-oid&gt;
+  to make sure that the ref you are creating does not exist.</blockquote>
+
+  <p><em>This is a compare-and-swap</em> in the sense the concurrency literature
+  uses the term — that framing is this guide's analysis, not language git uses.
+  Git's documentation never argues that the three-argument form defeats a race;
+  it states a conditional update and describes locking. The conclusion is ours:
+  an update that applies only if the observed value is still current is what lets
+  independent writers share mutable state without a lock.</p>
+
+  <div class="exercise">
+    <h3>Exercise 2 — feel the refusal</h3>
+    <p>Two commits, then two ref updates: one whose stated old value is true,
+    one whose stated old value is stale. Continue in a fresh scratch repository.</p>
+<pre><code>d=$(mktemp -d)/cas; git init -q -b main "$d" &amp;&amp; cd "$d"
+git config user.email demo@example.invalid &amp;&amp; git config user.name demo
+git config commit.gpgsign false
+export GIT_AUTHOR_DATE='2026-01-01T00:00:00+0000' GIT_COMMITTER_DATE='2026-01-01T00:00:00+0000'
+printf 'one\n' &gt; f.txt &amp;&amp; git add f.txt &amp;&amp; git commit -qm c1 &amp;&amp; old=$(git rev-parse HEAD)
+printf 'two\n' &gt;&gt; f.txt &amp;&amp; git commit -qam c2 &amp;&amp; new=$(git rev-parse HEAD)
+git update-ref refs/heads/main "$old" "$new"; echo "rewind, old value matches: exit=$?"
+git update-ref refs/heads/main "$new" "$new"; echo "replay, old value stale:  exit=$?"</code></pre>
+<pre class="exercise-output"><code>rewind, old value matches: exit=0
+fatal: update_ref failed for ref 'refs/heads/main': cannot lock ref 'refs/heads/main': is at 0c807259e9a3fc6eb1e46f87a61fffadbd2f4b2f but expected c6534426b98a60e379172034b78861edc0b4cdd1
+replay, old value stale:  exit=128</code></pre>
+    <p>Note two things. The first call moved a branch <em>backwards</em> —
+    <code>update-ref</code> has no opinion about direction, only about the old
+    value. And the refusal names both the value found and the value expected,
+    which is what a writer needs in order to re-read and re-derive.</p>
+  </div>
+
+  <h3>Where gateline lives on this</h3>
+
+  <p>The helper is <code>updateRefCAS</code> in <code>git.ts</code>: a
+  <code>try</code> around
+  <code>update-ref &lt;ref&gt; &lt;new&gt; &lt;expectedOld&gt;</code> returning
+  <code>true</code>, with a <code>catch</code> returning <code>false</code>. Its
+  docblock says what the false means: "the ref no longer points at
+  <code>expectedOld</code> — the caller re-reads and re-presents."</p>
+
+  <p>That one design choice — <em>failure is a return value, not an
+  exception</em> — is what makes losing the race ordinary rather than
+  exceptional. Both writers read the branch tip, both build a commit on it, and
+  the ref update admits exactly one. The
+  <a href="../how-it-works/how-gates-keep-a-human-in-charge.html#cas-co-writer">two-writer
+  figure on the gates page</a> draws the loop; module 2 takes apart what the
+  loser does next.</p>
+
+  <p>Note what <code>updateRefCAS</code> does <em>not</em> do: it does not
+  retry. Retrying is the caller's job, it is attempted only for the one refusal
+  reason a retry can fix, and it is bounded — the orchestrator's
+  closing-bookkeeping loop gives up after five attempts and logs.</p>
+
+  <h3>The all-zeros old value: create-only</h3>
+
+  <p>The man-page quote's last sentence is a separate primitive hiding in the
+  same command. Passing forty zeros as the old value asserts <em>this ref does not
+  exist</em>, so the update succeeds only for the writer who gets there first.
+  gateline names that value <code>ZERO_OID</code> and uses it in three places:
+  minting a run branch when a run is staged, creating a sweep branch when a
+  scheduled role comes due, and materializing a remote-only run branch locally.
+  The scheduler's own header names the pattern: branch creation from
+  <code>ZERO_OID</code> is the CAS duplicate-dispatch guard.</p>
+
+  <div class="exercise">
+    <h3>Exercise 3 — create-only, as a duplicate-dispatch guard</h3>
+    <p>Two orchestrator instances wake at the same moment, both decide the
+    weekly documentation sweep is due, and both try to create the same branch.
+    Continue in the repository from exercise 2.</p>
+<pre><code>zero=0000000000000000000000000000000000000000
+git update-ref refs/heads/sweep-2026-01-01 "$old" "$zero"; echo "first writer:  exit=$?"
+git update-ref refs/heads/sweep-2026-01-01 "$old" "$zero"; echo "second writer: exit=$?"</code></pre>
+<pre class="exercise-output"><code>first writer:  exit=0
+fatal: update_ref failed for ref 'refs/heads/sweep-2026-01-01': cannot lock ref 'refs/heads/sweep-2026-01-01': reference already exists
+second writer: exit=128</code></pre>
+    <p>Exactly one sweep is dispatched, and no coordination was needed to
+    arrange it. The loser's correct response is not to retry but to re-scan and
+    re-derive: the work it wanted may already be in flight.</p>
+  </div>
+
+  <h2 id="reading-a-file-without-checking-anything-out">Reading a file without checking anything out</h2>
+
+  <p>The syntax is one colon, and <code>gitrevisions(7)</code> defines it: "A
+  suffix : followed by a path names the blob or tree at the given path in the
+  tree-ish object named by the part before the colon." So
+  <code>&lt;rev&gt;:&lt;path&gt;</code> addresses a blob inside a commit.</p>
+  <!-- evidence: gitrevisions(7); packages/core/src/sources/git.ts -->
+
+  <p>There is an adjacent syntax one character away that means something else
+  entirely. <code>gitrevisions(7)</code> also defines
+  <code>:[&lt;n&gt;:]&lt;path&gt;</code> as naming "a blob object in the index
+  at the given path". A leading colon reads your index; a revision before the
+  colon reads a commit. Every read in gateline puts a revision before the
+  colon — there is no index in the picture at all.</p>
+
+  <div class="exercise">
+    <h3>Exercise 4 — read a run's spine from a branch you have not checked out</h3>
+    <p>In any clone of the framework repository, print the first lines of a
+    finished run's state file straight out of a commit. Your working tree is not
+    touched.</p>
+<pre><code>git show main:runs/dupefind/state.yaml | head -6</code></pre>
+<pre class="exercise-output"><code># Contract: maintained by Orchestrator (human in v0); read by everyone.
+# Lives at runs/&lt;slug&gt;/state.yaml — the single source of truth for a run.
+
+run: dupefind
+branch: run/dupefind
+phase: done               # spec | plan | implement | integrate | release | done | paused</code></pre>
+    <p>Note the fifth line. The file names a branch
+    <code>run/dupefind</code> that no longer exists anywhere in the repository —
+    the run merged and the branch was pruned. Its record survives on
+    <code>main</code> regardless, because the record was never the branch; it
+    was always the files.</p>
+  </div>
+
+  <h3>Where gateline lives on this</h3>
+
+  <p><code>Git.show</code> wraps that syntax with one refinement worth copying:
+  a missing path or revision returns <code>null</code> rather than throwing. A
+  regular expression matches git's "does not exist" family of errors, so
+  "is there a <code>verification-report.md</code> on this branch yet?" is a
+  read rather than an exception handler.</p>
+
+  <p>Because reads address refs, and refs include raw object ids, the past is
+  just another ref: shadow replay hands the observer a run reference whose
+  revision is a <em>commit id</em> instead of a branch name, and the same
+  derivation code then runs against a point in history with no special mode. One caution when you go looking for a run this
+  way: in a fresh clone the only reference to an unmerged run branch is the
+  remote-tracking one, so <code>origin/run/&lt;slug&gt;</code> is the portable
+  form.</p>
+
+  <h2 id="fast-forward-only-as-a-policy-primitive">Fast-forward-only as a policy primitive</h2>
+
+  <p>Most engineers meet fast-forward as a merge preference. It is more useful
+  read as a safety property. <code>gitglossary(7)</code> defines it as the case
+  where the branch you are merging is "a descendant of what you have", so you "do
+  not make a new merge commit but instead just update your branch to point at the
+  same revision". That last clause connects this section to the last one: a
+  fast-forward creates no object, it is a pure pointer move, which is why
+  "fast-forward only" is a usable policy — it says history is only ever appended
+  to, never rewritten underneath anyone. Enforcing it takes three mechanisms, and
+  they are not interchangeable.</p>
+  <!-- evidence: gitglossary(7); packages/core/src/sources/local-source.ts; packages/core/src/sources/code-tree.ts -->
+
+  <dl>
+    <dt>The flag</dt>
+    <dd><code>git merge --ff-only</code> will "resolve the merge as a
+    fast-forward when possible. When not possible, refuse to merge and exit with
+    a non-zero status." <code>git pull --ff-only</code> is documented
+    differently — "only update to the new history if there is no divergent local
+    history" — so quote the page you actually mean.</dd>
+    <dt>The refspec</dt>
+    <dd>A fetch refspec written
+    <code>refs/heads/&lt;b&gt;:refs/heads/&lt;b&gt;</code>, with
+    no leading <code>+</code>, is fast-forward-only <em>by grammar</em> — the
+    plus sign is what would make it forced. gateline's
+    <code>syncFromRemote</code> builds exactly that spec, one per branch, so a
+    local branch carrying an unpushed decision commit is never clobbered by a
+    sync.</dd>
+    <dt>The ancestry test</dt>
+    <dd>To decide for yourself whether a move <em>would</em> be a fast-forward,
+    ask whether the old commit is an ancestor of the new one:
+    <code>git merge-base --is-ancestor</code>. This is what the code-tree
+    monitor calls.</dd>
+  </dl>
+
+  <p>The refspec carries a second lesson. A non-fast-forward fetch is a
+  <em>per-ref</em> refusal: the other refspecs still apply and the
+  remote-tracking refs still update, which is why the code deliberately swallows
+  that failure. What <em>is</em> fatal, and aborts the whole batch, is fetching
+  into a branch checked out in a worktree — which is why
+  <code>syncFromRemote</code> filters those out first.</p>
+
+  <div class="exercise">
+    <h3>Exercise 5 — the fast-forward test, and its third exit code</h3>
+    <p><code>merge-base --is-ancestor</code> answers by exit status, and it has
+    three answers, not two.</p>
+<pre><code>d=$(mktemp -d)/ff; git init -q -b main "$d" &amp;&amp; cd "$d"
+git config user.email demo@example.invalid &amp;&amp; git config user.name demo
+git config commit.gpgsign false
+printf 'v1\n' &gt; f.txt &amp;&amp; git add f.txt &amp;&amp; git commit -qm c1 &amp;&amp; start=$(git rev-parse HEAD)
+printf 'v2\n' &gt; f.txt &amp;&amp; git commit -qam c2 &amp;&amp; head=$(git rev-parse HEAD)
+git merge-base --is-ancestor "$start" "$head"; echo "moved forward:   exit=$?"
+git merge-base --is-ancestor "$head" "$start"; echo "moved backward:  exit=$?"
+git merge-base --is-ancestor "$start" deadbeefdeadbeefdeadbeefdeadbeefdeadbeef; echo "unknown commit:  exit=$?"</code></pre>
+<pre class="exercise-output"><code>moved forward:   exit=0
+moved backward:  exit=1
+fatal: Not a valid commit name deadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+unknown commit:  exit=128</code></pre>
+    <p><code>git-merge-base(1)</code> is explicit that "errors are signaled by a
+    non-zero status that is not 1". gateline's <code>isAncestor</code> catches
+    every failure and returns <code>false</code>, which folds exit 128 into "not
+    an ancestor". In the monitor's context that is fail-safe — an error reads as
+    "not a fast-forward" and pauses dispatch — but it is a conflation, and worth
+    knowing about before you reuse the helper somewhere the two cases differ.</p>
+  </div>
+
+  <h3>Where gateline lives on this: the code-tree monitor</h3>
+
+  <p>The checkout the engine's own code runs from stays on the default branch
+  and moves only by clean fast-forward. <code>CodeTreeMonitor</code> enforces
+  that, and its decision order reads as a specification. On each check it asks,
+  in order: is the working tree dirty? Is a rebase or merge in progress — do the
+  <code>rebase-merge</code>, <code>rebase-apply</code> or <code>MERGE_HEAD</code>
+  git-dir markers exist? Has HEAD not moved at all since the process started? Is
+  HEAD detached? Is the branch something other than the default branch? And is
+  the commit the process started on an ancestor of the current HEAD? Answered
+  yes, the first two pause dispatch, and so do the fourth and fifth; the last
+  pauses dispatch when answered <em>no</em>, and counts as an update when
+  answered yes. The third is the odd one out, and it is the answer on nearly
+  every check of a healthy engine: HEAD has not moved means the tree is fresh,
+  and that observation also clears any in-flight supersede debounce. A pause
+  carries a machine-readable <code>cause</code> naming which question failed
+  (<code>dirty</code>, <code>in-progress</code>, <code>detached</code>,
+  <code>off-default-branch</code> or <code>non-fast-forward</code>), and a
+  dirty tree that is hiding a queued fast-forward also sets
+  <code>upgradeBlocked</code>, so the operator can see that a pull is waiting
+  behind their uncommitted change.</p>
+
+  <p>A fast-forward must be observed on two consecutive checks before it is
+  confirmed, so a check racing a still-running <code>git pull</code> does not
+  fire on a half-updated tree; when it is confirmed, the process drains and
+  exits with <code>EX_TEMPFAIL</code>. The engine never pulls: updating the code
+  is an operator act, and the engine's only move is to stand down. That act has
+  a command, <code>gateline self-update</code>, which pulls, rebuilds the web
+  dist, and leaves the running engine to supersede itself.</p>
+
+  <div class="maintainer-note">
+    <h3>Maintainer note</h3>
+    <p>The one-authority rule was not designed up front — it was written after a
+    bad day. The topology design records that within a single day of running
+    Gatehouse hosted and the orchestrator on a workstation, every seam between
+    them produced an incident: a human raised a budget limit on origin,
+    and the workstation engine, reading a local branch that nothing ever
+    fast-forwarded, kept deriving against the stale limit and re-escalated
+    within seconds. The document's own diagnosis is the sentence to remember:
+    the state store was replicated, and both replicas accepted writes.</p>
+  </div>
+
+  <h2 id="worktrees-one-repository-several-checkouts">Worktrees: one repository, several checkouts</h2>
+
+  <p><code>git-worktree(1)</code> describes a repository as supporting "multiple
+  working trees, allowing you to check out more than one branch at a time",
+  sharing "everything except per-worktree files such as HEAD, index, etc.".</p>
+  <!-- evidence: git-worktree(1); packages/core/src/sources/local-source.ts -->
+
+  <p>The rule that makes worktrees useful here is in that page's REFS section:
+  "In general, all pseudo refs are per-worktree and all refs starting with refs/
+  are shared." The next sentence is half the rule: "There are exceptions,
+  however: refs inside refs/bisect, refs/worktree and refs/rewritten are not
+  shared." So <code>refs/heads/*</code> is shared across every worktree, and so
+  is gateline's own <code>refs/gateline/wip/*</code>, clear of all three
+  exceptions — while <code>HEAD</code> and the index are not.</p>
+
+  <h3>Where gateline lives on this</h3>
+
+  <p>Worktree awareness changes the write path here.
+  <code>Git.worktrees</code> parses <code>git worktree list --porcelain</code>
+  into paths and branches, and decisions across core and the orchestrator
+  consult it — from which branches may be fetched to whether a rejected push
+  may be rolled back. The governing sentence is a code comment in
+  <code>writeState</code>: if the branch is checked out somewhere,
+  an <code>update-ref</code> behind its back would leave that checkout silently
+  diverged.</p>
+
+  <h2 id="commit-messages-as-a-protocol-and-the-limit-of-that-idea">Commit messages as a protocol, and the limit of that idea</h2>
+
+  <p>Every commit subject this system produces is a template literal, never free
+  text. Human decisions get sentences —
+  <code>state(&lt;slug&gt;): G2 approved by &lt;name&gt; [burden:
+  confirmation]</code>, <code>staged by &lt;name&gt;</code>, <code>armed by
+  &lt;name&gt;</code>, <code>closed by &lt;name&gt; [disposition: …]</code> —
+  and the orchestrator gets a reserved set of bookkeeping verbs instead. So a run branch reads as a transcript of a partnership, in
+  <code>git log</code>, with no tooling at all.</p>
+  <!-- evidence: contracts/state.yaml; packages/core/src/record/actions.ts; packages/orchestrator/src/observe.ts; packages/core/src/view-model/ledger.ts -->
+
+  <p>It is <em>evidence for humans</em>. The grammar is not the machine's input
+  to any decision. Two places in the codebase parse a commit subject, and
+  neither decides anything from it: a regular expression in the observer counts
+  how often an artifact was bounced since its last resolved dispute, and
+  Gatehouse's decision ledger in
+  <code>packages/core/src/view-model/ledger.ts</code> turns each
+  <code>state(&lt;slug&gt;): …</code> subject into a typed entry to render,
+  showing a subject it cannot parse verbatim rather than guessing. Everything
+  that decides reads the committed files — which is also why a reflog, which
+  nothing in gateline reads or writes, is not part of the record. Module 2
+  picks that thread up.</p>
+
+  <div class="check">
+    <h3>Check your understanding</h3>
+    <ol>
+      <li>A blob's object id is a function of its contents alone. Where does a
+      file's name live, and why does that force <code>writeTreeWithBlob</code>
+      to run <code>update-index --cacheinfo</code>?</li>
+      <li><code>updateRefCAS</code> returns <code>false</code> instead of
+      throwing. Name two consequences for callers.</li>
+      <li>What does passing forty zeros as <code>&lt;old-oid&gt;</code> assert,
+      and which operations in the framework depend on it?</li>
+      <li>Name the three mechanisms this codebase uses to enforce
+      fast-forward-only, and which one protects an unpushed decision commit
+      during a sync.</li>
+      <li>Which refs are shared across all worktrees of a repository, and which
+      are not?</li>
+      <li>The commit grammar makes authorship auditable, and Gatehouse renders
+      it. What does it still <em>not</em> do?</li>
+    </ol>
+  </div>
+
+  <h2 id="further-reading">Further reading</h2>
+
+  <p>Read <code>packages/core/src/sources/git.ts</code> end to end —
+  about three hundred lines, and the whole surface this module describes. Then
+  <code>local-source.ts</code>, whose <code>writeState</code> uses every
+  primitive here at once and is the subject of
+  <a href="the-co-written-state-file.html">module 2</a>; then
+  <code>docs/TOPOLOGY.md</code> §3 and <code>docs/ORCHESTRATOR.md</code> §13. On
+  git's side: <code>gitglossary(7)</code>, <code>gitrevisions(7)</code>,
+  <code>git-update-ref(1)</code> and <code>git-worktree(1)</code>.</p>
+</article>
+<!-- content:end -->
+<nav class="pager" aria-label="Previous and next page">
+  <a class="pager-prev" href="../onboarding/index.html"><span class="pager-label">Previous</span><span class="pager-title">Onboarding</span></a>
+  <a class="pager-next" href="../onboarding/the-co-written-state-file.html"><span class="pager-label">Next</span><span class="pager-title">The co-written state file</span></a>
+</nav>
+</main>
+<aside class="toc" aria-labelledby="toc-heading">
+  <p class="toc-title" id="toc-heading">On this page</p>
+  <ul class="toc-list">
+    <li><a href="#objects-a-content-addressed-database-that-happens-to-store-code">Objects: a content-addressed database that happens to store code</a></li>
+    <li><a href="#refs-mutable-pointers-and-the-one-operation-that-makes-them-safe">Refs: mutable pointers, and the one operation that makes them safe</a></li>
+    <li><a href="#reading-a-file-without-checking-anything-out">Reading a file without checking anything out</a></li>
+    <li><a href="#fast-forward-only-as-a-policy-primitive">Fast-forward-only as a policy primitive</a></li>
+    <li><a href="#worktrees-one-repository-several-checkouts">Worktrees: one repository, several checkouts</a></li>
+    <li><a href="#commit-messages-as-a-protocol-and-the-limit-of-that-idea">Commit messages as a protocol, and the limit of that idea</a></li>
+    <li><a href="#further-reading">Further reading</a></li>
+  </ul>
+</aside>
+<nav class="sidebar" aria-label="All documentation">
+  <p class="sidebar-title">Documentation</p>
+  <p class="sidebar-section"><a href="../how-it-works/index.html">How It Works</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../how-it-works/index.html">Overview</a></li>
+    <li><a href="../how-it-works/how-a-run-works.html">How a run works</a></li>
+    <li><a href="../how-it-works/how-gates-keep-a-human-in-charge.html">How gates keep a human in charge</a></li>
+    <li><a href="../how-it-works/how-gateline-stays-vendor-neutral.html">How gateline stays vendor-neutral</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../onboarding/index.html">Onboarding</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../onboarding/index.html">Overview</a></li>
+    <li><a href="../onboarding/git-plumbing.html" aria-current="page">1. Git, down to the plumbing</a></li>
+    <li><a href="../onboarding/the-co-written-state-file.html">2. The co-written state file</a></li>
+    <li><a href="../onboarding/contracts-and-their-parsers.html">3. Contracts and their parsers</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../reference/index.html">Reference</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../reference/index.html">Overview</a></li>
+    <li><a href="../reference/cli.html">CLI</a></li>
+    <li><a href="../reference/state-yaml.html">state.yaml</a></li>
+    <li><a href="../reference/orchestrator-yaml.html">orchestrator.yaml</a></li>
+    <li><a href="../reference/adapter-manifests.html">Adapter manifests</a></li>
+    <li><a href="../reference/contract-grammar.html">Contract grammar</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../api/index.html">API</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../api/index.html">Browse generated API docs</a></li>
+  </ul>
+</nav>
+</div>
+<footer class="site-footer">
+  gateline is an open-source framework (Apache-2.0). &copy; the gateline maintainers.
+  <span class="footer-sep">&middot;</span>
+  <a href="../index.html">Documentation home</a>
+</footer>
+</body>
+</html>

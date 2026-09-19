@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The co-written state file — gateline</title>
+  <meta name="description" content="How runs/&lt;slug&gt;/state.yaml is safely co-written by a human and the orchestrator.">
+  <link rel="stylesheet" href="../assets/site.css">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="site-header">
+  <a class="wordmark" href="../index.html">gateline</a>
+  <nav class="site-nav" aria-label="Sections">
+    <a href="../how-it-works/index.html">How It Works</a>
+    <a href="../onboarding/index.html" class="active" aria-current="true">Onboarding</a>
+    <a href="../reference/index.html">Reference</a>
+    <a href="../api/index.html">API</a>
+  </nav>
+</header>
+<div class="layout">
+<main id="content">
+  <h1>The co-written state file</h1>
+<!-- content:start -->
+<article class="doc">
+  <p class="lede">Module 1 ended on a primitive and a limit: a compare-and-swap
+  ref update lets two writers share a branch without a lock, and the structured
+  commit grammar is evidence for a human reading <code>git log</code> rather than
+  input to any decision. This module is what you build on top of that. One file,
+  <code>runs/&lt;slug&gt;/state.yaml</code>, is the entire control plane of a run
+  in both directions: a human edits it through Gatehouse or the
+  <code>gateline</code> CLI, an engine edits it on every tick that has
+  something to record, neither has a lock.
+  Making that safe takes four ideas.</p>
+  <!-- evidence: docs/ORCHESTRATOR.md §4.5, §7; contracts/state.yaml -->
+
+  <p>The concept-level version is on
+  <a href="../how-it-works/how-gates-keep-a-human-in-charge.html">how gates keep
+  a human in charge</a>, with a
+  <a href="../how-it-works/how-gates-keep-a-human-in-charge.html#cas-co-writer">figure
+  of the two-writer loop</a>. This module goes underneath it: what the code
+  actually does, and why each choice makes the next one possible.</p>
+
+  <h2 id="a-file-whose-comments-are-normative">A file whose comments are normative</h2>
+
+  <p>Start with the failure mode a naive implementation walks straight into.
+  Parse the YAML into an object, change a field, serialize it back, commit. Every
+  comment is gone, and so are the key order and the formatting.</p>
+  <!-- evidence: contracts/state.yaml; packages/core/src/sources/local-source.ts -->
+
+  <p>For most configuration files that is a cosmetic loss. Here it destroys the
+  record. <code>state.yaml</code>'s comments carry the contract: which values a
+  field may take, who may write it, and why a derived number is derived. The
+  contract file's header states that gate entries are written only by the named
+  human approver, and the inline comment on the budget ledger says <em>facts, not
+  a running total — totals are derived, so races and audits survive</em>. A
+  writer that dropped those sentences would silently delete the explanation of
+  the thing it just edited.</p>
+
+  <div class="exercise">
+    <h3>Exercise 1 — comments that survived seventy machine writes</h3>
+    <p>The <code>creation-seam</code> run was driven by the orchestrator engine,
+    which wrote its state file dozens of times. Read the top of the committed
+    result, in any clone of the framework repository.</p>
+<pre><code>git show main:runs/creation-seam/state.yaml | sed -n '1,10p'</code></pre>
+<pre class="exercise-output"><code># Contract: maintained by Orchestrator (human in v0, orchestrator engine in v1);
+# read by everyone. Lives at runs/&lt;slug&gt;/state.yaml — the single source of truth
+# for a run.
+
+run: creation-seam
+branch: run/creation-seam
+phase: done
+  # staged by hand ahead of the seam this run builds;
+  # resume (= arm) derives spec from the gate ledger
+profile: standard # patch | standard | full (DESIGN.md §4.1)</code></pre>
+    <p>Two comment styles survived: an indented two-line comment beneath
+    <code>phase:</code>, a key the engine wrote repeatedly as the run advanced,
+    and an inline trailing comment on <code>profile:</code>. Neither would
+    survive a parse-mutate-serialize round trip.</p>
+  </div>
+
+  <h3>How it is done</h3>
+
+  <p>The mechanism is the document API of the <code>yaml</code> package rather
+  than its serialization API, and the distinction is worth learning as a general
+  technique. <code>parse</code> gives you plain JavaScript values — convenient,
+  lossy, correct for reading. <code>parseDocument</code> gives you a document
+  that retains comments, anchors and formatting; you mutate it through
+  <code>setIn</code>, and <code>toString</code> renders it back with everything
+  it did not touch byte-identical.</p>
+
+  <p>The rule states in one line: <em>read with <code>parse</code>, write with
+  <code>parseDocument</code></em>. The schema and validation modules, which only
+  ever read, import <code>parse</code>. The single write path imports
+  <code>parseDocument</code>, and its round trip is three lines.</p>
+
+  <p>One honest boundary: the rule scopes to <code>state.yaml</code>, not to
+  every YAML file in the system. The scheduler's sweep marker is closed by
+  line-oriented regular-expression replacement — fine for a small file the
+  scheduler wrote itself, and not the same discipline. Say
+  "<code>state.yaml</code> is edited through the document API", not "YAML
+  is".</p>
+
+  <h2 id="mutations-are-data-not-i-o">Mutations are data, not I/O</h2>
+
+  <p>The second idea is a separation that is easy to skip past.
+  <code>planDecision</code> in
+  <code>packages/core/src/record/actions.ts</code> decides what a
+  decision means. It never touches git and needs no repository to run; its only
+  reach outside its arguments is the clock, for the timestamp it stamps on the
+  decision. Given the run state, a decision input and an identity, it returns
+  three things: a <code>mutate</code> function that edits a YAML document, the
+  structured commit message that edit deserves, and a human-readable summary for
+  confirmation prompts.</p>
+  <!-- evidence: packages/core/src/record/actions.ts -->
+
+  <p>Legality is checked there too, before any write is attempted. Approving a
+  gate outside the run's profile throws; approving an already-decided gate
+  throws, and for a declined gate the message points at the resume path that
+  re-opens it; approving without a
+  burden rating throws, because the burden is the metric the autonomy criterion
+  is measured on. Two later refusals follow the same pattern. A run a human has
+  ended with <code>gateline close</code> sits at <code>phase: closed</code> with
+  a typed <code>closure</code> block, and every verb but <code>reopen</code> is
+  refused on it. Approving a gate while its producing role is still in flight
+  is refused until that dispatch lands. Approve can also <code>hold</code>: the
+  approval is recorded and the run stays paused with a stated reason, which is
+  needed because the engine's convergence rule would otherwise advance it.
+  None of it requires a repository, which is why it is all straightforwardly
+  testable.</p>
+
+  <h2 id="one-write-path-two-ways-to-take-it">One write path, two ways to take it</h2>
+
+  <p><code>writeState</code> is the only writer. Its interface docblock calls
+  it "the single write path": resolve the branch, read the state file at the tip, apply
+  the mutation to a document, land the result with compare-and-swap
+  semantics.</p>
+  <!-- evidence: packages/core/src/sources/source.ts; packages/core/src/sources/local-source.ts; runs/writestate-kill-window/intent-brief.md -->
+
+  <p>The first thing it does is refuse anonymity. If <code>git config
+  user.name</code> and <code>user.email</code> are unset it returns a refusal
+  reading <em>decisions must be attributable to a named human</em>. Before any
+  question about concurrency, the write path establishes that somebody's name
+  will be on this.</p>
+
+  <p>Next it brings a stale local branch current. If the local branch is
+  strictly behind origin, <code>writeState</code> fast-forwards it before
+  choosing a route: with <code>merge --ff-only</code> inside the checkout when
+  one holds the branch, or with a compare-and-swap ref move when none does. A
+  checkout that cannot fast-forward refuses with <code>stale-checkout</code>,
+  and a ref that moves during the attempt refuses with
+  <code>ref-moved</code>.</p>
+
+  <p>Then it branches, and this is the constraint most worth understanding. If
+  no worktree holds the run branch, the write is pure plumbing exactly as module
+  1 described: blob, tree, commit onto the tip, compare-and-swap ref update. If a
+  worktree <em>does</em> hold the branch, that sequence is illegal — moving the
+  ref would leave the checkout silently diverged. So the write goes
+  <em>through</em> the checkout:
+  <code>git commit -m &lt;msg&gt; -- &lt;statePath&gt;</code>, a pathspec commit
+  recording exactly that one file whatever else is staged. If the checkout is
+  dirty in that file, the write refuses.</p>
+
+  <figure class="diagram" data-diagram="state-write-paths">
+    <figcaption>The single write path and the two routes it takes: plumbing
+    when no checkout holds the branch, a pathspec commit through the checkout
+    when one does — with the write-ahead intent ref covering the gap in the
+    second route.</figcaption>
+    <svg class="diagram-svg" viewBox="0 0 1020 960" role="img" aria-labelledby="title-state-write-paths">
+      <title id="title-state-write-paths">One entry point, writeState, runs a shared prelude — identity check first, then fast-forward a local branch that is behind origin, resolve the tip and read the state file, then mutate the YAML document — before it forks on whether a worktree holds the branch. The left lane writes by plumbing and publishes with a compare-and-swap ref update; the right lane records a write-ahead intent ref and commits through the checkout. Both rejoin at one outcome, and six named refusals exit sideways.</title>
+      <defs>
+        <marker id="arr-swp" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="currentColor"/></marker>
+        <marker id="arr-swp-faint" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="var(--fg-faint)"/></marker>
+        <marker id="arr-swp-accent" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" class="d-accent-fill"/></marker>
+      </defs>
+
+      <!-- Shared prelude, box 1: the entry point -->
+      <rect x="300" y="16" width="320" height="44" rx="4" fill="var(--bg-subtle,#f6f7f8)" stroke="currentColor" stroke-width="1.4"/>
+      <text x="460" y="38" text-anchor="middle" class="d-mono d-bold">writeState(ref, mutate, message, expectedTip?)</text>
+      <text x="460" y="52" text-anchor="middle" class="d-mono d-faint">the single write path</text>
+
+      <line x1="460" y1="60" x2="460" y2="100" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-swp)"/>
+
+      <!-- Shared prelude, box 2: the identity decision -->
+      <rect x="340" y="104" width="240" height="38" rx="4" fill="none" stroke="currentColor" stroke-width="2"/>
+      <text x="460" y="121" text-anchor="middle" class="d-bold">identity?</text>
+      <text x="460" y="135" text-anchor="middle" class="d-mono d-faint">git config user.name / user.email</text>
+      <!-- refusal exit from box 2 -->
+      <line x1="582" y1="123" x2="650" y2="123" class="d-accent-stroke" stroke-width="1" marker-end="url(#arr-swp-accent)"/>
+      <rect x="652" y="109" width="112" height="28" rx="4" fill="none" class="d-accent-stroke" stroke-width="1"/>
+      <text x="708" y="127" text-anchor="middle" class="d-mono d-accent-fill">no-identity</text>
+      <text x="652" y="149" class="d-small d-faint">decisions must be attributable</text>
+      <text x="652" y="161" class="d-small d-faint">to a named human</text>
+
+      <line x1="460" y1="142" x2="460" y2="178" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-swp)"/>
+
+      <!-- Shared prelude, box 3 -->
+      <rect x="320" y="182" width="280" height="40" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="460" y="200" text-anchor="middle" class="d-bold">resolve the tip, read state.yaml</text>
+      <text x="460" y="215" text-anchor="middle" class="d-mono d-faint">ff-only if behind · git show &lt;tip&gt;:&lt;path&gt;</text>
+      <!-- refusal exit from box 3: the expectedTip guard, after the identity check -->
+      <line x1="602" y1="202" x2="650" y2="202" class="d-accent-stroke" stroke-width="1" marker-end="url(#arr-swp-accent)"/>
+      <rect x="652" y="188" width="112" height="28" rx="4" fill="none" class="d-accent-stroke" stroke-width="1"/>
+      <text x="708" y="206" text-anchor="middle" class="d-mono d-accent-fill">ref-moved</text>
+      <text x="652" y="228" class="d-small d-faint">expectedTip set and the branch</text>
+      <text x="652" y="240" class="d-small d-faint">already moved past it; a checkout</text>
+      <text x="652" y="252" class="d-small d-faint">that cannot fast-forward is stale-checkout</text>
+
+      <line x1="460" y1="222" x2="460" y2="244" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-swp)"/>
+
+      <!-- Shared prelude, box 4 -->
+      <rect x="320" y="248" width="280" height="44" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="460" y="268" text-anchor="middle" class="d-mono d-bold">parseDocument → mutate(doc) → toString</text>
+      <text x="460" y="283" text-anchor="middle" class="d-small d-faint">comments and formatting preserved</text>
+
+      <line x1="460" y1="292" x2="460" y2="303" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-swp)"/>
+
+      <!-- The fork: the largest element in the middle -->
+      <rect x="400" y="332" width="120" height="120" transform="rotate(45 460 392)" fill="none" stroke="currentColor" stroke-width="1.8"/>
+      <text x="460" y="386" text-anchor="middle" class="d-bold">does a worktree</text>
+      <text x="460" y="400" text-anchor="middle" class="d-bold">hold this branch?</text>
+      <text x="460" y="492" text-anchor="middle" class="d-mono d-faint">git worktree list --porcelain</text>
+
+      <!-- lane split -->
+      <path d="M375,392 L200,392 L200,452" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="300" y="384" text-anchor="middle" class="d-small">no</text>
+      <text x="200" y="468" text-anchor="middle" class="d-bold">no checkout holds the branch</text>
+      <line x1="200" y1="476" x2="200" y2="494" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-swp)"/>
+      <path d="M545,392 L720,392 L720,452" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="632" y="384" text-anchor="middle" class="d-small">yes</text>
+      <text x="720" y="468" text-anchor="middle" class="d-bold">a worktree holds the branch</text>
+      <line x1="720" y1="476" x2="720" y2="494" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-swp)"/>
+
+      <!-- Left lane: plumbing -->
+      <rect x="50" y="496" width="300" height="40" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="200" y="514" text-anchor="middle" class="d-bold">hash the new bytes</text>
+      <text x="200" y="529" text-anchor="middle" class="d-mono d-faint">git hash-object -w --stdin</text>
+      <line x1="200" y1="536" x2="200" y2="554" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-swp)"/>
+      <rect x="50" y="558" width="300" height="44" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="200" y="576" text-anchor="middle" class="d-bold">build the tree</text>
+      <text x="200" y="592" text-anchor="middle" class="d-mono d-faint">read-tree · update-index --cacheinfo · write-tree</text>
+      <line x1="352" y1="584" x2="360" y2="584" stroke="var(--fg-faint)" stroke-width="1"/>
+      <text x="364" y="588" class="d-small d-faint">GIT_INDEX_FILE → a scratch index</text>
+      <line x1="200" y1="602" x2="200" y2="620" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-swp)"/>
+      <rect x="50" y="624" width="300" height="40" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="200" y="642" text-anchor="middle" class="d-bold">commit onto the tip</text>
+      <text x="200" y="657" text-anchor="middle" class="d-mono d-faint">git commit-tree &lt;tree&gt; -p &lt;tip&gt;</text>
+      <line x1="200" y1="664" x2="200" y2="682" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-swp)"/>
+      <text x="50" y="680" class="d-small d-accent-fill">the commit point</text>
+      <rect x="50" y="686" width="300" height="40" rx="4" fill="none" class="d-accent-stroke" stroke-width="1.8"/>
+      <text x="200" y="704" text-anchor="middle" class="d-bold">publish</text>
+      <text x="200" y="719" text-anchor="middle" class="d-mono d-faint">git update-ref &lt;branchRef&gt; &lt;commit&gt; &lt;tip&gt;</text>
+      <!-- refusal exit from the left lane's commit point -->
+      <line x1="352" y1="706" x2="382" y2="706" class="d-accent-stroke" stroke-width="1" marker-end="url(#arr-swp-accent)"/>
+      <rect x="384" y="692" width="112" height="28" rx="4" fill="none" class="d-accent-stroke" stroke-width="1"/>
+      <text x="440" y="710" text-anchor="middle" class="d-mono d-accent-fill">ref-moved</text>
+      <text x="384" y="732" class="d-small d-faint">another writer landed first;</text>
+      <text x="384" y="744" class="d-small d-faint">discard and re-derive</text>
+
+      <!-- Right lane: through the checkout -->
+      <rect x="600" y="496" width="240" height="36" rx="4" fill="none" stroke="currentColor" stroke-width="2"/>
+      <text x="720" y="518" text-anchor="middle" class="d-bold">is the state file dirty there?</text>
+      <line x1="720" y1="532" x2="720" y2="552" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-swp)"/>
+      <text x="728" y="547" class="d-small">yes</text>
+      <path d="M600,514 L580,514 L580,646 L594,646" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-swp)"/>
+      <text x="576" y="508" text-anchor="end" class="d-small">no</text>
+      <rect x="600" y="554" width="240" height="46" rx="4" fill="none" stroke="currentColor" stroke-width="2"/>
+      <text x="720" y="573" text-anchor="middle" class="d-bold">recover own abandoned write?</text>
+      <text x="720" y="589" text-anchor="middle" class="d-mono d-faint">refs/gateline/wip/&lt;branch&gt;</text>
+      <!-- refusal exit from the right lane -->
+      <line x1="842" y1="577" x2="872" y2="577" class="d-accent-stroke" stroke-width="1" marker-end="url(#arr-swp-accent)"/>
+      <text x="852" y="571" class="d-small">no</text>
+      <rect x="874" y="563" width="120" height="28" rx="4" fill="none" class="d-accent-stroke" stroke-width="1"/>
+      <text x="934" y="581" text-anchor="middle" class="d-mono d-accent-fill">dirty-worktree</text>
+      <text x="866" y="602" class="d-small d-faint">commit or discard it first;</text>
+      <text x="866" y="614" class="d-small d-faint">the refusal prints both commands</text>
+      <line x1="720" y1="600" x2="720" y2="620" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-swp)"/>
+      <text x="728" y="615" class="d-small">yes — restore from HEAD</text>
+      <rect x="600" y="622" width="240" height="56" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="720" y="640" text-anchor="middle" class="d-bold">record the write-ahead intent</text>
+      <text x="720" y="656" text-anchor="middle" class="d-mono d-faint">commit object held by</text>
+      <text x="720" y="668" text-anchor="middle" class="d-mono d-faint">refs/gateline/wip/&lt;branch&gt;</text>
+      <line x1="842" y1="650" x2="850" y2="650" stroke="var(--fg-faint)" stroke-width="1"/>
+      <text x="854" y="654" class="d-small d-faint">a ref no branch reaches</text>
+      <line x1="720" y1="678" x2="720" y2="696" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-swp)"/>
+      <text x="600" y="692" class="d-small d-accent-fill">this lane's commit point</text>
+      <rect x="600" y="698" width="240" height="62" rx="4" fill="none" class="d-accent-stroke" stroke-width="1.8"/>
+      <text x="720" y="716" text-anchor="middle" class="d-bold">write the file, then commit</text>
+      <text x="720" y="729" text-anchor="middle" class="d-bold">through the checkout</text>
+      <text x="720" y="748" text-anchor="middle" class="d-mono d-faint">git commit -m &lt;msg&gt; -- &lt;statePath&gt;</text>
+      <line x1="842" y1="722" x2="850" y2="722" stroke="var(--fg-faint)" stroke-width="1"/>
+      <text x="854" y="720" class="d-small d-faint">pathspec commit — exactly this</text>
+      <text x="854" y="732" class="d-small d-faint">file, whatever else is staged</text>
+      <line x1="720" y1="760" x2="720" y2="780" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-swp)"/>
+      <rect x="630" y="782" width="180" height="26" rx="4" fill="none" stroke="var(--fg-faint)" stroke-width="1"/>
+      <text x="720" y="799" text-anchor="middle" class="d-small d-faint">delete the intent ref</text>
+
+      <!-- Rejoin -->
+      <path d="M200,726 L200,850 L416,850" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-swp)"/>
+      <path d="M720,808 L720,850 L624,850" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-swp)"/>
+      <rect x="420" y="832" width="200" height="36" rx="4" fill="var(--bg-subtle,#f6f7f8)" stroke="currentColor" stroke-width="1.4"/>
+      <text x="520" y="856" text-anchor="middle" class="d-mono d-bold">{ ok: true, commit }</text>
+      <line x1="520" y1="868" x2="520" y2="890" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-swp)"/>
+      <text x="528" y="883" class="d-small d-faint">optional</text>
+      <rect x="390" y="892" width="260" height="28" rx="4" fill="none" stroke="var(--fg-faint)" stroke-width="1"/>
+      <text x="520" y="910" text-anchor="middle" class="d-mono d-faint">git push origin &lt;branch&gt;:&lt;branch&gt;</text>
+      <text x="520" y="936" text-anchor="middle" class="d-small d-faint">push failure keeps ok: true and reports pushFailed</text>
+
+      <!-- Refusal legend -->
+      <text x="870" y="796" class="d-mono d-accent-fill">ref-moved</text>
+      <text x="870" y="808" class="d-mono d-accent-fill">dirty-worktree</text>
+      <text x="870" y="820" class="d-mono d-accent-fill">stale-checkout</text>
+      <text x="870" y="832" class="d-mono d-accent-fill">no-branch</text>
+      <text x="870" y="844" class="d-mono d-accent-fill">no-identity</text>
+      <text x="870" y="856" class="d-mono d-accent-fill">error</text>
+      <text x="830" y="878" class="d-small d-faint">six named refusals — a return value,</text>
+      <text x="830" y="890" class="d-small d-faint">never an exception</text>
+      <text x="830" y="908" class="d-small d-faint">only ref-moved is retried,</text>
+      <text x="830" y="920" class="d-small d-faint">up to 5 attempts</text>
+    </svg>
+  </figure>
+
+  <div class="maintainer-note">
+    <h3>Maintainer note</h3>
+    <p>The write-ahead intent ref exists because of a specific bad restart. The
+    intent brief for the <code>writestate-kill-window</code> run records that on
+    2026-07-23 the engine was killed between writing the state file into its
+    checkout and committing it. Every later state write on that branch then
+    refused with <code>dirty-worktree</code> — correctly, since a checkout's
+    edits must never be clobbered — but the engine could not tell the dirt was
+    its own half-finished write, so it looped while delivered review verdicts sat
+    unrecorded. Recovery took a human hand-committing the file inside the
+    engine's own checkout. The brief's line is the one I keep coming back to:
+    recovery is worse than the fault, and it needs exactly the kind of manual
+    git surgery this framework exists to remove.</p>
+  </div>
+
+  <h2 id="refusal-is-a-return-value-and-mostly-not-retryable">Refusal is a return value, and mostly not retryable</h2>
+
+  <p>There are six named ways for a write to refuse, and they are a type:
+  <code>ref-moved</code>, <code>dirty-worktree</code>,
+  <code>stale-checkout</code>, <code>no-branch</code>, <code>no-identity</code>,
+  <code>error</code>. Each carries an operator-facing message — the
+  dirty-worktree refusal prints the exact commands to keep or discard the
+  offending change. Refusal is a named outcome, not an exception.</p>
+  <!-- evidence: packages/core/src/sources/source.ts; packages/orchestrator/src/engine.ts -->
+
+  <p>Exactly one of those six is worth retrying. The orchestrator's
+  closing-bookkeeping loop logs and gives up for anything other than
+  <code>ref-moved</code> — the heartbeat will age the open entry. For
+  <code>ref-moved</code> the outer loop re-reads the tip and re-derives, bounded
+  at five attempts. A retry loop that retried every failure would hammer a dirty
+  checkout forever.</p>
+
+  <p>There is a genuine asymmetry between the two writers.
+  <code>writeState</code> takes an optional <code>expectedTip</code>, which the
+  docblock says "extends the CAS window back to the caller's read". The engine
+  passes it, because it <em>derived</em> its action from a state read at the
+  start of the tick — if the branch moved in between, the derivation is stale and
+  the commit must not land. Human surfaces omit it: a human's read happens inside
+  the call. The machine holds the wider window and loses the race more often,
+  which is the intended distribution of who yields to whom.</p>
+
+  <div class="exercise">
+    <h3>Exercise 2 — two writers, one tip, one survivor</h3>
+    <p>Build both commits by hand the way <code>writeState</code>'s plumbing
+    path does, from the same tip, and let the ref decide — the whole co-writer
+    contract in a dozen lines of shell.</p>
+<pre><code>d=$(mktemp -d)/race; git init -q -b main "$d" &amp;&amp; cd "$d"
+export GIT_AUTHOR_NAME=demo GIT_AUTHOR_EMAIL=d@e.invalid GIT_COMMITTER_NAME=demo GIT_COMMITTER_EMAIL=d@e.invalid
+export GIT_AUTHOR_DATE='2026-01-01T00:00:00+0000' GIT_COMMITTER_DATE='2026-01-01T00:00:00+0000'
+printf 'phase: spec\n' &gt; state.yaml &amp;&amp; git add state.yaml &amp;&amp; git -c commit.gpgsign=false commit -qm init
+tip=$(git rev-parse refs/heads/main)                  # both writers read this tip
+build() {                                             # blob -&gt; tree -&gt; commit, no index you own
+  b=$(printf "$1" | git hash-object -w --stdin); export GIT_INDEX_FILE=$(mktemp -u)
+  git read-tree "$tip" &amp;&amp; git update-index --add --cacheinfo 100644,"$b",state.yaml
+  t=$(git write-tree); unset GIT_INDEX_FILE; git commit-tree "$t" -p "$tip" -m "$2"
+}
+human=$(build 'phase: paused\n' 'state(demo): paused by Dana (design question)')
+engine=$(build 'phase: implement\n' 'state(demo): advanced — spec → implement')
+git update-ref refs/heads/main "$human"  "$tip"; echo "human  exit=$?"
+git update-ref refs/heads/main "$engine" "$tip"; echo "engine exit=$?"
+git show -s --format='%s' main; git show main:state.yaml</code></pre>
+<pre class="exercise-output"><code>human  exit=0
+fatal: update_ref failed for ref 'refs/heads/main': cannot lock ref 'refs/heads/main': is at 173b42ead65d6f0e9d8ce635d346cf85a6fb4719 but expected 1aece1d25b3cbc439915ae0d71490da4228acb4d
+engine exit=128
+state(demo): paused by Dana (design question)
+phase: paused</code></pre>
+    <p>Both commits exist as objects; only one is reachable from the branch. The
+    engine's work is not corrupt, it is unpublished — and the correct next move
+    is not to force it through but to throw it away, re-read at the new tip, and
+    derive again. Doing that, the engine reads <code>phase: paused</code> and
+    derives no action at all.</p>
+  </div>
+
+  <h2 id="why-throwing-the-work-away-is-safe">Why throwing the work away is safe</h2>
+
+  <p>Discarding a computed action and recomputing it is reasonable only if
+  recomputing is cheap and lands in the same place. That is an invariant the
+  design states about every row of its derivation table: <em>each action is
+  derivable from committed files alone, and each action is idempotent to
+  re-derive — a tick interrupted anywhere converges on re-run.</em></p>
+  <!-- evidence: docs/ORCHESTRATOR.md §4.2, §4.4; packages/orchestrator/src/engine.ts -->
+
+  <p>Two consequences fall out. First, the compare-and-swap doubles as the
+  duplicate-dispatch guard: the dispatch protocol commits the <em>intent</em>
+  first — the task's status becomes <code>dispatched</code> and a ledger entry
+  opens — pushes that commit, and launches the job only once origin has
+  accepted the push. Two engine instances serialize on the local ref update;
+  the loser re-reads, sees <code>dispatched</code>, and rests. A push origin
+  rejects launches nothing: on the plumbing route the engine drops the intent
+  by moving the branch back to the commit's parent with the same
+  compare-and-swap ref update, a backwards move of the kind exercise 2 in
+  module 1 showed, and on the checkout route the commit stays local until a
+  later push carries or supersedes it.</p>
+
+  <p>Second, job handles are deliberately <em>not</em> committed. The design
+  calls process ids and the dispatcher's own tables host-specific ephemera and
+  treats them as cache, because the loop must always be able to reconstruct
+  reality by probing: git is the only store. Two facts that look like handles
+  do go into the ledger entry, and the design draws the line explicitly. A
+  <code>session</code> id is what the harness called the agent's session, so a
+  retry of the same dispatch can resume it; nothing is derived from it, and it
+  is handed back rather than read. An <code>engine</code> field names the
+  process that opened the entry as <code>host:pid</code>, so a second engine
+  can probe whether that process is still alive before treating the entry as
+  an orphan. Neither is something the loop reads state from.</p>
+
+  <h2 id="append-only-facts-derived-totals">Append-only facts, derived totals</h2>
+
+  <p>The same idea applied to numbers is an append-only ledger. The budget block
+  of <code>state.yaml</code> holds one entry per model invocation — timestamp,
+  role, task, round, adapter, model, tokens, cost, plus the optional
+  <code>failed</code>, <code>refused</code>, <code>session</code> and
+  <code>engine</code> keys — and a
+  <code>cost_spent_usd</code> field the contract annotates as
+  <em>derived: the sum of ledger[].cost_usd</em>.</p>
+  <!-- evidence: contracts/state.yaml; packages/orchestrator/src/engine.ts -->
+
+  <p>The implementation honours that literally. When the engine closes a
+  dispatch it writes the invocation's real token counts and cost into the ledger
+  entry it opened, then recomputes the total by reducing over the <em>whole</em>
+  ledger — it never adds a number to the existing total. Two writers appending
+  concurrently cannot corrupt a total that nobody increments.</p>
+
+  <div class="exercise">
+    <h3>Exercise 3 — recompute the total yourself</h3>
+    <p>Add up a finished run's ledger and compare it to the number stored in the
+    file. Read-only, in any clone of the framework repository.</p>
+<pre><code>git show main:runs/dupefind/state.yaml | grep -c 'cost_usd:'
+git show main:runs/dupefind/state.yaml | grep -o 'cost_usd: [0-9.]*' | awk '{s+=$2} END {printf "%.2f\n", s}'
+git show main:runs/dupefind/state.yaml | grep 'cost_spent_usd:'</code></pre>
+<pre class="exercise-output"><code>16
+12.15
+  cost_spent_usd: 12.15   # derived: the sum of ledger[].cost_usd</code></pre>
+    <p>Sixteen appended facts, one derived total, and they agree — a check
+    available to anyone with a clone and no special tooling, which is the
+    property the design is buying.</p>
+  </div>
+
+  <p>The ledger is not a hard cap. The budget limit is a pre-flight gate: before
+  a dispatch the engine projects the ledger sum plus a per-role estimate against
+  the limit, and a projected exceedance pauses and escalates rather than trimming
+  the work to fit. The <code>creation-seam</code> record closes at
+  <code>cost_spent_usd: 104.54</code> against <code>cost_limit_usd: 60</code>
+  because that is what happened — the machine stopped, a human overrode, and the
+  ledger recorded both.</p>
+
+  <h2 id="the-file-is-the-current-state-the-branch-is-the-record">The file is the current state; the branch is the record</h2>
+
+  <p>It is tempting to say <code>state.yaml</code> records every decision. It
+  does not, and knowing why keeps you from writing a reader that silently misses
+  things.</p>
+  <!-- evidence: packages/core/src/record/actions.ts; packages/orchestrator/src/observe.ts; packages/core/src/record/schema.ts -->
+
+  <p>Declining a gate writes the decline into the entry and pauses the run.
+  Resuming a gate-declined run <em>re-opens</em> that gate: the entry resets to
+  undecided. The decline is now absent at the branch tip — and present,
+  permanently, in the file's history, which is where the orchestrator finds the
+  notes to bounce back to the producing role. The consumer walks that history
+  looking, in each historical parse, for a gate that is not approved but does
+  have a name attached.</p>
+
+  <p>That predicate encodes something worth stating on its own: a gate has three
+  states, not two. <em>Undecided</em> is not approved and has no name.
+  <em>Declined</em> is not approved and has a name. <em>Approved</em> is
+  approved. The schema normalizes an absent out-of-profile gate to undecided, and
+  its docblock states the safety property directly: an absent gate entry can
+  never masquerade as approved.</p>
+
+  <h2 id="commit-grammar-as-authorship-evidence-and-what-it-is-not">Commit grammar as authorship evidence — and what it is not</h2>
+
+  <p>Now the thread module 1 left hanging. Every commit that touches a run's
+  state file carries a structured subject: a human decision sentence
+  (<code>G2 approved by &lt;name&gt; [burden: confirmation]</code>) or one of the
+  orchestrator's reserved bookkeeping verbs. The engine authors under a dedicated
+  bot identity, <code>gateline-orchestrator
+  &lt;orchestrator@gateline.invalid&gt;</code>, and never a person's git
+  config. Finished runs keep the author that wrote them, so a run recorded
+  before the rename shows the earlier bot name.</p>
+  <!-- evidence: docs/ORCHESTRATOR.md §4.3; packages/core/src/view-model/metrics.ts; packages/core/src/view-model/ledger.ts -->
+
+  <div class="exercise">
+    <h3>Exercise 4 — the partnership, counted</h3>
+    <p>In any clone of the framework repository, scope the log to one run's
+    directory on the default branch — the pathspec keeps the default branch's
+    own history out of the count.</p>
+<pre><code>git shortlog -sn main -- runs/creation-seam
+git log --format='%s' main -- runs/creation-seam \
+  | grep -oE 'state\(creation-seam\): [a-z]+' | sort | uniq -c | sort -rn</code></pre>
+<pre class="exercise-output"><code>    70	agentic-orchestrator
+    37	Nathan Carter
+  28 state(creation-seam): metered
+  21 state(creation-seam): dispatched
+  19 state(creation-seam): advanced
+   4 state(creation-seam): resumed
+   2 state(creation-seam): escalation
+   2 state(creation-seam): escalated</code></pre>
+    <p>Two identities, cleanly separated, and a verb census of what the machine
+    half of the partnership did. The bot name in the output is the identity
+    that wrote this run; finished runs keep their author, and the current
+    identity is <code>gateline-orchestrator</code>. Note the pathspec: without it,
+    <code>git log</code> walks the full ancestry and sweeps in every other run's
+    commits.</p>
+  </div>
+
+  <p>Here is the part that is tempting to overstate. It is natural to write that
+  the system "parses the commit message to tell human decisions from bot ones".
+  <strong>It does not.</strong> The metrics reader walks the state file's
+  history, parses the file at each commit, and identifies a gate decision as the
+  oldest commit at which that gate stops being undecided; it never inspects the
+  subject. Two parsers do read commit subjects, and neither decides anything.
+  The observer's regular expression counts bounces per artifact. Gatehouse's
+  decision ledger in <code>packages/core/src/view-model/ledger.ts</code> turns
+  each <code>state(&lt;slug&gt;): …</code> subject into a typed entry for
+  display, and a subject it cannot parse comes back as <code>other</code> with
+  its text verbatim.</p>
+
+  <p>So the accurate statement is a division of labour. <em>The machine decides
+  from the file. The grammar makes authorship auditable to a human reading
+  <code>git log</code>, and Gatehouse renders it with a parser that never
+  guesses.</em> The design docs describe the human decision grammar
+  as what the metrics reader treats as authoritative, which is true of the intent
+  — but the mechanism is the parsed file, and the difference matters if you are
+  writing a consumer. The <code>dupefind</code> run is the illustration: its final
+  commit reads
+  <code>state(dupefind): G3 recorded N/A by nthncrtr; phase -&gt; done</code>,
+  which matches no reserved grammar and is harmless, because the one parser
+  that sees it renders it verbatim as <code>other</code>.</p>
+
+  <div class="check">
+    <h3>Check your understanding</h3>
+    <ol>
+      <li>Why is "parse, mutate, re-serialize" a data-loss bug for
+      <code>state.yaml</code> specifically, and which API replaces it?</li>
+      <li>Under what condition does <code>writeState</code> refuse to move the
+      ref at all, and what does it do instead?</li>
+      <li>Five of the six write-failure reasons are not retried. Why is
+      <code>ref-moved</code> the exception?</li>
+      <li>The engine passes <code>expectedTip</code> and the human surfaces do
+      not. What does that asymmetry cause, and why is it the outcome you want?</li>
+      <li>What makes discarding a refused write cheap rather than destructive?
+      State the two invariants by name.</li>
+      <li>Why is <code>cost_spent_usd</code> recomputed rather than incremented,
+      and how can a run's spend legitimately exceed its limit?</li>
+      <li>A gate was declined and the run was later resumed. Where is the
+      decline now, and what predicate finds it?</li>
+    </ol>
+  </div>
+
+  <h2 id="further-reading">Further reading</h2>
+
+  <p>Read <code>packages/core/src/record/actions.ts</code> first — the
+  pure half, and short — then <code>writeState</code> in
+  <code>packages/core/src/sources/local-source.ts</code>, where every
+  primitive from <a href="git-plumbing.html">module 1</a> is used at once. The
+  prose contracts are <code>docs/ORCHESTRATOR.md</code> §4.2, §4.3, §4.4 and §7;
+  the field-by-field contract is <code>contracts/state.yaml</code>, which repays
+  reading in full. See also
+  <a href="../how-it-works/how-gates-keep-a-human-in-charge.html">how gates keep
+  a human in charge</a> and the
+  <a href="../reference/state-yaml.html">state.yaml reference</a>. Next,
+  <a href="contracts-and-their-parsers.html">module 3</a>.</p>
+</article>
+<!-- content:end -->
+<nav class="pager" aria-label="Previous and next page">
+  <a class="pager-prev" href="../onboarding/git-plumbing.html"><span class="pager-label">Previous</span><span class="pager-title">Git, down to the plumbing</span></a>
+  <a class="pager-next" href="../onboarding/contracts-and-their-parsers.html"><span class="pager-label">Next</span><span class="pager-title">Contracts and their parsers</span></a>
+</nav>
+</main>
+<aside class="toc" aria-labelledby="toc-heading">
+  <p class="toc-title" id="toc-heading">On this page</p>
+  <ul class="toc-list">
+    <li><a href="#a-file-whose-comments-are-normative">A file whose comments are normative</a></li>
+    <li><a href="#mutations-are-data-not-i-o">Mutations are data, not I/O</a></li>
+    <li><a href="#one-write-path-two-ways-to-take-it">One write path, two ways to take it</a></li>
+    <li><a href="#refusal-is-a-return-value-and-mostly-not-retryable">Refusal is a return value, and mostly not retryable</a></li>
+    <li><a href="#why-throwing-the-work-away-is-safe">Why throwing the work away is safe</a></li>
+    <li><a href="#append-only-facts-derived-totals">Append-only facts, derived totals</a></li>
+    <li><a href="#the-file-is-the-current-state-the-branch-is-the-record">The file is the current state; the branch is the record</a></li>
+    <li><a href="#commit-grammar-as-authorship-evidence-and-what-it-is-not">Commit grammar as authorship evidence — and what it is not</a></li>
+    <li><a href="#further-reading">Further reading</a></li>
+  </ul>
+</aside>
+<nav class="sidebar" aria-label="All documentation">
+  <p class="sidebar-title">Documentation</p>
+  <p class="sidebar-section"><a href="../how-it-works/index.html">How It Works</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../how-it-works/index.html">Overview</a></li>
+    <li><a href="../how-it-works/how-a-run-works.html">How a run works</a></li>
+    <li><a href="../how-it-works/how-gates-keep-a-human-in-charge.html">How gates keep a human in charge</a></li>
+    <li><a href="../how-it-works/how-gateline-stays-vendor-neutral.html">How gateline stays vendor-neutral</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../onboarding/index.html">Onboarding</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../onboarding/index.html">Overview</a></li>
+    <li><a href="../onboarding/git-plumbing.html">1. Git, down to the plumbing</a></li>
+    <li><a href="../onboarding/the-co-written-state-file.html" aria-current="page">2. The co-written state file</a></li>
+    <li><a href="../onboarding/contracts-and-their-parsers.html">3. Contracts and their parsers</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../reference/index.html">Reference</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../reference/index.html">Overview</a></li>
+    <li><a href="../reference/cli.html">CLI</a></li>
+    <li><a href="../reference/state-yaml.html">state.yaml</a></li>
+    <li><a href="../reference/orchestrator-yaml.html">orchestrator.yaml</a></li>
+    <li><a href="../reference/adapter-manifests.html">Adapter manifests</a></li>
+    <li><a href="../reference/contract-grammar.html">Contract grammar</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../api/index.html">API</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../api/index.html">Browse generated API docs</a></li>
+  </ul>
+</nav>
+</div>
+<footer class="site-footer">
+  gateline is an open-source framework (Apache-2.0). &copy; the gateline maintainers.
+  <span class="footer-sep">&middot;</span>
+  <a href="../index.html">Documentation home</a>
+</footer>
+</body>
+</html>

@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>How gates keep a human in charge — gateline</title>
+  <meta name="description" content="Structural gate authorship, the co-writer contract, round caps and escalation, one-authority topology, and the trust ladder.">
+  <link rel="stylesheet" href="../assets/site.css">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="site-header">
+  <a class="wordmark" href="../index.html">gateline</a>
+  <nav class="site-nav" aria-label="Sections">
+    <a href="../how-it-works/index.html" class="active" aria-current="true">How It Works</a>
+    <a href="../onboarding/index.html">Onboarding</a>
+    <a href="../reference/index.html">Reference</a>
+    <a href="../api/index.html">API</a>
+  </nav>
+</header>
+<div class="layout">
+<main id="content">
+  <h1>How gates keep a human in charge</h1>
+<!-- content:start -->
+<article class="doc">
+  <p class="lede">In an orchestrator-driven run, the engine dispatches the
+  agents, meters the spend, and moves the state file forward. The design's
+  answer to "who is actually in charge?" has four parts: a prohibition built
+  into the code rather than instructed, a shared-file discipline both writers
+  obey, one authority per deployment, and an autonomy level that is earned and
+  measured instead of declared.</p>
+  <!-- evidence: docs/ORCHESTRATOR.md §1, §3, §7; docs/TOPOLOGY.md §3.1; docs/DESIGN.md §7 -->
+
+  <h2 id="a-structural-never">A structural "never"</h2>
+  <p>gateline has two operating modes. In v0 a human plays the Orchestrator
+  role — dispatching each agent by hand and moving <code>state.yaml</code>
+  through its phases. In v1 an engine executes the same role spec: the specs
+  are identical in both modes, and only who executes
+  <code>orchestrator.md</code> changes. The engine is a stateless
+  <strong>reconciler</strong>. It wakes on a trigger, reads
+  <code>state.yaml</code> at the run branch tip, derives the next action from
+  committed files alone, executes it, commits, and exits. No conversation state
+  survives between wakes, so waiting at a gate costs nothing — a gate wait is
+  simply a state from which no action derives.</p>
+  <!-- evidence: docs/DESIGN.md §7; docs/ORCHESTRATOR.md §2, §3, §4.5; roles/orchestrator.md; packages/orchestrator/README.md -->
+  <p>The load-bearing safety property is structural. The engine has
+  <em>no code path</em> that writes <code>gates.*.approved</code>: "the
+  orchestrator never approves a gate" is not an instruction a model is asked to
+  follow but a property the code cannot violate. The one gate entry a
+  machine writes is the pull-request approval sync, which copies a human
+  reviewer's PR approval into G2 under that reviewer's name; it runs in
+  Gatehouse's server and <code>gateline sync</code>, never in the engine. A
+  run's <code>closure</code>
+  block sits on the same read-only list, so the engine can pause a run and
+  never end one. The role spec says the same in
+  its own grammar — the Orchestrator owns the gates in the sense that it
+  presents them, and it must halt until a named human records approval. And a
+  deterministic loop that meets a state it has no rule for escalates, where a
+  model in the same position would improvise.</p>
+
+  <h2 id="one-file-two-writers">One file, two writers</h2>
+  <p><code>state.yaml</code> is the entire control plane in both directions —
+  there is no orchestrator API, config channel, or command queue. Humans speak
+  through Gatehouse, the framework's web UI, and the <code>gateline</code> CLI;
+  the engine speaks by advancing state that the human surfaces recognize as
+  needing a person. Two writers on one file need rules, and the co-writer
+  contract supplies seven: every write is a compare-and-swap ref update; YAML
+  edits preserve comments and formatting, through a document API rather than
+  re-serialization; timestamps are ISO-8601; commit messages follow a
+  structured grammar under distinguishable identities; review-round counts live
+  only in <code>state.yaml</code>; phase, status, and pause values stay
+  within the contract's enums; and a gate decision is legal only for the gate
+  on the table. That last rule means the profile's first undecided gate, while
+  the run stands in a phase that gate is decided in. Gatehouse, the CLI, the
+  API, and the pull-request approval sync all refuse an out-of-order
+  approval.</p>
+  <!-- evidence: docs/ORCHESTRATOR.md §4.3, §4.5, §7; contracts/state.yaml; packages/core/src/sources/git.ts; runs/creation-seam/state.yaml -->
+  <p><strong>Compare-and-swap</strong> (CAS) is what makes the two writers
+  safe. Each writer reads the branch tip, makes its edit, commits, and then
+  updates the ref only if it still points at the commit it read. If the ref
+  moved — a human decided mid-tick, an agent committed — the update is
+  refused; the loser discards its work and re-derives from the new tip. A
+  refused write is the designed outcome of a race, not an error, and it is how
+  a human decision always wins: the engine never forces its bookkeeping
+  through.</p>
+  <p>Provenance is legible at a glance. Engine commits are authored by a
+  dedicated bot identity (<code>gateline-orchestrator</code>, one per install),
+  never a person's git config, and they use a reserved set of bookkeeping verbs
+  — <code>dispatched</code>, <code>bounced</code>, <code>advanced</code>,
+  <code>escalated</code>, <code>paused</code>, <code>metered</code>,
+  <code>harvested</code>. The decision grammar — <code>G2 approved by
+  &lt;name&gt;</code>, <code>staged by &lt;name&gt;</code>, <code>armed by
+  &lt;name&gt;</code>, <code>closed by &lt;name&gt;</code>, <code>reopened to
+  &lt;phase&gt; by &lt;name&gt;</code> — is reserved for humans, and the
+  metrics reader treats it as authoritative. A run's branch history therefore
+  reads like a transcript of the partnership:</p>
+  <pre><code>c4b9d95 state(creation-seam): G2 approved by Nathan Carter [burden: confirmation]
+fdef5f2 state(creation-seam): metered verifier $3.11</code></pre>
+  <p>The <code>creation-seam</code> record shows both hands in the same file:
+  ledger entries written by the engine, each carrying the dispatch's cost and
+  the token counts the harness reported (the input count leaves out cached
+  context, so the cost column is the one to trust), and
+  gate entries written by the named human, each carrying a burden rating of how
+  much work the review took. Its engine commits carry the bot name of their
+  day, <code>agentic-orchestrator</code>. <!-- historical-name --> Finished runs keep the author that
+  wrote them, and the current identity is
+  <code>gateline-orchestrator</code>.</p>
+
+  <figure class="diagram" data-diagram="cas-co-writer" id="cas-co-writer">
+    <figcaption>Two writers, one state file. Human and engine both read the
+    branch tip, edit, and commit; the compare-and-swap ref update admits
+    exactly one of them, and the loser re-derives.</figcaption>
+    <svg class="diagram-svg" viewBox="0 0 700 310" role="img" aria-labelledby="title-cas-co-writer">
+      <title id="title-cas-co-writer">Two writers on one state file: human (top lane) and engine (bottom lane), each reads, edits, commits, and CAS-updates the ref. The refused writer re-derives.</title>
+      <defs>
+        <marker id="arr-cas" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="currentColor"/></marker>
+        <marker id="arr-cas-accent" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" class="d-accent"/></marker>
+      </defs>
+      <!-- Top lane: human -->
+      <text x="15" y="16" class="d-bold">human — via Gatehouse / gateline CLI</text>
+      <rect x="15" y="26" width="100" height="30" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="65" y="45" text-anchor="middle" class="d-small">read branch tip</text>
+      <line x1="115" y1="41" x2="135" y2="41" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-cas)"/>
+      <rect x="137" y="26" width="100" height="30" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="187" y="45" text-anchor="middle" class="d-small">edit (decision)</text>
+      <line x1="237" y1="41" x2="257" y2="41" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-cas)"/>
+      <rect x="259" y="26" width="100" height="30" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="309" y="45" text-anchor="middle" class="d-small">commit</text>
+      <!-- Human commit grammar label -->
+      <text x="309" y="78" text-anchor="middle" class="d-mono">state(&lt;slug&gt;): G2 approved by &lt;name&gt;</text>
+      <text x="309" y="90" text-anchor="middle" class="d-small d-faint">reserved human grammar</text>
+
+      <!-- Bottom lane: engine -->
+      <text x="15" y="120" class="d-bold">engine — tick</text>
+      <rect x="15" y="130" width="100" height="30" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="65" y="149" text-anchor="middle" class="d-small">read branch tip</text>
+      <line x1="115" y1="145" x2="135" y2="145" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-cas)"/>
+      <rect x="137" y="130" width="100" height="30" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="187" y="149" text-anchor="middle" class="d-small">derive next action</text>
+      <line x1="237" y1="145" x2="257" y2="145" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-cas)"/>
+      <rect x="259" y="130" width="100" height="30" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="309" y="145" text-anchor="middle" class="d-small">edit (bookkeeping)</text>
+      <line x1="359" y1="145" x2="380" y2="145" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-cas)"/>
+      <rect x="382" y="130" width="100" height="30" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="432" y="149" text-anchor="middle" class="d-small">commit</text>
+      <!-- Engine commit grammar label -->
+      <text x="432" y="182" text-anchor="middle" class="d-mono">state(&lt;slug&gt;): metered verifier $3.11</text>
+      <text x="432" y="194" text-anchor="middle" class="d-small d-faint">bot identity: gateline-orchestrator</text>
+
+      <!-- Ref node (cylinder) -->
+      <ellipse cx="610" cy="88" rx="40" ry="14" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <rect x="570" y="88" width="40" height="30" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <line x1="570" y1="88" x2="570" y2="118" stroke="currentColor" stroke-width="1.2"/>
+      <line x1="610" y1="88" x2="610" y2="118" stroke="currentColor" stroke-width="1.2"/>
+      <text x="590" y="108" text-anchor="middle" class="d-small">refs/heads/</text>
+      <text x="590" y="120" text-anchor="middle" class="d-small">run/&lt;slug&gt;</text>
+
+      <!-- Accepted arrow from human -->
+      <line x1="359" y1="41" x2="570" y2="80" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-cas)"/>
+      <text x="460" y="55" text-anchor="middle" class="d-small">update-ref (CAS)</text>
+      <text x="460" y="66" text-anchor="middle" class="d-small">only if ref still = the commit I read</text>
+      <text x="555" y="78" class="d-bold d-accent-fill" font-size="14">✓ accepted</text>
+
+      <!-- Refused arrow from engine -->
+      <line x1="482" y1="145" x2="570" y2="100" stroke="currentColor" stroke-width="1.2" stroke-dasharray="4 3"/>
+      <text x="530" y="120" class="d-bold d-accent-fill" font-size="14">✕ refused</text>
+
+      <!-- Return loop -->
+      <path d="M482,145 C500,220 65,200 65,155" fill="none" class="d-accent-stroke" stroke-width="1.2" marker-end="url(#arr-cas-accent)"/>
+      <text x="270" y="218" text-anchor="middle" class="d-small d-accent-fill">discard; re-read; re-derive</text>
+      <text x="270" y="230" text-anchor="middle" class="d-small d-accent-fill">— refusal is the designed outcome</text>
+
+      <!-- Bottom annotation -->
+      <text x="15" y="290" class="d-small d-faint">seven rules: CAS writes · comment-preserving YAML · ISO-8601 timestamps · structured commit grammar · review_rounds only here · contract enums only · gate-on-the-table only</text>
+    </svg>
+  </figure>
+
+  <h2 id="caps-pauses-and-the-escalation-path">Caps, pauses, and the escalation path</h2>
+  <p>Autonomy inside a phase has hard edges. Implementer ⇄ Reviewer cycles are
+  capped at three rounds per work item; a fourth round escalates automatically,
+  with both sides' artifacts. Resolving that escalation grants one more round,
+  and the engine asks again for each extra round. Spend is capped too: every
+  model invocation flows through the dispatch seam and is metered into the
+  run's budget ledger, and before any dispatch the engine projects the ledger
+  sum plus a static per-role estimate against the run's cost limit. A projected
+  exceedance pauses the run as <code>budget-exhausted</code> and escalates —
+  exhaustion pauses the pipeline; it never degrades quality to fit the budget.
+  Resuming from that pause carries the budget decision: <code>gateline resume
+  --cost-limit &lt;usd&gt;</code> writes a higher limit in the same commit as
+  the phase restore, and a resume without one is refused, because the pause is
+  a condition the engine recomputes on every tick.</p>
+  <!-- evidence: docs/DESIGN.md §4; docs/ORCHESTRATOR.md §4.2, §4.5, §6; packages/cli/src/main.ts; runs/creation-seam/state.yaml -->
+  <p>Metering is unconditional, but enforcement is a switch. Operators on
+  flat-rate-billed harnesses can start the engine with
+  <code>--no-budget-enforcement</code>; the ledger, derived totals, and token
+  counts record regardless — pause-don't-degrade governs enforcement, not
+  measurement. The <code>creation-seam</code> run shows both halves in one
+  incident.</p>
+  <p>With the ledger at $44.02, the engine projected $68.02 against the run's
+  $60 limit, paused, and escalated. The human resolved the escalation by
+  restarting the engine with budget enforcement disabled and resuming;
+  metering kept running, and the record closes at $104.54 spent against the
+  original $60 limit — the machine's stop, the human's override, and the full
+  cost all legible in the same file.</p>
+  <p class="callout"><strong>Approve-and-hold.</strong> Sometimes signing a
+  gate should not start the next phase — another human decision still stands
+  in between. <code>gateline approve --hold &lt;reason&gt;</code> signs the gate
+  and sets <code>phase: paused</code> in the same commit; the held run is an
+  ordinary rest state, and resume releases it into whatever phase the gate
+  ledger implies. Signing and advancing are separate acts precisely so a
+  signature can never accidentally launch work.</p>
+
+  <h2 id="one-authority-per-deployment">One authority per deployment</h2>
+  <p>The control plane has one authority per deployment. Gatehouse and the
+  engine run as one supervised unit over one clone — the <code>gateline
+  up</code> topology — with one sync loop and one push path; the git host's
+  origin is the linearization point, so a dispatch whose intent commit origin
+  rejects is never launched. An origin that is merely unreachable does not
+  block the launch, because the clone is only ahead, and a later accepted push
+  carries the commit. A deployment can also run
+  local-only, with no push, no fetch, and no GitHub calls
+  (<code>gateline up --local-only</code>); it is a named, first-class
+  topology. The rule was learned from
+  incidents: the topology design records a day of split deployment in which an
+  engine kept deriving against a stale budget limit, and machine bookkeeping
+  and human decisions accumulated on divergent histories that needed manual
+  repair.</p>
+  <!-- evidence: docs/TOPOLOGY.md §1, §3.1, §3.2, §3.5, §3.6; docs/ORCHESTRATOR.md §13; AGENTS.md -->
+  <p>The blessed checkout stays on the default branch, and a code-tree monitor
+  enforces it. Only a clean fast-forward of the default branch counts as an
+  update; on one, the engine drains in-flight work and exits with code 75 — a
+  deliberately ordinary "temporary failure" exit that a supervisor restarts
+  onto the new code (unsupervised, the operator restarts it by hand). A dirty
+  tree, a branch switch, or
+  any non-fast-forward movement pauses dispatch instead — the engine never
+  dispatches on mixed code, and it never pulls: updating is always an operator
+  act (<code>git pull</code>, or <code>gateline self-update</code>). Unmerged
+  changes are tried from their own worktree with <code>gateline ui</code> —
+  never <code>up</code> — so unreviewed code is never put in charge of live,
+  metered dispatch.</p>
+
+  <h2 id="autonomy-is-earned-and-measured">Autonomy is earned, and measured</h2>
+  <p>The framework treats orchestration autonomy the way you would treat a new
+  hire's: v0 exists so the team builds a calibrated sense of where agents are
+  strong before granting routing autonomy. The promotion criterion is explicit
+  — gate reviews have become <em>confirmations rather than corrections</em> —
+  and it is measured, not vibes: the gate frontend records a
+  <strong>burden</strong> (<code>confirmation</code>,
+  <code>light-correction</code>, or <code>heavy-correction</code>) in the act
+  of deciding, and hand-recorded decisions are expected to set it, so the
+  criterion is checkable from the record where decisions flow through the
+  frontend — while older or hand-entered decisions may lack it.</p>
+  <!-- evidence: docs/DESIGN.md §7; docs/ORCHESTRATOR.md §10; contracts/state.yaml; packages/orchestrator/shadow-dupefind.md; AGENTS.md -->
+  <p>Autonomy arrives across a milestone ladder, and the ladder has a gate of
+  its own. M0 lands the contracts and a hand-kept ledger. M1 runs the engine in
+  <strong>shadow mode</strong> — a dry-run tick against finished v0 runs,
+  comparing each derived action to what the human orchestrator actually did;
+  the bar was three full runs with every disagreement dispositioned as an
+  engine bug or a design finding. M2 is the autonomous loop on one vendor, and
+  it could not begin until the promotion criterion was credibly met — a
+  sustained majority of <code>confirmation</code> burden across v0 gate
+  decisions. M2 has since run: the engine has driven real runs against this
+  repository, <code>creation-seam</code> among them, with humans acting only
+  at gates and escalations. M3 adds cross-vendor dispatch with the vendor pins
+  enforced at dispatch time; M4 hardens crash recovery and isolation, and
+  per-task worktrees, session resume, and crash recovery are in place.</p>
+  <p>The shadow record shows the bar working as design review. Against the
+  first v0 run the engine's derived action matched the human's on 8 of 19
+  steps, and the disagreements traced to bookkeeping gaps the design then
+  closed; by the later runs agreement reached 18 of 22 and 16 of 23 steps, with
+  the remaining disagreements specific, fixable defects. Autonomy here is not a
+  switch that ships: it remains gated on the measured criterion, and no mode of
+  the framework is "fully autonomous."</p>
+
+  <figure class="diagram" data-diagram="trust-ladder">
+    <figcaption>Autonomy as a ladder with a gate. Each milestone has an exit
+    criterion; the autonomous loop (M2) waits on a sustained majority of
+    confirmation-burden gate reviews.</figcaption>
+    <svg class="diagram-svg" viewBox="0 0 700 250" role="img" aria-labelledby="title-trust-ladder">
+      <title id="title-trust-ladder">Trust ladder: M0 to M4 in ascending steps, with an autonomy gate barrier between M1 and M2, measured by the burden metric.</title>
+      <defs>
+        <marker id="arr-tl" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" class="d-accent"/></marker>
+      </defs>
+      <!-- Staircase steps -->
+      <!-- M0: x=30 y=170 -->
+      <rect x="30" y="170" width="100" height="32" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="80" y="184" text-anchor="middle" class="d-bold">M0</text>
+      <text x="80" y="196" text-anchor="middle" class="d-small">contracts land</text>
+      <text x="80" y="208" text-anchor="middle" class="d-small">hand-kept ledger</text>
+
+      <!-- M1: x=160 y=140 -->
+      <rect x="160" y="140" width="100" height="32" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="210" y="154" text-anchor="middle" class="d-bold">M1</text>
+      <text x="210" y="166" text-anchor="middle" class="d-small">shadow mode: derived action</text>
+      <text x="210" y="177" text-anchor="middle" class="d-small">vs. human action over</text>
+      <text x="210" y="188" text-anchor="middle" class="d-small">3 finished v0 runs</text>
+
+      <!-- M2: x=290 y=110 -->
+      <rect x="290" y="110" width="100" height="32" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="340" y="124" text-anchor="middle" class="d-bold">M2</text>
+      <text x="340" y="136" text-anchor="middle" class="d-small">autonomous loop, one vendor</text>
+
+      <!-- M3: x=420 y=80 -->
+      <rect x="420" y="80" width="100" height="32" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="470" y="94" text-anchor="middle" class="d-bold">M3</text>
+      <text x="470" y="106" text-anchor="middle" class="d-small">cross-vendor dispatch;</text>
+      <text x="470" y="117" text-anchor="middle" class="d-small">vendor pins enforced</text>
+
+      <!-- M4: x=550 y=50 -->
+      <rect x="550" y="50" width="100" height="32" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="600" y="64" text-anchor="middle" class="d-bold">M4</text>
+      <text x="600" y="76" text-anchor="middle" class="d-small">hardening: crash recovery,</text>
+      <text x="600" y="87" text-anchor="middle" class="d-small">isolation, packaging</text>
+
+      <!-- Staircase connectors -->
+      <line x1="130" y1="186" x2="158" y2="156" stroke="currentColor" stroke-width="1.2"/>
+      <line x1="260" y1="156" x2="288" y2="126" stroke="currentColor" stroke-width="1.2"/>
+      <line x1="390" y1="126" x2="418" y2="96" stroke="currentColor" stroke-width="1.2"/>
+      <line x1="520" y1="96" x2="548" y2="66" stroke="currentColor" stroke-width="1.2"/>
+      <!-- Upward arrow along staircase -->
+      <path d="M635,200 L635,30" fill="none" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-tl)"/>
+      <text x="650" y="155" transform="rotate(-90 650 155)" class="d-small d-faint">autonomy increases; gates stay human</text>
+
+      <!-- Autonomy gate barrier between M1 and M2 -->
+      <line x1="278" y1="105" x2="278" y2="175" class="d-accent-stroke" stroke-width="3"/>
+      <text x="272" y="100" text-anchor="end" class="d-bold d-accent-fill" font-size="10">autonomy</text>
+      <text x="272" y="111" text-anchor="end" class="d-bold d-accent-fill" font-size="10">gate</text>
+      <text x="284" y="100" class="d-small d-accent-fill">M2 does not begin until</text>
+      <text x="284" y="112" class="d-small d-accent-fill">gate reviews are mostly confirmations</text>
+      <text x="284" y="126" class="d-small d-faint">measured by burden: confirmation · light-correction · heavy-correction</text>
+
+      <!-- Shadow trajectory -->
+      <line x1="160" y1="219" x2="160" y2="230" class="d-dashed" stroke-width="1"/>
+      <text x="160" y="244" class="d-small d-faint">evidence so far: 8/19 → 18/22 → 16/23 steps agreed</text>
+      <text x="160" y="256" class="d-small d-faint">(wordfreq → mdtoc → dupefind)</text>
+
+      <!-- Upward arrow -->
+
+    </svg>
+  </figure>
+
+  <p>The third page covers the other half of the trust story —
+  <a href="how-gateline-stays-vendor-neutral.html">how gateline stays
+  vendor-neutral</a>, so no model or harness is baked into the pipeline. For
+  the decision commands themselves, see the
+  <a href="../reference/cli.html">CLI reference</a>; for every field the two
+  writers share, the <a href="../reference/state-yaml.html">state.yaml
+  reference</a>.</p>
+</article>
+<!-- content:end -->
+<nav class="pager" aria-label="Previous and next page">
+  <a class="pager-prev" href="../how-it-works/how-a-run-works.html"><span class="pager-label">Previous</span><span class="pager-title">How a run works</span></a>
+  <a class="pager-next" href="../how-it-works/how-gateline-stays-vendor-neutral.html"><span class="pager-label">Next</span><span class="pager-title">How gateline stays vendor-neutral</span></a>
+</nav>
+</main>
+<aside class="toc" aria-labelledby="toc-heading">
+  <p class="toc-title" id="toc-heading">On this page</p>
+  <ul class="toc-list">
+    <li><a href="#a-structural-never">A structural &quot;never&quot;</a></li>
+    <li><a href="#one-file-two-writers">One file, two writers</a></li>
+    <li><a href="#caps-pauses-and-the-escalation-path">Caps, pauses, and the escalation path</a></li>
+    <li><a href="#one-authority-per-deployment">One authority per deployment</a></li>
+    <li><a href="#autonomy-is-earned-and-measured">Autonomy is earned, and measured</a></li>
+  </ul>
+</aside>
+<nav class="sidebar" aria-label="All documentation">
+  <p class="sidebar-title">Documentation</p>
+  <p class="sidebar-section"><a href="../how-it-works/index.html">How It Works</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../how-it-works/index.html">Overview</a></li>
+    <li><a href="../how-it-works/how-a-run-works.html">How a run works</a></li>
+    <li><a href="../how-it-works/how-gates-keep-a-human-in-charge.html" aria-current="page">How gates keep a human in charge</a></li>
+    <li><a href="../how-it-works/how-gateline-stays-vendor-neutral.html">How gateline stays vendor-neutral</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../onboarding/index.html">Onboarding</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../onboarding/index.html">Overview</a></li>
+    <li><a href="../onboarding/git-plumbing.html">1. Git, down to the plumbing</a></li>
+    <li><a href="../onboarding/the-co-written-state-file.html">2. The co-written state file</a></li>
+    <li><a href="../onboarding/contracts-and-their-parsers.html">3. Contracts and their parsers</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../reference/index.html">Reference</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../reference/index.html">Overview</a></li>
+    <li><a href="../reference/cli.html">CLI</a></li>
+    <li><a href="../reference/state-yaml.html">state.yaml</a></li>
+    <li><a href="../reference/orchestrator-yaml.html">orchestrator.yaml</a></li>
+    <li><a href="../reference/adapter-manifests.html">Adapter manifests</a></li>
+    <li><a href="../reference/contract-grammar.html">Contract grammar</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../api/index.html">API</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../api/index.html">Browse generated API docs</a></li>
+  </ul>
+</nav>
+</div>
+<footer class="site-footer">
+  gateline is an open-source framework (Apache-2.0). &copy; the gateline maintainers.
+  <span class="footer-sep">&middot;</span>
+  <a href="../index.html">Documentation home</a>
+</footer>
+</body>
+</html>

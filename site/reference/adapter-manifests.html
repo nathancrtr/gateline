@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Adapter manifest reference — gateline</title>
+  <meta name="description" content="The adapter manifest schema, the render pipeline that consumes it, and the permission model.">
+  <link rel="stylesheet" href="../assets/site.css">
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+</head>
+<body>
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="site-header">
+  <a class="wordmark" href="../index.html">gateline</a>
+  <nav class="site-nav" aria-label="Sections">
+    <a href="../how-it-works/index.html">How It Works</a>
+    <a href="../onboarding/index.html">Onboarding</a>
+    <a href="../reference/index.html" class="active" aria-current="true">Reference</a>
+    <a href="../api/index.html">API</a>
+  </nav>
+</header>
+<div class="layout">
+<main id="content">
+  <h1>Adapter manifest reference</h1>
+<!-- content:start -->
+<article class="doc">
+<p class="lede">
+    Each adapter under <code>adapters/&lt;name&gt;/</code> carries a
+    <code>manifest.json</code> that maps the framework's runtime-neutral role
+    specs into a specific runner's vocabulary. Agent files are
+    <strong>rendered, not written</strong> — <code>gateline render</code>
+    reads role specs and manifests, then writes the runner's agent files. The
+    renderer lives in <code>packages/framework/src/render.ts</code>, and CI
+    enforces staleness with
+    <code>node packages/framework/src/main.ts render --check</code>, which
+    needs nothing installed. An adapter may
+    <em>narrow</em> a role (fewer tools, tighter permissions) but never
+    <em>widen</em> it — the role spec is the ceiling.
+    <!-- evidence: AGENTS.md "Invariants"; docs/DESIGN.md §8; packages/framework/src/render.ts -->
+  </p>
+
+  <p class="callout"><strong>Honesty note — model IDs are ILLUSTRATIVE.</strong>
+  The registry's model IDs are marked ILLUSTRATIVE in
+  <code>registry/models.yaml</code>: each adopter must pin their
+  organization's approved models and re-verify pricing. The manifest model
+  spellings quoted below are configuration examples, not guaranteed
+  live bindings. The opencode adapter specifically marks its Kimi binding as
+  TEMPORARY (<code>adapters/opencode/manifest.json</code>): its comment says
+  to revisit the binding once Kimi K3's open weights land on 2026-07-27, a
+  date now past, so the binding is pending that revisit. The OpenRouter pricing entries back the token-based
+  metering fallback; opencode reports real cost directly today, so they are
+  not the live path (<code>registry/models.yaml</code>).</p>
+
+  <h2 id="three-shipped-adapters">Three shipped adapters</h2>
+  <table>
+    <thead><tr><th>Adapter</th><th>Output dir</th><th>Filename template</th><th>Tools style</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>claude-code</code></td>
+        <td><code>.claude/agents/</code></td>
+        <td><code>{role}.md</code></td>
+        <td><code>comma</code> — capabilities rendered as a comma-separated tool list</td>
+      </tr>
+      <tr>
+        <td><code>copilot-cli</code></td>
+        <td><code>.github/agents/</code></td>
+        <td><code>{role}.agent.md</code></td>
+        <td><code>flow-list</code> — capabilities rendered as a YAML flow list</td>
+      </tr>
+      <tr>
+        <td><code>opencode</code></td>
+        <td><code>.opencode/agents/</code></td>
+        <td><code>{role}.md</code></td>
+        <td><code>permission-map</code> — capabilities rendered as allow/deny permissions</td>
+      </tr>
+    </tbody>
+  </table>
+  <!-- evidence: docs/DESIGN.md §8; adapters/claude-code/manifest.json; adapters/copilot-cli/manifest.json; adapters/opencode/manifest.json -->
+
+  <h2 id="manifest-schema-key-by-key-union-across-adapters">Manifest schema — key by key (union across adapters)</h2>
+  <p>All three shipped manifests carry identical top-level
+  non‑<code>_comment</code> key sets; only the <code>headless</code> block
+  differs, where opencode adds <code>session_field</code> and
+  <code>resume_args</code>. The renderer's loader requires
+  <code>adapter</code>, <code>output_dir</code>, <code>filename</code> and
+  <code>tools_style</code> as strings and <code>roles</code> as an array, and
+  reads <code>tool_map</code> and <code>model_map</code> at use;
+  <code>model_overrides</code> and <code>extra_frontmatter</code> are optional.
+  The renderer never reads <code>model_vendors</code> or
+  <code>headless</code>; the orchestrator does.</p>
+  <!-- evidence: packages/framework/src/adapter.ts; packages/orchestrator/src/manifest.ts -->
+
+  <table>
+    <thead><tr><th>Key</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>adapter</code></td><td>Adapter id string, e.g. <code>"claude-code"</code></td></tr>
+      <tr><td><code>output_dir</code></td><td>Render target directory, created if missing</td></tr>
+      <tr><td><code>filename</code></td><td>Per-role filename template; <code>{role}</code> is substituted with the role name</td></tr>
+      <tr><td><code>roles[]</code></td><td>Roles rendered for this runner. All three adapters render eight roles: analyst, architect, implementer, reviewer, verifier, ops, integrator, historian. The orchestrator role is <em>not</em> rendered — it is executed by the engine/human.</td></tr>
+      <tr><td><code>tools_style</code></td><td>How capabilities render as tools/permissions: <code>comma | flow-list | permission-map</code></td></tr>
+      <tr><td><code>tool_map</code></td><td>Abstract capability (<code>read</code>, <code>search</code>, <code>write-artifacts</code>, <code>edit-code</code>, <code>shell</code>) → runner's tool names</td></tr>
+      <tr><td><code>model_map</code></td><td>Capability profile (<code>frontier-reasoning | balanced | fast-cheap</code>) → runner model spelling</td></tr>
+      <tr><td><code>model_overrides</code></td><td>Per-role model spelling overrides. Implements P5 pins on multi-vendor runners: the copilot-cli maps reviewer → gpt-5.4 and verifier → gemini-3-flash (against a Claude implementer); opencode maps reviewer → kimi-k2.6 and verifier → minimax-m3 (three distinct labs, three-way decorrelation). Single-vendor adapters (claude-code) leave this empty.</td></tr>
+      <tr><td><code>model_vendors</code></td><td>Runner spelling → vendor name, for the orchestrator's dispatch-time <code>avoid_vendor_of</code> check. For opencode, vendor is the underlying model lab (not the OpenRouter routing layer they are all fetched through).</td></tr>
+      <tr><td><code>extra_frontmatter</code></td><td>Extra rendered frontmatter keys, values JSON-serialised. Example: copilot-cli sets <code>disable-model-invocation: true</code> and <code>user-invocable: true</code>; opencode sets <code>mode: all</code>.</td></tr>
+      <tr><td><code>headless.command[]</code></td><td>v1 dispatch invocation template; <code>{prompt}</code> and <code>{role}</code> are substituted</td></tr>
+      <tr><td><code>headless.dispatch_prompt</code></td><td>Prompt template — <code>{role}</code> and <code>{body}</code> are substituted; defaults to <code>{body}</code> when absent</td></tr>
+      <tr><td><code>headless.session_field</code></td><td>Optional. The field in the runner's output that names its own session for the dispatch; opencode reads <code>sessionID</code>. The seam records it on the ledger entry.</td></tr>
+      <tr><td><code>headless.resume_args</code></td><td>Optional. Extra arguments appended on a retry of the same role, task and round, with <code>{session}</code> substituted, so the retry continues the harness session; opencode passes <code>["--session", "{session}"]</code>.</td></tr>
+      <tr><td><code>headless.usage_report</code></td><td>Metering parse spec. Three formats: <code>json-stdout</code> (field paths + error/result fields, used by claude-code), <code>static-estimate</code> (falls back to registry estimates, used by copilot-cli), <code>ndjson-sum</code> (line_filter + dotted field paths over streaming JSON, used by opencode).</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="how-gateline-render-consumes-manifests">How <code>gateline render</code> consumes manifests</h2>
+  <p>The renderer is part of <code>@gateline/framework</code>, a Node package
+  with no runtime dependencies: it imports <code>node:</code> builtins and its
+  own modules, nothing else. Manifests are JSON, and role frontmatter is read
+  by a hand-rolled flat reader. That is what lets it run before the
+  environment probe has fixed anything in a host repo.</p>
+  <!-- evidence: packages/framework/src/main.ts; packages/framework/src/role.ts; docs/INTEGRATION.md §8 -->
+
+  <p><code>renderAll</code> lists the directories under <code>adapters/</code>
+  that contain a <code>manifest.json</code>, sorted by name for stable output,
+  then for each listed role:</p>
+  <ol>
+    <li>Parses the role spec's frontmatter (requiring <code>dispatch</code>,
+      <code>capabilities</code>, and <code>capability_profile</code>).</li>
+    <li>Resolves the model: checks <code>model_overrides[role]</code> first,
+      then falls back to <code>model_map[capability_profile]</code>.</li>
+    <li>Merges capabilities into the runner's tool names via
+      <code>tool_map</code>, in order and deduplicated.</li>
+    <li>Emits the rendered file: frontmatter
+      (<code>---</code> / <code>name:</code> / <code>description:</code> /
+      tools‑or‑permission / <code>model:</code> / any extra frontmatter /
+      <code>---</code>) first, then the header comment
+      ("RENDERED from roles/&lt;role&gt;.md by gateline render - DO NOT EDIT.
+      Edit the role spec, then run: gateline render"), then the
+      body, then overlay splices (<code>overlays/_all.md</code>
+      and <code>overlays/&lt;role&gt;.md</code> are spliced in as project
+      policy layers).</li>
+  </ol>
+
+  <p>Mode <code>--check</code> (used by CI:
+  <code>.github/workflows/render-check.yml</code>) reads existing rendered
+  files and exits 1 if any are stale — a stale-render CI failure
+  means the manifest or role spec was edited without re-rendering. A host
+  repository gets the same check as
+  <code>.github/workflows/gateline-render-check.yml</code> from
+  <code>gateline init</code>.</p>
+
+  <p>In a host repository, <code>gateline render</code> resolves the core
+  root from <code>&lt;prefix&gt;/framework-lock.json</code>; the default
+  prefix is <code>.gateline</code>.</p>
+
+  <h2 id="permission-model-narrow-never-widen">Permission model: narrow, never widen</h2>
+  <p>An adapter may <em>narrow</em> a role (fewer tools, tighter permissions)
+  but never <em>widen</em> it. The role spec is the ceiling. This principle
+  is rendered as a property in the opencode adapter: the
+  <code>permission-map</code> tools style generates a deny-by-default map
+  (<code>permission:</code>, then <code>"*": deny</code>, then one
+  <code>&lt;key&gt;: allow</code> per mapped tool) where only the role's
+  declared capabilities are explicitly allowed. The
+  function <code>renderPermissionMap</code> in <code>render.ts</code>
+  implements this.</p>
+  <!-- evidence: docs/DESIGN.md §8; packages/framework/src/render.ts -->
+
+  <h2 id="p5-decorrelation-per-adapter-gradient">P5 decorrelation — per-adapter gradient</h2>
+  <table>
+    <thead><tr><th>Adapter</th><th>P5 decorrelation status</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><code>claude-code</code></td>
+        <td>Single-vendor harness — P5 decorrelation is only partially honored. The interim fallback is a lineage split: the reviewer reviews the implementer's work using a different model within the same vendor family (fable reviews sonnet). Satisfiable via a second adapter.</td>
+      </tr>
+      <tr>
+        <td><code>copilot-cli</code></td>
+        <td>P5 decorrelation is fully honored via <code>model_overrides</code>: reviewer → gpt-5.4 (OpenAI) and verifier → gemini-3-flash (Google), against a Claude (Anthropic) implementer.</td>
+      </tr>
+      <tr>
+        <td><code>opencode</code></td>
+        <td>Three-way lab decorrelation: implementer uses DeepSeek, reviewer uses Moonshot (Kimi), verifier uses MiniMax — distinct companies with independent training pipelines and RLHF. All three routed through OpenRouter; vendor is the underlying lab, not the routing layer.</td>
+      </tr>
+    </tbody>
+  </table>
+  <!-- evidence: docs/DESIGN.md §2; adapters/claude-code/README.md; adapters/copilot-cli/README.md; adapters/opencode/manifest.json -->
+
+  <p>Dispatch-time enforcement: with more than one adapter configured, the
+  orchestrator's dispatch seam <em>refuses</em> to bind Reviewer or Verifier
+  to the Implementer's vendor (<code>VendorPinError</code>), so the
+  <code>avoid_vendor_of</code> registry pins are enforced rather than
+  conventional. With a single adapter (the default <code>gateline up</code>
+  with one <code>--adapter</code>) the pin is unsatisfiable and stays
+  advisory: the router dispatches on the implementer's vendor and logs a P5
+  advisory once per role. Later <code>--adapter</code> flags are how those
+  pins are satisfied.</p>
+
+  <h2 id="renderer-constraints">Renderer constraints</h2>
+  <ul>
+    <li>No runtime dependencies — <code>node:</code> builtins only. A dependency that forces an install step in <code>render-check.yml</code> is the bug, not the workflow</li>
+    <li>Node 24 or later</li>
+    <li>JSON manifests, not YAML</li>
+    <li>Overlay splicing: <code>overlays/_all.md</code> is spliced into every agent;
+      <code>overlays/&lt;role&gt;.md</code> into that one role's agent. The framework repository itself has no <code>overlays/</code>; they exist in host repositories, where <code>gateline init</code> writes the stubs and <code>validate</code> requires them present and non-empty</li>
+    <li>Stubs that are only HTML comments splice nothing</li>
+    <li>A rendering that encounters an unparseable manifest or missing
+      frontmatter raises <code>FrameworkError</code> and exits 1 (no guesswork)</li>
+  </ul>
+  <!-- evidence: AGENTS.md "Invariants"; packages/framework/src/render.ts; .github/workflows/render-check.yml -->
+</article>
+<!-- content:end -->
+<nav class="pager" aria-label="Previous and next page">
+  <a class="pager-prev" href="../reference/orchestrator-yaml.html"><span class="pager-label">Previous</span><span class="pager-title">orchestrator.yaml reference</span></a>
+  <a class="pager-next" href="../reference/contract-grammar.html"><span class="pager-label">Next</span><span class="pager-title">Contract grammar reference</span></a>
+</nav>
+</main>
+<aside class="toc" aria-labelledby="toc-heading">
+  <p class="toc-title" id="toc-heading">On this page</p>
+  <ul class="toc-list">
+    <li><a href="#three-shipped-adapters">Three shipped adapters</a></li>
+    <li><a href="#manifest-schema-key-by-key-union-across-adapters">Manifest schema — key by key (union across adapters)</a></li>
+    <li><a href="#how-gateline-render-consumes-manifests">How gateline render consumes manifests</a></li>
+    <li><a href="#permission-model-narrow-never-widen">Permission model: narrow, never widen</a></li>
+    <li><a href="#p5-decorrelation-per-adapter-gradient">P5 decorrelation — per-adapter gradient</a></li>
+    <li><a href="#renderer-constraints">Renderer constraints</a></li>
+  </ul>
+</aside>
+<nav class="sidebar" aria-label="All documentation">
+  <p class="sidebar-title">Documentation</p>
+  <p class="sidebar-section"><a href="../how-it-works/index.html">How It Works</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../how-it-works/index.html">Overview</a></li>
+    <li><a href="../how-it-works/how-a-run-works.html">How a run works</a></li>
+    <li><a href="../how-it-works/how-gates-keep-a-human-in-charge.html">How gates keep a human in charge</a></li>
+    <li><a href="../how-it-works/how-gateline-stays-vendor-neutral.html">How gateline stays vendor-neutral</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../onboarding/index.html">Onboarding</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../onboarding/index.html">Overview</a></li>
+    <li><a href="../onboarding/git-plumbing.html">1. Git, down to the plumbing</a></li>
+    <li><a href="../onboarding/the-co-written-state-file.html">2. The co-written state file</a></li>
+    <li><a href="../onboarding/contracts-and-their-parsers.html">3. Contracts and their parsers</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../reference/index.html">Reference</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../reference/index.html">Overview</a></li>
+    <li><a href="../reference/cli.html">CLI</a></li>
+    <li><a href="../reference/state-yaml.html">state.yaml</a></li>
+    <li><a href="../reference/orchestrator-yaml.html">orchestrator.yaml</a></li>
+    <li><a href="../reference/adapter-manifests.html" aria-current="page">Adapter manifests</a></li>
+    <li><a href="../reference/contract-grammar.html">Contract grammar</a></li>
+  </ul>
+  <p class="sidebar-section"><a href="../api/index.html">API</a></p>
+  <ul class="sidebar-list">
+    <li><a href="../api/index.html">Browse generated API docs</a></li>
+  </ul>
+</nav>
+</div>
+<footer class="site-footer">
+  gateline is an open-source framework (Apache-2.0). &copy; the gateline maintainers.
+  <span class="footer-sep">&middot;</span>
+  <a href="../index.html">Documentation home</a>
+</footer>
+</body>
+</html>

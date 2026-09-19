@@ -1,0 +1,14 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [],
+  "entryPointStrategy": "resolve",
+  "exclude": [
+    "**/test/**",
+    "**/fixtures/**"
+  ],
+  "out": "api",
+  "readme": "none",
+  "name": "gateline — API reference",
+  "includeVersion": false,
+  "logLevel": "Verbose"
+}

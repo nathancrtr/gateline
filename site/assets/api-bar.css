@@ -1,0 +1,105 @@
+/* === gateline docs bar for the generated API section =======================
+   Injected into every page under api/ by scripts/build-site.py, so the
+   TypeDoc output is reachable from the rest of the documentation site and
+   links back into it. This file is the only styling layered on top of the
+   TypeDoc theme; it deliberately reuses TypeDoc's own colour variables so it
+   follows whichever theme the reader has selected.
+   ========================================================================== */
+
+:root {
+  --gateline-accent: #0d7377;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --gateline-accent: #5bc0c4;
+  }
+}
+
+:root[data-theme="light"] {
+  --gateline-accent: #0d7377;
+}
+
+:root[data-theme="dark"] {
+  --gateline-accent: #5bc0c4;
+}
+
+.gateline-docsbar {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  height: 2.5rem;
+  padding: 0 1.25rem;
+  background: var(--color-background);
+  border-bottom: 1px solid var(--color-accent);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  font-size: 0.8rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.gateline-docsbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* TypeDoc's own toolbar is sticky at top: 0 — sit it below this bar. */
+.tsd-page-toolbar {
+  top: 2.5rem !important;
+}
+
+.gateline-docsbar-mark {
+  flex: 0 0 auto;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.gateline-docsbar-mark:hover {
+  color: var(--gateline-accent);
+}
+
+.gateline-docsbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 1 1 auto;
+  white-space: nowrap;
+}
+
+.gateline-docsbar-nav a {
+  padding: 0.2rem 0.5rem;
+  border-radius: 5px;
+  color: var(--color-text-aside);
+  text-decoration: none;
+}
+
+.gateline-docsbar-nav a:hover {
+  color: var(--gateline-accent);
+  background: var(--color-background-secondary);
+}
+
+.gateline-docsbar-here {
+  flex: 0 0 auto;
+  padding-left: 0.5rem;
+  border-left: 1px solid var(--color-accent);
+  color: var(--gateline-accent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@media (max-width: 640px) {
+  .gateline-docsbar {
+    gap: 0.6rem;
+    padding: 0 0.75rem;
+  }
+
+  .gateline-docsbar-here {
+    display: none;
+  }
+}

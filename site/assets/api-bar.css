@@ -49,45 +49,34 @@
   top: var(--gl-bar-h);
 }
 
-/* Wordmark: "gate|line", the same generated-content treatment as the site
-   header; the markup is the plain word, the halves are drawn with empty alt
-   text and the bar between them is a 2px accent rule. */
+/* Wordmark: "gate|line", the same treatment as the site header. The builder
+   emits the word as two spans, <span>gate</span><span>line</span>; the
+   accessible name is the plain word, and the bar between the halves is a
+   2px accent rule. */
 .gateline-docsbar-mark {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   margin-right: auto;
-  font-size: 0;
-  color: var(--gl-bar-ink);
-  text-decoration: none;
-}
-
-.gateline-docsbar-mark::before,
-.gateline-docsbar-mark::after {
-  display: inline-block;
   font-family: var(--gl-bar-font-mark);
   font-size: 1.25rem;
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.01em;
   color: var(--gl-bar-ink);
+  text-decoration: none;
 }
 
-.gateline-docsbar-mark::before {
-  content: "gate";
-  content: "gate" / "";
+.gateline-docsbar-mark > span:first-child {
   padding-right: 0.28em;
   border-right: 2px solid var(--gl-bar-accent);
 }
 
-.gateline-docsbar-mark::after {
-  content: "line";
-  content: "line" / "";
+.gateline-docsbar-mark > span:last-child {
   padding-left: 0.28em;
 }
 
-.gateline-docsbar-mark:hover::before,
-.gateline-docsbar-mark:hover::after {
+.gateline-docsbar-mark:hover {
   color: var(--gl-bar-accent);
 }
 
@@ -156,8 +145,7 @@
     height: 48px;
   }
 
-  .gateline-docsbar-mark::before,
-  .gateline-docsbar-mark::after {
+  .gateline-docsbar-mark {
     font-size: 1.125rem;
   }
 

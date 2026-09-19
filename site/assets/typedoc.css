@@ -135,7 +135,7 @@
   --gl-accent-hover: #0b3d78;
   --gl-accent-underline: #9cc1e3;
   --gl-approved: #0f7a52;
-  --gl-declined: #ca3535;
+  --gl-declined: #c03030;
   --gl-focus: #ffdd00;
   --gl-caution-bg: #fff8d6;
   --gl-caution-label: #7a6400;
@@ -713,6 +713,18 @@ details.tsd-page-navigation > summary {
 .tsd-member {
   border-top: 1px solid var(--gl-line);
   padding-top: 16px;
+}
+
+/* The theme gives panel headings -1.5rem side margins (and matching padding)
+   from when panels were padded boxes; ours are not, and on a phone the
+   overhang was 8px of sideways scroll. */
+.tsd-panel > h1,
+.tsd-panel > h2,
+.tsd-panel > h3 {
+  margin-left: 0;
+  margin-right: 0;
+  padding-left: 0;
+  padding-right: 0;
 }
 
 .tsd-member .tsd-anchor + h3 {

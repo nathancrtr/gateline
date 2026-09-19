@@ -7,6 +7,17 @@ table of contents, prev/next pager, footer — is generated from `site.json` and
 rewritten on every run. Editing a page means editing what is between the
 markers; editing the navigation means editing `site.json`.
 
+Every page, the landing included, sits in the same frame: top bar, site tree on
+the left, content column, and the on-this-page rail when the page has two or
+more <h2>s. The `landing` layout differs from `doc` in one way: it has no
+prev/next pager, because the landing is the root of the tree rather than a
+step in the reading order. A page's `heading` (when given) is the <h1> and
+its pager title; `title` is the <title>.
+
+The wordmark is emitted as two spans, `<span>gate</span><span>line</span>`,
+so the stylesheet can draw the rule between the halves without generated
+content; the accessible name is the plain word.
+
 The script is idempotent: running it twice produces the same bytes. On its
 first run over a page written before the markers existed, it migrates the page
 by lifting the inner <main> as the content body.
@@ -68,6 +79,16 @@ def rel(from_path, to_path):
     """Relative href from one site-root-relative page path to another."""
     depth = from_path.count("/")
     return "../" * depth + to_path
+
+
+def heading(page):
+    """The page's display name: its <h1> and its title in the pager."""
+    return page.get("heading") or page["title"]
+
+
+def render_wordmark(site):
+    """`<span>gate</span><span>line</span>` — one span per half of the mark."""
+    return "".join("<span>%s</span>" % esc(half) for half in site["wordmark"])
 
 
 # ---- manifest --------------------------------------------------------------
@@ -185,7 +206,8 @@ def render_header(site, page):
     out = [
         '<a class="skip-link" href="#content">Skip to content</a>',
         '<header class="site-header">',
-        '  <a class="wordmark" href="%sindex.html">%s</a>' % (root, site["wordmark"]),
+        '  <a class="wordmark" href="%sindex.html">%s</a>'
+        % (root, render_wordmark(site)),
         '  <nav class="site-nav" aria-label="Sections">',
     ]
     for section in site["sections"]:
@@ -260,7 +282,7 @@ def render_pager(site, page):
         out.append(
             '  <a class="pager-prev" href="%s"><span class="pager-label">Previous</span>'
             '<span class="pager-title">%s</span></a>'
-            % (rel(page["path"], prev_page["path"]), esc(prev_page["title"]))
+            % (rel(page["path"], prev_page["path"]), esc(heading(prev_page)))
         )
     else:
         out.append('  <span class="pager-spacer"></span>')
@@ -268,7 +290,7 @@ def render_pager(site, page):
         out.append(
             '  <a class="pager-next" href="%s"><span class="pager-label">Next</span>'
             '<span class="pager-title">%s</span></a>'
-            % (rel(page["path"], next_page["path"]), esc(next_page["title"]))
+            % (rel(page["path"], next_page["path"]), esc(heading(next_page)))
         )
     out.append("</nav>")
     return "\n".join(out)
@@ -290,31 +312,23 @@ def render_footer(site, page):
 
 def build_page(site, page, body):
     layout = page.get("layout", "doc")
+    toc = render_toc(collect_toc(body))
     parts = [render_head(site, page), "<body>", render_header(site, page)]
-
-    if layout == "landing":
-        parts.append('<main id="content">')
-        parts.append(START)
-        parts.append(body)
-        parts.append(END)
-        parts.append("</main>")
-    else:
-        toc = render_toc(collect_toc(body))
-        parts.append('<div class="layout">')
-        parts.append('<main id="content">')
-        parts.append("  <h1>%s</h1>" % esc(page["title"]))
-        parts.append(START)
-        parts.append(body)
-        parts.append(END)
+    parts.append('<div class="layout">')
+    parts.append('<main id="content">')
+    parts.append("  <h1>%s</h1>" % esc(heading(page)))
+    parts.append(START)
+    parts.append(body)
+    parts.append(END)
+    if layout != "landing":
         pager = render_pager(site, page)
         if pager:
             parts.append(pager)
-        parts.append("</main>")
-        if toc:
-            parts.append(toc)
-        parts.append(render_sidebar(site, page))
-        parts.append("</div>")
-
+    parts.append("</main>")
+    if toc:
+        parts.append(toc)
+    parts.append(render_sidebar(site, page))
+    parts.append("</div>")
     parts += [render_footer(site, page), "</body>", "</html>", ""]
     return "\n".join(parts)
 
@@ -322,8 +336,8 @@ def build_page(site, page, body):
 # ---- API bar ---------------------------------------------------------------
 
 
-def render_api_bar(depth):
-    """`depth` is how many directories below public/ the api page sits."""
+def render_api_bar(site, depth):
+    """`depth` is how many directories below the site root the api page sits."""
     root = "../" * depth
     links = [
         ("index.html", "Documentation home"),
@@ -337,11 +351,11 @@ def render_api_bar(depth):
     return (
         "%s"
         '<div class="gateline-docsbar">'
-        '<a class="gateline-docsbar-mark" href="%sindex.html">gateline</a>'
+        '<a class="gateline-docsbar-mark" href="%sindex.html">%s</a>'
         '<nav class="gateline-docsbar-nav" aria-label="Documentation sections">%s</nav>'
         '<span class="gateline-docsbar-here">API reference</span>'
         "</div>"
-        "%s" % (BAR_START, root, items, BAR_END)
+        "%s" % (BAR_START, root, render_wordmark(site), items, BAR_END)
     )
 
 
@@ -349,7 +363,7 @@ BAR_BLOCK_RE = re.compile(re.escape(BAR_START) + ".*?" + re.escape(BAR_END), re.
 BAR_CSS_RE = re.compile(r'<link rel="stylesheet" href="[^"]*assets/api-bar\.css"/?>')
 
 
-def build_api_page(raw, depth):
+def build_api_page(site, raw, depth):
     root = "../" * depth
     out = BAR_BLOCK_RE.sub("", raw)
     out = BAR_CSS_RE.sub("", out)
@@ -362,7 +376,7 @@ def build_api_page(raw, depth):
     if not match:
         return out
     at = match.end()
-    return out[:at] + render_api_bar(depth) + out[at:]
+    return out[:at] + render_api_bar(site, depth) + out[at:]
 
 
 # ---- main ------------------------------------------------------------------
@@ -417,7 +431,7 @@ def main():
                 depth = os.path.relpath(full, ROOT).count("/")
                 with open(full, encoding="utf-8") as fh:
                     raw = fh.read()
-                write(full, build_api_page(raw, depth), args.check, changed)
+                write(full, build_api_page(site, raw, depth), args.check, changed)
                 api_count += 1
 
     if migrated:

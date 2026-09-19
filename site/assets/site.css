@@ -138,14 +138,14 @@
   --color-accent-underline: #9cc1e3; /* prose link underlines */
   --color-accent-on: #ffffff;
   --color-approved: #0f7a52;         /* gate state only */
-  --color-declined: #ca3535;         /* gate state / errors only */
+  --color-declined: #c03030;         /* gate state / errors only; 5.7:1 on ground */
   --color-focus: #ffdd00;            /* focus rings; "awaiting a human" */
   --color-note-bg: #eaf2fa;
   --color-note-label: #1d70b8;
   --color-caution-bg: #fff8d6;
   --color-caution-label: #7a6400;
   --color-danger-bg: #fbeceb;
-  --color-danger-label: #ca3535;
+  --color-danger-label: #c03030;     /* 4.9:1 on the danger tint */
   --color-selection: #d6e6f5;
 
   /* Code highlight tones (four, shared with the TypeDoc theme later). No page
@@ -285,44 +285,32 @@ a:focus-visible .pager-label {
   border-bottom: 1px solid var(--color-line);
 }
 
-/* Wordmark: "gate|line", the | in signal blue. The markup is the plain word;
-   the two halves are drawn as generated content (empty alt text, so assistive
-   tech reads only the real "gateline") and the line between them is a 2px
-   accent rule rather than a glyph. */
+/* Wordmark: "gate|line", the | in signal blue. The builder emits the word as
+   two spans, <span>gate</span><span>line</span>, so the accessible name is the
+   plain word and the line between the halves is a 2px accent rule rather than
+   a glyph. */
 .wordmark {
   display: inline-flex;
   align-items: center;
-  font-size: 0;
-  color: var(--color-ink);
-  text-decoration: none;
-}
-
-.wordmark::before,
-.wordmark::after {
-  display: inline-block;
   font-family: var(--font-mark);
   font-size: 1.25rem;        /* 20px */
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.01em;
   color: var(--color-ink);
+  text-decoration: none;
 }
 
-.wordmark::before {
-  content: "gate";
-  content: "gate" / "";
+.wordmark > span:first-child {
   padding-right: 0.28em;
   border-right: 2px solid var(--color-accent);
 }
 
-.wordmark::after {
-  content: "line";
-  content: "line" / "";
+.wordmark > span:last-child {
   padding-left: 0.28em;
 }
 
-.wordmark:hover::before,
-.wordmark:hover::after {
+.wordmark:hover {
   color: var(--color-accent);
 }
 
@@ -686,8 +674,7 @@ main > h1,
 
 /* ---- tables -------------------------------------------------------------- */
 
-.doc table,
-.landing-table {
+.doc table {
   width: 100%;
   margin: 16px 0 24px;
   border-collapse: collapse;
@@ -698,9 +685,7 @@ main > h1,
 }
 
 .doc th,
-.doc td,
-.landing-table th,
-.landing-table td {
+.doc td {
   padding: 8px 12px;
   text-align: left;
   vertical-align: top;
@@ -708,40 +693,35 @@ main > h1,
 }
 
 .doc th:first-child,
-.doc td:first-child,
-.landing-table th:first-child,
-.landing-table td:first-child {
+.doc td:first-child {
   padding-left: 0;
 }
 
-.doc th,
-.landing-table th {
+.doc th {
   font-weight: 700;
   color: var(--color-ink);
   background: var(--color-surface);
   border-bottom: 2px solid var(--color-line-strong);
 }
 
-.doc th:first-child,
-.landing-table th:first-child {
+.doc th:first-child {
   padding-left: 12px;
 }
 
-.doc td:first-child,
-.landing-table td:first-child {
+.doc td:first-child {
   padding-left: 12px;
 }
 
-.doc table code,
-.landing-table code {
+/* Code in cells wraps at its spaces: the grammar tables carry 50-character
+   commit subjects, and a table wider than the column pushes the page sideways. */
+.doc table code {
   font-size: 0.9em;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 /* First columns are names (gates, flags, keys); the longest in the set is
    40 characters, so they are kept on one line. */
-.doc td:first-child,
-.landing-table td:first-child {
+.doc td:first-child {
   white-space: nowrap;
 }
 
@@ -792,6 +772,15 @@ main > h1,
   font-family: var(--font-ui);
   font-size: 11px;
   color: var(--color-ink);
+}
+
+/* Labels sit on connectors. A stroke in the ground colour, painted under the
+   glyphs, knocks the line out where the text crosses it. */
+.diagram-svg text {
+  paint-order: stroke;
+  stroke: var(--color-ground);
+  stroke-width: 3px;
+  stroke-linejoin: round;
 }
 
 .diagram-svg .d-bg {
@@ -1222,78 +1211,15 @@ main > h1,
 
 /* ---- landing page -------------------------------------------------------- */
 
-/* Same frame as every other page. The intro is two columns: the prose on the
-   left, the four entry points as a ruled list on the right. */
-.landing-intro {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 208px;
-  grid-template-rows: auto 1fr;
-  column-gap: 40px;
-  align-items: start;
-  margin: 0 0 8px;
-}
-
-.landing-intro > .hero {
-  grid-column: 1;
-  grid-row: 1 / 3;
-}
-
-.landing-actions {
-  grid-column: 2;
-  grid-row: 1;
-  list-style: none;
-  margin: 6px 0 0;
-  padding: 0;
-  border-top: 2px solid var(--color-line-strong);
-  font-family: var(--font-ui);
-}
-
-.landing-actions li {
-  margin: 0;
-  border-bottom: 1px solid var(--color-line);
-}
-
-.landing-actions a {
-  display: block;
-  padding: 8px 0;
-  font-size: 0.9375rem;
-  font-weight: 700;
-  color: var(--color-accent);
-  text-decoration: none;
-}
-
-.landing-actions a:hover {
-  color: var(--color-accent-hover);
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.18em;
-}
-
-.hero-note {
-  grid-column: 2;
-  grid-row: 2;
-  margin: 12px 0 0;
-  font-family: var(--font-ui);
-  font-size: 0.875rem;
-  line-height: 1.45;
-  color: var(--color-muted);
-}
-
-.landing-h2 {
-  margin-top: 48px;
-}
-
-/* The three lists on the landing page — ideas, paths, sections — share one
-   grammar: ruled rows with the name on the left and the text on the right. */
-.feature-grid,
-.path-grid,
+/* The landing sits in the interior frame and is the page's own site map: the
+   intro, then the four sections as ruled rows (name left, text right) in the
+   same grammar as the section hubs, then the licence note. */
 .section-nav {
+  max-width: var(--measure);
   margin: 0 0 8px;
 }
 
-.feature,
-.path,
-.section-nav-card {
+.section-nav-row {
   display: grid;
   grid-template-columns: 200px minmax(0, 1fr);
   column-gap: 32px;
@@ -1301,9 +1227,7 @@ main > h1,
   border-bottom: 1px solid var(--color-line);
 }
 
-.feature h3,
-.section-nav-card h3,
-.path .path-label {
+.section-nav-row h3 {
   grid-column: 1;
   margin: 0;
   font-size: 1.0625rem;
@@ -1312,48 +1236,35 @@ main > h1,
   color: var(--color-ink);
 }
 
-.section-nav-card h3 a {
+.section-nav-row h3 a {
   color: var(--color-accent);
   text-decoration: none;
 }
 
-.section-nav-card h3 a:hover {
+.section-nav-row h3 a:hover {
   color: var(--color-accent-hover);
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.18em;
 }
 
-.feature p,
-.path p,
-.section-nav-card p {
+.section-nav-row p {
   grid-column: 2;
-  margin: 0 0 8px;
+  margin: 0;
   font-size: 1rem;
   line-height: 1.55;
 }
 
-.feature p:last-child,
-.path p:last-child,
-.section-nav-card p:last-child {
-  margin-bottom: 0;
-}
-
-.feature-link a {
+.doc .landing-note {
+  margin: 32px 0 8px;
   font-family: var(--font-ui);
-  font-size: 0.9375rem;
-  font-weight: 700;
-  text-decoration: none;
+  font-size: 0.875rem;
+  line-height: 1.45;
+  color: var(--color-muted);
 }
 
-.feature-link a:hover {
-  text-decoration: underline;
-}
-
-.provenance {
-  margin-top: 48px;
-  padding-top: 16px;
-  border-top: 1px solid var(--color-line);
+.doc .provenance {
+  margin: 0;
   font-size: 0.9375rem;
   color: var(--color-muted);
 }
@@ -1457,30 +1368,17 @@ main > h1,
     text-align: left;
   }
 
-  .landing-intro {
+  .section-nav-row {
     display: block;
   }
 
-  .landing-actions {
-    margin-top: 8px;
-  }
-
-  .feature,
-  .path,
-  .section-nav-card {
-    display: block;
-  }
-
-  .feature h3,
-  .section-nav-card h3,
-  .path .path-label {
+  .section-nav-row h3 {
     margin-bottom: 6px;
   }
 
   /* Reference tables carry code in every cell and cannot reflow; they scroll
      inside themselves rather than pushing the page sideways. */
-  .doc table,
-  .landing-table {
+  .doc table {
     display: block;
     max-width: 100%;
     overflow-x: auto;
@@ -1502,8 +1400,7 @@ main > h1,
     height: 48px;
   }
 
-  .wordmark::before,
-  .wordmark::after {
+  .wordmark {
     font-size: 1.125rem;
   }
 
@@ -1542,18 +1439,4 @@ main > h1,
     margin: 0 -12px 8px;
     padding: 0 12px;
   }
-}
-
-/* ---- .button: no longer emitted by the landing page, kept as a plain link
-   in the UI face so a build that still writes it degrades to a link ------ */
-.button {
-  font-family: var(--font-ui);
-  font-weight: 700;
-  color: var(--color-accent);
-  text-decoration: none;
-}
-
-.button:hover {
-  color: var(--color-accent-hover);
-  text-decoration: underline;
 }

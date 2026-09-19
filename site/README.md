@@ -35,7 +35,10 @@ python3 site/scripts/check-names.py          # exit 1 on a retired name
 ```
 
 To add, remove, reorder or retitle a page, edit `site.json` and rebuild; the
-manifest's order is the reading order for the pager.
+manifest's order is the reading order for the pager. Every page sits in the
+same frame, the landing included; its `"layout": "landing"` only drops the
+pager, and its `heading` is the `<h1>` where that should differ from the
+`<title>`.
 
 ## The API reference
 
@@ -62,9 +65,9 @@ page. It is light-only (`color-scheme: light`), plain CSS, no JavaScript.
 
 `assets/site.css` is the token file and the whole stylesheet: the palette,
 the four type faces and the frame widths are the `:root` custom properties at
-the top, and every colour below is one of them. The wordmark is drawn from the
-plain word in the markup with `::before`/`::after` (with empty alt text, so
-assistive technology hears "gateline").
+the top, and every colour below is one of them. The wordmark is two spans,
+`<span>gate</span><span>line</span>`, that the builder emits from the manifest;
+the rule between them is a border, so assistive technology hears "gateline".
 
 Fonts are vendored under `assets/fonts/`, one folder per family with its
 licence beside it, and nothing loads from a font host. Public Sans (body and

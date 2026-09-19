@@ -11,7 +11,7 @@
 <body>
 <a class="skip-link" href="#content">Skip to content</a>
 <header class="site-header">
-  <a class="wordmark" href="../index.html">gateline</a>
+  <a class="wordmark" href="../index.html"><span>gate</span><span>line</span></a>
   <nav class="site-nav" aria-label="Sections">
     <a href="../how-it-works/index.html" class="active" aria-current="true">How It Works</a>
     <a href="../onboarding/index.html">Onboarding</a>
@@ -93,119 +93,103 @@
     <figcaption>A full-weight run from intent brief to release. Roles produce
     artifacts; gates G0–G3 are human decisions over those artifacts; the
     implement/review loop is capped at three rounds.</figcaption>
-    <svg class="diagram-svg" viewBox="0 0 1020 370" role="img" aria-labelledby="title-run-lifecycle">
+    <svg class="diagram-svg" viewBox="0 0 1110 370" role="img" aria-labelledby="title-run-lifecycle">
       <title id="title-run-lifecycle">Pipeline diagram: six roles, four gates, one run from intent brief to release, with a state file band and human markers at each gate.</title>
       <defs>
         <marker id="arr-rl" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="currentColor"/></marker>
         <marker id="arr-rl-accent" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" class="d-accent"/></marker>
       </defs>
-      <!-- Nodes: intent brief -->
-      <rect x="18" y="40" width="78" height="38" rx="8" class="d-bg" stroke="currentColor" stroke-width="1.2"/>
-      <text x="57" y="56" text-anchor="middle" class="d-bold">intent brief</text>
-      <text x="57" y="69" text-anchor="middle" class="d-small d-faint">human-authored</text>
-      <!-- Arrow -->
-      <line x1="96" y1="59" x2="112" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
+      <!-- intent brief -->
+      <rect x="8" y="40" width="74" height="38" rx="8" class="d-bg" stroke="currentColor" stroke-width="1.2"/>
+      <text x="45" y="56" text-anchor="middle" class="d-bold">intent brief</text>
+      <text x="45" y="69" text-anchor="middle" class="d-small d-faint">human-authored</text>
+      <line x1="82" y1="59" x2="96" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
       <!-- Analyst -->
-      <rect x="114" y="40" width="72" height="38" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
-      <text x="150" y="56" text-anchor="middle" class="d-bold">Analyst</text>
-      <text x="150" y="69" text-anchor="middle" class="d-small d-faint">→ spec.md</text>
-      <!-- Arrow -->
-      <line x1="186" y1="59" x2="202" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
-      <!-- G0 Diamond -->
-      <rect x="206" y="37" width="52" height="44" rx="4" transform="rotate(45 232 59)" fill="none" class="d-accent-stroke" stroke-width="1.5"/>
-      <text x="232" y="58" text-anchor="middle" class="d-bold d-accent-fill">G0</text>
-      <text x="232" y="83" text-anchor="middle" class="d-small d-faint">Is this what we actually want built?</text>
-      <!-- HUMAN marker -->
-      <text x="232" y="320" text-anchor="middle" class="d-accent-fill d-bold" font-size="8">HUMAN</text>
-      <text x="232" y="333" text-anchor="middle" class="d-small d-faint">named human approves</text>
-      <!-- Arrow -->
-      <line x1="258" y1="59" x2="274" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
+      <rect x="98" y="40" width="64" height="38" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="130" y="56" text-anchor="middle" class="d-bold">Analyst</text>
+      <text x="130" y="69" text-anchor="middle" class="d-small d-faint">→ spec.md</text>
+      <line x1="162" y1="59" x2="176" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
+      <!-- G0 -->
+      <rect x="184" y="37" width="52" height="44" rx="4" transform="rotate(45 210 59)" fill="none" class="d-accent-stroke" stroke-width="1.5"/>
+      <text x="210" y="58" text-anchor="middle" class="d-bold d-accent-fill">G0</text>
+      <text x="210" y="92" text-anchor="middle" class="d-small d-faint">Is this what we actually want built?</text>
+      <text x="210" y="320" text-anchor="middle" class="d-accent-fill d-bold" font-size="8">HUMAN</text>
+      <text x="210" y="333" text-anchor="middle" class="d-small d-faint">named human approves</text>
+      <line x1="244" y1="59" x2="256" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
       <!-- Architect -->
-      <rect x="276" y="40" width="86" height="38" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
-      <text x="319" y="56" text-anchor="middle" class="d-bold">Architect</text>
-      <text x="319" y="69" text-anchor="middle" class="d-small d-faint">→ plan.md + tasks/*.yaml</text>
-      <!-- Arrow -->
-      <line x1="362" y1="59" x2="378" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
-      <!-- G1 Diamond -->
-      <rect x="382" y="37" width="52" height="44" rx="4" transform="rotate(45 408 59)" fill="none" class="d-accent-stroke" stroke-width="1.5"/>
-      <text x="408" y="58" text-anchor="middle" class="d-bold d-accent-fill">G1</text>
-      <text x="408" y="83" text-anchor="middle" class="d-small d-faint">safe parallel pieces?</text>
-      <!-- HUMAN marker -->
-      <text x="408" y="320" text-anchor="middle" class="d-accent-fill d-bold" font-size="8">HUMAN</text>
-      <text x="408" y="333" text-anchor="middle" class="d-small d-faint">named human approves</text>
-      <!-- Arrow into container -->
-      <line x1="434" y1="59" x2="452" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
-      <!-- Container: per work item -->
-      <rect x="454" y="12" width="310" height="116" rx="8" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="5 3"/>
-      <rect x="454" y="12" width="140" height="18" rx="3" fill="var(--bg-subtle,#f6f7f8)" stroke="none"/>
-      <text x="524" y="25" text-anchor="middle" class="d-small">per work item, in parallel</text>
+      <rect x="258" y="40" width="112" height="38" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="314" y="56" text-anchor="middle" class="d-bold">Architect</text>
+      <text x="314" y="69" text-anchor="middle" class="d-small d-faint">→ plan.md + tasks/*.yaml</text>
+      <line x1="370" y1="59" x2="384" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
+      <!-- G1 -->
+      <rect x="392" y="37" width="52" height="44" rx="4" transform="rotate(45 418 59)" fill="none" class="d-accent-stroke" stroke-width="1.5"/>
+      <text x="418" y="58" text-anchor="middle" class="d-bold d-accent-fill">G1</text>
+      <text x="418" y="92" text-anchor="middle" class="d-small d-faint">safe parallel pieces?</text>
+      <text x="418" y="320" text-anchor="middle" class="d-accent-fill d-bold" font-size="8">HUMAN</text>
+      <text x="418" y="333" text-anchor="middle" class="d-small d-faint">named human approves</text>
+      <line x1="452" y1="59" x2="464" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
+      <!-- per-work-item group -->
+      <rect x="466" y="12" width="300" height="116" rx="8" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="5 3"/>
+      <rect x="466" y="12" width="140" height="18" rx="3" fill="var(--bg-subtle,#f6f7f8)" stroke="none"/>
+      <text x="536" y="25" text-anchor="middle" class="d-small">per work item, in parallel</text>
       <!-- Implementer -->
-      <rect x="464" y="52" width="72" height="34" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
-      <text x="500" y="73" text-anchor="middle" class="d-bold">Implementer</text>
-      <!-- Arrow: diff -->
-      <line x1="536" y1="69" x2="552" y2="69" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
-      <text x="544" y="65" text-anchor="middle" class="d-small">diff</text>
+      <rect x="476" y="52" width="72" height="34" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="512" y="73" text-anchor="middle" class="d-bold">Implementer</text>
+      <line x1="548" y1="69" x2="576" y2="69" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
+      <text x="562" y="65" text-anchor="middle" class="d-small">diff</text>
       <!-- Reviewer -->
-      <rect x="554" y="52" width="72" height="34" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
-      <text x="590" y="73" text-anchor="middle" class="d-bold">Reviewer</text>
-      <!-- Return arrow -->
-      <path d="M590,50 C590,32 500,32 500,50" fill="none" class="d-accent-stroke" stroke-width="1.2" marker-end="url(#arr-rl-accent)"/>
-      <text x="545" y="38" text-anchor="middle" class="d-small d-accent-fill">request-changes · ≤ 3 rounds</text>
-      <!-- Branch: round 4 escalate -->
-      <line x1="545" y1="44" x2="545" y2="58" stroke="currentColor" stroke-width="0.8"/>
-      <text x="545" y="95" text-anchor="middle" class="d-small">round 4 → escalate to human</text>
-      <!-- Arrow to Verifier -->
-      <line x1="626" y1="69" x2="642" y2="69" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
-      <text x="634" y="65" text-anchor="middle" class="d-small">report</text>
+      <rect x="578" y="52" width="72" height="34" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="614" y="73" text-anchor="middle" class="d-bold">Reviewer</text>
+      <!-- review loop -->
+      <path d="M614,50 C614,32 512,32 512,50" fill="none" class="d-accent-stroke" stroke-width="1.2" marker-end="url(#arr-rl-accent)"/>
+      <text x="563" y="38" text-anchor="middle" class="d-small d-accent-fill">request-changes · ≤ 3 rounds</text>
+      <line x1="563" y1="44" x2="563" y2="58" stroke="currentColor" stroke-width="0.8"/>
+      <text x="563" y="95" text-anchor="middle" class="d-small">round 4 → escalate to human</text>
+      <line x1="650" y1="69" x2="678" y2="69" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
+      <text x="664" y="65" text-anchor="middle" class="d-small">report</text>
       <!-- Verifier -->
-      <rect x="644" y="52" width="72" height="34" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
-      <text x="680" y="73" text-anchor="middle" class="d-bold">Verifier</text>
-      <text x="680" y="107" text-anchor="middle" class="d-small d-faint">→ verification-report.md</text>
-      <!-- Arrow out of container -->
-      <line x1="716" y1="69" x2="750" y2="69" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
-      <!-- G2 Diamond -->
-      <rect x="754" y="37" width="52" height="44" rx="4" transform="rotate(45 780 59)" fill="none" class="d-accent-stroke" stroke-width="1.5"/>
-      <text x="780" y="58" text-anchor="middle" class="d-bold d-accent-fill">G2</text>
-      <text x="780" y="83" text-anchor="middle" class="d-small d-faint">evidence supports merging?</text>
-      <!-- HUMAN marker -->
-      <text x="780" y="320" text-anchor="middle" class="d-accent-fill d-bold" font-size="8">HUMAN</text>
-      <text x="780" y="333" text-anchor="middle" class="d-small d-faint">named human merges</text>
-      <!-- Arrow -->
-      <line x1="806" y1="59" x2="822" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
+      <rect x="680" y="52" width="72" height="34" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="716" y="73" text-anchor="middle" class="d-bold">Verifier</text>
+      <text x="716" y="107" text-anchor="middle" class="d-small d-faint">→ verification-report.md</text>
+      <line x1="766" y1="69" x2="792" y2="69" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
+      <!-- G2 -->
+      <rect x="800" y="37" width="52" height="44" rx="4" transform="rotate(45 826 59)" fill="none" class="d-accent-stroke" stroke-width="1.5"/>
+      <text x="826" y="58" text-anchor="middle" class="d-bold d-accent-fill">G2</text>
+      <text x="826" y="92" text-anchor="middle" class="d-small d-faint">evidence supports merging?</text>
+      <text x="826" y="320" text-anchor="middle" class="d-accent-fill d-bold" font-size="8">HUMAN</text>
+      <text x="826" y="333" text-anchor="middle" class="d-small d-faint">named human merges</text>
+      <line x1="860" y1="59" x2="872" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
       <!-- Ops -->
-      <rect x="824" y="40" width="58" height="38" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
-      <text x="853" y="56" text-anchor="middle" class="d-bold">Ops</text>
-      <text x="853" y="69" text-anchor="middle" class="d-small d-faint">→ release-plan.md</text>
-      <!-- Arrow -->
-      <line x1="882" y1="59" x2="898" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
-      <!-- G3 Diamond -->
-      <rect x="902" y="37" width="52" height="44" rx="4" transform="rotate(45 928 59)" fill="none" class="d-accent-stroke" stroke-width="1.5"/>
-      <text x="928" y="58" text-anchor="middle" class="d-bold d-accent-fill">G3</text>
-      <text x="928" y="83" text-anchor="middle" class="d-small d-faint">ship it?</text>
-      <!-- HUMAN marker -->
-      <text x="928" y="320" text-anchor="middle" class="d-accent-fill d-bold" font-size="8">HUMAN</text>
-      <text x="928" y="333" text-anchor="middle" class="d-small d-faint">named human approves</text>
-      <!-- Arrow -->
-      <line x1="954" y1="59" x2="966" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
+      <rect x="874" y="40" width="86" height="38" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="917" y="56" text-anchor="middle" class="d-bold">Ops</text>
+      <text x="917" y="69" text-anchor="middle" class="d-small d-faint">→ release-plan.md</text>
+      <line x1="960" y1="59" x2="972" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
+      <!-- G3 -->
+      <rect x="980" y="37" width="52" height="44" rx="4" transform="rotate(45 1006 59)" fill="none" class="d-accent-stroke" stroke-width="1.5"/>
+      <text x="1006" y="58" text-anchor="middle" class="d-bold d-accent-fill">G3</text>
+      <text x="1006" y="92" text-anchor="middle" class="d-small d-faint">ship it?</text>
+      <text x="1006" y="320" text-anchor="middle" class="d-accent-fill d-bold" font-size="8">HUMAN</text>
+      <text x="1006" y="333" text-anchor="middle" class="d-small d-faint">named human approves</text>
+      <line x1="1040" y1="59" x2="1052" y2="59" stroke="currentColor" stroke-width="1.2" marker-end="url(#arr-rl)"/>
       <!-- released -->
-      <rect x="968" y="40" width="48" height="38" rx="8" fill="none" stroke="currentColor" stroke-width="1.2"/>
-      <text x="992" y="63" text-anchor="middle" class="d-bold">released</text>
+      <rect x="1054" y="40" width="48" height="38" rx="8" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <text x="1078" y="63" text-anchor="middle" class="d-bold">released</text>
 
-      <!-- State band -->
-      <rect x="0" y="235" width="1020" height="3" fill="currentColor" opacity="0.3"/>
+      <!-- state.yaml spine: every step commits -->
+      <rect x="0" y="235" width="1110" height="3" fill="currentColor" opacity="0.3"/>
       <text x="10" y="260" class="d-mono">runs/&lt;slug&gt;/state.yaml</text>
-      <text x="1000" y="260" text-anchor="end" class="d-small d-faint">every step commits</text>
-      <!-- Dotted connectors -->
-      <line x1="150" y1="78" x2="150" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
-      <line x1="232" y1="81" x2="232" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
-      <line x1="319" y1="78" x2="319" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
-      <line x1="408" y1="81" x2="408" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
-      <line x1="500" y1="86" x2="500" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
-      <line x1="590" y1="86" x2="590" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
-      <line x1="680" y1="86" x2="680" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
-      <line x1="780" y1="81" x2="780" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
-      <line x1="853" y1="78" x2="853" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
-      <line x1="928" y1="81" x2="928" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
+      <text x="1100" y="260" text-anchor="end" class="d-small d-faint">every step commits</text>
+      <!-- commit ticks -->
+      <line x1="130" y1="78" x2="130" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
+      <line x1="210" y1="97" x2="210" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
+      <line x1="314" y1="78" x2="314" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
+      <line x1="418" y1="97" x2="418" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
+      <line x1="512" y1="86" x2="512" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
+      <line x1="614" y1="86" x2="614" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
+      <line x1="716" y1="86" x2="716" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
+      <line x1="826" y1="97" x2="826" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
+      <line x1="917" y1="78" x2="917" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
+      <line x1="1006" y1="97" x2="1006" y2="235" stroke="currentColor" stroke-width="0.8" class="d-dashed"/>
     </svg>
   </figure>
 
@@ -332,30 +316,26 @@
       <rect x="100" y="20" width="360" height="36" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
       <text x="88" y="42" text-anchor="end" class="d-bold">patch</text>
       <text x="115" y="42" class="d-bold">Implementer · Reviewer</text>
-      <text x="330" y="42" class="d-accent-fill">G1 · G2</text>
+      <text x="448" y="42" text-anchor="end" class="d-accent-fill">G1 · G2</text>
       <!-- Bar: standard -->
       <rect x="100" y="70" width="440" height="36" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
       <text x="88" y="92" text-anchor="end" class="d-bold">standard</text>
-      <text x="115" y="92">Implementer · Reviewer</text>
-      <text x="270" y="92" class="d-accent-fill"> · Analyst · Architect · Verifier</text>
-      <text x="330" y="92">G1 · G2</text>
-      <text x="410" y="92" class="d-accent-fill"> · G0</text>
+      <text x="115" y="92">Implementer · Reviewer<tspan class="d-accent-fill"> · Analyst · Architect · Verifier</tspan></text>
+      <text x="528" y="92" text-anchor="end">G1 · G2<tspan class="d-accent-fill"> · G0</tspan></text>
       <!-- Bar: full -->
-      <rect x="100" y="120" width="500" height="36" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
+      <rect x="100" y="120" width="510" height="36" rx="4" fill="none" stroke="currentColor" stroke-width="1.2"/>
       <text x="88" y="142" text-anchor="end" class="d-bold">full</text>
-      <text x="115" y="142">Implementer · Reviewer · Analyst · Architect · Verifier</text>
-      <text x="430" y="142" class="d-accent-fill"> · all eight roles</text>
-      <text x="330" y="135">G1 · G2 · G0</text>
-      <text x="435" y="135" class="d-accent-fill"> · G3</text>
+      <text x="115" y="142">Implementer · Reviewer · Analyst · Architect · Verifier<tspan class="d-accent-fill"> · all eight roles</tspan></text>
+      <text x="598" y="142" text-anchor="end">G1 · G2 · G0<tspan class="d-accent-fill"> · G3</tspan></text>
       <!-- Annotations -->
       <text x="600" y="40" text-anchor="end" class="d-small d-faint">fixed sets, not knobs</text>
       <text x="600" y="52" text-anchor="end" class="d-small d-faint">— no per-run toggles</text>
       <!-- Upgrade arrow -->
-      <line x1="60" y1="55" x2="60" y2="155" class="d-accent-stroke" stroke-width="1.8" marker-end="url(#arr-rl-accent)"/>
-      <text x="52" y="105" text-anchor="end" class="d-small d-accent-fill" transform="rotate(-90 52 105)">upgrade: human edit profile: + resume</text>
+      <line x1="30" y1="55" x2="30" y2="155" class="d-accent-stroke" stroke-width="1.8" marker-end="url(#arr-rl-accent)"/>
+      <text x="22" y="105" text-anchor="middle" class="d-small d-accent-fill" transform="rotate(-90 22 105)">upgrade: human edit profile: + resume</text>
       <!-- Downgrade note -->
-      <text x="70" y="188" text-anchor="end" class="d-small d-faint">downgrade: forbidden</text>
-      <text x="70" y="200" text-anchor="end" class="d-small d-faint">— the engine escalates</text>
+      <text x="10" y="198" class="d-small d-faint">downgrade: forbidden</text>
+      <text x="10" y="210" class="d-small d-faint">— the engine escalates</text>
       <!-- Caption -->
       <text x="100" y="225" class="d-small d-faint">no profile: field in state.yaml = full</text>
     </svg>

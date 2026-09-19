@@ -41,7 +41,10 @@ HARD = {
     "scaffold": re.compile(
         r"\b(?:worth (?:noting|naming|saying|mentioning)|it'?s worth|note that|here'?s the thing|"
         r"let'?s (?:dive|break)|in this (?:article|section|page)|it'?s important to|keep in mind|"
-        r"in summary|in conclusion|to summarize|put simply|simply put|in other words)\b", re.I),
+        r"put simply|simply put|in other words)\b", re.I),
+    # Summarising closers only count when they open a sentence; "passing output
+    # in summary" is a phrase, not a scaffold.
+    "closer-opener": re.compile(r"(?:^|[.!?]\s+)(?:In summary|In conclusion|To summarize|Overall|Ultimately),", re.M),
     "enumerated": re.compile(r"\bFirst,[^.]*\.[^.]*\bSecond,", re.I),
     "hedge-stack": re.compile(r"\b(?:may|might|could)\s+(?:potentially|possibly|arguably)\b", re.I),
     "not-only": re.compile(r"\bnot only\b[^.]*\bbut(?: also)?\b", re.I),

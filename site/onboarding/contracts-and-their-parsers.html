@@ -27,18 +27,16 @@
   <p class="lede">Most document formats serve one audience. A gateline contract
   under <code>contracts/</code> serves two: an agent writes the artifact, another
   agent parses it, and a human reads the result well enough to approve or refuse
-  a phase of work. The interesting engineering is not the parser — it is
+  a phase of work. The interesting engineering is not the parser. It is
   deciding, shape by shape, what a machine must read, what a human must check,
   and what happens when an instance is malformed.</p>
-  <!-- evidence: docs/DESIGN.md §5; contracts/ -->
 
   <h2 id="prose-as-a-wire-format">Prose as a wire format</h2>
 
   <p>The rule that organizes everything here is <strong>bounce, never
   guess</strong>. An artifact missing a required section is malformed, and the
-  consuming agent's first duty is to bounce it back to its producer rather than
+  consuming agent's first duty is to bounce it back to its producer, not to
   infer what the author meant.</p>
-  <!-- evidence: docs/DESIGN.md §5; AGENTS.md -->
 
   <p>That is a stronger commitment than it looks. A tolerant parser is normally
   a virtue: accept what you can, recover, keep going. Here tolerance is the
@@ -48,7 +46,7 @@
   costs a record nobody can trust.</p>
 
   <p>So a contract is written in two registers at once. Some of what it declares
-  is a grammar — literal shapes with regular expressions behind them. Some is a
+  is a grammar: literal shapes with regular expressions behind them. Some is a
   readability rule only a reader can evaluate. Both are normative, both are
   bounceable, and telling them apart is most of the skill.</p>
 
@@ -61,15 +59,14 @@
   list. What fills those sections is an example instance. A template can declare
   up to five kinds of rule, and — the part newcomers over-generalize — most
   declare only some.</p>
-  <!-- evidence: contracts/; packages/core/src/record/validate.ts -->
 
   <dl>
     <dt><strong>Required sections</strong></dt>
     <dd>The template's own <code>##</code> headings. Every markdown contract has
-    these, and they are what the validator checks — and only on the artifacts
+    these, and they are what the validator checks, and only on the artifacts
     a contract covers.</dd>
     <dt><strong>BUDGET</strong></dt>
-    <dd>Concision as a contract property rather than a style hope: reference
+    <dd>Concision as a contract property, not a style hope: reference
     upstream artifacts by number, paste failing output in full and passing output
     in summary. Seven of the ten declare one.</dd>
     <dt><strong>GRAMMAR</strong></dt>
@@ -98,36 +95,35 @@
   <h2 id="the-id-grammars-and-who-parses-them">The ID grammars, and who parses them</h2>
 
   <p>Four GRAMMAR blocks declare eight shapes between them. Requirement headings
-  in a spec are <code>### R&lt;n&gt; — &lt;short name&gt;</code>; acceptance
-  criteria are list items whose text begins <code>AC&lt;n&gt;.&lt;m&gt; — </code>;
-  architecture decisions in a plan are
-  <code>### ADR-&lt;n&gt;[ (&lt;qualifier&gt;)]: &lt;decision&gt;</code>; and
-  evidence blocks in a verification report are
+  in a spec are <code>### R&lt;n&gt; — &lt;short name&gt;</code>. Acceptance
+  criteria are list items whose text begins <code>AC&lt;n&gt;.&lt;m&gt; — </code>.
+  Architecture decisions in a plan are
+  <code>### ADR-&lt;n&gt;[ (&lt;qualifier&gt;)]: &lt;decision&gt;</code>.
+  Evidence blocks in a verification report are
   <code>### E&lt;k&gt; — AC&lt;n&gt;.&lt;m&gt;</code>, with the report's Results
   table carrying the bare criterion id in its first column and one overall
   <code>**Verdict:** pass | fail | escalate</code> line. A release plan's
   preamble fields (<code>**Change released:**</code> and three more bold
   labels) and its numbered Release steps are the newest two.</p>
-  <!-- evidence: contracts/spec.md; contracts/plan.md; contracts/verification-report.md; contracts/release-plan.md; packages/core/src/view-model/lexicon.ts -->
 
-  <p>Those shapes exist so a run's artifacts can be read as a graph rather than
-  as text. <code>buildLexicon</code> in
+  <p>Those shapes exist so a run's artifacts can be read as a graph, not as text.
+  <code>buildLexicon</code> in
   <code>packages/core/src/view-model/lexicon.ts</code> turns a run's own
   <code>spec.md</code> and <code>plan.md</code> into definitions Gatehouse serves
   to the browser, and <code>buildEvidenceRollup</code> in the sibling
   <code>evidence.ts</code> answers one question: for each criterion the spec
-  defines, where does evidence cite it? Both are deliberately non-judgmental — a
+  defines, where does evidence cite it? Both are deliberately non-judgmental: a
   lexicon entry is the exact artifact bytes, "never a paraphrase", and the rollup
   computes presence, never verdicts.</p>
 
-  <p>That job — <em>locate</em>, never <em>summarize</em> — shows up in small
+  <p>That job (<em>locate</em>, never <em>summarize</em>) shows up in small
   decisions. Nearly every scanner in <code>core</code> skips fenced code
   blocks, so a heading quoted inside a fence is not mistaken for a real one.
   <code>scanIds</code> in <code>lexicon.ts</code> deliberately does not, and
   says why in a comment: evidence blocks cite criteria from inside fences. It
-  is not the only scanner that reads through a fence — the review-mention loop
+  is not the only scanner that reads through a fence (the review-mention loop
   in <code>evidence.ts</code> carries no fence state either, unlike the
-  verification-report loop earlier in the same function — but it is the only
+  verification-report loop earlier in the same function), but it is the only
   one that does so on purpose, with its reason attached. The engine's own
   verdict reader, <code>parseReviewReport</code> in
   <code>packages/orchestrator/src/review-report.ts</code>, reads through fences
@@ -294,18 +290,17 @@
 
   <p>Three cells of that two-by-two are occupied, and the empty one is recent.
   Most shapes are declared and parsed. Some rules are normative with no code
-  behind them — the READABILITY family is the clearest case, enforced by a human
+  behind them: the READABILITY family is the clearest case, enforced by a human
   reviewer citing the rule. And some shapes are parsed without ever being
   declared, which is the dangerous quadrant, because nothing tells an author
   they have broken one. Some artifacts sit outside the grid altogether:
   <code>retro.md</code>, <code>docs-delta.md</code> and
   <code>integration-profile.md</code> get no contract back from
   <code>contractFor</code>, and a null contract validates trivially.</p>
-  <!-- evidence: contracts/review-report.md; contracts/release-plan.md; packages/orchestrator/src/review-report.ts; packages/core/src/view-model/review.ts; packages/core/src/record/validate.ts -->
 
   <p><code>contracts/review-report.md</code> is where this collides. It declares
   BUDGET, an ESCALATE SCOPE clause, READABILITY, AUDIENCE and a VERIFY ROUND
-  block — and no block labelled GRAMMAR. The <code>F&lt;n&gt;</code> finding
+  block, and no block labelled GRAMMAR. The <code>F&lt;n&gt;</code> finding
   shape its own template demonstrates was for a long time a convention read by
   no code. It is parsed now: <code>parseReview</code> in
   <code>packages/core/src/view-model/review.ts</code> reads the finding
@@ -325,12 +320,12 @@
   repository reads either. Only its <code>##</code> headings are validated.</p>
 
   <p>Those two undeclared shapes carry more operational weight than any declared
-  one. <code>parseReviewReport</code> binds a report to its task by the header
-  rather than the filename, because repositories number review files
+  one. <code>parseReviewReport</code> binds a report to its task by the header, not
+  the filename, because repositories number review files
   inconsistently, and treats the last <code>**Verdict:**</code> line as the live
   one, because rounds append and never overwrite. The engine routes on that value
-  — <code>approve</code> moves the task to review-approved,
-  <code>escalate</code> waits for a human — and the count of verdict lines is
+  (<code>approve</code> moves the task to review-approved,
+  <code>escalate</code> waits for a human), and the count of verdict lines is
   what <code>review_rounds</code> is reconciled against, the number that decides
   whether a fourth round becomes an escalation. A human who resolves that
   escalation grants the loop one more round.</p>
@@ -338,14 +333,13 @@
   <p>The asymmetry tells you where to route a fix. If an artifact breaks a
   declared shape, the artifact is wrong and the contract is doing its job. If
   code depends on a shape no contract declares, the <em>contract</em> is
-  incomplete — and reaching for the parser first only entrenches the gap.</p>
+  incomplete, and reaching for the parser first only entrenches the gap.</p>
 
   <h2 id="readability-is-two-rule-sets-not-one">READABILITY is two rule sets, not one</h2>
 
   <p>The second thing newcomers over-generalize is READABILITY. It is easy to
   read one contract's block and assume a house style. It is not one: the rules
   follow what each section is <em>for</em>.</p>
-  <!-- evidence: contracts/spec.md; contracts/review-report.md; contracts/release-plan.md -->
 
   <p>Four contracts declare the same five-rule set, governing the sections a
   gate human reads as argument: Context in a spec, Approach and each ADR's
@@ -383,22 +377,22 @@
   <p>What Coverage does <em>not</em> impose matters as much. It has no
   one-idea-per-paragraph rule, no four-sentence limit, no three-parallel-items
   rule, no one-claim-per-sentence rule, and no full-path clause. In their place
-  it prescribes a shape — a four-column table, one row per requirement or area
-  — and moves every cite into a column of its own, one location per row.</p>
+  it prescribes a shape (a four-column table, one row per requirement or area)
+  and moves every cite into a column of its own, one location per row.</p>
 
   <p>That is coherent once you ask what each section is for. A spec's Context is
   an argument a G0 approver reads to decide whether the problem is understood, so
   its rules shape argument: one idea, one claim, plain first sentence. A Coverage
   section is an inventory a G2 approver scans for what was <em>not</em> checked,
-  and an inventory in flowing prose is unscannable — so its contract demands the
+  and an inventory in flowing prose is unscannable, so its contract demands the
   table and forbids both the list and the paragraph. The two even name their sanctions differently:
   a spec's breach is "bounced like a grammar deviation," while a review report,
   having no GRAMMAR block to point at, says a breach is "bounced like a malformed
   finding."</p>
 
-  <p>One consequence: the summary in <code>AGENTS.md</code> — plain-words
+  <p>One consequence: the summary in <code>AGENTS.md</code> (plain-words
   opening sentence, one idea per paragraph, lists instead of semicolon chains,
-  name before cite — describes the five-rule set accurately and is not true of
+  name before cite) describes the five-rule set accurately and is not true of
   Coverage. When a summary and a contract disagree, the contract governs.</p>
 
   <h2 id="evolving-a-contract-without-breaking-what-is-committed">Evolving a contract without breaking what is committed</h2>
@@ -406,7 +400,6 @@
   <p>A format with committed instances going back through every finished run has
   an obvious hazard: tighten it and you retroactively invalidate history that
   must not be edited. Three mechanisms carry the weight.</p>
-  <!-- evidence: packages/core/src/record/validate.ts; packages/core/src/record/schema.ts -->
 
   <p>First, <strong>the contract is the authority at read time, not a compiled
   copy</strong>. <code>validateArtifact</code> derives required sections from the
@@ -434,14 +427,13 @@
   be present. Presence is what it enforces, not exclusivity: a surplus entry left
   over from a heavier profile parses without complaint, and profile-aware
   consumers filter it out. The defaults keep older records meaningful and newer
-  fields additive — a <code>state.yaml</code> with no <code>profile:</code> field
+  fields additive: a <code>state.yaml</code> with no <code>profile:</code> field
   parses as <code>full</code>, an absent gate entry parses as undecided and "can
   never masquerade as approved," and unknown keys pass through untouched.</p>
 
   <h2 id="spot-the-malformed-artifact">Spot the malformed artifact</h2>
 
   <p>Two cases, in ascending order of how long they take to notice.</p>
-  <!-- evidence: packages/core/src/record/validate.ts; packages/orchestrator/src/derive.ts; packages/core/src/view-model/readiness.ts -->
 
   <h3>Case 1 — a missing section</h3>
 
@@ -472,9 +464,9 @@ Renaming a run that is already staged.
 </code></pre>
 
   <p>Now delete the <code>## Context</code> heading and its two sentences.
-  Nothing looks broken — the requirement is still there, its criterion still
+  Nothing looks broken: the requirement is still there, its criterion still
   parses, and a careless consumer could reconstruct the problem statement from
-  the requirements underneath. That inference is exactly what the system
+  the requirements underneath. That inference is what the system
   forbids.</p>
 
   <p>What happens instead is mechanical. <code>validateArtifact</code> compares
@@ -482,7 +474,7 @@ Renaming a run that is already staged.
   <code>contracts/spec.md</code> and returns <code>Context</code> in its
   <code>missing</code> list. The orchestrator's derivation sees an invalid
   artifact and emits its D7 action: re-dispatch the analyst, with the missing
-  sections named in the dispatch reason and in the commit subject —
+  sections named in the dispatch reason and in the commit subject:
   <code>state(&lt;slug&gt;): bounced spec.md — re-dispatching analyst
   (missing: Context)</code>. Later ticks read those subjects back to count
   bounces per artifact. On the third malformed delivery the bounce cap of two
@@ -516,7 +508,7 @@ Renaming a run that is already staged.
   <code>Packet malformed — bounced, not reviewable</code>, with the missing
   section named. So the same word names two mechanisms at two layers: for a
   producer's artifact, engine-side re-dispatch, automatic and counted; for a
-  review report, a human gate declining to open. Worth knowing which half is
+  review report, a human gate declining to open. Know which half is
   mechanised before you go looking for a bounce commit that will not exist.</p>
 
   <h3>Case 2 — the wrong dash</h3>
@@ -525,17 +517,17 @@ Renaming a run that is already staged.
 
 <pre><code>### R1 - Slug collisions fail closed</code></pre>
 
-  <p>An ASCII hyphen, not the em dash the contract's grammar specifies. The
+  <p>An ASCII hyphen where the contract's grammar specifies an em dash. The
   required-section check passes, because <code>## Requirements</code> is present
   and the heading inside it is never inspected. Nothing bounces. The pull-request
   description generator still renders the requirement, because
   <code>requirementNames</code> in <code>pr-description.ts</code> accepts an em
   dash <em>or</em> a hyphen and requires exactly three hash marks. But
   <code>R_HEADING</code> in <code>lexicon.ts</code>, which accepts any heading
-  level and only an em dash, does not match — so R1 has no lexicon entry, and
+  level and only an em dash, does not match, so R1 has no lexicon entry, and
   Gatehouse cannot show its definition.</p>
 
-  <p>Do the same to an acceptance criterion — <code>AC2.1 - …</code> — and the
+  <p>Do the same to an acceptance criterion (<code>AC2.1 - …</code>) and the
   damage travels further, because the evidence rollup seeds its criteria from the
   lexicon. An unparsed criterion is not "uncited"; it is unknown. If the
   verification report's Results table cites <code>AC2.1</code> by its bare id,
@@ -550,7 +542,7 @@ Renaming a run that is already staged.
   <div class="maintainer-note">
     <h3>Maintainer note</h3>
     <p>I should be straight about how much of the bounce path is proven. The
-    machinery is designed, implemented and covered by fixtures — but across the
+    machinery is designed, implemented and covered by fixtures, but across the
     three human-orchestrated runs that took the pipeline end to end, not one
     artifact arrived malformed. The mdtoc retro records "no D7 bounce was
     exercised," and dupefind's "three runs, zero D7 bounces — bounce handling
@@ -579,15 +571,16 @@ Renaming a run that is already staged.
 
   <ul>
     <li><a href="../reference/contract-grammar.html">Contract grammar
-    reference</a> — the exact shapes and the contract-by-contract table.</li>
-    <li><code>contracts/</code> in the framework repository — ten files, all
+    reference</a>: the exact shapes and the contract-by-contract table.</li>
+    <li><code>contracts/</code> in the framework repository: ten files, all
     short. Read <code>spec.md</code> and <code>review-report.md</code> back to
     back; the contrast is the whole lesson.</li>
     <li><code>docs/DESIGN.md</code> §5 for the contract model, and the
     "Invariants — check before editing" section of <code>AGENTS.md</code>.</li>
-    <li><a href="the-co-written-state-file.html">The co-written state file</a> —
-    the commit-message grammar as evidence for a human rather than input to a
-    decision, and the two parsers in the codebase that read commit subjects.</li>
+    <li><a href="the-co-written-state-file.html">The co-written state file</a>:
+    the commit-message grammar as evidence for a human, not input to a decision,
+    and the two parsers in
+    the codebase that read commit subjects.</li>
     <li><a href="../how-it-works/how-a-run-works.html">How a run works</a> for
     where each artifact sits in the G0–G3 lifecycle.</li>
   </ul>

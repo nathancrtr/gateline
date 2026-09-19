@@ -26,27 +26,25 @@
 <article class="doc">
 <p class="lede">
     <code>orchestrator.yaml</code> lives at the repository root and declares the
-    <strong>schedules</strong> for periodic role dispatches — gate-less
+    <strong>schedules</strong> for periodic role dispatches, gate-less
     "sweeps" that are not tied to a pipeline run. The first (and currently
     only) scheduled role is the Historian, which periodically reconciles
     documentation with run artifacts. This file is committed project policy,
     not per-instance configuration: any orchestrator instance pointed at the
     same repo derives the same sweeps.
-    <!-- evidence: orchestrator.yaml; AGENTS.md "Invariants"; docs/ORCHESTRATOR.md §4.6 -->
   </p>
 
   <h2 id="where-and-how-it-is-read">Where and how it is read</h2>
   <p>The v1 orchestrator reads <code>orchestrator.yaml</code> from the
-  <strong>default-branch tip</strong> — never from a checkout and never
+  <strong>default-branch tip</strong>, never from a checkout and never
   from the current branch. On each tick, the scheduler calls
   <code>this.git.show(defaultBranch, 'orchestrator.yaml')</code>. If the
   file is absent, the scheduler returns an empty schedule list. Parse
-  errors are logged, never guessed at — the bounce rule applied to config.</p>
-  <!-- evidence: packages/orchestrator/src/schedule.ts; docs/ORCHESTRATOR.md §4.6 -->
+  errors are logged, never guessed at. That is the bounce rule applied to
+  config.</p>
 
   <h2 id="key-schedules">Key: <code>schedules</code></h2>
   <p>A map of role name → schedule entry. Each entry has one required key and two optional keys:</p>
-  <!-- evidence: orchestrator.yaml; packages/orchestrator/src/schedule.ts -->
 
   <table>
     <thead><tr><th>Key</th><th>Required</th><th>Type</th><th>Purpose</th></tr></thead>
@@ -75,12 +73,11 @@
   <h2 id="interval-grammar">Interval grammar</h2>
   <p>Intervals are parsed by <code>parseEvery()</code> in
   <code>schedule.ts</code>. The grammar is
-  <code>^(\d+)([dhm])$</code> — a positive integer followed by one of
+  <code>^(\d+)([dhm])$</code>: a positive integer followed by one of
   <code>d</code>, <code>h</code>, or <code>m</code> (days, hours, minutes).
-  The input is trimmed first. The function returns milliseconds;
-  <code>null</code> when the value does not match the grammar or the integer
+  The input is trimmed first. The function returns milliseconds,
+  or <code>null</code> when the value does not match the grammar or the integer
   is zero, which the scheduler treats as a parse error.</p>
-  <!-- evidence: packages/orchestrator/src/schedule.ts -->
 
   <h2 id="example">Example</h2>
   <pre><code>schedules:
@@ -90,15 +87,14 @@
     enabled: true</code></pre>
 
   <h2 id="sweep-lifecycle">Sweep lifecycle</h2>
-  <p>A sweep is a gate-less mini-run — <code>runs/&lt;role&gt;-&lt;date&gt;/</code>
+  <p>A sweep is a gate-less mini-run: <code>runs/&lt;role&gt;-&lt;date&gt;/</code>
   on branch <code>run/&lt;role&gt;-&lt;date&gt;</code>, seeded with a
   <code>sweep.yaml</code> marker. It carries no <code>state.yaml</code> on
   purpose: the gate engine and frontend recognize runs by
   <code>state.yaml</code>, so sweeps stay out of the derivation table
-  entirely. The human surface is the branch itself — review the docs-delta
-  and doc edits, merge to approve (the P4 principle), and the merged marker
+  entirely. The human surface is the branch itself: review the docs-delta
+  and doc edits, and merge to approve (the P4 principle). The merged marker
   on the default branch makes the next sweep's interval derivable.</p>
-  <!-- evidence: runs/README.md; orchestrator.yaml; docs/ORCHESTRATOR.md §4.6 -->
 
   <p>The marker carries these fields:</p>
   <table>
@@ -116,7 +112,6 @@
   <h2 id="sweep-derivation-rules-s0s4-sb">Sweep derivation rules (S0–S4+SB)</h2>
   <p>The scheduler applies one rule per schedule entry per tick; each rule
   has a test in <code>test/schedule.test.ts</code>:</p>
-  <!-- evidence: packages/orchestrator/src/schedule.ts; packages/orchestrator/test/schedule.test.ts -->
   <table>
     <thead><tr><th>Rule</th><th>Condition</th><th>Action</th></tr></thead>
     <tbody>
@@ -136,7 +131,7 @@
 
   <p>The dispatch itself follows commit-then-launch: the intent commit seeds
   the sweep branch with its marker, created from <code>ZERO_OID</code> so two
-  instances racing the same schedule resolve at the ref — the loser rests.
+  instances racing the same schedule resolve at the ref, and the loser rests.
   After the agent completes, a closing commit records real usage into the
   marker.</p>
 </article>

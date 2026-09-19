@@ -25,13 +25,12 @@
 <!-- content:start -->
 <article class="doc">
   <p class="lede">Most senior engineers know git as a workflow: branch, commit,
-  rebase, push. gateline uses it as something else — a small transactional
+  rebase, push. gateline uses it as something else: a small transactional
   database that happens to store source code. The framework has no server, no
   lock service, and no message queue; two independent writers edit one file
   concurrently and neither can clobber the other. This module walks the git
   primitives that make that possible, and for each one shows the place in the
   codebase that would collapse without it.</p>
-  <!-- evidence: packages/core/src/sources/git.ts -->
 
   <p>The thesis is written down in the repository, at the top of the module
   that wraps the git CLI: <em>reads always address refs (never the working
@@ -43,29 +42,28 @@
   tree is on some unrelated branch, mid-rebase, and dirty.</p>
 
   <p><strong>Plumbing</strong> and <strong>porcelain</strong> are git's own
-  terms for its two command layers. Porcelain is the human interface —
-  <code>git commit</code>, <code>git merge</code>, <code>git pull</code> — and
+  terms for its two command layers. Porcelain is the human interface
+  (<code>git commit</code>, <code>git merge</code>, <code>git pull</code>), and
   it assumes a working tree and an index belonging to a person. Plumbing is the
   scriptable layer underneath:
   <code>hash-object</code>, <code>read-tree</code>, <code>write-tree</code>,
   <code>commit-tree</code>, <code>update-ref</code>. <code>git-commit-tree(1)</code>
-  says as much in its own description — <em>"This is usually not what an end
+  says as much in its own description: <em>"This is usually not what an end
   user wants to run directly."</em></p>
 
   <h2 id="objects-a-content-addressed-database-that-happens-to-store-code">Objects: a content-addressed database that happens to store code</h2>
 
-  <p>A git repository is an object store with exactly four object types — blob,
+  <p>A git repository is an object store with exactly four object types: blob,
   tree, commit, tag. <code>gitglossary(7)</code> defines an
   <strong>object</strong> as "the unit of storage in Git. It is uniquely
   identified by the SHA-1 of its contents. Consequently, an object cannot be
   changed." A <strong>tree object</strong> is "an object containing a list of file names
   and modes along with refs to the associated blob and/or tree objects", and a
   <strong>commit</strong> names one tree plus its metadata.</p>
-  <!-- evidence: gitglossary(7); packages/core/src/sources/git.ts -->
 
   <p>Two consequences do most of the work here. The object id is a function of
   the content, so identical content anywhere in history is one object. And
-  <em>names and modes live in the tree, not in the blob</em> — which is why
+  <em>names and modes live in the tree, not in the blob</em>, which is why
   building a commit programmatically takes more than writing a blob: you must
   also produce a tree binding the blob to a path and a file mode.</p>
 
@@ -221,7 +219,7 @@ c1
   and <code>write-tree</code> against that scratch index, and deletes the
   directory in a <code>finally</code>. <code>git(1)</code> documents
   <code>GIT_INDEX_FILE</code> as specifying "an alternate index file", and that
-  is the whole of it — the variable relocates the index and changes nothing
+  is the whole of it: the variable relocates the index and changes nothing
   else. The operator's index at <code>$GIT_DIR/index</code> is left unread and
   unwritten.</p>
 
@@ -229,7 +227,7 @@ c1
   <code>GIT_AUTHOR_NAME</code>, <code>GIT_AUTHOR_EMAIL</code>,
   <code>GIT_COMMITTER_NAME</code> and <code>GIT_COMMITTER_EMAIL</code> from an
   optional identity argument. That is how the orchestrator commits under its own
-  bot identity without ever mutating <code>git config</code> — a design that
+  bot identity without ever mutating <code>git config</code>. A design that
   switched <code>git config user.name</code> instead would be writing shared,
   persistent state that any concurrent human commit would inherit.</p>
 
@@ -241,27 +239,26 @@ c1
   matters for library design:
   "The ref namespace is hierarchical. Ref names must either start with refs/ or
   be located in the root of the hierarchy." A branch is nothing but a ref under
-  <code>refs/heads/</code> — and because names only have to start with
+  <code>refs/heads/</code>. Because names only have to start with
   <code>refs/</code>, a program can carve out a namespace nothing else will
   collide with. gateline uses <code>refs/gateline/wip/&lt;branch&gt;</code> to
   hold a write-ahead intent commit while a state write is in flight: a ref no
   branch reaches, keeping an object alive without putting it in anybody's
   history.</p>
-  <!-- evidence: gitglossary(7); git-update-ref(1); packages/core/src/sources/git.ts; packages/core/src/sources/local-source.ts -->
 
   <p>A <strong>pseudoref</strong> is the exception you have to know about; the
   glossary defines it as "a ref that has different semantics than normal refs. These refs can be read via
   normal Git commands, but cannot be written to by commands like
   git-update-ref(1)." <code>MERGE_HEAD</code> and <code>FETCH_HEAD</code> are
   pseudorefs, which is why gateline's code-tree monitor <em>tests for the
-  existence of</em> <code>MERGE_HEAD</code> rather than transacting on it.</p>
+  existence of</em> <code>MERGE_HEAD</code>, never transacts on it.</p>
 
   <h3>The three-argument <code>update-ref</code></h3>
 
   <p>Here is the primitive the whole framework rests on. Most engineers have
   only ever met <code>update-ref</code> in its two-argument form, a blunt
   "point this ref here". <code>git-update-ref(1)</code> states the
-  three-argument form exactly:</p>
+  three-argument form:</p>
 
   <blockquote>Given three arguments, stores the &lt;new-oid&gt; in the
   &lt;ref&gt;, possibly dereferencing the symbolic refs, after verifying that
@@ -272,9 +269,8 @@ c1
   to make sure that the ref you are creating does not exist.</blockquote>
 
   <p><em>This is a compare-and-swap</em> in the sense the concurrency literature
-  uses the term — that framing is this guide's analysis, not language git uses.
-  Git's documentation never argues that the three-argument form defeats a race;
-  it states a conditional update and describes locking. The conclusion is ours:
+  uses the term. That framing is this guide's analysis, not language git uses. Git's documentation
+  never argues that the three-argument form defeats a race; it states a conditional update and describes locking. The conclusion is ours:
   an update that applies only if the observed value is still current is what lets
   independent writers share mutable state without a lock.</p>
 
@@ -308,17 +304,16 @@ replay, old value stale:  exit=128</code></pre>
   docblock says what the false means: "the ref no longer points at
   <code>expectedOld</code> — the caller re-reads and re-presents."</p>
 
-  <p>That one design choice — <em>failure is a return value, not an
-  exception</em> — is what makes losing the race ordinary rather than
-  exceptional. Both writers read the branch tip, both build a commit on it, and
-  the ref update admits exactly one. The
+  <p><em>Failure is a return value, not an exception.</em> That one design
+  choice is what makes losing the race ordinary. Both writers read the branch
+  tip, both build a commit on it, and the ref update admits exactly one. The
   <a href="../how-it-works/how-gates-keep-a-human-in-charge.html#cas-co-writer">two-writer
   figure on the gates page</a> draws the loop; module 2 takes apart what the
   loser does next.</p>
 
   <p>Note what <code>updateRefCAS</code> does <em>not</em> do: it does not
   retry. Retrying is the caller's job, it is attempted only for the one refusal
-  reason a retry can fix, and it is bounded — the orchestrator's
+  reason a retry can fix, and it is bounded: the orchestrator's
   closing-bookkeeping loop gives up after five attempts and logs.</p>
 
   <h3>The all-zeros old value: create-only</h3>
@@ -354,14 +349,13 @@ second writer: exit=128</code></pre>
   suffix : followed by a path names the blob or tree at the given path in the
   tree-ish object named by the part before the colon." So
   <code>&lt;rev&gt;:&lt;path&gt;</code> addresses a blob inside a commit.</p>
-  <!-- evidence: gitrevisions(7); packages/core/src/sources/git.ts -->
 
   <p>There is an adjacent syntax one character away that means something else
   entirely. <code>gitrevisions(7)</code> also defines
   <code>:[&lt;n&gt;:]&lt;path&gt;</code> as naming "a blob object in the index
   at the given path". A leading colon reads your index; a revision before the
   colon reads a commit. Every read in gateline puts a revision before the
-  colon — there is no index in the picture at all.</p>
+  colon. There is no index in the picture at all.</p>
 
   <div class="exercise">
     <h3>Exercise 4 — read a run's spine from a branch you have not checked out</h3>
@@ -385,14 +379,14 @@ phase: done               # spec | plan | implement | integrate | release | done
   <h3>Where gateline lives on this</h3>
 
   <p><code>Git.show</code> wraps that syntax with one refinement worth copying:
-  a missing path or revision returns <code>null</code> rather than throwing. A
+  a missing path or revision returns <code>null</code> and never throws. A
   regular expression matches git's "does not exist" family of errors, so
   "is there a <code>verification-report.md</code> on this branch yet?" is a
   read rather than an exception handler.</p>
 
   <p>Because reads address refs, and refs include raw object ids, the past is
   just another ref: shadow replay hands the observer a run reference whose
-  revision is a <em>commit id</em> instead of a branch name, and the same
+  revision is a <em>commit id</em>, not a branch name, and the same
   derivation code then runs against a point in history with no special mode. One caution when you go looking for a run this
   way: in a fresh clone the only reference to an unmerged run branch is the
   remote-tracking one, so <code>origin/run/&lt;slug&gt;</code> is the portable
@@ -405,23 +399,22 @@ phase: done               # spec | plan | implement | integrate | release | done
   where the branch you are merging is "a descendant of what you have", so you "do
   not make a new merge commit but instead just update your branch to point at the
   same revision". That last clause connects this section to the last one: a
-  fast-forward creates no object, it is a pure pointer move, which is why
-  "fast-forward only" is a usable policy — it says history is only ever appended
+  fast-forward creates no object, it is a pure pointer move. That is why
+  "fast-forward only" is a usable policy. It says history is only ever appended
   to, never rewritten underneath anyone. Enforcing it takes three mechanisms, and
   they are not interchangeable.</p>
-  <!-- evidence: gitglossary(7); packages/core/src/sources/local-source.ts; packages/core/src/sources/code-tree.ts -->
 
   <dl>
     <dt>The flag</dt>
     <dd><code>git merge --ff-only</code> will "resolve the merge as a
     fast-forward when possible. When not possible, refuse to merge and exit with
     a non-zero status." <code>git pull --ff-only</code> is documented
-    differently — "only update to the new history if there is no divergent local
-    history" — so quote the page you actually mean.</dd>
+    differently ("only update to the new history if there is no divergent local
+    history"), so quote the page you mean.</dd>
     <dt>The refspec</dt>
     <dd>A fetch refspec written
     <code>refs/heads/&lt;b&gt;:refs/heads/&lt;b&gt;</code>, with
-    no leading <code>+</code>, is fast-forward-only <em>by grammar</em> — the
+    no leading <code>+</code>, is fast-forward-only <em>by grammar</em>: the
     plus sign is what would make it forced. gateline's
     <code>syncFromRemote</code> builds exactly that spec, one per branch, so a
     local branch carrying an unpushed decision commit is never clobbered by a
@@ -437,7 +430,7 @@ phase: done               # spec | plan | implement | integrate | release | done
   <em>per-ref</em> refusal: the other refspecs still apply and the
   remote-tracking refs still update, which is why the code deliberately swallows
   that failure. What <em>is</em> fatal, and aborts the whole batch, is fetching
-  into a branch checked out in a worktree — which is why
+  into a branch checked out in a worktree, which is why
   <code>syncFromRemote</code> filters those out first.</p>
 
   <div class="exercise">
@@ -496,7 +489,7 @@ unknown commit:  exit=128</code></pre>
 
   <div class="maintainer-note">
     <h3>Maintainer note</h3>
-    <p>The one-authority rule was not designed up front — it was written after a
+    <p>The one-authority rule was not designed up front. It was written after a
     bad day. The topology design records that within a single day of running
     Gatehouse hosted and the orchestrator on a workstation, every seam between
     them produced an incident: a human raised a budget limit on origin,
@@ -511,7 +504,6 @@ unknown commit:  exit=128</code></pre>
   <p><code>git-worktree(1)</code> describes a repository as supporting "multiple
   working trees, allowing you to check out more than one branch at a time",
   sharing "everything except per-worktree files such as HEAD, index, etc.".</p>
-  <!-- evidence: git-worktree(1); packages/core/src/sources/local-source.ts -->
 
   <p>The rule that makes worktrees useful here is in that page's REFS section:
   "In general, all pseudo refs are per-worktree and all refs starting with refs/
@@ -519,14 +511,14 @@ unknown commit:  exit=128</code></pre>
   however: refs inside refs/bisect, refs/worktree and refs/rewritten are not
   shared." So <code>refs/heads/*</code> is shared across every worktree, and so
   is gateline's own <code>refs/gateline/wip/*</code>, clear of all three
-  exceptions — while <code>HEAD</code> and the index are not.</p>
+  exceptions, while <code>HEAD</code> and the index are not.</p>
 
   <h3>Where gateline lives on this</h3>
 
   <p>Worktree awareness changes the write path here.
   <code>Git.worktrees</code> parses <code>git worktree list --porcelain</code>
   into paths and branches, and decisions across core and the orchestrator
-  consult it — from which branches may be fetched to whether a rejected push
+  consult it: from which branches may be fetched to whether a rejected push
   may be rolled back. The governing sentence is a code comment in
   <code>writeState</code>: if the branch is checked out somewhere,
   an <code>update-ref</code> behind its back would leave that checkout silently
@@ -535,13 +527,12 @@ unknown commit:  exit=128</code></pre>
   <h2 id="commit-messages-as-a-protocol-and-the-limit-of-that-idea">Commit messages as a protocol, and the limit of that idea</h2>
 
   <p>Every commit subject this system produces is a template literal, never free
-  text. Human decisions get sentences —
-  <code>state(&lt;slug&gt;): G2 approved by &lt;name&gt; [burden:
+  text. Human decisions get sentences
+  (<code>state(&lt;slug&gt;): G2 approved by &lt;name&gt; [burden:
   confirmation]</code>, <code>staged by &lt;name&gt;</code>, <code>armed by
-  &lt;name&gt;</code>, <code>closed by &lt;name&gt; [disposition: …]</code> —
+  &lt;name&gt;</code>, <code>closed by &lt;name&gt; [disposition: …]</code>),
   and the orchestrator gets a reserved set of bookkeeping verbs instead. So a run branch reads as a transcript of a partnership, in
   <code>git log</code>, with no tooling at all.</p>
-  <!-- evidence: contracts/state.yaml; packages/core/src/record/actions.ts; packages/orchestrator/src/observe.ts; packages/core/src/view-model/ledger.ts -->
 
   <p>It is <em>evidence for humans</em>. The grammar is not the machine's input
   to any decision. Two places in the codebase parse a commit subject, and
@@ -550,8 +541,8 @@ unknown commit:  exit=128</code></pre>
   Gatehouse's decision ledger in
   <code>packages/core/src/view-model/ledger.ts</code> turns each
   <code>state(&lt;slug&gt;): …</code> subject into a typed entry to render,
-  showing a subject it cannot parse verbatim rather than guessing. Everything
-  that decides reads the committed files — which is also why a reflog, which
+  showing a subject it cannot parse verbatim, not a guess. Everything
+  that decides reads the committed files. That is also why a reflog, which
   nothing in gateline reads or writes, is not part of the record. Module 2
   picks that thread up.</p>
 
@@ -577,7 +568,7 @@ unknown commit:  exit=128</code></pre>
 
   <h2 id="further-reading">Further reading</h2>
 
-  <p>Read <code>packages/core/src/sources/git.ts</code> end to end —
+  <p>Read <code>packages/core/src/sources/git.ts</code> end to end:
   about three hundred lines, and the whole surface this module describes. Then
   <code>local-source.ts</code>, whose <code>writeState</code> uses every
   primitive here at once and is the subject of

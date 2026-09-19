@@ -25,11 +25,10 @@
 <!-- content:start -->
 <article class="doc">
   <p class="lede">No role in gateline knows which model executes it. Roles are
-  contracts over files; models are bindings resolved in a single registry;
-  runtimes attach through thin, generated adapters. That separation is enforced
-  in the repository — and it is what lets an adopter change vendors,
+  contracts over files, models are bindings resolved in a single registry, and
+  runtimes attach through thin, generated adapters. That separation is
+  enforced in the repository, and it is what lets an adopter change vendors,
   harnesses, or both without rewriting the pipeline.</p>
-  <!-- evidence: docs/DESIGN.md §2, §6, §8; AGENTS.md -->
 
   <h2 id="the-principles-and-the-two-that-do-the-work">The principles, and the two that do the work</h2>
   <p>Six principles govern the design: artifacts over conversation (P1); roles
@@ -39,9 +38,8 @@
   the neutrality work. P2 rules out hardcoding a <code>claude-*</code> or
   <code>gpt-*</code> identifier in any role definition, and the rule is
   enforced as a repository invariant: no vendor or model name may appear in
-  <code>roles/</code> or <code>contracts/</code> — model IDs live only in the
+  <code>roles/</code> or <code>contracts/</code>. Model IDs live only in the
   registry.</p>
-  <!-- evidence: docs/DESIGN.md §2; AGENTS.md -->
   <p>P5 is the technical argument. Models from the same family share blind
   spots: an error the implementer's model reliably makes is often an error that
   same model reliably fails to catch. Binding the Reviewer and Verifier to a
@@ -57,19 +55,18 @@
   decision records. The Implementer executes one work item on a branch. The
   Reviewer reads the diff adversarially against spec and plan. The Verifier
   independently exercises the behavior end to end. Ops prepares the release and
-  rollback plans. The Historian periodically reconciles the surrounding prose —
-  docs, changelog, tracker — with the run record. Reviewer and Verifier are
+  rollback plans. The Historian periodically reconciles the surrounding prose
+  (docs, changelog, tracker) with the run record. Reviewer and Verifier are
   separate on purpose: review is reading, verification is running, and
   collapsing them recreates rubber-stamp reviews.</p>
-  <!-- evidence: docs/DESIGN.md §3, §4.2, §7; AGENTS.md; roles/integrator.md; roles/orchestrator.md; docs/INTEGRATION.md -->
   <p>The <code>roles/</code> directory holds one more spec: the Integrator, the
   role that adopts the framework into a host repository, with its own gate
-  (GI). It is not a ninth SDLC role — the pipeline roster is eight roles plus
-  the Integrator. The set is closed: adding a role takes an explicit maintainer
+  (GI). It is not a ninth SDLC role: the pipeline roster is eight roles plus the
+  Integrator. The set is closed: adding a role takes an explicit maintainer
   decision recorded in an issue, because P6 makes roles the only extension
-  surface. The Historian is the worked example — when doc drift became
-  painful, the role cost one spec, one contract, and one registry binding, with
-  no change to any other role or contract.</p>
+  surface. The Historian is the worked example: when doc drift became painful,
+  the role cost one spec, one contract, and one registry binding, with no
+  change to any other role or contract.</p>
   <p>DESIGN.md §4.2 draws the line finer. Implementer, Reviewer, Verifier, and
   the Orchestrator are evidence-bearing positions: the record's claims are
   about them, so they are as closed as the gates. The other roles are closed
@@ -78,7 +75,7 @@
   an existing gate's table, and it may never mint a gate.</p>
   <p>Each role spec carries its mission, operating instructions, definition of
   done, and explicit escalation triggers, with frontmatter declaring its
-  capabilities and a <strong>capability profile</strong> — a tier of model
+  capabilities and a <strong>capability profile</strong>, a tier of model
   ability, not a model. One role is never rendered to a runner at all: the
   Orchestrator is executed by a human in v0 or by the engine in v1, so no
   adapter ships an agent file for it.</p>
@@ -86,15 +83,14 @@
   <h2 id="one-file-owns-the-models">One file owns the models</h2>
   <p><code>registry/models.yaml</code> is the only place vendor and model IDs
   exist. Roles bind to capability profiles instead of models:
-  <code>frontier-reasoning</code> for where judgment concentrates —
-  architecture, review, orchestration, cost-insensitive because these roles'
-  errors are the expensive ones — <code>balanced</code> for the workhorse
+  <code>frontier-reasoning</code> for where judgment concentrates
+  (architecture, review, orchestration, cost-insensitive because these roles'
+  errors are the expensive ones), <code>balanced</code> for the workhorse
   tiers, and <code>fast-cheap</code> for high-volume, low-stakes work. A
   bindings map attaches each role to a profile, and the Reviewer and Verifier
-  entries carry <code>avoid_vendor_of: implementer</code> — the P5 pin written
+  entries carry <code>avoid_vendor_of: implementer</code>, the P5 pin written
   as data, so a human dispatching by hand or the engine dispatching
   automatically can enforce it.</p>
-  <!-- evidence: registry/models.yaml; docs/DESIGN.md §6; docs/ORCHESTRATOR.md §6; adapters/opencode/manifest.json; AGENTS.md -->
   <p>Resolution runs role → capability profile → registry profile → concrete
   vendor/model ID, and then to the dispatching adapter's own spelling of that
   ID. That spelling is what lands in the ledger and what the pricing lookup
@@ -103,11 +99,11 @@
   adapter's manifest and re-rendering; no role spec or contract ever changes.
   The same file holds the pricing map used to meter dispatches and the static
   per-role estimates behind the pre-flight budget check.</p>
-  <p>Two honesty notes. The shipped model IDs are marked ILLUSTRATIVE — pin
-  your organization's approved models and re-verify pricing when you do. And
-  the OpenRouter pricing entries are a wired fallback rather than the live
-  path: the opencode adapter reports real per-dispatch cost directly, and the
-  entries key the token-based fallback if that report ever stops carrying
+  <p>Two honesty notes. The shipped model IDs are marked ILLUSTRATIVE: pin your
+  organization's approved models and re-verify pricing when you do. And the
+  OpenRouter pricing entries are a wired fallback off the live path: the
+  opencode adapter reports real per-dispatch cost directly, and the entries
+  key the token-based fallback if that report ever stops carrying
   cost.</p>
 
   <figure class="diagram" data-diagram="binding-resolution">
@@ -185,13 +181,13 @@
 
   <h2 id="adapters-are-rendered-not-written">Adapters are rendered, not written</h2>
   <p>Three adapters ship. <code>claude-code</code> renders
-  <code>.claude/agents/</code> subagents; <code>copilot-cli</code> renders
-  <code>.github/agents/</code> custom agents; <code>opencode</code> renders
+  <code>.claude/agents/</code> subagents. <code>copilot-cli</code> renders
+  <code>.github/agents/</code> custom agents. <code>opencode</code> renders
   <code>.opencode/agents/</code> agents against its any-provider catalog.
   <code>gateline render</code>, from the Node package
   <code>@gateline/framework</code>, generates each agent file from the role
-  spec — the body verbatim, because agents start cold and the spec doubles as
-  their instructions — plus the adapter's <code>manifest.json</code>, which
+  spec (the body verbatim, because agents start cold and the spec doubles as
+  their instructions) plus the adapter's <code>manifest.json</code>, which
   supplies the frontmatter shape, the capability-to-tool map, and the runner's
   model spellings. That package is the only reader of role specs and
   manifests, and it takes no runtime dependencies on purpose, so a host
@@ -200,22 +196,19 @@
   do-not-edit header, and CI fails any pull request whose renders are stale:
   drift between a role spec and what a runner executes is structurally
   impossible.</p>
-  <!-- evidence: docs/DESIGN.md §8; packages/framework/src/render.ts; .github/workflows/render-check.yml; adapters/opencode/manifest.json; docs/ORCHESTRATOR.md §5; AGENTS.md -->
-  <p>An adapter may narrow a role — fewer tools, tighter permissions — but
-  never widen it; the role spec is the ceiling. In the opencode adapter the
+  <p>An adapter may narrow a role (fewer tools, tighter permissions) but never
+  widen it; the role spec is the ceiling. In the opencode adapter the
   rule is a rendered property: each agent carries a deny-by-default permission
   map, so a harness capability the role never granted stays denied. The v1
   engine dispatches through the same manifests: a <code>headless</code> section
   gives the invocation template and the usage-report parsing spec, so nothing
   above the dispatch seam knows which harness ran. Supporting a new runner
-  costs one manifest — the roles are never restated per runner.</p>
+  costs one manifest. The roles are never restated per runner.</p>
 
   <h2 id="the-decorrelation-gradient-stated-honestly">The decorrelation gradient, stated honestly</h2>
-  <p>The honest summary is: gateline supports cross-vendor pinning by design,
-  and it is exercised where the harness allows. The three adapters sit at
-  different points on that gradient, and the framework's own documentation says
-  so rather than rounding up.</p>
-  <!-- evidence: docs/DESIGN.md §8; adapters/claude-code/README.md; adapters/copilot-cli/manifest.json; adapters/opencode/manifest.json; docs/ORCHESTRATOR.md §5.3; runs/dupefind/state.yaml -->
+  <p>gateline supports cross-vendor pinning by design, and it is exercised where
+  the harness allows. The three adapters sit at different points on that
+  gradient, and the framework's own documentation says so.</p>
   <table>
     <thead>
       <tr><th>Adapter</th><th>Model surface</th><th>P5 decorrelation</th></tr>
@@ -242,7 +235,7 @@
   </table>
   <p>Where more than one vendor is live, enforcement is mechanical: the
   dispatch seam refuses to bind the Reviewer or Verifier to the Implementer's
-  vendor. The run records show the gradient as well — in the human-orchestrated
+  vendor. The run records show the gradient as well: in the human-orchestrated
   dupefind run, every implementer ledger entry is one model lineage and every
   reviewer entry another, under the single vendor that harness hosts.</p>
   <p>The neutrality claim, whole: the judgment encoded in roles and contracts
@@ -254,8 +247,8 @@
   <a href="../reference/adapter-manifests.html">adapter manifests
   reference</a>; for the handoff formats the roles exchange, the
   <a href="../reference/contract-grammar.html">contract grammar
-  reference</a>; and for the packages that implement the engine, server, CLI,
-  and UI, the <a href="../api/index.html">API documentation</a>.</p>
+  reference</a>. For the packages that implement the engine, server, CLI, and
+  UI, see the <a href="../api/index.html">API documentation</a>.</p>
 </article>
 <!-- content:end -->
 <nav class="pager" aria-label="Previous and next page">

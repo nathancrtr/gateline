@@ -408,6 +408,40 @@ may reorder, group, fold, badge, and diff, but every word shown comes byte-ident
 from the committed artifact and every word stays reachable. Folding is never
 truncation, and nothing here summarizes.
 
+### 4.8 The record rail names kinds, not files (#401)
+
+The Record rail was a directory listing: `tasks/06-pages-workflow.yaml` in
+monospace, truncated at the rail's width to the part nobody was reading, under
+a `runs/<slug>/` caption the reader header and the page header both repeated.
+The reader translated filenames back into a vocabulary the page already held —
+the rail's own sort order is brief, spec, plan, work items, reviews,
+verification, release plan, ledger — and never saw that vocabulary written.
+
+The rail now says the kind and the reader header says the bytes. A one-per-run
+artifact is named by its kind (`Spec`, `Verification`). Work items sit under
+one `Work items · n` caption and each says its id, verbatim from the filename:
+the record's own name for the task, the one `depends_on`, the task board and
+the review header all use, with its number kept because
+`contracts/work-item.yaml` makes that a display fact. Reviews sit under `Reviews · n` and
+each says the task it reviews, read from the report's header by the same
+parser the findings use; a file-per-round record carries each round so the
+entries stay distinct. Two entries keep their filename on purpose: `state.yaml`,
+which is the record's index rather than an artifact and whose name is the
+decision grammar's, and any file the framework has no position for. Mixed
+labels there are honest — these are the kinds the framework knows, this one it
+does not — and the face makes the distinction visible: a name reads in the UI
+face, a filename in the code face, like every other path on the page.
+
+What honesty requires is that the address never becomes unreachable, and it
+does not: `runs/<slug>/<path>` stays printed beside the contract badge at the
+top of every artifact, and the URL carries `?artifact=<path>`. Labelling
+`spec.md` "Spec" is a view, not a paraphrase; the §4.7 rule is about the
+artifact's words. A work item's reader is additionally headed by its `title:`,
+the one sentence a YAML dump buries, taken from the same parsed packet the G1
+surface reads. The contract badge still names the contract by its file: that
+is the same question one level down, and the badge is where the file-level
+truth is meant to show.
+
 ## 5. The dashboard question
 
 **For one operator running one pipeline, a dashboard is overhead — Claude Code plus

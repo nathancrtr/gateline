@@ -28,42 +28,10 @@ import { isAuditSection, itemCount } from '../fold.ts'
 import { gateCardState } from '../gate-state.ts'
 import { DIFF_SELECTION, decideTargetIndex, landingArtifact, resolveSurface, type Surface } from '../landing.ts'
 import { collapseEngineSpans } from '../ledger-spans.ts'
+import { isReviewPath, isTaskPath, orderArtifacts, railGroups } from '../record-rail.ts'
 import { EdgeFade, useScrollCue } from '../scroll-cue.tsx'
 import { type KeyHint, useKeys } from '../use-keys.ts'
 import { PageStatus } from './inbox.tsx'
-
-const isReviewPath = (p: string) => /^review-\d+.*\.md$/.test(p)
-
-/**
- * The record, in the order the pipeline wrote it (#285/4).
- *
- * The picker was alphabetical, which is not an order — it is the absence of
- * one, and it put `review-01.md` above `spec.md` so the run's narrative came
- * out as an accident of naming. Reading top to bottom is how anyone catches up
- * on a run they did not watch happen, so the list reads the way the run went:
- * brief, spec, plan, the work items, the reviews of them, the verification, the
- * release plan, and `state.yaml` last as the ledger that records all of it.
- *
- * Ranks, not a comparator table: a file the framework has not met yet lands
- * between the phases and the ledger rather than at an arbitrary end, and ties
- * inside a rank stay alphabetical, which is the right order for `tasks/*` and
- * `review-*` because their names are numbered.
- */
-export function artifactRank(path: string): number {
-  if (path === 'intent-brief.md') return 0
-  if (path === 'spec.md') return 1
-  if (path === 'plan.md') return 2
-  if (path.startsWith('tasks/')) return 3
-  if (isReviewPath(path)) return 4
-  if (path === 'verification-report.md') return 5
-  if (path === 'release-plan.md') return 6
-  if (path === 'state.yaml') return 8
-  return 7
-}
-
-export function orderArtifacts(paths: readonly string[]): string[] {
-  return [...paths].sort((a, b) => artifactRank(a) - artifactRank(b) || a.localeCompare(b))
-}
 
 /** Bare grammar — words that carry no fact of their own, so a sentence built
  *  only from these plus words already on screen adds nothing to the screen. */
@@ -824,27 +792,39 @@ function RecordSurface({
   return (
     <div className="grid grid-cols-[280px_1fr] gap-0 max-lg:flex max-lg:flex-col border-b border-line">
       <nav className="border-r border-line bg-surface py-[18px] max-lg:w-full max-lg:border-r-0 max-lg:border-b max-lg:py-2.5">
-        <div className={`${NAV_LABEL} max-lg:px-3 max-lg:pb-1`}>Artifacts · runs/{detail.summary.slug}/</div>
+        <div className={`${NAV_LABEL} max-lg:px-3 max-lg:pb-1`}>Artifacts</div>
         <div className="max-lg:flex max-lg:flex-wrap max-lg:items-center max-lg:gap-x-1 max-lg:px-3">
+          {/* Entries name kinds, not files (#401): the rail says what each
+              artifact is, the reader header says where its bytes are. The
+              numbered families sit under one caption each, so `tasks/` and
+              `review-` are said once instead of on every line. */}
           <ul className="flex flex-col max-lg:contents">
-            {paths.map((p) => {
-              const v = detail.validations[p]
-              return (
-                <li key={p} className="max-lg:min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => onSelect(p)}
-                    data-artifact-entry={p}
-                    data-selected={!showDiff && p === current ? 'true' : undefined}
-                    className={navEntryClass(!showDiff && p === current)}
-                  >
-                    {v && <ValidationBadge ok={v.ok} missing={v.missing} />}
-                    <span className="truncate">{p}</span>
-                    {verdictsFor(p) && <span className="ml-auto max-lg:ml-1">{verdictsFor(p)}</span>}
-                  </button>
-                </li>
-              )
-            })}
+            {railGroups(paths, reports).map((group) =>
+              group.entries.map((entry, i) => {
+                const p = entry.path
+                const v = detail.validations[p]
+                return (
+                  <li key={p} className="max-lg:min-w-0 max-lg:contents">
+                    {i === 0 && group.caption && (
+                      <div data-rail-caption className={`${NAV_LABEL} pt-2.5 pb-1 max-lg:px-2 max-lg:py-1.5 max-lg:shrink-0`}>
+                        {group.caption}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => onSelect(p)}
+                      data-artifact-entry={p}
+                      data-selected={!showDiff && p === current ? 'true' : undefined}
+                      className={navEntryClass(!showDiff && p === current, entry.literal)}
+                    >
+                      {v && <ValidationBadge ok={v.ok} missing={v.missing} />}
+                      <span className="truncate">{entry.text}</span>
+                      {verdictsFor(p) && <span className="ml-auto max-lg:ml-1">{verdictsFor(p)}</span>}
+                    </button>
+                  </li>
+                )
+              }),
+            )}
           </ul>
           <div className="mt-3.5 border-t border-line pt-3.5 max-lg:mt-0 max-lg:flex max-lg:items-center max-lg:border-t-0 max-lg:pt-0">
             <div className={`${NAV_LABEL} max-lg:px-2 max-lg:pb-0 max-lg:py-1.5 max-lg:shrink-0`}>The change</div>
@@ -884,13 +864,20 @@ const NAV_LABEL = 'font-ui text-[10.5px] text-muted px-[18px] pb-2.5'
  * stacked. Only the mark and the tint depend on `active`; the shape never does.
  */
 export const RECORD_ENTRY_SHAPE =
-  'flex w-full items-center gap-2.5 px-[18px] py-2.5 text-left font-mono text-[12.5px] border-l-2 ' +
+  'flex w-full items-center gap-2.5 px-[18px] py-2.5 text-left border-l-2 ' +
   'max-lg:w-auto max-lg:max-w-full max-lg:border-l-0 max-lg:border-b-2 max-lg:px-2 max-lg:py-1.5'
 
-export function navEntryClass(active: boolean) {
+/**
+ * The face says what the entry is (#401): a name for a kind reads in the UI
+ * face, and an entry that is a filename — `state.yaml`, a file the framework
+ * has no position for — reads in the code face, as every path on the page
+ * does. The reader can tell a name from an address without being told.
+ */
+export function navEntryClass(active: boolean, literal = false) {
+  const face = literal ? 'font-mono text-[12.5px]' : 'font-ui text-[13.5px]'
   return active
-    ? `${RECORD_ENTRY_SHAPE} bg-accent-tint border-l-accent border-b-accent text-accent-deep font-semibold`
-    : `${RECORD_ENTRY_SHAPE} border-l-transparent border-b-transparent text-ink hover:bg-inset hover:text-ink`
+    ? `${RECORD_ENTRY_SHAPE} ${face} bg-accent-tint border-l-accent border-b-accent text-accent-deep font-semibold`
+    : `${RECORD_ENTRY_SHAPE} ${face} border-l-transparent border-b-transparent text-ink hover:bg-inset hover:text-ink`
 }
 
 /**
@@ -957,6 +944,12 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
     queryKey: ['artifact', src, slug, path],
     queryFn: () => api.artifact(src, slug, path),
   })
+  // A work item's `title:` heads its reader (#401): the rail says the id, and
+  // the sentence the architect wrote is the one thing a YAML dump buries. The G1 packet already carries every work item parsed, under the
+  // same query the G1 surface uses, so this is one cache entry, not a second
+  // parser in the browser. Absent until it loads; nothing is invented.
+  const g1 = useQuery({ queryKey: ['g1', src, slug], queryFn: () => api.g1(src, slug), enabled: isTaskPath(path) })
+  const taskTitle = isTaskPath(path) ? (g1.data?.tasks.find((t) => t.path === path)?.title ?? null) : null
   // Jump-to-definition (#163): the anchor param lands on the def-<id> heading
   // ids the lexicon rehype stage stamps onto R/ADR definition headings.
   const [params] = useSearchParams()
@@ -977,6 +970,11 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
     <article className="relative min-h-0 px-10 py-8 max-lg:px-4 max-lg:py-6">
       <div className="max-w-[var(--measure)]">
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 font-mono text-[11.5px] text-muted pb-[18px] border-b border-line mb-[30px]">
+          {taskTitle && (
+            <span data-task-title className="basis-full font-ui text-[15px] font-semibold text-ink">
+              {taskTitle}
+            </span>
+          )}
           <span className="text-ink">runs/{slug}/{path}</span>
           <span
             className="ml-auto max-lg:ml-0 font-semibold"

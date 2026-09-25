@@ -554,10 +554,26 @@ test('surfaces (#258): retired tab names still resolve, and leave a canonical UR
 
 test('surfaces (#258): the change reads inside Record, and every artifact stays reachable', async ({ page }) => {
   await page.goto(`/runs/${sourceId()}/g2-pending?tab=record`)
-  // AC2 — the artifact list is unchanged, and the change sits below it.
-  for (const path of ['spec.md', 'plan.md', 'verification-report.md', 'review-01.md']) {
-    await expect(page.getByRole('button', { name: new RegExp(path.replace('.', '\\.')) })).toBeVisible()
+  // AC2 — every artifact is listed, and the change sits below them. The rail
+  // names kinds and tasks rather than files (#401): the review entry is the
+  // task it reviews, and the path shows in the reader header instead.
+  for (const path of ['spec.md', 'plan.md', 'verification-report.md', 'review-01.md', 'tasks/01-core.yaml']) {
+    await expect(page.locator(`[data-artifact-entry="${path}"]`)).toBeVisible()
   }
+  const entry = (path: string) => page.locator(`[data-artifact-entry="${path}"]`)
+  for (const [path, label] of [
+    ['spec.md', /Spec$/],
+    ['plan.md', /Plan$/],
+    ['verification-report.md', /Verification$/],
+    ['tasks/01-core.yaml', /01-core$/],
+  ] as const) {
+    await expect(entry(path)).toHaveText(label)
+  }
+  await expect(page.locator('[data-artifact-entry="review-01.md"]')).toContainText('01-core')
+  await expect(page.locator('[data-rail-caption]', { hasText: 'Work items · 2' })).toBeVisible()
+  await expect(page.locator('[data-artifact-entry="state.yaml"]')).toHaveText(/^state\.yaml$/)
+  await expect(page.locator('[data-artifact-entry="state.yaml"]')).toHaveClass(/font-mono/)
+  await expect(page.locator('[data-artifact-entry="spec.md"]')).toHaveClass(/font-ui/)
   await page.locator('[data-select-diff]').click()
   await expect(page).toHaveURL(/artifact=%40diff/)
   await expect(page.locator('[data-undeclared]')).toBeVisible()
@@ -565,9 +581,15 @@ test('surfaces (#258): the change reads inside Record, and every artifact stays 
   // landed on must not still read as selected behind the change.
   await expect(page.locator('[data-artifact-entry][data-selected="true"]')).toHaveCount(0)
   // …and back out to an artifact, without leaving the surface.
-  await page.getByRole('button', { name: /spec\.md/ }).click()
+  await entry('spec.md').click()
   await expect(page.locator('[data-surface="record"]')).toHaveAttribute('aria-current', 'page')
   await expect(page.locator('.prose-artifact')).toBeVisible()
+  // The address did not leave the surface: it moved to the reader header.
+  await expect(page.locator('article')).toContainText('runs/g2-pending/spec.md')
+  // A work item's reader is headed by the sentence its architect wrote.
+  await page.locator('[data-artifact-entry="tasks/01-core.yaml"]').click()
+  await expect(page.locator('[data-task-title]')).toBeVisible()
+  await expect(page.locator('article')).toContainText('runs/g2-pending/tasks/01-core.yaml')
 })
 
 test('G1 packet (#255): a patch run keeps its brief-plus-work-item view', async ({ page }) => {

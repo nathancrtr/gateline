@@ -12,7 +12,7 @@ intake:
   staged_by: "Nathan Carter"
 budget:
   cost_limit_usd: 50
-  cost_spent_usd: 35.38
+  cost_spent_usd: 38.71
   ledger:
     [
       {
@@ -108,9 +108,9 @@ budget:
           adapter: claude-code,
           model: claude-opus-5-5,
           engine: Carter-Nathan-MacBook Pro-L0295K7GD7:34260,
-          tokens_in: null,
-          tokens_out: null,
-          cost_usd: null
+          tokens_in: 258,
+          tokens_out: 3781,
+          cost_usd: 3.3292459499999993
         },
       {
           at: 2026-09-25T22:55:10.870Z,
@@ -183,7 +183,7 @@ gates:
 tasks:
   [
     { id: 01-artifact-path-route, status: review-approved, review_rounds: 2 },
-    { id: 02-snapshot-generator, status: dispatched, review_rounds: 0 },
+    { id: 02-snapshot-generator, status: in-review, review_rounds: 0 },
     { id: 03-web-static-mode, status: in-review, review_rounds: 1 },
     { id: 04-fixture-label, status: pending, review_rounds: 0 },
     { id: 05-static-render-check, status: pending, review_rounds: 0 },

@@ -135,6 +135,18 @@ budget:
           tokens_in: 226,
           tokens_out: 3821,
           cost_usd: 3.6834979999999997
+        },
+      {
+          at: 2026-09-25T23:10:48.410Z,
+          role: implementer,
+          task: 03-web-static-mode,
+          round: 2,
+          adapter: claude-code,
+          model: claude-opus-5-5,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:34260,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:
@@ -160,7 +172,7 @@ tasks:
   [
     { id: 01-artifact-path-route, status: review-approved, review_rounds: 2 },
     { id: 02-snapshot-generator, status: dispatched, review_rounds: 0 },
-    { id: 03-web-static-mode, status: in-review, review_rounds: 1 },
+    { id: 03-web-static-mode, status: dispatched, review_rounds: 1 },
     { id: 04-fixture-label, status: pending, review_rounds: 0 },
     { id: 05-static-render-check, status: pending, review_rounds: 0 },
     { id: 06-pages-workflow, status: pending, review_rounds: 0 }

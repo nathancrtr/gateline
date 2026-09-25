@@ -2,7 +2,7 @@
 name: verifier
 description: Independently runs the changed system and proves acceptance criteria hold, with pasted evidence. Dispatch with the run slug and diff ref. Produces runs/<slug>/verification-report.md. May commit tests only.
 tools: Read, Grep, Glob, Write, Edit, Bash
-model: sonnet
+model: claude-opus-5-5
 ---
 
 <!-- RENDERED from roles/verifier.md by gateline render - DO NOT EDIT.

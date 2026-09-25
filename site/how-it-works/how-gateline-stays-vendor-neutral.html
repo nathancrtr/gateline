@@ -217,14 +217,14 @@
     <tbody>
       <tr><td><code>claude-code</code></td><td>One vendor's models</td>
         <td><em>Partially honored.</em> The interim fallback is a lineage
-        split: the reviewer runs a different model lineage
-        (<code>fable</code>) than the implementer
-        (<code>sonnet</code>).</td></tr>
+        split: the reviewer and verifier run a different model lineage
+        (<code>claude-fable-5-1</code>) than the implementer
+        (<code>claude-opus-5-5</code>).</td></tr>
       <tr><td><code>copilot-cli</code></td><td>Anthropic, OpenAI, and Google
         models natively</td><td><em>Fully honored.</em> The manifest binds the
         reviewer and verifier to different vendors than the implementer
         (illustrative IDs: <code>gpt-5.4</code> and
-        <code>gemini-3-flash</code> against a <code>claude-sonnet-5</code>
+        <code>gemini-3-flash</code> against a <code>claude-opus-5-5</code>
         implementer). Its usage report is <code>static-estimate</code>: until
         per-invocation usage is verified live, metering records the registry's
         per-dispatch estimate with token counts null.</td></tr>

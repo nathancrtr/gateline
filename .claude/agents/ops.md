@@ -2,7 +2,7 @@
 name: ops
 description: Carries a verified, merged change toward release — CI health, release plan, rollback plan. Dispatch with the run slug after G2. Produces runs/<slug>/release-plan.md.
 tools: Read, Grep, Glob, Write, Edit, Bash
-model: sonnet
+model: claude-opus-5-5
 ---
 
 <!-- RENDERED from roles/ops.md by gateline render - DO NOT EDIT.

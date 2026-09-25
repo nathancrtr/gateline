@@ -2,8 +2,10 @@
 # Roles declare a capability_profile; this file resolves it to a concrete model.
 # Swapping vendors is an edit here, never in roles/ or contracts/.
 # Adapter manifests (adapters/*/manifest.json) re-spell these bindings in each
-# runner's model vocabulary (e.g. anthropic/claude-fable-5 -> "fable" in Claude
-# Code) — when you change a binding here, update the manifests and re-render.
+# runner's model vocabulary (e.g. anthropic/claude-opus-5-5 -> "claude-opus-5-5"
+# in Claude Code, spelled as the full ID rather than an alias so the record
+# names the model that ran) — when you change a binding here, update the
+# manifests and re-render.
 #
 # Model IDs below are ILLUSTRATIVE. Pin them to your org's approved, current
 # models and re-verify pricing and limits when you do.
@@ -11,14 +13,18 @@
 profiles:
   frontier-reasoning:
     # Deepest reasoning available; used where judgment concentrates and errors
-    # are expensive (architecture, review, orchestration). Cost-insensitive.
-    default: anthropic/claude-fable-5
+    # are expensive (architecture, review, verification, orchestration).
+    # Cost-insensitive.
+    default: anthropic/claude-fable-5-1
     # alternates: add your org's approved models from a second vendor here (P5 needs one)
     alternates: []
 
   balanced:
-    # Strong general capability at moderate cost; the workhorse tier.
-    default: anthropic/claude-sonnet-5
+    # Strong general capability at moderate cost; the workhorse tier. The
+    # current Opus generation is priced below the previous Sonnet one, so it
+    # holds this tier on capability and cost alike; anthropic/claude-sonnet-5
+    # remains a cheaper option (priced below).
+    default: anthropic/claude-opus-5-5
     # alternates: add your org's approved models from a second vendor here (P5 needs one)
     alternates: []
 
@@ -36,9 +42,17 @@ pricing:
   # The v1 orchestrator prices each dispatch's usage from this map into the
   # run's budget.ledger[] (docs/ORCHESTRATOR.md §6). A model with no entry
   # here cannot be metered; the dispatch seam refuses it rather than guessing.
-  anthropic/claude-fable-5:   {usd_per_mtok_in: 10, usd_per_mtok_out: 50}
-  anthropic/claude-sonnet-5:  {usd_per_mtok_in: 3,  usd_per_mtok_out: 15}
+  anthropic/claude-fable-5-1: {usd_per_mtok_in: 10, usd_per_mtok_out: 50}
+  anthropic/claude-opus-5-5:  {usd_per_mtok_in: 4,  usd_per_mtok_out: 20}
+  anthropic/claude-sonnet-5:  {usd_per_mtok_in: 2,  usd_per_mtok_out: 10}
   anthropic/claude-haiku-4-5: {usd_per_mtok_in: 1,  usd_per_mtok_out: 5}
+  # The Claude Code adapter spells these bindings as the same IDs without the
+  # vendor prefix; its usage report carries cost directly, so these rows back
+  # the token-based fallback for that adapter.
+  claude-fable-5-1: {usd_per_mtok_in: 10, usd_per_mtok_out: 50}
+  claude-opus-5-5:  {usd_per_mtok_in: 4,  usd_per_mtok_out: 20}
+  claude-sonnet-5:  {usd_per_mtok_in: 2,  usd_per_mtok_out: 10}
+  claude-haiku-4-5: {usd_per_mtok_in: 1,  usd_per_mtok_out: 5}
 
   # Rates for the opencode adapter's open-weight bindings
   # (adapters/opencode/manifest.json). resolveModel() is adapter-aware (#359):
@@ -63,7 +77,7 @@ dispatch_estimates_usd:
   architect: 5
   implementer: 8
   reviewer: 4
-  verifier: 6
+  verifier: 10     # frontier tier since 2026-09-25: runs code and writes tests at the priciest output rate
   ops: 2
   historian: 1     # one sweep: read an interval's artifacts, edit docs, write the delta
 
@@ -75,9 +89,11 @@ bindings:
 
   # P5 decorrelation: reviewer and verifier must not resolve to the same vendor
   # as implementer. `avoid_vendor_of` makes the constraint explicit so an
-  # orchestrator (or a human doing v0 dispatch) can enforce it.
+  # orchestrator (or a human doing v0 dispatch) can enforce it. Both sit on the
+  # frontier tier so that, in a single-vendor harness, the lineage-split
+  # fallback also keeps them off the implementer's model.
   reviewer:     {profile: frontier-reasoning, avoid_vendor_of: implementer}
-  verifier:     {profile: balanced,           avoid_vendor_of: implementer}
+  verifier:     {profile: frontier-reasoning, avoid_vendor_of: implementer}
 
   ops:          {profile: balanced}
 

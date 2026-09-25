@@ -55,3 +55,23 @@ depends_on: []
 status: pending
 
 notes: |
+  Implementer r1: found packages/server/src/contract.ts and
+  packages/server/src/app.ts already carrying this task's full scope
+  (FIXTURE_SOURCE_ID, the header-comment update, the ApiRoutes wildcard key,
+  the extracted readArtifact helper, and the new route) — a survivor of the
+  prior r1 attempt that was aborted mid-drain but whose in-progress edits were
+  harvested (commit 828d99c) before this dispatch. Verified that code against
+  the plan's ADR-2 text and the task's scope line by line; no changes needed
+  there. Added the five vitest cases to packages/server/test/app.test.ts
+  (path form matches query form for spec.md; nested path
+  tasks/01-core.yaml; missing-artifact 404; unknown-run 404; query form
+  unchanged), all against fixture run g1-pending. Hand-verified each new
+  fixture against a mutant: (a) capturing match[0] instead of match[1] in the
+  path-form regex breaks both the "matches query form" and "nested path"
+  cases; (b) neutralizing the missing-content 404 check breaks the
+  missing-artifact case; (c) inverting the shared helper's not-found check
+  breaks the unknown-run case, the matches/nested-path cases, the existing
+  malformed-spec artifact test, and the query-form-unchanged case. All
+  mutants reverted and the file diffed identical to the pre-mutant original
+  afterward. `npm run typecheck`, `npm test` (1245 passed, 2 pre-existing
+  skips, unrelated), and `npm run lint` all green in packages/.

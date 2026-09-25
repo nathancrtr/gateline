@@ -2,7 +2,7 @@
 name: architect
 description: Produces the technical plan and conflict-free work breakdown from an approved spec. Dispatch with the run slug. Produces runs/<slug>/plan.md and runs/<slug>/tasks/*.yaml.
 tools: Read, Grep, Glob, Write
-model: fable
+model: claude-fable-5-1
 ---
 
 <!-- RENDERED from roles/architect.md by gateline render - DO NOT EDIT.

@@ -8,12 +8,12 @@ the human drives the main session as Orchestrator and dispatches role subagents.
 
 | Role spec | Subagent | Model binding (via registry profile) | Tool narrowing |
 |-----------|----------|--------------------------------------|----------------|
-| `roles/analyst.md` | `.claude/agents/analyst.md` | balanced → `sonnet` | read + write (artifacts only, by instruction) |
-| `roles/architect.md` | `.claude/agents/architect.md` | frontier-reasoning → `fable` | read + write (artifacts only, by instruction) |
-| `roles/implementer.md` | `.claude/agents/implementer.md` | balanced → `sonnet` | full edit + bash |
-| `roles/reviewer.md` | `.claude/agents/reviewer.md` | frontier-reasoning → `fable` | read + git via bash; writes report only |
-| `roles/verifier.md` | `.claude/agents/verifier.md` | balanced → `sonnet` | full edit + bash (tests only, by instruction) |
-| `roles/ops.md` | `.claude/agents/ops.md` | balanced → `sonnet` | edit + bash (pipeline/config only, by instruction) |
+| `roles/analyst.md` | `.claude/agents/analyst.md` | balanced → `claude-opus-5-5` | read + write (artifacts only, by instruction) |
+| `roles/architect.md` | `.claude/agents/architect.md` | frontier-reasoning → `claude-fable-5-1` | read + write (artifacts only, by instruction) |
+| `roles/implementer.md` | `.claude/agents/implementer.md` | balanced → `claude-opus-5-5` | full edit + bash |
+| `roles/reviewer.md` | `.claude/agents/reviewer.md` | frontier-reasoning → `claude-fable-5-1` | read + git via bash; writes report only |
+| `roles/verifier.md` | `.claude/agents/verifier.md` | frontier-reasoning → `claude-fable-5-1` | full edit + bash (tests only, by instruction) |
+| `roles/ops.md` | `.claude/agents/ops.md` | balanced → `claude-opus-5-5` | edit + bash (pipeline/config only, by instruction) |
 | `roles/orchestrator.md` | **you** (v0) | — | the main Claude Code session, driven by a human |
 
 Subagents are **generated, never hand-edited**: the renderer builds
@@ -29,7 +29,7 @@ hand-adapted agent files.
 
 - **P5 decorrelation is only partially honored.** The registry pins Reviewer/Verifier
   away from the Implementer's *vendor*, but this harness runs one vendor. The interim
-  fallback is different model lineages (`fable` reviews `sonnet` output). Full
+  fallback is different model lineages (`claude-fable-5-1` reviews and verifies `claude-opus-5-5` output). Full
   decorrelation requires a second adapter wrapping another vendor's CLI for the
   Reviewer role — see [`adapters/copilot-cli/`](../copilot-cli/), which hosts
   Anthropic/OpenAI/Google models natively and binds Reviewer/Verifier to a genuinely

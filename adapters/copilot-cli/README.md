@@ -9,12 +9,12 @@ and dispatches role agents one handoff at a time.
 
 | Role spec | Agent profile | Model binding (via registry profile) | Tool narrowing |
 |-----------|----------------|----------------------------------------|----------------|
-| `roles/analyst.md` | `.github/agents/analyst.agent.md` | balanced → `claude-sonnet-5` | `read, search, edit` (artifacts only, by instruction) |
-| `roles/architect.md` | `.github/agents/architect.agent.md` | frontier-reasoning → `claude-fable-5` | `read, search, edit` (artifacts only, by instruction) |
-| `roles/implementer.md` | `.github/agents/implementer.agent.md` | balanced → `claude-sonnet-5` | `read, search, edit, execute` |
+| `roles/analyst.md` | `.github/agents/analyst.agent.md` | balanced → `claude-opus-5-5` | `read, search, edit` (artifacts only, by instruction) |
+| `roles/architect.md` | `.github/agents/architect.agent.md` | frontier-reasoning → `claude-fable-5-1` | `read, search, edit` (artifacts only, by instruction) |
+| `roles/implementer.md` | `.github/agents/implementer.agent.md` | balanced → `claude-opus-5-5` | `read, search, edit, execute` |
 | `roles/reviewer.md` | `.github/agents/reviewer.agent.md` | frontier-reasoning, avoid vendor of implementer → `gpt-5.4` | `read, search, edit, execute` (git via execute; writes report only, by instruction) |
-| `roles/verifier.md` | `.github/agents/verifier.agent.md` | balanced, avoid vendor of implementer → `gemini-3-flash` | `read, search, edit, execute` (tests only, by instruction) |
-| `roles/ops.md` | `.github/agents/ops.agent.md` | balanced → `claude-sonnet-5` | `read, search, edit, execute` (pipeline/config only, by instruction) |
+| `roles/verifier.md` | `.github/agents/verifier.agent.md` | frontier-reasoning, avoid vendor of implementer → `gemini-3-flash` | `read, search, edit, execute` (tests only, by instruction) |
+| `roles/ops.md` | `.github/agents/ops.agent.md` | balanced → `claude-opus-5-5` | `read, search, edit, execute` (pipeline/config only, by instruction) |
 | `roles/orchestrator.md` | **you** (v0) | — | the main `copilot` session, driven by a human |
 
 Agent profiles are **generated, never hand-edited**: the renderer

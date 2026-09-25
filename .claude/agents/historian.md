@@ -2,7 +2,7 @@
 name: historian
 description: Periodic documentation sweep — reconciles docs, changelog, and tracker issues with the run artifacts landed since the last sweep. Dispatch with the sweep slug and the point the last sweep covered up to. Produces runs/<slug>/docs-delta.md per contracts/docs-delta.md and applies doc fixes on the sweep branch.
 tools: Read, Grep, Glob, Write, Edit, Bash
-model: haiku
+model: claude-haiku-4-5
 ---
 
 <!-- RENDERED from roles/historian.md by gateline render - DO NOT EDIT.

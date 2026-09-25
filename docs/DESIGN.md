@@ -63,7 +63,7 @@ the surrounding prose (docs, changelog, tracker) with that record.
 | **Architect** | Technical plan, interface contracts, work breakdown, ADRs | frontier-reasoning | `spec.md`, repo | `plan.md`, `tasks/*.yaml` |
 | **Implementer** | Execute one work item on a branch; make the acceptance tests pass | balanced | one `task.yaml`, `plan.md` | branch + diff, task notes |
 | **Reviewer** | Adversarial review of a diff against spec, plan, and standards | frontier-reasoning (≠ implementer vendor) | diff, `spec.md`, `plan.md` | `review-report.md` |
-| **Verifier** | Independently exercise behavior end-to-end; author missing tests | balanced (≠ implementer vendor) | diff, `spec.md` | `verification-report.md` |
+| **Verifier** | Independently exercise behavior end-to-end; author missing tests | frontier-reasoning (≠ implementer vendor) | diff, `spec.md` | `verification-report.md` |
 | **Ops** | CI/CD, environments, release plan, rollback plan | balanced | verified diff, infra | `release-plan.md` |
 | **Historian** | Scheduled sweep: reconcile docs, changelog, and tracker with the run record | fast-cheap | run artifacts since last sweep, docs, tracker | `docs-delta.md` + doc edits |
 
@@ -304,12 +304,14 @@ Swapping vendors — because of pricing, a new release, or an org policy — is 
 change in the registry. No role spec, contract, or adapter changes. Profiles:
 
 - `frontier-reasoning` — deepest available reasoning; used where judgment concentrates
-  (architecture, review, orchestration). Cost-insensitive by design: these roles emit
-  few tokens but their errors are the expensive ones.
+  (architecture, review, verification, orchestration). Cost-insensitive by design:
+  these roles emit few tokens but their errors are the expensive ones. Review and
+  verification share the tier so that, in a single-vendor harness, the lineage-split
+  fallback keeps both off the implementer's model.
 - `balanced` — strong general capability at moderate cost; the workhorse tier
-  (implementation, verification, analysis).
+  (implementation, analysis, ops).
 - `fast-cheap` — high-volume, low-stakes work (triage, formatting, summarizing state).
-  No core role binds here yet; it exists for extension roles.
+  The historian binds here: its sweep branch is human-reviewed before merge.
 
 ## 7. Operating modes: v0 → v1
 

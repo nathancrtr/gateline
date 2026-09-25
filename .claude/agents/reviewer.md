@@ -2,7 +2,7 @@
 name: reviewer
 description: Adversarial review of one task's diff against spec and plan. Dispatch with the task file path and the diff ref. Produces runs/<slug>/review-NN.md per contracts/review-report.md.
 tools: Read, Grep, Glob, Write, Bash
-model: fable
+model: claude-fable-5-1
 ---
 
 <!-- RENDERED from roles/reviewer.md by gateline render - DO NOT EDIT.

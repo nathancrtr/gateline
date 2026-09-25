@@ -74,7 +74,7 @@ function Withheld({ reason, src, slug, path, hook }: { reason: string; src: stri
 
 function GroupLabel({ children, hint }: { children: string; hint?: string }) {
   return (
-    <p className="mt-2.5 font-mono text-[10.5px] text-faint">
+    <p className="mt-2.5 font-ui text-[10.5px] text-faint">
       {children}
       {hint && <span className="ml-1.5 normal-case text-muted">· {hint}</span>}
     </p>
@@ -117,7 +117,7 @@ function Coverage({ packet, src, slug }: { packet: G1PacketData; src: string; sl
             ))}
             {packet.unmappedTasks.length > 0 && (
               <li
-                className="border border-line bg-surface px-3 py-2 font-mono text-[11.5px] leading-[1.5] text-muted"
+                className="border border-line bg-surface px-3 py-2 font-ui text-[11.5px] leading-[1.5] text-muted"
                 data-unmapped-tasks
               >
                 no mapping row names: {packet.unmappedTasks.join(', ')}
@@ -145,11 +145,11 @@ function CoverageEntry({ row }: { row: CoverageRow }) {
         <span className="shrink-0 font-mono text-[11.5px] font-semibold text-ink">{row.id}</span>
         {row.shortName && <span className="shrink-0 text-[12.5px] font-medium text-ink">{row.shortName}</span>}
         {!row.defined && (
-          <span className="shrink-0 font-mono text-[11px] text-warn">named by the mapping, defined in no spec</span>
+          <span className="shrink-0 font-ui text-[11px] text-warn">named by the mapping, defined in no spec</span>
         )}
         <span className="ml-auto flex shrink-0 flex-wrap items-baseline gap-1.5">
           {row.mapped.length === 0 ? (
-            <span className="font-mono text-[11px] text-warn">no task</span>
+            <span className="font-ui text-[11px] text-warn">no task</span>
           ) : (
             row.mapped.map((t) => (
               <span
@@ -169,7 +169,7 @@ function CoverageEntry({ row }: { row: CoverageRow }) {
       {/* The task's own claim is a third, independent statement: it may name a
           requirement the table does not, and that difference is worth seeing. */}
       {row.claimedBy.length > 0 && row.claimedBy.some((id) => !row.mapped.includes(id)) && (
-        <p className="mt-1 font-mono text-[11px] text-muted">
+        <p className="mt-1 font-ui text-[11px] text-muted">
           claimed by the work item{row.claimedBy.length > 1 ? 's' : ''}: {row.claimedBy.join(', ')}
         </p>
       )}

@@ -331,7 +331,7 @@ export function CitedObjects({ content, path }: { content: string; path: string 
                 <>
                   <span className="min-w-0 truncate text-muted">{entry.shortName || entry.body.replace(/\s+/g, ' ')}</span>
                   <Link
-                    className="ml-auto shrink-0 font-mono text-[11px] text-accent underline underline-offset-2"
+                    className="ml-auto shrink-0 font-ui text-[11px] text-accent underline underline-offset-2"
                     to={`/runs/${lex.src}/${lex.slug}?tab=record&artifact=${encodeURIComponent(entry.artifact)}&anchor=${anchorFor(id)}`}
                   >
                     {entry.artifact}:{entry.line}

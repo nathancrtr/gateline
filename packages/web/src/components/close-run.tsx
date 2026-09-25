@@ -105,14 +105,14 @@ export function ClosureRecordBlock({
       </p>
       {view.malformed && <p className="mt-1 text-xs text-muted">{view.malformed}</p>}
       <dl className="mt-2 flex flex-wrap items-baseline gap-x-2 text-[13px] leading-[1.6]">
-        <dt className="shrink-0 font-mono text-[10.5px] text-faint">
+        <dt className="shrink-0 font-ui text-[10.5px] text-faint">
           Why <span aria-hidden="true">·</span>
         </dt>
         <dd className={`min-w-0 flex-1 ${view.reason === null ? 'text-faint' : 'text-ink'}`} data-closure-reason>
           {view.reason ?? NO_REASON}
         </dd>
       </dl>
-      <p className="mt-2 font-mono text-[11.5px] text-faint">{view.provenance}</p>
+      <p className="mt-2 font-ui text-[11.5px] text-faint">{view.provenance}</p>
       {flash && <p className="mt-2 text-xs font-semibold text-bad">{flash}</p>}
       <div className="mt-3">
         {confirming ? (
@@ -198,7 +198,7 @@ export function CloseRunPanel({ source, slug, phase }: { source: string; slug: s
       {flash && <p className="mt-2 text-xs font-semibold text-bad">{flash}</p>}
 
       <fieldset className="mt-3">
-        <legend className="mb-[9px] font-mono text-[10.5px] font-semibold text-muted">
+        <legend className="mb-[9px] font-ui text-[10.5px] font-semibold text-muted">
           Why does it end here? (recorded with the closure)
         </legend>
         <div className="flex flex-col gap-2">

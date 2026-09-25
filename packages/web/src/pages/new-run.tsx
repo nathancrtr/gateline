@@ -226,7 +226,7 @@ export function NewRunPage() {
               <p className="font-semibold">
                 Staged {outcome.slug} — committed {outcome.commit.slice(0, 10)} on {outcome.branch}, but the push failed.
               </p>
-              <p className="mt-1.5 font-mono text-xs text-muted">{outcome.pushFailed}</p>
+              <p className="mt-1.5 font-ui text-xs text-muted">{outcome.pushFailed}</p>
               <p className="mt-1.5 text-muted">
                 The commit is local only — the remote never received run/{outcome.slug}. Nothing has dispatched and
                 nothing is spent; retry the push from the server, then continue.
@@ -277,7 +277,7 @@ export function NewRunPage() {
           {outcome?.outcome === 'refused' && outcome.reason === 'no-identity' && (
             <Flash tone="cfg">
               <p className="font-semibold">Refused — no resolvable identity.</p>
-              <p className="mt-1.5 font-mono text-xs text-muted">{outcome.message}</p>
+              <p className="mt-1.5 font-ui text-xs text-muted">{outcome.message}</p>
               <p className="mt-1.5 text-muted">
                 This is deployment configuration, not a form problem — no field here can cure it, and Gatehouse will not guess or ask
                 you to type a name. Your draft is intact.
@@ -302,7 +302,7 @@ export function NewRunPage() {
               className="mb-4 border-t border-b border-mark py-3.5"
             >
               <p className="text-sm font-semibold text-bad">Staging refused — the brief is missing required sections</p>
-              <p className="mt-1.5 font-mono text-xs text-muted">server: {outcome.message}</p>
+              <p className="mt-1.5 font-ui text-xs text-muted">server: {outcome.message}</p>
               <ul className="mt-2 flex flex-col gap-1">
                 {(outcome.missing ?? []).map((heading) => (
                   <li key={heading}>
@@ -371,7 +371,7 @@ export function NewRunPage() {
                 run/{slug || '…'}
               </span>
             </div>
-            <p className="mt-1.5 text-[12px] text-muted font-mono">
+            <p className="mt-1.5 text-[12px] text-muted font-ui">
               Suggested from the title; edit it until you stage. It names the branch and the run directory forever.
             </p>
           </div>
@@ -423,7 +423,7 @@ export function NewRunPage() {
               onChange={(e) => setBudget(e.target.value)}
               className={`input-well w-full px-3 py-[8px] text-[14px] ${budgetInvalid ? 'err' : ''}`}
             />
-            <p className="mt-1.5 text-[12px] text-muted font-mono">Blank = no ceiling; the run reads as unmetered.</p>
+            <p className="mt-1.5 text-[12px] text-muted font-ui">Blank = no ceiling; the run reads as unmetered.</p>
           </div>
 
           <div className="mb-6">
@@ -442,7 +442,7 @@ export function NewRunPage() {
                 >
                   <div className="flex items-center gap-2.5 pb-[5px]">
                     <span className="font-mono text-[12.5px] text-ink">## {heading}</span>
-                    <span className="font-mono text-[11px] text-muted">{filled ? '✓ filled' : '· required'}</span>
+                    <span className="font-ui text-[11px] text-muted">{filled ? '✓ filled' : '· required'}</span>
                     {isServerMissing && <span className="ml-auto text-xs font-semibold text-bad">{sectionErrorText(heading)}</span>}
                   </div>
                   <textarea
@@ -450,12 +450,12 @@ export function NewRunPage() {
                     onChange={(e) => setSections((prev) => ({ ...prev, [heading]: e.target.value }))}
                     placeholder={`Your ${heading.toLowerCase()} text, in your own words. Placeholders are never submitted.`}
                     rows={3}
-                    className={`input-well w-full resize-y px-3 py-2.5 font-read text-[15px] placeholder:text-muted min-h-[96px] ${isServerMissing ? 'err' : ''}`}
+                    className={`input-well w-full resize-y px-3 py-2.5 font-sans text-[15px] placeholder:text-muted min-h-[96px] ${isServerMissing ? 'err' : ''}`}
                   />
                 </div>
               )
             })}
-            <p className="mt-1 text-[12px] text-muted font-mono">
+            <p className="mt-1 text-[12px] text-muted font-ui">
               Section headings come from the source's contract template — they are fixed chrome, not content. Gatehouse never
               writes a word of the brief.
             </p>
@@ -467,7 +467,7 @@ export function NewRunPage() {
             </p>
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label htmlFor="intake-source" className="block font-mono text-[11.5px] text-muted mb-1.5">
+                <label htmlFor="intake-source" className="block font-ui text-[11.5px] text-muted mb-1.5">
                   source
                 </label>
                 <input
@@ -479,7 +479,7 @@ export function NewRunPage() {
                 />
               </div>
               <div>
-                <label htmlFor="intake-ref" className="block font-mono text-[11.5px] text-muted mb-1.5">
+                <label htmlFor="intake-ref" className="block font-ui text-[11.5px] text-muted mb-1.5">
                   ref
                 </label>
                 <input
@@ -491,7 +491,7 @@ export function NewRunPage() {
                 />
               </div>
               <div>
-                <label htmlFor="intake-url" className="block font-mono text-[11.5px] text-muted mb-1.5">
+                <label htmlFor="intake-url" className="block font-ui text-[11.5px] text-muted mb-1.5">
                   url
                 </label>
                 <input
@@ -504,7 +504,7 @@ export function NewRunPage() {
                 />
               </div>
             </div>
-            <p className="mt-1.5 text-[12px] text-muted font-mono">
+            <p className="mt-1.5 text-[12px] text-muted font-ui">
               Recorded verbatim into the genesis commit's <code>intake:</code> block. Nothing here is
               fetched, previewed, or checked — a URL is a string you vouch for, not an object Gatehouse retrieves.
             </p>
@@ -518,9 +518,9 @@ export function NewRunPage() {
                 <span className="font-mono text-[12.5px] text-muted">&lt;{source.identity.email}&gt;</span>
               </>
             ) : (
-              <span className="font-mono text-[12.5px] font-semibold text-bad">no identity configured on this source</span>
+              <span className="font-ui text-[12.5px] font-semibold text-bad">no identity configured on this source</span>
             )}
-            <span className="ml-auto text-right font-mono text-[11px] text-muted">
+            <span className="ml-auto text-right font-ui text-[11px] text-muted">
               — author &amp; committer · displayed, never asked
             </span>
           </div>
@@ -577,7 +577,7 @@ function RecordPreview({
   const genesisReady = Boolean(ready && scaffold)
   return (
     <aside className="w-full shrink-0 lg:sticky lg:top-6 lg:w-[480px]">
-      <div className="flex items-baseline gap-2.5 pb-[5px] font-mono text-[11.5px] text-muted">
+      <div className="flex items-baseline gap-2.5 pb-[5px] font-ui text-[11.5px] text-muted">
         <span>the record this stages</span>
         <span className="ml-auto tabular-nums">
           {filledCount} of {sectionEntries.length} sections filled
@@ -609,11 +609,11 @@ function RecordPreview({
               <span className="text-[12px] text-muted">author &amp; committer</span>
             </div>
           )}
-          {scaffold && !identity && <div className="mt-2 font-mono text-[13px] font-semibold text-bad">(no identity configured)</div>}
+          {scaffold && !identity && <div className="mt-2 font-ui text-[13px] font-semibold text-bad">(no identity configured)</div>}
         </div>
 
         {/* files */}
-        <div className="mt-[18px] font-mono text-[12.5px]">
+        <div className="mt-[18px] font-ui text-[12.5px]">
           <div className="flex items-baseline gap-2.5 border-b border-dashed border-line py-[5px]">
             <span className="text-ink">runs/{branchLabel}/state.yaml</span>
             <span className="ml-auto text-[11.5px] text-muted">new</span>
@@ -647,7 +647,7 @@ function RecordPreview({
         {/* collapsible state.yaml */}
         {scaffold && (
           <details className="group mt-[18px] border-t border-line">
-            <summary className="flex cursor-pointer list-none items-center gap-2 py-2.5 font-mono text-[12px] text-ink">
+            <summary className="flex cursor-pointer list-none items-center gap-2 py-2.5 font-ui text-[12px] text-ink">
               <span className="inline-block group-open:rotate-90">▸</span>
               runs/{branchLabel}/state.yaml
               <span className="ml-auto text-[11px] text-muted tabular-nums">{(scaffold.files['state.yaml'] ?? '').split('\n').length} lines</span>

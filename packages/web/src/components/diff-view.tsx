@@ -25,8 +25,8 @@ export function DiffView({ files, surface }: { files: DiffFile[]; surface?: Surf
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-        <p className="font-mono text-[11px] text-muted">{grouped ? 'diff by declared contact surface' : 'diff'}</p>
-        <span className="font-mono text-[11px] text-faint">
+        <p className="font-ui text-[11px] text-muted">{grouped ? 'diff by declared contact surface' : 'diff'}</p>
+        <span className="font-ui text-[11px] text-faint">
           {sum.files} file{sum.files === 1 ? '' : 's'} · <span className="text-ok">+{sum.additions}</span>{' '}
           <span className="text-bad">−{sum.deletions}</span>
         </span>
@@ -88,9 +88,9 @@ function SurfaceSection({ item, files }: { item: SurfaceItemRef; files: DiffFile
       <div className="mb-2 flex flex-wrap items-baseline gap-x-2.5 gap-y-1 border-b border-line pb-1.5">
         <span className="font-mono text-[12px] font-semibold text-ink">{item.id}</span>
         <span className="min-w-0 truncate text-[12.5px] text-muted">{item.title}</span>
-        <span className="ml-auto shrink-0 font-mono text-[11px] text-faint">{item.statusText}</span>
+        <span className="ml-auto shrink-0 font-ui text-[11px] text-faint">{item.statusText}</span>
       </div>
-      <p className="mb-2 font-mono text-[11px] leading-[1.6] text-faint">
+      <p className="mb-2 font-ui text-[11px] leading-[1.6] text-faint">
         declared: {item.surface.join(', ') || '(nothing)'}
         {untouched.length > 0 && <span className="text-muted"> · unchanged in this diff: {untouched.join(', ')}</span>}
       </p>

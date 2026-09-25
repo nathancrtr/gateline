@@ -26,7 +26,7 @@ const BURDEN_LABELS: [keyof typeof BURDEN_TEXTURE, string][] = [
   ['heavy-correction', 'heavy correction'],
 ]
 
-const TH = 'whitespace-nowrap pr-3 pb-1.5 text-left font-sans text-[11.5px] font-normal text-muted border-b border-ink'
+const TH = 'whitespace-nowrap pr-3 pb-1.5 text-left font-ui text-[11.5px] font-normal text-muted border-b border-ink'
 const TD = 'pr-3 py-2.5 border-b border-line align-top'
 
 function formatLatency(seconds: number | null): string {
@@ -97,7 +97,7 @@ function GateTable({ metrics }: { metrics: MetricsResponse }) {
             {metrics.perGate.map((g) => (
               <tr key={g.gate}>
                 <td className={`${TD} font-mono text-xs font-semibold`}>{g.gate}</td>
-                <td className={`${TD} text-right font-mono text-xs tabular-nums`}>{g.decisions || '—'}</td>
+                <td className={`${TD} text-right font-ui text-xs tabular-nums`}>{g.decisions || '—'}</td>
                 <td className={TD}>
                   {g.approvalRate === null ? (
                     <span className="text-xs text-muted">no decisions</span>
@@ -108,7 +108,7 @@ function GateTable({ metrics }: { metrics: MetricsResponse }) {
                 <td className={TD}>
                   <BurdenBar mix={g.burdenMix} unrecorded={g.burdenUnrecorded} total={g.decisions} />
                 </td>
-                <td className={`${TD} text-right font-mono text-xs tabular-nums text-muted`}>{formatLatency(g.medianLatencySeconds)}</td>
+                <td className={`${TD} text-right font-ui text-xs tabular-nums text-muted`}>{formatLatency(g.medianLatencySeconds)}</td>
               </tr>
             ))}
           </tbody>
@@ -143,7 +143,7 @@ function ApprovalMeter({ rate, overTriggering }: { rate: number; overTriggering:
         <span className={`block h-full ${overTriggering ? 'bg-mark' : 'bg-ink'}`} style={{ width: `${pct}%` }} />
         <span className="absolute -inset-y-1 left-[90%] w-0.5 bg-mark" title="90% over-triggering threshold" />
       </span>
-      <span className="font-mono text-xs tabular-nums">{pct}%</span>
+      <span className="font-ui text-xs tabular-nums">{pct}%</span>
       {overTriggering && (
         <Imp tone="mark" title="sustained >90% approval — consider moving this gate down the tier ladder">
           over-triggering?
@@ -191,7 +191,7 @@ function RoundsSection({ metrics }: { metrics: MetricsResponse }) {
       <div className="flex max-w-[440px] flex-col gap-2">
         {buckets.map((b) => (
           <div key={b.label} className="flex items-center gap-3">
-            <span className="w-16 shrink-0 text-right font-mono text-xs tabular-nums text-muted">{b.label}</span>
+            <span className="w-16 shrink-0 text-right font-ui text-xs tabular-nums text-muted">{b.label}</span>
             <div className="h-3.5 flex-1 border border-line">
               <div
                 className={`h-full ${b.capped && b.n > 0 ? 'bg-mark' : 'bg-ink'}`}
@@ -199,7 +199,7 @@ function RoundsSection({ metrics }: { metrics: MetricsResponse }) {
                 title={`${b.n} task(s)`}
               />
             </div>
-            <span className="w-[26px] shrink-0 font-mono text-xs tabular-nums text-muted">{b.n || ''}</span>
+            <span className="w-[26px] shrink-0 font-ui text-xs tabular-nums text-muted">{b.n || ''}</span>
           </div>
         ))}
       </div>
@@ -232,8 +232,8 @@ function BudgetSection({ metrics }: { metrics: MetricsResponse }) {
                 <td className={`${TD} font-mono text-xs`}>
                   {r.source}/{r.slug}
                 </td>
-                <td className={`${TD} text-right font-mono text-xs tabular-nums`}>{r.budget.limit === null ? '—' : `$${r.budget.limit}`}</td>
-                <td className={`${TD} text-right font-mono text-xs tabular-nums`}>{r.budget.spent === null ? '—' : `$${r.budget.spent}`}</td>
+                <td className={`${TD} text-right font-ui text-xs tabular-nums`}>{r.budget.limit === null ? '—' : `$${r.budget.limit}`}</td>
+                <td className={`${TD} text-right font-ui text-xs tabular-nums`}>{r.budget.spent === null ? '—' : `$${r.budget.spent}`}</td>
                 <td className={`${TD} pl-3 text-xs`}>
                   {r.budget.everUpdated ? <Imp>✓ updated during the run</Imp> : <Imp tone="hatch">never updated</Imp>}
                 </td>

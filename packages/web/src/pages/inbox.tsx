@@ -167,7 +167,7 @@ export function InboxPage() {
 
       {/* Kind filters: plain type, the active one underlined. Wraps at narrow
           widths; the gaps carry it (#280). */}
-      <div className="mt-[22px] flex flex-wrap items-center gap-x-[18px] gap-y-2 font-mono text-[12.5px] font-medium" data-inbox-filters>
+      <div className="mt-[22px] flex flex-wrap items-center gap-x-[18px] gap-y-2 font-ui text-[12.5px] font-medium" data-inbox-filters>
         {filters.map((f) => (
           <button
             key={f.label}

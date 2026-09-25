@@ -270,10 +270,13 @@ describe('the fit decides when provenance is demoted', () => {
     // Not merely tidier: at 900px the notes were the difference between one row
     // and two, and dropping them (with the gaps, so the connectors touch the
     // pills they join) has to actually clear the width. Below that the row
-    // crops and scrolls, which is still one sequence; wrapping is not.
+    // crops and scrolls, which is still one sequence; wrapping is not. (With
+    // the UI face's narrower notes the tightest full state comes within 3px
+    // of fitting at 1000 with its notes open; the rung rounds it up and demotes
+    // them there anyway, which the test above holds. The premise here is 900.)
     for (const spine of fullProfileStates()) {
       const { withNotes, dense } = spineFit(spine)
-      expect(withNotes).toBeGreaterThan(AT_1000)
+      expect(withNotes).toBeGreaterThan(AT_900)
       expect(dense).toBeLessThanOrEqual(AT_1000)
       expect(dense).toBeLessThanOrEqual(AT_900)
     }

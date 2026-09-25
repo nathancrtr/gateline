@@ -47,8 +47,15 @@ directions below are kept as the record of how that structure was reached.
   with it the seeded process that produced it: round 4 takes its values
   from a designed sibling surface in this repository, not from a sampled
   photograph.
-- Held: a single light theme; the inherited type (the site's faces are the
-  open type pass, #358); the impression grammar; radius 0; no shadows.
+- **Type is the site's** (#358, in the second PR of the round): Public
+  Sans for reading and headings, Atkinson Hyperlegible Next for the UI —
+  the rack, tabs, tables, labels, captions — IBM Plex Mono with ligatures
+  off for everything code-shaped, Overpass for the wordmark. The serif
+  reading face retires with it; the site sets its long pages in the sans,
+  and the cockpit's artifacts are the same kind of page. Some eighty
+  labels, captions and table cells that were set in the mono face move to
+  the UI face; the mono keeps what a person would copy.
+- Held: a single light theme; the impression grammar; radius 0; no shadows.
 
 ### What was settled at the round 3 build (2026-09-04)
 

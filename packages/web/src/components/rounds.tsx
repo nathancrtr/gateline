@@ -127,7 +127,7 @@ export function RoundCapPanel({ src, slug, task }: { src: string; slug: string; 
 function Side({ side }: { side: RoundSide }) {
   return (
     <span className="inline-flex items-baseline gap-1.5" data-round-side={side.round}>
-      <span className="font-mono text-[11px] text-muted">round {side.round}</span>
+      <span className="font-ui text-[11px] text-muted">round {side.round}</span>
       <VerdictChip verdicts={[side.verdict]} compact />
       {side.paths.length > 0 && <span className="font-mono text-[10.5px] text-faint">{side.paths.join(' · ')}</span>}
     </span>
@@ -149,7 +149,7 @@ function Group({
 }) {
   return (
     <div className="mt-2.5" data-round-group={kind}>
-      <p className="font-mono text-[10.5px] text-faint">
+      <p className="font-ui text-[10.5px] text-faint">
         {label}
         {hint && <span className="ml-1.5 normal-case text-muted">· {hint}</span>}
       </p>
@@ -171,7 +171,7 @@ function Group({
                     {item.note}
                   </span>
                   {item.raisedIn.length > 1 && (
-                    <span className="shrink-0 font-mono text-[10.5px] text-faint" title="rounds that raised this finding">
+                    <span className="shrink-0 font-ui text-[10.5px] text-faint" title="rounds that raised this finding">
                       rounds {item.raisedIn.join(', ')}
                     </span>
                   )}
@@ -196,7 +196,7 @@ function Group({
 function ExtraDisposition({ text }: { text: string }) {
   return (
     <div className="flex flex-wrap gap-x-2">
-      <dt className="shrink-0 font-mono text-[10.5px] text-faint">Disposition</dt>
+      <dt className="shrink-0 font-ui text-[10.5px] text-faint">Disposition</dt>
       <dd className="min-w-0 flex-1 text-muted">
         <Inline>{unbulleted(text)}</Inline>
       </dd>

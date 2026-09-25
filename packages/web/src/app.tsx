@@ -12,11 +12,11 @@ function NavItem({ to, label, badge, end }: { to: string; label: string; badge?:
       to={to}
       end={end}
       className={({ isActive }) =>
-        `flex items-baseline justify-between gap-3 py-[3px] text-[14px] ${isActive ? 'font-semibold text-accent' : 'text-muted hover:text-ink'}`
+        `flex items-baseline justify-between gap-3 py-[3px] font-ui text-[14px] ${isActive ? 'font-semibold text-accent' : 'text-muted hover:text-ink'}`
       }
     >
       <span>{label}</span>
-      {badge !== undefined && badge > 0 && <span className="font-mono text-[12px] tabular-nums">{badge}</span>}
+      {badge !== undefined && badge > 0 && <span className="font-ui text-[12px] tabular-nums">{badge}</span>}
     </NavLink>
   )
 }
@@ -164,7 +164,7 @@ export function App() {
         <div>
           <div className="flex items-center gap-2">
             <Sigil size={16} />
-            <span className="text-[15px] font-semibold leading-none text-ink">Gatehouse</span>
+            <span className="wordmark text-[16px] leading-none text-ink">Gatehouse</span>
           </div>
           <p className="mt-1.5 text-[12px] leading-[1.35] text-muted">pipeline decisions</p>
         </div>
@@ -173,7 +173,7 @@ export function App() {
           <NavItem to="/portfolio" label="Portfolio" />
           <NavItem to="/metrics" label="Metrics" />
         </nav>
-        <div className="mt-auto font-mono text-[10.5px] leading-[1.6] text-muted">
+        <div className="mt-auto font-ui text-[10.5px] leading-[1.6] text-muted">
           The repo is the database.
           <br />
           Every view renders git.
@@ -184,7 +184,7 @@ export function App() {
       <div className="fixed inset-x-0 top-0 z-10 flex items-center gap-4 border-b border-t-[3px] border-line border-t-ink bg-ground px-4 py-2.5 md:hidden">
         <span className="mr-2 flex items-center gap-1.5">
           <Sigil size={14} />
-          <span className="text-[15px] font-semibold leading-none text-ink">Gatehouse</span>
+          <span className="wordmark text-[15px] leading-none text-ink">Gatehouse</span>
         </span>
         <NavItem to="/" label="Inbox" badge={needs} end />
         <NavItem to="/portfolio" label="Portfolio" />

@@ -282,7 +282,7 @@ export function RunPage() {
     <header className="mb-6">
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
         <h1 className="text-[28px] font-semibold leading-[1.15] text-ink">{summary.slug}</h1>
-        <p className="min-w-0 font-mono text-[12.5px] leading-[1.6] text-muted">
+        <p className="min-w-0 font-ui text-[12.5px] leading-[1.6] text-muted">
           {genesisIntake && genesisCommit && (
             <>
               staged by{' '}
@@ -312,7 +312,7 @@ export function RunPage() {
             thing, so the spine stands down rather than contradict them. #254
             landed after the malformed-state treatment and never met it. */}
         {detail.stateError ? (
-          <p data-spine-unknown className="font-mono text-[11.5px] text-muted">sequence unknown — state.yaml unreadable</p>
+          <p data-spine-unknown className="font-ui text-[11.5px] text-muted">sequence unknown — state.yaml unreadable</p>
         ) : (
           // `items` is what switches on the bounced-gate tooltip (#285/9).
           // #295 built the prop and could not turn it on: whether a packet is
@@ -431,12 +431,12 @@ function SurfaceTab({
       onClick={() => onSelect(surface)}
       data-surface={surface}
       aria-current={active ? 'page' : undefined}
-      className={`px-4 py-2.5 text-[13.5px] font-medium border-b-2 -mb-px ${
+      className={`px-4 py-2.5 font-ui text-[13.5px] font-medium border-b-2 -mb-px ${
         active ? 'border-accent text-ink font-semibold' : 'border-transparent text-muted hover:text-ink'
       }`}
     >
       {label}
-      <span className="ml-1.5 font-mono text-[11px] text-faint">{count}</span>
+      <span className="ml-1.5 font-ui text-[11px] text-faint">{count}</span>
     </button>
   )
 }
@@ -473,10 +473,10 @@ function RunMetadata({ summary, board }: { summary: RunSummary; board: React.Rea
           leaves. Below about 1000px it wraps to two, which is the same
           graceful thing the rest of this band does. */}
       <section className="min-w-0 flex-1 basis-[340px]">
-        <div className="font-mono text-[10px] text-muted pb-1.5">Vitals</div>
+        <div className="font-ui text-[11px] text-muted pb-1.5">Vitals</div>
         <div
           data-vitals
-          className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-line py-[7px] font-mono text-[12.5px] text-muted"
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-line py-[7px] font-ui text-[12.5px] text-muted"
         >
           {/* The meter is built as a column — bar over words — for the row it
               used to sit in. In a text strip that hangs its words below the
@@ -671,7 +671,7 @@ function NeedsYouCard({
           </p>
         )}
         {mentionedTask && (
-          <p className="mt-1.5 font-mono text-[12px] text-muted">
+          <p className="mt-1.5 font-ui text-[12px] text-muted">
             {mentionedTask.id} · {mentionedTask.status} · review round {mentionedTask.review_rounds}/{detail.summary.tasks.roundCap}
           </p>
         )}
@@ -755,7 +755,7 @@ function TaskBoard({ state, roundCap }: { state: NonNullable<RunDetailResponse['
   const doneCount = state.tasks.filter((t) => t.status === 'done').length
   return (
     <section className="text-[13px]">
-      <div className="font-mono text-[10px] text-muted pb-1.5">
+      <div className="font-ui text-[11px] text-muted pb-1.5">
         Task board · {doneCount} / {state.tasks.length} done
       </div>
       {state.tasks.map((t) => {
@@ -766,7 +766,7 @@ function TaskBoard({ state, roundCap }: { state: NonNullable<RunDetailResponse['
             <span className="min-w-0 truncate font-mono text-[12.5px] font-medium text-ink">{t.id}</span>
             <span className="flex shrink-0 items-center gap-1.5">
               {t.review_rounds > 0 && (
-                <span className={`font-mono text-[11.5px] tabular-nums ${capped ? 'font-semibold text-warn' : 'text-muted'}`} title="review rounds">
+                <span className={`font-ui text-[11.5px] tabular-nums ${capped ? 'font-semibold text-warn' : 'text-muted'}`} title="review rounds">
                   ⟲{t.review_rounds}
                 </span>
               )}
@@ -874,7 +874,7 @@ function RecordSurface({
 
 /** The picker's two section labels. Full-width rail below, an inline caption in
  *  the strip above the reader. */
-const NAV_LABEL = 'font-mono text-[10.5px] text-muted px-[18px] pb-2.5'
+const NAV_LABEL = 'font-ui text-[10.5px] text-muted px-[18px] pb-2.5'
 
 /**
  * One picker entry, in both of the picker's shapes — and the artifact entries
@@ -1145,7 +1145,7 @@ function HistoryTab({ history, src, slug }: { history: RunDetailResponse['histor
               : 'before:border-dotted before:border-muted before:bg-ground'
         }`}
       >
-        <span className="w-32 shrink-0 font-mono text-[11.5px] tabular-nums text-muted">{formatWhen(h.time)}</span>
+        <span className="w-32 shrink-0 font-ui text-[11.5px] tabular-nums text-muted">{formatWhen(h.time)}</span>
         {/* A human's own decision is stamped onto the ledger — the one mark
             on this page that was pressed rather than printed. The words
             beside it are still the commit subject, verbatim. */}
@@ -1169,7 +1169,7 @@ function HistoryTab({ history, src, slug }: { history: RunDetailResponse['histor
           <span className="shrink-0 border border-line px-1.5 py-px font-mono text-[10.5px] text-muted">{extra.burden}</span>
         )}
         {e.actor === 'orchestrator' && (
-          <span className="shrink-0 font-mono text-[10.5px] text-faint" title="committed under the orchestrator's bot identity">
+          <span className="shrink-0 font-ui text-[10.5px] text-faint" title="committed under the orchestrator's bot identity">
             engine
           </span>
         )}
@@ -1191,7 +1191,7 @@ function HistoryTab({ history, src, slug }: { history: RunDetailResponse['histor
         <button
           type="button"
           onClick={() => setRaw((v) => !v)}
-          className="font-mono text-[11px] text-muted underline decoration-dotted underline-offset-2 hover:text-ink"
+          className="font-ui text-[11px] text-muted underline decoration-dotted underline-offset-2 hover:text-ink"
           aria-pressed={raw}
         >
           {raw ? 'hide raw commits' : 'show raw commits'}
@@ -1216,7 +1216,7 @@ function HistoryTab({ history, src, slug }: { history: RunDetailResponse['histor
                 data-ledger-span-open={expanded ? 'true' : undefined}
                 className="relative flex items-baseline gap-3 border-b border-line py-2.5 pl-7 text-sm last:border-b-0 before:absolute before:left-0.5 before:top-[15px] before:h-2.5 before:w-2.5 before:border before:border-dotted before:border-muted before:bg-ground before:content-['']"
               >
-                <span className="w-32 shrink-0 font-mono text-[11.5px] tabular-nums text-muted">{formatWhen(history[r.from]!.time)}</span>
+                <span className="w-32 shrink-0 font-ui text-[11.5px] tabular-nums text-muted">{formatWhen(history[r.from]!.time)}</span>
                 <button
                   type="button"
                   onClick={() => setOpen((prev) => {

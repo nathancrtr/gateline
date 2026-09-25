@@ -1,7 +1,7 @@
 run: gatehouse-demo
 branch: run/gatehouse-demo
-phase: implement # staged — not yet armed; `gateline arm gatehouse-demo` starts the run
-paused_reason: null
+phase: paused # staged — not yet armed; `gateline arm gatehouse-demo` starts the run
+paused_reason: escalation
 profile: standard # patch | standard | full
 intake:
   # source-agnostic staging provenance; free-form path: nulls + client_key
@@ -225,4 +225,12 @@ tasks:
     { id: 05-static-render-check, status: pending, review_rounds: 0 },
     { id: 06-pages-workflow, status: pending, review_rounds: 0 }
   ]
-escalations: []
+escalations:
+  [
+    {
+        at: 2026-09-25T23:37:38.219Z,
+        from_role: orchestrator,
+        reason: reviewer escalated task 04-fixture-label — see review-04.md,
+        resolved: false
+      }
+  ]

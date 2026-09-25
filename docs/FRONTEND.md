@@ -442,6 +442,51 @@ surface reads. The contract badge still names the contract by its file: that
 is the same question one level down, and the badge is where the file-level
 truth is meant to show.
 
+### 4.9 The G3 surface (#403)
+
+G3 asks "Ship it?". Every other gate had a composed surface by the time #261's
+work items landed; G3 fell through to the generic card — the question, the
+buttons, and one `release-plan.md` chip between them — because until #260 the
+plan had no contract to parse against. Readiness was bare presence: the phase
+is `release` and the file exists. The fixture's plan was complete the whole
+time, and the card ignored all of it.
+
+`contracts/release-plan.md` fixes four bold preamble fields, an ordered Release
+steps list, and five required sections, and says what the approver is really
+being asked about: the irreversible step, and whether the way back has been
+tried. The packet reads the plan in that order.
+
+- **Rollback, first.** `**Rollback trigger:**` and `**Rollback exercised:**`
+  verbatim, then the rollback prose with those two lines lifted out so they are
+  not said twice. An exercised value whose first word is `no` is set apart, as
+  the record's word — not as a computed warning. A value that is neither `yes`
+  nor `no` is shown as written and nothing is inferred from it.
+- **What ships.** `**Change released:**`, `**Environment:**`, and CI health as
+  the plain sentence Ops wrote. The contract makes a red pipeline an escalation
+  rather than a workaround, so the sentence sits on the card, not in a fold.
+- **Release steps** as the numbered list they are, one act per item, numbered as
+  written. A step is marked irreversible only when its own text says the word.
+- **Verified against.** G3 sits on an approved G2, and the evidence rollup the G2
+  surface reads is one cache entry away: the report's own verdict, quoted, and
+  the criteria no evidence cites, as facts about the record. "Ship it" is read
+  against "verified against what", with the report one click away.
+- **Verification after release** and **Blast radius** folded to their headings
+  and opened in place to the plan's own words, the way §4.7 folds audit-time
+  sections.
+
+Presence, as for G1 and G2. No risk grade, no "safe to ship", and no link to a
+deploy target: nothing in the record names one beyond the environment line, and
+inventing a host link is a format-freeze decision (#248).
+
+Contracts are forkable. A plan missing a field line withholds the fields view and
+names every line it looked for; Release steps that are prose rather than a
+numbered list withhold the steps view the same way. The rest of the packet still
+renders what it can, and the packet renders on a bounced card too — seeing what
+is malformed is exactly the job in that state. What the design still lacks is a
+real release: #69 records that no run has approved a G3 against a live deploy
+surface, so this packet is composed from the contract rather than from watching
+an approver decide, and #69 is where that evidence gets earned.
+
 ## 5. The dashboard question
 
 **For one operator running one pipeline, a dashboard is overhead — Claude Code plus

@@ -48,6 +48,8 @@ import type {
   Metrics,
   Phase,
   Profile,
+  ReleasePacket,
+  ReleaseStep,
   ReviewFinding,
   ReviewReport,
   RunMetricsSummary,
@@ -97,6 +99,8 @@ export type {
   LexiconEntry,
   Phase,
   Profile,
+  ReleasePacket,
+  ReleaseStep,
   ReviewFinding,
   ReviewReport,
   RunMetricsSummary,
@@ -365,6 +369,7 @@ export interface ApiRoutes {
   'GET /api/runs/:src/:slug/reviews': { response: ReviewsResponse }
   'GET /api/runs/:src/:slug/evidence': { response: EvidenceRollup }
   'GET /api/runs/:src/:slug/g1': { response: G1Packet }
+  'GET /api/runs/:src/:slug/g3': { response: ReleasePacket }
   'GET /api/runs/:src/:slug/diff': { response: DiffResponse }
   'GET /api/runs/:src/:slug/decisions': { response: DecisionsResponse }
   'GET /api/metrics': { response: MetricsResponse }

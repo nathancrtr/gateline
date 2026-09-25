@@ -56,9 +56,10 @@ export function G1Packet({ src, slug }: { src: string; slug: string }) {
   )
 }
 
-/** The fork fallback, in the one shape both halves use: name the grammar that
- *  was looked for, and route to the artifact that has the answer. */
-function Withheld({ reason, src, slug, path, hook }: { reason: string; src: string; slug: string; path: string; hook: string }) {
+/** The fork fallback, in the one shape every packet half uses: name the grammar
+ *  that was looked for, and route to the artifact that has the answer. Shared
+ *  with the G3 packet (#403). */
+export function Withheld({ reason, src, slug, path, hook }: { reason: string; src: string; slug: string; path: string; hook: string }) {
   return (
     <p
       className="mt-1.5 border border-warn-line bg-warn-bg px-2.5 py-2 text-[12px] leading-[1.5] text-warn"
@@ -72,7 +73,7 @@ function Withheld({ reason, src, slug, path, hook }: { reason: string; src: stri
   )
 }
 
-function GroupLabel({ children, hint }: { children: string; hint?: string }) {
+export function GroupLabel({ children, hint }: { children: string; hint?: string }) {
   return (
     <p className="mt-2.5 font-ui text-[10.5px] text-faint">
       {children}

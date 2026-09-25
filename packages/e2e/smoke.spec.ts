@@ -600,6 +600,64 @@ test('G1 packet (#255): a patch run keeps its brief-plus-work-item view', async 
   await expect(page.locator('[data-g1-packet]')).toHaveCount(0)
 })
 
+test('G3 packet (#403): the release plan composed for "Ship it?"', async ({ page }) => {
+  await page.goto(`/runs/${sourceId()}/g3-pending?decide=G3`)
+  const packet = page.locator('[data-g3-packet]')
+  await expect(packet).toBeVisible()
+
+  // AC1 — the rollback facts lead, verbatim from the plan's bold fields.
+  const rollback = packet.locator('[data-g3-rollback]')
+  await expect(rollback.locator('[data-fact="trigger"]')).toContainText('the published artifact fails its smoke run')
+  await expect(rollback.locator('[data-fact="exercised"]')).toContainText('yes — re-pointed the tag on a scratch clone')
+  await expect(rollback.locator('[data-g3-rollback-plan]')).toContainText('Re-point the tag at the previous release')
+  // The rollback section's own field lines are not said twice.
+  await expect(rollback.locator('[data-g3-rollback-plan]')).not.toContainText('Rollback trigger:')
+
+  // What ships: the change, the environment, and CI health as Ops wrote it.
+  await expect(packet.locator('[data-fact="change"]')).toContainText('run/g3-pending')
+  await expect(packet.locator('[data-fact="environment"]')).toContainText('the published package on the public registry')
+  await expect(packet.locator('[data-g3-ci]')).toContainText('The pipeline is green on the merge commit')
+
+  // The ordered steps, one act per item, numbered as written.
+  const steps = packet.locator('[data-g3-steps] [data-step]')
+  await expect(steps).toHaveCount(2)
+  await expect(steps.first()).toHaveAttribute('data-step', '1')
+  await expect(steps.first()).toContainText('Tag the merge commit')
+  await expect(packet.locator('[data-irreversible]')).toHaveCount(0)
+
+  // What G2 verified: the report's verdict and the criteria count, from the
+  // same rollup the G2 surface reads, with the report one click away.
+  const verified = packet.locator('[data-g3-verified]')
+  await expect(verified.locator('[data-cited]')).toBeVisible()
+  await expect(verified.getByRole('link', { name: 'verification-report.md' })).toBeVisible()
+
+  // AC4 — the audit-time sections fold to their heading and open to the
+  // plan's own words; folding is never truncation.
+  const blast = packet.locator('[data-g3-fold="blast-radius"]')
+  await expect(blast).toHaveAttribute('data-open', 'false')
+  await expect(blast).not.toContainText('Consumers who install')
+  await blast.getByRole('button').click()
+  await expect(blast).toContainText('Consumers who install the new version while it is broken')
+  await expect(packet.locator('[data-g3-fold="verification-after"]')).toContainText('Verification after release')
+})
+
+test('G3 packet (#403): a malformed plan withholds what it cannot read and shows what it can', async ({ page }) => {
+  // AC3 — the fixture's plan has a Release steps list and nothing else. The
+  // card is bounced (readiness says so); the packet still renders the steps
+  // and names every field line it looked for.
+  await page.goto(`/runs/${sourceId()}/malformed-release?decide=G3`)
+  const packet = page.locator('[data-g3-packet]')
+  await expect(packet).toBeVisible()
+  const withheld = packet.locator('[data-withheld="fields"]')
+  await expect(withheld).toContainText('**Rollback trigger:**')
+  await expect(withheld).toContainText('**Rollback exercised:**')
+  await expect(withheld.getByRole('link', { name: 'read release-plan.md' })).toBeVisible()
+  await expect(packet.locator('[data-withheld="ci"]')).toBeVisible()
+  await expect(packet.locator('[data-g3-steps] [data-step]')).toHaveCount(1)
+  await expect(packet.locator('[data-g3-steps] [data-step]')).toContainText('Ship it.')
+  await expect(packet.locator('[data-g3-fold]')).toHaveCount(0)
+})
+
 test('round cap (#257): the surface compares the last two rounds, not a file list', async ({ page }) => {
   await page.goto(`/runs/${sourceId()}/round-cap`)
   const panel = page.locator('[data-round-cap]')

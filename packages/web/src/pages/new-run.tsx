@@ -231,7 +231,7 @@ export function NewRunPage() {
                 The commit is local only — the remote never received run/{outcome.slug}. Nothing has dispatched and
                 nothing is spent; retry the push from the server, then continue.
               </p>
-              <Link to={`/runs/${source.id}/${outcome.slug}`} className="mt-2 inline-block font-semibold text-warn hover:underline">
+              <Link to={`/runs/${source.id}/${outcome.slug}`} className="mt-2 inline-block font-semibold text-bad hover:underline">
                 Continue to {outcome.slug}
               </Link>
             </Flash>
@@ -301,12 +301,12 @@ export function NewRunPage() {
               role="alert"
               className="mb-4 border-t border-b border-mark py-3.5"
             >
-              <p className="text-sm font-semibold text-warn">Staging refused — the brief is missing required sections</p>
+              <p className="text-sm font-semibold text-bad">Staging refused — the brief is missing required sections</p>
               <p className="mt-1.5 font-mono text-xs text-muted">server: {outcome.message}</p>
               <ul className="mt-2 flex flex-col gap-1">
                 {(outcome.missing ?? []).map((heading) => (
                   <li key={heading}>
-                    <a href={`#section-${slugify(heading)}`} className="text-[13px] font-semibold text-warn hover:underline">
+                    <a href={`#section-${slugify(heading)}`} className="text-[13px] font-semibold text-bad hover:underline">
                       {sectionErrorText(heading)}
                     </a>
                   </li>
@@ -443,7 +443,7 @@ export function NewRunPage() {
                   <div className="flex items-center gap-2.5 pb-[5px]">
                     <span className="font-mono text-[12.5px] text-ink">## {heading}</span>
                     <span className="font-mono text-[11px] text-muted">{filled ? '✓ filled' : '· required'}</span>
-                    {isServerMissing && <span className="ml-auto text-xs font-semibold text-warn">{sectionErrorText(heading)}</span>}
+                    {isServerMissing && <span className="ml-auto text-xs font-semibold text-bad">{sectionErrorText(heading)}</span>}
                   </div>
                   <textarea
                     value={sections[heading] ?? ''}
@@ -609,7 +609,7 @@ function RecordPreview({
               <span className="text-[12px] text-muted">author &amp; committer</span>
             </div>
           )}
-          {scaffold && !identity && <div className="mt-2 font-mono text-[13px] font-semibold text-warn">(no identity configured)</div>}
+          {scaffold && !identity && <div className="mt-2 font-mono text-[13px] font-semibold text-bad">(no identity configured)</div>}
         </div>
 
         {/* files */}
@@ -672,9 +672,9 @@ function Flash({ tone, children }: { tone: 'ok' | 'info' | 'bad' | 'cfg' | 'warn
   const cls = {
     ok: 'border-ink text-ink',
     info: 'border-line text-ink',
-    bad: 'border-mark text-warn',
-    cfg: 'border-mark border-dashed text-warn',
-    warn: 'border-mark text-warn',
+    bad: 'border-mark text-bad',
+    cfg: 'border-mark border-dashed text-bad',
+    warn: 'border-warn text-warn',
   }[tone]
   return (
     <div role={tone === 'bad' || tone === 'cfg' ? 'alert' : 'status'} className={`mb-4 border-t border-b py-3 text-[13px] leading-[1.55] ${cls}`}>

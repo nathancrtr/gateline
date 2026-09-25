@@ -518,7 +518,7 @@ function NotesField({
 }
 
 function Flash({ kind, text }: { kind: 'ok' | 'conflict' | 'error'; text: string }) {
-  const tone = kind === 'ok' ? 'border-ink text-ink' : 'border-mark text-warn'
+  const tone = kind === 'ok' ? 'border-ink text-ink' : 'border-mark text-bad'
   return (
     <p className={`mb-2 border-t border-b py-2 text-xs font-semibold ${tone}`} role="status">
       {text}

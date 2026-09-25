@@ -7,9 +7,8 @@
 // A token is read out of `src/styles.css` by name, so a value edited there
 // without re-running the numbers fails here rather than in someone's eyes.
 //
-// Decorative rules (the ledger's horizontals) are listed but not floored:
-// they separate rows, and nothing is read from them. The seed's own rules
-// measure 2.0 and are kept as sampled.
+// Decorative rules (the hairlines) are listed but not floored: they separate
+// rows, and nothing is read from them.
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -35,8 +34,9 @@ export function contrast(a: string, b: string): number {
   return Math.round(((Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)) * 100) / 100
 }
 
-/** Every text pair the app sets, with its floor. Surfaces: the ground, the
- *  paper-in-shade inset, and the raised hover/selection tint. */
+/** Every text pair the app sets, with its floor. Surfaces: the white
+ *  ground, the panel-grey inset, the raised hover/selection step, the
+ *  state tints, and the fills that reverse type out of them. */
 export const TEXT_PAIRS: [text: string, surface: string, floor: number][] = [
   ['ink', 'ground', 4.5],
   ['ink', 'inset', 4.5],
@@ -46,25 +46,41 @@ export const TEXT_PAIRS: [text: string, surface: string, floor: number][] = [
   ['muted', 'raised', 4.5],
   ['faint', 'ground', 4.5],
   ['faint', 'inset', 4.5],
-  ['warn', 'ground', 4.5],
+  ['faint', 'raised', 4.5],
+  ['accent', 'ground', 4.5], // links, the active entry
+  ['accent', 'inset', 4.5],
+  ['accent', 'accent-tint', 4.5], // a link inside the selected entry
+  ['accent-deep', 'accent-tint', 4.5], // the selected record entry's own text
+  ['accent-hover', 'ground', 4.5],
+  ['ok', 'ground', 4.5], // approved
+  ['ok', 'inset', 4.5],
+  ['ok', 'ok-bg', 4.5],
+  ['info', 'info-bg', 4.5],
+  ['warn', 'ground', 4.5], // the caution ink
   ['warn', 'inset', 4.5],
-  ['bad', 'ground', 4.5],
-  ['on-solid', 'accent-deep', 4.5], // paper on a filled impression / button
-  ['on-solid', 'mark', 3.0], // paper on the danger button — bold 13px, judged as large
+  ['warn', 'warn-bg', 4.5],
+  ['bad', 'ground', 4.5], // declined
+  ['bad', 'inset', 4.5],
+  ['bad', 'bad-bg', 4.5],
+  ['ink', 'focus', 4.5], // the position cell: ink on the yellow
+  ['on-solid', 'ink', 4.5], // reversed type on a filled impression / the primary button
+  ['on-solid', 'mark', 4.5], // reversed type on the danger button
 ]
 
 /** Marks that carry meaning against the surface they sit on: 3.0. */
 export const MARK_PAIRS: [mark: string, surface: string, floor: number][] = [
-  ['mark', 'ground', 3.0], // the position / over mark
+  ['mark', 'ground', 3.0], // the over-budget bar, an error border, the alert rule
   ['mark', 'inset', 3.0],
   ['line-cool', 'ground', 3.0], // form control borders
-  ['ink', 'ground', 3.0], // impression borders, meters
+  ['ink', 'ground', 3.0], // impression borders, meters, the band
+  ['accent', 'ground', 3.0], // the selected entry's rule
 ]
 
 /** Listed for the table; not floored (see the header). */
 export const DECORATIVE_PAIRS: [rule: string, surface: string][] = [
   ['line', 'ground'],
   ['line', 'inset'],
+  ['focus', 'ground'], // the yellow is a fill with ink on it, never read against the page
 ]
 
 describe('the contrast table', () => {
@@ -76,13 +92,17 @@ describe('the contrast table', () => {
     expect(contrast(token(mark), token(surface))).toBeGreaterThanOrEqual(floor)
   })
 
-  it('collapses the semantic quartet: ok and info are the ink, warn and bad are the one red', () => {
-    expect(token('ok')).toBe(token('ink'))
-    expect(token('info')).toBe(token('ink'))
-    expect(token('warn')).toBe(token('bad'))
+  it('gives each state colour one job: ok, warn and bad are three different inks, and info is the accent', () => {
+    expect(new Set([token('ok'), token('warn'), token('bad')]).size).toBe(3)
+    expect(token('info')).toBe(token('accent'))
+    expect(token('mark')).toBe(token('bad'))
   })
 
-  it('is one surface: the ground and the surface tokens are the same paper', () => {
+  it('keeps colour off the frame: every state box is bordered by the hairline', () => {
+    for (const state of ['ok', 'info', 'pend', 'warn', 'bad']) expect(token(`${state}-line`)).toBe(token('line'))
+  })
+
+  it('is one surface: the ground and the surface tokens are the same page', () => {
     expect(token('surface')).toBe(token('ground'))
   })
 

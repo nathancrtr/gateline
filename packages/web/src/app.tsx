@@ -5,14 +5,14 @@ import { pauseVoice } from './drift.ts'
 import { useLiveInvalidation } from './use-live.ts'
 
 /** One entry in the rack: the name, and the count where there is one. Plain
- *  type; the active entry is the one in the ink at weight. */
+ *  type; the active entry is the one in the signal blue, as on the site. */
 function NavItem({ to, label, badge, end }: { to: string; label: string; badge?: number; end?: boolean }) {
   return (
     <NavLink
       to={to}
       end={end}
       className={({ isActive }) =>
-        `flex items-baseline justify-between gap-3 py-[3px] text-[14px] ${isActive ? 'font-semibold text-ink' : 'text-muted hover:text-ink'}`
+        `flex items-baseline justify-between gap-3 py-[3px] text-[14px] ${isActive ? 'font-semibold text-accent' : 'text-muted hover:text-ink'}`
       }
     >
       <span>{label}</span>
@@ -45,7 +45,7 @@ function EngineOutageBanner() {
   if (stale.length === 0) return null
   return (
     <div className="mb-4 border-t border-b border-mark py-2.5 text-sm text-ink" role="alert">
-      <span className="font-semibold text-warn">The orchestrator does not appear to be running.</span>{' '}
+      <span className="font-semibold text-bad">The orchestrator does not appear to be running.</span>{' '}
       Decisions will be recorded but nothing will dispatch — last heartbeat{' '}
       {stale.map(([id, h]) => `${formatAge(Math.floor(Date.parse(h!.at) / 1000), health.data!.now)} ago (${id})`).join(', ')}.
     </div>
@@ -79,15 +79,15 @@ function EngineDriftChip() {
         const paused = entry.codeState === 'paused'
         // Tone follows the cause, not the state (#222): a dirty tree is the
         // warn voice; the topology family, and an engine too old to say,
-        // stay red. In one ink and one red, the two voices are the red
-        // heading word against the muted one; the words carry the rest.
+        // stay red. The rule above and below takes the voice's colour, the
+        // heading word takes it in the red case; the words carry the rest.
         const voice = paused ? pauseVoice(entry) : null
         const alarmed = voice?.tone === 'bad'
         return (
           <p
             key={id}
             data-pause-tone={voice?.tone}
-            className={`border-t border-b py-2 text-xs ${paused ? 'border-mark' : 'border-line'} ${alarmed ? 'text-ink' : 'text-muted'}`}
+            className={`border-t border-b py-2 text-xs ${paused ? (alarmed ? 'border-mark' : 'border-warn') : 'border-line'} ${alarmed ? 'text-ink' : 'text-muted'}`}
           >
             {showId ? <span className="font-mono text-muted">{id} · </span> : null}
             {paused && voice ? (
@@ -95,7 +95,7 @@ function EngineDriftChip() {
               // rendered in full and allowed to wrap: hiding it behind a
               // tooltip is the failure mode #185 exists to fix.
               <span>
-                <b className={`font-semibold ${alarmed ? 'text-warn' : 'text-ink'}`}>engine paused</b> —{' '}
+                <b className={`font-semibold ${alarmed ? 'text-bad' : 'text-ink'}`}>engine paused</b> —{' '}
                 {entry.codeReason ?? (
                   <>
                     code tree at <code className="font-mono">{shortOid(entry.codeHead)}</code> not clean
@@ -159,7 +159,7 @@ export function App() {
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-7xl">
       {/* The rack: name, the three surfaces with their counts, and the one
-          line of voice. Same paper as the page, a rule between. */}
+          line of voice. Same page as the content, a rule between. */}
       <aside className="sticky top-0 flex h-dvh w-[200px] shrink-0 flex-col gap-[26px] border-r border-line py-[30px] pl-[26px] pr-[22px] max-md:hidden">
         <div>
           <div className="flex items-center gap-2">
@@ -180,8 +180,8 @@ export function App() {
         </div>
       </aside>
 
-      {/* Mobile top nav */}
-      <div className="fixed inset-x-0 top-0 z-10 flex items-center gap-4 border-b border-line bg-ground px-4 py-2.5 md:hidden">
+      {/* Mobile top nav. It sits over the body's ink band, so it carries the band itself. */}
+      <div className="fixed inset-x-0 top-0 z-10 flex items-center gap-4 border-b border-t-[3px] border-line border-t-ink bg-ground px-4 py-2.5 md:hidden">
         <span className="mr-2 flex items-center gap-1.5">
           <Sigil size={14} />
           <span className="text-[15px] font-semibold leading-none text-ink">Gatehouse</span>

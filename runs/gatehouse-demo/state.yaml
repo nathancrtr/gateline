@@ -87,6 +87,18 @@ budget:
           tokens_in: 194,
           tokens_out: 2845,
           cost_usd: 1.5080388000000005
+        },
+      {
+          at: 2026-09-25T22:47:12.660Z,
+          role: reviewer,
+          task: 01-artifact-path-route,
+          round: 2,
+          adapter: claude-code,
+          model: claude-fable-5-1,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:34260,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:

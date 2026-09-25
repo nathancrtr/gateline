@@ -195,20 +195,27 @@ const CONNECTOR_MIN = 8
 const PHASE_CHROME = 22
 /** `px-2`, the border, the `gap-1`, and the state glyph of a gate pill. */
 const GATE_CHROME = 29
-/** One character's advance: Inter at 12px and JetBrains Mono at 10.5px both sit near this. */
-const CHAR = 6.4
+/** One character's advance in a cell: IBM Plex Mono at the 11px the
+ *  impressions are set in — 600 units per em, measured 6.60 in Chromium. */
+const CELL_CHAR = 6.6
+/** One character's advance in a note: Atkinson Hyperlegible Next at 10.5px.
+ *  A date, the widest note, measured 5.73 per character in Chromium; the
+ *  words run narrower (4.6–4.9), so this over-estimates them — the safe
+ *  side for a fit test. */
+const NOTE_CHAR = 5.8
 
-const textWidth = (s: string): number => s.length * CHAR
+const cellText = (s: string): number => s.length * CELL_CHAR
+const noteText = (s: string): number => s.length * NOTE_CHAR
 
 function pillWidth(cell: SpineCell): number {
-  return cell.kind === 'phase' ? PHASE_CHROME + textWidth(cell.phase) : GATE_CHROME + textWidth(cell.gate)
+  return cell.kind === 'phase' ? PHASE_CHROME + cellText(cell.phase) : GATE_CHROME + cellText(cell.gate)
 }
 
 function cellWidth(cell: SpineCell): number {
   const pill = pillWidth(cell)
   if (cell.kind === 'phase') return pill
   const note = gateNote(cell)
-  return note ? Math.max(pill, ...note.map(textWidth)) : pill
+  return note ? Math.max(pill, ...note.map(noteText)) : pill
 }
 
 export interface SpineFit {

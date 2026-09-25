@@ -34,7 +34,7 @@ export function EvidenceRollupPanel({ src, slug }: { src: string; slug: string }
   const cited = defined.filter((c) => c.evidence.length > 0 || c.result)
   return (
     <section className="mt-3 border border-line bg-inset px-3 py-2.5 text-xs" data-evidence-rollup>
-      <p className="font-mono text-[11px] text-muted">Evidence citations — computed from the record</p>
+      <p className="font-ui text-[11px] text-muted">Evidence citations — computed from the record</p>
       <ReportVerdict rollup={data} />
       {uncited.length > 0 && (
         <div className="mt-2">
@@ -351,7 +351,7 @@ function CriterionPacket({
       {c.result && <ResultLine result={c.result} />}
       {c.gap && (
         <p className="mt-1 text-[12px] leading-[1.5] text-muted">
-          <span className="font-mono text-[11px] text-faint">Gaps</span> “{c.gap}”
+          <span className="font-ui text-[11px] text-faint">Gaps</span> “{c.gap}”
         </p>
       )}
 
@@ -359,7 +359,7 @@ function CriterionPacket({
           bytes, open by default because it is the thing being approved. */}
       {c.evidence.map((a) => (
         <details key={`${a.label}-${a.line}`} open className="mt-1.5" data-evidence-block={a.label}>
-          <summary className="cursor-pointer font-mono text-[11px] text-muted marker:text-faint">
+          <summary className="cursor-pointer font-ui text-[11px] text-muted marker:text-faint">
             {a.label} ·{' '}
             <Link
               className="text-accent underline underline-offset-2"
@@ -416,7 +416,7 @@ function UnattributedFindings({
   )
   return (
     <div className="mt-3" data-unattributed-findings>
-      <p className="font-mono text-[11px] text-muted">
+      <p className="font-ui text-[11px] text-muted">
         Findings citing no criterion
         <Link className="ml-2 normal-case text-accent underline underline-offset-2" to={artifactLink(src, slug, loose[0]!.path)}>
           open the reports
@@ -443,7 +443,7 @@ function ReportsPacket({ reports, src, slug }: { reports: ReviewReport[]; src: s
             </Link>
             {r.task && <span className="font-mono text-[11px] text-faint">{r.task}</span>}
             <VerdictChip verdicts={r.rounds.map((x) => x.verdict)} />
-            <span className="ml-auto font-mono text-[11px] text-faint">
+            <span className="ml-auto font-ui text-[11px] text-faint">
               {r.findings.length === 0 ? 'no findings raised' : `${r.findings.length} finding${r.findings.length === 1 ? '' : 's'}`}
             </span>
           </div>
@@ -503,7 +503,7 @@ export function G2Packet({ src, slug, profile }: { src: string; slug: string; pr
     <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
       <p className={PACKET_LABEL}>G2 packet — composed from the record</p>
       {!rollup.hasVerification && (
-        <span className="font-mono text-[11px] text-faint">
+        <span className="font-ui text-[11px] text-faint">
           {profile === 'patch' ? 'patch profile runs no verifier — the reviews are the packet' : 'no verification report in the record'}
         </span>
       )}
@@ -564,7 +564,7 @@ function BoundaryCheck({ src, slug }: { src: string; slug: string }) {
 
   return (
     <p className="mt-2.5 border-t border-line pt-2 text-[12px] leading-[1.55] text-muted" data-boundary-check>
-      <span className="font-mono text-[11px] text-muted">boundary</span>{' '}
+      <span className="font-ui text-[11px] text-muted">boundary</span>{' '}
       <span className="text-ink">{line.changed}</span> changed file{line.changed === 1 ? '' : 's'};{' '}
       {line.undeclared.length === 0 ? (
         <>every one falls under a declared contact surface.</>

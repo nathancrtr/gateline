@@ -30,7 +30,7 @@ import type { KeyHint } from '../use-keys.ts'
 export function KeyHints({ hints, className = '' }: { hints: readonly KeyHint[]; className?: string }) {
   if (hints.length === 0) return null
   return (
-    <p data-key-hints className={`font-mono text-[10.5px] leading-[1.7] text-muted ${className}`}>
+    <p data-key-hints className={`font-ui text-[10.5px] leading-[1.7] text-muted ${className}`}>
       {hints.map(([key, verb], i) => (
         <Fragment key={key}>
           {i > 0 && (
@@ -154,14 +154,14 @@ const AGE_GLYPH = 'mr-[4px]'
 export function AgeBadge({ label, urgent, stale }: { label: string; urgent: boolean; stale?: boolean }) {
   if (stale) {
     return (
-      <span className="shrink-0 font-mono text-[12.5px] font-semibold leading-none tabular-nums text-warn" title="waiting since">
+      <span className="shrink-0 font-ui text-[12.5px] font-semibold leading-none tabular-nums text-warn" title="waiting since">
         <span className={AGE_GLYPH}>⏱</span>
         {label}
       </span>
     )
   }
   return (
-    <span className={`shrink-0 font-mono text-[12.5px] leading-none tabular-nums ${urgent ? 'font-semibold text-ink' : 'text-muted'}`} title="waiting since">
+    <span className={`shrink-0 font-ui text-[12.5px] leading-none tabular-nums ${urgent ? 'font-semibold text-ink' : 'text-muted'}`} title="waiting since">
       {urgent && <span className={AGE_GLYPH}>⏱</span>}
       {label}
     </span>
@@ -353,7 +353,7 @@ function SpineGate({ cell, bounced, noteClass }: { cell: GateCell; bounced: bool
       </Imp>
       <span
         aria-hidden="true"
-        className={`h-[24px] whitespace-nowrap text-center font-mono text-[10.5px] leading-[12px] text-muted ${noteClass}`}
+        className={`h-[24px] whitespace-nowrap text-center font-ui text-[10.5px] leading-[12px] text-muted ${noteClass}`}
       >
         {note?.map((line, i) => (
           // biome-ignore lint/suspicious/noArrayIndexKey: `note` is a fixed, pre-split set of display lines for one gate cell, never reordered.
@@ -384,7 +384,7 @@ export function BudgetMeter({ limit, spent }: { limit: number | null; spent: num
   // Nothing spent, so there is nothing to meter: the word alone (#285/5).
   if (used === 0) {
     return (
-      <span className="font-mono text-[11.5px] tabular-nums text-muted" title={`$0.00 of $${limit.toFixed(2)}`}>
+      <span className="font-ui text-[11.5px] tabular-nums text-muted" title={`$0.00 of $${limit.toFixed(2)}`}>
         unmetered
       </span>
     )
@@ -394,7 +394,7 @@ export function BudgetMeter({ limit, spent }: { limit: number | null; spent: num
       <span className="h-[7px] w-[90px] overflow-hidden border border-line">
         <span className={`block h-full ${over ? 'bg-mark' : 'bg-ink'}`} style={{ width: `${pct}%` }} />
       </span>
-      <span className={`font-mono text-[11.5px] tabular-nums ${over ? 'font-semibold text-bad' : 'text-muted'}`}>
+      <span className={`font-ui text-[11.5px] tabular-nums ${over ? 'font-semibold text-bad' : 'text-muted'}`}>
         ${used.toFixed(0)} / ${limit.toFixed(0)}
         {over ? ' · over' : ''}
       </span>

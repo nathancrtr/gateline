@@ -77,7 +77,7 @@ export const plainQuote = (text: string) =>
  *  the frame. Shared so the pending state and the loaded state of one packet
  *  cannot drift apart — the whole point of #299 is that they are one card. */
 export const PACKET_FRAME = 'mt-3.5 border border-line bg-inset px-3 py-2.5'
-export const PACKET_LABEL = 'font-mono text-[11px] text-muted'
+export const PACKET_LABEL = 'font-ui text-[11px] text-muted'
 
 /**
  * The in-flight body of a decide packet (#299).
@@ -193,7 +193,7 @@ export function FindingCard({
         {/* Named only where the card leaves its own report — under a criterion,
             "which review raised this" is not otherwise on screen. */}
         {source && <span className="shrink-0 font-mono text-[10.5px] text-faint">{source}</span>}
-        {finding.round !== null && <span className="shrink-0 font-mono text-[10.5px] text-faint">round {finding.round}</span>}
+        {finding.round !== null && <span className="shrink-0 font-ui text-[10.5px] text-faint">round {finding.round}</span>}
         {note}
         {/* The words, and the control that folds them, travel together (#296).
             Everything above is `shrink-0`, so while the title was a bare
@@ -263,7 +263,7 @@ export function FindingCard({
 function Field({ label, children }: { label: string; children: string }) {
   return (
     <div className="flex flex-wrap gap-x-2">
-      <dt className="shrink-0 font-mono text-[10.5px] text-faint">{label}</dt>
+      <dt className="shrink-0 font-ui text-[10.5px] text-faint">{label}</dt>
       <dd className="min-w-0 flex-1 text-muted">
         <Inline>{children}</Inline>
       </dd>
@@ -299,11 +299,11 @@ export function FindingsPanel({ src, slug, path }: { src: string; slug: string; 
   return (
     <section className="mb-4 border border-line bg-surface px-3 py-2.5" data-findings>
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-        <p className="font-mono text-[11px] text-muted">
+        <p className="font-ui text-[11px] text-muted">
           Findings{report.task ? ` · ${report.task}` : ''}
         </p>
         <VerdictChip verdicts={report.rounds.map((r) => r.verdict)} />
-        <span className="ml-auto font-mono text-[11px] text-faint">
+        <span className="ml-auto font-ui text-[11px] text-faint">
           {report.findings.length === 0
             ? 'none raised'
             : `${standing.length} standing of ${report.findings.length} · ${report.rounds.length} round${report.rounds.length === 1 ? '' : 's'}`}

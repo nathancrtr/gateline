@@ -100,16 +100,26 @@ from a site value, and says which step and why.
 
 ## Type
 
-| | family | source |
-|---|---|---|
-| Reading | Newsreader | held — vendored, `public/fonts/newsreader/` |
-| Chrome | Inter | held — vendored, `public/fonts/inter/` |
-| Mono | JetBrains Mono | held — vendored, `public/fonts/jetbrains-mono/` |
+The site's four faces, by job, vendored under `public/fonts/` from the same
+binaries the site serves (`public/fonts/README.md` records versions and
+sources). The cockpit's split follows the site's rule — a face per job, not
+per surface — with one addition the site does not need: a code face for
+the impression grammar, which is where the cockpit's identifiers live.
 
-Type is held so the palette can be judged on its own. The site's faces —
-Public Sans for body, Atkinson Hyperlegible Next for navigation, tables and
-labels, IBM Plex Mono for code — are the open type pass (#358), and the
-cockpit is expected to take them.
+| token | family | job |
+|---|---|---|
+| `--font-sans` | Public Sans | page and section headings, running text, and the rendered artifacts on Record (`--font-read` resolves to the same face) |
+| `--font-ui` | Atkinson Hyperlegible Next | the rack, tabs, buttons, table text and column heads, captions, labels, helper text, key hints |
+| `--font-mono` | IBM Plex Mono, ligatures off | everything code-shaped: ids, paths, slugs, refs, commit subjects, quoted verdicts, the status chips, `<pre>` |
+| `--font-mark` | Overpass 700 | the wordmark only |
+
+The line between the UI face and the code face: a string a person would
+copy — an id, a path, a ref, an amount the record states — is code; a string
+that tells the reader what they are looking at is UI. Where the two meet in
+one line (a label followed by a path), the label is UI and the path is code.
+
+Retired with this round: Newsreader (the serif reading face), Inter and
+JetBrains Mono.
 
 ## Layout grammar
 
@@ -178,7 +188,10 @@ the ink.
 6. **Portfolio phase chips are the plain mark**, not the position tone: a
    column of positions is a column of alarms (2026-09-04, found in the
    browser).
-7. **Type is held** — see *Type*; #358.
+7. **Type is the site's** (#358, 2026-09-25): Public Sans for reading and
+   headings, Atkinson Hyperlegible Next for the UI, IBM Plex Mono for code,
+   Overpass for the wordmark. The serif reading face retires with the
+   site's own choice to set long pages in the sans.
 
 ## Contrast
 

@@ -1,78 +1,30 @@
 @import 'tailwindcss';
 
-/* Vendored type — Inter, JetBrains Mono, Newsreader, self-hosted from
-   public/fonts/ instead of a Google Fonts <link> (packages/web/DESIGN.md
-   "Type": "a self-hosted cockpit should not phone a font CDN"). Each is the
-   project's variable font, split into the same latin / latin-ext subsets
-   Google Fonts serves, so an accented name or slug still renders without a
-   second family loading. License text (SIL OFL 1.1) sits beside the font
-   files in each family's directory. */
-@font-face {
-  font-family: "Inter";
-  font-style: normal;
-  font-weight: 400 700;
-  font-display: swap;
-  src: url("/fonts/inter/Inter-latin.woff2") format("woff2");
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: "Inter";
-  font-style: normal;
-  font-weight: 400 700;
-  font-display: swap;
-  src: url("/fonts/inter/Inter-latin-ext.woff2") format("woff2");
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
-}
+/* Vendored type — the site's four faces (site/assets/fonts/README.md),
+   self-hosted from public/fonts/ so a cockpit never phones a font host and
+   the deploy image carries what it needs. Files are taken as each project
+   ships them, the same binaries the site serves; each family's licence sits
+   beside its files. Public Sans is the reading and heading face, Atkinson
+   Hyperlegible Next the UI face (navigation, tables, labels, captions), IBM
+   Plex Mono the code face with ligatures off, Overpass the wordmark only. */
+@font-face { font-family: "Public Sans"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/public-sans/PublicSans-Regular.woff2") format("woff2"); }
+@font-face { font-family: "Public Sans"; font-style: italic; font-weight: 400; font-display: swap; src: url("/fonts/public-sans/PublicSans-Italic.woff2") format("woff2"); }
+@font-face { font-family: "Public Sans"; font-style: normal; font-weight: 600; font-display: swap; src: url("/fonts/public-sans/PublicSans-SemiBold.woff2") format("woff2"); }
+@font-face { font-family: "Public Sans"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/public-sans/PublicSans-Bold.woff2") format("woff2"); }
 
-@font-face {
-  font-family: "JetBrains Mono";
-  font-style: normal;
-  font-weight: 400 500;
-  font-display: swap;
-  src: url("/fonts/jetbrains-mono/JetBrainsMono-latin.woff2") format("woff2");
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: "JetBrains Mono";
-  font-style: normal;
-  font-weight: 400 500;
-  font-display: swap;
-  src: url("/fonts/jetbrains-mono/JetBrainsMono-latin-ext.woff2") format("woff2");
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
-}
+@font-face { font-family: "Atkinson Hyperlegible Next"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/atkinson-hyperlegible-next/AtkinsonHyperlegibleNext-Regular.woff2") format("woff2"); }
+@font-face { font-family: "Atkinson Hyperlegible Next"; font-style: normal; font-weight: 500; font-display: swap; src: url("/fonts/atkinson-hyperlegible-next/AtkinsonHyperlegibleNext-Medium.woff2") format("woff2"); }
+@font-face { font-family: "Atkinson Hyperlegible Next"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/atkinson-hyperlegible-next/AtkinsonHyperlegibleNext-Bold.woff2") format("woff2"); }
 
-@font-face {
-  font-family: "Newsreader";
-  font-style: normal;
-  font-weight: 400 600;
-  font-display: swap;
-  src: url("/fonts/newsreader/Newsreader-latin.woff2") format("woff2");
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: "Newsreader";
-  font-style: normal;
-  font-weight: 400 600;
-  font-display: swap;
-  src: url("/fonts/newsreader/Newsreader-latin-ext.woff2") format("woff2");
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
-}
-@font-face {
-  font-family: "Newsreader";
-  font-style: italic;
-  font-weight: 400 600;
-  font-display: swap;
-  src: url("/fonts/newsreader/Newsreader-Italic-latin.woff2") format("woff2");
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: "Newsreader";
-  font-style: italic;
-  font-weight: 400 600;
-  font-display: swap;
-  src: url("/fonts/newsreader/Newsreader-Italic-latin-ext.woff2") format("woff2");
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
-}
+/* IBM Plex Mono ships split by script: Latin1 covers ASCII and Latin-1,
+   Latin2 the extended Latin block. The ranges are the ones IBM's own CSS
+   declares, so an ASCII-only page downloads only the Latin1 file. */
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/ibm-plex-mono/IBMPlexMono-Regular-Latin1.woff2") format("woff2"); unicode-range: U+0020-007E, U+00A0-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2013-2014, U+2018-201A, U+201C-201E, U+2020-2022, U+2026, U+2030, U+2039-203A, U+2044, U+20AC, U+2122, U+2212, U+FB01-FB02; }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url("/fonts/ibm-plex-mono/IBMPlexMono-Regular-Latin2.woff2") format("woff2"); unicode-range: U+0100-0101, U+0104-0130, U+0132-0151, U+0154-017F, U+018F, U+0192, U+01A0-01A1, U+01AF-01B0, U+01FA-01FF, U+0218-021B, U+0237, U+0259, U+1E80-1E85, U+1E9E, U+20A1, U+20A4, U+20A6, U+20A8-20AA, U+20AD-20AE, U+20B1-20B2, U+20B4-20B5, U+20B8-20BA, U+20BD, U+20BF; }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url("/fonts/ibm-plex-mono/IBMPlexMono-Medium-Latin1.woff2") format("woff2"); unicode-range: U+0020-007E, U+00A0-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2013-2014, U+2018-201A, U+201C-201E, U+2020-2022, U+2026, U+2030, U+2039-203A, U+2044, U+20AC, U+2122, U+2212, U+FB01-FB02; }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url("/fonts/ibm-plex-mono/IBMPlexMono-Medium-Latin2.woff2") format("woff2"); unicode-range: U+0100-0101, U+0104-0130, U+0132-0151, U+0154-017F, U+018F, U+0192, U+01A0-01A1, U+01AF-01B0, U+01FA-01FF, U+0218-021B, U+0237, U+0259, U+1E80-1E85, U+1E9E, U+20A1, U+20A4, U+20A6, U+20A8-20AA, U+20AD-20AE, U+20B1-20B2, U+20B4-20B5, U+20B8-20BA, U+20BD, U+20BF; }
+
+@font-face { font-family: "Overpass"; font-style: normal; font-weight: 700; font-display: swap; src: url("/fonts/overpass/Overpass-Bold.woff2") format("woff2"); }
 
 /* Design tokens — the site's direction, carried into the cockpit
    (docs/GATEHOUSE-DESIGN.md round 4; per-token provenance in
@@ -145,10 +97,14 @@
   --radius-lg: 0px;
   --radius-xl: 0px;
 
-  /* type — held; the site's faces are the open type pass (#358) */
-  --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --font-read: "Newsreader", Georgia, "Times New Roman", serif;
+  /* type — the site's faces, by job (#358). `--font-read` survives as a
+     name so nothing breaks; it resolves to the reading face, which is now
+     the sans. The mark face is the wordmark's alone. */
+  --font-sans: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-ui: "Atkinson Hyperlegible Next", "Public Sans", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-read: "Public Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-mark: "Overpass", "Public Sans", Arial, sans-serif;
 }
 
 :root {
@@ -174,11 +130,19 @@
 
 body {
   @apply bg-ground text-ink font-sans antialiased;
+  font-kerning: normal;
   /* The site's signage: a 3px ink band across the top of the page. */
   border-top: 3px solid var(--color-ink);
   font-size: 14px;
   line-height: 1.5;
   text-rendering: optimizeLegibility;
+}
+
+/* Code never ligates: an arrow in a diff or a slug is the characters it is
+   made of, as on the site. */
+code, pre, kbd, samp, .font-mono, .imp {
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
 }
 
 /* Focus is the yellow, as on the site: the one colour that means a
@@ -251,7 +215,7 @@ body {
    hollow; danger is the declined red. Never a pill, never a shadow. */
 .btn {
   display: inline-block;
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1;
   font-weight: 600;
@@ -266,12 +230,12 @@ body {
 .btn-danger { background: var(--color-mark); border-color: var(--color-mark); color: var(--color-on-solid); }
 
 /* ------------------------------------------------------------------------
-   Rendered markdown (artifacts) — the reading surface. Newsreader body on
-   the same page as everything else; headings in the chrome face. */
+   Rendered markdown (artifacts) — the reading surface, in the reading face
+   the site sets its own long pages in; tables in the UI face, as there. */
 .prose-artifact {
   font-family: var(--font-read);
-  font-size: 16.5px;
-  line-height: 1.68;
+  font-size: 16px;
+  line-height: 1.6;
   color: var(--color-ink);
   max-width: var(--measure);
 }
@@ -352,7 +316,8 @@ body {
   width: 100%;
   margin: 0 0 18px;
   font-size: 14px;
-  font-family: var(--font-sans);
+  font-family: var(--font-ui);
+  font-variant-numeric: tabular-nums;
 }
 .prose-artifact th {
   text-align: left;
@@ -376,7 +341,7 @@ body {
   color: var(--color-muted);
   font-style: italic;
   font-family: var(--font-read);
-  font-size: 16.5px;
+  font-size: 16px;
   line-height: 1.6;
 }
 .prose-artifact hr {
@@ -450,7 +415,7 @@ body {
   @apply mb-4 border-t border-b border-line py-2 text-xs;
 }
 .lex-cited > summary {
-  @apply cursor-pointer select-none font-mono text-[11.5px] text-muted;
+  @apply cursor-pointer select-none font-ui text-[11.5px] text-muted;
 }
 .lex-cited > summary:hover {
   @apply text-ink;
@@ -459,10 +424,16 @@ body {
   @apply mt-2 flex flex-col gap-1;
 }
 
-/* Gate sigil — the two-posts-and-crossbar mark, in the ink. */
+/* Gate sigil — the two-posts-and-crossbar mark, in the ink — and the
+   wordmark beside it, in the mark face the site's own wordmark is set in. */
 .gate-sigil {
   display: inline-flex;
   color: var(--color-ink);
+}
+.wordmark {
+  font-family: var(--font-mark);
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 /* Form controls: a ruled field on the page. */

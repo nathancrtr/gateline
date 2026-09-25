@@ -9,9 +9,9 @@ import { EdgeFade, useScrollCue } from '../scroll-cue.tsx'
 import { PageStatus } from './inbox.tsx'
 
 // The ledger's column heads: small, muted, on the rule.
-const TH = 'text-left font-sans font-normal text-[11.5px] text-muted pr-2.5 pb-1.5 border-b border-ink whitespace-nowrap'
+const TH = 'text-left font-ui font-normal text-[11.5px] text-muted pr-2.5 pb-1.5 border-b border-ink whitespace-nowrap'
 const TD = 'pr-2.5 py-[12px] border-b border-line align-top'
-const NUM = 'pr-2.5 py-[12px] border-b border-line align-top text-right font-mono text-[12.5px] tabular-nums text-ink'
+const NUM = 'pr-2.5 py-[12px] border-b border-line align-top text-right font-ui text-[12.5px] tabular-nums text-ink'
 
 /**
  * What the mark at the left edge of a run row says (#297).
@@ -75,7 +75,7 @@ function NeedsYou({ mark }: { mark: NeedsYouMark }) {
   if (mark.kind === 'quiet') return <span aria-hidden="true" className="w-[34px] shrink-0" />
   if (mark.kind === 'escalation') {
     return (
-      <span className="mt-[3px] w-[34px] shrink-0 whitespace-nowrap font-mono text-[11px] font-semibold text-warn" title={mark.label}>
+      <span className="mt-[3px] w-[34px] shrink-0 whitespace-nowrap font-ui text-[11px] font-semibold text-warn" title={mark.label}>
         {mark.count} esc
       </span>
     )
@@ -175,7 +175,7 @@ export function PortfolioPage() {
                       <Link to={`/runs/${run.source}/${run.slug}`} className="font-mono text-[13.5px] font-semibold text-ink hover:underline">
                         {run.slug}
                       </Link>
-                      <div className="mt-[2px] font-mono text-[11.5px] text-muted">
+                      <div className="mt-[2px] font-ui text-[11.5px] text-muted">
                         {run.source} · {run.profile}
                       </div>
                       {run.malformed && (

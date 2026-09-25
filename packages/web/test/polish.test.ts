@@ -17,15 +17,8 @@ import type { G1Packet as G1PacketData, InboxItem, RunSummary } from '../src/api
 import { AgeBadge, BudgetMeter, PhaseSpine } from '../src/components/chips.tsx'
 import { BOUNCED_INSTRUCTION, DecidePanel, ROUND_CAP_INSTRUCTION } from '../src/components/decide.tsx'
 import { G1Packet } from '../src/components/g1.tsx'
-import {
-  artifactRank,
-  burdenPillNeeded,
-  cardInstruction,
-  contractBadgeName,
-  orderArtifacts,
-  roundsLabel,
-  visibleProblems,
-} from '../src/pages/run.tsx'
+import { burdenPillNeeded, cardInstruction, contractBadgeName, roundsLabel, visibleProblems } from '../src/pages/run.tsx'
+import { artifactRank, orderArtifacts } from '../src/record-rail.ts'
 
 const item = (over: Partial<InboxItem>): InboxItem =>
   ({

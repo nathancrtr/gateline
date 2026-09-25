@@ -75,6 +75,18 @@ budget:
           tokens_in: 194,
           tokens_out: 3503,
           cost_usd: 3.08803025
+        },
+      {
+          at: 2026-09-25T22:37:29.797Z,
+          role: implementer,
+          task: 01-artifact-path-route,
+          round: 2,
+          adapter: claude-code,
+          model: claude-opus-5-5,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:34260,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:
@@ -98,7 +110,7 @@ gates:
   G2: { approved: false, by: null, at: null, notes: null }
 tasks:
   [
-    { id: 01-artifact-path-route, status: in-review, review_rounds: 1 },
+    { id: 01-artifact-path-route, status: dispatched, review_rounds: 1 },
     { id: 02-snapshot-generator, status: pending, review_rounds: 0 },
     { id: 03-web-static-mode, status: pending, review_rounds: 0 },
     { id: 04-fixture-label, status: pending, review_rounds: 0 },

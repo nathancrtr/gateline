@@ -402,7 +402,12 @@ export function createApp(deps: AppDeps): Hono {
     const match = new URL(c.req.url).pathname.match(/^\/api\/runs\/[^/]+\/[^/]+\/artifact\/(.+)$/)
     const remainder = match ? match[1] : ''
     if (!remainder) return fail(c, 400, { error: 'artifact path required' })
-    const path = decodeURIComponent(remainder)
+    let path: string
+    try {
+      path = decodeURIComponent(remainder)
+    } catch {
+      return fail(c, 400, { error: 'malformed artifact path' })
+    }
     return readArtifact<'GET /api/runs/:src/:slug/artifact/*'>(c, c.req.param('src'), c.req.param('slug'), path)
   })
 

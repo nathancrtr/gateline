@@ -75,3 +75,38 @@ notes: |
   mutants reverted and the file diffed identical to the pre-mutant original
   afterward. `npm run typecheck`, `npm test` (1245 passed, 2 pre-existing
   skips, unrelated), and `npm run lint` all green in packages/.
+
+  Implementer r2 (review-01.md, verdict request-changes): addressed all three
+  findings in code, no rebuttals.
+  - F1 (major — malformed percent-encoding path-form escapes as an uncaught
+    URIError, 500 text/plain instead of the 404 JSON shape): fixed. The
+    path-form handler in app.ts now wraps `decodeURIComponent(remainder)` in
+    try/catch and returns `fail(c, 400, { error: 'malformed artifact path' })`
+    on a decode failure, so malformed input answers the one JSON error shape
+    every route promises instead of Hono's default 500 handler. Added
+    `GET artifact path form 400s malformed percent-encoding instead of
+    500ing` against the reviewer's exact repro (`%E0%A4%A`).
+  - F2 (minor — no test pins the empty-remainder 400): fixed. Added
+    `GET artifact path form 400s an empty remainder` hitting
+    `/artifact/` directly.
+  - F3 (minor — no test exercises a percent-encoded segment): fixed. Added
+    `GET artifact path form decodes a percent-encoded segment` asserting
+    `spec%2Emd` → 200 with `path: 'spec.md'`.
+  Hand-verified each of the three new fixtures against the reviewer's own
+  named mutant, on top of the already-fixed code so each test is proven to
+  fail without its guard: (a) removing the try/catch (decode uncaught) — the
+  malformed-encoding test failed with the exact `URIError`/non-JSON-body
+  symptom the review named; (b) `(.+)` → `(.*)` with the empty-remainder
+  guard's effect nullified (guard line dropped as part of the same edit,
+  matching the review's mutant) — the empty-remainder test failed, 200
+  instead of 400; (c) `const path = remainder` (decode step dropped) — the
+  encoded-segment test failed, 404 instead of 200. All three mutants reverted
+  individually; `git diff packages/server/src/app.ts` after each revert
+  showed only the intended F1 fix (the try/catch), matching before the mutant
+  was introduced. Re-ran the full server/test/app.test.ts suite after all
+  mutant round-trips: 50/50 passed. Re-ran `npm run typecheck`, `npm run
+  lint` (clean) and full `npm test` (1248 passed, 2 pre-existing skips,
+  unrelated — the 3 new tests account for 1245 → 1248) in packages/, all
+  green. Files touched this round: packages/server/src/app.ts (the F1
+  try/catch),  packages/server/test/app.test.ts (the three new cases);
+  packages/server/src/contract.ts untouched — no finding named it.

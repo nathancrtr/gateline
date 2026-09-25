@@ -166,6 +166,24 @@ describe('read routes', () => {
     expect(typeof body.error).toBe('string')
   })
 
+  it('GET artifact path form 400s an empty remainder', async () => {
+    const { status, body } = await get('/api/runs/fixture/g1-pending/artifact/')
+    expect(status).toBe(400)
+    expect(typeof body.error).toBe('string')
+  })
+
+  it('GET artifact path form decodes a percent-encoded segment', async () => {
+    const { status, body } = await get('/api/runs/fixture/g1-pending/artifact/spec%2Emd')
+    expect(status).toBe(200)
+    expect(body.path).toBe('spec.md')
+  })
+
+  it('GET artifact path form 400s malformed percent-encoding instead of 500ing', async () => {
+    const { status, body } = await get('/api/runs/fixture/g1-pending/artifact/%E0%A4%A')
+    expect(status).toBe(400)
+    expect(typeof body.error).toBe('string')
+  })
+
   it('GET artifact query form still works unchanged', async () => {
     const { status, body } = await get('/api/runs/fixture/g1-pending/artifact?path=spec.md')
     expect(status).toBe(200)

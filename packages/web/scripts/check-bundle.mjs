@@ -19,7 +19,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const DIST = resolve(dirname(fileURLToPath(import.meta.url)), '../dist')
+const DIST = resolve(dirname(fileURLToPath(import.meta.url)), '..', process.argv[2] ?? 'dist')
 
 /**
  * The node builtin module names. Matching is deliberately narrow: a bundled

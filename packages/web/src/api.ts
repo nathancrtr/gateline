@@ -42,6 +42,7 @@ import type {
   StagingConfigResponse,
 } from '@gateline/server/contract'
 import { API_VERSION } from '@gateline/server/contract'
+import { readUrl, writeUrl } from './static-mode.ts'
 
 /**
  * The wire vocabulary, re-exported so the rest of web imports one module —
@@ -177,12 +178,23 @@ export class ApiError extends Error {
 }
 
 async function getJson<T>(path: string): Promise<T> {
-  const res = await fetch(path)
+  const res = await fetch(readUrl(path))
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as Partial<ApiErrorBody> | null
     throw new ApiError(body?.error ?? `${res.status} ${res.statusText}`, res.status)
   }
   return res.json() as Promise<T>
+}
+
+/** The artifact route's path form (ADR-2, R1): every segment of the
+ * run-relative path is encoded on its own, so the slashes stay slashes and
+ * the result is exactly the server's `/artifact/*` grammar. Exported so the
+ * URL grammar is testable without going through `fetch`. */
+export function artifactPath(src: string, slug: string, path: string): string {
+  return `/api/runs/${src}/${slug}/artifact/${path
+    .split('/')
+    .map(encodeURIComponent)
+    .join('/')}`
 }
 
 export const api = {
@@ -196,7 +208,7 @@ export const api = {
    * status alongside the server's reason/message/missing — only a network
    * failure or an unparseable/unrecognized body throws ApiError. */
   stage: async (req: StageRequest): Promise<StageOutcomeView> => {
-    const res = await fetch('/api/runs', {
+    const res = await fetch(writeUrl('/api/runs'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(req),
@@ -217,8 +229,7 @@ export const api = {
     throw new ApiError(body.error ?? `${res.status} ${res.statusText}`, res.status)
   },
   run: (src: string, slug: string) => getJson<RunDetailResponse>(`/api/runs/${src}/${slug}`),
-  artifact: (src: string, slug: string, path: string) =>
-    getJson<ArtifactResponse>(`/api/runs/${src}/${slug}/artifact?path=${encodeURIComponent(path)}`),
+  artifact: (src: string, slug: string, path: string) => getJson<ArtifactResponse>(artifactPath(src, slug, path)),
   lexicon: (src: string, slug: string) => getJson<LexiconResponse>(`/api/runs/${src}/${slug}/lexicon`),
   evidence: (src: string, slug: string) => getJson<EvidenceRollup>(`/api/runs/${src}/${slug}/evidence`),
   g1: (src: string, slug: string) => getJson<G1Packet>(`/api/runs/${src}/${slug}/g1`),
@@ -227,7 +238,7 @@ export const api = {
   diff: (src: string, slug: string) => getJson<DiffResponse>(`/api/runs/${src}/${slug}/diff`),
   metrics: () => getJson<MetricsResponse>('/api/metrics'),
   decide: async (req: DecisionRequest): Promise<DecisionResponse> => {
-    const res = await fetch('/api/decisions', {
+    const res = await fetch(writeUrl('/api/decisions'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(req),

@@ -196,7 +196,7 @@ tasks:
   [
     { id: 01-artifact-path-route, status: review-approved, review_rounds: 2 },
     { id: 02-snapshot-generator, status: in-review, review_rounds: 0 },
-    { id: 03-web-static-mode, status: in-review, review_rounds: 1 },
+    { id: 03-web-static-mode, status: in-review, review_rounds: 2 },
     { id: 04-fixture-label, status: pending, review_rounds: 0 },
     { id: 05-static-render-check, status: pending, review_rounds: 0 },
     { id: 06-pages-workflow, status: pending, review_rounds: 0 }

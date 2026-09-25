@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, formatAge, type InboxItem } from '../api.ts'
 import { AgeBadge, KeyHints, KindChip } from '../components/chips.tsx'
+import { FixtureLabel, isFixtureSource } from '../components/fixture-label.tsx'
 import { gateCardState } from '../gate-state.ts'
 import { type KeyHint, useKeys } from '../use-keys.ts'
 
@@ -69,6 +70,7 @@ function InboxRow({ item, now, selected }: { item: InboxItem; now: number; selec
             <span className="min-w-0 truncate font-mono text-[12.5px] text-muted">
               {item.source}/{item.slug}
             </span>
+            {isFixtureSource(item.source) && <FixtureLabel />}
           </span>
           <p className="max-w-[var(--measure)] truncate text-[13.5px] text-muted">{item.detail}</p>
           {isBouncedGate && (

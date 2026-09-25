@@ -20,6 +20,7 @@ import { BOUNCED_INSTRUCTION, DecidePanel, INFLIGHT_INSTRUCTION, ROUND_CAP_INSTR
 import { DiffView } from '../components/diff-view.tsx'
 import { EvidenceRollupPanel, G2Packet } from '../components/evidence.tsx'
 import { FindingsPanel, useReviews, VerdictChip } from '../components/findings.tsx'
+import { FixtureLabel, isFixtureSource } from '../components/fixture-label.tsx'
 import { G1Packet } from '../components/g1.tsx'
 import { CitedObjects, CitedText, LexiconProvider, useRunLexicon } from '../components/lexicon.tsx'
 import { Markdown } from '../components/markdown.tsx'
@@ -282,6 +283,7 @@ export function RunPage() {
     <header className="mb-6">
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
         <h1 className="text-[28px] font-semibold leading-[1.15] text-ink">{summary.slug}</h1>
+        {isFixtureSource(summary.source) && <FixtureLabel />}
         <p className="min-w-0 font-mono text-[12.5px] leading-[1.6] text-muted">
           {genesisIntake && genesisCommit && (
             <>

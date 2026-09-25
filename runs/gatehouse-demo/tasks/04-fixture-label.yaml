@@ -56,3 +56,40 @@ depends_on: [01-artifact-path-route]
 status: pending
 
 notes: |
+  Implementer r1: built exactly the scope. New
+  packages/web/src/components/fixture-label.tsx exports `isFixtureSource`
+  (value-imports `FIXTURE_SOURCE_ID` from `@gateline/server/contract`, the
+  one workspace module web may import per web/test/boundary.test.ts) and
+  `FixtureLabel`, an `Imp tone="hatch" data-fixture-label` wrapping the
+  literal text "fixture data" with the spec's title string. Wired it in at
+  the three call sites: run.tsx renders `<FixtureLabel />` right after the
+  `<h1>` in the header's first flex row, gated on
+  `isFixtureSource(summary.source)`; inbox.tsx's `InboxRow` renders it beside
+  the `{item.source}/{item.slug}` span inside the same flex-wrap row, gated
+  on `isFixtureSource(item.source)`; portfolio.tsx's run cell renders
+  `<FixtureLabel className="ml-2" />` on the `{run.source} · {run.profile}`
+  line, gated on `isFixtureSource(run.source)`. New
+  packages/web/test/fixture-label.test.ts is the layer-2 `.ts` test
+  (renderToStaticMarkup, no jsdom) asserting `isFixtureSource('fixture')` is
+  true, `isFixtureSource('gateline')` is false, and the rendered markup
+  contains both `data-fixture-label` and the visible text `fixture data`.
+
+  Hand-verified both fixtures against mutants on a scratch copy of
+  fixture-label.tsx, each reverted after: (a) `isFixtureSource` hard-coded to
+  `return true` — killed the "is false for a real source id" case; (b)
+  renamed `data-fixture-label` to `data-fixture-badge` and changed the text
+  to "fixture info" — killed the "renders the data hook and visible text"
+  case (both assertions in that test failed independently). Restored the
+  file after each mutant and confirmed it matched the pre-mutant version
+  before re-running the full suite.
+
+  Verification (packages/): `npx tsc -p web/tsconfig.json` clean (no output);
+  `npx vitest run web/test` — 22 test files, 261 tests passed, including
+  boundary.test.ts unchanged; `npm run lint` — "Checked 231 files in 67ms. No
+  fixes applied." Did not touch server or core; `FIXTURE_SOURCE_ID` and `Imp`
+  were consumed exactly as they already existed. Files changed: new
+  packages/web/src/components/fixture-label.tsx,
+  packages/web/test/fixture-label.test.ts; modified
+  packages/web/src/pages/run.tsx, packages/web/src/pages/inbox.tsx,
+  packages/web/src/pages/portfolio.tsx (import + one render line each). Left
+  uncommitted per dispatch.

@@ -5,6 +5,7 @@ import { type ReactNode, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { api, formatAge, type RunSummary } from '../api.ts'
 import { BudgetMeter, GateLedger, Imp, PhaseChip } from '../components/chips.tsx'
+import { FixtureLabel, isFixtureSource } from '../components/fixture-label.tsx'
 import { EdgeFade, useScrollCue } from '../scroll-cue.tsx'
 import { PageStatus } from './inbox.tsx'
 
@@ -177,6 +178,7 @@ export function PortfolioPage() {
                       </Link>
                       <div className="mt-[2px] font-mono text-[11.5px] text-muted">
                         {run.source} · {run.profile}
+                        {isFixtureSource(run.source) && <FixtureLabel className="ml-2" />}
                       </div>
                       {run.malformed && (
                         <div className="mt-[3px] font-mono text-[11.5px] text-warn before:content-['✕_']">{run.malformed}</div>

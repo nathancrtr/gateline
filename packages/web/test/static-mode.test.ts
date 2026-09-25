@@ -2,7 +2,7 @@
 // every helper takes its env explicitly here rather than reading the module's
 // build-time `env`, so the same assertions cover both builds without two
 // separate builds running under vitest.
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { artifactPath } from '../src/api.ts'
 import { eventsUrl, pathPrefix, readUrl, routerBasename, type StaticModeEnv, writeUrl } from '../src/static-mode.ts'
 
@@ -28,6 +28,10 @@ describe('static-mode: live env reproduces today\'s URLs', () => {
 
   it('routerBasename is /', () => {
     expect(routerBasename(LIVE)).toBe('/')
+  })
+
+  it('readUrl never throws on a query string — the guard is static-only', () => {
+    expect(readUrl('/api/x?y=1', LIVE)).toBe('/api/x?y=1')
   })
 })
 
@@ -85,5 +89,50 @@ describe('artifactPath: the path form the server route expects (ADR-2)', () => {
 
   it('encodes characters that would otherwise change the URL grammar', () => {
     expect(artifactPath('repo', 'slug', 'a b/c?d.md')).toBe('/api/runs/repo/slug/artifact/a%20b/c%3Fd.md')
+  })
+})
+
+// F1: the module-level `env` and `api`'s wiring into `readUrl`/`artifactPath`
+// are otherwise untested — every fixture above supplies its own `StaticModeEnv`
+// and never exercises the build-time flag or the two call sites that read the
+// module default. These three pin that: the flag itself, and both of `api`'s
+// two shapes of GET (a plain path and the artifact path form) resolving through
+// it. `vi.resetModules()` before each dynamic `import()` is required because
+// `env` is computed once, at module evaluation, from `import.meta.env`.
+describe('static-mode: the build-time flag actually gates behaviour (F1)', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.unstubAllGlobals()
+    vi.resetModules()
+  })
+
+  it('VITE_GATELINE_STATIC=1 makes env.isStatic true (not truthy-by-accident: only exactly "1")', async () => {
+    vi.stubEnv('VITE_GATELINE_STATIC', '1')
+    vi.stubEnv('BASE_URL', '/demo/')
+    vi.resetModules()
+    const { env } = await import('../src/static-mode.ts')
+    expect(env).toEqual({ baseUrl: '/demo/', isStatic: true })
+  })
+
+  it('api.inbox() resolves through readUrl in static mode: fetches /demo/api/inbox.json', async () => {
+    vi.stubEnv('VITE_GATELINE_STATIC', '1')
+    vi.stubEnv('BASE_URL', '/demo/')
+    vi.resetModules()
+    const fetchMock = vi.fn(async () => new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { api } = await import('../src/api.ts')
+    await api.inbox()
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith('/demo/api/inbox.json')
+  })
+
+  it('api.artifact() resolves through artifactPath + readUrl in static mode: fetches the .json file form', async () => {
+    vi.stubEnv('VITE_GATELINE_STATIC', '1')
+    vi.stubEnv('BASE_URL', '/demo/')
+    vi.resetModules()
+    const fetchMock = vi.fn(async () => new Response('{}', { status: 200, headers: { 'content-type': 'application/json' } }))
+    vi.stubGlobal('fetch', fetchMock)
+    const { api } = await import('../src/api.ts')
+    await api.artifact('fixture', 'g2-pending', 'tasks/01-core.yaml')
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith('/demo/api/runs/fixture/g2-pending/artifact/tasks/01-core.yaml.json')
   })
 })

@@ -50,7 +50,7 @@ export function writeUrl(path: string, e: StaticModeEnv = env): string {
 /** The live-invalidation stream's URL, or `null` when the app was built
  * static — the static demo opens no `EventSource` at all (R4). */
 export function eventsUrl(e: StaticModeEnv = env): string | null {
-  return e.isStatic ? null : pathPrefix(e) + '/api/events'
+  return e.isStatic ? null : `${pathPrefix(e)}/api/events`
 }
 
 /** `createBrowserRouter`'s `basename`: the prefix, or `/` when there is

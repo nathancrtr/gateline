@@ -173,3 +173,91 @@ notes: |
   `packages/web/.env.static` (new), `packages/web/src/vite-env.d.ts` (new),
   `packages/web/package.json`, `packages/web/scripts/check-bundle.mjs`,
   `packages/.gitignore`, `packages/web/test/static-mode.test.ts` (new).
+
+  Round 2 (implementer). Addressed all four findings from
+  `runs/gatehouse-demo/review-03.md` (verdict request-changes).
+
+  - **F1 (major, fixed).** Added a fourth describe block to
+    `packages/web/test/static-mode.test.ts`, "the build-time flag actually
+    gates behaviour (F1)", exactly along the lines the review sketched:
+    `vi.stubEnv('VITE_GATELINE_STATIC', '1')` + `vi.stubEnv('BASE_URL',
+    '/demo/')` + `vi.resetModules()` + dynamic `import()`, with
+    `afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals();
+    vi.resetModules() })` so each case starts clean. Three new tests: (1)
+    `env` equals `{ baseUrl: '/demo/', isStatic: true }` under the stubbed
+    flag — pins the flag itself, and specifically that only the literal `'1'`
+    trips it; (2) `api.inbox()` with `vi.stubGlobal('fetch', ...)` asserts
+    the mock was called (`toHaveBeenCalledExactlyOnceWith`) with
+    `/demo/api/inbox.json` — pins `getJson` routing through `readUrl`; (3)
+    `api.artifact('fixture', 'g2-pending', 'tasks/01-core.yaml')` asserts the
+    mock was called with
+    `/demo/api/runs/fixture/g2-pending/artifact/tasks/01-core.yaml.json` —
+    pins `api.artifact` routing through `artifactPath` then `readUrl`.
+    `BASE_URL` is stubbed alongside the flag so the asserted URLs are exact
+    (not dependent on whatever `import.meta.env.BASE_URL` happens to default
+    to under vitest), per the review's note. No DOM entered the file — the
+    stubs are `fetch`/`import.meta.env`, both DOM-free.
+
+    Mutant-kill evidence (hand-patched a scratch copy in place — via `sed` on
+    the tracked files, confirmed the fixture failed, then restored from a
+    `/tmp` backup of the pre-mutation files and diffed clean before
+    continuing):
+    (a) `static-mode.ts:23` `=== '1'` → `=== 'true'`: all three new F1 tests
+    failed (`env` test: got `isStatic: false`; both `api` tests: fetched the
+    un-prefixed, un-suffixed live-style URL instead).
+    (b) `api.ts:181` `fetch(readUrl(path))` → `fetch(path)`: the `api.inbox`
+    and `api.artifact` F1 tests both failed (fetched `/api/inbox` and
+    `/api/runs/.../artifact/tasks/01-core.yaml` respectively — no `/demo`
+    prefix, no `.json`).
+    (c) `api.ts:232` reverted `api.artifact` to the query form
+    (`` `/api/runs/${src}/${slug}/artifact?path=${encodeURIComponent(path)}` ``):
+    the `api.artifact` F1 test failed — not with a mismatch but with
+    `readUrl` *throwing* ("static mode cannot address a query string as a
+    file"), which is exactly the review's predicted static-demo failure mode
+    for this mutant.
+    All three reverted; each revert diffed clean against the pre-mutation
+    backup before moving to the next.
+
+  - **F2 (minor, fixed).** Added `readUrl('/api/x?y=1', LIVE)` →
+    `/api/x?y=1` to the live-env describe block in
+    `static-mode.test.ts`. Mutant-kill: dropped `e.isStatic &&` from the
+    guard at `static-mode.ts:38` (`if (path.includes('?'))` unconditional) —
+    the new test failed (`readUrl` threw on the live case instead of passing
+    the query straight through). Reverted, diffed clean.
+
+  - **F3 (minor, fixed).** `packages/web/scripts/check-bundle.mjs`'s
+    empty-bundle message now interpolates `DIST` (matching line 85's
+    pattern) instead of the literal string `dist/`.
+
+  - **F4 (minor, fixed).** `packages/web/src/static-mode.ts`'s `eventsUrl`
+    now returns a template literal (`` `${pathPrefix(e)}/api/events` ``)
+    instead of string concatenation. `npx biome check web/src/static-mode.ts`
+    reported the `lint/style/useTemplate` info before the fix and is silent
+    after.
+
+  Verification (from `packages/`, after `npm install` — added 5 packages,
+  no lockfile change; `git status` stayed limited to the three files this
+  round touches before and after):
+  - `npx tsc -p web/tsconfig.json` — clean, no output.
+  - `npx vitest run web/test` — 21 files, 258 tests, all passed (254 from
+    round 1 plus the 4 new: three F1 cases, one F2 case; `boundary.test.ts`
+    still green).
+  - `npm run lint` (root) — `biome check .`, 227 files, no fixes applied, no
+    diagnostics at all (round 1 had one `useTemplate` info; F4 removed it).
+  - `npm run build` (root, live) — succeeds from a clean `dist/`;
+    `packages/web/dist/index.html` asset URLs are `/assets/…`.
+  - `npm run build:static -w @gateline/web` — succeeds from a clean
+    `dist-static/`; `packages/web/dist-static/index.html` asset URLs are
+    `/demo/assets/…` (grepped directly).
+  - `npx playwright test` — first run: 48/49 passed, one failure in
+    `e2e/smoke.spec.ts` ("run lexicon (#163): ids resolve to verbatim hover
+    cards and jump to their definition") on a click being intercepted by a
+    table header — this matches the known geometry flake on this spec file
+    (800px card edge, ~3px CI variance) and is unrelated to anything in this
+    task's surface. Rerun: 49/49 passed clean.
+
+  Files touched this round, all inside the declared `file_contact_surface`:
+  `packages/web/src/static-mode.ts`, `packages/web/scripts/check-bundle.mjs`,
+  `packages/web/test/static-mode.test.ts`. No other file changed; `git
+  status` shows exactly these three modified, nothing untracked, build
+  outputs land in the already-ignored `dist/` / `dist-static/`.

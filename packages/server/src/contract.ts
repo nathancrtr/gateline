@@ -18,8 +18,9 @@
  *    depends on the view-model layer (it serializes 15 view-model symbols),
  *    so it can name these types without reaching anywhere it does not already.
  * 2. **Types only, and browser-safe.** Everything imported from core is
- *    `import type`, which erases at build. `API_VERSION` is the one value, and
- *    it is a number. Nothing here may import Hono, node builtins, or any core
+ *    `import type`, which erases at build. `API_VERSION` and `FIXTURE_SOURCE_ID`
+ *    are the two browser-safe primitive values exported: a number and a
+ *    string. Nothing here may import Hono, node builtins, or any core
  *    *value* — `web/test/boundary.test.ts` and the post-build bundle check
  *    both enforce that from the other side.
  * 3. **A response type is what the handler must produce.** `respond()` in
@@ -75,6 +76,13 @@ import type {
  * can say so instead of failing in pieces.
  */
 export const API_VERSION = 1
+
+/**
+ * The source id the demo snapshot assigns to the generated fixture repository
+ * (ADR-5). The web labels runs from this source as fixture data, wherever a
+ * run's `source` equals it.
+ */
+export const FIXTURE_SOURCE_ID = 'fixture'
 
 /** Core types that cross the wire. Re-exported so a client imports one module. */
 export type {
@@ -361,6 +369,12 @@ export interface ApiRoutes {
   'POST /api/runs': { request: StageRequest; response: StageResponse }
   'GET /api/runs/:src/:slug': { response: RunDetailResponse }
   'GET /api/runs/:src/:slug/artifact': { response: ArtifactResponse }
+  /**
+   * Path form of the artifact read (ADR-2): the remainder after `/artifact/`
+   * is the run-relative artifact path, URL-encoded per segment. Same response
+   * as the query form above, which stays for older clients.
+   */
+  'GET /api/runs/:src/:slug/artifact/*': { response: ArtifactResponse }
   'GET /api/runs/:src/:slug/lexicon': { response: LexiconResponse }
   'GET /api/runs/:src/:slug/reviews': { response: ReviewsResponse }
   'GET /api/runs/:src/:slug/evidence': { response: EvidenceRollup }

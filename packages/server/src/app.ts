@@ -366,16 +366,44 @@ export function createApp(deps: AppDeps): Hono {
     return respond<'GET /api/runs/:src/:slug'>(c, { ...payload, now: Math.floor(Date.now() / 1000) })
   })
 
-  app.get('/api/runs/:src/:slug/artifact', async (c) => {
-    const path = c.req.query('path')
-    if (!path) return fail(c, 400, { error: 'path query parameter required' })
-    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+  // Shared by both artifact route forms (ADR-2) so they cannot drift. The
+  // route key is a type parameter, defaulted to the query form, so each
+  // route's respond<> call still checks against its own contract entry even
+  // though both currently declare the identical ArtifactResponse.
+  const readArtifact = async <
+    K extends 'GET /api/runs/:src/:slug/artifact' | 'GET /api/runs/:src/:slug/artifact/*' = 'GET /api/runs/:src/:slug/artifact',
+  >(
+    c: Context,
+    src: string,
+    slug: string,
+    path: string,
+  ) => {
+    const found = await findRun(src, slug)
     if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
     const content = await source.readArtifact(ref, path)
     if (content === null) return fail(c, 404, { error: `no artifact at ${path}` })
     const validation = await validateArtifact(path, content, source.templates)
-    return respond<'GET /api/runs/:src/:slug/artifact'>(c, { path, content, validation })
+    return respond<K>(c, { path, content, validation })
+  }
+
+  app.get('/api/runs/:src/:slug/artifact', async (c) => {
+    const path = c.req.query('path')
+    if (!path) return fail(c, 400, { error: 'path query parameter required' })
+    return readArtifact(c, c.req.param('src'), c.req.param('slug'), path)
+  })
+
+  // Path form (ADR-2, R1): every read is addressable as a file, which the
+  // static demo snapshot depends on. The remainder is taken from the raw
+  // pathname (rather than Hono's own wildcard capture) and decoded once, so
+  // a caller who encodes each path segment per ADR-2 gets back the literal
+  // run-relative path, slashes included.
+  app.get('/api/runs/:src/:slug/artifact/*', async (c) => {
+    const match = new URL(c.req.url).pathname.match(/^\/api\/runs\/[^/]+\/[^/]+\/artifact\/(.+)$/)
+    const remainder = match ? match[1] : ''
+    if (!remainder) return fail(c, 400, { error: 'artifact path required' })
+    const path = decodeURIComponent(remainder)
+    return readArtifact<'GET /api/runs/:src/:slug/artifact/*'>(c, c.req.param('src'), c.req.param('slug'), path)
   })
 
   // The run lexicon (#163): verbatim R/AC/ADR definitions from this run's

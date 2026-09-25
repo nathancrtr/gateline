@@ -1,0 +1,91 @@
+id: 03-web-static-mode
+title: Static build mode for the web app (base path, .json reads, no event stream)
+requirements: [R1, R4, R5, R6]
+
+scope: |
+  Make one build of the web app servable from files under `/demo/`, without
+  changing the live build's behaviour (plan ADR-1, ADR-2, ADR-4, "Web client
+  URL resolution", "Web build").
+
+  1. New `packages/web/src/static-mode.ts` with exactly the plan's signatures:
+     `env` (from `import.meta.env.BASE_URL` and
+     `import.meta.env.VITE_GATELINE_STATIC === '1'`), `pathPrefix`, `readUrl`
+     (prefix + path, plus `.json` when static; throw if static and the path
+     contains `?`), `writeUrl` (prefix + path, never suffixed), `eventsUrl`
+     (null when static, else prefix + `/api/events`), `routerBasename`
+     (`pathPrefix(e) || '/'`). Every function takes an optional env so tests
+     pass their own.
+  2. `packages/web/src/api.ts`: `getJson` fetches `readUrl(path)`; the two
+     POSTs (`stage`, `decide`) fetch `writeUrl('/api/runs')` and
+     `writeUrl('/api/decisions')`; `api.artifact` requests the path form
+     `/api/runs/${src}/${slug}/artifact/${path.split('/').map(encodeURIComponent).join('/')}`
+     (the server route from task 01). Nothing else in the file changes; the
+     `ApiError` failure path is untouched — that is what R5 relies on.
+  3. `packages/web/src/use-live.ts`: inside the effect, `const url = eventsUrl();
+     if (url === null) return;` before constructing `EventSource(url)`. The
+     hook is still called unconditionally.
+  4. `packages/web/src/main.tsx`: `createBrowserRouter(routes, { basename: routerBasename() })`.
+  5. `packages/web/vite.config.ts` becomes `defineConfig(({ mode }) => ({ … }))`
+     with `base: mode === 'static' ? '/demo/' : '/'` and
+     `build: mode === 'static' ? { outDir: 'dist-static' } : undefined`;
+     plugins and the dev server proxy unchanged.
+  6. New `packages/web/.env.static` containing `VITE_GATELINE_STATIC=1`, and
+     new `packages/web/src/vite-env.d.ts` with
+     `/// <reference types="vite/client" />` plus an `ImportMetaEnv`
+     augmentation declaring `readonly VITE_GATELINE_STATIC?: string`.
+  7. `packages/web/package.json`: add
+     `"build:static": "tsc -p tsconfig.json && vite build --mode static && node scripts/check-bundle.mjs dist-static"`.
+     `packages/web/scripts/check-bundle.mjs`: resolve `DIST` from an optional
+     `process.argv[2]` (relative to `packages/web`, default `dist`); keep its
+     exported `scan` and CLI guard unchanged. Add `dist-static/` to
+     `packages/.gitignore`.
+
+  Tests in `packages/web/test/static-mode.test.ts` (pure, no DOM): with
+  `{ baseUrl: '/', isStatic: false }` every helper reproduces today's URLs
+  (`/api/inbox`, `/api/decisions`, `/api/events`, basename `/`); with
+  `{ baseUrl: '/demo/', isStatic: true }` reads become
+  `/demo/api/runs/fixture/g2-pending.json`, writes `/demo/api/decisions`,
+  `eventsUrl` is null, basename is `/demo`; `readUrl` throws on a `?` path in
+  static mode. Also assert the artifact URL grammar by calling the exported
+  helper you use for it (export a small `artifactPath(src, slug, path)` from
+  `api.ts` if that is the cleanest way; it must encode each segment and keep
+  the slashes).
+
+  Verify by hand and record in notes: `npm run build:static -w @gateline/web`
+  produces `packages/web/dist-static/index.html` whose asset URLs start with
+  `/demo/assets/`, and `npm run build` still produces `packages/web/dist` as
+  before. `web/test/boundary.test.ts` must stay green (no new workspace
+  imports). Existing e2e (`npx playwright test`) must pass against the live
+  build — the artifact viewer now uses the path route.
+
+  Constraints: no new dependencies; the live build's requests must be
+  byte-identical to today's except `api.artifact`'s URL.
+
+file_contact_surface:
+  - packages/web/src/static-mode.ts
+  - packages/web/src/api.ts
+  - packages/web/src/use-live.ts
+  - packages/web/src/main.tsx
+  - packages/web/vite.config.ts
+  - packages/web/.env.static
+  - packages/web/src/vite-env.d.ts
+  - packages/web/package.json
+  - packages/web/scripts/check-bundle.mjs
+  - packages/.gitignore
+  - packages/web/test/static-mode.test.ts
+
+acceptance_tests:
+  - AC1.2
+  - AC4.2
+  - AC5.1
+  - AC5.2
+  - AC6.1
+  - "vitest static-mode.test.ts: live env reproduces today's URLs; static env yields /demo-prefixed .json reads, unsuffixed writes, null events URL, basename /demo"
+  - "npm run build:static -w @gateline/web succeeds and dist-static/index.html references /demo/assets/"
+  - "npm run build (live) succeeds; npx tsc -p web/tsconfig.json, npx vitest run web/test and npx playwright test pass"
+
+depends_on: [01-artifact-path-route]
+
+status: pending
+
+notes: |

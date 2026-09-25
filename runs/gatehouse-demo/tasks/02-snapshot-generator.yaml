@@ -1,0 +1,99 @@
+id: 02-snapshot-generator
+title: Static snapshot generator with done-on-default-branch content selection
+requirements: [R1, R2, R4, R6, R9]
+
+scope: |
+  Write `packages/server/src/snapshot.ts` exactly as the plan's "Snapshot
+  generator" and "Demo tree layout" contracts describe (plan ADR-1, ADR-3,
+  ADR-6). It is a script, not a CLI subcommand: nothing under `packages/cli`
+  changes, and it must never import `./main.ts`, `@hono/node-server`, or call
+  `serve(`/`.listen(`.
+
+  1. `DoneOnDefaultBranchSource implements RunSource`, wrapping a
+     `LocalGitSource`. `survey()` reads `inner.git.defaultBranch()`, the runs
+     root from `inner.frameworkRoots()`, lists slugs with
+     `inner.git.lsTreeDirs(defaultBranch, runsRoot)`, reads each
+     `runs/<slug>/state.yaml` with `inner.git.show`, parses it with core's
+     `parseRunState`, and includes the slug only when the parsed phase is
+     exactly 'done'; everything else lands in `excluded` with a reason
+     ("phase <p>", "state.yaml unreadable: <error>", or "no state.yaml").
+     `listRuns()` returns, for each included slug, a `RunRef` with
+     source = this.id, slug, ref = the default branch, kind = 'default',
+     branch = 'run/' + slug, sorted by slug. Every other `RunSource` member,
+     including the optional ones (`runHistory`, `aheadOfOrigin`,
+     `behindOrigin`, `originUrl`), delegates to the inner source. Expose no
+     `dir` property (so `/api/engine-health` skips it).
+  2. `buildDemoSources({ repo, repoId })`: the real source is
+     `new DoneOnDefaultBranchSource(new LocalGitSource(repoId, repo, { localOnly: true }))`;
+     the fixture source is
+     `new LocalGitSource(FIXTURE_SOURCE_ID, generateFixtureRepo().dir, { localOnly: true })`
+     (`FIXTURE_SOURCE_ID` from `./contract.ts`). Return both, the fixture dir,
+     and the wrapper.
+  3. `writeSnapshot(app, { outDir, webDist?, excluded? })`: for each route in
+     `SNAPSHOT_GLOBAL_ROUTES`, then for every run in the `/api/runs` body for
+     each `SNAPSHOT_RUN_ROUTES` suffix, then for every path in each run's
+     detail `artifacts` as `/api/runs/<src>/<slug>/artifact/<path>` (segments
+     `encodeURIComponent`-ed in the request, decoded in the filename), call
+     `app.request(route)`; a non-2xx status throws an Error whose message is
+     the route followed by " → " and the status; write the body text to
+     `<outDir><route>.json`, creating directories. When `webDist` is given,
+     copy it recursively into `outDir` (`fs.cp` with `recursive: true`), then
+     write a copy of `<webDist>/index.html` at `<outDir>/<shell>/index.html`
+     for each of `ROUTE_SHELLS` (except the empty shell, which the copy
+     already covers) and for `runs/<source>/<slug>` per run. Return the
+     `SnapshotReport`.
+  4. CLI guard in the workspace's idiom
+     (`process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)`):
+     parse `--repo`, `--out`, `--repo-id` (default `gateline`), `--web-dist`;
+     `createApp({ sources })`; print each excluded slug with its reason to
+     stderr, a one-line summary (routes, runs by source, shells) to stdout;
+     exit 1 with the error message on failure. Remove the generated fixture
+     dir on exit. Add `"snapshot": "node src/snapshot.ts"` to
+     `packages/server/package.json` scripts.
+
+  Tests in `packages/server/test/snapshot.test.ts` (vitest, fixture-based like
+  `app.test.ts`): generate two fixture repos; wrap one in
+  `DoneOnDefaultBranchSource` (expect `listRuns()` = only `done-merged`, and
+  `survey().excluded` empty since only one run lives on the fixture's main);
+  use the other as the `fixture` source; `writeSnapshot` into a temp dir with
+  a fake `webDist` (an `index.html` plus `assets/x.js`) and assert: a file
+  exists for every global route and every per-run route of every run in
+  `runs.json`; one `artifact/<path>.json` per entry in each run's detail
+  `artifacts`, parsing to the same body as `app.request` for that route;
+  `runs.json` lists exactly `done-merged` from the wrapped source plus every
+  `FixtureRepo.runs` slug from the fixture source and nothing else; shells
+  exist at `index.html`, `portfolio/index.html`, `portfolio/new/index.html`,
+  `metrics/index.html` and `runs/fixture/g2-pending/index.html`;
+  `assets/x.js` was copied; the module's own source text contains neither
+  `serve(` nor `.listen(`; and no file under `packages/cli/src` mentions
+  `snapshot` (assert by reading the cli source tree in the test).
+
+  Constraints: no new dependencies (`@gateline/fixtures` is already a server
+  devDependency); erasable TypeScript only, `.ts` import extensions; both
+  sources `localOnly: true` so the script never fetches or pushes.
+
+file_contact_surface:
+  - packages/server/src/snapshot.ts
+  - packages/server/test/snapshot.test.ts
+  - packages/server/package.json
+
+acceptance_tests:
+  - AC1.1
+  - AC1.2
+  - AC1.3
+  - AC2.1
+  - AC2.2
+  - AC4.1
+  - AC6.1
+  - AC9.1
+  - "vitest snapshot.test.ts: every route in the plan's tree layout exists as <route>.json and parses as JSON"
+  - "vitest snapshot.test.ts: runs.json = {done-merged from the wrapped source} plus {every generateFixtureRepo() run}, no others"
+  - "vitest snapshot.test.ts: shells exist for '', portfolio, portfolio/new, metrics and runs/<src>/<slug> per run"
+  - "grep -E 'serve\\(|\\.listen\\(' packages/server/src/snapshot.ts returns no matches"
+  - "npm run typecheck && npm test && npm run lint pass in packages/"
+
+depends_on: [01-artifact-path-route]
+
+status: pending
+
+notes: |

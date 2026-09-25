@@ -1,0 +1,57 @@
+id: 01-artifact-path-route
+title: Path-form artifact route and the fixture source id in the wire contract
+requirements: [R1]
+
+scope: |
+  Give the server an artifact read that a static file host can serve, and put
+  the one shared constant the demo needs into the wire contract (plan ADR-2,
+  ADR-5, "Interface contracts").
+
+  In `packages/server/src/contract.ts`:
+  - add `export const FIXTURE_SOURCE_ID = 'fixture'` with a doc comment saying
+    it is the source id the demo snapshot gives the generated fixture repo and
+    that the web labels runs from it as fixture data;
+  - add the route key `'GET /api/runs/:src/:slug/artifact/*': { response: ArtifactResponse }`
+    to `ApiRoutes`, documented as the path form of the artifact read whose
+    remainder is the run-relative artifact path, URL-encoded per segment;
+  - update the header comment's "API_VERSION is the one value" rule to name
+    the two browser-safe primitive values now exported. Do not bump
+    `API_VERSION` — nothing is removed or narrowed.
+
+  In `packages/server/src/app.ts`:
+  - extract the body of the existing `GET /api/runs/:src/:slug/artifact`
+    handler into one private async helper taking `(c, src, slug, path)`;
+  - register `app.get('/api/runs/:src/:slug/artifact/*', …)` whose remainder is
+    `decodeURIComponent` of group 1 of
+    `/^\/api\/runs\/[^/]+\/[^/]+\/artifact\/(.+)$/` applied to
+    `new URL(c.req.url).pathname`; an empty remainder is
+    `fail(c, 400, { error: 'artifact path required' })`; everything else calls
+    the shared helper so the two forms cannot drift;
+  - use `respond<'GET /api/runs/:src/:slug/artifact/*'>` for the new route.
+
+  In `packages/server/test/app.test.ts`, add cases: the path form returns the
+  same body as the query form for `spec.md` and for a nested path
+  (`tasks/01-core.yaml`) on a fixture run; a missing artifact is 404 with a
+  string `error`; an unknown run is 404; the query form still works unchanged.
+  Keep `npm run typecheck`, `npm test` and `npm run lint` green.
+
+  Constraints: no new dependencies; Node 24 runs the TypeScript directly, so
+  only erasable syntax and explicit `.ts` import extensions.
+
+file_contact_surface:
+  - packages/server/src/contract.ts
+  - packages/server/src/app.ts
+  - packages/server/test/app.test.ts
+
+acceptance_tests:
+  - AC1.2
+  - "vitest: GET /api/runs/<src>/<slug>/artifact/spec.md returns 200 with a body deep-equal to GET …/artifact?path=spec.md"
+  - "vitest: GET /api/runs/<src>/<slug>/artifact/tasks/01-core.yaml returns 200 with path 'tasks/01-core.yaml'"
+  - "vitest: GET /api/runs/<src>/<slug>/artifact/nope.md returns 404 with a string error; unknown run returns 404"
+  - "npm run typecheck && npm test && npm run lint pass in packages/"
+
+depends_on: []
+
+status: pending
+
+notes: |

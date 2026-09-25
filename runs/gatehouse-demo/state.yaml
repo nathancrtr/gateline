@@ -1,0 +1,216 @@
+run: gatehouse-demo
+branch: run/gatehouse-demo
+phase: implement # staged — not yet armed; `gateline arm gatehouse-demo` starts the run
+paused_reason: null
+profile: standard # patch | standard | full
+intake:
+  # source-agnostic staging provenance; free-form path: nulls + client_key
+  source: null
+  ref: null
+  url: null
+  client_key: null
+  staged_by: "Nathan Carter"
+budget:
+  cost_limit_usd: 50
+  cost_spent_usd: 41.9
+  ledger:
+    [
+      {
+          at: 2026-09-25T20:52:01.586Z,
+          role: analyst,
+          task: null,
+          round: null,
+          adapter: claude-code,
+          model: sonnet,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:99447,
+          tokens_in: 162,
+          tokens_out: 2500,
+          cost_usd: 1.7190371500000008
+        },
+      {
+          at: 2026-09-25T21:11:33.710Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: claude-code,
+          model: fable,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:99447,
+          tokens_in: 66,
+          tokens_out: 2142,
+          cost_usd: 9.397183499999999
+        },
+      {
+          at: 2026-09-25T22:18:09.931Z,
+          role: implementer,
+          task: 01-artifact-path-route,
+          round: 1,
+          adapter: claude-code,
+          model: claude-opus-5-5,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:10935,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: 8,
+          failed: true
+        },
+      {
+          at: 2026-09-25T22:21:00.470Z,
+          role: implementer,
+          task: 01-artifact-path-route,
+          round: 1,
+          adapter: claude-code,
+          model: claude-opus-5-5,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:34260,
+          tokens_in: 162,
+          tokens_out: 2685,
+          cost_usd: 1.6843764000000003
+        },
+      {
+          at: 2026-09-25T22:29:02.741Z,
+          role: reviewer,
+          task: 01-artifact-path-route,
+          round: 1,
+          adapter: claude-code,
+          model: claude-fable-5-1,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:34260,
+          tokens_in: 194,
+          tokens_out: 3503,
+          cost_usd: 3.08803025
+        },
+      {
+          at: 2026-09-25T22:37:29.797Z,
+          role: implementer,
+          task: 01-artifact-path-route,
+          round: 2,
+          adapter: claude-code,
+          model: claude-opus-5-5,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:34260,
+          tokens_in: 194,
+          tokens_out: 2845,
+          cost_usd: 1.5080388000000005
+        },
+      {
+          at: 2026-09-25T22:47:12.660Z,
+          role: reviewer,
+          task: 01-artifact-path-route,
+          round: 2,
+          adapter: claude-code,
+          model: claude-fable-5-1,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:34260,
+          tokens_in: 194,
+          tokens_out: 3673,
+          cost_usd: 2.17886225
+        },
+      {
+          at: 2026-09-25T22:55:10.870Z,
+          role: implementer,
+          task: 02-snapshot-generator,
+          round: 1,
+          adapter: claude-code,
+          model: claude-opus-5-5,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:34260,
+          tokens_in: 258,
+          tokens_out: 3781,
+          cost_usd: 3.3292459499999993
+        },
+      {
+          at: 2026-09-25T22:55:10.870Z,
+          role: implementer,
+          task: 03-web-static-mode,
+          round: 1,
+          adapter: claude-code,
+          model: claude-opus-5-5,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:34260,
+          tokens_in: 162,
+          tokens_out: 2793,
+          cost_usd: 2.3272022500000005
+        },
+      {
+          at: 2026-09-25T23:03:15.528Z,
+          role: reviewer,
+          task: 03-web-static-mode,
+          round: 1,
+          adapter: claude-code,
+          model: claude-fable-5-1,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:34260,
+          tokens_in: 226,
+          tokens_out: 3821,
+          cost_usd: 3.6834979999999997
+        },
+      {
+          at: 2026-09-25T23:10:48.410Z,
+          role: implementer,
+          task: 03-web-static-mode,
+          round: 2,
+          adapter: claude-code,
+          model: claude-opus-5-5,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:34260,
+          tokens_in: 98,
+          tokens_out: 2799,
+          cost_usd: 1.79087435
+        },
+      {
+          at: 2026-09-25T23:18:36.449Z,
+          role: reviewer,
+          task: 03-web-static-mode,
+          round: 2,
+          adapter: claude-code,
+          model: claude-fable-5-1,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:34260,
+          tokens_in: 226,
+          tokens_out: 5577,
+          cost_usd: 3.1944974999999998
+        },
+      {
+          at: 2026-09-25T23:21:27.623Z,
+          role: reviewer,
+          task: 02-snapshot-generator,
+          round: 1,
+          adapter: claude-code,
+          model: claude-fable-5-1,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:34260,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
+        },
+      {
+          at: 2026-09-25T23:25:49.860Z,
+          role: implementer,
+          task: 04-fixture-label,
+          round: 1,
+          adapter: claude-code,
+          model: claude-opus-5-5,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:34260,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
+        }
+    ]
+gates:
+  # exactly PROFILE_GATES[standard] — no others
+  G0:
+    {
+      approved: true,
+      by: Nathan Carter,
+      at: 2026-09-25T21:11:21.583Z,
+      notes: null,
+      burden: confirmation
+    }
+  G1:
+    {
+      approved: true,
+      by: Nathan Carter,
+      at: 2026-09-25T22:17:45.652Z,
+      notes: null,
+      burden: confirmation
+    }
+  G2: { approved: false, by: null, at: null, notes: null }
+tasks:
+  [
+    { id: 01-artifact-path-route, status: review-approved, review_rounds: 2 },
+    { id: 02-snapshot-generator, status: in-review, review_rounds: 0 },
+    { id: 03-web-static-mode, status: review-approved, review_rounds: 2 },
+    { id: 04-fixture-label, status: dispatched, review_rounds: 0 },
+    { id: 05-static-render-check, status: pending, review_rounds: 0 },
+    { id: 06-pages-workflow, status: pending, review_rounds: 0 }
+  ]
+escalations: []

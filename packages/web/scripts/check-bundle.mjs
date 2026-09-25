@@ -19,7 +19,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const DIST = resolve(dirname(fileURLToPath(import.meta.url)), '../dist')
+const DIST = resolve(dirname(fileURLToPath(import.meta.url)), '..', process.argv[2] ?? 'dist')
 
 /**
  * The node builtin module names. Matching is deliberately narrow: a bundled
@@ -93,7 +93,7 @@ if (!dist.isDirectory()) {
 const assets = walk(DIST).filter((f) => /\.(js|mjs|cjs)$/.test(f))
 if (assets.length === 0) {
   // A silent pass here would make every future build "clean" by accident.
-  console.error('check-bundle: no JavaScript in dist/ — refusing to report a clean bundle')
+  console.error(`check-bundle: no JavaScript in ${DIST} — refusing to report a clean bundle`)
   process.exit(1)
 }
 

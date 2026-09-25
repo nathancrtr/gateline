@@ -1,0 +1,85 @@
+id: 06-pages-workflow
+title: Build, verify and gate the demo in the Pages workflow; document it
+requirements: [R7, R8, R9]
+
+scope: |
+  Wire the generator (task 02), the static build (task 03) and the render
+  check (task 05) into `.github/workflows/site-pages.yml`, gated on one
+  repository variable that defaults off (plan ADR-7, ADR-8, ADR-9, "Pages
+  workflow"). Keep every existing step and its order; add, do not rewrite.
+
+  1. Triggers: add `'runs/*/state.yaml'` to the `push` trigger's `paths` only.
+     The `pull_request` paths stay exactly as they are. Update the header
+     comment to say a run reaching `done` on `main` refreshes the demo.
+  2. `build` job: `actions/checkout@v4` gains `with: fetch-depth: 0` with a
+     comment naming why (finished runs' history and `run/*` branches).
+  3. After the existing "Assemble the published tree" step, add in order:
+     - `Build the Gatehouse demo bundle (static mode)`:
+       `npm run build:static -w @gateline/web`, working-directory `packages`.
+     - `Snapshot the demo (finished runs on main + the fixture)`:
+       `node server/src/snapshot.ts --repo "$GITHUB_WORKSPACE" --repo-id gateline --out "$GITHUB_WORKSPACE/_site/demo" --web-dist web/dist-static`,
+       working-directory `packages`.
+     - `The demo renders against its snapshot`:
+       `npx playwright install --with-deps chromium` then `npm run e2e:static`,
+       working-directory `packages`, `env: DEMO_SITE_ROOT: ${{ github.workspace }}/_site`.
+     - `Publication switch (repository variable GATELINE_PUBLISH_DEMO)`:
+       `if: vars.GATELINE_PUBLISH_DEMO != 'true'`, run `rm -rf _site/demo`
+       with an `echo` saying the demo was built and verified but is not being
+       published because the variable is not `true`. Comment the step with the
+       exact "on" value (`true`) and that flipping it is a human decision made
+       outside any run.
+     `actions/upload-pages-artifact@v3` and the `deploy` job (`if:
+     github.event_name == 'push'`) are unchanged, so pull requests still
+     never reach `actions/deploy-pages`.
+  4. Root `.gitignore`: add `/_site/` (the assembled tree, built locally by
+     the verifier recipe and never committed).
+  5. `site/README.md`: add a section "The Gatehouse demo" saying: `demo/` is
+     assembled into `_site/demo/` at build time and never committed; what it
+     contains (the static web bundle plus a JSON snapshot of every read
+     route, over the finished runs on `main` and the generated fixture); the
+     three commands the workflow runs and the local recipe from task 05's
+     notes; the gating variable `GATELINE_PUBLISH_DEMO` (unset = off, `true`
+     = on) and that the build runs and is verified either way; and that
+     fixture runs are labelled as fixture data in the UI. Consumer-agnostic
+     wording, no downstream organisation, none of the words audit, compliance
+     or regulator. Run `python3 site/scripts/check-names.py` and
+     `python3 site/scripts/build-site.py --check` afterwards (the README is
+     not a page, so the shell builder is unaffected, but confirm).
+
+  Verify by reasoning and, where possible, by running the steps locally in
+  order from a clean `_site`: the snapshot lands at `_site/demo/`; with the
+  variable unset the `rm` step runs and the upload tree carries no `demo/`;
+  with `GATELINE_PUBLISH_DEMO=true` the step is skipped. Record in notes
+  that this diff sets no repository variable (AC8.3 — variables are
+  repository settings, not files).
+
+  Constraints: no change under `deploy/`, `packages/framework`, roles,
+  contracts or the registry; no new Actions beyond those already used
+  (`actions/checkout`, `actions/setup-node`, `actions/upload-pages-artifact`,
+  `actions/deploy-pages`).
+
+file_contact_surface:
+  - .github/workflows/site-pages.yml
+  - site/README.md
+  - .gitignore
+
+acceptance_tests:
+  - AC7.1
+  - AC7.2
+  - AC7.3
+  - AC7.4
+  - AC8.1
+  - AC8.2
+  - AC8.3
+  - AC9.1
+  - AC9.2
+  - "site-pages.yml: build job has fetch-depth: 0, runs build:static, the snapshot CLI into _site/demo, and npm run e2e:static, on both triggers"
+  - "site-pages.yml: a step guarded by `vars.GATELINE_PUBLISH_DEMO != 'true'` removes _site/demo before upload-pages-artifact; deploy keeps `if: github.event_name == 'push'`"
+  - "python3 site/scripts/check-names.py passes; python3 site/scripts/build-site.py --check passes"
+  - "the run's diff contains no `deploy/` change and no repository-variable setting"
+
+depends_on: [05-static-render-check]
+
+status: pending
+
+notes: |

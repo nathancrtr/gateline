@@ -1,0 +1,112 @@
+id: 01-artifact-path-route
+title: Path-form artifact route and the fixture source id in the wire contract
+requirements: [R1]
+
+scope: |
+  Give the server an artifact read that a static file host can serve, and put
+  the one shared constant the demo needs into the wire contract (plan ADR-2,
+  ADR-5, "Interface contracts").
+
+  In `packages/server/src/contract.ts`:
+  - add `export const FIXTURE_SOURCE_ID = 'fixture'` with a doc comment saying
+    it is the source id the demo snapshot gives the generated fixture repo and
+    that the web labels runs from it as fixture data;
+  - add the route key `'GET /api/runs/:src/:slug/artifact/*': { response: ArtifactResponse }`
+    to `ApiRoutes`, documented as the path form of the artifact read whose
+    remainder is the run-relative artifact path, URL-encoded per segment;
+  - update the header comment's "API_VERSION is the one value" rule to name
+    the two browser-safe primitive values now exported. Do not bump
+    `API_VERSION` — nothing is removed or narrowed.
+
+  In `packages/server/src/app.ts`:
+  - extract the body of the existing `GET /api/runs/:src/:slug/artifact`
+    handler into one private async helper taking `(c, src, slug, path)`;
+  - register `app.get('/api/runs/:src/:slug/artifact/*', …)` whose remainder is
+    `decodeURIComponent` of group 1 of
+    `/^\/api\/runs\/[^/]+\/[^/]+\/artifact\/(.+)$/` applied to
+    `new URL(c.req.url).pathname`; an empty remainder is
+    `fail(c, 400, { error: 'artifact path required' })`; everything else calls
+    the shared helper so the two forms cannot drift;
+  - use `respond<'GET /api/runs/:src/:slug/artifact/*'>` for the new route.
+
+  In `packages/server/test/app.test.ts`, add cases: the path form returns the
+  same body as the query form for `spec.md` and for a nested path
+  (`tasks/01-core.yaml`) on a fixture run; a missing artifact is 404 with a
+  string `error`; an unknown run is 404; the query form still works unchanged.
+  Keep `npm run typecheck`, `npm test` and `npm run lint` green.
+
+  Constraints: no new dependencies; Node 24 runs the TypeScript directly, so
+  only erasable syntax and explicit `.ts` import extensions.
+
+file_contact_surface:
+  - packages/server/src/contract.ts
+  - packages/server/src/app.ts
+  - packages/server/test/app.test.ts
+
+acceptance_tests:
+  - AC1.2
+  - "vitest: GET /api/runs/<src>/<slug>/artifact/spec.md returns 200 with a body deep-equal to GET …/artifact?path=spec.md"
+  - "vitest: GET /api/runs/<src>/<slug>/artifact/tasks/01-core.yaml returns 200 with path 'tasks/01-core.yaml'"
+  - "vitest: GET /api/runs/<src>/<slug>/artifact/nope.md returns 404 with a string error; unknown run returns 404"
+  - "npm run typecheck && npm test && npm run lint pass in packages/"
+
+depends_on: []
+
+status: pending
+
+notes: |
+  Implementer r1: found packages/server/src/contract.ts and
+  packages/server/src/app.ts already carrying this task's full scope
+  (FIXTURE_SOURCE_ID, the header-comment update, the ApiRoutes wildcard key,
+  the extracted readArtifact helper, and the new route) — a survivor of the
+  prior r1 attempt that was aborted mid-drain but whose in-progress edits were
+  harvested (commit 828d99c) before this dispatch. Verified that code against
+  the plan's ADR-2 text and the task's scope line by line; no changes needed
+  there. Added the five vitest cases to packages/server/test/app.test.ts
+  (path form matches query form for spec.md; nested path
+  tasks/01-core.yaml; missing-artifact 404; unknown-run 404; query form
+  unchanged), all against fixture run g1-pending. Hand-verified each new
+  fixture against a mutant: (a) capturing match[0] instead of match[1] in the
+  path-form regex breaks both the "matches query form" and "nested path"
+  cases; (b) neutralizing the missing-content 404 check breaks the
+  missing-artifact case; (c) inverting the shared helper's not-found check
+  breaks the unknown-run case, the matches/nested-path cases, the existing
+  malformed-spec artifact test, and the query-form-unchanged case. All
+  mutants reverted and the file diffed identical to the pre-mutant original
+  afterward. `npm run typecheck`, `npm test` (1245 passed, 2 pre-existing
+  skips, unrelated), and `npm run lint` all green in packages/.
+
+  Implementer r2 (review-01.md, verdict request-changes): addressed all three
+  findings in code, no rebuttals.
+  - F1 (major — malformed percent-encoding path-form escapes as an uncaught
+    URIError, 500 text/plain instead of the 404 JSON shape): fixed. The
+    path-form handler in app.ts now wraps `decodeURIComponent(remainder)` in
+    try/catch and returns `fail(c, 400, { error: 'malformed artifact path' })`
+    on a decode failure, so malformed input answers the one JSON error shape
+    every route promises instead of Hono's default 500 handler. Added
+    `GET artifact path form 400s malformed percent-encoding instead of
+    500ing` against the reviewer's exact repro (`%E0%A4%A`).
+  - F2 (minor — no test pins the empty-remainder 400): fixed. Added
+    `GET artifact path form 400s an empty remainder` hitting
+    `/artifact/` directly.
+  - F3 (minor — no test exercises a percent-encoded segment): fixed. Added
+    `GET artifact path form decodes a percent-encoded segment` asserting
+    `spec%2Emd` → 200 with `path: 'spec.md'`.
+  Hand-verified each of the three new fixtures against the reviewer's own
+  named mutant, on top of the already-fixed code so each test is proven to
+  fail without its guard: (a) removing the try/catch (decode uncaught) — the
+  malformed-encoding test failed with the exact `URIError`/non-JSON-body
+  symptom the review named; (b) `(.+)` → `(.*)` with the empty-remainder
+  guard's effect nullified (guard line dropped as part of the same edit,
+  matching the review's mutant) — the empty-remainder test failed, 200
+  instead of 400; (c) `const path = remainder` (decode step dropped) — the
+  encoded-segment test failed, 404 instead of 200. All three mutants reverted
+  individually; `git diff packages/server/src/app.ts` after each revert
+  showed only the intended F1 fix (the try/catch), matching before the mutant
+  was introduced. Re-ran the full server/test/app.test.ts suite after all
+  mutant round-trips: 50/50 passed. Re-ran `npm run typecheck`, `npm run
+  lint` (clean) and full `npm test` (1248 passed, 2 pre-existing skips,
+  unrelated — the 3 new tests account for 1245 → 1248) in packages/, all
+  green. Files touched this round: packages/server/src/app.ts (the F1
+  try/catch),  packages/server/test/app.test.ts (the three new cases);
+  packages/server/src/contract.ts untouched — no finding named it.

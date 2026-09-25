@@ -1,0 +1,263 @@
+id: 03-web-static-mode
+title: Static build mode for the web app (base path, .json reads, no event stream)
+requirements: [R1, R4, R5, R6]
+
+scope: |
+  Make one build of the web app servable from files under `/demo/`, without
+  changing the live build's behaviour (plan ADR-1, ADR-2, ADR-4, "Web client
+  URL resolution", "Web build").
+
+  1. New `packages/web/src/static-mode.ts` with exactly the plan's signatures:
+     `env` (from `import.meta.env.BASE_URL` and
+     `import.meta.env.VITE_GATELINE_STATIC === '1'`), `pathPrefix`, `readUrl`
+     (prefix + path, plus `.json` when static; throw if static and the path
+     contains `?`), `writeUrl` (prefix + path, never suffixed), `eventsUrl`
+     (null when static, else prefix + `/api/events`), `routerBasename`
+     (`pathPrefix(e) || '/'`). Every function takes an optional env so tests
+     pass their own.
+  2. `packages/web/src/api.ts`: `getJson` fetches `readUrl(path)`; the two
+     POSTs (`stage`, `decide`) fetch `writeUrl('/api/runs')` and
+     `writeUrl('/api/decisions')`; `api.artifact` requests the path form
+     `/api/runs/${src}/${slug}/artifact/${path.split('/').map(encodeURIComponent).join('/')}`
+     (the server route from task 01). Nothing else in the file changes; the
+     `ApiError` failure path is untouched — that is what R5 relies on.
+  3. `packages/web/src/use-live.ts`: inside the effect, `const url = eventsUrl();
+     if (url === null) return;` before constructing `EventSource(url)`. The
+     hook is still called unconditionally.
+  4. `packages/web/src/main.tsx`: `createBrowserRouter(routes, { basename: routerBasename() })`.
+  5. `packages/web/vite.config.ts` becomes `defineConfig(({ mode }) => ({ … }))`
+     with `base: mode === 'static' ? '/demo/' : '/'` and
+     `build: mode === 'static' ? { outDir: 'dist-static' } : undefined`;
+     plugins and the dev server proxy unchanged.
+  6. New `packages/web/.env.static` containing `VITE_GATELINE_STATIC=1`, and
+     new `packages/web/src/vite-env.d.ts` with
+     `/// <reference types="vite/client" />` plus an `ImportMetaEnv`
+     augmentation declaring `readonly VITE_GATELINE_STATIC?: string`.
+  7. `packages/web/package.json`: add
+     `"build:static": "tsc -p tsconfig.json && vite build --mode static && node scripts/check-bundle.mjs dist-static"`.
+     `packages/web/scripts/check-bundle.mjs`: resolve `DIST` from an optional
+     `process.argv[2]` (relative to `packages/web`, default `dist`); keep its
+     exported `scan` and CLI guard unchanged. Add `dist-static/` to
+     `packages/.gitignore`.
+
+  Tests in `packages/web/test/static-mode.test.ts` (pure, no DOM): with
+  `{ baseUrl: '/', isStatic: false }` every helper reproduces today's URLs
+  (`/api/inbox`, `/api/decisions`, `/api/events`, basename `/`); with
+  `{ baseUrl: '/demo/', isStatic: true }` reads become
+  `/demo/api/runs/fixture/g2-pending.json`, writes `/demo/api/decisions`,
+  `eventsUrl` is null, basename is `/demo`; `readUrl` throws on a `?` path in
+  static mode. Also assert the artifact URL grammar by calling the exported
+  helper you use for it (export a small `artifactPath(src, slug, path)` from
+  `api.ts` if that is the cleanest way; it must encode each segment and keep
+  the slashes).
+
+  Verify by hand and record in notes: `npm run build:static -w @gateline/web`
+  produces `packages/web/dist-static/index.html` whose asset URLs start with
+  `/demo/assets/`, and `npm run build` still produces `packages/web/dist` as
+  before. `web/test/boundary.test.ts` must stay green (no new workspace
+  imports). Existing e2e (`npx playwright test`) must pass against the live
+  build — the artifact viewer now uses the path route.
+
+  Constraints: no new dependencies; the live build's requests must be
+  byte-identical to today's except `api.artifact`'s URL.
+
+file_contact_surface:
+  - packages/web/src/static-mode.ts
+  - packages/web/src/api.ts
+  - packages/web/src/use-live.ts
+  - packages/web/src/main.tsx
+  - packages/web/vite.config.ts
+  - packages/web/.env.static
+  - packages/web/src/vite-env.d.ts
+  - packages/web/package.json
+  - packages/web/scripts/check-bundle.mjs
+  - packages/.gitignore
+  - packages/web/test/static-mode.test.ts
+
+acceptance_tests:
+  - AC1.2
+  - AC4.2
+  - AC5.1
+  - AC5.2
+  - AC6.1
+  - "vitest static-mode.test.ts: live env reproduces today's URLs; static env yields /demo-prefixed .json reads, unsuffixed writes, null events URL, basename /demo"
+  - "npm run build:static -w @gateline/web succeeds and dist-static/index.html references /demo/assets/"
+  - "npm run build (live) succeeds; npx tsc -p web/tsconfig.json, npx vitest run web/test and npx playwright test pass"
+
+depends_on: [01-artifact-path-route]
+
+status: pending
+
+notes: |
+  Round 1 (implementer). Built exactly the plan's shape, no deviations:
+
+  - `packages/web/src/static-mode.ts` (new): `StaticModeEnv`, `env` (reads
+    `import.meta.env.BASE_URL` / `VITE_GATELINE_STATIC === '1'`),
+    `pathPrefix`, `readUrl` (throws on `?` in static mode), `writeUrl`,
+    `eventsUrl` (null when static), `routerBasename`. Every helper but `env`
+    itself takes an optional `StaticModeEnv` defaulting to the module-level
+    `env`.
+  - `packages/web/src/api.ts`: `getJson` now fetches `readUrl(path)`; `stage`
+    and `decide` POST to `writeUrl('/api/runs')` / `writeUrl('/api/decisions')`.
+    Added and exported `artifactPath(src, slug, path)` (segment-wise
+    `encodeURIComponent`, rejoined with `/`) matching the plan's exact
+    expression and task 01's merged server route
+    (`GET /api/runs/:src/:slug/artifact/*`, `decodeURIComponent` of the whole
+    remainder); `api.artifact` now calls it instead of the old `?path=` query
+    form. Nothing else in the file changed; `ApiError`/ `getJson`'s failure
+    path is untouched (R5).
+  - `packages/web/src/use-live.ts`: `const url = eventsUrl(); if (url ===
+    null) return;` before constructing `EventSource`; the hook is still
+    called unconditionally from `app.tsx`.
+  - `packages/web/src/main.tsx`: `createBrowserRouter(routes, { basename:
+    routerBasename() })`.
+  - `packages/web/vite.config.ts`: `defineConfig(({ mode }) => ({ base: mode
+    === 'static' ? '/demo/' : '/', build: mode === 'static' ? { outDir:
+    'dist-static' } : undefined, …unchanged plugins/proxy… }))`.
+  - New `packages/web/.env.static` (`VITE_GATELINE_STATIC=1`) and
+    `packages/web/src/vite-env.d.ts` (`/// <reference types="vite/client"
+    />` + `ImportMetaEnv.VITE_GATELINE_STATIC?: string`).
+  - `packages/web/package.json`: added `build:static` running `tsc -p
+    tsconfig.json && vite build --mode static && node
+    scripts/check-bundle.mjs dist-static`.
+  - `packages/web/scripts/check-bundle.mjs`: `DIST` now resolves
+    `process.argv[2] ?? 'dist'` relative to `packages/web`; exported `scan`
+    and the CLI guard are unchanged.
+  - `packages/.gitignore`: added `dist-static/`.
+  - New `packages/web/test/static-mode.test.ts` (pure, no DOM): live env
+    reproduces today's URLs (readUrl/writeUrl unprefixed/unsuffixed, events
+    `/api/events`, basename `/`); static env yields `/demo`-prefixed `.json`
+    reads, unsuffixed `/demo`-prefixed writes, null events URL, basename
+    `/demo`; `readUrl` throws on a `?`-bearing path in static mode; a
+    no-env-argument smoke check that every helper accepts being called bare
+    (uses the module's own build-time `env`); and `artifactPath` grammar
+    (single segment, multi-segment slash-preserving, and a segment with a
+    space and a literal `?` to prove per-segment encoding).
+
+  Deviation from the literal task text: none. One judgment call — `pathPrefix`
+  is implemented generically as `baseUrl.replace(/\/$/, '')` rather than a
+  two-way conditional, since that's the same result for both '/' → '' and
+  '/demo/' → '/demo' and needs no case-by-case reasoning as more base paths
+  are added later.
+
+  Mutant-kill verification (hand-patched a scratch copy in place, confirmed
+  the vitest fixture failed, reverted): (1) dropped the `.json` suffix in
+  `readUrl` → "readUrl prefixes with /demo and appends .json" failed as
+  expected. (2) made `eventsUrl` ignore `isStatic` → "eventsUrl is null"
+  failed as expected. (3) dropped `encodeURIComponent` in `artifactPath` →
+  "encodes characters that would otherwise change the URL grammar" failed as
+  expected. (4) dropped the `|| '/'` fallback in `routerBasename` → "routerBasename
+  is /" failed as expected. All four reverted; `diff` against pre-mutation
+  copies confirmed clean before final verification.
+
+  Verification (from `packages/`, after `npm install` — `node_modules` was
+  present but missing `@vitejs/plugin-react` and friends, which `npm install`
+  fixed with no lockfile change beyond what was already committed):
+  - `npx tsc -p web/tsconfig.json` — clean, no output.
+  - `npx vitest run web/test` — 21 files, 254 tests, all passed (includes
+    `boundary.test.ts` green and the new `static-mode.test.ts`'s 21 tests).
+  - `npm run build` (root, live) — succeeds; `packages/web/dist/index.html`
+    asset URLs are `/assets/…` as before.
+  - `npm run build:static -w @gateline/web` — succeeds;
+    `packages/web/dist-static/index.html` asset URLs are `/demo/assets/…`
+    (confirmed by grep on a from-clean rebuild after `rm -rf dist
+    dist-static`).
+  - `npx playwright test` — installed with `npx playwright install
+    --with-deps chromium` (already cached, no-op), then 49/49 passed,
+    including the artifact-viewer flow now exercising the path route.
+
+  Nothing left incomplete. Files touched, all inside the declared
+  `file_contact_surface`: `packages/web/src/static-mode.ts` (new),
+  `packages/web/src/api.ts`, `packages/web/src/use-live.ts`,
+  `packages/web/src/main.tsx`, `packages/web/vite.config.ts`,
+  `packages/web/.env.static` (new), `packages/web/src/vite-env.d.ts` (new),
+  `packages/web/package.json`, `packages/web/scripts/check-bundle.mjs`,
+  `packages/.gitignore`, `packages/web/test/static-mode.test.ts` (new).
+
+  Round 2 (implementer). Addressed all four findings from
+  `runs/gatehouse-demo/review-03.md` (verdict request-changes).
+
+  - **F1 (major, fixed).** Added a fourth describe block to
+    `packages/web/test/static-mode.test.ts`, "the build-time flag actually
+    gates behaviour (F1)", exactly along the lines the review sketched:
+    `vi.stubEnv('VITE_GATELINE_STATIC', '1')` + `vi.stubEnv('BASE_URL',
+    '/demo/')` + `vi.resetModules()` + dynamic `import()`, with
+    `afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals();
+    vi.resetModules() })` so each case starts clean. Three new tests: (1)
+    `env` equals `{ baseUrl: '/demo/', isStatic: true }` under the stubbed
+    flag — pins the flag itself, and specifically that only the literal `'1'`
+    trips it; (2) `api.inbox()` with `vi.stubGlobal('fetch', ...)` asserts
+    the mock was called (`toHaveBeenCalledExactlyOnceWith`) with
+    `/demo/api/inbox.json` — pins `getJson` routing through `readUrl`; (3)
+    `api.artifact('fixture', 'g2-pending', 'tasks/01-core.yaml')` asserts the
+    mock was called with
+    `/demo/api/runs/fixture/g2-pending/artifact/tasks/01-core.yaml.json` —
+    pins `api.artifact` routing through `artifactPath` then `readUrl`.
+    `BASE_URL` is stubbed alongside the flag so the asserted URLs are exact
+    (not dependent on whatever `import.meta.env.BASE_URL` happens to default
+    to under vitest), per the review's note. No DOM entered the file — the
+    stubs are `fetch`/`import.meta.env`, both DOM-free.
+
+    Mutant-kill evidence (hand-patched a scratch copy in place — via `sed` on
+    the tracked files, confirmed the fixture failed, then restored from a
+    `/tmp` backup of the pre-mutation files and diffed clean before
+    continuing):
+    (a) `static-mode.ts:23` `=== '1'` → `=== 'true'`: all three new F1 tests
+    failed (`env` test: got `isStatic: false`; both `api` tests: fetched the
+    un-prefixed, un-suffixed live-style URL instead).
+    (b) `api.ts:181` `fetch(readUrl(path))` → `fetch(path)`: the `api.inbox`
+    and `api.artifact` F1 tests both failed (fetched `/api/inbox` and
+    `/api/runs/.../artifact/tasks/01-core.yaml` respectively — no `/demo`
+    prefix, no `.json`).
+    (c) `api.ts:232` reverted `api.artifact` to the query form
+    (`` `/api/runs/${src}/${slug}/artifact?path=${encodeURIComponent(path)}` ``):
+    the `api.artifact` F1 test failed — not with a mismatch but with
+    `readUrl` *throwing* ("static mode cannot address a query string as a
+    file"), which is exactly the review's predicted static-demo failure mode
+    for this mutant.
+    All three reverted; each revert diffed clean against the pre-mutation
+    backup before moving to the next.
+
+  - **F2 (minor, fixed).** Added `readUrl('/api/x?y=1', LIVE)` →
+    `/api/x?y=1` to the live-env describe block in
+    `static-mode.test.ts`. Mutant-kill: dropped `e.isStatic &&` from the
+    guard at `static-mode.ts:38` (`if (path.includes('?'))` unconditional) —
+    the new test failed (`readUrl` threw on the live case instead of passing
+    the query straight through). Reverted, diffed clean.
+
+  - **F3 (minor, fixed).** `packages/web/scripts/check-bundle.mjs`'s
+    empty-bundle message now interpolates `DIST` (matching line 85's
+    pattern) instead of the literal string `dist/`.
+
+  - **F4 (minor, fixed).** `packages/web/src/static-mode.ts`'s `eventsUrl`
+    now returns a template literal (`` `${pathPrefix(e)}/api/events` ``)
+    instead of string concatenation. `npx biome check web/src/static-mode.ts`
+    reported the `lint/style/useTemplate` info before the fix and is silent
+    after.
+
+  Verification (from `packages/`, after `npm install` — added 5 packages,
+  no lockfile change; `git status` stayed limited to the three files this
+  round touches before and after):
+  - `npx tsc -p web/tsconfig.json` — clean, no output.
+  - `npx vitest run web/test` — 21 files, 258 tests, all passed (254 from
+    round 1 plus the 4 new: three F1 cases, one F2 case; `boundary.test.ts`
+    still green).
+  - `npm run lint` (root) — `biome check .`, 227 files, no fixes applied, no
+    diagnostics at all (round 1 had one `useTemplate` info; F4 removed it).
+  - `npm run build` (root, live) — succeeds from a clean `dist/`;
+    `packages/web/dist/index.html` asset URLs are `/assets/…`.
+  - `npm run build:static -w @gateline/web` — succeeds from a clean
+    `dist-static/`; `packages/web/dist-static/index.html` asset URLs are
+    `/demo/assets/…` (grepped directly).
+  - `npx playwright test` — first run: 48/49 passed, one failure in
+    `e2e/smoke.spec.ts` ("run lexicon (#163): ids resolve to verbatim hover
+    cards and jump to their definition") on a click being intercepted by a
+    table header — this matches the known geometry flake on this spec file
+    (800px card edge, ~3px CI variance) and is unrelated to anything in this
+    task's surface. Rerun: 49/49 passed clean.
+
+  Files touched this round, all inside the declared `file_contact_surface`:
+  `packages/web/src/static-mode.ts`, `packages/web/scripts/check-bundle.mjs`,
+  `packages/web/test/static-mode.test.ts`. No other file changed; `git
+  status` shows exactly these three modified, nothing untracked, build
+  outputs land in the already-ignored `dist/` / `dist-static/`.

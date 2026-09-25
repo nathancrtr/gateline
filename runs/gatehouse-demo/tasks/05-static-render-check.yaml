@@ -1,0 +1,105 @@
+id: 05-static-render-check
+title: Pages-like static server and the Playwright render check over the assembled demo tree
+requirements: [R3, R4, R5, R6, R7]
+
+scope: |
+  Prove the demo renders and refuses correctly from files alone, in a form
+  the Pages workflow (task 06) and a local verifier both run (plan ADR-7,
+  "Pages-like static server", "Static render check").
+
+  1. New `packages/web/scripts/serve-static.mjs` (node:http and node:fs only,
+     no dependencies): `--root <dir> --port <n>`. GET/HEAD only — any other
+     method answers 405 with a plain-text body. Resolve the URL pathname under
+     root, refusing anything that escapes it (404). A regular file → 200 with
+     MIME by extension (reuse the table shape in `server/src/main.ts`: html,
+     js, css, svg, png, ico, woff2, json; default `application/octet-stream`).
+     A directory requested without a trailing slash → 301 `Location` to the
+     slashed path with the query string preserved. A directory → its
+     `index.html`, else 404. Missing → 404 whose body is `<root>/404.html`
+     when that file exists (content-type text/html), else plain text. Print
+     "serve-static: http://127.0.0.1:<port> ← <root>" on listen.
+  2. New `packages/playwright.static.config.ts`: `testDir: './e2e-static'`,
+     `timeout: 60_000`, `expect: { timeout: 15_000 }`, `retries: 0`,
+     `use: { baseURL: 'http://127.0.0.1:4397', viewport: { width: 1280, height: 900 } }`,
+     and a `webServer` whose `command` is
+     "node web/scripts/serve-static.mjs --root <DEMO_SITE_ROOT or ../_site> --port 4397"
+     (read `process.env.DEMO_SITE_ROOT`, default `'../_site'`), with
+     `url: 'http://127.0.0.1:4397/demo/api/health.json'`,
+     `reuseExistingServer: false`, `timeout: 30_000`.
+     Add `"e2e:static": "playwright test -c playwright.static.config.ts"` to
+     `packages/package.json` scripts and `"e2e-static/**"` to
+     `files.includes` in `packages/biome.json`. Do not touch
+     `playwright.config.ts`; its `testDir: './e2e'` never sees the new dir.
+  3. New `packages/e2e-static/demo.spec.ts`. Before all, fetch
+     `/demo/api/runs.json` and pick one run whose `source !== 'fixture'`
+     (the real run) and the fixture run `g2-pending`; fail loudly if either is
+     missing. Every navigation is a fresh `page.goto` (a fresh HTTP request,
+     never a client-side route change). Tests:
+     - `/demo/`, `/demo/portfolio`, `/demo/metrics` each respond 200 (check
+       the `goto` response, following the 301 where the path lacks a slash)
+       and render their heading (`Inbox`, `Portfolio`, and the metrics page's
+       heading) (AC6.1).
+     - `/demo/runs/<real src>/<real slug>` renders an `h1` with the slug and
+       has zero `[data-fixture-label]`; `/demo/runs/fixture/g2-pending`
+       renders its `h1` and at least one `[data-fixture-label]` containing
+       `fixture data` in the initial markup (AC3.1, AC3.2, AC6.1).
+     - `/demo/runs/fixture/g2-pending?tab=record&artifact=spec.md` renders the
+       artifact body (the reader shows `runs/g2-pending/spec.md`) — the path
+       form resolved to a file.
+     - No `EventSource` is ever constructed: `page.addInitScript` replaces
+       `window.EventSource` with a constructor that records calls on
+       `window.__es`; after loading `/demo/` and waiting for the inbox rows,
+       `window.__es` is empty (AC4.2).
+     - Refusal on approve (AC5.1): on `/demo/runs/fixture/g2-pending?decide=G2`
+       click `[data-decide="approve"]`, choose a burden radio, click
+       `[data-decide="approve-confirm"]`; assert a `POST` whose URL ends with
+       `/api/decisions` was issued and answered non-2xx (`page.waitForResponse`);
+       assert a `[role="status"]` flash renders, the confirm button is
+       enabled again with text `Approve G2` (no `Committing…` left), and the
+       G2 gate is still undecided — locate the header's phase spine and
+       assert its G2 cell does not read as approved (check
+       `components/chips.tsx`'s spine markup for the exact hook).
+     - Refusal on staging (AC5.2): record the inbox count from
+       `/demo/api/inbox.json`; on `/demo/portfolio/new` fill title, keep the
+       suggested slug, fill every `#section-<slug> textarea` (see
+       `e2e/staging.spec.ts` for the idiom), click the `Stage run` button;
+       assert a `POST` ending in `/api/runs` answered non-2xx and the form's
+       network-error flash renders; then `goto('/demo/')` and assert the row
+       count equals the recorded inbox count.
+     - `/demo/nope/never` responds 404 and renders `Page not found` (AC6.2).
+  4. Local recipe, to be recorded in this task's notes after you run it:
+     mkdir -p /tmp/gl-site && cp site/404.html /tmp/gl-site/ &&
+     (cd packages && npm run build:static -w @gateline/web &&
+     node server/src/snapshot.ts --repo "$PWD/.." --out /tmp/gl-site/demo --web-dist web/dist-static &&
+     DEMO_SITE_ROOT=/tmp/gl-site npm run e2e:static).
+     Note: `serve-static` serves `404.html` from its root, which is why the
+     recipe copies the site's 404 page beside `demo/`.
+
+  Constraints: no new dependencies; `npm run lint` covers the new dir; the
+  main `npx playwright test` must be unaffected.
+
+file_contact_surface:
+  - packages/web/scripts/serve-static.mjs
+  - packages/playwright.static.config.ts
+  - packages/e2e-static/demo.spec.ts
+  - packages/package.json
+  - packages/biome.json
+
+acceptance_tests:
+  - AC3.1
+  - AC3.2
+  - AC4.2
+  - AC5.1
+  - AC5.2
+  - AC6.1
+  - AC6.2
+  - AC7.3
+  - "DEMO_SITE_ROOT=<assembled tree> npm run e2e:static passes against a tree built by tasks 02 and 03"
+  - "npm run e2e:static fails when a run's detail JSON is deleted from the tree (prove the check can fail; record in notes)"
+  - "npm run lint passes; npx playwright test (the live suite) is unaffected"
+
+depends_on: [02-snapshot-generator, 03-web-static-mode, 04-fixture-label]
+
+status: pending
+
+notes: |

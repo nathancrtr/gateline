@@ -9,24 +9,28 @@ import { MetricsPage } from './pages/metrics.tsx'
 import { NewRunPage } from './pages/new-run.tsx'
 import { PortfolioPage } from './pages/portfolio.tsx'
 import { RunPage } from './pages/run.tsx'
+import { routerBasename } from './static-mode.ts'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 15_000, refetchOnWindowFocus: true } },
 })
 
-const router = createBrowserRouter([
-  {
-    path: '/',
-    element: <App />,
-    children: [
-      { index: true, element: <InboxPage /> },
-      { path: 'portfolio', element: <PortfolioPage /> },
-      { path: 'portfolio/new', element: <NewRunPage /> },
-      { path: 'metrics', element: <MetricsPage /> },
-      { path: 'runs/:src/:slug', element: <RunPage /> },
-    ],
-  },
-])
+const router = createBrowserRouter(
+  [
+    {
+      path: '/',
+      element: <App />,
+      children: [
+        { index: true, element: <InboxPage /> },
+        { path: 'portfolio', element: <PortfolioPage /> },
+        { path: 'portfolio/new', element: <NewRunPage /> },
+        { path: 'metrics', element: <MetricsPage /> },
+        { path: 'runs/:src/:slug', element: <RunPage /> },
+      ],
+    },
+  ],
+  { basename: routerBasename() },
+)
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

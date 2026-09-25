@@ -139,6 +139,57 @@ describe('read routes', () => {
     expect(body.validation.missing).toContain('Requirements')
   })
 
+  it('GET artifact path form (ADR-2) matches the query form body', async () => {
+    const query = await get('/api/runs/fixture/g1-pending/artifact?path=spec.md')
+    const pathForm = await get('/api/runs/fixture/g1-pending/artifact/spec.md')
+    expect(query.status).toBe(200)
+    expect(pathForm.status).toBe(200)
+    expect(pathForm.body).toEqual(query.body)
+  })
+
+  it('GET artifact path form resolves a nested path', async () => {
+    const { status, body } = await get('/api/runs/fixture/g1-pending/artifact/tasks/01-core.yaml')
+    expect(status).toBe(200)
+    expect(body.path).toBe('tasks/01-core.yaml')
+  })
+
+  it('GET artifact path form 404s a missing artifact with a string error', async () => {
+    const { status, body } = await get('/api/runs/fixture/g1-pending/artifact/nope.md')
+    expect(status).toBe(404)
+    expect(typeof body.error).toBe('string')
+    expect(body.error.length).toBeGreaterThan(0)
+  })
+
+  it('GET artifact path form 404s an unknown run', async () => {
+    const { status, body } = await get('/api/runs/fixture/nope/artifact/spec.md')
+    expect(status).toBe(404)
+    expect(typeof body.error).toBe('string')
+  })
+
+  it('GET artifact path form 400s an empty remainder', async () => {
+    const { status, body } = await get('/api/runs/fixture/g1-pending/artifact/')
+    expect(status).toBe(400)
+    expect(typeof body.error).toBe('string')
+  })
+
+  it('GET artifact path form decodes a percent-encoded segment', async () => {
+    const { status, body } = await get('/api/runs/fixture/g1-pending/artifact/spec%2Emd')
+    expect(status).toBe(200)
+    expect(body.path).toBe('spec.md')
+  })
+
+  it('GET artifact path form 400s malformed percent-encoding instead of 500ing', async () => {
+    const { status, body } = await get('/api/runs/fixture/g1-pending/artifact/%E0%A4%A')
+    expect(status).toBe(400)
+    expect(typeof body.error).toBe('string')
+  })
+
+  it('GET artifact query form still works unchanged', async () => {
+    const { status, body } = await get('/api/runs/fixture/g1-pending/artifact?path=spec.md')
+    expect(status).toBe(200)
+    expect(body.path).toBe('spec.md')
+  })
+
   it('GET lexicon returns verbatim definitions plus the id grammar as data', async () => {
     const { status, body } = await get('/api/runs/fixture/g2-pending/lexicon')
     expect(status).toBe(200)

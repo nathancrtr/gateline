@@ -55,3 +55,42 @@ I read the whole diff against requirements one, four, five and six and the plan'
 ## Boundary check
 
 Inside the surface. 866b2d9 touches exactly the eleven declared files plus the task file's `notes:` block; nothing under `packages/server`, `packages/core`, `e2e/` or the root config moved. Worktree was clean before review and is clean after: `npm ci` changed no tracked file, both build outputs land in ignored directories (`dist/`, `dist-static/`), and the two scratch probes lived under `/tmp` and were removed.
+
+# Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** `run/gatehouse-demo`, commit 0893665 (`git diff 0893665^ 0893665`) — the delta over 866b2d9
+
+## Verify round
+- **F1 — resolved** — `static-mode.test.ts:103-138` pins `env` under the stubbed flag and both `api` GET shapes through a `fetch` stub; re-run in place, mutant (a) `=== 'true'` fails 3 tests, (b) `fetch(path)` fails 2, (c) query-form artifact fails 1 (via the `readUrl` throw), a hard-coded `baseUrl: '/'` fails 3.
+- **F2 — resolved** — `static-mode.test.ts:33-35` adds the live `?` case; dropping `e.isStatic &&` at `static-mode.ts:38` now fails that one test.
+- **F3 — resolved** — `check-bundle.mjs:96` interpolates `DIST`; `node web/scripts/check-bundle.mjs /tmp/<empty dir>` prints that directory's path and exits 1.
+- **F4 — resolved** — `static-mode.ts:53` is a template literal; `npm run lint` reports no diagnostics across 227 files.
+
+### F5 — minor — The F1 flag test's title claims exact-`'1'` discrimination the assertion does not perform
+- **Where:** `packages/web/test/static-mode.test.ts:110-116`
+- **Failure scenario:** mutant: `static-mode.ts:23` becomes `!== undefined` (or `Boolean(...)`) → the whole file still passes 20/20 (verified in place), while the test named "only exactly '1'" stays green. A gitignored local `.env` carrying `VITE_GATELINE_STATIC=0` or `VITE_GATELINE_STATIC=` — the file AGENTS.md reserves for local keys — would then build the live app static: every read requests `/api/…json` and 404s. One negative case (`stubEnv('VITE_GATELINE_STATIC', '0')` → `isStatic: false`) kills it; alternatively drop the parenthetical from the title. Non-blocking: both shipped builds behave identically under the mutant.
+- **Requirement:** task scope item 1 (`VITE_GATELINE_STATIC === '1'`)
+
+## Coverage
+
+I re-checked only the round-two delta: I re-read the three changed source and test files and the implementer's response note, ran every mutant the round-one findings named plus three of my own in place against the new tests, ran the web typecheck, the full web suite in default and shuffled order, lint, and both builds from a clean output directory, and confirmed the test stubs cannot leak into other test files; the four prior findings are genuinely closed, and the one new finding is a test-name overclaim, not a product defect.
+
+| Requirement | Where | Mechanism checked | Status |
+|-------------|-------|-------------------|--------|
+| F1 mutants (a)(b)(c) | `packages/web/test/static-mode.test.ts:103-138` | each patched via `perl -pi`, `npx vitest run web/test/static-mode.test.ts` fails 3/2/1 tests respectively, `git checkout --` restores | ✓ |
+| F1 extra mutants | `packages/web/src/static-mode.ts:22,41` | hard-coded `baseUrl: '/'` fails 3 tests; prefix dropped from `readUrl` fails 3 | ✓ |
+| F1 negative case | `packages/web/src/static-mode.ts:23` | `!== undefined` survives 20/20 | partial — F5 |
+| F2 mutant | `packages/web/src/static-mode.ts:38` | guard without `e.isStatic &&` fails the new live `?` test | ✓ |
+| F3 diagnostic | `packages/web/scripts/check-bundle.mjs:96` | run against an empty directory: message names that directory, exit 1 | ✓ |
+| F4 lint | `packages/web/src/static-mode.ts:53` | `npm run lint` → 227 files, no diagnostics | ✓ |
+| stub cleanup | `packages/vitest.config.ts:53-62` | default `isolate` under the forks pool gives each file its own module graph and globals; `packet.test.ts` names `fetch` only in a comment; `static-mode.ts` is the sole `import.meta.env` reader; `--sequence.shuffle` run 258/258 | ✓ |
+| template-literal hunk in the build | `packages/web/dist-static/assets/index-*.js` | from clean: static bundle inlines `{baseUrl:'/demo/',isStatic:!0}` and `` `${…}/api/events` ``, zero `import.meta.env`/`VITE_GATELINE_STATIC` text; the second `isStatic:!1` is react-router's own literal; live bundle `isStatic:!1`; `index.html` assets under `/demo/assets/`; `check-bundle` clean on both | ✓ |
+| toolchain | `packages/` | `npm ci`; `npx tsc -p web/tsconfig.json` clean; `npx vitest run web/test` 21 files / 258 tests | ✓ |
+| Playwright | — | not run (optional this round; no changed hunk reaches the DOM) | n/a |
+| unchanged hunks | `packages/web/src/api.ts`, `use-live.ts`, `main.tsx`, `vite.config.ts` | untouched since 866b2d9; round-1 coverage rows stand | ✓ |
+
+## Boundary check
+
+Inside the surface. 0893665 touches `static-mode.ts`, `check-bundle.mjs`, `static-mode.test.ts` and the task file's `notes:` block only. Every mutant was restored with `git checkout --` and `git status --porcelain` was empty before the final build step. Operational note for the orchestrator, not a finding: during this review the branch advanced under the worktree (0b754f2 task 02 round 1, then 786f0a7 and d2c4ec7 state commits) and for a few seconds `git status` showed task 02's files as staged deletions against the new HEAD before the tree caught up on its own; `git diff` (worktree vs index) was empty throughout, I touched nothing, and at the end the worktree is clean apart from this report.

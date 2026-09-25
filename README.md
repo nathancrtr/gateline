@@ -7,7 +7,7 @@ each phase gate from a cockpit that reads nothing but the repository. Built for
 senior engineers moving from single-conversation AI pair-programming to
 multi-agent development.
 
-![Gatehouse, gateline's cockpit, in five screens: the Inbox with four decisions waiting, one of them a bounced malformed packet; the Portfolio's gate ledger across nineteen runs; the run csvpeek paused on an escalation with its budget over the limit; the finished run fleetview-design and its artifact record; and Metrics flagging gates G1 and G2 as over-triggering.](docs/images/gatehouse.gif)
+![Gatehouse, gateline's cockpit, in five screens: the Inbox with four decisions waiting, one of them a bounced malformed packet; the Portfolio's gate ledger across twenty runs; the run csvpeek paused on an escalation with its budget over the limit; the finished run fleetview-design and its artifact record; and Metrics flagging gates G1 and G2 as over-triggering.](docs/images/gatehouse.gif)
 
 **Current state**: The frontend, CLI, and orchestrator are fully operable and run as one unit via `gateline up`. Gate approvals are a convention, not evidence, until [#129](https://github.com/nathancrtr/gateline/issues/129) lands.
 
@@ -39,7 +39,7 @@ the same mechanism.
   approval above 90% is flagged as over-triggering — the signal to move its
   scope down the tier ladder.
 
-![The run page for csvpeek, paused on an escalation: the phase spine with G0 and G1 approved and the implement phase current; a task board of four items; the budget reading $31 of $30, marked over; and an escalation card from the orchestrator, waiting 37 days, with its artifacts and a Resolve button.](docs/images/run-escalation-detail.png)
+![The run page for csvpeek, paused on an escalation: the phase spine with G0 and G1 approved and the implement phase current; a task board of four items; the budget reading $31 of $30, marked over; and an escalation card from the orchestrator, waiting 60 days, with its artifacts and a Resolve button.](docs/images/run-escalation-detail.png)
 
 *Every screenshot is Gatehouse, the cockpit, over this repository's own runs —
 gateline develops itself through its own gates — captured with the

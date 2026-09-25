@@ -13,7 +13,21 @@ intake:
 budget:
   cost_limit_usd: 50
   cost_spent_usd: 0
-  ledger: []
+  ledger:
+    [
+      {
+          at: 2026-09-25T20:52:01.586Z,
+          role: analyst,
+          task: null,
+          round: null,
+          adapter: claude-code,
+          model: sonnet,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:99447,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
+        }
+    ]
 gates:
   # exactly PROFILE_GATES[standard] — no others
   G0: { approved: false, by: null, at: null, notes: null }

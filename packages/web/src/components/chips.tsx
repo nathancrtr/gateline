@@ -1,13 +1,15 @@
 // The fixed status vocabulary: phases, gate states, inbox kinds, validation.
 // Used identically everywhere — status is encoded in form, not just color.
 //
-// Since the seeded redesign (docs/GATEHOUSE-DESIGN.md) every status is an
+// Since the 2026-09 redesign (docs/GATEHOUSE-DESIGN.md) every status is an
 // *impression*: a name plus its code in one ink, told apart by texture —
 // filled for a decision taken, hollow for pending, struck for declined,
-// hatched for bounced, dotted for a state not reached or a run at rest, and
-// dashed in the red for the position a run stands at. There is no hue per
-// phase and no ok/warn/bad tint: the seed's ledger leaves one ink on the
-// page, and the word carries the difference.
+// hatched for bounced, dotted for a state not reached or a run at rest,
+// doubled for the phase the machine is working in, and filled in the yellow
+// for the gate on the table, because that is where a human is wanted. There
+// is no hue per phase: the word and the texture carry the difference, and
+// colour is spent only where the site spends it — approved, declined,
+// caution, and the one signal blue.
 import { Fragment, useEffect, useRef } from 'react'
 import { type ClosureRecord, type GateId, type InboxItem, PROFILE_GATES, type Profile, type RunSummary } from '../api.ts'
 import { gateCardState } from '../gate-state.ts'
@@ -50,7 +52,7 @@ export function Imp({
   className = '',
   title,
   ...rest
-}: React.HTMLAttributes<HTMLSpanElement> & { tone?: '' | 'fill' | 'dot' | 'struck' | 'hatch' | 'cur' | 'mark' | 'stamped' | 'fill stamped' }) {
+}: React.HTMLAttributes<HTMLSpanElement> & { tone?: '' | 'fill' | 'dot' | 'struck' | 'hatch' | 'hatch mark' | 'cur' | 'here' | 'mark' | 'stamped' | 'fill stamped' }) {
   const tones = tone
     .split(' ')
     .filter(Boolean)
@@ -104,16 +106,17 @@ export function PhaseChip({
       </Imp>
     )
   }
-  // A phase the vocabulary does not know is a fact about the record, not a
-  // position: hatched, in the red, like a bounced packet.
+  // A phase the vocabulary does not know is a malformed record, not a
+  // position: hatched, in the declined red, like a bounced packet. The red
+  // is the mark tone, not a text utility — `.imp` sets its own colour.
   if (phase === 'unknown') {
     return (
-      <Imp data-phase-chip tone="hatch" className="text-warn">
+      <Imp data-phase-chip tone="hatch mark">
         unknown
       </Imp>
     )
   }
-  // A phase in flight is the plain mark. The red dashed "position" tone is
+  // A phase in flight is the plain mark. The doubled "here" tone is
   // reserved for the spine, where the sequence gives it something to be the
   // position *in*; a column of them in the portfolio was a column of alarms.
   return <Imp data-phase-chip>{phase}</Imp>
@@ -294,8 +297,9 @@ const NOTE_RUNG_ROW: Record<SpineNoteRung, string> = {
 function SpinePhase({ cell, atRest, noteClass }: { cell: PhaseCell; atRest: boolean; noteClass: string }) {
   // At rest the run still stands somewhere; the cell goes dotted to say it is
   // standing there rather than moving through, and the phase chip beside the
-  // spine names the reason.
-  const tone = cell.state === 'current' ? (atRest ? 'dot' : 'cur') : cell.state === 'future' ? 'dot' : ''
+  // spine names the reason. In motion it is doubled, not yellow: the yellow
+  // is the gate's, for the one cell that is waiting on a person.
+  const tone = cell.state === 'current' ? (atRest ? 'dot' : 'here') : cell.state === 'future' ? 'dot' : ''
   return (
     <li data-spine-phase={cell.phase} data-state={cell.state} className="flex shrink-0 flex-col items-center gap-[4px]">
       <Imp tone={tone}>{cell.phase}</Imp>
@@ -366,7 +370,7 @@ function SpineGate({ cell, bounced, noteClass }: { cell: GateCell; bounced: bool
 export function ValidationBadge({ ok, missing }: { ok: boolean; missing?: string[] }) {
   if (ok) return <span className="font-mono text-[11px] text-ink" title="contract sections present">✓</span>
   return (
-    <span className="font-mono text-[11px] font-semibold text-warn" title={`missing: ${(missing ?? []).join(', ')}`}>
+    <span className="font-mono text-[11px] font-semibold text-bad" title={`missing: ${(missing ?? []).join(', ')}`}>
       ✕
     </span>
   )
@@ -390,7 +394,7 @@ export function BudgetMeter({ limit, spent }: { limit: number | null; spent: num
       <span className="h-[7px] w-[90px] overflow-hidden border border-line">
         <span className={`block h-full ${over ? 'bg-mark' : 'bg-ink'}`} style={{ width: `${pct}%` }} />
       </span>
-      <span className={`font-mono text-[11.5px] tabular-nums ${over ? 'font-semibold text-warn' : 'text-muted'}`}>
+      <span className={`font-mono text-[11.5px] tabular-nums ${over ? 'font-semibold text-bad' : 'text-muted'}`}>
         ${used.toFixed(0)} / ${limit.toFixed(0)}
         {over ? ' · over' : ''}
       </span>

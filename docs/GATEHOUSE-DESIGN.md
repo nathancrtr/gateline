@@ -6,19 +6,51 @@ per-token provenance lives beside the code in
 [`packages/web/DESIGN.md`](../packages/web/DESIGN.md) once a direction is
 built. Earlier rounds are kept at the end as history.
 
-Process: `~/.claude/skills/seeded-design` (every visual property is sampled
-from an artifact outside the model, derived from a sampled value, or forced
-by a written constraint) with Anthropic's `frontend-design` plugin as the
-taste layer. **Status: step 7 of 8 — built.** The token contract with
-per-token provenance and the contrast table is
-[`packages/web/DESIGN.md`](../packages/web/DESIGN.md), held to its floors by
-`packages/web/test/contrast.test.ts`. The three-direction mockups are one
-self-contained page,
-[`docs/design/gatehouse-directions.html`](design/gatehouse-directions.html);
-the iteration on A1 with live ground candidates is
-[`docs/design/gatehouse-impression.html`](design/gatehouse-impression.html).
+**Status (2026-09-25): round 4 — the site's direction, carried in.** The
+public documentation site took its design first (`site/`, PR #392, lineage
+in `site/README.md` §Design: British Rail 1965, GOV.UK's functional colour,
+Stripe's frame, Go's neutrals), with the decision that Gatehouse follows.
+Round 4 is that follow: the cockpit's tokens now resolve to the site's
+values, and colour is spent only where the site spends it — one signal blue
+for navigation and links, and a green, a red and a yellow each reserved for
+a gate state. The token contract with per-token provenance and the contrast
+table is [`packages/web/DESIGN.md`](../packages/web/DESIGN.md), held to its
+floors by `packages/web/test/contrast.test.ts`. What survives from round 3
+is its structure: one surface, rules not cards, no elevation, and the
+impression grammar for status. Round 3's seeded process and the three
+directions below are kept as the record of how that structure was reached.
 
-### What was settled at the build (2026-09-04)
+### What round 4 changed (2026-09-25)
+
+- **The ground is white** and the ink is the site's near-black; the panel
+  grey the site uses for its sidebar and code panels is the inset.
+- **The accent is the signal blue**, doing on the cockpit what it does on
+  the site: links, the active entry in the rack, the selected record entry.
+  Nothing else is blue.
+- **The semantic quartet gets its jobs back.** Round 3 collapsed `ok` and
+  `info` into the ink and `warn` and `bad` into one dusty red. Now `ok` is
+  the approved green, `bad` the declined red, `warn` the caution ink and
+  `info` the note blue — the site's own state vocabulary, which it reserves
+  for gate states. A state box is the site's callout: a tint, a hairline
+  frame, colour on the label.
+- **The gate on the table is the yellow.** On the site the GOV.UK yellow
+  means one thing: a human is wanted here — the focus ring, and "awaiting a
+  human". The spine's pending gate is filled with it, and the focus ring
+  takes it. The phase the machine is working in is a doubled rule with no
+  colour, because nobody is wanted there yet; a first cut gave it the
+  yellow too, and a merged run lit up on `done`. Round 3 marked both in a
+  dashed red, which said *alarm*; the position is not an alarm, it is an
+  invitation.
+- **The 3px ink band** runs across the top of the page, as on the site.
+- **The provisional accent is retired.** The grey-and-dusty-red pairing
+  recorded as "not favoured long term" at the round 3 build is gone, and
+  with it the seeded process that produced it: round 4 takes its values
+  from a designed sibling surface in this repository, not from a sampled
+  photograph.
+- Held: a single light theme; the inherited type (the site's faces are the
+  open type pass, #358); the impression grammar; radius 0; no shadows.
+
+### What was settled at the round 3 build (2026-09-04)
 
 - **Ground `#F3F3EE`** — the lightest of the five candidates, chosen with the
   register's collision flags in view; the justification is in the contract.
@@ -414,7 +446,7 @@ either the point or the problem.
 Cold near-black ground `#0A0E11`, mono readouts, keyboard-first. Retired by
 the gate-redesign brief, which reframed the product as a reading environment.
 
-### Round 2 — Candidate A, warm paper (2026-07-25, shipping)
+### Round 2 — Candidate A, warm paper (2026-07-25, retired)
 
 `runs/gate-redesign/` (PR #197): warm paper `#FAF7F1`, terracotta
 `#A04423`, Inter chrome, Newsreader reading body, JetBrains Mono, Primer
@@ -423,3 +455,20 @@ Linear, Sentry. Judged against the seeded-design register on 2026-09-04: it land
 Anthropic cream-and-terracotta cluster almost exactly, with a ground shared
 to within a few units by the maintainer's other two products. The run record
 is historical and is not edited; this document supersedes its rationale.
+
+### Round 3 — the impression (2026-09-04, structure kept; palette retired)
+
+PR #357, the seeded pass: hue-60 paper `#F3F3EE`, one slate ink `#2C343C`,
+the ledger's dusty red `#A46C6C` as both position and warning, `ok` and
+`info` collapsed into the ink. It gave the cockpit its structure — one
+surface, rules not cards, no elevation, status as texture — and that
+structure stands. Its palette was recorded as provisional at the build and
+read, at full-page scale, as nearly black and white; the maintainer
+rejected the seeded process on 2026-09-18. Retired by round 4.
+
+### Round 4 — the site's direction (2026-09-25, shipping)
+
+The public site's palette and grammar (PR #392) carried into the cockpit:
+white ground, ink, one signal blue, approved green, declined red, the
+yellow for a human's attention, hairlines and the 3px band. See *What
+round 4 changed* at the top.

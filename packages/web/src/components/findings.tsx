@@ -52,7 +52,7 @@ export function Inline({ children }: { children: string }) {
           <CitedText>{m[1]}</CitedText>
         </strong>
       ) : (
-        <code key={key++} className="bg-inset px-1 font-mono text-[11px] text-accent-deep">
+        <code key={key++} className="bg-inset px-1 font-mono text-[11px] text-ink">
           {m[2]}
         </code>
       ),

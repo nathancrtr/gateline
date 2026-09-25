@@ -9,8 +9,9 @@ import { PageStatus } from './inbox.tsx'
 
 // Ordered burden ramp: one hue (the ink) at three textures — solid, hatched,
 // dotted — with the surface showing through as 2px gaps between segments.
-// Texture, not lightness, is what orders the steps: the seed's ledger leaves
-// one ink on the page, and a fourth state is a texture rather than a hue.
+// Texture, not lightness, is what orders the steps: burden is a category,
+// not a gate state, so it gets no colour, and a fourth state is a texture
+// rather than a hue.
 // The legend and the table are the low-contrast relief.
 const BURDEN_TEXTURE = {
   confirmation: 'tx-solid',

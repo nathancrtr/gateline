@@ -179,7 +179,7 @@ export function PortfolioPage() {
                         {run.source} · {run.profile}
                       </div>
                       {run.malformed && (
-                        <div className="mt-[3px] font-mono text-[11.5px] text-warn before:content-['✕_']">{run.malformed}</div>
+                        <div className="mt-[3px] font-mono text-[11.5px] text-bad before:content-['✕_']">{run.malformed}</div>
                       )}
                       {run.aheadOfOrigin != null && run.aheadOfOrigin > 0 && (run.behindOrigin ?? 0) > 0 ? (
                         <Imp

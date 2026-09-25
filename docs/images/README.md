@@ -32,7 +32,7 @@ cd packages && node web/scripts/capture-readme.mjs http://127.0.0.1:4312 /tmp/sh
 
 Scale each frame to 1280 wide; `run-escalation-detail.png` is
 `crop=802:624:330:0` of the scaled escalation frame. Pad every frame to
-1280×720 on the page ground `#f3f3ee` (the token `--color-ground` in
+1280×720 on the page ground `#ffffff` (the token `--color-ground` in
 `packages/web/src/styles.css`) before cutting the GIF — frames of unequal
 size silently collapse to one — then:
 

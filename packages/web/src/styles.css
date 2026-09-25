@@ -74,69 +74,78 @@
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
 
-/* Design tokens — "the impression" (docs/GATEHOUSE-DESIGN.md; per-token
-   provenance in packages/web/DESIGN.md, which test/contrast.test.ts holds to
-   its floors). One surface, one ink, rules not cards, state as texture.
+/* Design tokens — the site's direction, carried into the cockpit
+   (docs/GATEHOUSE-DESIGN.md round 4; per-token provenance in
+   packages/web/DESIGN.md, which test/contrast.test.ts holds to its floors).
 
-   Every hue here is sampled from the seed — a rack of account-title stamps
-   on ruled ledger paper — and only lightness is ever moved. The old
-   semantic quartet (ok / warn / bad / info) is collapsed: `ok` and `info` are
-   the ink, `warn` and `bad` are the one red the ledger's column rule is
-   printed in. The token *names* survive so that every consumer keeps
-   working; what they resolve to is the point.
+   Every value here is the same value in site/assets/site.css, or one step
+   derived from it and marked so in the contract. The lineage is signage:
+   a white ground, one ink, one signal blue, rules instead of boxes — and
+   the three other colours each reserved for a gate state: approved green,
+   declined red, and the yellow that means "awaiting a human". The old
+   token *names* survive so every consumer keeps working; what they
+   resolve to is the point.
 
-   Single theme, on purpose: no dark-ground artifact has been sampled, and a
-   derived dark theme would be a set of decisions nobody sourced. */
+   Single theme, on purpose: the site is light only, and so is this. */
 @theme {
-  /* surfaces — hue 60 from the paper; --color-inset is the paper as sampled */
-  --color-ground: #f3f3ee;
-  --color-surface: #f3f3ee;
-  --color-inset: #ecece4;
-  --color-raised: #e4e4dc;
-  --color-reading-bg: #f3f3ee;
+  /* surfaces — the white page, the site's panel grey for insets, one step down for hover */
+  --color-ground: #ffffff;
+  --color-surface: #ffffff;
+  --color-inset: #f2f3f4;
+  --color-raised: #e6e8ea;
+  --color-reading-bg: #ffffff;
 
-  /* inks — the stamp-face lettering and the deepest impression */
-  --color-ink: #2c343c;
-  --color-muted: #5a6262;
-  --color-faint: #636b73;
-  --color-on-solid: #f3f3ee;
+  /* inks */
+  --color-ink: #0b0c0c;
+  --color-muted: #4f5459;
+  --color-faint: #5f646a;
+  --color-on-solid: #ffffff;
 
-  /* rules — the ledger's blue-grey horizontals; -cool is lifted for controls */
-  --color-line: #a4acb4;
-  --color-line-cool: #828d98;
+  /* rules — the hairline; -cool is darkened to 3.0 for form-control borders */
+  --color-line: #c8cacc;
+  --color-line-cool: #8b9095;
 
-  /* the accent is the ink: what used to be a hue is now weight */
-  --color-accent: #2c343c;
-  --color-accent-deep: #1c2424;
-  --color-accent-tint: #e4e4dc;
-  --color-accent-soft: rgba(44, 52, 60, 0.08);
+  /* the accent is the signal blue: links, the active entry, the selected row */
+  --color-accent: #1d70b8;
+  --color-accent-hover: #0b3d78;
+  --color-accent-deep: #0b3d78;
+  --color-accent-tint: #eaf2fa;
+  --color-accent-soft: rgba(29, 112, 184, 0.08);
+  --color-accent-underline: #9cc1e3;
 
-  /* states: two, not four — the ink, and the column rule's red */
-  --color-ok: #2c343c;
-  --color-info: #2c343c;
-  --color-warn: #945b5b;
-  --color-bad: #945b5b;
-  --color-mark: #a46c6c;
+  /* states: each colour has one job. ok is approved, bad is declined, warn
+     is the caution ink, info is the note blue. focus is the yellow that
+     means a human is needed — the position a run stands at, and the focus
+     ring. mark is the declined red where a mark, not a word, carries it:
+     the danger button, the over-budget bar, an error border. */
+  --color-ok: #0f7a52;
+  --color-info: #1d70b8;
+  --color-warn: #7a6400;
+  --color-bad: #c03030;
+  --color-mark: #c03030;
+  --color-focus: #ffdd00;
 
-  --color-ok-bg: #ecece4;   --color-ok-line: #a4acb4;
-  --color-info-bg: #ecece4; --color-info-line: #a4acb4;
-  --color-pend-bg: #ecece4; --color-pend-line: #a4acb4;
-  --color-pend-ink: #5a6262;
-  --color-warn-bg: #ecece4; --color-warn-line: #a46c6c;
-  --color-bad-bg: #ecece4;  --color-bad-line: #a46c6c;
+  /* tinted fields carry the state; their border is the hairline, as the
+     site's callouts are built — colour on the label, never on the frame */
+  --color-ok-bg: #e6f4ee;   --color-ok-line: #c8cacc;
+  --color-info-bg: #eaf2fa; --color-info-line: #c8cacc;
+  --color-pend-bg: #f2f3f4; --color-pend-line: #c8cacc;
+  --color-pend-ink: #4f5459;
+  --color-warn-bg: #fff8d6; --color-warn-line: #c8cacc;
+  --color-bad-bg: #fbeceb;  --color-bad-line: #c8cacc;
 
-  --color-ok-soft: rgba(44, 52, 60, 0.08);
-  --color-warn-soft: rgba(164, 108, 108, 0.14);
-  --color-bad-soft: rgba(164, 108, 108, 0.14);
+  --color-ok-soft: rgba(15, 122, 82, 0.1);
+  --color-warn-soft: rgba(122, 100, 0, 0.12);
+  --color-bad-soft: rgba(192, 48, 48, 0.1);
 
-  /* shape: the seed has ruled fields and rectangular stamp bodies — no radius */
+  /* shape: ruled fields and rectangular marks — no radius */
   --radius-xs: 0px;
   --radius-sm: 0px;
   --radius-md: 0px;
   --radius-lg: 0px;
   --radius-xl: 0px;
 
-  /* type — held from the previous round; seeded in its own pass */
+  /* type — held; the site's faces are the open type pass (#358) */
   --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --font-read: "Newsreader", Georgia, "Times New Roman", serif;
@@ -145,8 +154,8 @@
 :root {
   color-scheme: light;
 
-  /* Nothing on a printed sheet floats: every shadow token resolves to none,
-     so a consumer that still reaches for one gets nothing. */
+  /* Nothing floats: every shadow token resolves to none, so a consumer
+     that still reaches for one gets nothing. */
   --shadow-soft: none;
   --shadow-lift: none;
   --static-ring: none;
@@ -165,19 +174,22 @@
 
 body {
   @apply bg-ground text-ink font-sans antialiased;
+  /* The site's signage: a 3px ink band across the top of the page. */
+  border-top: 3px solid var(--color-ink);
   font-size: 14px;
   line-height: 1.5;
   text-rendering: optimizeLegibility;
 }
 
-/* Focus is always visible, in the ink. */
+/* Focus is the yellow, as on the site: the one colour that means a
+   human is wanted here. */
 :focus-visible {
-  outline: 2px solid var(--color-ink);
+  outline: 3px solid var(--color-focus);
   outline-offset: 2px;
 }
 
 /* Motion: none that the reader did not cause. The skeleton is a static
-   block of the paper's shade; nothing sweeps. */
+   block of the panel grey; nothing sweeps. */
 .skel {
   background: var(--color-raised);
 }
@@ -197,9 +209,12 @@ body {
    A status is a name (plus its code) in one ink, told apart by texture:
    filled for a decision taken, hollow for pending, struck for declined,
    hatched at the leading edge for bounced, dotted for a state not reached
-   or a run at rest. `.imp-cur` is the position a run stands at, and
-   `.imp-stamped` is a human's own mark on the record — set slightly askew
-   and roughened, because it was pressed there rather than printed. */
+   or a run at rest. `.imp-cur` is the gate on the table — the one cell
+   filled in the yellow, because that is where a human is wanted — and
+   `.imp-here` is the phase the machine is working in, a doubled rule with
+   no colour, because nobody is wanted there yet. `.imp-stamped` is a
+   human's own mark on the record, set slightly askew and roughened,
+   because it was pressed there rather than printed. */
 .imp {
   display: inline-block;
   font-family: var(--font-mono);
@@ -213,14 +228,15 @@ body {
   vertical-align: middle;
   color: var(--color-ink);
 }
-.imp-fill { background: var(--color-accent-deep); color: var(--color-on-solid); border-color: var(--color-accent-deep); }
+.imp-fill { background: var(--color-ink); color: var(--color-on-solid); border-color: var(--color-ink); }
 .imp-dot { border-style: dotted; color: var(--color-muted); }
 .imp-struck { text-decoration: line-through; }
 .imp-hatch {
   padding-left: 16px;
   background: repeating-linear-gradient(-45deg, currentColor 0 1px, transparent 1px 4px) left / 10px 100% no-repeat;
 }
-.imp-cur { color: var(--color-mark); border-style: dashed; font-weight: 600; }
+.imp-cur { background: var(--color-focus); color: var(--color-ink); border-color: var(--color-ink); font-weight: 600; }
+.imp-here { box-shadow: inset 0 0 0 1px currentColor; font-weight: 600; }
 .imp-mark { color: var(--color-mark); }
 .imp-stamped { transform: rotate(-1.6deg); filter: url(#grain); }
 
@@ -232,7 +248,7 @@ body {
 .tx-none { border-style: dotted; }
 
 /* Buttons: the impression at hand size. Primary is ink-filled; quiet is
-   hollow; danger is the red mark. Never a pill, never a shadow. */
+   hollow; danger is the declined red. Never a pill, never a shadow. */
 .btn {
   display: inline-block;
   font-family: var(--font-sans);
@@ -240,8 +256,8 @@ body {
   line-height: 1;
   font-weight: 600;
   padding: 9px 14px;
-  border: 1px solid var(--color-accent-deep);
-  background: var(--color-accent-deep);
+  border: 1px solid var(--color-ink);
+  background: var(--color-ink);
   color: var(--color-on-solid);
   white-space: nowrap;
 }
@@ -251,7 +267,7 @@ body {
 
 /* ------------------------------------------------------------------------
    Rendered markdown (artifacts) — the reading surface. Newsreader body on
-   the same paper as everything else; headings in the chrome face. */
+   the same page as everything else; headings in the chrome face. */
 .prose-artifact {
   font-family: var(--font-read);
   font-size: 16.5px;
@@ -289,9 +305,14 @@ body {
 .prose-artifact strong { font-weight: 600; color: var(--color-ink); }
 .prose-artifact em { font-style: italic; }
 .prose-artifact a {
-  color: var(--color-ink);
+  color: var(--color-accent);
   text-decoration: underline;
+  text-decoration-color: var(--color-accent-underline);
   text-underline-offset: 2px;
+}
+.prose-artifact a:hover {
+  color: var(--color-accent-hover);
+  text-decoration-color: var(--color-accent-hover);
 }
 .prose-artifact ul, .prose-artifact ol {
   margin: 0 0 16px;
@@ -373,8 +394,8 @@ body {
 
 /* Run-lexicon references. A cited R/AC/ADR id resolves where it stands:
    dotted underline; hover or keyboard focus opens a card quoting the
-   definition verbatim. Unresolved ids take the red — a dangling reference
-   is reviewer signal. */
+   definition verbatim. Unresolved ids take the caution ink — a dangling
+   reference is reviewer signal. */
 .lex-ref {
   @apply relative font-mono text-[0.94em] text-ink;
   text-decoration: underline dotted;
@@ -444,7 +465,7 @@ body {
   color: var(--color-ink);
 }
 
-/* Form controls: a ruled field on the paper. */
+/* Form controls: a ruled field on the page. */
 .input-well {
   border: 1px solid var(--color-line-cool);
   background: transparent;

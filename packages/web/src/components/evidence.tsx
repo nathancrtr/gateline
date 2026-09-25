@@ -97,7 +97,7 @@ export function ReportVerdict({ rollup }: { rollup: EvidenceRollup }) {
           The report states no overall verdict — written before the verdict line existed, or without it.
         </p>
       ) : (
-        <p className={`mt-1.5 ${alarmed ? 'font-semibold text-warn' : 'text-muted'}`} data-report-verdict={rollup.verdict}>
+        <p className={`mt-1.5 ${alarmed ? 'font-semibold text-bad' : 'text-muted'}`} data-report-verdict={rollup.verdict}>
           The report states its verdict: <span className="font-mono">“{rollup.verdict}”</span>
         </p>
       )}

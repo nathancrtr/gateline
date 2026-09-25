@@ -97,3 +97,23 @@ depends_on: [01-artifact-path-route]
 status: pending
 
 notes: |
+  round 1 (implementer): built as scoped. One deviation worth recording:
+  snapshot.test.ts's beforeAll does a full writeSnapshot pass over two full
+  generateFixtureRepo() repos (16 runs x 7 route suffixes, plus per-run
+  artifacts) — real work the acceptance tests require, ~18-29s standalone,
+  but it exceeded the project's global 30s vitest hookTimeout once the rest
+  of the suite's files were sharing the 4-fork pool. Fixed locally (no
+  vitest.config.ts change, out of this task's file_contact_surface anyway):
+  gave that one beforeAll an explicit 180s timeout, and reworked the
+  "excluded passes through" case to run writeSnapshot against a minimal stub
+  Hono app instead of re-running the full heavy pass a second time. Full
+  `npm test` (in packages/) subsequently passed clean twice in a row: 99
+  files / 1264 tests passed, 2 skipped (pre-existing, unrelated).
+
+  Manually verified the CLI end-to-end against this actual repo (`node
+  src/snapshot.ts --repo <repo> --out <tmp>`): it found exactly the 7 real
+  `done` runs the spec names as ground truth (creation-seam, dupefind,
+  local-only-mode, mdtoc, web-staging, wordfreq, writestate-kill-window),
+  correctly excluded the rest with reasons (phase spec/release, no
+  state.yaml), wrote 354 routes, and cleaned up its generated fixture dir on
+  exit.

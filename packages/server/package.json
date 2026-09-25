@@ -17,7 +17,8 @@
     "./contract": "./src/contract.ts"
   },
   "scripts": {
-    "dev": "node src/main.ts"
+    "dev": "node src/main.ts",
+    "snapshot": "node src/snapshot.ts"
   },
   "dependencies": {
     "@gateline/core": "*",

@@ -96,7 +96,7 @@
 // interrupted anywhere converges on re-run. Note what is deliberately absent:
 // no rule writes gates.* (§3, structural safety) and no rule judges artifact
 // content — task status `verified` is a human/G2 judgment, never derived.
-import { type Escalation, G2_COMPLETE_STATUSES, GATE_IDS, GATE_PHASES, type GateId, gateUndecided, type Phase, PROFILE_GATES, PROFILE_PHASES, phaseAfterGate, ROUND_CAP, } from '@gateline/core/record'
+import { describeArtifact, type Escalation, G2_COMPLETE_STATUSES, GATE_IDS, GATE_PHASES, type GateId, gateUndecided, type Phase, PROFILE_GATES, PROFILE_PHASES, phaseAfterGate, ROUND_CAP, } from '@gateline/core/record'
 import {
   type Anchor,
   after,
@@ -330,6 +330,9 @@ function producerPhase(obs: RunObservation, gate: GateId): DerivedAction {
   return rest('D10', `${artifact} well-formed; ${gate} is on the table (the frontend inbox surfaces it)`)
 }
 
+/** A work item by core's classifier, the one Gatehouse reads too (#421). */
+const isWorkItem = (p: string): boolean => describeArtifact(p).kind === 'work-item'
+
 /**
  * Plan phase. In `patch` (DESIGN.md §4.1) there is no analyst or architect —
  * the human authored the intent brief and a single work item at init, and G1
@@ -339,7 +342,7 @@ function producerPhase(obs: RunObservation, gate: GateId): DerivedAction {
  */
 function planPhase(obs: RunObservation): DerivedAction {
   if (obs.state?.profile === 'patch') {
-    const taskFiles = obs.artifacts.filter((p) => p.startsWith('tasks/') && p.endsWith('.yaml'))
+    const taskFiles = obs.artifacts.filter(isWorkItem)
     if (taskFiles.length === 0)
       return escalate('D21', 'patch run has no work item — the human authors tasks/01-*.yaml alongside the intent brief at init', 'escalation')
     return rest('D10', 'patch packet (intent brief + work item) is human-authored; G1 is on the table (the frontend inbox surfaces it)')
@@ -348,7 +351,7 @@ function planPhase(obs: RunObservation): DerivedAction {
   const inFlight = obs.openDispatches.find((d) => d.role === 'architect')
   if (inFlight) return rest('D12', 'architect dispatched and not yet landed — in flight')
 
-  const taskFiles = obs.artifacts.filter((p) => p.startsWith('tasks/') && p.endsWith('.yaml'))
+  const taskFiles = obs.artifacts.filter(isWorkItem)
   if (!obs.artifacts.includes('plan.md') || taskFiles.length === 0)
     return gatedDispatch(
       obs,

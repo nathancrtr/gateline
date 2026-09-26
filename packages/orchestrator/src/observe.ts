@@ -5,6 +5,7 @@
 
 import {
   type BudgetLedgerEntry,
+  describeArtifact,
   type GateId,
   parseLedger,
   type RunState,
@@ -210,8 +211,10 @@ export interface ObserveConfig {
   isAncestor?: (maybeAncestor: string, of: string) => Promise<boolean>
 }
 
-const isTaskFile = (p: string) => p.startsWith('tasks/') && p.endsWith('.yaml')
-const isReviewFile = (p: string) => /^review-\d+.*\.md$/.test(p)
+// What a run file is comes from core's one classifier (#421), the same answer
+// Gatehouse reads — not a second copy of the path grammar kept here.
+const isTaskFile = (p: string) => describeArtifact(p).kind === 'work-item'
+const isReviewFile = (p: string) => describeArtifact(p).kind === 'review-report'
 /**
  * Statuses whose task holds its `file_contact_surface` against a parallel
  * launch: everything that is neither pending nor complete. `in-progress` stays

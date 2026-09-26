@@ -4,7 +4,7 @@
 // gate requires; every disagreement is dispositioned as an engine bug or a
 // design finding — either way the run was free design review.
 import type { RunState } from '@gateline/core/record'
-import { parseRunState } from '@gateline/core/record'
+import { describeArtifact, parseRunState } from '@gateline/core/record'
 import type { LocalGitSource, RunRef } from '@gateline/core/sources'
 import { type DerivedAction, type DispatchIntent, deriveAction } from './derive.ts'
 import { type ObserveConfig, observeRun } from './observe.ts'
@@ -69,7 +69,7 @@ export async function shadowReplay(
   return steps
 }
 
-interface NextFacts {
+export interface NextFacts {
   changed: string[]
   runDir: string
   runsRoot: string
@@ -93,21 +93,28 @@ function gateDecided(facts: NextFacts): boolean {
   )
 }
 
-function dispatchLanded(d: DispatchIntent, facts: NextFacts): boolean {
-  const touched = artifactsTouched(facts)
+/**
+ * Whether the next commit carries what dispatch `d` was sent to produce. What
+ * each touched file is comes from core's `describeArtifact` (#421), so the
+ * replay and Gatehouse agree on what a run holds. The implementer's own work
+ * item is the one whose filename carries the dispatch's task id — the id a
+ * `tasks/NN-slug.yaml` path gives it — not any file whose name contains it.
+ */
+export function dispatchLanded(d: DispatchIntent, facts: NextFacts): boolean {
+  const kinds = artifactsTouched(facts).map(describeArtifact)
   switch (d.role) {
     case 'analyst':
-      return touched.includes('spec.md')
+      return kinds.some((a) => a.kind === 'spec')
     case 'architect':
-      return touched.includes('plan.md') || touched.some((p) => p.startsWith('tasks/'))
+      return kinds.some((a) => a.kind === 'plan' || a.kind === 'work-item')
     case 'implementer':
-      return codeTouched(facts) || (d.task !== null && touched.some((p) => p.startsWith('tasks/') && p.includes(d.task!)))
+      return codeTouched(facts) || (d.task !== null && kinds.some((a) => a.kind === 'work-item' && a.id === d.task))
     case 'reviewer':
-      return touched.some((p) => /^review-\d+/.test(p))
+      return kinds.some((a) => a.kind === 'review-report')
     case 'verifier':
-      return touched.includes('verification-report.md')
+      return kinds.some((a) => a.kind === 'verification-report')
     case 'ops':
-      return touched.includes('release-plan.md')
+      return kinds.some((a) => a.kind === 'release-plan')
   }
 }
 

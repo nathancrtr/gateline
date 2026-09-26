@@ -266,19 +266,26 @@ function TaskEntry({ item, src, slug }: { item: G1WorkItem; src: string; slug: s
             {item.path}
           </Address>
         )}
-        <span className="min-w-0 flex-1 text-[12.5px] text-ink">
-          <CitedText>{item.title}</CitedText>
-        </span>
         {item.dependsOn.length > 0 && (
           <span className="shrink-0 font-mono text-[10.5px] text-muted">after {item.dependsOn.join(', ')}</span>
         )}
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="shrink-0 border border-line bg-surface px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none text-muted"
-        >
-          surface{open ? ' ▾' : ' ▸'}
-        </button>
+        {/* The title and the fold control travel together, on a floor rather
+            than an infinite shrink (#296, and #454 for this row). Every other
+            item here is `shrink-0`, so a bare `min-w-0 flex-1` title absorbed
+            all the pressure from the id, the `after …` chip and the button
+            and rendered as a sliver instead of wrapping to its own line. */}
+        <span className="flex min-w-[min(24ch,100%)] flex-1 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className="min-w-[min(24ch,100%)] flex-1 text-[12.5px] text-ink" data-worktask-title>
+            <CitedText>{item.title}</CitedText>
+          </span>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="shrink-0 border border-line bg-surface px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none text-muted"
+          >
+            surface{open ? ' ▾' : ' ▸'}
+          </button>
+        </span>
       </div>
       {item.withheld && (
         <Withheld view="Surface view" reason={item.withheld} src={src} slug={slug} className="mt-1" data-task-withheld />
@@ -330,14 +337,27 @@ function Decisions({ src, slug }: { src: string; slug: string }) {
                     {entry.qualifier}
                   </span>
                 )}
-                <span className="min-w-0 flex-1 text-[12.5px] font-medium text-ink">{entry.shortName}</span>
-                <button
-                  type="button"
-                  onClick={() => setOpen(expanded ? null : key)}
-                  className="shrink-0 border border-line bg-surface px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none text-muted"
-                >
-                  {expanded ? 'less ▾' : 'more ▸'}
-                </button>
+                {/* A floor, not an infinite shrink (#296; this row is #454).
+                    The id and, on an amended ADR, the qualifier chip are both
+                    `shrink-0` — at 320px the qualifier alone is ~226px, and a
+                    bare `min-w-0 flex-1` title had nowhere to go but a 2px
+                    sliver, with its words painting past the card into the
+                    page edge. The floor gives the title (and the fold
+                    control it travels with, so the row cannot break between
+                    them) its own line once 24ch no longer fits beside the
+                    metadata. */}
+                <span className="flex min-w-[min(24ch,100%)] flex-1 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  <span className="min-w-[min(24ch,100%)] flex-1 text-[12.5px] font-medium text-ink" data-adr-title>
+                    {entry.shortName}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setOpen(expanded ? null : key)}
+                    className="shrink-0 border border-line bg-surface px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none text-muted"
+                  >
+                    {expanded ? 'less ▾' : 'more ▸'}
+                  </button>
+                </span>
               </div>
               <p className="mt-1 whitespace-pre-wrap text-[12.5px] leading-[1.5] text-muted">
                 <CitedText>{entry.body}</CitedText>

@@ -7,6 +7,7 @@ import { api, formatAge, type InboxItem } from '../api.ts'
 import { AgeBadge, KeyHints, KindChip } from '../components/chips.tsx'
 import { Count, isName, Name, QuotedWord } from '../components/vocabulary.tsx'
 import { gateCardState } from '../gate-state.ts'
+import { usd } from '../money.ts'
 import { type KeyHint, useKeys } from '../use-keys.ts'
 
 const STALE_SECONDS = 3 * 86_400 // aging turns urgent at 3 days
@@ -32,9 +33,6 @@ export function itemHref(item: InboxItem): string {
   const q = params.toString()
   return `/runs/${item.source}/${item.slug}${q ? `?${q}` : ''}`
 }
-
-/** A dollar figure as the header's budget meter prints one: two decimals. */
-export const usd = (n: number) => `$${n.toFixed(2)}`
 
 /**
  * A Name inside a line set larger than the code face's own sizes: the row's

@@ -372,12 +372,21 @@ async function measure(p: Page): Promise<Omit<Measurement, 'state' | 'width'>> {
     // not the title's immediate parent: the wrapper the title sits in today is
     // #296's implementation, and measuring against it would let a future
     // regression that collapses the wrapper collapse the floor with it.
+    //
+    // The same floor covers two other rows now (#454): the G1 packet's
+    // Decisions list (`data-adr-title`) and its Parallel-safety work-item list
+    // (`data-worktask-title`) are the #296 squeeze in another component — a
+    // flexible title between `shrink-0` siblings — and carry the identical
+    // fix. `card` below is whichever of the three list-item kinds owns the
+    // title, not "the finding card" specifically.
     const ctx = document.createElement('canvas').getContext('2d')!
-    const findingTitles = [...document.querySelectorAll<HTMLElement>('[data-finding-title]')].map((el) => {
+    const findingTitles = [
+      ...document.querySelectorAll<HTMLElement>('[data-finding-title], [data-adr-title], [data-worktask-title]'),
+    ].map((el) => {
       const cs = getComputedStyle(el)
       ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`
       const ch = ctx.measureText('0').width
-      const card = el.closest<HTMLElement>('[data-finding]')
+      const card = el.closest<HTMLElement>('[data-finding], [data-adr], [data-task]')
       const cardStyle = card ? getComputedStyle(card) : null
       // `clientWidth`, not the bounding box: the box includes the card's 1px
       // border on each side, and counting those makes the floor 2px wider than
@@ -385,8 +394,9 @@ async function measure(p: Page): Promise<Omit<Measurement, 'state' | 'width'>> {
       const available = card
         ? card.clientWidth - parseFloat(cardStyle!.paddingLeft) - parseFloat(cardStyle!.paddingRight)
         : Infinity
+      const id = card?.getAttribute('data-finding') ?? card?.getAttribute('data-adr') ?? card?.getAttribute('data-task') ?? '?'
       return {
-        id: card?.getAttribute('data-finding') ?? '?',
+        id,
         width: round(el.getBoundingClientRect().width),
         floor: round(Math.min(24 * ch, available)),
       }
@@ -549,7 +559,9 @@ const CHECKS: Record<InvariantId, (m: Measurement) => string | null> = {
    * #296: the title was the only shrinkable item in a row of `shrink-0`
    * metadata, so it absorbed every pixel of pressure and rendered one word per
    * line beside empty row space. The rule is a floor — 24ch, or the card's own
-   * width where that is narrower — under which the words never go.
+   * width where that is narrower — under which the words never go. #454 is
+   * the same squeeze in the G1 packet's Decisions and Parallel-safety rows,
+   * covered by the same rule now that both carry the same fix.
    */
   'finding-title-floor': (m) => {
     const squeezed = m.findingTitles.filter((t) => t.width < t.floor - 1)
@@ -685,13 +697,13 @@ test('no run page scrolls sideways on a 390px phone, and its spine fits folded (
 })
 
 // Asked of the header alone, not the whole page. At 320px the rest of a run
-// page is not yet laid out for the width: on CI's Linux fonts g1-pending's G1
-// packet measured 321px, because a Decisions row (ADR-2) squeezes its
-// `min-w-0 flex-1` title to a 2px box between `shrink-0` chips and the words
-// "Shared config module" paint past it to the viewport edge. That is the #296
-// squeeze in another component, independent of the spine (the page is still
-// 321px with the header hidden, and 320px with only the header shown), so it
-// is not this test's to catch. What #427 fixed is the header's own overflow.
+// page is not laid out for the width the same way the header is: on CI's
+// Linux fonts g1-pending's G1 packet used to measure 321px on its own,
+// because a Decisions row (ADR-2) squeezed its `min-w-0 flex-1` title to a 2px
+// box between `shrink-0` chips and the words "Shared config module" painted
+// past it to the viewport edge (#454, fixed below and asserted in the next
+// test, independent of the spine this one is scoped to). What #427 fixed is
+// the header's own overflow.
 test('at 320px a spine that still crops keeps its labels inside its own row (#427)', () => {
   const at320 = phone.filter((m) => m.width === NARROW_PHONE)
   expect(at320.length).toBe(PHONE_RUNS.length)
@@ -707,6 +719,30 @@ test('at 320px a spine that still crops keeps its labels inside its own row (#42
     const problem = CHECKS['one-row-spine'](m)
     if (problem !== null) failures.push(`${m.state} — one-row-spine: ${problem}`)  }
   expect(failures, `run headers that break at ${NARROW_PHONE}px:\n${failures.join('\n')}`).toEqual([])
+})
+
+// #454: the G1 packet's Decisions row (ADR-2) squeezed its title to a 2px box
+// between `shrink-0` chips — "amended 2026-07-06, G1 decline" alone is
+// ~226px — and the words spilled ~43px past it, reaching the page edge (321px
+// on CI's Linux fonts, exactly 320px on macOS). The Parallel-safety list's
+// work-item row (TaskEntry) carries the identical shape — an id, an `after …`
+// chip and a `surface ▸` button, all `shrink-0`, around one flexible title —
+// and squeezed the same way, short of the edge. Both rows now take the #296
+// fix, so this is the whole-page check #296's own test could not be: that fix
+// stopped a title from shredding into single words, not from pushing the page
+// past its viewport, and #454 is the case where a squeeze reaches the edge.
+test('the G1 packet does not scroll the page sideways at 320px, and its Decisions/Parallel-safety titles hold their floor (#454)', () => {
+  const g1 = phone.find((m) => m.state === 'g1-pending' && m.width === NARROW_PHONE)
+  expect(g1, 'g1-pending must be swept at 320px').toBeDefined()
+  // Non-vacuity: the packet must actually have rendered ADR and work-item
+  // title rows, or the floor check below passes on nothing.
+  expect(g1!.findingTitles.length).toBeGreaterThan(0)
+  const failures: string[] = []
+  for (const rule of ['no-sideways-scroll', 'finding-title-floor'] as const) {
+    const problem = CHECKS[rule](g1!)
+    if (problem !== null) failures.push(`${rule}: ${problem}`)
+  }
+  expect(failures, `g1-pending breaks at ${NARROW_PHONE}px:\n${failures.join('\n')}`).toEqual([])
 })
 
 test('no finding title is squeezed below its width floor', () => {

@@ -343,7 +343,7 @@ tasks:
     { id: 03-web-static-mode, status: review-approved, review_rounds: 2 },
     { id: 04-fixture-label, status: review-approved, review_rounds: 2 },
     { id: 05-static-render-check, status: review-approved, review_rounds: 2 },
-    { id: 06-pages-workflow, status: in-review, review_rounds: 0 }
+    { id: 06-pages-workflow, status: in-review, review_rounds: 1 }
   ]
 escalations:
   [

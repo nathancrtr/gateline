@@ -15,7 +15,7 @@ import type { NeedFact, RunSummary, RunsResponse } from '../src/api.ts'
 import { NeedsYou, needsYouMark, scrollCue } from '../src/pages/portfolio.tsx'
 
 const need = (kind: NeedFact['kind'], over: Partial<NeedFact> = {}): NeedFact => ({ kind, gate: null, reviewable: true, inflight: null, ...over })
-const run = (needs: NeedFact[]) => ({ needs, needsHuman: needs.length })
+const run = (needs: NeedFact[]) => ({ needs })
 /** The `imp-*` classes on the mark, sorted. */
 const tones = (html: string) => [...html.matchAll(/class="imp ([^"]*)"/g)].flatMap((m) => m[1]!.split(' ').filter((c) => c.startsWith('imp-'))).sort()
 
@@ -38,10 +38,6 @@ describe('needsYouMark', () => {
   it('is quiet when the run asks nothing of you — whatever its escalation count', () => {
     const closed: Pick<RunSummary, 'needs' | 'needsHuman' | 'escalationsOpen'> = { needs: [], needsHuman: 0, escalationsOpen: 1 }
     expect(needsYouMark(closed)).toEqual({ kind: 'quiet', count: 0, label: 'nothing needs you' })
-  })
-
-  it('falls back to the bare count from a server that predates `needs`', () => {
-    expect(needsYouMark({ needsHuman: 2 })).toEqual({ kind: 'needs', count: 2, lead: null, tone: '', glyph: '', label: '2 items need you' })
   })
 })
 
@@ -106,7 +102,7 @@ describe('the demo portfolio, row by row (#452)', () => {
   })
 
   it('no waiting row wears fill', () => {
-    const waiting = runs.filter((r) => (r.needs?.length ?? 0) > 0)
+    const waiting = runs.filter((r) => r.needs.length > 0)
     expect(waiting.length).toBeGreaterThan(10)
     for (const r of waiting) expect(chip(r.slug), r.slug).not.toContain('imp-fill')
   })

@@ -42,7 +42,7 @@ const NUM = 'pr-2.5 py-[12px] border-b border-line align-top text-right font-ui 
  * but the closure answered them, so the run is quiet here (#452).
  */
 export type NeedsYouMark =
-  | { kind: 'needs'; count: number; lead: NeedFact | null; tone: ImpTone; glyph: string; label: string }
+  | { kind: 'needs'; count: number; lead: NeedFact; tone: ImpTone; glyph: string; label: string }
   | { kind: 'quiet'; count: 0; label: string }
 
 /** The lead item in the record's words: its kind, and for a gate its code and state. */
@@ -53,13 +53,11 @@ function leadWords(need: NeedFact): string {
   return state === 'bounced' ? `${gate}, bounced` : state === 'inflight' ? `${gate}, superseded` : gate
 }
 
-export function needsYouMark(run: Pick<RunSummary, 'needs' | 'needsHuman'>): NeedsYouMark {
-  // A server built before #452 sends no `needs`: the count, with no kind.
-  const count = run.needs?.length ?? run.needsHuman
-  if (count === 0) return { kind: 'quiet', count: 0, label: 'nothing needs you' }
+export function needsYouMark(run: Pick<RunSummary, 'needs'>): NeedsYouMark {
+  const [lead] = run.needs
+  if (!lead) return { kind: 'quiet', count: 0, label: 'nothing needs you' }
+  const count = run.needs.length
   const items = `${count} ${count === 1 ? 'item needs' : 'items need'} you`
-  const lead = run.needs?.[0] ?? null
-  if (!lead) return { kind: 'needs', count, lead, tone: '', glyph: '', label: items }
   const what = leadWords(lead)
   return {
     kind: 'needs',
@@ -106,7 +104,7 @@ export function NeedsYou({ mark }: { mark: NeedsYouMark }) {
   if (mark.kind === 'quiet') return <span aria-hidden="true" className="w-[34px] shrink-0" />
   return (
     <span className="w-[34px] shrink-0" title={mark.label}>
-      <Imp tone={mark.tone} className="tabular-nums" data-needs-you={mark.lead?.kind}>
+      <Imp tone={mark.tone} className="tabular-nums" data-needs-you={mark.lead.kind}>
         {mark.glyph}
         {mark.count}
       </Imp>

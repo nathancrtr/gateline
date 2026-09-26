@@ -39,7 +39,6 @@ import type {
   ClosureRecord,
   CodeTreeCause,
   InboxItem as CoreInboxItem,
-  RunSummary as CoreRunSummary,
   CoverageRow,
   CriterionEvidence,
   DecisionAction,
@@ -81,6 +80,7 @@ import type {
   RoundCapFact,
   RunMetricsSummary,
   RunState,
+  RunSummary,
   Severity,
   StagedFact,
   StageRefusal,
@@ -163,6 +163,7 @@ export type {
   RoundCapFact,
   RunMetricsSummary,
   RunState,
+  RunSummary,
   Severity,
   StagedFact,
   StateProblem,
@@ -188,14 +189,6 @@ type InboxFactKey = 'question' | 'waitingOn' | 'superseded' | 'bouncedBy' | 'esc
  * are kept (#411 step 8). Not a version bump: the change is additive.
  */
 export type InboxItem = Omit<CoreInboxItem, InboxFactKey> & Partial<Pick<CoreInboxItem, InboxFactKey>>
-
-/**
- * A portfolio row on the wire. `needs` (#452) is optional here for the reason
- * the inbox facts are: a new Gatehouse can be served by a server built before
- * it. A client reads an absent `needs` as "this server predates the fact" and
- * falls back to the bare `needsHuman` count. Not a version bump: additive.
- */
-export type RunSummary = Omit<CoreRunSummary, 'needs'> & Partial<Pick<CoreRunSummary, 'needs'>>
 
 /**
  * Every error response, at every status. `error` is the human-readable reason;

@@ -16,6 +16,10 @@ describe('isFixtureSource', () => {
   it('is false for a real source id', () => {
     expect(isFixtureSource('gateline')).toBe(false)
   })
+
+  it('is false for a source id that merely contains the fixture id as a substring', () => {
+    expect(isFixtureSource('fixtures')).toBe(false)
+  })
 })
 
 describe('FixtureLabel', () => {
@@ -23,5 +27,13 @@ describe('FixtureLabel', () => {
     const html = renderToStaticMarkup(createElement(FixtureLabel))
     expect(html).toContain('data-fixture-label')
     expect(html).toContain('fixture data')
+  })
+
+  it('renders the text as a child node, not only inside the title attribute (AC3.2)', () => {
+    const html = renderToStaticMarkup(createElement(FixtureLabel))
+    // Strip every tag/attribute; if "fixture data" survives, it was in the
+    // element's text content, not hover-only inside `title`.
+    expect(html.replace(/<[^>]+>/g, '')).toBe('fixture data')
+    expect(html).toMatch(/>fixture data</)
   })
 })

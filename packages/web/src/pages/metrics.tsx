@@ -5,6 +5,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api, type MetricsResponse } from '../api.ts'
 import { Imp } from '../components/chips.tsx'
+import { FixtureLabel, isFixtureSource } from '../components/fixture-label.tsx'
 import { PageStatus } from './inbox.tsx'
 
 // Ordered burden ramp: one hue (the ink) at three textures — solid, hatched,
@@ -230,6 +231,7 @@ function BudgetSection({ metrics }: { metrics: MetricsResponse }) {
               <tr key={`${r.source}/${r.slug}`}>
                 <td className={`${TD} font-mono text-xs`}>
                   {r.source}/{r.slug}
+                  {isFixtureSource(r.source) && <FixtureLabel className="ml-2" />}
                 </td>
                 <td className={`${TD} text-right font-mono text-xs tabular-nums`}>{r.budget.limit === null ? '—' : `$${r.budget.limit}`}</td>
                 <td className={`${TD} text-right font-mono text-xs tabular-nums`}>{r.budget.spent === null ? '—' : `$${r.budget.spent}`}</td>

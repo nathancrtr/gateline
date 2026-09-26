@@ -102,3 +102,50 @@ notes: |
   packages/web/src/pages/run.tsx, packages/web/src/pages/inbox.tsx,
   packages/web/src/pages/portfolio.tsx (import + one render line each). Left
   uncommitted per dispatch.
+
+  Implementer r2: addressed the escalation and both findings from
+  review-04.md.
+
+  Escalation (metrics.tsx, scope item 5): the human resolved the round-1
+  escalation as return-to-implement and widened the task's surface with
+  `packages/web/src/pages/metrics.tsx`. Added
+  `import { FixtureLabel, isFixtureSource } from '../components/fixture-label.tsx'`
+  and, in `BudgetSection`'s run cell (the `{r.source}/{r.slug}` `<td>`),
+  `{isFixtureSource(r.source) && <FixtureLabel className="ml-2" />}` —
+  identical gating pattern to portfolio.tsx's run cell, same `ml-2` spacing.
+  No other line in metrics.tsx touched.
+
+  F1 (major — markup test couldn't distinguish visible text from
+  title-only text): added a second `FixtureLabel` test asserting
+  `html.replace(/<[^>]+>/g, '')` equals exactly `'fixture data'` (i.e. the
+  only text content in the whole element, after stripping every tag, is the
+  visible label — nothing survives if the word is only inside `title`) plus
+  `expect(html).toMatch(/>fixture data</)` as a second, narrower pin. Applied
+  the reviewer's exact mutant to `fixture-label.tsx` on the real file
+  (`title="fixture data"`, no children) and reran
+  `npx vitest run web/test/fixture-label.test.ts`: the new test failed
+  (`expected '' to be 'fixture data'`), 4/5 passed — mutant killed. Restored
+  `fixture-label.tsx` from a pre-mutant copy and confirmed `git diff` on that
+  file was empty (byte-identical to pre-mutant) before moving on.
+
+  F2 (minor — substring/prefix matches survived): added
+  `isFixtureSource('fixtures')` → `false` to the `isFixtureSource` describe
+  block, per the task's updated acceptance-test line. Applied the reviewer's
+  `includes` mutant (`return source.includes(FIXTURE_SOURCE_ID)`) to the real
+  file and reran the same targeted vitest command: the new test failed
+  (`expected true to be false`), 4/5 passed — mutant killed. Restored the
+  file again and reconfirmed an empty `git diff` on it.
+
+  No rebuttals — all three items (escalation, F1, F2) taken as findings and
+  fixed as specified; no jsdom or new dependency added.
+
+  Verification (packages/, after restoring fixture-label.tsx both times):
+  `npx tsc -p web/tsconfig.json` clean (no output); `npx vitest run web/test`
+  — 22 test files, 263 tests passed (261 + 2 new: the AC3.2 child-node pin
+  and the `'fixtures'` negative case), boundary.test.ts unchanged; `npm run
+  lint` — "Checked 231 files in 66ms. No fixes applied." Files changed this
+  round: `packages/web/src/pages/metrics.tsx` (import + one gated render
+  line), `packages/web/test/fixture-label.test.ts` (two new test cases).
+  `packages/web/src/components/fixture-label.tsx` and the other three page
+  files are untouched this round (verified via `git diff --stat`, which
+  lists only the two files above). Left uncommitted per dispatch.

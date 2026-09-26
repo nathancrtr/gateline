@@ -27,13 +27,29 @@
 // nothing is restated in the packet's own words.
 
 import { useQuery } from '@tanstack/react-query'
-import { api, type EscalationPacket as EscalationPacketData } from '../api.ts'
+import { Link } from 'react-router-dom'
+import { type ArtifactRef, api, type EscalationPacket as EscalationPacketData } from '../api.ts'
 import { PACKET_FRAME, PACKET_LABEL, PacketSweep } from './findings.tsx'
 import { GroupLabel } from './g1.tsx'
 import { Markdown } from './markdown.tsx'
 import { Address, artifactHref, FieldRow, QuotedPassage, Withheld } from './vocabulary.tsx'
 
-export function EscalationPacket({ src, slug, index }: { src: string; slug: string; index: number }) {
+export function EscalationPacket({
+  src,
+  slug,
+  index,
+  refs,
+}: {
+  src: string
+  slug: string
+  index: number
+  /**
+   * The card's packet refs (#415). `EscalationPacket.artifact` is still a bare
+   * path on the wire, so the report's kind is joined from the ref the card
+   * holds for the same file rather than read off its name.
+   */
+  refs?: readonly ArtifactRef[]
+}) {
   const { data, isPending } = useQuery({
     queryKey: ['escalation', src, slug, index],
     queryFn: () => api.escalation(src, slug, index),
@@ -60,7 +76,7 @@ export function EscalationPacket({ src, slug, index }: { src: string; slug: stri
           <Routes packet={packet} who={who} />
         </>
       )}
-      <Report packet={packet} src={src} slug={slug} />
+      <Report packet={packet} src={src} slug={slug} refs={refs} />
     </section>
   )
 }
@@ -152,17 +168,23 @@ function Routes({ packet, who }: { packet: EscalationPacketData; who: string }) 
  * one (ESCALATE SCOPE lets a review approve the diff and escalate the run at
  * once), the findings still standing, and the artifact itself one click away.
  */
-function Report({ packet, src, slug }: { packet: EscalationPacketData; src: string; slug: string }) {
+function Report({ packet, src, slug, refs }: { packet: EscalationPacketData; src: string; slug: string; refs?: readonly ArtifactRef[] }) {
   const diffVerdict = packet.section?.diffVerdict ?? null
+  // #411 step 5: the packet hands `artifact` as a bare path. Its kind comes
+  // from the card's ref for that path; with no ref the link says "report".
+  const kind = refs?.find((r) => r.path === packet.artifact)?.contractName ?? 'report'
   return (
     <div data-escalation-report>
       <GroupLabel hint="the artifact the escalation lives in">The report</GroupLabel>
       <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1 border border-line bg-surface px-3 py-2 text-[12.5px]">
-        {/* #411 step 3: the report is named by its kind, and this Address
-            follows the name instead of leading the row. */}
-        <Address size="md" to={artifactHref(src, slug, packet.artifact!)}>
-          {packet.artifact!}
-        </Address>
+        {/* The link is the UI's words, "Open the <kind>", and the file follows
+            as the Address it is (#423) — never the link text on its own. */}
+        <span className="inline-flex flex-wrap items-baseline gap-x-2">
+          <Link className="text-accent underline underline-offset-2" to={artifactHref(src, slug, packet.artifact!)}>
+            Open the {kind}
+          </Link>
+          <Address>{packet.artifact!}</Address>
+        </span>
         {packet.reportVerdict && (
           <span className="text-muted">
             verdict <span className="font-mono text-ink">{packet.reportVerdict}</span>

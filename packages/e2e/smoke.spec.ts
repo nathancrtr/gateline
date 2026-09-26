@@ -690,13 +690,17 @@ test("escalation packet (#407): the escalating role's own words on the card", as
   // report has no diff verdict and no findings, so neither is claimed.
   const report = packet.locator('[data-escalation-report]')
   await expect(report).toContainText('escalate')
-  await expect(report.getByRole('link', { name: 'verification-report.md' })).toBeVisible()
+  // The link is the UI's words and the file follows it as the Address (#423).
+  await expect(report.getByRole('link', { name: 'Open the verification report' })).toBeVisible()
+  await expect(report.locator('[data-address]')).toHaveText('verification-report.md')
   await expect(report.locator('[data-escalation-diff-verdict]')).toHaveCount(0)
   await expect(report.locator('[data-escalation-standing]')).toHaveCount(0)
 
-  // The state file is no longer offered as reading; the report is the chip.
-  await expect(card.locator('a.imp', { hasText: 'state.yaml' })).toHaveCount(0)
-  await expect(card.locator('a.imp', { hasText: 'verification-report.md' })).toHaveCount(1)
+  // The state file is no longer offered as reading; the report is the row,
+  // named by its kind (#423).
+  await expect(card.locator('[data-ref-row="state.yaml"]')).toHaveCount(0)
+  await expect(card.locator('[data-ref-row="verification-report.md"]')).toHaveCount(1)
+  await expect(card.locator('[data-ref-row="verification-report.md"] [data-kind-label]')).toHaveText('Verification report')
   // The Resolve form is unchanged.
   await expect(card.locator('[data-decide="resolve"]')).toBeVisible()
 })
@@ -736,11 +740,11 @@ test('round cap (#257): the surface compares the last two rounds, not a file lis
   await expect(resolved.first()).toContainText('the banner is the first line')
 
   // Every report stays one click away — folding is never truncation. The link
-  // is the decide card's own packet chip, which carries the verdict too; the
-  // panel no longer repeats that row 40px above it (#296).
+  // is the decide card's own reference row, which carries the verdict too; the
+  // panel no longer repeats that row 40px above it (#296, #423).
   const card = page.locator('[data-needs-card]').first()
   for (const path of ['review-01.md', 'review-02.md', 'review-03.md']) {
-    await expect(card.getByRole('link', { name: new RegExp(`^${path}`) })).toHaveCount(1)
+    await expect(card.locator(`a[data-ref-row="${path}"]`)).toHaveCount(1)
   }
   await expect(panel.getByRole('link', { name: /review-0\d\.md/ })).toHaveCount(0)
 })

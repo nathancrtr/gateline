@@ -19,7 +19,7 @@ import { useQuery } from '@tanstack/react-query'
 import { type ReactNode, useState } from 'react'
 import { api, type ReviewFinding, type ReviewReport, type Severity, type Verdict } from '../api.ts'
 import { CitedText } from './lexicon.tsx'
-import { Address, FieldRow } from './vocabulary.tsx'
+import { Address, FieldRow, isName, Name } from './vocabulary.tsx'
 
 const SEVERITY_RANK: Record<Severity, number> = { blocking: 0, major: 1, minor: 2, unknown: 3 }
 
@@ -156,6 +156,12 @@ function SeverityChip({ finding }: { finding: ReviewFinding }) {
   )
 }
 
+/** Where a finding was raised: the review's task, from its own header, and the review's path. */
+export interface FindingSource {
+  task: string | null
+  path: string
+}
+
 /**
  * One finding, verbatim. Exported because G2's packet surface (#256) and the
  * round-cap comparison (#257) render the same card — under the criterion it
@@ -174,7 +180,8 @@ export function FindingCard({
   defaultOpen,
 }: {
   finding: ReviewFinding
-  source?: string
+  /** The review that raised it: the task its header names, and its path as the Address after that name. */
+  source?: FindingSource
   note?: ReactNode
   extra?: ReactNode
   /** Overrides the default fold, for a caller that knows something the finding
@@ -193,11 +200,17 @@ export function FindingCard({
         <SeverityChip finding={finding} />
         {/* Named only where the card leaves its own report — under a criterion,
             "which review raised this" is not otherwise on screen. */}
-        {/* #411 step 3: the report is named by its kind and task; the file
-            becomes the Address after that name. */}
+        {/* The review is named by the task it reviews, and its file follows
+            as the Address (#423). A header that names no task leaves the
+            address after the finding's own id, which is a name too. */}
+        {source?.task && isName(source.task) && (
+          <Name size="xs" className="shrink-0">
+            {source.task}
+          </Name>
+        )}
         {source && (
           <Address size="xs" className="shrink-0">
-            {source}
+            {source.path}
           </Address>
         )}
         {finding.round !== null && <span className="shrink-0 font-ui text-[10.5px] text-faint">round {finding.round}</span>}

@@ -216,6 +216,12 @@ code, pre, kbd, samp, .font-mono, .imp {
 .imp-warn { color: var(--color-warn); }
 .imp-ok { background: var(--color-ok); color: var(--color-on-solid); border-color: var(--color-ok); }
 .imp-stamped { transform: rotate(-1.6deg); filter: url(#grain); }
+/* A folded spine phase (#427): the impression with its word taken out, the
+   same height as its neighbours and 8px wide, so the sequence keeps its shape
+   and texture where the words do not fit. The zero-width space gives it a
+   line box without giving it text. */
+.imp-tick { padding: 4px 3px 3px; }
+.imp-tick::before { content: "\200b"; }
 
 /* Textures for one-hue sequential fills (the burden ramp) and the
    "unrecorded" outline. Applied to block elements with a set size. */

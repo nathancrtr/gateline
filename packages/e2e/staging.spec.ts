@@ -5,15 +5,14 @@
 // the actual UI/API this suite drives, not a pre-baked fixture run). Follows
 // smoke.spec.ts's idioms (spawned server, readiness poll, execFileSync git
 // assertions) but is fully self-contained: its own fixture dir and its own
-// server on a port other than 4399, so it never collides with smoke.spec's
-// server under parallel Playwright workers (plan Risk 2).
-import { type ChildProcess, execFileSync, spawn } from 'node:child_process'
+// server on an OS-assigned port (demo-server.ts, #438), so it never collides
+// with another spec's server under parallel Playwright workers, or another
+// worktree's (plan Risk 2).
+import { type ChildProcess, execFileSync } from 'node:child_process'
 import { rmSync } from 'node:fs'
 import { generateFixtureRepo } from '@gateline/fixtures'
 import { expect, type Page, test } from '@playwright/test'
-
-const PORT = 4398
-test.use({ baseURL: `http://127.0.0.1:${PORT}` })
+import { spawnDemoServer } from './demo-server.ts'
 
 // The fixture's built-in intent-brief.md template (packages/fixtures/src/index.ts's
 // CONTRACTS['intent-brief.md']) — the same order GET /api/staging serves.
@@ -24,6 +23,7 @@ const STAGE_SLUG = 'e2e-staging-flow'
 
 let fixtureDir: string
 let server: ChildProcess
+let ORIGIN: string
 
 const git = (args: string[]) => execFileSync('git', ['-C', fixtureDir, ...args], { encoding: 'utf8' })
 
@@ -34,22 +34,12 @@ function sourceId(): string {
   return fixtureDir.replace(/\/+$/, '').split('/').pop()!
 }
 
+/** Navigates against this file's own server — never one another suite started. */
+const goto = (page: Page, path: string) => page.goto(ORIGIN + path)
+
 test.beforeAll(async () => {
   fixtureDir = generateFixtureRepo().dir
-  server = spawn('node', ['server/src/main.ts', '--repo', fixtureDir, '--port', String(PORT)], {
-    cwd: new URL('..', import.meta.url).pathname,
-    stdio: 'ignore',
-  })
-  for (let i = 0; i < 60; i++) {
-    try {
-      const res = await fetch(`http://127.0.0.1:${PORT}/api/health`)
-      if (res.ok) return
-    } catch {
-      /* not up yet */
-    }
-    await new Promise((r) => setTimeout(r, 500))
-  }
-  throw new Error('server did not come up')
+  ;({ server, origin: ORIGIN } = await spawnDemoServer(fixtureDir))
 })
 
 test.afterAll(() => {
@@ -84,7 +74,7 @@ function extractClientKey(stateYaml: string): string {
 }
 
 test('entry + stage: Portfolio → New run → fill the brief → land on the run detail page (AC1.2, AC4.2, AC7.1)', async ({ page }) => {
-  await page.goto('/portfolio')
+  await goto(page, '/portfolio')
 
   // AC7.1: the nav still shows exactly Inbox/Portfolio/Metrics — staging's
   // entry point is reachable from an existing page, not a new top-level route.
@@ -118,7 +108,7 @@ test('entry + stage: Portfolio → New run → fill the brief → land on the ru
 })
 
 test('submit stays disabled while a required section is left empty (AC2.1/AC2.2 prevention)', async ({ page }) => {
-  await page.goto('/portfolio/new')
+  await goto(page, '/portfolio/new')
   await expect(page.locator('#title')).toBeVisible()
   await page.locator('#title').fill('Partial Brief Probe')
   // Fill every section but the last — one blank required section is enough.
@@ -129,12 +119,12 @@ test('submit stays disabled while a required section is left empty (AC2.1/AC2.2 
 })
 
 test('a staged run renders distinctly and offers only Arm, never Resume (AC6.1/AC6.2)', async ({ page }) => {
-  await page.goto('/portfolio')
+  await goto(page, '/portfolio')
   const row = page.locator('tr', { hasText: STAGE_SLUG })
   await expect(row).toContainText('staged')
   await expect(row).not.toContainText('paused')
 
-  await page.goto(`/runs/${sourceId()}/${STAGE_SLUG}`)
+  await goto(page, `/runs/${sourceId()}/${STAGE_SLUG}`)
   // The PhaseChip itself (its data hook) — not the header at large, which
   // also carries the genesis-preview candidate's permanent "staged by
   // <name>" provenance line regardless of current phase.
@@ -151,7 +141,7 @@ test('a staged run renders distinctly and offers only Arm, never Resume (AC6.1/A
 })
 
 test('arm commits "armed by" and clears the staged treatment (AC5.1)', async ({ page }) => {
-  await page.goto(`/runs/${sourceId()}/${STAGE_SLUG}`)
+  await goto(page, `/runs/${sourceId()}/${STAGE_SLUG}`)
   const card = page.locator('[data-needs-card]').first()
   await card.locator('[data-decide="arm"]').click()
   await card.locator('[data-decide="arm-confirm"]').click()
@@ -176,7 +166,7 @@ test('replaying the same client key reports "already staged", no second commit (
   const clientKey = extractClientKey(priorState)
   const tipBefore = git(['rev-parse', `run/${STAGE_SLUG}`]).trim()
 
-  await page.goto('/portfolio/new')
+  await goto(page, '/portfolio/new')
   await expect(page.locator('#title')).toBeVisible()
   // Same slug (same title auto-suggests it) — the same staging request,
   // resubmitted. The form always mints a fresh client key per page load
@@ -205,7 +195,7 @@ test('replaying the same client key reports "already staged", no second commit (
 test('staging a taken slug refuses, naming the existing run, no branch mutation (AC8.2)', async ({ page }) => {
   const tipBefore = git(['rev-parse', 'run/g0-pending']).trim()
 
-  await page.goto('/portfolio/new')
+  await goto(page, '/portfolio/new')
   await expect(page.locator('#title')).toBeVisible()
   await page.locator('#title').fill('Collision Probe')
   await page.locator('#slug').fill('g0-pending')

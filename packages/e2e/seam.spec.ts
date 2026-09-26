@@ -32,14 +32,16 @@
 // no owner fails, and an entry that no longer matches any hit fails too — so
 // the PR that fixes a surface must delete its entry, and the list can only
 // get shorter.
-import { type ChildProcess, spawn } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import { rmSync, writeFileSync } from 'node:fs'
 import { generateFixtureRepo } from '@gateline/fixtures'
 import { type Browser, expect, type Page, test } from '@playwright/test'
+import { spawnDemoServer } from './demo-server.ts'
 
-// 4395–4399 are the other specs'; 4377 is the local dev server's.
-const PORT = 4394
-const ORIGIN = `http://127.0.0.1:${PORT}`
+// The server binds an OS-assigned port (demo-server.ts, #438), set once
+// `beforeAll` resolves it — never a port this suite picked itself, so a
+// concurrent worktree's server is never the one this sweep reads.
+let ORIGIN: string
 const WIDTH = 1440
 
 /** What the rule looks for, as strings so they can cross into the page. */
@@ -210,20 +212,7 @@ const hits: Hit[] = []
 test.beforeAll(async ({ browser }: { browser: Browser }) => {
   test.setTimeout(600_000)
   fixtureDir = generateFixtureRepo().dir
-  server = spawn('node', ['server/src/main.ts', '--repo', fixtureDir, '--port', String(PORT)], {
-    cwd: new URL('..', import.meta.url).pathname,
-    stdio: 'ignore',
-  })
-  let up = false
-  for (let i = 0; i < 60 && !up; i++) {
-    try {
-      up = (await fetch(`${ORIGIN}/api/health`)).ok
-    } catch {
-      /* not up yet */
-    }
-    if (!up) await new Promise((r) => setTimeout(r, 500))
-  }
-  if (!up) throw new Error('server did not come up')
+  ;({ server, origin: ORIGIN } = await spawnDemoServer(fixtureDir))
 
   surfaces.push(...(await enumerate()))
   page = await browser.newPage({ viewport: { width: WIDTH, height: 900 } })

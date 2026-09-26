@@ -8,7 +8,11 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   retries: 0,
   use: {
-    baseURL: 'http://127.0.0.1:4399',
+    // No baseURL: each spec spawns its own server on an OS-assigned port and
+    // navigates against the origin it reads back (demo-server.ts, #438) — a
+    // pinned default here would be one more fixed port a concurrent worktree
+    // could collide with, and nothing left reads it.
+    //
     // The default, not the only width. Behaviour and content tests run here;
     // anything about layout belongs in `e2e/geometry.spec.ts`, which builds its
     // own context and sweeps 800/900/1000/1280. #301 was filed because this pin

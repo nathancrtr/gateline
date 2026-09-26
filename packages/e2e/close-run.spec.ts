@@ -1,21 +1,20 @@
 // E2E for closing a run (#200): the run-level affordance, the typed
 // disposition, what the record ends up holding, and the reopen that undoes it.
 //
-// Follows staging.spec.ts's idioms — its own fixture repo, its own server on
-// its own port, and git assertions read through plumbing rather than a
-// checkout, so the committed record is checked the way an operator would
-// inspect it. Ports in use: 4399 smoke, 4398 staging, 4397 host-link, 4396
-// here — each spec needs its own so parallel workers never collide.
-import { type ChildProcess, execFileSync, spawn } from 'node:child_process'
+// Follows staging.spec.ts's idioms — its own fixture repo, its own server,
+// and git assertions read through plumbing rather than a checkout, so the
+// committed record is checked the way an operator would inspect it. The
+// server binds an OS-assigned port (demo-server.ts, #438) so parallel workers
+// — and parallel worktrees — never collide.
+import { type ChildProcess, execFileSync } from 'node:child_process'
 import { rmSync } from 'node:fs'
 import { generateFixtureRepo } from '@gateline/fixtures'
-import { expect, test } from '@playwright/test'
-
-const PORT = 4396
-test.use({ baseURL: `http://127.0.0.1:${PORT}` })
+import { expect, type Page, test } from '@playwright/test'
+import { spawnDemoServer } from './demo-server.ts'
 
 let fixtureDir: string
 let server: ChildProcess
+let ORIGIN: string
 
 const git = (args: string[]) => execFileSync('git', ['-C', fixtureDir, ...args], { encoding: 'utf8' })
 
@@ -23,22 +22,12 @@ function sourceId(): string {
   return fixtureDir.replace(/\/+$/, '').split('/').pop()!
 }
 
+/** Navigates against this file's own server — never one another suite started. */
+const goto = (page: Page, path: string) => page.goto(ORIGIN + path)
+
 test.beforeAll(async () => {
   fixtureDir = generateFixtureRepo().dir
-  server = spawn('node', ['server/src/main.ts', '--repo', fixtureDir, '--port', String(PORT)], {
-    cwd: new URL('..', import.meta.url).pathname,
-    stdio: 'ignore',
-  })
-  for (let i = 0; i < 60; i++) {
-    try {
-      const res = await fetch(`http://127.0.0.1:${PORT}/api/health`)
-      if (res.ok) return
-    } catch {
-      /* not up yet */
-    }
-    await new Promise((r) => setTimeout(r, 500))
-  }
-  throw new Error('server did not come up')
+  ;({ server, origin: ORIGIN } = await spawnDemoServer(fixtureDir))
 })
 
 test.afterAll(() => {
@@ -53,10 +42,10 @@ test('close: a paused run is ended from its own page with a typed disposition, a
   // `{source}/{slug}` as separate nodes.
   const rows = page.locator('[data-inbox-row]')
   const inboxRow = rows.filter({ hasText: 'paused-budget' })
-  await page.goto('/')
+  await goto(page, '/')
   await expect(inboxRow).toHaveCount(1)
 
-  await page.goto(`/runs/${sourceId()}/paused-budget`)
+  await goto(page, `/runs/${sourceId()}/paused-budget`)
   await page.locator('[data-decide="close"]').click()
 
   // Both halves are required: the confirm stays disabled until a disposition
@@ -90,18 +79,18 @@ test('close: a paused run is ended from its own page with a typed disposition, a
   await expect(page.locator('[data-phase-chip]').first()).toContainText('already-delivered')
 
   // And it is out of the inbox — the point of the exercise.
-  await page.goto('/')
+  await goto(page, '/')
   await expect(rows.first()).toBeVisible() // the box rendered, and this run is not in it
   await expect(inboxRow).toHaveCount(0)
 })
 
 test('close is not offered on a done run — a finished run is already its own record', async ({ page }) => {
-  await page.goto(`/runs/${sourceId()}/done-merged`)
+  await goto(page, `/runs/${sourceId()}/done-merged`)
   await expect(page.locator('[data-decide="close"]')).toHaveCount(0)
 })
 
 test('reopen: a closure is a decision, not a deletion — undoing it is another commit', async ({ page }) => {
-  await page.goto(`/runs/${sourceId()}/closed-delivered`)
+  await goto(page, `/runs/${sourceId()}/closed-delivered`)
 
   const record = page.locator('[data-closure-record]')
   await expect(record).toContainText('already-delivered')

@@ -21,13 +21,27 @@
 // path to learn a kind. That is also why a review's entry names its task from
 // the first paint: it used to wait for the reports to load and then relabel.
 //
-// Two entries keep their filename on purpose. `state.yaml` is the record's
-// index rather than an artifact in the reader's sense, and the human decision
-// grammar lives in it by name. A file the framework has no position for is
-// shown as the file it is: mixed labels are honest — these are the kinds the
-// framework knows, this one it does not. `literal` marks both, so the rail can
-// set them in the code face and the kinds in the UI face: a monospace entry is
-// a path, a proportional one is a name.
+// One entry keeps its filename on purpose: a file the framework has no
+// position for is shown as the file it is — mixed labels are honest, since
+// these are the kinds the framework knows, this one it does not. `state.yaml`
+// used to be the other one, kept literal because the rail had nowhere else to
+// put "this is the ledger"; docs/SEAM.md §8.3 gives it that position instead —
+// labelled `Ledger` like every other one-per-run kind — and the reader header
+// carries the filename as the address, so the fact that lives in `state.yaml`
+// by name is never lost, just no longer the rail's job to say.
+//
+// Task ids reversed the other way (§8.2). #401 set them in the UI face,
+// proportional, reasoning that an id is a name for the task and a name reads
+// like the kind labels beside it. But the task board, the diff group heads
+// and every packet set an id in the code face, ink — consistency is the
+// reader's only signal for "this is the record's own vocabulary," and a rail
+// entry that breaks it is the odd one out, not the rest. `face` replaces
+// `literal`: a Name is not "the file's own name" (the flag's old framing), it
+// is the record's identifier for the thing, shown in the code face because
+// that is where identifiers live, not because it is a path. `path` is the
+// other code-face case, and the only one that actually is a path — a file the
+// framework has no name for, shown as the file it is. `label` is the kind
+// label, in the UI face, the same as it always was.
 //
 // Pure and type-only, so it is unit-testable without a DOM.
 import type { ArtifactKind, ArtifactRef } from './api.ts'
@@ -74,32 +88,42 @@ const KIND_LABELS: Partial<Record<ArtifactKind, string>> = {
   plan: 'Plan',
   'verification-report': 'Verification',
   'release-plan': 'Release plan',
+  state: 'Ledger',
 }
 
 export interface RailLabel {
   /** What the entry says. */
   text: string
-  /** True when `text` is the file's own name rather than a name for its kind. */
-  literal: boolean
+  /**
+   * How `text` is set (docs/SEAM.md §5). `label` is a kind label — `Spec`,
+   * `Ledger` — the UI face, sentence case. `name` is a record Name — a task
+   * id, a review's task — the code face, ink, verbatim everywhere else the
+   * record names it (§8.2). `path` is the file's own name, the code face,
+   * shown as such only because the framework has no position for it — the
+   * one case that is actually a path.
+   */
+  face: 'label' | 'name' | 'path'
 }
 
 /**
  * A work item's entry is its id — the record's own name for the task, what
  * `depends_on` cites, what the task board shows, what a review's header
- * names — so the entry reads the same as every other mention of it. The
- * leading number stays because `contracts/work-item.yaml` makes it a display
- * fact. A filename off the `NN-slug` grammar still gives a name (`hotfix`);
- * only a file nested under `tasks/` has none, and is shown as the file it is.
+ * names — so the entry reads the same as every other mention of it: a Name,
+ * in the code face (§8.2). The leading number stays because
+ * `contracts/work-item.yaml` makes it a display fact. A filename off the
+ * `NN-slug` grammar still gives a name (`hotfix`); only a file nested under
+ * `tasks/` has none, and is shown as the file it is — a path, not a Name.
  */
 function taskLabel(ref: ArtifactRef): RailLabel {
-  return ref.id !== null ? { text: ref.id, literal: false } : { text: ref.path, literal: true }
+  return ref.id !== null ? { text: ref.id, face: 'name' } : { text: ref.path, face: 'path' }
 }
 
 /**
  * A review's entry names the task it reviews, as the report's own
- * `# Review Report: <id>` header says (`reviewOf`, read on the server). A
- * report with no readable header is named by the id its filename gives it
- * (`01`), under the Reviews caption that says what it is — a name, never the
+ * `# Review Report: <id>` header says (`reviewOf`, read on the server) — a
+ * Name, in the code face, the same as the task it names (§8.2). A report
+ * with no readable header is named by the id its filename gives it (`01`),
+ * under the Reviews caption that says what it is — still a Name, never the
  * filename (docs/SEAM.md §2). Where a run keeps a file per round, several
  * reports name one task, and each entry carries its round so they stay
  * distinct; one that states no round carries its id instead.
@@ -107,10 +131,10 @@ function taskLabel(ref: ArtifactRef): RailLabel {
 function reviewLabel(ref: ArtifactRef, sharedTask: boolean): RailLabel {
   const id = ref.id ?? ref.path
   const task = ref.reviewOf?.task ?? null
-  if (task === null) return { text: id, literal: false }
-  if (!sharedTask) return { text: task, literal: false }
+  if (task === null) return { text: id, face: 'name' }
+  if (!sharedTask) return { text: task, face: 'name' }
   const round = ref.reviewOf?.round ?? null
-  return { text: round === null ? `${task} · ${id}` : `${task} · round ${round}`, literal: false }
+  return { text: round === null ? `${task} · ${id}` : `${task} · round ${round}`, face: 'name' }
 }
 
 /**
@@ -119,14 +143,14 @@ function reviewLabel(ref: ArtifactRef, sharedTask: boolean): RailLabel {
  */
 export function railLabel(ref: ArtifactRef, all: readonly ArtifactRef[] = [ref]): RailLabel {
   const kind = KIND_LABELS[ref.kind]
-  if (kind) return { text: kind, literal: false }
+  if (kind) return { text: kind, face: 'label' }
   if (ref.kind === 'work-item') return taskLabel(ref)
   if (ref.kind === 'review-report') {
     const task = ref.reviewOf?.task ?? null
     const shared = task !== null && all.filter((r) => r.kind === 'review-report' && r.reviewOf?.task === task).length > 1
     return reviewLabel(ref, shared)
   }
-  return { text: ref.path, literal: true }
+  return { text: ref.path, face: 'path' }
 }
 
 export interface RailEntry extends RailLabel {

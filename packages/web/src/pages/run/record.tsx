@@ -13,10 +13,10 @@ import { EvidenceRollupPanel } from '../../components/evidence.tsx'
 import { FindingsPanel, useReviews, VerdictChip } from '../../components/findings.tsx'
 import { CitedObjects } from '../../components/lexicon.tsx'
 import { Markdown } from '../../components/markdown.tsx'
-import { Address, Instruction } from '../../components/vocabulary.tsx'
+import { Address, Instruction, Name } from '../../components/vocabulary.tsx'
 import { isAuditSection, itemCount } from '../../fold.ts'
 import { DIFF_SELECTION, landingArtifact } from '../../landing.ts'
-import { orderArtifacts, railGroups } from '../../record-rail.ts'
+import { orderArtifacts, type RailLabel, railGroups } from '../../record-rail.ts'
 import { EdgeFade, useScrollCue } from '../../scroll-cue.tsx'
 import { PageStatus } from '../inbox.tsx'
 import { LoadingSkeleton } from './header.tsx'
@@ -73,7 +73,10 @@ export function RecordSurface({
         <div className={`${NAV_LABEL} max-lg:px-3 max-lg:pb-1`}>Artifacts</div>
         <div className="max-lg:flex max-lg:flex-wrap max-lg:items-center max-lg:gap-x-1 max-lg:px-3">
           {/* Entries name kinds, not files (#401): the rail says what each
-              artifact is, the reader header says where its bytes are. The
+              artifact is, the reader header says where its bytes are. A task
+              id names itself, in the code face, everywhere the record uses
+              it (#425, docs/SEAM.md §8.2); every other kind is a UI-face
+              label — `Ledger` for `state.yaml` since #425 too (§8.3). The
               numbered families sit under one caption each, so `tasks/` and
               `review-` are said once instead of on every line. */}
           {wireRefs === undefined && (
@@ -98,10 +101,16 @@ export function RecordSurface({
                       onClick={() => onSelect(p)}
                       data-artifact-entry={p}
                       data-selected={!showDiff && p === current ? 'true' : undefined}
-                      className={navEntryClass(!showDiff && p === current, entry.literal)}
+                      className={navEntryClass(!showDiff && p === current, entry.face)}
                     >
                       {v && <ValidationBadge ok={v.ok} missing={v.missing} />}
-                      <span className="truncate">{entry.text}</span>
+                      {entry.face === 'name' ? (
+                        <Name lead className="truncate">
+                          {entry.text}
+                        </Name>
+                      ) : (
+                        <span className="truncate">{entry.text}</span>
+                      )}
                       {verdictsFor(p) && <span className="ml-auto max-lg:ml-1">{verdictsFor(p)}</span>}
                     </button>
                   </li>
@@ -154,16 +163,18 @@ export const RECORD_ENTRY_SHAPE =
   'max-lg:w-auto max-lg:max-w-full max-lg:border-l-0 max-lg:border-b-2 max-lg:px-2 max-lg:py-1.5'
 
 /**
- * The face says what the entry is (#401): a name for a kind reads in the UI
- * face, and an entry that is a filename — `state.yaml`, a file the framework
- * has no position for — reads in the code face, as every path on the page
- * does. The reader can tell a name from an address without being told.
+ * The face says what the entry is (docs/SEAM.md §5): a kind label reads in
+ * the UI face; a Name (a task id) and a literal path (`state.yaml` used to be
+ * one; a file the framework has no position for still is) both read in the
+ * code face — a Name through its own component, ink regardless of
+ * selection, so `entryFace` only sets the size the two code-face cases share.
+ * The reader can tell a name from an address without being told.
  */
-export function navEntryClass(active: boolean, literal = false) {
-  const face = literal ? 'font-mono text-[12.5px]' : 'font-ui text-[13.5px]'
+export function navEntryClass(active: boolean, face: RailLabel['face'] = 'label') {
+  const entryFace = face === 'label' ? 'font-ui text-[13.5px]' : 'font-mono text-[12.5px]'
   return active
-    ? `${RECORD_ENTRY_SHAPE} ${face} bg-accent-tint border-l-accent border-b-accent text-accent-deep font-semibold`
-    : `${RECORD_ENTRY_SHAPE} ${face} border-l-transparent border-b-transparent text-ink hover:bg-inset hover:text-ink`
+    ? `${RECORD_ENTRY_SHAPE} ${entryFace} bg-accent-tint border-l-accent border-b-accent text-accent-deep font-semibold`
+    : `${RECORD_ENTRY_SHAPE} ${entryFace} border-l-transparent border-b-transparent text-ink hover:bg-inset hover:text-ink`
 }
 
 /**

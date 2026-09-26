@@ -4,6 +4,7 @@
 import { bestEffortEscalations, type ClosureRecord, type GateEntry, type Profile, ROUND_CAP, type RunState } from '../record/schema.ts'
 import type { RunRef, RunSource } from '../sources/source.ts'
 import { deriveReadiness, type InboxItem } from './readiness.ts'
+import { type StateProblem, stateProblem } from './state-problem.ts'
 
 export interface GateLedgerCell {
   approved: boolean
@@ -26,7 +27,12 @@ export interface RunSummary {
    * state the phase exists to avoid.
    */
   closure: ClosureRecord | null
-  malformed: string | null
+  /**
+   * Why no state could be read from `state.yaml`, as a fact (#435): the run
+   * state parser's diagnostic when it refused the file, or which other case
+   * it was. Null when the state parsed.
+   */
+  unreadable: StateProblem | null
   /** Run profile (DESIGN.md §4.1); display layers filter the gate ledger through PROFILE_GATES. */
   profile: Profile
   gates: Record<'G0' | 'G1' | 'G2' | 'G3', GateLedgerCell>
@@ -64,7 +70,8 @@ export async function summarizeRun(
   source: RunSource,
   ref: RunRef,
 ): Promise<{ summary: RunSummary; items: InboxItem[] }> {
-  const { state, error, raw } = await source.readState(ref)
+  const read = await source.readState(ref)
+  const { state, raw } = read
   const { items } = await deriveReadiness(source, ref)
   const touched = await source.lastTouched(ref, [''])
   const aheadOfOrigin = (await source.aheadOfOrigin?.(ref)) ?? null
@@ -72,7 +79,7 @@ export async function summarizeRun(
 
   if (!state) {
     // Best-effort (#49): `escalations:` read on its own even though the rest
-    // of the file fails the contract — the run stays loudly `malformed`
+    // of the file fails the contract — the run stays loudly `unreadable`
     // below, this only keeps the one field a governance surface needs most
     // from silently reading as zero.
     const escalationsOpen = (raw ? bestEffortEscalations(raw) : []).filter((e) => !e.resolved).length
@@ -85,7 +92,7 @@ export async function summarizeRun(
         phase: 'unknown',
         pausedReason: null,
         closure: null,
-        malformed: error ?? 'state.yaml unreadable',
+        unreadable: stateProblem(read),
         profile: 'full',
         gates: emptyLedger(),
         tasks: { total: 0, done: 0, maxRounds: 0, roundCap: ROUND_CAP },
@@ -109,7 +116,7 @@ export async function summarizeRun(
       phase: state.phase,
       pausedReason: state.paused_reason,
       closure: state.closure,
-      malformed: null,
+      unreadable: null,
       profile: state.profile,
       gates: {
         G0: cell(state.gates.G0),

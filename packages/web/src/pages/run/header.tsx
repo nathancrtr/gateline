@@ -10,6 +10,7 @@
 import { readIntake } from '@gateline/core/record'
 import { formatAge, formatWhen, type Phase, PROFILE_PHASES, type RunDetailResponse, type RunSummary } from '../../api.ts'
 import { BudgetMeter, Imp, PhaseChip, PhaseSpine } from '../../components/chips.tsx'
+import { Address, artifactHref } from '../../components/vocabulary.tsx'
 import type { Surface } from '../../landing.ts'
 import { PageStatus } from '../inbox.tsx'
 
@@ -248,6 +249,8 @@ export function RunHeader({ summary, detail }: { summary: RunSummary; detail: Ru
   // in the sequence and must not be drawn as one.
   const atRest =
     summary.phase === 'paused' || summary.phase === 'closed' || !PROFILE_PHASES[summary.profile].includes(summary.phase as Phase)
+  // The run state's reference, found by its kind on the wire, never by filename.
+  const ledger = detail.artifactRefs.find((r) => r.kind === 'state') ?? null
 
   return (
     <header className="mb-6">
@@ -283,7 +286,17 @@ export function RunHeader({ summary, detail }: { summary: RunSummary; detail: Ru
             thing, so the spine stands down rather than contradict them. #254
             landed after the malformed-state treatment and never met it. */}
         {detail.stateError ? (
-          <p data-spine-unknown className="font-ui text-[11.5px] text-muted">sequence unknown — state.yaml unreadable</p>
+          // Named by the rail's kind, `Ledger` (SEAM.md §8.3), with its file
+          // after it as the Address, which opens the reader (#435).
+          <p data-spine-unknown className="font-ui text-[11.5px] text-muted">
+            sequence unknown — the Ledger is unreadable
+            {ledger && (
+              <>
+                {' '}
+                <Address to={artifactHref(summary.source, summary.slug, ledger.path)}>{ledger.path}</Address>
+              </>
+            )}
+          </p>
         ) : (
           // `items` is what switches on the bounced-gate tooltip (#285/9).
           // #295 built the prop and could not turn it on: whether a packet is

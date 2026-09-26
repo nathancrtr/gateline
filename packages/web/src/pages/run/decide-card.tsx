@@ -24,10 +24,10 @@ import { G1Packet } from '../../components/g1.tsx'
 import { G3Packet } from '../../components/g3.tsx'
 import { CitedText } from '../../components/lexicon.tsx'
 import { RoundCapPanel } from '../../components/rounds.tsx'
+import { UnreadableState } from '../../components/unreadable-state.tsx'
 import {
   Address,
   artifactHref,
-  Diagnostic,
   Instruction,
   isName,
   KindLabel,
@@ -427,9 +427,11 @@ export function CardFacts({ item, now }: { item: InboxItem; now: number }) {
       // The parser's diagnostic is the fact: a message, the offending line and
       // a caret under the column it failed at, which only `<pre>` keeps under
       // the character it names (#285/1). Byte for byte, labelled by producer.
-      return item.problems.length > 0 ? (
+      // Any other reason there is no state is the cockpit's sentence, never
+      // set under the parser's name (#435).
+      return item.unreadable ? (
         <div className="max-w-[var(--measure)]" data-card-diagnostic>
-          <Diagnostic producer="Run state parser">{item.problems.join('\n')}</Diagnostic>
+          <UnreadableState problem={item.unreadable} src={item.source} slug={item.slug} />
         </div>
       ) : null
   }

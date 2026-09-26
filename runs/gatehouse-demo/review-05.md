@@ -55,3 +55,36 @@ I read the whole diff against requirements three through seven and the plan's st
 ## Boundary check
 
 Inside the surface. 9a79bf7 touches exactly the five declared files plus the task file's `status:` line and `notes:` block; `playwright.config.ts`, `e2e/`, `server/`, `core/` and the workflow are untouched. Mutants A and B were applied to `e2e-static/demo.spec.ts` and `web/scripts/serve-static.mjs` (both in the surface) and mutant D to `web/src/static-mode.ts` (outside it, for the round trip only); each was restored with `git checkout --`, `dist-static/` was rebuilt clean from the restored source, and `git status --short` was empty after every restore and at the end. Operational note, not a finding: `packages/node_modules` was again missing `@vitejs/plugin-react` when this round began (the implementer's notes record installing it), so I ran `npm ci --no-audit --no-fund` — gitignored, nothing tracked moved. Scratch output went to `/tmp/gl-site` (rebuilt from scratch) and `/tmp/gl-site-mut` (removed); `test-results/` is gitignored.
+
+# Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** `run/gatehouse-demo`, commit 1f5d53f (`git show 1f5d53f`; cumulative `git diff cefc790 1f5d53f -- . ':!runs/gatehouse-demo/state.yaml'`)
+
+## Verify round
+- **F1 — resolved** — `demo.spec.ts:68` now reads `getByRole('heading', { level: 1 }).first()`; a DOM probe of the served real-run page shows two `h1`s with the `<header>` one first (`writestate-kill-window`) and the reader's `Intent Brief: …` second, so `.first()` names the record heading; 70/70 on `--repeat-each=10` against a tree rebuilt from the recipe, versus 5 passes in 18 in round 1; a missing header `h1` still fails, since `.first()` would then resolve to the reader's heading, whose text is not the slug.
+- **F2 — resolved** — `demo.spec.ts:99-101` adds the three no-ops `use-live.ts:19-22` calls; the round-1 `eventsUrl` mutant (rebuilt, snapshotted to a side tree) now fails at `demo.spec.ts:109` with `[["/demo/api/events"]]` received, not at the inbox-row wait.
+- **F3 — resolved** — `demo.spec.ts:163` pins the URL before the `goto`; the named mutant (synchronous `navigate('/')` in `new-run.tsx` `onError`) fails at `:158` because the redirect unmounts the alert, and a `setTimeout(…, 0)` variant fails the same way 3/3; a 400 ms-deferred navigate survives because `toHaveURL` is a positive assertion that resolves before the timer fires — a residual of the task's fresh-`goto` prescription rather than of the fix, and no plausible implementation defers an error redirect, so recorded here and not held open.
+
+No new findings: the three changed hunks introduce no defect.
+
+## Coverage
+
+I verified each round-1 finding against its own mutant on a demo tree rebuilt from the task's recipe (after `npm ci`), ran the full static suite ten times over, re-proved the negative acceptance check by deleting a real run's detail JSON, and reran lint, typecheck and both suite listings; the delta is confined to the three changed hunks and the task notes, and nothing outside them moved.
+
+| Requirement | Where | Mechanism checked | Status |
+|-------------|-------|-------------------|--------|
+| F1 heading locator | `packages/e2e-static/demo.spec.ts:68,71,76` | DOM probe on the side server: real run renders two `h1`s, header first; fixture run (with and without `?decide=G2`) renders one; `getByRole` level-1 list matches `$$('h1')` order; 70/70 across `--repeat-each=10` | ✓ AC3.1, AC3.2, AC6.1 |
+| F2 stub | `packages/e2e-static/demo.spec.ts:91-102` | `use-live.ts` uses exactly `addEventListener`, `removeEventListener`, `close`, all three stubbed; `eventsUrl` mutant fails at `:109` with the recorded call in the diff | ✓ AC4.2 |
+| F3 URL pin | `packages/e2e-static/demo.spec.ts:163` | regex accepts the static host's 301 form `/demo/portfolio/new/`; mutants A (sync) and B (next tick) killed at `:158`; mutant C (400 ms) survives — PLAUSIBLE residual, inherent to the fresh-`goto` prescription | ✓ AC5.2 |
+| negative check | `<root>/demo/api/runs/gateline/writestate-kill-window.json` | deleted → 1 failed (deep-link test, `toHaveText` "element(s) not found") / 6 passed; restored → 7 passed | ✓ acceptance test "fails when a run's detail JSON is deleted" |
+| lint / typecheck | `packages/` | biome: 232 files, no fixes; `tsc -p tsconfig.json && tsc -p web/tsconfig.json` exit 0 | ✓ |
+| live suite unaffected | `packages/playwright.config.ts` | root `--list` still 49 tests in 5 files, all under `e2e/`; static `--list` 7 tests in 1 file | ✓ |
+| unchanged files | `serve-static.mjs`, `playwright.static.config.ts`, `package.json`, `biome.json` | absent from 1f5d53f's stat; round-1 coverage rows stand | ✓ |
+| notes accuracy | task file notes, "Implementer round 2" | every claim (70/70, F2 failure site, F3 alert-site failure, negative check, lint, typecheck, listings) reproduced here | ✓ |
+| AC5.1, AC6.2, artifact path form | `packages/e2e-static/demo.spec.ts:82-86,112-137,169-173` | hunks unchanged since round 1; passed 10/10 each in the repeat run | ✓ |
+
+## Boundary check
+
+Inside the surface. 1f5d53f touches `packages/e2e-static/demo.spec.ts` and the task file's `notes:` block only; the cumulative range `cefc790..1f5d53f` is exactly the five declared files, the task file, and this review. Mutants were applied to `web/src/static-mode.ts` and `web/src/pages/new-run.tsx` (outside the surface, for the round trip only), each restored from a backup copy with `dist-static/` rebuilt from the restored source, and `git status --short` was empty after every restore and at the end. Operational note, not a finding: `packages/node_modules` again lacked `@vitejs/plugin-react` when the round began, so I ran `npm ci --no-audit --no-fund` (gitignored). Scratch trees `/tmp/gl-site-r2` and `/tmp/gl-site-mut-r2` and the helper scripts under `/tmp` were removed; Playwright's `test-results/` is gitignored.

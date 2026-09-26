@@ -173,8 +173,18 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
 
   const port = opts.port ?? 4310
   const host = opts.host ?? '127.0.0.1'
-  const server = serve({ fetch: app.fetch, port, hostname: host })
-  const url = `http://${host === '0.0.0.0' ? 'localhost' : host}:${port}`
+  // `port: 0` asks the OS for a free port (the e2e suite's own scheme, #438);
+  // the requested port is never necessarily the bound one, so the actual
+  // port comes from the listener callback rather than being assumed back
+  // from what was passed in.
+  let boundPort = port
+  const server = await new Promise<ReturnType<typeof serve>>((resolveServer) => {
+    const s = serve({ fetch: app.fetch, port, hostname: host }, (info) => {
+      boundPort = info.port
+      resolveServer(s)
+    })
+  })
+  const url = `http://${host === '0.0.0.0' ? 'localhost' : host}:${boundPort}`
   console.log(`gateline ui listening on ${url}${hasSpa ? '' : '  (API only — run `npm run build` for the SPA, or `npm run dev -w @gateline/web`)'}`)
 
   if (opts.open) {

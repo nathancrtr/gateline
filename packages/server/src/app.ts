@@ -13,6 +13,7 @@ import {
   buildG1Packet,
   buildLexicon,
   buildPortfolio,
+  buildReleasePacket,
   buildTaskSet,
   type Closure,
   collectRunDecisions,
@@ -484,6 +485,20 @@ export function createApp(deps: AppDeps): Hono {
       return buildG1Packet({ lexicon: buildLexicon({ spec }), plan, tasks })
     })
     return respond<'GET /api/runs/:src/:slug/g1'>(c, packet)
+  })
+
+  // G3's packet (#403): the release plan read for what "Ship it?" asks —
+  // the rollback facts, CI health, the ordered steps, the audit-time sections.
+  // One artifact, one cache entry; the view composes it with the evidence
+  // rollup it already has.
+  app.get('/api/runs/:src/:slug/g3', async (c) => {
+    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+    if (!found) return fail(c, 404, { error: 'run not found' })
+    const { source, ref } = found
+    const packet = await cache.get(`g3:${ref.source}:${ref.slug}`, async () =>
+      buildReleasePacket({ plan: await source.readArtifact(ref, 'release-plan.md') }),
+    )
+    return respond<'GET /api/runs/:src/:slug/g3'>(c, packet)
   })
 
   // The diff, labelled with the contact surface each work item declared (#270).

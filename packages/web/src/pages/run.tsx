@@ -22,6 +22,7 @@ import { EscalationPacket } from '../components/escalation.tsx'
 import { EvidenceRollupPanel, G2Packet } from '../components/evidence.tsx'
 import { FindingsPanel, useReviews, VerdictChip } from '../components/findings.tsx'
 import { G1Packet } from '../components/g1.tsx'
+import { G3Packet } from '../components/g3.tsx'
 import { CitedObjects, CitedText, LexiconProvider, useRunLexicon } from '../components/lexicon.tsx'
 import { Markdown } from '../components/markdown.tsx'
 import { RoundCapPanel } from '../components/rounds.tsx'
@@ -665,6 +666,11 @@ function NeedsYouCard({
         {item.kind === 'gate' && item.gate === 'G2' && (
           <G2Packet src={item.source} slug={item.slug} profile={detail.summary.profile} />
         )}
+        {/* G3's packet (#403): the release plan read for what "Ship it?" asks
+            — rollback first, then what ships, the ordered steps, and what G2
+            already verified. Rendered on a bounced card too: seeing what is
+            malformed is exactly the job in that state. */}
+        {item.kind === 'gate' && item.gate === 'G3' && <G3Packet src={item.source} slug={item.slug} />}
         {/* A round cap asks what did not converge, which is a question about two
             rounds at once (#257). The chip list below still offers every report;
             this is the comparison the chips could not be. */}

@@ -566,13 +566,18 @@ test('surfaces (#258): the change reads inside Record, and every artifact stays 
     ['plan.md', /Plan$/],
     ['verification-report.md', /Verification$/],
     ['tasks/01-core.yaml', /01-core$/],
+    ['state.yaml', /^Ledger$/],
   ] as const) {
     await expect(entry(path)).toHaveText(label)
   }
   await expect(page.locator('[data-artifact-entry="review-01.md"]')).toContainText('01-core')
   await expect(page.locator('[data-rail-caption]', { hasText: 'Work items · 2' })).toBeVisible()
-  await expect(page.locator('[data-artifact-entry="state.yaml"]')).toHaveText(/^state\.yaml$/)
-  await expect(page.locator('[data-artifact-entry="state.yaml"]')).toHaveClass(/font-mono/)
+  // The two reversals (#425, docs/SEAM.md §8.2–8.3): a task id sets in the
+  // code face everywhere the record uses it, so it reads with `state.yaml`'s
+  // old treatment; `state.yaml` itself is named by its kind now, like every
+  // other one-per-run artifact, and reads in the UI face instead.
+  await expect(page.locator('[data-artifact-entry="tasks/01-core.yaml"]')).toHaveClass(/font-mono/)
+  await expect(page.locator('[data-artifact-entry="state.yaml"]')).toHaveClass(/font-ui/)
   await expect(page.locator('[data-artifact-entry="spec.md"]')).toHaveClass(/font-ui/)
   await page.locator('[data-select-diff]').click()
   await expect(page).toHaveURL(/artifact=%40diff/)

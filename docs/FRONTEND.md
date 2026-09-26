@@ -448,6 +448,13 @@ surface reads. The contract badge still names the contract by its file: that
 is the same question one level down, and the badge is where the file-level
 truth is meant to show.
 
+docs/SEAM.md §8.2–8.3 reverses two of the calls made above (#425): a task id
+now sets in the code face, the record's own vocabulary rather than the UI
+face, matching the task board, the diff group heads and every packet; and
+`state.yaml`'s rail entry is now named by its kind, `Ledger`, like every other
+one-per-run artifact, with its filename kept as the address in the reader
+header rather than as the rail's one exception.
+
 ### 4.9 The escalation surface (#407)
 
 An escalation is two facts in two places. The engine's `state.escalations[i]`

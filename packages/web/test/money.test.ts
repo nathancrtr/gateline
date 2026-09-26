@@ -38,7 +38,26 @@ describe('usd', () => {
 
   it('never needs more than two decimals: it rounds rather than truncates', () => {
     expect(usd(0.375)).toBe('$0.38')
-    expect(usd(0.001)).toBe('$0.00')
+    // Rounds to the cent first, so a fraction of a cent that rounds down to
+    // nothing is a whole $0, not a "$0.00" that implies a cent was tracked.
+    expect(usd(0.001)).toBe('$0')
+  })
+
+  it('rounds to the cent before asking whether the amount is whole, so a float sum reads the same as its exact value', () => {
+    // 6.4 + 3.6 lands on 10.000000000000002, not 10 — checking Number.isInteger
+    // against the raw float printed "$10.00" beside a limit that printed "$10",
+    // the exact mismatch this module exists to remove.
+    expect(usd(6.4 + 3.6)).toBe('$10')
+    expect(usd(10.000000000000002)).toBe('$10')
+    expect(usd(9.999)).toBe('$10')
+    expect(usd(0.005)).toBe('$0.01') // Math.round(0.5) rounds half up
+  })
+
+  it('handles zero and negative amounts sanely', () => {
+    expect(usd(0)).toBe('$0')
+    expect(usd(-0)).toBe('$0')
+    expect(usd(-10)).toBe('$-10')
+    expect(usd(-10.4)).toBe('$-10.40')
   })
 
   it('exact keeps two decimals even on a whole number', () => {

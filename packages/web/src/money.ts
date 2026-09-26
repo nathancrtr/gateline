@@ -13,8 +13,14 @@
  * that states an amount against its ceiling (`$0.00 of $18.50`), where the
  * two zeroes are themselves part of the fact being shown, not noise to
  * round away.
+ *
+ * Rounds to the cent before asking whether the amount is whole. A float sum
+ * like `6.4 + 3.6` lands on `10.000000000000002`, not `10` — checking
+ * `Number.isInteger` against that raw value would print `$10.00` beside a
+ * limit that prints `$10`, the exact mismatch this module exists to remove.
  */
 export function usd(n: number, opts?: { exact?: boolean }): string {
   if (opts?.exact) return `$${n.toFixed(2)}`
-  return Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`
+  const cents = Math.round(n * 100)
+  return cents % 100 === 0 ? `$${cents / 100}` : `$${(cents / 100).toFixed(2)}`
 }

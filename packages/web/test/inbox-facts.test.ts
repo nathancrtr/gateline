@@ -385,11 +385,17 @@ describe('decide card lines, composed from facts (#433)', () => {
     expect(markup['paused-landed']).toContain(PAUSED_INSTRUCTIONS.landed)
   })
 
-  it('a staged card states its terms, then says what arming does', () => {
+  it('a staged card states its terms — the profile as its Name, the ceiling as recorded — then says what arming does', () => {
     const html = markup.staged!
-    expect(text(/data-staged[^>]*>([\s\S]*?)<\/p>/.exec(html)![1]!)).toBe(
-      'Staged by Fixture Operator 2h ago · profile standard · budget ceiling $25.00, set by cost_limit_usd',
-    )
+    expect(text(/data-staged-by[^>]*>([\s\S]*?)<\/p>/.exec(html)![1]!)).toBe('Staged by Fixture Operator 2h ago')
+    const terms = /data-staged(?:="true")?>([\s\S]*?)<\/p>/.exec(html)![1]!
+    expect(text(terms)).toBe('Profile standard · budget ceiling $25.00, set by cost_limit_usd')
+    // The profile is an identifier (SEAM §4), the face the inbox row gives it; the ceiling is a figure, never a meter.
+    expect(terms).toMatch(/data-name[^>]*>standard</)
+    expect(terms).toMatch(/tabular-nums[^>]*data-budget-ceiling="25"[^>]*>\$25\.00</)
+    expect(terms).toMatch(/data-address[^>]*>cost_limit_usd</)
+    // The brief's passages load with the packet query; until then the card holds their place.
+    expect(html).toContain('data-packet-pending')
     expect(html).toContain(ARM_INSTRUCTION)
     expect(text(html)).not.toContain('Rounds without convergence')
   })

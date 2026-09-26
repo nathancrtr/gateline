@@ -81,7 +81,7 @@ describe('the wire contract (#317)', () => {
 
   it('reports every failure in one shape', async () => {
     // ApiErrorBody: `error` always present and a string, at every status.
-    for (const path of ['/api/runs/nope/nope', '/api/runs/nope/nope/lexicon', '/api/runs/nope/nope/g1']) {
+    for (const path of ['/api/runs/nope/nope', '/api/runs/nope/nope/lexicon', '/api/runs/nope/nope/g0', '/api/runs/nope/nope/g1']) {
       const { status, body } = await get(path)
       expect(status).toBe(404)
       expect(typeof body.error).toBe('string')
@@ -112,7 +112,7 @@ describe('read routes', () => {
   it('GET /api/runs returns the portfolio', async () => {
     const { status, body } = await get('/api/runs')
     expect(status).toBe(200)
-    expect(body.runs).toHaveLength(15)
+    expect(body.runs).toHaveLength(16)
     const done = body.runs.find((r: { slug: string }) => r.slug === 'done-merged')
     expect(done.phase).toBe('done')
     expect(done.needsHuman).toBe(0)
@@ -201,6 +201,29 @@ describe('read routes', () => {
     expect(body.mappingWithheld).toEqual({ grammar: 'a plan', lookedIn: null })
     expect(body.tasksWithheld).toEqual({ grammar: 'a work item', lookedIn: null })
     expect(body.overlaps).toEqual([])
+  })
+
+  it('GET g0 returns the Assumptions, the roster and the brief’s sections, each with its line (#440)', async () => {
+    const { status, body } = await get('/api/runs/fixture/g0-pending/g0')
+    expect(status).toBe(200)
+    expect(body.assumptionsWithheld).toBeNull()
+    expect(body.assumptions).toHaveLength(1)
+    expect(body.assumptions[0].at.path).toBe('spec.md')
+    expect(body.requirements.map((r: { id: string; name: string }) => `${r.id} ${r.name}`)).toEqual(['R1 Core behavior', 'R2 Error handling'])
+    expect(body.problem.body.at.path).toBe('intent-brief.md')
+    expect(body.constraints.body.text).toBe('Must run offline; none otherwise known.')
+    // The fold is the contract's word: the fixture's spec template marks Out of scope audit-time.
+    expect(body.outOfScope).toMatchObject({ heading: 'Out of scope', audience: 'audit' })
+    expect(body.briefOutOfScope).toMatchObject({ audience: 'decide' })
+  })
+
+  it('GET g0 withholds the Assumptions on a spec without the section, and serves a staged run’s brief with no spec (#440)', async () => {
+    const malformed = await get('/api/runs/fixture/malformed-spec/g0')
+    expect(malformed.body.assumptionsWithheld).toMatchObject({ grammar: 'a section headed', token: '## Assumptions', lookedIn: { path: 'spec.md' } })
+    const staged = await get('/api/runs/fixture/staged/g0')
+    expect(staged.body.spec).toBeNull()
+    expect(staged.body.briefWithheld).toBeNull()
+    expect(staged.body.problem.body.text).toContain('changelog linter')
   })
 
   it('GET diff returns parsed hunks for a branch run and merged flag for done', async () => {

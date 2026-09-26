@@ -12,6 +12,7 @@ import {
   bestEffortEscalations,
   buildEscalationPacket,
   buildEvidenceRollup,
+  buildG0Packet,
   buildG1Packet,
   buildLexicon,
   buildPortfolio,
@@ -494,6 +495,26 @@ export function createApp(deps: AppDeps): Hono {
       return buildEvidenceRollup({ lexicon: buildLexicon({ spec }), verification, reviews })
     })
     return respond<'GET /api/runs/:src/:slug/evidence'>(c, rollup)
+  })
+
+  // G0's packet (#440): the spec's Assumptions, its requirement roster and
+  // its Out of scope, beside the brief's Problem and Constraints. Two
+  // artifacts read side by side — presence only, nothing computed across
+  // them. The staged card and the patch G1 card read the brief half of it.
+  app.get('/api/runs/:src/:slug/g0', async (c) => {
+    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+    if (!found) return fail(c, 404, { error: 'run not found' })
+    const { source, ref } = found
+    const packet = await cache.get(`g0:${ref.source}:${ref.slug}`, async () => {
+      const [spec, brief] = await Promise.all([source.readArtifact(ref, 'spec.md'), source.readArtifact(ref, 'intent-brief.md')])
+      // Which sections a view folds is the contract's `AUDIENCE:` line, read
+      // by validation from the repo's own templates — never the view's call.
+      const audit = async (path: string, content: string | null) =>
+        content === null ? [] : ((await validateArtifact(path, content, source.templates)).audit ?? [])
+      const [specAudit, briefAudit] = await Promise.all([audit('spec.md', spec), audit('intent-brief.md', brief)])
+      return buildG0Packet({ spec, brief, audit: { spec: specAudit, brief: briefAudit } })
+    })
+    return respond<'GET /api/runs/:src/:slug/g0'>(c, packet)
   })
 
   // G1's packet (#255): requirement coverage against the plan's own mapping

@@ -93,6 +93,34 @@ test('bounce view at G3 (#260): a thin release plan is malformed, not ready', as
   await expect(card.locator('[data-decide="approve"]')).toHaveCount(0)
 })
 
+test('G0 packet (#440): Assumptions lead, the roster names each requirement, the brief sits beside', async ({ page }) => {
+  // Before the decision loop below approves this run's G0: after it, there is no G0 card to read.
+  await page.goto(`/runs/${sourceId()}/g0-pending?decide=G0`)
+  const packet = page.locator('[data-g0-packet]')
+  await expect(packet).toContainText('G0 packet — composed from the record')
+  const assumption = packet.locator('[data-assumption]').first()
+  await expect(assumption).toContainText('ASSUMPTION: input fits in memory')
+  await expect(packet.locator('[data-requirement="R1"]')).toContainText('Core behavior')
+  await expect(packet.locator('[data-requirement="R2"]')).toContainText('Error handling')
+  await expect(packet.locator('[data-g0-section="problem"]')).toContainText('The CSV importer workflow is manual')
+  await expect(packet.locator('[data-g0-section="constraints"]')).toContainText('Must run offline')
+
+  // Out of scope is audit-time for G0: folded, and opened in place, verbatim.
+  const fold = packet.locator('[data-g0-fold="out-of-scope"]')
+  await expect(fold).toHaveAttribute('data-open', 'false')
+  await expect(fold).not.toContainText('Concurrency')
+  await fold.getByRole('button').click()
+  await expect(fold).toContainText('Concurrency; internationalization.')
+
+  // The assumption's line is one gesture away, and one click lands on the spec in the reader.
+  await assumption.hover()
+  const address = assumption.locator('[data-address]')
+  await expect(address).toHaveText(/^spec\.md:\d+$/)
+  await address.click()
+  await expect(page).toHaveURL(/tab=record&artifact=spec\.md/)
+  await expect(page.locator('[data-reader] article')).toContainText('input fits in memory')
+})
+
 test('the pointer decision loop: approve G0 with burden → correct commit', async ({ page }) => {
   await page.goto(`/runs/${sourceId()}/g0-pending?decide=G0`)
   const card = page.locator('[data-needs-card]').first()
@@ -645,10 +673,36 @@ test('surfaces (#258): the change reads inside Record, and every artifact stays 
 
 test('G1 packet (#255): a patch run keeps its brief-plus-work-item view', async ({ page }) => {
   // AC4 — patch runs have no plan.md and no spec, so there is no mapping to
-  // check and no coverage claim to make.
+  // check and no coverage claim to make. Its G1 absorbs the G0 question, so it
+  // takes G0's packet (#440): the brief half and the work item (#442).
   await page.goto(`/runs/${sourceId()}/patch-g1-pending?decide=G1`)
   await expect(page.locator('[data-needs-card]').first()).toBeVisible()
   await expect(page.locator('[data-g1-packet]')).toHaveCount(0)
+  const packet = page.locator('[data-g0-packet][data-g0-mode="patch"]')
+  await expect(packet.locator('[data-g0-section="problem"]')).toContainText('The typo hotfix workflow is manual')
+  await expect(packet.locator('[data-g0-spec]')).toHaveCount(0)
+  await expect(packet.locator('[data-g0-section="brief-out-of-scope"]')).toContainText('Changing the upstream data format.')
+  // The work item it approves with the brief (DESIGN.md §4.1), as fields.
+  await expect(packet.locator('[data-patch-work-item="01-hotfix"] [data-field-view="work-item"]')).toBeVisible()
+  await expect(packet.locator('[data-withheld-view]')).toHaveCount(0)
+})
+
+test('G0 packet (#440): a spec with no Assumptions withholds that view, naming the grammar', async ({ page }) => {
+  await page.goto(`/runs/${sourceId()}/malformed-spec?decide=G0`)
+  const packet = page.locator('[data-g0-packet]')
+  await expect(packet.locator('[data-withheld="assumptions"]')).toContainText('Assumptions withheld — looked for a section headed ## Assumptions in the spec.')
+  await expect(packet.locator('[data-g0-section="problem"]')).toContainText('The webhook relay workflow is manual')
+})
+
+test('staged card (#440): the brief, the profile and the recorded ceiling, then Arm', async ({ page }) => {
+  await page.goto(`/runs/${sourceId()}/staged?decide=staged`)
+  const card = page.locator('[data-needs-card]')
+  await expect(card.locator('[data-staged-brief] [data-g0-section="problem"]')).toContainText('The changelog linter workflow is manual')
+  const terms = card.locator('[data-staged]')
+  await expect(terms.locator('[data-name]')).toHaveText('standard')
+  await expect(terms.locator('[data-budget-ceiling]')).toHaveText('$18.50')
+  await expect(terms).toContainText('Profile standard · budget ceiling $18.50, set by cost_limit_usd')
+  await expect(card.getByRole('button', { name: /^Arm/ })).toBeVisible()
 })
 
 test('G3 packet (#403): the release plan composed for "Ship it?"', async ({ page }) => {

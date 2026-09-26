@@ -567,6 +567,8 @@ interface StateOpts {
   tasks?: { id: string; status: string; rounds: number }[]
   escalations?: { at: string; from: string; reason: string; resolved: boolean }[]
   budget?: { limit: number; spent: number; ledger?: LedgerLine[] }
+  /** The staging provenance `gateline new` writes (#440): a staged run names who staged it here. */
+  intake?: { stagedBy: string }
 }
 
 interface LedgerLine {
@@ -617,7 +619,7 @@ run: ${o.slug}
 branch: run/${o.slug}
 phase: ${o.phase}               # spec | plan | implement | integrate | release | done | paused | closed
 ${o.profile ? `profile: ${o.profile}           # patch | standard | full (DESIGN.md §4.1)\n` : ''}paused_reason: ${o.pausedReason ?? 'null'}
-${o.closure ? `closure: {as: ${o.closure.as}, by: ${o.closure.by}, at: ${o.closure.at}, reason: ${JSON.stringify(o.closure.reason)}}\n` : ''}
+${o.closure ? `closure: {as: ${o.closure.as}, by: ${o.closure.by}, at: ${o.closure.at}, reason: ${JSON.stringify(o.closure.reason)}}\n` : ''}${o.intake ? `intake:                   # source-agnostic staging provenance; free-form path: nulls + client_key\n  source: null\n  ref: null\n  url: null\n  client_key: null\n  staged_by: ${JSON.stringify(o.intake.stagedBy)}\n` : ''}
 
 budget:
   cost_limit_usd: ${budget.limit}      # exhaustion pauses the run; it never silently degrades
@@ -1045,6 +1047,27 @@ export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts 
           gates: { G0: { by: 'operator', at: '2026-06-27T09:00:00Z', burden: 'confirmation' } },
           tasks: [{ id: '01-core', status: 'failed', rounds: 0 }],
           escalations: [{ at: '2026-06-28T09:00:00Z', from: 'orchestrator', reason: 'implementer failed twice', resolved: false }],
+        }),
+      },
+    },
+    // A staged, unarmed run (#440): what `gateline new` leaves — the brief and
+    // a state.yaml paused as `staged` — and what the staged card is for. Arming
+    // is where the budget starts to meter, so the card states the brief, the
+    // profile and the ceiling it accepts; a demo with no staged run never
+    // showed that card at all.
+    {
+      slug: 'staged',
+      age: 0.5,
+      files: {
+        'intent-brief.md': brief('changelog linter'),
+        'state.yaml': stateYaml({
+          slug: 'staged',
+          phase: 'paused',
+          profile: 'standard',
+          pausedReason: 'staged',
+          gates: {},
+          budget: { limit: 18.5, spent: 0 },
+          intake: { stagedBy: 'Fixture Operator' },
         }),
       },
     },

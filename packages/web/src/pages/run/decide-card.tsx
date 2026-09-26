@@ -2,9 +2,10 @@
 // what it renders. Split out of pages/run.tsx (#413); pages/run.tsx
 // re-exports the helpers it already exported, so no import path a test uses
 // had to change. The packet's reference rows (#423) live here too.
+import { useQuery } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { type ArtifactRef, formatAge, type InboxItem, type ReviewReport, type RunDetailResponse } from '../../api.ts'
+import { type ArtifactRef, api, formatAge, type InboxItem, type ReviewReport, type RunDetailResponse } from '../../api.ts'
 import { AgeBadge, Imp, KindChip } from '../../components/chips.tsx'
 import {
   ARM_INSTRUCTION,
@@ -17,7 +18,8 @@ import {
 } from '../../components/decide.tsx'
 import { EscalationPacket } from '../../components/escalation.tsx'
 import { G2Packet } from '../../components/evidence.tsx'
-import { useReviews } from '../../components/findings.tsx'
+import { PacketSweep, useReviews } from '../../components/findings.tsx'
+import { G0Packet, StagedBrief } from '../../components/g0.tsx'
 import { G1Packet } from '../../components/g1.tsx'
 import { G3Packet } from '../../components/g3.tsx'
 import { CitedText } from '../../components/lexicon.tsx'
@@ -36,6 +38,7 @@ import {
 import { gateCardState } from '../../gate-state.ts'
 import type { KeyHint } from '../../use-keys.ts'
 import { aboutWords, inboxTitle, NameOrNothing, predatesFacts, usd } from '../inbox.tsx'
+import { FieldViewBody } from './record.tsx'
 
 /**
  * The instruction a card with no button has to give, for the description slot
@@ -342,11 +345,23 @@ export function NeedsYouCard({
         {/* G2's packet, composed in criterion order (#256). The one-line
             citation map this replaced still renders on verification-report.md
             itself, where the report's own markdown is already on screen. */}
+        {/* G0's packet (#440): the spec's Assumptions leading, its requirement
+            roster, and the brief's Problem and Constraints beside them.
+            Rendered on a bounced card too, as G3's is: a spec missing its
+            Assumptions says so in the packet, where the approver looks. */}
+        {item.kind === 'gate' && item.gate === 'G0' && <G0Packet src={item.source} slug={item.slug} />}
         {/* G1's packet (#255): coverage against the plan's own mapping table,
             and the surface overlaps no dependency orders. A patch run has no
-            plan.md and no spec, so its G1 keeps the brief-plus-work-item view. */}
+            plan, and its G1 absorbs the G0 question — brief and work item are
+            approved together — so it takes G0's packet instead: the brief
+            half and the work item, read as fields (#440, #442). */}
         {item.kind === 'gate' && item.gate === 'G1' && detail.summary.profile !== 'patch' && (
           <G1Packet src={item.source} slug={item.slug} />
+        )}
+        {item.kind === 'gate' && item.gate === 'G1' && detail.summary.profile === 'patch' && (
+          <G0Packet src={item.source} slug={item.slug} mode="patch">
+            <PatchWorkItems refs={item.packetRefs} src={item.source} slug={item.slug} />
+          </G0Packet>
         )}
         {item.kind === 'gate' && item.gate === 'G2' && (
           <G2Packet src={item.source} slug={item.slug} profile={detail.summary.profile} />
@@ -604,34 +619,85 @@ function PausedFacts({ item }: { item: InboxItem }) {
 }
 
 /**
- * A staged run: who staged it and when, the profile it will run under, and
- * the ceiling arming lets it spend (#433) — the terms the Arm button accepts.
+ * A staged run: what it is for, and the terms the Arm button accepts (#433,
+ * #440). Arming is where the budget starts to meter, so the card says what
+ * arming spends against before it offers the button: who staged the run and
+ * when, the brief's Problem and Constraints quoted, the profile as the Name
+ * the record gives it, and the ceiling `cost_limit_usd` records.
  */
 function StagedFacts({ item, now }: { item: InboxItem; now: number }) {
   const staged = item.staged
   return (
-    <div className="flex flex-col gap-1.5">
+    <div className="flex flex-col gap-2">
+      {staged?.by && (
+        <p className={FACT_LINE} data-staged-by>
+          Staged by <span className="font-semibold">{staged.by}</span>
+          {staged.at !== null && <> {formatAge(staged.at, now)} ago</>}
+        </p>
+      )}
+      <StagedBrief src={item.source} slug={item.slug} />
       {staged && (
+        // The facts the record states, and only those: whether the engine
+        // enforces the ceiling, or requires one, is its flag, not the
+        // record's, so the card claims neither (#442).
         <p className={FACT_LINE} data-staged>
-          {staged.by && (
-            <>
-              Staged by <span className="font-semibold">{staged.by}</span>
-              {staged.at !== null && <> {formatAge(staged.at, now)} ago</>} ·{' '}
-            </>
-          )}
-          profile <Name>{staged.profile}</Name> ·{' '}
+          Profile <Name>{staged.profile}</Name> ·{' '}
           {staged.budgetCeiling === null ? (
             <>
-              no budget ceiling, <Address size="xs">cost_limit_usd</Address> unset
+              no ceiling — <Address size="xs">cost_limit_usd</Address> unset
             </>
           ) : (
             <>
-              budget ceiling {usd(staged.budgetCeiling)}, set by <Address size="xs">cost_limit_usd</Address>
+              budget ceiling{' '}
+              <span className="font-ui tabular-nums" data-budget-ceiling={staged.budgetCeiling}>
+                {usd(staged.budgetCeiling)}
+              </span>
+              , set by <Address size="xs">cost_limit_usd</Address>
             </>
           )}
         </p>
       )}
       <Instruction className="max-w-[var(--measure)]">{ARM_INSTRUCTION}</Instruction>
+    </div>
+  )
+}
+
+/**
+ * The work item a patch run's G1 approves with the brief (DESIGN.md §4.1),
+ * read as fields over its contract's keys (#434's field view, the reader's
+ * own), headed by its id and the title the author wrote. The bytes are one
+ * toggle away inside the view, as in the reader.
+ */
+function PatchWorkItems({ refs, src, slug }: { refs: readonly ArtifactRef[]; src: string; slug: string }) {
+  const items = refs.filter((r) => r.kind === 'work-item')
+  if (items.length === 0) return null
+  return (
+    <div className="mt-2.5 flex flex-col gap-2" data-patch-work-items>
+      {items.map((ref) => (
+        <PatchWorkItem key={ref.path} artifact={ref} src={src} slug={slug} />
+      ))}
+    </div>
+  )
+}
+
+function PatchWorkItem({ artifact, src, slug }: { artifact: ArtifactRef; src: string; slug: string }) {
+  const { data } = useQuery({ queryKey: ['artifact', src, slug, artifact.path], queryFn: () => api.artifact(src, slug, artifact.path) })
+  const fields = data?.fields ?? null
+  const title = fields?.fields.find((f) => f.key === 'title')
+  return (
+    <div data-patch-work-item={artifact.id ?? artifact.path}>
+      <p className="flex flex-wrap items-baseline gap-x-2">
+        <KindLabel tone="muted">Work item</KindLabel>
+        {artifact.id !== null && isName(artifact.id) && <Name lead>{artifact.id}</Name>}
+        {title?.kind === 'passage' && <span className="text-[12.5px] font-medium text-ink">{title.value}</span>}
+      </p>
+      {!data ? (
+        <PacketSweep />
+      ) : fields ? (
+        <div className="mt-1 border border-line bg-surface px-3 py-2 text-[12.5px]">
+          <FieldViewBody view={fields} content={data.content} kind="work-item" src={src} slug={slug} />
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -100,7 +100,14 @@ export function extractSections(markdown: string): string[] {
   return h2Headings(markdown)
 }
 
-const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+/**
+ * How the validator matches a heading: case- and punctuation-insensitive.
+ * Exported so a view that looks a section up by name finds exactly the
+ * sections validation found (#442) — `## Out of Scope` passes validation, so
+ * a view must not miss it.
+ */
+export const normalizeHeading = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+const normalize = normalizeHeading
 
 /** Required section headings absent from `content` (normalize-insensitive,
  * fenced-code-block headings ignored via `extractSections`). The single

@@ -146,6 +146,7 @@ const STATES: SweepState[] = [
   { name: 'patch-g2-pending', path: (s) => `/runs/${s}/patch-g2-pending`, ready: '[data-spine]' },
   { name: 'forked-contract', path: (s) => `/runs/${s}/forked-contract`, ready: '[data-spine]' },
   { name: 'malformed-spec · bounce', path: (s) => `/runs/${s}/malformed-spec?decide=G0`, ready: '[data-needs-card]' },
+  { name: 'staged · arm', path: (s) => `/runs/${s}/staged?decide=staged`, ready: '[data-staged-brief]' },
   { name: 'malformed-release · bounce', path: (s) => `/runs/${s}/malformed-release?decide=G3`, ready: '[data-needs-card]' },
   { name: 'bad-state', path: (s) => `/runs/${s}/bad-state`, ready: 'main' },
 

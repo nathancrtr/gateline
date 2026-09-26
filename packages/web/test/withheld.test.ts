@@ -20,6 +20,7 @@ import type { DiffResponse, Profile, RunDetailResponse } from '../src/api.ts'
 import { DiffView } from '../src/components/diff-view.tsx'
 import { EscalationPacket } from '../src/components/escalation.tsx'
 import { EvidenceRollupPanel, G2Packet } from '../src/components/evidence.tsx'
+import { G0Packet } from '../src/components/g0.tsx'
 import { G1Packet } from '../src/components/g1.tsx'
 import { G3Packet } from '../src/components/g3.tsx'
 import { RoundCapPanel } from '../src/components/rounds.tsx'
@@ -62,6 +63,7 @@ async function render(slug: string): Promise<Record<string, string[]>> {
   client.setQueryData(['run', SRC, slug], detail)
   client.setQueryData(['diff', SRC, slug], diff)
   for (const [key, route] of [
+    ['g0', 'g0'],
     ['g1', 'g1'],
     ['g3', 'g3'],
     ['evidence', 'evidence'],
@@ -76,6 +78,7 @@ async function render(slug: string): Promise<Record<string, string[]>> {
   }
   const profile: Profile = detail.summary.profile
   const surfaces: [string, ReactNode][] = [
+    ['g0', createElement(G0Packet, { src: SRC, slug })],
     ['g1', createElement(G1Packet, { src: SRC, slug })],
     ['g2', createElement(G2Packet, { src: SRC, slug, profile })],
     ['g3', createElement(G3Packet, { src: SRC, slug })],
@@ -119,6 +122,17 @@ describe('withheld views over the demo fixtures (#424)', () => {
         'CI health withheld — looked for a section headed ## CI health in the release plan. Open the release plan',
       ],
     })
+  })
+
+  it('a spec with no Assumptions section: the Assumptions view and the roster each name their grammar, in the spec (#440)', () => {
+    expect(notices.get('malformed-spec')).toMatchObject({
+      g0: [
+        'Assumptions withheld — looked for a section headed ## Assumptions in the spec. Open the spec',
+        'Requirement roster withheld — looked for a requirement heading ### R<n> — <short name> in the spec. Open the spec',
+      ],
+    })
+    // A well-formed spec and brief withhold nothing.
+    expect(notices.get('g0-pending')?.g0).toBeUndefined()
   })
 
   it('a run with no plan and no work items has nothing to open, and says so without a link', () => {

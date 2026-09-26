@@ -11,6 +11,11 @@
 export class FenceTracker {
   private open: { char: string; length: number } | null = null
 
+  /** A fence is open: the next line is inside it (or closes it). */
+  get isOpen(): boolean {
+    return this.open !== null
+  }
+
   /** Feed one line; returns true when the line is inside (or delimits) a fence. */
   feed(line: string): boolean {
     if (this.open) {

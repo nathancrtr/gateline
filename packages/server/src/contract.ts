@@ -32,6 +32,7 @@ import type {
   ArtifactFormat,
   ArtifactKind,
   ArtifactRef,
+  AssumptionPassage,
   BounceFact,
   Burden,
   Closure,
@@ -52,6 +53,8 @@ import type {
   FieldGroup,
   FieldKind,
   FieldView,
+  G0Packet,
+  G0Requirement,
   G1Packet,
   GateDecisionRecord,
   GateId,
@@ -66,6 +69,9 @@ import type {
   PausedFact,
   Phase,
   Profile,
+  Quotation,
+  QuoteAt,
+  QuotedSection,
   ReleasePacket,
   ReleaseStep,
   ReviewFinding,
@@ -109,6 +115,7 @@ export type {
   ArtifactFormat,
   ArtifactKind,
   ArtifactRef,
+  AssumptionPassage,
   BounceFact,
   Burden,
   Closure,
@@ -128,6 +135,8 @@ export type {
   FieldGroup,
   FieldKind,
   FieldView,
+  G0Packet,
+  G0Requirement,
   G1Packet,
   GateDecisionRecord,
   GateId,
@@ -141,6 +150,9 @@ export type {
   PausedFact,
   Phase,
   Profile,
+  Quotation,
+  QuoteAt,
+  QuotedSection,
   ReleasePacket,
   ReleaseStep,
   ReviewFinding,
@@ -450,6 +462,7 @@ export interface ApiRoutes {
   'GET /api/runs/:src/:slug/lexicon': { response: LexiconResponse }
   'GET /api/runs/:src/:slug/reviews': { response: ReviewsResponse }
   'GET /api/runs/:src/:slug/evidence': { response: EvidenceRollup }
+  'GET /api/runs/:src/:slug/g0': { response: G0Packet }
   'GET /api/runs/:src/:slug/g1': { response: G1Packet }
   'GET /api/runs/:src/:slug/g3': { response: ReleasePacket }
   'GET /api/runs/:src/:slug/escalation/:index': { response: EscalationPacket }

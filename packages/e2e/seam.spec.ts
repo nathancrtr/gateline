@@ -128,10 +128,12 @@ const OUTSIDE_STEPS = { step: null, issue: 435 } as const
  * fixtures do not produce it: `pausedInstruction`'s `runs/<slug>/` (the
  * `paused-budget` fixture pauses for budget, whose instruction names no
  * path); the inbox row's escalation pointer (the `escalated` fixture is a
- * role escalation with a packet, not an engine one with a pointer); the G0
- * and staged cards (the G0 card's references are Addresses since step 3, and
- * no fixture is staged); and evidence.tsx's "verification-report.md states" and
- * the round-cap report chips, which step 3 already set as Addresses.
+ * role escalation with a packet, not an engine one with a pointer); and
+ * evidence.tsx's "verification-report.md states" and the round-cap report
+ * chips, which step 3 already set as Addresses. The G0 and staged cards are
+ * swept like every other card since step 9 (#440) gave G0 its packet and the
+ * fixture its `staged` run: their quotations sit in `.prose-card`, their
+ * lines in Addresses.
  */
 const PENDING: Pending[] = [
   // Outside §9's steps (#435), found by this sweep.
@@ -392,7 +394,7 @@ const render = (h: Hit) => `${h.surface}  (${h.path})\n    ${h.pattern} "${h.mat
 
 test('the sweep reached every surface, and its exceptions are live', () => {
   // Non-vacuity: a sweep that navigated nowhere finds nothing. The fixture
-  // carries 15 runs, 13 of them with something to decide, each with a
+  // carries 16 runs, 14 of them with something to decide, each with a
   // history and several artifacts.
   expect(surfaces.filter((s) => s.label.includes(' · record · ')).length).toBeGreaterThan(40)
   expect(surfaces.filter((s) => s.label.includes(' · decide')).length).toBeGreaterThan(10)

@@ -276,6 +276,7 @@ describe('run discovery', () => {
       'paused-other-reason',
       'round-cap',
       'round-cap-granted',
+      'staged',
       'staged-run',
     ])
     expect(refs.get('done-merged')!.kind).toBe('default')

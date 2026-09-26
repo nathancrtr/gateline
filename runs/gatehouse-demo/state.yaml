@@ -1,7 +1,7 @@
 run: gatehouse-demo
 branch: run/gatehouse-demo
-phase: paused # staged — not yet armed; `gateline arm gatehouse-demo` starts the run
-paused_reason: escalation
+phase: implement # staged — not yet armed; `gateline arm gatehouse-demo` starts the run
+paused_reason: null
 profile: standard # patch | standard | full
 intake:
   # source-agnostic staging provenance; free-form path: nulls + client_key

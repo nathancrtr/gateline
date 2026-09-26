@@ -155,7 +155,12 @@ describe('AUDIENCE (#217)', () => {
 describe('verification verdict line (#152)', () => {
   const body = (verdict: string) => `# Verification Report: run\n\n**Verdict:** ${verdict}\n\n## Results\n\n## Beyond the happy path\n\n## Gaps\n`
   it('a present line must be exactly one of the three words, or the report is malformed', async () => {
-    expect((await validateArtifact('verification-report.md', body('escalate'), noTemplates)).ok).toBe(true)
+    expect((await validateArtifact('verification-report.md', body('pass'), noTemplates)).ok).toBe(true)
+    // `escalate` alone is a well-formed verdict line; since #405 it also
+    // requires the Escalation section, which escalation.test.ts covers.
+    expect((await validateArtifact('verification-report.md', body('escalate'), noTemplates)).missing).toEqual([
+      'Escalation (required when Verdict is escalate)',
+    ])
     const bad = await validateArtifact('verification-report.md', body('fail — escalating AC3.2'), noTemplates)
     expect(bad.ok).toBe(false)
     expect(bad.missing).toEqual(['Verdict: pass | fail | escalate'])

@@ -282,8 +282,8 @@ repeatedly — once as output, then as input to every downstream reader.
 | `spec.md` | Analyst → Architect, Reviewer, Verifier | requirements (numbered), acceptance criteria (testable), out-of-scope |
 | `plan.md` | Architect → Implementers, Reviewer | approach, interface contracts, ADRs, risk notes |
 | `tasks/NN-slug.yaml` | Architect → one Implementer | scope, files expected to change, acceptance tests, dependencies |
-| `review-report.md` | Reviewer → Implementer, gate G2 | verdict, findings (severity-ranked, file:line), what was checked |
-| `verification-report.md` | Verifier → gate G2 | what was exercised, evidence (commands + output), gaps |
+| `review-report.md` | Reviewer → Implementer, gate G2 | verdict, findings (severity-ranked, file:line), what was checked; an Escalation section when the verdict is `escalate` |
+| `verification-report.md` | Verifier → gate G2 | what was exercised, evidence (commands + output), gaps; an Escalation section when the verdict is `escalate` |
 | `release-plan.md` | Ops → gate G3 | CI health, release steps in order, rollback plan and its trigger, verification after release, blast radius |
 | `state.yaml` | Orchestrator → everyone | phase, task statuses, gate approvals, budgets |
 

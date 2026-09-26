@@ -167,16 +167,23 @@ describe('5 · a non-value reads as one', () => {
   })
 })
 
-describe('5 · an unmetered budget is a word, not a meter', () => {
-  it('draws no bar when nothing has been spent', () => {
+describe('5 · a zero-spend budget states the record, not a word of its own (#443)', () => {
+  it('states $0 of the ceiling when nothing has been spent, never "unmetered"', () => {
     const html = renderToStaticMarkup(createElement(BudgetMeter, { limit: 25, spent: 0 }))
-    expect(html).toContain('unmetered')
-    expect(html).not.toContain('width')
-    // The limit the bar stood for is still reachable.
+    expect(html).not.toContain('unmetered')
+    expect(html).toContain('$0 / $25')
+    // The limit is also reachable in the tooltip, at the same precision nonzero spend gets.
     expect(html).toContain('$0.00 of $25.00')
   })
 
-  it('draws the bar again the moment a dispatch spends something', () => {
+  it('reads the same way for a staged run, whose spend is recorded as null rather than 0', () => {
+    const html = renderToStaticMarkup(createElement(BudgetMeter, { limit: 18.5, spent: null }))
+    expect(html).not.toContain('unmetered')
+    expect(html).toContain('$0.00 of $18.50')
+    expect(html).toContain('$0 / $19')
+  })
+
+  it('draws the bar the moment a dispatch spends something, same shape as zero spend', () => {
     const html = renderToStaticMarkup(createElement(BudgetMeter, { limit: 25, spent: 6.4 }))
     expect(html).toContain('width')
     expect(html).toContain('$6 / $25')

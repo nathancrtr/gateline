@@ -460,14 +460,12 @@ export function BudgetMeter({ limit, spent }: { limit: number | null; spent: num
   const used = spent ?? 0
   const over = used > limit
   const pct = Math.min(100, (used / limit) * 100)
-  // Nothing spent, so there is nothing to meter: the word alone (#285/5).
-  if (used === 0) {
-    return (
-      <span className="font-ui text-[11.5px] tabular-nums text-muted" title={`$0.00 of $${limit.toFixed(2)}`}>
-        unmetered
-      </span>
-    )
-  }
+  // At zero spend the record still has a limit, so the meter states both
+  // facts it has ($0 of the ceiling) rather than a word of its own. A staged
+  // run — spent nothing by definition, since arming is where metering begins
+  // — is the common case (#443); "unmetered" there contradicted a ceiling
+  // stated one line away. The bar at 0% is honestly empty, not a floored
+  // tick (that floor was removed in #313/#285), so no special case is needed.
   return (
     <span className="inline-flex flex-col items-end gap-[3px]" title={`$${used.toFixed(2)} of $${limit.toFixed(2)}`}>
       <span className="h-[7px] w-[90px] overflow-hidden border border-line">

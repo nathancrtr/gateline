@@ -423,7 +423,7 @@ export function NewRunPage() {
               onChange={(e) => setBudget(e.target.value)}
               className={`input-well w-full px-3 py-[8px] text-[14px] ${budgetInvalid ? 'err' : ''}`}
             />
-            <p className="mt-1.5 text-[12px] text-muted font-ui">Blank = no ceiling; the run reads as unmetered.</p>
+            <p className="mt-1.5 text-[12px] text-muted font-ui">Blank = no ceiling; the run reads as “no budget”.</p>
           </div>
 
           <div className="mb-6">

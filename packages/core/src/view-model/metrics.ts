@@ -56,9 +56,14 @@ const GATE_TRIGGERS: Record<GateId, (artifacts: string[]) => string[]> = {
 /**
  * Walk a run's state.yaml history (newest→oldest) and emit one record per
  * gate decision: the first commit at which the gate stops being undecided.
+ * A caller that has already walked the history passes it in.
  */
-export async function collectRunDecisions(source: RunSource, ref: RunRef): Promise<GateDecisionRecord[]> {
-  const history = await source.stateHistory(ref)
+export async function collectRunDecisions(
+  source: RunSource,
+  ref: RunRef,
+  walked?: StateCommit[],
+): Promise<GateDecisionRecord[]> {
+  const history = walked ?? (await source.stateHistory(ref))
   if (history.length === 0) return []
   const artifacts = await source.listArtifacts(ref)
   const records: GateDecisionRecord[] = []
@@ -107,10 +112,10 @@ export async function computeMetrics(sources: RunSource[]): Promise<Metrics> {
 
   for (const source of sources) {
     for (const ref of await source.listRuns()) {
-      decisions.push(...(await collectRunDecisions(source, ref)))
+      const history = await source.stateHistory(ref)
+      decisions.push(...(await collectRunDecisions(source, ref, history)))
       const { state } = await source.readState(ref)
       if (!state) continue
-      const history = await source.stateHistory(ref)
       const spentValues = history.map((h) => h.state?.budget?.cost_spent_usd ?? null).filter((v) => v !== null)
       runs.push({
         source: source.id,

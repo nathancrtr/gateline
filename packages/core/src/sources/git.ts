@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { CatFileBatch, CatFileError } from './cat-file.ts'
 
 export class GitError extends Error {
   readonly args: string[]
@@ -42,9 +43,11 @@ export interface WorktreeInfo {
 
 export class Git {
   readonly dir: string
+  private readonly blobs: CatFileBatch
 
   constructor(dir: string) {
     this.dir = dir
+    this.blobs = new CatFileBatch(dir)
   }
 
   run(args: string[], opts: { input?: string; env?: Record<string, string> } = {}): Promise<string> {
@@ -107,8 +110,23 @@ export class Git {
 
   /** Content of `path` at `rev`, or null when the path/rev doesn't exist. */
   async show(rev: string, path: string): Promise<string | null> {
+    const spec = `${rev}:${path}`
+    // Blobs come from the shared batch reader (one process for all of them).
+    // Anything else `git show` prints in its own format, so it still gets
+    // its own `git show`, as does a name the batch protocol cannot carry.
+    if (CatFileBatch.accepts(spec)) {
+      let object: Awaited<ReturnType<CatFileBatch['read']>>
+      try {
+        object = await this.blobs.read(spec)
+      } catch (e) {
+        const stderr = e instanceof CatFileError ? e.stderr : ''
+        throw new GitError((e as Error).message, ['cat-file', '--batch'], stderr)
+      }
+      if (object === null) return null
+      if (object.type === 'blob') return object.content.toString('utf8')
+    }
     try {
-      return await this.run(['show', `${rev}:${path}`])
+      return await this.run(['show', spec])
     } catch (e) {
       if (e instanceof GitError && MISSING_PATH_RE.test(e.stderr)) return null
       throw e

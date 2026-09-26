@@ -112,6 +112,7 @@ import type { CommitInfo } from '../sources/git.ts'
 import type { RunRef, RunSource } from '../sources/source.ts'
 import { type ArtifactRef, artifactRef } from './artifact-ref.ts'
 import { describeEscalation } from './escalation.ts'
+import { type StateProblem, stateProblem } from './state-problem.ts'
 import { formatDuration } from './time.ts'
 
 export const GATE_QUESTIONS: Record<GateId, string> = {
@@ -267,6 +268,12 @@ export interface InboxItem {
   staged: StagedFact | null
   /** kind=round-cap: the breach as facts. */
   roundCap: RoundCapFact | null
+  /**
+   * kind=malformed: why no state came of `state.yaml`, as a fact (#435). Only
+   * its `parser` case carries words, and they are the parser's; `problems`
+   * holds the same diagnostic for the CLI and the bounce contract.
+   */
+  unreadable: StateProblem | null
   /** Epoch seconds when this began waiting (commit time of the trigger), or null. */
   since: number | null
   /**
@@ -493,6 +500,7 @@ const NO_FACTS = {
   paused: null,
   staged: null,
   roundCap: null,
+  unreadable: null,
 } as const satisfies Partial<InboxItem>
 
 /** `task <id>:` (the engine's round-cap and routing lines), `gate G<n> …` (D21). */
@@ -579,21 +587,27 @@ export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<R
 async function deriveItems(source: RunSource, ref: RunRef): Promise<{ items: DerivedItem[]; validations: Record<string, Validation> }> {
   const items: DerivedItem[] = []
   const validations: Record<string, Validation> = {}
-  const { state, error, raw } = await source.readState(ref)
+  const read = await source.readState(ref)
+  const { state, error, raw } = read
 
   if (!state) {
     const touched = await source.lastTouched(ref, ['state.yaml'])
+    const unreadable = stateProblem(read)
     items.push({
       kind: 'malformed',
       gate: null,
       source: ref.source,
       slug: ref.slug,
       title: 'Malformed run state',
-      detail: error ?? 'state.yaml unreadable',
+      // Kept for one release (#411 step 8); nothing reads it.
+      detail: error ?? 'Malformed run state',
       ...NO_FACTS,
+      unreadable,
       since: touched?.time ?? null,
       reviewable: false,
-      problems: [error ?? 'state.yaml unreadable'],
+      // The parser's diagnostic only (#435): a sentence nobody parsed is not
+      // one to set under the parser's name.
+      problems: unreadable?.kind === 'parser' ? [unreadable.diagnostic] : [],
       packet: ['state.yaml'],
       inflight: null,
       escalationIndex: null,

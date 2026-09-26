@@ -118,15 +118,18 @@ interface Pending {
   why: string
 }
 
-const OUTSIDE_STEPS = { step: null, issue: 435 } as const
-
 /**
  * The residue: surfaces the epic's later steps have not reached yet, one
  * entry per (surface, pattern). The PR that fixes a surface deletes its
  * entry — the sweep fails on an entry that no longer matches anything — so
  * this list only gets shorter.
  *
- * What is *not* here, though the issue expected it, because the current
+ * Empty since #435 set the last five, which no §9 step claimed: the lexicon's
+ * hover-card jump and "Cites …" strip, the G1 Coverage hint, the spine
+ * caption on an unreadable record, and the portfolio's parse error. A
+ * surface the sweep finds tomorrow gets an entry here only with an owner.
+ *
+ * What was never here, though the step-4 issue expected it, because the
  * fixtures do not produce it: `pausedInstruction`'s `runs/<slug>/` (the
  * `paused-budget` fixture pauses for budget, whose instruction names no
  * path); the inbox row's escalation pointer (the `escalated` fixture is a
@@ -137,46 +140,7 @@ const OUTSIDE_STEPS = { step: null, issue: 435 } as const
  * fixture its `staged` run: their quotations sit in `.prose-card`, their
  * lines in Addresses.
  */
-const PENDING: Pending[] = [
-  // Outside §9's steps (#435), found by this sweep.
-  {
-    surface: /./,
-    within: '.lex-card-jump',
-    pattern: 'filename',
-    owner: OUTSIDE_STEPS,
-    why: "The lexicon hover card's `spec.md:13 — jump to definition ↗` is an address set as a link label, and it spends ↗, which is Link-out's. It follows a Name, so the fix is an Address with a UI word.",
-  },
-  {
-    surface: / · record · /,
-    within: '.lex-cited',
-    pattern: 'filename',
-    owner: OUTSIDE_STEPS,
-    why: 'The reader\'s "Cites …" strip links `spec.md:8` after each id: an address after a Name, as §2 wants it, but not rendered through Address.',
-  },
-  {
-    surface: /^g1-pending · decide · G1$/,
-    within: '[data-g1-coverage]',
-    pattern: 'filename',
-    text: /^plan\.md$/,
-    owner: OUTSIDE_STEPS,
-    why: "The G1 Coverage hint cites `contracts/plan.md` by filename. Step 5 named contracts by kind on the badge and the failure notice, but missed this hint.",
-  },
-  {
-    surface: /^bad-state · /,
-    within: '[data-spine-unknown]',
-    pattern: 'filename',
-    owner: OUTSIDE_STEPS,
-    why: 'The run header on an unreadable record says `sequence unknown — state.yaml unreadable`: a filename in the cockpit\'s own copy, where the kind belongs.',
-  },
-  {
-    surface: /^portfolio$/,
-    within: 'tbody',
-    pattern: 'filename',
-    text: /^state\.yaml$/,
-    owner: OUTSIDE_STEPS,
-    why: "bad-state's portfolio row prints the YAML parser's message as a row line, not as a Diagnostic with its producer.",
-  },
-]
+const PENDING: Pending[] = []
 
 interface Surface {
   label: string

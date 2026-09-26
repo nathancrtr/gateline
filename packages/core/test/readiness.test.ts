@@ -640,7 +640,7 @@ describe('best-effort escalations independent of full state-schema validity (#49
     expect(items[1]!.escalation).toEqual({ role: 'reviewer', about: null, artifact: null, reason: 'contract dispute — needs a human', pointer: false })
 
     const { summary } = await summarizeRun(ctx.source, ref)
-    expect(summary.malformed).not.toBeNull()
+    expect(summary.unreadable?.kind).toBe('parser')
     expect(summary.escalationsOpen).toBe(1)
   })
 
@@ -651,7 +651,7 @@ describe('best-effort escalations independent of full state-schema validity (#49
     expect(items[0]).toMatchObject({ kind: 'malformed', reviewable: false })
 
     const { summary } = await summarizeRun(ctx.source, ref)
-    expect(summary.malformed).not.toBeNull()
+    expect(summary.unreadable?.kind).toBe('parser')
     expect(summary.escalationsOpen).toBe(0)
   })
 })

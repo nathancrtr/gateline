@@ -110,6 +110,28 @@ describe('gateline CLI', () => {
     expect(stdout).toContain('BOUNCED')
   })
 
+  // #433: the facts a terminal reader needs, composed here — an escalation's
+  // reason and a paused run's way out were unreachable from `inbox` before.
+  it('inbox prints an escalation’s reason, report and resolve command, and a budget pause’s spend and next step', async () => {
+    const { stdout } = await run(['inbox'])
+    const entry = (slug: string) => {
+      const lines = stdout.split('\n')
+      const at = lines.findIndex((l) => l.includes(`/${slug} `))
+      const end = lines.findIndex((l, i) => i > at && /^\S/.test(l))
+      return lines.slice(at, end === -1 ? undefined : end).join('\n')
+    }
+    const escalated = entry('escalated')
+    expect(escalated).toMatch(/escalation from verifier/)
+    expect(escalated).toMatch(/reason\s+AC2\.1 unverifiable: sample input referenced by the spec does not exist in the repo/)
+    expect(escalated).toMatch(/report\s+verification-report\.md/)
+    expect(escalated).toMatch(/resolve\s+gateline resolve-escalation escalated 0 --note <text>/)
+    const paused = entry('paused-budget')
+    expect(paused).toMatch(/run paused: budget-exhausted/)
+    expect(paused).toMatch(/budget\s+\$10\.40 spent, cost_limit_usd \$10\.00/)
+    expect(paused).toMatch(/next\s+gateline resume paused-budget --cost-limit <usd>/)
+    expect(paused).toMatch(/gateline close paused-budget --as <disposition> --reason <text>/)
+  })
+
   it('approve requires burden when non-interactive', async () => {
     const { code, stderr } = await run(['approve', 'g0-pending', 'G0'], true)
     expect(code).toBe(1)

@@ -6,7 +6,15 @@ import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { type ArtifactRef, formatAge, type InboxItem, type ReviewReport, type RunDetailResponse } from '../../api.ts'
 import { AgeBadge, Imp, KindChip } from '../../components/chips.tsx'
-import { BOUNCED_INSTRUCTION, DecidePanel, INFLIGHT_INSTRUCTION, ROUND_CAP_INSTRUCTION } from '../../components/decide.tsx'
+import {
+  ARM_INSTRUCTION,
+  BOUNCED_INSTRUCTION,
+  DecidePanel,
+  INFLIGHT_INSTRUCTION,
+  LOST_DISPATCH_INSTRUCTION,
+  pausedInstruction,
+  ROUND_CAP_INSTRUCTION,
+} from '../../components/decide.tsx'
 import { EscalationPacket } from '../../components/escalation.tsx'
 import { G2Packet } from '../../components/evidence.tsx'
 import { useReviews } from '../../components/findings.tsx'
@@ -14,52 +22,20 @@ import { G1Packet } from '../../components/g1.tsx'
 import { G3Packet } from '../../components/g3.tsx'
 import { CitedText } from '../../components/lexicon.tsx'
 import { RoundCapPanel } from '../../components/rounds.tsx'
-import { Address, artifactHref, isName, KindLabel, Name, QuotedWord } from '../../components/vocabulary.tsx'
+import {
+  Address,
+  artifactHref,
+  Diagnostic,
+  Instruction,
+  isName,
+  KindLabel,
+  Name,
+  QuotedPassage,
+  QuotedWord,
+} from '../../components/vocabulary.tsx'
 import { gateCardState } from '../../gate-state.ts'
 import type { KeyHint } from '../../use-keys.ts'
-
-/** Bare grammar — words that carry no fact of their own, so a sentence built
- *  only from these plus words already on screen adds nothing to the screen. */
-const GRAMMAR = new Set([
-  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'by', 'for', 'from', 'in', 'is', 'it', 'its',
-  'of', 'on', 'or', 'that', 'the', 'this', 'to', 'was', 'were', 'with',
-])
-
-const words = (s: string) => s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
-
-/**
- * Does `line` say only what `shown` has already said? (#294)
- *
- * This decides whether a decision card renders its subtitle. It is a plain
- * containment check over words and never a paraphrase check: if every word of
- * the line beyond bare grammar already appears in the text rendered above it,
- * the line is a restatement and is dropped. One new word anywhere — an
- * escalation's reason, a bounce's "Packet malformed", a paused run's "Resume" —
- * and the whole line renders verbatim, as it always did.
- *
- * Nothing becomes unreachable this way. The suppressed words are, by the test's
- * own definition, still on the page a few pixels above.
- */
-export function restatesWhatIsShown(line: string, shown: string): boolean {
-  const vocabulary = new Set(words(shown))
-  const carried = words(line).filter((w) => !GRAMMAR.has(w))
-  return carried.length > 0 && carried.every((w) => vocabulary.has(w))
-}
-
-/**
- * A decision card's problems, minus the ones its description has already said
- * (#285/1).
- *
- * The malformed-state card carried the YAML parse error twice — once as
- * `detail`, once as its single `problem` — because core writes the same string
- * into both, and the card rendered both slots without ever comparing them.
- * Byte equality is the whole test: a bounced gate's problems name the missing
- * contract sections, which appear nowhere in its description, and every one of
- * them still renders.
- */
-export function visibleProblems(item: InboxItem): string[] {
-  return item.problems.filter((p) => p.trim() !== item.detail.trim())
-}
+import { aboutWords, inboxTitle, NameOrNothing, predatesFacts, usd } from '../inbox.tsx'
 
 /**
  * The instruction a card with no button has to give, for the description slot
@@ -100,6 +76,26 @@ export function burdenPillNeeded(detail: string, burden: string): boolean {
 }
 
 /**
+ * The record's words and references a card's facts carry, as one string to
+ * look for artifacts in (#433): an escalation's reason line — the engine's
+ * words, which may name the artifact it is about — and the artifact a hand
+ * edit is owed on. Never a sentence the cockpit wrote.
+ */
+function mentions(item: InboxItem): string {
+  const edit = item.paused?.handEdit
+  return [item.escalation?.reason ?? '', edit?.kind === 'contract-dispute' ? edit.artifact.path : ''].join(' ')
+}
+
+/** The task a card's facts name: a round cap's, or the one an escalation is about. */
+export function factTask(item: InboxItem): string | null {
+  if (item.roundCap) return item.roundCap.task
+  const about = item.escalation?.about
+  if (about && 'task' in about) return about.task
+  const edit = item.paused?.handEdit
+  return edit?.kind === 'unknown-status' ? edit.task : null
+}
+
+/**
  * The artifacts a decide card offers, as references (#423): the packet, then
  * any artifact the card's own prose names that the packet does not.
  *
@@ -112,7 +108,7 @@ export function packetReferences(item: InboxItem, detail: RunDetailResponse): Ar
   const packet = (item as { packetRefs?: ArtifactRef[] }).packetRefs
   if (!packet) return []
   const all = (detail as { artifactRefs?: ArtifactRef[] }).artifactRefs ?? []
-  const prose = `${item.title} ${item.detail}`
+  const prose = mentions(item)
   // The ledger is offered even though the rail lists it last: it is where the
   // decision grammar lives, and a paused or staged card has nothing else.
   const offered = packet.filter((r) => detail.artifacts.includes(r.path) || r.kind === 'state')
@@ -259,19 +255,6 @@ export function NeedsYouCard({
 }) {
   const urgent = item.since !== null && now - item.since > 3 * 86_400
   const ageLabel = `waiting ${formatAge(item.since, now)}`
-  // `item.detail` is written for an inbox row, where "<slug> is waiting on G2"
-  // is what tells you which run you are looking at. Here the slug is the H1, the
-  // gate is in the chip, "waiting" is in the badge on the same line, and the
-  // question is the title — so the line is words the reader has already read.
-  const restated = restatesWhatIsShown(item.detail, `${item.title} ${item.slug} ${ageLabel}`)
-  // A malformed-state `detail` is a parser's diagnostic, not a sentence: a
-  // message, a blank line, the offending source line, and a caret under the
-  // column it failed at. Flowed as prose that caret wraps to wherever the
-  // measure happens to break and points at nothing — the "dangling caret" of
-  // #285/1. Mono and pre-wrap put it back under the character it names, and
-  // the string is still rendered byte for byte.
-  const diagnostic = item.detail.includes('\n')
-  const problems = visibleProblems(item)
   const instruction = cardInstruction(item)
   // Arriving from an inbox link: bring the named card into view and give it
   // focus, so the decision is where the eye and the keyboard already are.
@@ -285,8 +268,8 @@ export function NeedsYouCard({
   // data already in the detail payload so the card answers "what happened,
   // where do I look" without a trip to the tabs.
   const reports = useReviews(item.source, item.slug)
-  const prose = `${item.title} ${item.detail}`
-  const mentionedTask = detail.state?.tasks.find((t) => prose.includes(t.id)) ?? null
+  const task = factTask(item)
+  const mentionedTask = task === null ? null : (detail.state?.tasks.find((t) => t.id === task) ?? null)
   // The packet as reference rows (#423). A chip that named a review carried
   // what that review concluded (#215), and the row keeps it: the G2 approver
   // should not have to open three files to learn that one said request-changes.
@@ -342,19 +325,10 @@ export function NeedsYouCard({
             <AgeBadge label={ageLabel} urgent={urgent} />
           </span>
         </div>
-        <h2 className="mt-3 mb-1.5 text-[22px] font-semibold leading-[1.2] text-ink">
-          <CitedText>{item.title}</CitedText>
+        <h2 className="mt-3 mb-1.5 text-[22px] font-semibold leading-[1.2] text-ink" data-card-title>
+          {inboxTitle(item)}
         </h2>
-        {!restated &&
-          (diagnostic ? (
-            <pre className="max-w-[var(--measure)] overflow-x-auto whitespace-pre-wrap font-mono text-[12.5px] leading-[1.55] text-ink">
-              {item.detail}
-            </pre>
-          ) : (
-            <p className="max-w-[var(--measure)] text-[14.5px] text-ink leading-[1.55]">
-              <CitedText>{item.detail}</CitedText>
-            </p>
-          ))}
+        <CardFacts item={item} now={now} />
         {instruction && (
           <p data-card-instruction className={`mt-1.5 max-w-[var(--measure)] text-[14.5px] leading-[1.55] ${instruction.tone}`}>
             {instruction.text}
@@ -364,15 +338,6 @@ export function NeedsYouCard({
           <p className="mt-1.5 font-ui text-[12px] text-muted">
             {mentionedTask.id} · {mentionedTask.status} · review round {mentionedTask.review_rounds}/{detail.summary.tasks.roundCap}
           </p>
-        )}
-        {problems.length > 0 && (
-          <ul className="mt-2 flex flex-col gap-1">
-            {problems.map((p) => (
-              <li key={p} className={`font-mono text-[12px] ${item.kind === 'gate' ? 'text-ink' : 'text-bad'}`}>
-                ✕ {p}
-              </li>
-            ))}
-          </ul>
         )}
         {/* G2's packet, composed in criterion order (#256). The one-line
             citation map this replaced still renders on verification-report.md
@@ -413,5 +378,260 @@ export function NeedsYouCard({
         />
       </div>
     </section>
+  )
+}
+
+/** The card's fact lines share one measure and one reading size. */
+const FACT_LINE = 'max-w-[var(--measure)] text-[14.5px] leading-[1.55] text-ink'
+
+/**
+ * The card's own lines under its title, composed here from the item's facts
+ * (#433, docs/SEAM.md §7 "facts, not sentences"). The card used to print
+ * core's `detail` — a sentence written for the inbox row — and guess, word by
+ * word, whether it restated the title (#294); it now says
+ * only what the facts carry that the title and the eyebrow have not, in four
+ * voices a reader can tell apart: the record's words quoted, its ids named,
+ * addresses muted and following a name, and the cockpit's instructions
+ * unboxed.
+ */
+export function CardFacts({ item, now }: { item: InboxItem; now: number }) {
+  if (predatesFacts(item)) return <KeptSentences item={item} />
+  switch (item.kind) {
+    case 'gate':
+      return <GateFacts item={item} now={now} />
+    case 'escalation':
+      return <EscalationFacts item={item} />
+    case 'round-cap':
+      // The round-cap panel below says what a breach usually means.
+      return null
+    case 'paused':
+      return <PausedFacts item={item} />
+    case 'staged':
+      return <StagedFacts item={item} now={now} />
+    case 'malformed':
+      // The parser's diagnostic is the fact: a message, the offending line and
+      // a caret under the column it failed at, which only `<pre>` keeps under
+      // the character it names (#285/1). Byte for byte, labelled by producer.
+      return item.problems.length > 0 ? (
+        <div className="max-w-[var(--measure)]" data-card-diagnostic>
+          <Diagnostic producer="Run state parser">{item.problems.join('\n')}</Diagnostic>
+        </div>
+      ) : null
+  }
+}
+
+/**
+ * An item from a server built before the facts (#433): its kept `detail`, as
+ * the card printed it before, and a bounced gate's problems. For the one
+ * release `title` and `detail` are kept (#411 step 8); delete with them.
+ */
+function KeptSentences({ item }: { item: InboxItem }) {
+  const problems = item.kind === 'gate' ? item.problems : []
+  return (
+    <div className="flex flex-col gap-1" data-kept-sentences>
+      {item.detail.includes('\n') ? (
+        <pre className="max-w-[var(--measure)] overflow-x-auto whitespace-pre-wrap font-mono text-[12.5px] leading-[1.55] text-ink">
+          {item.detail}
+        </pre>
+      ) : (
+        <p className={FACT_LINE}>
+          <CitedText>{item.detail}</CitedText>
+        </p>
+      )}
+      {problems.map((p) => (
+        <p key={p} className="font-mono text-[12px] text-ink">
+          ✕ {p}
+        </p>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * A bounced gate names what failed (R3): each artifact by its contract's
+ * name, its file as the address beside that name, and the missing sections or
+ * keys as the contract spells them. A producer that re-dispatched and never
+ * landed is said, with what to do about it; one still in flight is the
+ * eyebrow's and the instruction's to say.
+ */
+function GateFacts({ item, now }: { item: InboxItem; now: number }) {
+  const bounces = item.bouncedBy ?? []
+  const waiting = item.waitingOn
+  if (bounces.length === 0 && !waiting?.lost) return null
+  return (
+    <div className="flex flex-col gap-1">
+      {bounces.map((b) => (
+        <p key={b.path} className={FACT_LINE} data-bounce={b.path}>
+          {b.absent ? (
+            <>
+              The {b.contractName ?? 'artifact'} is missing from the run <Address size="xs">{b.path}</Address>
+            </>
+          ) : (
+            <>
+              Fails its {b.contractName ?? 'artifact'} contract <Address size="xs">{b.path}</Address> — missing required {b.unit}:{' '}
+              {b.missing.map((m, i) => (
+                <span key={m}>
+                  {i > 0 && ', '}
+                  {isName(m) ? <Name>{m}</Name> : <code className="font-mono text-[11.5px] text-ink">{m}</code>}
+                </span>
+              ))}
+            </>
+          )}
+        </p>
+      ))}
+      {waiting?.lost && isName(waiting.role) && (
+        <>
+          <p className={FACT_LINE} data-lost-dispatch>
+            The <Name>{waiting.role}</Name> was re-dispatched {formatAge(waiting.since, now)} ago and has not landed the{' '}
+            {waiting.artifact.contractName ?? 'artifact'}.
+          </p>
+          <Instruction className="max-w-[var(--measure)]">{LOST_DISPATCH_INSTRUCTION}</Instruction>
+        </>
+      )}
+    </div>
+  )
+}
+
+/**
+ * What an escalation is about, and its reason line when that line is the
+ * substance (docs/SEAM.md §3): an engine-originated escalation's reason is its
+ * whole packet, and a role that wrote its words into the entry said them
+ * there. A line that only points at the report the packet below already
+ * opens (`… — see review-04.md`) is not repeated; History keeps it.
+ */
+function EscalationFacts({ item }: { item: InboxItem }) {
+  const esc = item.escalation
+  if (!esc) return null
+  const about = esc.about
+  return (
+    <div className="flex flex-col gap-2">
+      {about && (
+        <p className={FACT_LINE} data-escalation-about>
+          {aboutWords(about, 'About')}
+        </p>
+      )}
+      {!esc.pointer && (
+        <RecordPassage label="Reason, as recorded" data-escalation-reason>
+          {esc.reason}
+        </RecordPassage>
+      )}
+    </div>
+  )
+}
+
+/** A line of the record's, quoted as a passage under the label that says whose it is. */
+function RecordPassage({ label, children, ...rest }: { label: string; children: string } & { [k: `data-${string}`]: string | boolean }) {
+  return (
+    <div className="max-w-[var(--measure)]" {...rest}>
+      <KindLabel tone="muted">{label}</KindLabel>
+      <QuotedPassage className="mt-1 text-[14px] leading-[1.55]">
+        <CitedText>{children}</CitedText>
+      </QuotedPassage>
+    </div>
+  )
+}
+
+/**
+ * A paused run: the facts that decide what clears it, then the cockpit's
+ * instruction for its reason (#96, #348). A human's free-text hold reason is
+ * quoted as a passage; the engine's own line for the pause, when the record
+ * has one, is quoted beside the counts — rule DB pauses on *projected* spend,
+ * so the counts alone would misstate why. The budget names the key the resume
+ * form writes, as an address; a hand edit names the artifact, the keys or the
+ * task it is owed on.
+ */
+function PausedFacts({ item }: { item: InboxItem }) {
+  const paused = item.paused
+  if (!paused) return null
+  const budget = paused.budget
+  const edit = paused.handEdit
+  return (
+    <div className="flex flex-col gap-1.5">
+      {paused.freeText && paused.reason && (
+        <RecordPassage label="Hold reason, as recorded" data-paused-hold>
+          {paused.reason}
+        </RecordPassage>
+      )}
+      {paused.reason === 'budget-exhausted' && budget && (
+        <p className={FACT_LINE} data-paused-budget>
+          {budget.spent !== null && <>{usd(budget.spent)} spent · </>}
+          {budget.limit !== null ? (
+            <>
+              limit {usd(budget.limit)}, set by <Address size="xs">cost_limit_usd</Address>
+            </>
+          ) : (
+            <>
+              the run has no <Address size="xs">cost_limit_usd</Address>
+            </>
+          )}
+        </p>
+      )}
+      {paused.cause && (
+        <RecordPassage label={paused.reason === 'budget-exhausted' ? 'The engine’s reason, as recorded' : 'Last resolved escalation, as recorded'} data-paused-cause>
+          {paused.cause}
+        </RecordPassage>
+      )}
+      {edit?.kind === 'contract-dispute' && (
+        <p className={FACT_LINE} data-hand-edit={edit.kind}>
+          The {edit.artifact.contractName ?? 'artifact'} to fix <Address size="xs">{edit.artifact.path}</Address>
+        </p>
+      )}
+      {edit?.kind === 'profile-violation' && (
+        <p className={FACT_LINE} data-hand-edit={edit.kind}>
+          Profile <Name>{edit.profile}</Name>, set by <Address size="xs">profile</Address>; the phase by{' '}
+          <Address size="xs">phase</Address>
+        </p>
+      )}
+      {edit?.kind === 'no-task-files' && (
+        <p className={FACT_LINE} data-hand-edit={edit.kind}>
+          Work items land at <Address size="xs">tasks/*.yaml</Address>
+        </p>
+      )}
+      {edit?.kind === 'unknown-status' && (
+        <p className={FACT_LINE} data-hand-edit={edit.kind}>
+          Task <NameOrNothing id={edit.task} /> has status <QuotedWord>{edit.status}</QuotedWord>; the table knows{' '}
+          {edit.known.map((k, i) => (
+            <span key={k}>
+              {i > 0 && ' '}
+              <QuotedWord>{k}</QuotedWord>
+            </span>
+          ))}
+        </p>
+      )}
+      <Instruction className="max-w-[var(--measure)]">{pausedInstruction(paused)}</Instruction>
+    </div>
+  )
+}
+
+/**
+ * A staged run: who staged it and when, the profile it will run under, and
+ * the ceiling arming lets it spend (#433) — the terms the Arm button accepts.
+ */
+function StagedFacts({ item, now }: { item: InboxItem; now: number }) {
+  const staged = item.staged
+  return (
+    <div className="flex flex-col gap-1.5">
+      {staged && (
+        <p className={FACT_LINE} data-staged>
+          {staged.by && (
+            <>
+              Staged by <span className="font-semibold">{staged.by}</span>
+              {staged.at !== null && <> {formatAge(staged.at, now)} ago</>} ·{' '}
+            </>
+          )}
+          profile <Name>{staged.profile}</Name> ·{' '}
+          {staged.budgetCeiling === null ? (
+            <>
+              no budget ceiling, <Address size="xs">cost_limit_usd</Address> unset
+            </>
+          ) : (
+            <>
+              budget ceiling {usd(staged.budgetCeiling)}, set by <Address size="xs">cost_limit_usd</Address>
+            </>
+          )}
+        </p>
+      )}
+      <Instruction className="max-w-[var(--measure)]">{ARM_INSTRUCTION}</Instruction>
+    </div>
   )
 }

@@ -112,7 +112,6 @@ interface Pending {
 }
 
 const STEP_7 = { step: 7, issue: 434 } as const
-const STEP_8 = { step: 8, issue: 433 } as const
 const OUTSIDE_STEPS = { step: null, issue: 435 } as const
 
 /**
@@ -138,30 +137,6 @@ const PENDING: Pending[] = [
     pattern: 'filename',
     owner: STEP_7,
     why: 'The reader dumps a work item and state.yaml as a raw <pre>. Step 7 gives both a field view over their contract keys, with the bytes behind "show bytes". Today the filenames inside (a work item\'s file_contact_surface, the state contract\'s header comment) are bytes where a view belongs.',
-  },
-
-  // Step 8 (#433): inbox and card sentences from facts.
-  {
-    surface: /^inbox$/,
-    within: '[data-inbox-text]',
-    pattern: 'filename',
-    text: /^state\.yaml$/,
-    owner: STEP_8,
-    why: "bad-state's inbox row prints the YAML parser's message (`state.yaml is not valid YAML: …`) as its detail line, a sentence core composed. Step 8 composes the row from facts.",
-  },
-  {
-    surface: /^bad-state · decide$/,
-    within: '[data-needs-card] pre',
-    pattern: 'filename',
-    owner: STEP_8,
-    why: "bad-state's card prints the same parser message as a bare <pre>, with no producer label. §10 keeps a parser's diagnostic, but as a Diagnostic. Step 8 composes the card from facts.",
-  },
-  {
-    surface: /^malformed-(spec · decide · G0|release · decide · G3)$/,
-    within: '[data-needs-card] li.font-mono',
-    pattern: 'filename',
-    owner: STEP_8,
-    why: "The bounce card's problem lines (`✕ release-plan.md: missing required sections — …`) are core's sentences, led by the path. Step 8 names the contract by kind from `bouncedBy` and deletes `visibleProblems`' string matching.",
   },
 
   // Outside §9's steps (#435), found by this sweep.

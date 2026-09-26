@@ -44,6 +44,37 @@ test('inbox ranks oldest first and flags bounced packets', async ({ page }) => {
   await expect(bounced).toContainText('Bounced')
 })
 
+test('inbox rows compose their lines from facts (#433)', async ({ page }) => {
+  await page.goto('/')
+  const rows = page.locator('[data-inbox-row]')
+  // A gate row is the gate and its question; nothing restates the slug.
+  const gate = rows.filter({ hasText: /\/g2-pending/ })
+  await expect(gate.locator('[data-inbox-title]')).toHaveText('G2 — Does the evidence support merging?')
+  await expect(gate.locator('[data-inbox-line]')).toHaveCount(0)
+  // An escalation row names who escalated — no pointer, no filename.
+  const escalation = rows.filter({ hasText: /\/escalated/ })
+  await expect(escalation.locator('[data-inbox-title]')).toHaveText('Escalation from verifier')
+  await expect(escalation).not.toContainText('.md')
+  // Its reason is the verifier's own words, not a pointer: the row keeps it.
+  await expect(escalation.locator('[data-inbox-line]')).toContainText('sample input referenced by the spec does not exist')
+  // A paused row quotes the reason after a UI word and says what it spent.
+  const paused = rows.filter({ hasText: /\/paused-budget/ })
+  await expect(paused.locator('[data-inbox-title]')).toHaveText('Run paused budget-exhausted')
+  await expect(paused.locator('[data-quoted-word="budget-exhausted"]')).toBeVisible()
+  await expect(paused.locator('[data-inbox-line]')).toHaveText('$10.40 spent · limit $10.00')
+  const cap = rows.filter({ hasText: /\/round-cap/ })
+  await expect(cap.locator('[data-inbox-title]')).toHaveText('Round cap reached on 01-core')
+  await expect(cap.locator('[data-inbox-line]')).toHaveText('review rounds 3/3 without convergence')
+})
+
+test('the paused card states its budget with the key as an address, then the instruction (#433)', async ({ page }) => {
+  await page.goto(`/runs/${sourceId()}/paused-budget?decide=paused`)
+  const card = page.locator('[data-needs-card]')
+  await expect(card.locator('[data-paused-budget]')).toHaveText('$10.40 spent · limit $10.00, set by cost_limit_usd')
+  await expect(card.locator('[data-paused-budget] [data-address]')).toHaveText('cost_limit_usd')
+  await expect(card.locator('[data-instruction]')).toContainText('Resume with a higher limit')
+})
+
 test('bounce view renders problems and offers no approval (R3)', async ({ page }) => {
   await page.goto(`/runs/${sourceId()}/malformed-spec?decide=G0`)
   const card = page.locator('[data-needs-card]')
@@ -671,6 +702,8 @@ test("escalation packet (#407): the escalating role's own words on the card", as
   await expect(card).toBeVisible()
   // The card is headed by the role that escalated, not the engine that wrote the entry.
   await expect(card.locator('h2')).toContainText('Escalation from verifier')
+  // The verifier wrote its words into the entry, so the reason is quoted (#433).
+  await expect(card.locator('[data-escalation-reason]')).toContainText('sample input referenced by the spec does not exist')
 
   const packet = card.locator('[data-escalation-packet]')
   await expect(packet).toBeVisible()

@@ -36,6 +36,7 @@ import {
 } from '../../components/vocabulary.tsx'
 import { isAuditSection, itemCount } from '../../fold.ts'
 import { DIFF_SELECTION, landingArtifact } from '../../landing.ts'
+import { landingIndex, lineOfAnchor } from '../../line-anchor.ts'
 import { orderArtifacts, type RailLabel, railGroups } from '../../record-rail.ts'
 import { EdgeFade, useScrollCue } from '../../scroll-cue.tsx'
 import { PageStatus } from '../inbox.tsx'
@@ -262,6 +263,13 @@ export function contractBadgeName(
   return { name: contractName, address: contract === path.split('/').pop() ? null : contract }
 }
 
+/** The block in `root` a line anchor lands on (line-anchor.ts), among those the reader stamped with their lines. */
+function lineTarget(root: HTMLElement | null, line: number): HTMLElement | null {
+  const blocks = [...(root?.querySelectorAll<HTMLElement>('[data-line]') ?? [])]
+  const spans = blocks.map((el) => ({ start: Number(el.dataset.line), end: Number(el.dataset.lineEnd ?? el.dataset.line) }))
+  return blocks[landingIndex(spans, line)] ?? null
+}
+
 function ArtifactBody({ src, slug, path, artifact }: { src: string; slug: string; path: string; artifact: ArtifactRef | null }) {
   // The kind, off the ref (#415). A path the URL names that the run does not
   // list has no ref, and reads as a plain file.
@@ -271,17 +279,24 @@ function ArtifactBody({ src, slug, path, artifact }: { src: string; slug: string
     queryFn: () => api.artifact(src, slug, path),
   })
   // Jump-to-definition (#163): the anchor param lands on the def-<id> heading
-  // ids the lexicon rehype stage stamps onto R/ADR definition headings.
+  // ids the lexicon rehype stage stamps onto R/ADR definition headings. A line
+  // anchor, `L<n>` (#441), lands on the block holding that line of the
+  // artifact, by the rule in line-anchor.ts.
   const [params] = useSearchParams()
   const anchor = params.get('anchor')
+  const articleRef = useRef<HTMLElement>(null)
   useEffect(() => {
     if (!anchor || !data) return
-    const target = document.getElementById(anchor)
+    const line = lineOfAnchor(anchor)
+    const target = line === null ? document.getElementById(anchor) : lineTarget(articleRef.current, line)
     // A definition inside a folded audit-time section (#217) opens its fold
     // before the jump, so a citation never lands on a closed heading.
     const fold = target?.closest('details')
     if (fold && !fold.open) fold.open = true
     target?.scrollIntoView({ block: 'start' })
+    // Which block the address landed on, for whoever checks the landing.
+    target?.setAttribute('data-landed', '')
+    return () => target?.removeAttribute('data-landed')
   }, [anchor, data])
   if (isLoading) return <LoadingSkeleton text="Reading artifact…" />
   if (error) return <PageStatus text={(error as Error).message} bad />
@@ -299,7 +314,7 @@ function ArtifactBody({ src, slug, path, artifact }: { src: string; slug: string
   const contract = contractBadgeName(path, validation.contract, artifact?.contractName ?? null)
   const contractWords = `${contract.name ? `the ${contract.name} ` : ''}contract`
   return (
-    <article className="relative min-h-0 px-10 py-8 max-lg:px-4 max-lg:py-6">
+    <article ref={articleRef} className="relative min-h-0 px-10 py-8 max-lg:px-4 max-lg:py-6">
       <div className="max-w-[var(--measure)]">
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 font-mono text-[11.5px] text-muted pb-[18px] border-b border-line mb-[30px]">
           {taskTitle && (
@@ -369,8 +384,15 @@ function ArtifactBody({ src, slug, path, artifact }: { src: string; slug: string
  * through the same single `Markdown` call as before: the split exists only
  * when there is something to fold.
  */
-function FoldedMarkdown({ content, kind, audit }: { content: string; kind: ArtifactKind; audit: string[] }) {
-  if (audit.length === 0) return <Markdown sourceKind={kind}>{content}</Markdown>
+export function FoldedMarkdown({ content, kind, audit }: { content: string; kind: ArtifactKind; audit: string[] }) {
+  // Each render is told the artifact line it starts on (#441), so its blocks
+  // carry the artifact's line numbers, not the slice's.
+  if (audit.length === 0)
+    return (
+      <Markdown sourceKind={kind} line={1}>
+        {content}
+      </Markdown>
+    )
   // One `.prose-artifact` wrapper for the whole artifact, however many
   // renders it takes: the styles are descendant rules, and the DOM keeps
   // reading as one artifact.
@@ -382,7 +404,7 @@ function FoldedMarkdown({ content, kind, audit }: { content: string; kind: Artif
         if (section.heading === null || section.depth !== 2 || !isAuditSection(section.heading, audit)) {
           return (
             // biome-ignore lint/suspicious/noArrayIndexKey: sections split from one static artifact body in document order; a heading can be null (the preamble) or repeat (review rounds).
-            <Markdown key={i} sourceKind={kind} unwrapped>
+            <Markdown key={i} sourceKind={kind} unwrapped line={section.line}>
               {section.headingLine ? `${section.headingLine}\n${section.body}` : section.body}
             </Markdown>
           )
@@ -395,12 +417,14 @@ function FoldedMarkdown({ content, kind, audit }: { content: string; kind: Artif
               {/* The heading's accessible name stays the heading; the glyph
                   and the count sit beside it, not inside it. */}
               <span aria-hidden="true" className="inline-block text-[0.7em] text-muted group-open:rotate-90">▶</span>
-              <h2 className="!my-0">{section.heading}</h2>
+              <h2 className="!my-0" data-line={section.line} data-line-end={section.line}>
+                {section.heading}
+              </h2>
               <span className="font-sans text-[13px] text-muted">
                 {count.n} {count.unit} · audit-time, folded until opened
               </span>
             </summary>
-            <Markdown sourceKind={kind} unwrapped>
+            <Markdown sourceKind={kind} unwrapped line={section.line + 1}>
               {section.body}
             </Markdown>
           </details>

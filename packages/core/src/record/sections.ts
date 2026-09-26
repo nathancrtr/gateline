@@ -41,6 +41,13 @@ export interface Section {
   headingLine: string | null
   /** The section's body, without its heading line. */
   body: string
+  /**
+   * The 1-based line of the artifact the section starts on: its heading line,
+   * or line 1 for the preamble; a heading's body starts on the next line. It is
+   * the numbering every `file:line` address uses, so a view that renders
+   * section by section can still land on a quoted line (#441).
+   */
+  line: number
 }
 
 /**
@@ -51,18 +58,18 @@ export interface Section {
 export function splitSections(markdown: string): Section[] {
   const out: Section[] = []
   const fences = new FenceTracker()
-  let current: Section = { heading: null, depth: null, headingLine: null, body: '' }
+  let current: Section = { heading: null, depth: null, headingLine: null, body: '', line: 1 }
   let lines: string[] = []
   const flush = () => {
     current.body = lines.join('\n')
     out.push(current)
   }
-  for (const line of markdown.split('\n')) {
+  for (const [i, line] of markdown.split('\n').entries()) {
     const inFence = fences.feed(line)
     const m = !inFence && /^(#{1,2})\s+(.+?)\s*#*\s*$/.exec(line)
     if (m) {
       flush()
-      current = { heading: m[2]!, depth: m[1]!.length as 1 | 2, headingLine: line, body: '' }
+      current = { heading: m[2]!, depth: m[1]!.length as 1 | 2, headingLine: line, body: '', line: i + 1 }
       lines = []
       continue
     }

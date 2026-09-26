@@ -102,7 +102,7 @@ describe('FindingCard title column (#296)', () => {
     const withNote = renderToStaticMarkup(
       createElement(FindingCard, {
         finding,
-        source: 'review-03.md',
+        source: { task: '01-core', path: 'review-03.md' },
         note: createElement('span', { className: 'shrink-0' }, 'raised again'),
       }),
     )
@@ -119,7 +119,7 @@ describe('FindingCard title column (#296)', () => {
     // severity chip, the row could break between them and leave the button
     // alone under the metadata.
     expect(foldable.resolution?.state, 'the fixture must be foldable').toBe('resolved')
-    const markup = renderToStaticMarkup(createElement(FindingCard, { finding: foldable, source: 'review-02.md' }))
+    const markup = renderToStaticMarkup(createElement(FindingCard, { finding: foldable, source: { task: '01-core', path: 'review-02.md' } }))
     expect(markup).toContain('<button')
     const group = titleGroup(markup)
     expect(group).toContain('data-finding-title')

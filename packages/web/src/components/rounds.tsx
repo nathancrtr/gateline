@@ -24,7 +24,7 @@ import {
   useReviewsQuery,
   VerdictChip,
 } from './findings.tsx'
-import { Address, artifactHref, Withheld } from './vocabulary.tsx'
+import { Address, artifactHref, isName, Name, Withheld } from './vocabulary.tsx'
 
 const NOTE_TONE: Record<RoundFinding['note'], string> = {
   'raised again': 'border-bad-line bg-bad-bg text-bad',
@@ -84,6 +84,9 @@ export function RoundCapPanel({ src, slug, task }: { src: string; slug: string; 
   }
 
   const { earlier, later, standing, fresh, resolved } = comparison
+  // Each report's task, from its own header: how a side and a finding name
+  // the review they come from (#423).
+  const tasks = new Map(scoped.map((r) => [r.path, r.task]))
   return (
     <section className={PACKET_FRAME} data-round-cap>
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
@@ -91,9 +94,9 @@ export function RoundCapPanel({ src, slug, task }: { src: string; slug: string; 
           Round {earlier.round} against round {later.round}
           {task ? ` · ${task}` : ''}
         </p>
-        <Side side={earlier} />
+        <Side side={earlier} task={task} tasks={tasks} />
         <span className="font-mono text-[11px] text-faint">→</span>
-        <Side side={later} />
+        <Side side={later} task={task} tasks={tasks} />
       </div>
 
       {/* The question the cap asks, answered first: what is still open in both
@@ -105,9 +108,10 @@ export function RoundCapPanel({ src, slug, task }: { src: string; slug: string; 
         items={standing}
         empty="Nothing was raised in both rounds — the cap was reached on findings that did not repeat."
         kind="standing"
+        tasks={tasks}
       />
       {fresh.length > 0 && (
-        <Group label={`New in round ${later.round} — ${fresh.length}`} items={fresh} kind="fresh" />
+        <Group label={`New in round ${later.round} — ${fresh.length}`} items={fresh} kind="fresh" tasks={tasks} />
       )}
       {resolved.length > 0 && (
         <Group
@@ -115,26 +119,39 @@ export function RoundCapPanel({ src, slug, task }: { src: string; slug: string; 
           hint="closed by a disposition the reviewer wrote; folded, and expandable"
           items={resolved}
           kind="resolved"
+          tasks={tasks}
         />
       )}
       {/* No "The reports, in full" row here (#296). The panel only ever renders
-          inside the decide card, whose own artifact chips sit some 40px below
-          it and list the same files carrying their verdicts — so this row was
+          inside the decide card, whose own reference rows sit some 40px below
+          it and list the same reports carrying their verdicts — so this row was
           the weaker of two identical affordances stacked on top of each other.
           Every report is still one click away; it is one click away from the
-          chips, which is where the reader was already going to look. */}
+          rows, which is where the reader was already going to look. */}
     </section>
   )
 }
 
-/** One side of the comparison: its round, its artifacts, and the verdict it recorded. */
-function Side({ side }: { side: RoundSide }) {
+/**
+ * One side of the comparison: its round, the verdict it recorded, and its
+ * reports. Each report is named by the task its header names, with the file as
+ * the Address after it (#423) — except where that task is already the panel's
+ * own label, a few pixels left, and the address follows the round instead.
+ */
+function Side({ side, task, tasks }: { side: RoundSide; task: string | null; tasks: Map<string, string | null> }) {
   return (
-    <span className="inline-flex items-baseline gap-1.5" data-round-side={side.round}>
+    <span className="inline-flex flex-wrap items-baseline gap-x-1.5" data-round-side={side.round}>
       <span className="font-ui text-[11px] text-muted">round {side.round}</span>
       <VerdictChip verdicts={[side.verdict]} compact />
-      {/* #411 step 3: the side names its reports by kind; the files follow. */}
-      {side.paths.length > 0 && <Address size="xs">{side.paths.join(' · ')}</Address>}
+      {side.paths.map((path) => {
+        const named = tasks.get(path) ?? null
+        return (
+          <span key={path} className="inline-flex items-baseline gap-1.5">
+            {named !== null && named !== task && isName(named) && <Name size="xs">{named}</Name>}
+            <Address size="xs">{path}</Address>
+          </span>
+        )
+      })}
     </span>
   )
 }
@@ -145,12 +162,14 @@ function Group({
   items,
   empty,
   kind,
+  tasks,
 }: {
   label: string
   hint?: string
   items: RoundFinding[]
   empty?: string
   kind: string
+  tasks: Map<string, string | null>
 }) {
   return (
     <div className="mt-2.5" data-round-group={kind}>
@@ -166,7 +185,7 @@ function Group({
             <FindingCard
               key={item.finding.id}
               finding={item.finding}
-              source={item.path}
+              source={{ task: tasks.get(item.path) ?? null, path: item.path }}
               note={
                 <span className="contents">
                   <span

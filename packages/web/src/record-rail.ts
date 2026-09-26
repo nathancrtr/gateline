@@ -67,14 +67,6 @@ export function orderArtifacts(refs: readonly ArtifactRef[]): ArtifactRef[] {
   return [...refs].sort((a, b) => artifactRank(a) - artifactRank(b) || a.path.localeCompare(b.path))
 }
 
-/**
- * @deprecated A path test, kept only because `pages/run/decide-card.tsx`'s
- * packet chip row still reads bare paths. It goes in #411 step 3 (packet chips
- * become reference rows), which moves that row onto `InboxItem.packetRefs`.
- * New code reads `ArtifactRef.kind`.
- */
-export const isReviewPath = (path: string) => /^review-\d+.*\.md$/.test(path)
-
 /** The kinds the framework fixes one per run, and what each one's rail entry says. */
 const KIND_LABELS: Partial<Record<ArtifactKind, string>> = {
   'intent-brief': 'Brief',

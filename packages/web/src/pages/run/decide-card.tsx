@@ -1,10 +1,10 @@
 // The Decide surface's one card shape, and the small pure helpers that decide
-// what it renders. Split out of pages/run.tsx (#413) as a pure move — no
-// behaviour, markup, or string changed; pages/run.tsx re-exports every symbol
-// below so no import path a test already uses had to change.
+// what it renders. Split out of pages/run.tsx (#413); pages/run.tsx
+// re-exports the helpers it already exported, so no import path a test uses
+// had to change. The packet's reference rows (#423) live here too.
 import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { formatAge, type InboxItem, type RunDetailResponse } from '../../api.ts'
+import { type ArtifactRef, formatAge, type InboxItem, type ReviewReport, type RunDetailResponse } from '../../api.ts'
 import { AgeBadge, Imp, KindChip } from '../../components/chips.tsx'
 import { BOUNCED_INSTRUCTION, DecidePanel, INFLIGHT_INSTRUCTION, ROUND_CAP_INSTRUCTION } from '../../components/decide.tsx'
 import { EscalationPacket } from '../../components/escalation.tsx'
@@ -14,8 +14,8 @@ import { G1Packet } from '../../components/g1.tsx'
 import { G3Packet } from '../../components/g3.tsx'
 import { CitedText } from '../../components/lexicon.tsx'
 import { RoundCapPanel } from '../../components/rounds.tsx'
+import { Address, artifactHref, isName, KindLabel, Name, QuotedWord } from '../../components/vocabulary.tsx'
 import { gateCardState } from '../../gate-state.ts'
-import { isReviewPath } from '../../record-rail.ts'
 import type { KeyHint } from '../../use-keys.ts'
 
 /** Bare grammar — words that carry no fact of their own, so a sentence built
@@ -99,6 +99,146 @@ export function burdenPillNeeded(detail: string, burden: string): boolean {
   return !detail.includes(burden)
 }
 
+/**
+ * The artifacts a decide card offers, as references (#423): the packet, then
+ * any artifact the card's own prose names that the packet does not.
+ *
+ * Built from `InboxItem.packetRefs` and `RunDetailResponse.artifactRefs`, the
+ * refs core derived (#415) — nothing here reads a path to learn a kind. A
+ * payload from a server older than the refs carries neither, and the card
+ * then offers no rows rather than guessing them back from paths.
+ */
+export function packetReferences(item: InboxItem, detail: RunDetailResponse): ArtifactRef[] {
+  const packet = (item as { packetRefs?: ArtifactRef[] }).packetRefs
+  if (!packet) return []
+  const all = (detail as { artifactRefs?: ArtifactRef[] }).artifactRefs ?? []
+  const prose = `${item.title} ${item.detail}`
+  // The ledger is offered even though the rail lists it last: it is where the
+  // decision grammar lives, and a paused or staged card has nothing else.
+  const offered = packet.filter((r) => detail.artifacts.includes(r.path) || r.kind === 'state')
+  const mentioned = all.filter((r) => !item.packet.includes(r.path) && prose.includes(r.path))
+  return [...offered, ...mentioned]
+}
+
+/** The kind, in the framework's words: the contract's own name, sentence case. */
+const kindLabel = (ref: ArtifactRef): string | null =>
+  ref.contractName === null ? null : ref.contractName.charAt(0).toUpperCase() + ref.contractName.slice(1)
+
+/**
+ * The id the record uses for the artifact, or null for a kind the framework
+ * fixes one per run (the kind label is then the whole name). A work item is
+ * its id; a review is the task its header names, with its round where the
+ * packet holds more than one review of that task. A review whose header is
+ * unreadable goes by its number. `G<n>` is never a name for a spec.
+ */
+export function referenceName(ref: ArtifactRef, among: readonly ArtifactRef[]): { name: string; round: number | null } | null {
+  if (ref.kind === 'review-report') {
+    const task = ref.reviewOf?.task ?? null
+    if (task === null || !isName(task)) return ref.id !== null && isName(ref.id) ? { name: ref.id, round: null } : null
+    const shared = among.filter((r) => r.kind === 'review-report' && r.reviewOf?.task === task).length > 1
+    return { name: task, round: shared ? (ref.reviewOf?.round ?? null) : null }
+  }
+  if (ref.id !== null && isName(ref.id)) return { name: ref.id, round: null }
+  return null
+}
+
+/**
+ * What a review concluded, as the chip carried it (#215): its verdict in force,
+ * or the arc from its first round's to its last when the two differ. Only a
+ * review has one; the words are the report's own.
+ */
+export function referenceVerdicts(ref: ArtifactRef, reports: readonly ReviewReport[] | undefined): string[] {
+  if (ref.kind !== 'review-report') return []
+  const report = reports?.find((r) => r.path === ref.path)
+  const verdicts = (report?.rounds ?? []).map((r) => r.verdict).filter((v): v is NonNullable<typeof v> => v !== null)
+  if (verdicts.length === 0) return []
+  const first = verdicts[0]!
+  const last = verdicts[verdicts.length - 1]!
+  return verdicts.length > 1 && first !== last ? [first, last] : [last]
+}
+
+/**
+ * The packet's artifacts as reference rows (#423, docs/SEAM.md §2, §5): the
+ * kind, the record's name for it, the verdict it states, and its address.
+ *
+ * This was a row of `imp` chips printing the path — `tasks/06-pages-workflow.yaml`,
+ * `review-04.md` — in the border that belongs to a quoted word. A filename is
+ * where the bytes live, not what the reader is deciding on, so the row now
+ * leads with what the framework knows the file to be and the id the record
+ * uses for it. The path is still one gesture away: it follows the name, muted,
+ * shown on hover or focus of the row (always, below `sm` or with no hover),
+ * and it is in the DOM the whole time, so copying the row or reading it with a
+ * screen reader gets the address too. The row is the link into the Record
+ * reader, as the chip was.
+ */
+export function ReferenceRows({
+  refs,
+  reports,
+  src,
+  slug,
+}: {
+  refs: readonly ArtifactRef[]
+  reports: readonly ReviewReport[] | undefined
+  src: string
+  slug: string
+}) {
+  if (refs.length === 0) return null
+  return (
+    <ul className="flex min-w-0 flex-col" data-packet-refs>
+      {refs.map((ref) => {
+        const kind = kindLabel(ref)
+        const named = referenceName(ref, refs)
+        const verdicts = referenceVerdicts(ref, reports)
+        // An artifact the framework has no kind for has only its address; it
+        // is shown in the open, after a UI word, rather than on hover. Below
+        // `sm` every address is in the open: a phone has no hover, and there
+        // the address wraps to a line of its own, so hiding it left a blank
+        // line under the row (measured at 390px).
+        const addressOnly = kind === null && named === null
+        return (
+          <li key={ref.path}>
+            <Link
+              to={artifactHref(src, slug, ref.path)}
+              className="group flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 px-1.5 py-1 hover:bg-inset focus-visible:bg-inset"
+              data-ref-row={ref.path}
+              data-ref-kind={ref.kind}
+            >
+              <KindLabel className="shrink-0 sm:w-[8.5rem]">{kind ?? 'File'}</KindLabel>
+              {named && (
+                <Name lead className="shrink-0">
+                  {named.name}
+                </Name>
+              )}
+              {named?.round != null && <span className="shrink-0 font-ui text-[11px] text-muted">round {named.round}</span>}
+              {verdicts.length > 0 && (
+                <span className="inline-flex shrink-0 items-baseline gap-1" data-ref-verdict={verdicts.join(' → ')}>
+                  <QuotedWord>{verdicts[0]!}</QuotedWord>
+                  {verdicts[1] && (
+                    <>
+                      <span className="font-ui text-[11px] text-faint">→</span>
+                      <QuotedWord>{verdicts[1]}</QuotedWord>
+                    </>
+                  )}
+                </span>
+              )}
+              <span
+                className={
+                  addressOnly
+                    ? 'min-w-0 [overflow-wrap:anywhere]'
+                    : 'min-w-0 opacity-0 [overflow-wrap:anywhere] group-hover:opacity-100 group-focus-visible:opacity-100 max-sm:opacity-100 [@media(hover:none)]:opacity-100'
+                }
+                data-ref-address
+              >
+                <Address size="xs">{ref.path}</Address>
+              </span>
+            </Link>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
 /** A pending decision, rendered as a stakes-varied card. Candidate A:
  *  4px accent left-rail + tinted ground + lifted shadow. Reviewable cards
  *  get accent-tint ground, bounced cards get bad-bg — no animation, no glow. */
@@ -146,34 +286,12 @@ export function NeedsYouCard({
   // where do I look" without a trip to the tabs.
   const reports = useReviews(item.source, item.slug)
   const prose = `${item.title} ${item.detail}`
-  const mentioned = detail.artifacts.filter((p) => !item.packet.includes(p) && prose.includes(p))
-  const chipPaths = [...item.packet.filter((p) => detail.artifacts.includes(p) || p === 'state.yaml'), ...mentioned]
   const mentionedTask = detail.state?.tasks.find((t) => prose.includes(t.id)) ?? null
-  // A packet chip that names a review carries what that review concluded
-  // (#215) — the G2 approver should not have to open three files to learn
-  // that one of them said request-changes.
-  const chips =
-    chipPaths.length > 0
-      ? chipPaths.map((p) => {
-          const report = isReviewPath(p) ? reports?.find((r) => r.path === p) : undefined
-          const verdicts = (report?.rounds ?? []).map((r) => r.verdict).filter((v): v is NonNullable<typeof v> => v !== null)
-          const verdictArc =
-            verdicts.length === 0 ? null : verdicts.length > 1 && verdicts[0] !== verdicts[verdicts.length - 1] ? `${verdicts[0]} → ${verdicts[verdicts.length - 1]}` : verdicts[verdicts.length - 1]
-          return (
-            <Link
-              key={p}
-              to={`/runs/${item.source}/${item.slug}?tab=record&artifact=${encodeURIComponent(p)}`}
-              className="imp hover:bg-inset"
-            >
-              {p}
-              {/* The verdict rides inside the same impression as the name, in
-                  the name-plus-code grammar: a chip nested in a chip stood
-                  4px taller than its neighbours (measured, 2026-09-04). */}
-              {verdictArc && <span className="text-muted"> · {verdictArc}</span>}
-            </Link>
-          )
-        })
-      : null
+  // The packet as reference rows (#423). A chip that named a review carried
+  // what that review concluded (#215), and the row keeps it: the G2 approver
+  // should not have to open three files to learn that one said request-changes.
+  const refs = packetReferences(item, detail)
+  const chips = refs.length > 0 ? <ReferenceRows refs={refs} reports={reports} src={item.source} slug={item.slug} /> : null
   // Three chromes for three states (#159). An in-flight card is neither the
   // lifted accent of something to decide nor the red of something broken: it is
   // a card at rest, waiting on a machine, and its eyebrow says so rather than
@@ -274,8 +392,8 @@ export function NeedsYouCard({
             malformed is exactly the job in that state. */}
         {item.kind === 'gate' && item.gate === 'G3' && <G3Packet src={item.source} slug={item.slug} />}
         {/* A round cap asks what did not converge, which is a question about two
-            rounds at once (#257). The chip list below still offers every report;
-            this is the comparison the chips could not be. */}
+            rounds at once (#257). The reference rows below still offer every
+            report; this is the comparison a list of files could not be. */}
         {item.kind === 'round-cap' && <RoundCapPanel src={item.source} slug={item.slug} task={mentionedTask?.id ?? null} />}
         {/* An escalation a role raised is a decision the role wrote down (#407):
             its Escalation section, verbatim, and the routes as it sees them,
@@ -283,7 +401,7 @@ export function NeedsYouCard({
             engine-originated one renders nothing here — its reason line above
             is the whole packet. */}
         {item.kind === 'escalation' && item.escalationIndex !== null && (
-          <EscalationPacket src={item.source} slug={item.slug} index={item.escalationIndex} />
+          <EscalationPacket src={item.source} slug={item.slug} index={item.escalationIndex} refs={item.packetRefs} />
         )}
         <DecidePanel
           item={item}

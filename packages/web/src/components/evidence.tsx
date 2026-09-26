@@ -10,7 +10,7 @@ import { DIFF_SELECTION } from '../landing.ts'
 import { boundaryLine, fileLabel } from '../surface.ts'
 import { FindingCard, Inline, PACKET_FRAME, PACKET_LABEL, PacketSweep, useReviews, VerdictChip } from './findings.tsx'
 import { useLexicon } from './lexicon.tsx'
-import { Address, artifactHref, Name, Withheld } from './vocabulary.tsx'
+import { Address, artifactHref, isName, KindLabel, Name, Withheld } from './vocabulary.tsx'
 
 // The two artifacts this surface reads arrive on the rollup as ArtifactRefs
 // (#415): `rollup.spec` and `rollup.verification`.
@@ -199,6 +199,11 @@ function EvidenceRow({ c, src, slug }: { c: CriterionEvidence; src: string; slug
 
 const SEVERITY_ORDER: Record<ReviewFinding['severity'], number> = { blocking: 0, major: 1, minor: 2, unknown: 3 }
 
+/** The task each review names in its own header, by path — how a finding's source is named (#423). */
+function reviewTasks(reports: ReviewReport[] | undefined): Map<string, string | null> {
+  return new Map((reports ?? []).map((r) => [r.path, r.task]))
+}
+
 /** Index the typed reports so a criterion's finding refs resolve to findings. */
 function findingIndex(reports: ReviewReport[] | undefined): Map<string, ReviewFinding> {
   const m = new Map<string, ReviewFinding>()
@@ -317,6 +322,7 @@ function CriterionPacket({
   src,
   slug,
   findings,
+  tasks,
 }: {
   c: CriterionEvidence
   /** The rollup the criterion is from: its `spec` and `verification` refs, and whether a report exists. */
@@ -324,6 +330,7 @@ function CriterionPacket({
   src: string
   slug: string
   findings: Map<string, ReviewFinding>
+  tasks: Map<string, string | null>
 }) {
   const { hasVerification } = rollup
   const lex = useLexicon()
@@ -384,7 +391,11 @@ function CriterionPacket({
         <ul className="mt-1.5 flex flex-col gap-1.5">
           {raised.map(({ ref, finding }) =>
             finding ? (
-              <FindingCard key={`${ref.artifact}#${ref.id}`} finding={finding} source={ref.artifact} />
+              <FindingCard
+                key={`${ref.artifact}#${ref.id}`}
+                finding={finding}
+                source={{ task: tasks.get(ref.artifact) ?? null, path: ref.artifact }}
+              />
             ) : (
               <li key={`${ref.artifact}#${ref.id}`} className="font-mono text-[11.5px] text-muted">
                 {/* #411 step 3: named by the report's kind and the finding's
@@ -412,7 +423,7 @@ function UnattributedFindings({
   slug: string
 }) {
   const loose = reports.flatMap((r) =>
-    r.findings.filter((f) => !claimed.has(`${r.path}#${f.id}`)).map((f) => ({ path: r.path, finding: f })),
+    r.findings.filter((f) => !claimed.has(`${r.path}#${f.id}`)).map((f) => ({ path: r.path, task: r.task, finding: f })),
   )
   if (loose.length === 0) return null
   loose.sort(
@@ -430,8 +441,8 @@ function UnattributedFindings({
         </Link>
       </p>
       <ul className="mt-1.5 flex flex-col gap-1.5">
-        {loose.map(({ path, finding }) => (
-          <FindingCard key={`${path}#${finding.id}`} finding={finding} source={path} />
+        {loose.map(({ path, task, finding }) => (
+          <FindingCard key={`${path}#${finding.id}`} finding={finding} source={{ task, path }} />
         ))}
       </ul>
     </div>
@@ -445,12 +456,13 @@ function ReportsPacket({ reports, src, slug }: { reports: ReviewReport[]; src: s
       {reports.map((r) => (
         <li key={r.path} className="border border-line bg-surface px-3 py-2.5" data-report={r.path}>
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            {/* #411 step 3: an Address never leads a row. The report is named
-                by its kind and task, and the path follows as provenance. */}
-            <Address size="md" to={artifactHref(src, slug, r.path)}>
+            {/* An Address never leads a row (#423): the report is named by
+                the task its header names, and the path follows as provenance.
+                A header that names no task leads with the kind instead. */}
+            {r.task && isName(r.task) ? <Name lead>{r.task}</Name> : <KindLabel>Review report</KindLabel>}
+            <Address size="sm" to={artifactHref(src, slug, r.path)}>
               {r.path}
             </Address>
-            {r.task && <span className="font-mono text-[11px] text-faint">{r.task}</span>}
             <VerdictChip verdicts={r.rounds.map((x) => x.verdict)} />
             <span className="ml-auto font-ui text-[11px] text-faint">
               {r.findings.length === 0 ? 'no findings raised' : `${r.findings.length} finding${r.findings.length === 1 ? '' : 's'}`}
@@ -499,6 +511,7 @@ export function G2Packet({ src, slug, profile }: { src: string; slug: string; pr
 
   const rollup: EvidenceRollup = data
   const findings = findingIndex(reports)
+  const tasks = reviewTasks(reports)
   const claimed = new Set(rollup.criteria.flatMap((c) => c.findings.map((f) => `${f.artifact}#${f.id}`)))
   const defined = rollup.criteria.filter((c) => c.defined)
   const unknown = rollup.criteria.filter((c) => !c.defined)
@@ -534,7 +547,7 @@ export function G2Packet({ src, slug, profile }: { src: string; slug: string; pr
       {!rollup.withheld && ordered.length > 0 && (
         <ul className="mt-2 flex flex-col gap-2">
           {ordered.map((c) => (
-            <CriterionPacket key={c.id} c={c} rollup={rollup} src={src} slug={slug} findings={findings} />
+            <CriterionPacket key={c.id} c={c} rollup={rollup} src={src} slug={slug} findings={findings} tasks={tasks} />
           ))}
         </ul>
       )}

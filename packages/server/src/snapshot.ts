@@ -271,20 +271,31 @@ export async function writeSnapshot(
 // Direct invocation: node src/snapshot.ts --repo <path> --out <dir> [--repo-id gateline] [--web-dist <dir>]
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2)
-  let repo: string | undefined
-  let out: string | undefined
-  let repoId = 'gateline'
-  let webDist: string | undefined
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i]!
-    if (a === '--repo') repo = args[++i]
-    else if (a === '--out') out = args[++i]
-    else if (a === '--repo-id') repoId = args[++i]!
-    else if (a === '--web-dist') webDist = args[++i]
-  }
+  const usage = 'usage: node src/snapshot.ts --repo <path> --out <dir> [--repo-id gateline] [--web-dist <dir>]'
 
   const run = async () => {
-    if (!repo || !out) throw new Error('usage: node src/snapshot.ts --repo <path> --out <dir> [--repo-id gateline] [--web-dist <dir>]')
+    let repo: string | undefined
+    let out: string | undefined
+    let repoId = 'gateline'
+    let webDist: string | undefined
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i]!
+      // A flag with no following argument (a trailing `--repo-id`, say) must
+      // fail here, not construct a source with `id === undefined` and fail a
+      // minute later on an unrelated route (review-02 F3) — same for a flag
+      // this parser has never heard of.
+      const value = (): string => {
+        const v = args[++i]
+        if (v === undefined) throw new Error(usage)
+        return v
+      }
+      if (a === '--repo') repo = value()
+      else if (a === '--out') out = value()
+      else if (a === '--repo-id') repoId = value()
+      else if (a === '--web-dist') webDist = value()
+      else throw new Error(usage)
+    }
+    if (!repo || !out) throw new Error(usage)
     const { sources, fixtureDir, real } = await buildDemoSources({ repo, repoId })
     try {
       const app = createApp({ sources })

@@ -117,3 +117,77 @@ notes: |
   correctly excluded the rest with reasons (phase spec/release, no
   state.yaml), wrote 354 routes, and cleaned up its generated fixture dir on
   exit.
+
+  round 2 (implementer): addressed review-02 (request-changes). All six
+  findings fixed, none rebutted.
+
+  F1 (blocking, phase filter unguarded): fixed in snapshot.test.ts's
+  beforeAll — after generateFixtureRepo() builds the stand-in repo, commit
+  four more run directories straight onto its own main via execFileSync git
+  (same idiom as app.test.ts/merged-runs.test.ts): a second schema-valid
+  `done` run (`aaa-second-done`, done-merged's own state.yaml text with the
+  slug swapped, sorting before done-merged to exercise the sort too), a
+  schema-valid run at another phase (`zzz-wrong-phase`, phase: release), a
+  `state.yaml` that isn't valid YAML (`bad-yaml-state`), and a run directory
+  with no `state.yaml` at all (`no-state-run`). New assertions:
+  `listRuns()` = `['aaa-second-done', 'done-merged']` in that order, and
+  `survey().excluded` names all three exclusions with their exact reasons
+  (`phase release`, `state.yaml unreadable: ...` via stringMatching, `no
+  state.yaml`) and nothing else. Updated the `runs.json` exact-set assertion
+  to include both done slugs. Hand-verified the kill: reproduced the
+  reviewer's mutant (deleting the phase check, admitting every parseable
+  state.yaml) on a scratch copy of snapshot.ts — 3 tests failed (the two
+  DoneOnDefaultBranchSource tests plus the runs.json exact-set test), all
+  for the reason the mutant should trip; reverted.
+
+  F2 (route/shell sets untested against the plan): added a
+  "route/shell constants match the plan's contract" describe block with one
+  `toEqual` per exported constant against the plan's own literal list (not
+  against itself). Hand-verified: dropping `/api/metrics`, `/diff`, and
+  `metrics` (all three at once, then individually) each fails exactly the
+  matching new test and nothing else; reverted.
+
+  F3 (dangling flag values / unknown flags silently accepted): moved argv
+  parsing inside the `run()` async function so a thrown parse error reaches
+  the same `.catch` → stderr → exit(1) path as the existing usage check;
+  each flag now reads its value through a helper that throws the usage
+  message when the next arg is `undefined` (a trailing `--repo-id` or
+  `--web-dist`), and an unrecognised flag now throws the same usage message
+  instead of being ignored. Verified by hand: `--repo . --out <dir>
+  --repo-id` (no value), `--web-dist` (no value), and `--bogus` all now
+  print the usage line to stderr and exit 1, instead of failing later with a
+  misleading route error or silently doing nothing; a full valid run against
+  this repo still produces the same 354-route, 7-done-run output as round 1.
+  No new dependency, no CLI-level unit test added (the guard only runs under
+  direct invocation; exercising it needs a subprocess spawn, which felt like
+  more machinery than a minor finding warranted next to the manual
+  verification above).
+
+  F4 (per-run route assertion checks existence only): added `JSON.parse` +
+  truthiness check inside the per-run-route loop, matching the global-route
+  and artifact loops. Hand-verified: a mutant writing a non-JSON body for
+  every suffix but the detail route itself fails exactly this test with a
+  JSON.parse SyntaxError; reverted.
+
+  F5 (encoded-request/decoded-filename split unexercised, PLAUSIBLE):
+  fixed rather than rebutted — in the same beforeAll commit as F1, added a
+  real artifact under `done-merged` named `notes with space #1.md` (a space
+  and a `#`, both bytes `encodeURIComponent` rewrites, unlike every artifact
+  name `generateFixtureRepo()` ships otherwise). No new test code was
+  needed: the existing "matching the live route body" test already loops
+  every artifact in `done-merged`'s detail response, asserting the file
+  lands at the literal decoded path and its body matches the encoded live
+  route — it just had nothing that discriminated the split before. Hand-
+  verified: the reviewer's exact mutant (`fileRoute` built from `encoded`
+  instead of `path`) fails that test's `existsSync` assertion for the new
+  artifact; reverted.
+
+  F6 (out2/fail mkdtemp dirs never removed): added a module-level
+  `extraTempDirs` array; both ad-hoc `mkdtempSync` calls now push into it,
+  and `afterAll` sweeps it alongside the shared `outDir`/`webDist`/repo dirs.
+
+  Verification (packages/): `npm run typecheck` clean, `npm run lint`
+  (biome check) clean on 231 files, `npx vitest run
+  server/test/snapshot.test.ts` alone: 19/19 passed (~72s, within the
+  file's own 180s beforeAll timeout). Full `npm test` run separately;
+  see the report for its result.

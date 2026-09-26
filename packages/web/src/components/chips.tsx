@@ -23,6 +23,7 @@
 import { Fragment, useEffect, useRef } from 'react'
 import { type ClosureRecord, type GateId, type InboxItem, PROFILE_GATES, type Profile, type RunSummary } from '../api.ts'
 import { gateCardState } from '../gate-state.ts'
+import { usd } from '../money.ts'
 import {
   type GateCell,
   gateNote,
@@ -515,13 +516,6 @@ export function ValidationBadge({ ok, missing }: { ok: boolean; missing?: string
   )
 }
 
-// Whole dollars read as whole dollars; a fractional amount keeps its cents.
-// A meter that always rounded to whole dollars is the label that made a
-// staged $18.50 ceiling read "$19" — a second, smaller instance of the same
-// contradiction #443 is about, between the header and the record's own
-// number (#443 follow-up).
-const label = (n: number) => (Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`)
-
 export function BudgetMeter({ limit, spent }: { limit: number | null; spent: number | null }) {
   if (limit === null) return <span className="text-xs italic text-muted">no budget</span>
   const used = spent ?? 0
@@ -534,12 +528,12 @@ export function BudgetMeter({ limit, spent }: { limit: number | null; spent: num
   // stated one line away. The bar at 0% is honestly empty, not a floored
   // tick (that floor was removed in #313/#285), so no special case is needed.
   return (
-    <span className="inline-flex flex-col items-end gap-[3px]" title={`$${used.toFixed(2)} of $${limit.toFixed(2)}`}>
+    <span className="inline-flex flex-col items-end gap-[3px]" title={`${usd(used, { exact: true })} of ${usd(limit, { exact: true })}`}>
       <span className="h-[7px] w-[90px] overflow-hidden border border-line">
         <span className={`block h-full ${over ? 'bg-mark' : 'bg-ink'}`} style={{ width: `${pct}%` }} />
       </span>
       <span className={`font-ui text-[11.5px] tabular-nums ${over ? 'font-semibold text-bad' : 'text-muted'}`}>
-        {label(used)} / {label(limit)}
+        {usd(used)} / {usd(limit)}
         {over ? ' · over' : ''}
       </span>
     </span>

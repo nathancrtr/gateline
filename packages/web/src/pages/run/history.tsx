@@ -10,6 +10,7 @@ import { Markdown } from '../../components/markdown.tsx'
 import { artifactHref, Fold, isName, KindLabel, Name, QuotedPassage, QuotedWord } from '../../components/vocabulary.tsx'
 import { decideTargetIndex } from '../../landing.ts'
 import { collapseEngineSpans } from '../../ledger-spans.ts'
+import { usd } from '../../money.ts'
 import { PageStatus } from '../inbox.tsx'
 import { burdenPillNeeded } from './decide-card.tsx'
 
@@ -319,7 +320,7 @@ export function HistoryTab({
                   title={expanded ? 'fold these rows' : 'show every row'}
                 >
                   engine · {r.count} actions ·{' '}
-                  {r.verbs.map(([verb, n]) => `${n} ${verb}${verb === 'metered' && r.meteredUsd !== null ? ` ($${r.meteredUsd.toFixed(2)})` : ''}`).join(' · ')}
+                  {r.verbs.map(([verb, n]) => `${n} ${verb}${verb === 'metered' && r.meteredUsd !== null ? ` (${usd(r.meteredUsd)})` : ''}`).join(' · ')}
                 </button>
                 {r.entered.map((phase, k) => (
                   // biome-ignore lint/suspicious/noArrayIndexKey: a bounce cycle can revisit the same phase, so the name isn't unique; this is a fixed sequence from committed history.

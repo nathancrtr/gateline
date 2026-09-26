@@ -16,6 +16,7 @@ import {
   type PausedFact,
   type Profile,
 } from '../api.ts'
+import { usd } from '../money.ts'
 import { type KeyHint, useKeys } from '../use-keys.ts'
 import { KeyHints } from './chips.tsx'
 
@@ -495,7 +496,7 @@ export function DecidePanel({
             <b className="text-ink">{item.slug}</b> stopped because its next dispatch would exceed{' '}
             {item.costLimitUsd != null ? (
               <>
-                <code className="font-mono">cost_limit_usd</code> ${item.costLimitUsd}
+                <code className="font-mono">cost_limit_usd</code> {usd(item.costLimitUsd)}
               </>
             ) : (
               <>
@@ -519,12 +520,12 @@ export function DecidePanel({
               className="input-well w-32 px-[11px] py-[7px] font-mono text-sm tabular-nums"
             />
             {item.costLimitUsd != null && !limitRaised && costLimit !== '' && (
-              <span className="text-xs text-bad">must be above ${item.costLimitUsd}</span>
+              <span className="text-xs text-bad">must be above {usd(item.costLimitUsd)}</span>
             )}
           </label>
           <div className="flex gap-2">
             <Button primary onClick={submitResumeWithLimit} disabled={!limitRaised || mutation.isPending} data-decide="resume-confirm">
-              {mutation.isPending ? 'Committing…' : `Resume ${item.slug} at $${Number.isFinite(parsedLimit) ? parsedLimit : '…'}`}
+              {mutation.isPending ? 'Committing…' : `Resume ${item.slug} at ${Number.isFinite(parsedLimit) ? usd(parsedLimit) : '…'}`}
             </Button>
             <Button onClick={() => setMode('idle')}>Cancel</Button>
           </div>

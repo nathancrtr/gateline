@@ -36,8 +36,9 @@ import {
   QuotedWord,
 } from '../../components/vocabulary.tsx'
 import { gateCardState } from '../../gate-state.ts'
+import { usd } from '../../money.ts'
 import type { KeyHint } from '../../use-keys.ts'
-import { aboutWords, inboxTitle, NameOrNothing, predatesFacts, usd } from '../inbox.tsx'
+import { aboutWords, inboxTitle, NameOrNothing, predatesFacts } from '../inbox.tsx'
 import { FieldViewBody } from './record.tsx'
 
 /**

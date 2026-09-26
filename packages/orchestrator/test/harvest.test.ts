@@ -1,11 +1,12 @@
 // #182: a shell-less role (analyst, architect) writes its artifact into the
 // dispatch checkout but has no shell to commit it with — left uncommitted,
 // the next tick's D6 sees no artifact at the branch tip and redispatches
-// forever, and when the last in-flight job for the run settles,
-// removeRunCheckout force-removes the worktree, destroying the work. The
-// engine's harvest-commit (launch(), non-isolated path) is the fix: it
-// scoops up exactly this role's own outputs and commits them under the bot
-// identity before the checkout can be torn down.
+// forever, and the dispatch worktree is force-removed when the job settles,
+// destroying the work. The harvest-commit is the fix: the fold scoops up
+// exactly this role's own outputs (`harvestPathspecs`) and commits them
+// under the bot identity before the worktree is torn down (#406 moved the
+// harvest from a shared run checkout into the fold of each job's private
+// worktree; what it takes, and what it leaves, is unchanged).
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { LocalGitSource } from '@gateline/core'
@@ -78,13 +79,13 @@ describe('engine harvest-commit (#182)', () => {
     }
   })
 
-  it('scopes the harvest to the role\'s own artifact, leaving a stray peer file uncommitted', async () => {
+  it('scopes the harvest to the role\'s own artifact, leaving a stray file behind', async () => {
     const { dir } = makeToyRepo()
     markAnalystShellLess(dir)
     const dispatcher = new FakeDispatcher((req) => {
       writeFileSync(join(req.cwd, 'runs/toy/spec.md'), SPEC)
-      // A stray file from an (imagined) concurrent reviewer sharing this
-      // same checkout — the harvest must never sweep it in.
+      // A stray file the analyst produced outside its own artifact list —
+      // the harvest must never sweep it in.
       writeFileSync(join(req.cwd, 'runs/toy/review-01.md'), '# stray\n')
       return {}
     })

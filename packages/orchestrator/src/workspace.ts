@@ -1,8 +1,10 @@
-// Run checkouts for dispatched agents. Agents work in a real checkout of the
-// run branch; the orchestrator keeps those checkouts in per-run git worktrees
-// under the OS temp dir — host-specific ephemera, like job handles (§4.4):
-// losing them costs a re-checkout, never state, because agents commit to the
-// run branch and git is the only store.
+// Checkouts for dispatched agents. Every local dispatch works in its own git
+// worktree on a private branch off the run tip (§5.3, #406), and the
+// orchestrator folds it back into the run branch when the job settles. The
+// run branch itself is checked out only for a sweep (`schedule.ts`). All of
+// them live under the OS temp dir — host-specific ephemera, like job handles
+// (§4.4): losing them costs a re-checkout, never state, because everything
+// that landed is on a branch and git is the only store.
 import { createHash } from 'node:crypto'
 import { access } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -11,8 +13,8 @@ import type { Identity } from '@gateline/core/record'
 import { Git } from '@gateline/core/sources'
 import { type SeedOptions, seedDependencies } from './deps.ts'
 
-// Parallel dispatches for one run share its checkout; single-flight the
-// worktree creation so concurrent jobs don't race `git worktree add`.
+// A run checkout is shared by whoever asks for it (sweeps); single-flight
+// the worktree creation so concurrent callers don't race `git worktree add`.
 const inFlight = new Map<string, Promise<string>>()
 
 /** The marker every orchestrator-owned worktree path carries; anything else holding a run branch is someone's. */
@@ -116,11 +118,15 @@ export async function removeRunCheckout(repoDir: string, branch: string): Promis
 }
 
 /**
- * Per-task isolation (ORCHESTRATOR.md §5.3, the wordfreq retro fix: task 03
- * observed task 02's mid-flight broken state in the shared tree). Each
- * parallel implementer works its task on a private branch in a private
- * worktree, both derived from the run branch tip; the orchestrator folds
- * results back into the run branch serially with `foldTaskBranch`.
+ * Per-dispatch isolation (ORCHESTRATOR.md §5.3). It began as per-task
+ * isolation for parallel implementers — the wordfreq retro fix: task 03
+ * observed task 02's mid-flight broken state in the shared tree — and #406
+ * extended it to every local dispatch, after two reviewers of one run were
+ * found applying in-place mutants to the same shared checkout. Each job works
+ * on a private branch in a private worktree, both derived from the run branch
+ * tip; the orchestrator folds results back into the run branch serially with
+ * `foldTaskBranch`. Nothing a dispatch does to its working tree is visible to
+ * any other, and nothing lands on the run branch except through a fold.
  */
 export interface TaskCheckout {
   path: string
@@ -129,9 +135,28 @@ export interface TaskCheckout {
 
 const taskBranchName = (runBranch: string, task: string) => `${runBranch}--task/${task}`
 
-export async function ensureTaskCheckout(repoDir: string, runBranch: string, task: string, seed: SeedOptions = {}): Promise<TaskCheckout> {
+/** The task-branch namespaces a fold may leave behind and a reap must cover. */
+const DISPATCH_BRANCH_PREFIXES = ['--task/', '--job/'] as const
+
+/**
+ * The private branch a dispatch works on. An implementer's task keeps the
+ * `--task/<task>` name the fold and its tests have always used; every other
+ * dispatch is named by what it is — role, task if any, round if any — under
+ * `--job/`, so two reviews of two tasks in one round, or two rounds of one
+ * review, never collide, and a leftover branch says which job left it.
+ */
+export function dispatchBranchName(runBranch: string, intent: { role: string; task: string | null; round: number | null }): string {
+  if (intent.role === 'implementer' && intent.task !== null) return taskBranchName(runBranch, intent.task)
+  const parts = [intent.role, intent.task, intent.round !== null ? `r${intent.round}` : null].filter((p): p is string => p !== null)
+  return `${runBranch}--job/${parts.join('-')}`
+}
+
+export function ensureTaskCheckout(repoDir: string, runBranch: string, task: string, seed: SeedOptions = {}): Promise<TaskCheckout> {
+  return ensureDispatchCheckout(repoDir, runBranch, taskBranchName(runBranch, task), seed)
+}
+
+export async function ensureDispatchCheckout(repoDir: string, runBranch: string, branch: string, seed: SeedOptions = {}): Promise<TaskCheckout> {
   const git = new Git(repoDir)
-  const branch = taskBranchName(runBranch, task)
   const path = worktreePath(repoDir, branch.replace(/\//g, '-'))
 
   // A leftover branch from a crashed dispatch is stale by definition — the
@@ -143,8 +168,8 @@ export async function ensureTaskCheckout(repoDir: string, runBranch: string, tas
 
   await git.run(['worktree', 'add', '-b', branch, path, runBranch])
   // A git worktree carries tracked files only, so a fresh one has no
-  // dependencies at all and the implementer's first act is a cold install
-  // (#229). Seed them instead, from the run checkout if it has them and the
+  // dependencies at all and the agent's first act is a cold install (#229).
+  // Seed them instead, from the run checkout if one exists with them and the
   // repository otherwise — a private tree either way, so the isolation the
   // worktree exists for is untouched.
   await seedDependencies(path, [worktreePath(repoDir, runBranch.replace(/\//g, '-')), repoDir], seed)
@@ -227,27 +252,34 @@ async function untrackedPaths(wtGit: Git): Promise<string[]> {
 
 /**
  * What the pre-fold harvest needs to know about the dispatch it is rescuing
- * (#184): which files the task was allowed to touch, and who to commit as.
- * Optional on `foldTaskBranch` so a caller with no task context (the tests'
- * direct fold, a future non-task fold) still folds — it simply harvests
- * nothing.
+ * (#184): which files the dispatch was allowed to touch, and who to commit
+ * as. For an implementer the surface is the task's `file_contact_surface`;
+ * for every other role it is `harvestPathspecs` — the role's own artifacts
+ * (#182), the same scope the shared-checkout harvest-commit used before #406
+ * gave those roles a worktree of their own. Optional on `foldTaskBranch` so a
+ * caller with no dispatch context (the tests' direct fold) still folds — it
+ * simply harvests nothing.
  */
 export interface TaskHarvest {
   slug: string
-  task: string
+  /** The role that was dispatched; `implementer` when absent, the shape before #406. */
+  role?: string
+  task: string | null
   round: number | null
-  /** The task's `file_contact_surface`, used verbatim as git pathspecs. */
+  /** Git pathspecs, used verbatim: a task's surface, or a role's artifact list. */
   surface: string[]
   identity: Identity
 }
 
 /**
- * Commit everything uncommitted inside the task's declared file-contact
- * surface onto the task branch, before the fold discards anything and before
- * the `finally` force-removes the worktree (#184). This is `Engine.harvest`
- * (#182) applied to the isolated path: same bot identity, same `harvested`
- * verb, same commit-message shape, and the same per-pathspec `git add -A`
- * (run "runner-agent" review-04.md round-2 F10 — one combined add is
+ * Commit everything uncommitted inside the dispatch's surface onto its
+ * branch, before the fold discards anything and before the `finally`
+ * force-removes the worktree (#184). This is the harvest-commit of #182 —
+ * the only way a shell-less role's artifact ever reaches a branch, and a
+ * backstop for a shell-ful role that did not commit — carried out where the
+ * work now lives: same bot identity, same `harvested` verb, same
+ * commit-message shape, and the same per-pathspec `git add -A` (run
+ * "runner-agent" review-04.md round-2 F10 — one combined add is
  * all-or-nothing, so a surface entry matching nothing would silently drop the
  * entries beside it). A surface entry that matches nothing is not an error:
  * entries are sometimes prose rather than paths.
@@ -268,7 +300,8 @@ async function harvestSurface(wtGit: Git, harvest: TaskHarvest): Promise<string[
   const staged = await wtGit.run(['diff', '--cached', '--name-only']).catch(() => '')
   const paths = staged.split('\n').map((l) => l.trim()).filter(Boolean)
   if (paths.length === 0) return []
-  const what = `${harvest.task}${harvest.round ? ` r${harvest.round}` : ''}`
+  const role = harvest.role ?? 'implementer'
+  const what = `${role}${harvest.task ? `(${harvest.task}${harvest.round ? ` r${harvest.round}` : ''})` : ''}`
   await wtGit.run([
     '-c',
     `user.name=${harvest.identity.name}`,
@@ -276,7 +309,7 @@ async function harvestSurface(wtGit: Git, harvest: TaskHarvest): Promise<string[
     `user.email=${harvest.identity.email}`,
     'commit',
     '-m',
-    `state(${harvest.slug}): harvested implementer(${what}) artifacts`,
+    `state(${harvest.slug}): harvested ${what} artifacts`,
   ])
   return paths
 }
@@ -392,16 +425,23 @@ export async function foldTaskBranch(
 }
 
 /**
- * Deletes task branches left behind by failed folds for a finished run (#225).
- * Retention buys the escalated human a diff to inspect; it must not accrue
- * local refs forever. A re-dispatch of the same task already reaps its own
- * branch in `ensureTaskCheckout`, so this covers the other end: a run that has
- * reached a terminal state and will dispatch nothing further.
+ * Deletes dispatch branches left behind by failed folds for a finished run
+ * (#225). Retention buys the escalated human a diff to inspect; it must not
+ * accrue local refs forever. A re-dispatch of the same job already reaps its
+ * own branch in `ensureDispatchCheckout`, so this covers the other end: a run
+ * that has reached a terminal state and will dispatch nothing further. Both
+ * namespaces are covered — the implementer's `--task/` and every other
+ * role's `--job/` (#406).
  */
 export async function reapTaskBranches(repoDir: string, runBranch: string): Promise<string[]> {
   const git = new Git(repoDir)
-  const prefix = `${runBranch}--task/`
-  const out = await git.run(['for-each-ref', '--format=%(refname:short)', `refs/heads/${prefix}*`]).catch(() => '')
+  const out = (
+    await Promise.all(
+      DISPATCH_BRANCH_PREFIXES.map((prefix) =>
+        git.run(['for-each-ref', '--format=%(refname:short)', `refs/heads/${runBranch}${prefix}*`]).catch(() => ''),
+      ),
+    )
+  ).join('\n')
   const branches = out.split('\n').map((l) => l.trim()).filter(Boolean)
   const reaped: string[] = []
   for (const branch of branches) {

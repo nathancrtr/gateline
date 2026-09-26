@@ -28,7 +28,6 @@ import { UnreadableState } from '../../components/unreadable-state.tsx'
 import {
   Address,
   artifactHref,
-  Diagnostic,
   Instruction,
   isName,
   KindLabel,
@@ -429,18 +428,10 @@ export function CardFacts({ item, now }: { item: InboxItem; now: number }) {
       // a caret under the column it failed at, which only `<pre>` keeps under
       // the character it names (#285/1). Byte for byte, labelled by producer.
       // Any other reason there is no state is the cockpit's sentence, never
-      // set under the parser's name (#435). An item from before the fact
-      // carries only `problems`.
-      if (item.unreadable) {
-        return (
-          <div className="max-w-[var(--measure)]" data-card-diagnostic>
-            <UnreadableState problem={item.unreadable} src={item.source} slug={item.slug} />
-          </div>
-        )
-      }
-      return item.problems.length > 0 ? (
+      // set under the parser's name (#435).
+      return item.unreadable ? (
         <div className="max-w-[var(--measure)]" data-card-diagnostic>
-          <Diagnostic producer="Run state parser">{item.problems.join('\n')}</Diagnostic>
+          <UnreadableState problem={item.unreadable} src={item.source} slug={item.slug} />
         </div>
       ) : null
   }

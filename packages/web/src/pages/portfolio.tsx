@@ -6,7 +6,6 @@ import { Link } from 'react-router-dom'
 import { api, formatAge, type RunSummary } from '../api.ts'
 import { BudgetMeter, GateLedger, Imp, PhaseChip } from '../components/chips.tsx'
 import { UnreadableState } from '../components/unreadable-state.tsx'
-import { Diagnostic } from '../components/vocabulary.tsx'
 import { EdgeFade, useScrollCue } from '../scroll-cue.tsx'
 import { PageStatus } from './inbox.tsx'
 
@@ -186,17 +185,12 @@ export function PortfolioPage() {
                           keeping the caret under its column; any other case in
                           the cockpit's words with the file as the Address. It
                           was once a red row line, flowed, with the caret
-                          collapsed onto the line before it. A server built
-                          before the fact sends only the kept string. */}
-                      {run.unreadable ? (
+                          collapsed onto the line before it. */}
+                      {run.unreadable && (
                         <div className="mt-1.5 max-w-[46ch]">
                           <UnreadableState problem={run.unreadable} src={run.source} slug={run.slug} />
                         </div>
-                      ) : run.malformed ? (
-                        <div className="mt-1.5 max-w-[46ch]">
-                          <Diagnostic producer="Run state parser">{run.malformed}</Diagnostic>
-                        </div>
-                      ) : null}
+                      )}
                       {run.aheadOfOrigin != null && run.aheadOfOrigin > 0 && (run.behindOrigin ?? 0) > 0 ? (
                         <Imp
                           tone="mark"

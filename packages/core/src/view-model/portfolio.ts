@@ -33,11 +33,6 @@ export interface RunSummary {
    * it was. Null when the state parsed.
    */
   unreadable: StateProblem | null
-  /**
-   * Kept for one release beside `unreadable` (#435): the read's error string,
-   * for a Gatehouse built before the fact. New code reads `unreadable`.
-   */
-  malformed: string | null
   /** Run profile (DESIGN.md §4.1); display layers filter the gate ledger through PROFILE_GATES. */
   profile: Profile
   gates: Record<'G0' | 'G1' | 'G2' | 'G3', GateLedgerCell>
@@ -76,7 +71,7 @@ export async function summarizeRun(
   ref: RunRef,
 ): Promise<{ summary: RunSummary; items: InboxItem[] }> {
   const read = await source.readState(ref)
-  const { state, error, raw } = read
+  const { state, raw } = read
   const { items } = await deriveReadiness(source, ref)
   const touched = await source.lastTouched(ref, [''])
   const aheadOfOrigin = (await source.aheadOfOrigin?.(ref)) ?? null
@@ -84,7 +79,7 @@ export async function summarizeRun(
 
   if (!state) {
     // Best-effort (#49): `escalations:` read on its own even though the rest
-    // of the file fails the contract — the run stays loudly `malformed`
+    // of the file fails the contract — the run stays loudly `unreadable`
     // below, this only keeps the one field a governance surface needs most
     // from silently reading as zero.
     const escalationsOpen = (raw ? bestEffortEscalations(raw) : []).filter((e) => !e.resolved).length
@@ -98,7 +93,6 @@ export async function summarizeRun(
         pausedReason: null,
         closure: null,
         unreadable: stateProblem(read),
-        malformed: error,
         profile: 'full',
         gates: emptyLedger(),
         tasks: { total: 0, done: 0, maxRounds: 0, roundCap: ROUND_CAP },
@@ -123,7 +117,6 @@ export async function summarizeRun(
       pausedReason: state.paused_reason,
       closure: state.closure,
       unreadable: null,
-      malformed: null,
       profile: state.profile,
       gates: {
         G0: cell(state.gates.G0),

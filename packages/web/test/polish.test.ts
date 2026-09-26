@@ -60,7 +60,14 @@ describe('1 · the malformed card says the parse error once', () => {
   // byte-equality filter that kept the two from doubling is gone with it. The
   // diagnostic renders once, whole, under the label of what produced it.
   it('renders the parser’s diagnostic once, byte for byte, in a <pre>', () => {
-    const malformed = item({ kind: 'malformed', gate: null, title: 'Malformed run state', detail: PARSE_ERROR, problems: [PARSE_ERROR] })
+    const malformed = item({
+      kind: 'malformed',
+      gate: null,
+      title: 'Malformed run state',
+      detail: PARSE_ERROR,
+      problems: [PARSE_ERROR],
+      unreadable: { kind: 'parser', diagnostic: PARSE_ERROR, ledger: ref('state.yaml') },
+    })
     const html = render(createElement(CardFacts, { item: malformed, now: 2 }))
     const escaped = PARSE_ERROR.replace(/\n$/, '')
     expect(html.split('phase: [this is').length - 1).toBe(1)

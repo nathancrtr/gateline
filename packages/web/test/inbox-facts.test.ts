@@ -177,7 +177,14 @@ const ITEMS: Record<string, InboxItem> = {
     pausedReason: 'waiting on the security review before G2',
     paused: { freeText: true, cause: null, reason: 'waiting on the security review before G2', budget: { spent: 3, limit: 25 }, handEdit: null },
   }),
-  'bad-state': item({ kind: 'malformed', reviewable: false, problems: [PARSE_ERROR], packet: ['state.yaml'], packetRefs: [ref('state.yaml')] }),
+  'bad-state': item({
+    kind: 'malformed',
+    reviewable: false,
+    problems: [PARSE_ERROR],
+    unreadable: { kind: 'parser', diagnostic: PARSE_ERROR, ledger: ref('state.yaml') },
+    packet: ['state.yaml'],
+    packetRefs: [ref('state.yaml')],
+  }),
 }
 
 function render(node: ReactNode): string {

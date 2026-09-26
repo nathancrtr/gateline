@@ -173,7 +173,7 @@ export function PhaseChip({
  * approval is offered — so it is dotted, like an in-flight gate (#159), a
  * staged run and a paused one. Never the yellow, never red on a bounce.
  */
-export function kindTone(item: InboxItem): ImpTone {
+export function kindTone(item: Pick<InboxItem, 'kind' | 'reviewable' | 'inflight'>): ImpTone {
   switch (item.kind) {
     case 'gate': {
       const state = gateCardState(item)
@@ -189,12 +189,23 @@ export function kindTone(item: InboxItem): ImpTone {
   }
 }
 
+/** The glyph an item's kind carries beside its word, where it has one. The
+ *  portfolio's needs-you mark (#452) carries the same glyph in place of the word. */
+export const KIND_GLYPH: Record<InboxItem['kind'], string> = {
+  gate: '',
+  escalation: '⚑',
+  'round-cap': '⟲',
+  paused: '',
+  staged: '',
+  malformed: '⚠',
+}
+
 export function KindChip({ item }: { item: InboxItem }) {
   const tone = kindTone(item)
   if (item.kind === 'gate') {
     return <Imp tone={tone}>{item.gate} · gate</Imp>
   }
-  const glyph = { escalation: '⚑', 'round-cap': '⟲', paused: '', staged: '', malformed: '⚠' }[item.kind] ?? ''
+  const glyph = KIND_GLYPH[item.kind]
   return (
     <Imp tone={tone}>
       {glyph ? `${glyph} ` : ''}

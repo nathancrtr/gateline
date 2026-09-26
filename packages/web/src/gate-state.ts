@@ -15,8 +15,9 @@ import type { InboxItem } from './api.ts'
 
 export type GateCardState = 'reviewable' | 'inflight' | 'bounced'
 
-/** The gate card's state, or null for an item that is not a gate. */
-export function gateCardState(item: InboxItem): GateCardState | null {
+/** The gate card's state, or null for an item that is not a gate. Reads only
+ *  the flags, so a portfolio row's `needs` fact (#452) reads the same way. */
+export function gateCardState(item: Pick<InboxItem, 'kind' | 'reviewable' | 'inflight'>): GateCardState | null {
   if (item.kind !== 'gate') return null
   if (item.reviewable) return 'reviewable'
   return item.inflight ? 'inflight' : 'bounced'

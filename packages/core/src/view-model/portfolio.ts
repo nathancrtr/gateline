@@ -44,11 +44,26 @@ export interface RunSummary {
    * (#314).
    */
   tasks: { total: number; done: number; maxRounds: number; roundCap: number }
+  /**
+   * Unresolved entries under `escalations:`, as the record holds them. A
+   * record count, not a needs-you count: a closed run keeps its unresolved
+   * entries here (History still shows them), while `needs` is empty, because
+   * a closure answers everything inside the run (readiness.ts). Every open
+   * escalation on a run that is not closed is already one of `needs`.
+   */
   escalationsOpen: number
   budget: { limit: number | null; spent: number | null }
   /** Epoch seconds of the last commit touching the run directory. */
   updatedAt: number | null
+  /** How many items need a human: `needs.length`, kept for the CLI and older readers. */
   needsHuman: number
+  /**
+   * What the run is waiting on a human for (#452): one fact per inbox item,
+   * most urgent first by `NEED_PRECEDENCE`, derivation order within a rank. A
+   * surface that shows one mark for the run reads `needs[0]`; the count is the
+   * length. Empty on a closed run, whatever its escalations say.
+   */
+  needs: NeedFact[]
   /**
    * Commits on the run branch origin lacks (#149) — unpushed writes the
    * viewer sees but origin consumers do not. Null when not knowable (no
@@ -57,6 +72,59 @@ export interface RunSummary {
   aheadOfOrigin: number | null
   /** Commits origin has that the local branch lacks (#99); with aheadOfOrigin > 0 the branch has diverged. */
   behindOrigin: number | null
+}
+
+/**
+ * One waiting item, reduced to what tells its kinds apart: the kind, the gate
+ * it is about, and the two flags that split a gate into ready, bounced and
+ * superseded (#159). The inbox item itself stays on `/api/inbox`.
+ */
+export type NeedFact = Pick<InboxItem, 'kind' | 'gate' | 'reviewable' | 'inflight'>
+
+/**
+ * Which waiting item speaks for the run when only one can (#452). Lower is
+ * more urgent. The order is the one settled decision 8 of
+ * `packages/web/DESIGN.md` gives colour — health, then the one ready
+ * decision, then everything that is the machine's turn or at rest — and each
+ * step has a reason in the record:
+ *
+ *  0. `malformed` — the record cannot be read. Nothing else about the run can
+ *     be trusted, and the engine cannot act on it (DESIGN.md §5: consumers
+ *     bounce, never guess).
+ *  1. `escalation`, `round-cap` — the run is stopped. An unresolved escalation
+ *     puts the engine at rest until a person answers (engine rule D3), and a round
+ *     cap is the loop's own escalation to a human (DESIGN.md §4).
+ *  2. a reviewable `gate` — the one decision ready to take; the run moves as
+ *     soon as someone takes it.
+ *  3. a gate that is bounced or superseded, `paused`, `staged` — the machine's
+ *     turn, or a run at rest. A bounced packet is re-dispatched, a superseded
+ *     one is about to be replaced, and a paused or staged run is standing.
+ */
+export const NEED_PRECEDENCE = ['malformed', 'stuck', 'ready-gate', 'at-rest'] as const
+export type NeedRank = (typeof NEED_PRECEDENCE)[number]
+
+/** A waiting item's rank in `NEED_PRECEDENCE`. Pure. */
+export function needRank(need: NeedFact): NeedRank {
+  switch (need.kind) {
+    case 'malformed':
+      return 'malformed'
+    case 'escalation':
+    case 'round-cap':
+      return 'stuck'
+    case 'gate':
+      return need.reviewable ? 'ready-gate' : 'at-rest'
+    case 'paused':
+    case 'staged':
+      return 'at-rest'
+  }
+}
+
+/** The run's waiting items as facts, most urgent first. Stable within a rank. */
+export function needsOf(items: readonly InboxItem[]): NeedFact[] {
+  const rank = (n: NeedFact) => NEED_PRECEDENCE.indexOf(needRank(n))
+  return items
+    .map(({ kind, gate, reviewable, inflight }): NeedFact => ({ kind, gate, reviewable, inflight }))
+    .sort((a, b) => rank(a) - rank(b))
 }
 
 const cell = (g: GateEntry): GateLedgerCell => ({
@@ -100,6 +168,7 @@ export async function summarizeRun(
         budget: { limit: null, spent: null },
         updatedAt: touched?.time ?? null,
         needsHuman: items.length,
+        needs: needsOf(items),
         aheadOfOrigin,
         behindOrigin,
       },
@@ -134,6 +203,7 @@ export async function summarizeRun(
       budget: { limit: state.budget?.cost_limit_usd ?? null, spent: state.budget?.cost_spent_usd ?? null },
       updatedAt: touched?.time ?? null,
       needsHuman: items.length,
+      needs: needsOf(items),
       aheadOfOrigin,
       behindOrigin,
     },

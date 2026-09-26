@@ -8,6 +8,12 @@ import {
   buildPortfolio,
   deriveReadiness,
   escalationFact,
+  type InboxItem,
+  type InboxKind,
+  NEED_PRECEDENCE,
+  type NeedFact,
+  needRank,
+  needsOf,
   parseRunState,
   pausedFacts,
   ROUND_CAP,
@@ -849,5 +855,101 @@ escalations: ${escalations}
 
   it('a human’s hold reason is free text, not a token', () => {
     expect(pausedFacts(paused('waiting on the security review before G2'))).toMatchObject({ freeText: true, cause: null })
+  })
+})
+
+/**
+ * #452. A portfolio row carries what it waits on, not only how many: the
+ * needs-you mark takes the texture of the kind, so the fact has to reach it.
+ * One fixture run per kind, the order when several wait, and the closed run
+ * that must say nothing whatever its escalations hold.
+ */
+describe('the portfolio row carries the kinds it waits on (#452)', () => {
+  const summary = async (slug: string) => (await summarizeRun(ctx.source, refs.get(slug)!)).summary
+
+  it.each([
+    ['g1-pending', { kind: 'gate', gate: 'G1', reviewable: true, inflight: null }, 'ready-gate'],
+    ['malformed-spec', { kind: 'gate', gate: 'G0', reviewable: false, inflight: null }, 'at-rest'],
+    ['escalated', { kind: 'escalation', gate: null, reviewable: true, inflight: null }, 'stuck'],
+    ['round-cap', { kind: 'round-cap', gate: null, reviewable: true, inflight: null }, 'stuck'],
+    ['paused-budget', { kind: 'paused', gate: null, reviewable: true, inflight: null }, 'at-rest'],
+    ['staged', { kind: 'staged', gate: null, reviewable: true, inflight: null }, 'at-rest'],
+    ['bad-state', { kind: 'malformed', gate: null, reviewable: false, inflight: null }, 'malformed'],
+  ] as const)('%s: one need, its kind, and its rank', async (slug, fact, rank) => {
+    const row = await summary(slug)
+    expect(row.needs).toEqual([fact])
+    expect(needRank(row.needs[0]!)).toBe(rank)
+    expect(row.needsHuman).toBe(1)
+  })
+
+  it('a superseded gate carries its in-flight producer and ranks with the machine’s turn (#159)', async () => {
+    const row = await summary('g0-redispatched')
+    expect(row.needs).toHaveLength(1)
+    expect(row.needs[0]).toMatchObject({ kind: 'gate', gate: 'G0', reviewable: false, inflight: { role: 'analyst' } })
+    expect(needRank(row.needs[0]!)).toBe('at-rest')
+  })
+
+  it('an unreadable record leads its own best-effort escalation', async () => {
+    const row = await summary('malformed-with-escalation')
+    expect(row.needs.map((n) => n.kind)).toEqual(['malformed', 'escalation'])
+  })
+
+  it('a closed run needs nothing, though its record still holds an open escalation', async () => {
+    const row = await summary('closed-delivered')
+    // The premise: the escalation is still open in the record, and says so.
+    expect(row.escalationsOpen).toBe(1)
+    expect(row.needs).toEqual([])
+    expect(row.needsHuman).toBe(0)
+  })
+
+  it('a finished run needs nothing', async () => {
+    expect((await summary('done-merged')).needs).toEqual([])
+  })
+
+  // What lets web drop its "open escalations" fallback: on every run that is
+  // not closed, each open escalation is already one of `needs`. Only a closure
+  // parts the two counts.
+  it('outside a closure, every open escalation is one of the needs; the count is the list', async () => {
+    const { runs } = await buildPortfolio([ctx.source])
+    expect(runs.length).toBeGreaterThan(20)
+    for (const run of runs) {
+      expect(run.needsHuman, run.slug).toBe(run.needs.length)
+      if (run.phase === 'closed') continue
+      expect(run.needs.filter((n) => n.kind === 'escalation').length, run.slug).toBe(run.escalationsOpen)
+    }
+    const parted = runs.filter((r) => r.escalationsOpen > 0 && !r.needs.some((n) => n.kind === 'escalation'))
+    expect(parted.map((r) => r.slug)).toEqual(['closed-delivered'])
+  })
+})
+
+describe('NEED_PRECEDENCE: which need speaks for the run (#452)', () => {
+  const need = (kind: InboxKind, over: Partial<NeedFact> = {}): NeedFact => ({ kind, gate: null, reviewable: true, inflight: null, ...over })
+  const items = (needs: NeedFact[]) => needs as unknown as InboxItem[]
+
+  it('reads health first, then the ready decision, then the machine’s turn and rest', () => {
+    expect(NEED_PRECEDENCE).toEqual(['malformed', 'stuck', 'ready-gate', 'at-rest'])
+    const ready = need('gate', { gate: 'G1' })
+    const malformed = need('malformed', { reviewable: false })
+    const sorted = needsOf(
+      items([need('staged'), need('paused'), need('gate', { gate: 'G2', reviewable: false }), ready, need('round-cap'), need('escalation'), malformed]),
+    )
+    expect(sorted.map(needRank)).toEqual(['malformed', 'stuck', 'stuck', 'ready-gate', 'at-rest', 'at-rest', 'at-rest'])
+    expect(sorted[0]).toEqual(malformed)
+    expect(sorted[3]).toEqual(ready)
+  })
+
+  it('an escalation outranks a ready gate, and a ready gate outranks a pause', () => {
+    expect(needsOf(items([need('gate', { gate: 'G2' }), need('escalation')]))[0]!.kind).toBe('escalation')
+    expect(needsOf(items([need('paused'), need('gate', { gate: 'G2' })]))[0]!.kind).toBe('gate')
+  })
+
+  it('keeps derivation order within a rank', () => {
+    const sorted = needsOf(items([need('round-cap', { gate: 'G1' }), need('escalation'), need('round-cap', { gate: 'G2' })]))
+    expect(sorted.map((n) => `${n.kind}${n.gate ?? ''}`)).toEqual(['round-capG1', 'escalation', 'round-capG2'])
+  })
+
+  it('carries only the facts that tell kinds apart', () => {
+    const full = { ...need('gate', { gate: 'G0' }), slug: 'x', title: 't', packet: ['spec.md'] }
+    expect(needsOf(items([full]))).toEqual([need('gate', { gate: 'G0' })])
   })
 })

@@ -7,6 +7,8 @@ import {
   armRefusal,
   BUILTIN_SECTIONS,
   type Burden,
+  bestEffortEscalations,
+  buildEscalationPacket,
   buildEvidenceRollup,
   buildG1Packet,
   buildLexicon,
@@ -396,11 +398,8 @@ export function createApp(deps: AppDeps): Hono {
   // parsed from this run's own review-NN.md and shipped as data — the browser
   // must not bundle the core runtime. Every field is a verbatim slice of the
   // committed artifact; nothing here summarizes or judges.
-  app.get('/api/runs/:src/:slug/reviews', async (c) => {
-    const found = await findRun(c.req.param('src'), c.req.param('slug'))
-    if (!found) return fail(c, 404, { error: 'run not found' })
-    const { source, ref } = found
-    const reports = await cache.get(`reviews:${ref.source}:${ref.slug}`, async () => {
+  const reviewsFor = (source: RunSource, ref: RunRef) =>
+    cache.get(`reviews:${ref.source}:${ref.slug}`, async () => {
       const artifacts = await source.listArtifacts(ref)
       return Promise.all(
         artifacts
@@ -408,7 +407,36 @@ export function createApp(deps: AppDeps): Hono {
           .map(async (p) => parseReview(p, (await source.readArtifact(ref, p)) ?? '')),
       )
     })
+  app.get('/api/runs/:src/:slug/reviews', async (c) => {
+    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+    if (!found) return fail(c, 404, { error: 'run not found' })
+    const { source, ref } = found
+    const reports = await reviewsFor(source, ref)
     return respond<'GET /api/runs/:src/:slug/reviews'>(c, { reports })
+  })
+
+  // The escalation packet (#407): one `state.escalations[i]` entry joined
+  // with the report its reason names. The record is read best-effort, as the
+  // readiness item is (#49), so a malformed run's open escalation still gets
+  // its packet; the reviews come from the same cache the reviews route fills.
+  app.get('/api/runs/:src/:slug/escalation/:index', async (c) => {
+    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+    if (!found) return fail(c, 404, { error: 'run not found' })
+    const { source, ref } = found
+    const index = Number(c.req.param('index'))
+    if (!Number.isInteger(index) || index < 0) return fail(c, 400, { error: 'escalation index must be a non-negative integer' })
+    const raw = await source.readArtifact(ref, 'state.yaml')
+    const escalation = raw === null ? undefined : bestEffortEscalations(raw)[index]
+    if (!escalation) return fail(c, 404, { error: `no escalation at index ${index}` })
+    const packet = await cache.get(`escalation:${ref.source}:${ref.slug}:${index}`, async () => {
+      const [artifacts, reviews, verification] = await Promise.all([
+        source.listArtifacts(ref),
+        reviewsFor(source, ref),
+        source.readArtifact(ref, 'verification-report.md'),
+      ])
+      return buildEscalationPacket({ index, escalation, artifacts, reviews, verification })
+    })
+    return respond<'GET /api/runs/:src/:slug/escalation/:index'>(c, packet)
   })
 
   // Evidence-presence rollup (#165): which criteria the verification record

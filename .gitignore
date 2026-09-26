@@ -19,3 +19,7 @@ __pycache__/
 # Public docs site: generated API docs and local tooling are built, never committed
 site/api/
 site/node_modules/
+
+# The site's assembled published tree (site pages plus the Gatehouse demo);
+# built locally by the verifier recipe and by the Pages workflow, never committed
+/_site/

@@ -54,6 +54,41 @@ npm run docs:api --prefix site
 `docs:api` runs TypeDoc and then the shell builder, so a regeneration cannot
 drop the back-to-site bar from the generated pages.
 
+## The Gatehouse demo
+
+`demo/` is assembled into `_site/demo/` at build time and is never committed.
+It is Gatehouse — the gate frontend — built once in a static mode, beside a
+tree of JSON files answering every read the app makes: a snapshot of every
+finished run on `main` (`state.yaml` reading `phase: done`) plus a generated
+fixture repository covering the transient states a finished record cannot
+show (a gate pending, escalated, round-capped, paused, and so on). Runs from
+the fixture are labelled as fixture data in the UI, visibly, on every page
+that shows one; no real run carries that label.
+
+The Pages workflow builds and verifies the demo on every pull request and
+push, whether or not it publishes:
+
+```bash
+npm run build:static -w @gateline/web
+node server/src/snapshot.ts --repo <repo> --out _site/demo --web-dist web/dist-static
+npm run e2e:static
+```
+
+The first command builds the static web bundle; the second drives the
+server's own routes in-process (no port bound) and writes each response
+alongside the bundle; the third renders the assembled tree with a plain
+static file server and Playwright, so a page that fails to render fails the
+build. The same three commands are the local recipe (see
+`runs/gatehouse-demo/tasks/05-static-render-check.yaml`'s notes for the exact
+sequence, including the scratch directory and the site's `404.html`).
+
+Publishing the demo is gated behind one repository variable,
+`GATELINE_PUBLISH_DEMO`: unset (or any value other than `true`) removes
+`demo/` from the uploaded artifact after the build and the render check both
+pass; set to `true`, it is kept. The build runs and is verified either way —
+flipping the variable only decides whether the result reaches the published
+site, and is a decision made outside any run.
+
 ## Design
 
 The site is set like signage: a white ground, ink lettering, one signal blue,

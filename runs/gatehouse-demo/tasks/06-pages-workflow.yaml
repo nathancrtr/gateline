@@ -83,3 +83,88 @@ depends_on: [05-static-render-check]
 status: pending
 
 notes: |
+  Implementer round 1.
+
+  Built exactly the three files in file_contact_surface:
+  - .github/workflows/site-pages.yml — added `runs/*/state.yaml` to the
+    `push` trigger's `paths` only (`pull_request` paths untouched); updated
+    the header comment to say a run reaching `done` on main refreshes the
+    demo; added `with: fetch-depth: 0` to `actions/checkout@v4` with a
+    comment naming why (finished runs' history and `run/*` branches); added,
+    in order, after "Assemble the published tree": "Build the Gatehouse demo
+    bundle (static mode)" (`npm run build:static -w @gateline/web`,
+    working-directory `packages`), "Snapshot the demo (finished runs on main
+    + the fixture)" (`node server/src/snapshot.ts --repo "$GITHUB_WORKSPACE"
+    --repo-id gateline --out "$GITHUB_WORKSPACE/_site/demo" --web-dist
+    web/dist-static`, working-directory `packages`), "The demo renders
+    against its snapshot" (`npx playwright install --with-deps chromium` then
+    `npm run e2e:static`, working-directory `packages`, env
+    `DEMO_SITE_ROOT: ${{ github.workspace }}/_site`), and "Publication switch
+    (repository variable GATELINE_PUBLISH_DEMO)" (`if: vars.GATELINE_PUBLISH_DEMO
+    != 'true'`, echoes that the demo was built and verified but is not being
+    published, then `rm -rf _site/demo`; comment names the exact "on" value
+    (`true`) and that flipping it is a human decision made outside any run).
+    `actions/upload-pages-artifact@v3` and the `deploy` job's
+    `if: github.event_name == 'push'` are byte-for-byte unchanged.
+  - .gitignore — added `/_site/` with a comment naming it as the assembled
+    tree, built locally by the verifier recipe and by the Pages workflow,
+    never committed.
+  - site/README.md — added a "The Gatehouse demo" section (before "Design")
+    covering: `demo/` assembled into `_site/demo/` at build time, never
+    committed; what it contains (static web bundle + JSON snapshot of every
+    read route over the finished runs on main plus the generated fixture,
+    fixture runs labelled visibly); the three workflow commands verbatim,
+    with a pointer to task 05's notes for the exact local recipe (scratch
+    dir, `site/404.html` placement); the `GATELINE_PUBLISH_DEMO` gate (unset
+    = off, `true` = on) and that the build runs and is verified either way.
+    Wording is consumer-agnostic; no downstream organisation named; none of
+    "audit", "compliance", "regulator" used.
+
+  No file outside the three-file contact surface was touched, and this run's
+  diff sets no repository variable (AC8.3) — `GATELINE_PUBLISH_DEMO` is
+  referenced only inside `if:`/`echo` conditions in the workflow YAML, never
+  assigned a value; flipping it remains a repository-settings action outside
+  this diff. No change under `deploy/`, `packages/framework`, `roles/`,
+  `contracts/`, or `registry/`. No new Actions introduced beyond
+  `actions/checkout`, `actions/setup-node`, `actions/upload-pages-artifact`,
+  `actions/deploy-pages` already in the file.
+
+  Verification run (packages/ as cwd unless noted; `npm install` first since
+  packages/node_modules lacked @vitejs/plugin-react in this worktree, same
+  gap task 05's implementer hit):
+
+  - YAML sanity: no `js-yaml`/`pyyaml`/`actionlint` available in this
+    sandbox (pip blocked by PEP 668, no network); parsed the workflow with
+    the `yaml` package already vendored under `packages/node_modules/yaml`
+    instead — parsed cleanly, `on.push.paths` includes `runs/*/state.yaml`
+    and `on.pull_request.paths` is unchanged, the `build` job's step name
+    list is the original steps plus the four new ones in order, and
+    `deploy.if` is still `github.event_name == 'push'`.
+  - `python3 site/scripts/check-names.py` → "check-names: clean" (exit 0).
+  - `python3 site/scripts/build-site.py --check` → "build-site: up to date"
+    (exit 0) — confirms the README addition (prose only, no page-shell
+    markers) left every page shell unaffected, as scope item 5 asked to
+    confirm.
+  - Ran the workflow's own three demo commands locally, in order, from a
+    clean `_site` seeded with `site/404.html` (mirroring what the "Assemble
+    the published tree" rsync step already places at `_site/404.html` in the
+    real job): `npm run build:static -w @gateline/web` → built,
+    "check-bundle: 1 bundle file(s) clean — no node builtins"; then, with
+    `GITHUB_WORKSPACE` exported to the repo root,
+    `node server/src/snapshot.ts --repo "$GITHUB_WORKSPACE" --repo-id
+    gateline --out "$GITHUB_WORKSPACE/_site/demo" --web-dist
+    web/dist-static` → "snapshot: 354 routes, 22 runs (fixture: 15, gateline:
+    7), 26 shells", landing at `_site/demo/`; then
+    `DEMO_SITE_ROOT="<repo>/_site" npm run e2e:static` → 7 passed.
+  - Publication-switch logic verified by reasoning plus a bash simulation of
+    the `if:` condition against both variable states, since no live GitHub
+    Actions run is available here: with the variable unset (empty string),
+    `[ "$VAR" != "true" ]` is true → simulated `rm -rf demo` on a copy of the
+    built `_site` left the copy with no `demo/` entry; with the variable set
+    to `true`, the same test is false → the step is skipped and a copy of
+    `_site` retained `demo/` untouched. This matches AC8.1/AC8.2 exactly:
+    unset → uploaded tree carries no `demo/`; `true` → uploaded tree includes
+    `demo/`, with no other code change between the two runs.
+  - Cleaned up the scratch `_site/` afterward (`rm -rf _site`); it is
+    gitignored by this task's own `.gitignore` change and was never staged.
+    `git status --short` shows only the three intended files modified.

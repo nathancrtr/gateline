@@ -290,7 +290,7 @@ describe('inbox row lines, composed from facts (#433)', () => {
     const paused = row(ITEMS['paused-budget']!)
     expect(paused.title).toBe('Run paused budget-exhausted')
     expect(paused.html).toContain('data-quoted-word="budget-exhausted"')
-    expect(paused.line).toBe('$10.40 spent · limit $10.00')
+    expect(paused.line).toBe('$10.40 spent · limit $10')
     expect(row(ITEMS['paused-landed']!)).toMatchObject({ title: 'Run paused slug-landed', line: null })
     expect(row(item({ kind: 'paused', paused: { freeText: false, cause: null, reason: null, budget: null, handEdit: null } })).title).toBe('Run paused, no reason recorded')
   })
@@ -304,7 +304,7 @@ describe('inbox row lines, composed from facts (#433)', () => {
   it('a staged row names who staged it, the profile, and the ceiling arming spends against', () => {
     expect(row(ITEMS.staged!)).toMatchObject({
       title: 'Run staged, awaiting arm',
-      line: 'standard profile · budget ceiling $25.00 · staged by Fixture Operator',
+      line: 'standard profile · budget ceiling $25 · staged by Fixture Operator',
     })
   })
 
@@ -363,7 +363,7 @@ describe('decide card lines, composed from facts (#433)', () => {
 
   it('a budget pause names the key the resume form writes as an Address, and says to raise it', () => {
     const html = markup['paused-budget']!
-    expect(text(/data-paused-budget[^>]*>([\s\S]*?)<\/p>/.exec(html)![1]!)).toBe('$10.40 spent · limit $10.00, set by cost_limit_usd')
+    expect(text(/data-paused-budget[^>]*>([\s\S]*?)<\/p>/.exec(html)![1]!)).toBe('$10.40 spent · limit $10, set by cost_limit_usd')
     expect(html).toMatch(/data-address[^>]*>cost_limit_usd</)
     expect(html).toContain(PAUSED_INSTRUCTIONS.budget)
   })
@@ -373,7 +373,7 @@ describe('decide card lines, composed from facts (#433)', () => {
     const cause = /data-paused-cause[^>]*>([\s\S]*?)<\/div><\/div>/.exec(html)?.[1] ?? ''
     expect(cause).toContain('The engine’s reason, as recorded')
     expect(text(cause)).toContain('projected spend $44.09 (ledger $36.09 + estimates) exceeds cost_limit_usd $40')
-    expect(text(/data-paused-budget[^>]*>([\s\S]*?)<\/p>/.exec(html)![1]!)).toBe('$36.09 spent · limit $40.00, set by cost_limit_usd')
+    expect(text(/data-paused-budget[^>]*>([\s\S]*?)<\/p>/.exec(html)![1]!)).toBe('$36.09 spent · limit $40, set by cost_limit_usd')
   })
 
   it('a hold reason is quoted as a passage, and the instruction is the generic one', () => {
@@ -396,10 +396,10 @@ describe('decide card lines, composed from facts (#433)', () => {
     const html = markup.staged!
     expect(text(/data-staged-by[^>]*>([\s\S]*?)<\/p>/.exec(html)![1]!)).toBe('Staged by Fixture Operator 2h ago')
     const terms = /data-staged(?:="true")?>([\s\S]*?)<\/p>/.exec(html)![1]!
-    expect(text(terms)).toBe('Profile standard · budget ceiling $25.00, set by cost_limit_usd')
+    expect(text(terms)).toBe('Profile standard · budget ceiling $25, set by cost_limit_usd')
     // The profile is an identifier (SEAM §4), the face the inbox row gives it; the ceiling is a figure, never a meter.
     expect(terms).toMatch(/data-name[^>]*>standard</)
-    expect(terms).toMatch(/tabular-nums[^>]*data-budget-ceiling="25"[^>]*>\$25\.00</)
+    expect(terms).toMatch(/tabular-nums[^>]*data-budget-ceiling="25"[^>]*>\$25</)
     expect(terms).toMatch(/data-address[^>]*>cost_limit_usd</)
     // The brief's passages load with the packet query; until then the card holds their place.
     expect(html).toContain('data-packet-pending')

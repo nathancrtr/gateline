@@ -112,6 +112,46 @@ test('G0 packet (#440): Assumptions lead, the roster names each requirement, the
   await expect(page.locator('[data-reader] article')).toContainText('input fits in memory')
 })
 
+test('a G0 quotation’s address lands on its line in the reader, its fold open (#441)', async ({ page }) => {
+  // Short enough that the spec overflows the reader: a landing that did not
+  // scroll would leave Out of scope below the fold of the window.
+  await page.setViewportSize({ width: 1280, height: 420 })
+  const packet = page.locator('[data-g0-packet]')
+  const landed = page.locator('[data-reader] article [data-landed]')
+  const address = async (quote: string) => {
+    const at = packet.locator(quote).locator('[data-at] [data-address]')
+    await packet.locator(quote).hover()
+    const text = (await at.textContent())!
+    await at.click()
+    return Number(text.split(':')[1])
+  }
+
+  // An Assumption: a list item in a decide-time section of the spec.
+  await goto(page, `/runs/${sourceId()}/g0-pending?decide=G0`)
+  let line = await address('[data-assumption]')
+  await expect(page).toHaveURL(new RegExp(`artifact=spec\\.md&anchor=L${line}$`))
+  await expect(landed).toHaveCount(1)
+  await expect(landed).toContainText('input fits in memory')
+  await expect(landed).toHaveAttribute('data-line', String(line))
+  await expect(landed).toBeInViewport()
+
+  // Out of scope: audit-time, so the reader folds it — the landing opens it.
+  await goto(page, `/runs/${sourceId()}/g0-pending?decide=G0`)
+  await packet.locator('[data-g0-fold="out-of-scope"]').getByRole('button').click()
+  line = await address('[data-quote="out-of-scope"]')
+  await expect(page).toHaveURL(new RegExp(`artifact=spec\\.md&anchor=L${line}$`))
+  await expect(landed).toHaveText('Concurrency; internationalization.')
+  await expect(page.locator('[data-reader] details[data-fold="Out of scope"]')).toHaveJSProperty('open', true)
+  await expect(landed).toBeInViewport()
+
+  // A brief section: the intent brief renders whole, numbered from its line 1.
+  await goto(page, `/runs/${sourceId()}/g0-pending?decide=G0`)
+  line = await address('[data-quote="constraints"]')
+  await expect(page).toHaveURL(new RegExp(`artifact=intent-brief\\.md&anchor=L${line}$`))
+  await expect(landed).toHaveText('Must run offline; none otherwise known.')
+  await expect(landed).toBeInViewport()
+})
+
 test('the pointer decision loop: approve G0 with burden → correct commit', async ({ page }) => {
   await goto(page, `/runs/${sourceId()}/g0-pending?decide=G0`)
   const card = page.locator('[data-needs-card]').first()

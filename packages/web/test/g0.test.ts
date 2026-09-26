@@ -101,10 +101,10 @@ describe('the G0 packet over g0-pending', () => {
 
     const assumption = /<li[^>]*data-assumption="(\d+)"[^>]*>([\s\S]*?)<\/li>/.exec(html)!
     expect(text(assumption[2]!)).toContain('ASSUMPTION: input fits in memory → resolved as yes because samples are <1MB.')
-    // The address says where, and the link opens the spec in the reader.
+    // The address says where, and the link opens the spec in the reader on that line (#441).
     const link = new RegExp(`<a([^>]*)>spec\\.md:${assumption[1]}</a>`).exec(assumption[2]!)
     expect(link?.[1]).toContain('data-address')
-    expect(link?.[1]).toContain(`href="/runs/${SRC}/g0-pending?tab=record&amp;artifact=spec.md"`)
+    expect(link?.[1]).toContain(`href="/runs/${SRC}/g0-pending?tab=record&amp;artifact=spec.md&amp;anchor=L${assumption[1]}"`)
     // Quoted as a passage: the hairline box, the record's markdown rendered.
     expect(assumption[0]).toMatch(/border-line bg-surface/)
     expect(assumption[2]).toContain('<strong>ASSUMPTION:</strong>')

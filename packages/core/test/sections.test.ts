@@ -62,7 +62,22 @@ describe('splitSections', () => {
       const md = readFileSync(f, 'utf8')
       expect(rejoin(md), f).toBe(md)
       expect(h2Headings(md), f).toEqual(extractSections(md))
+      // Each section's line is the file's own 1-based line of its heading (#441).
+      const lines = md.split('\n')
+      for (const s of splitSections(md)) if (s.headingLine !== null) expect(lines[s.line - 1], `${f}:${s.line}`).toBe(s.headingLine)
     }
+  })
+
+  it('numbers each section by the file line it starts on, an empty preamble dropped but counted (#441)', () => {
+    expect(splitSections('\n\n## A\nx\n\n## B\ny\n').map((s) => [s.heading, s.line])).toEqual([
+      ['A', 3],
+      ['B', 6],
+    ])
+    expect(splitSections('preamble\n# T\n## A\n').map((s) => [s.heading, s.line])).toEqual([
+      [null, 1],
+      ['T', 2],
+      ['A', 3],
+    ])
   })
 
   it('runs/mdtoc/review-01.md keeps Boundary check at the top level', () => {

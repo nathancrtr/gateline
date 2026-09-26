@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { type ArtifactRef, api, type CriterionEvidence, type EvidenceRollup, type Profile, type ReviewFinding, type ReviewReport } from '../api.ts'
 import { DIFF_SELECTION } from '../landing.ts'
+import { lineAnchor } from '../line-anchor.ts'
 import { boundaryLine, fileLabel } from '../surface.ts'
 import { FindingCard, Inline, PACKET_FRAME, PACKET_LABEL, PacketSweep, useReviews, VerdictChip } from './findings.tsx'
 import { useLexicon } from './lexicon.tsx'
@@ -156,7 +157,7 @@ function EvidenceRow({ c, src, slug }: { c: CriterionEvidence; src: string; slug
           {c.reviewMentions.map((a, i) => (
             <span key={`${a.artifact}:${a.line}`}>
               {i > 0 && ', '}
-              <Address to={artifactHref(src, slug, a.artifact)}>{`${a.artifact}:${a.line}`}</Address>
+              <Address to={artifactHref(src, slug, a.artifact, lineAnchor(a.line))}>{`${a.artifact}:${a.line}`}</Address>
             </span>
           ))}
         </span>

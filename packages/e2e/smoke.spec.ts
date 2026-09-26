@@ -600,6 +600,49 @@ test('G1 packet (#255): a patch run keeps its brief-plus-work-item view', async 
   await expect(page.locator('[data-g1-packet]')).toHaveCount(0)
 })
 
+test("escalation packet (#407): the escalating role's own words on the card", async ({ page }) => {
+  // The fixture's escalated run carries the verifier's report with the
+  // Escalation section #405 requires.
+  await page.goto(`/runs/${sourceId()}/escalated`)
+  const card = page.locator('[data-needs-card]').first()
+  await expect(card).toBeVisible()
+  // The card is headed by the role that escalated, not the engine that wrote the entry.
+  await expect(card.locator('h2')).toContainText('Escalation from verifier')
+
+  const packet = card.locator('[data-escalation-packet]')
+  await expect(packet).toBeVisible()
+  await expect(packet).toHaveAttribute('data-origin', 'role')
+
+  // AC1 — the section's fields and paragraph, verbatim.
+  // The lexicon wraps each id in a reference whose hover card is in the DOM,
+  // so the field's text is not one contiguous string.
+  await expect(packet.locator('[data-escalation-field="traces-to"]')).toContainText('R2')
+  await expect(packet.locator('[data-escalation-field="traces-to"]')).toContainText('AC2.1')
+  await expect(packet.locator('[data-escalation-field="criteria-affected"]')).toContainText('AC2.1')
+  await expect(packet.locator('[data-escalation-prose]')).toContainText('The sample input the second requirement points at does not exist')
+  // The requirement id resolves through the lexicon, as on every card.
+  await expect(packet.locator('[data-escalation-field="traces-to"] .lex-ref').first()).toBeVisible()
+
+  // The options as the verifier framed them, numbered, in its order.
+  const options = packet.locator('[data-escalation-option]')
+  await expect(options).toHaveCount(2)
+  await expect(options.first()).toContainText('to name an input that exists')
+
+  // The report: its verdict and one click to the artifact. A verification
+  // report has no diff verdict and no findings, so neither is claimed.
+  const report = packet.locator('[data-escalation-report]')
+  await expect(report).toContainText('escalate')
+  await expect(report.getByRole('link', { name: 'verification-report.md' })).toBeVisible()
+  await expect(report.locator('[data-escalation-diff-verdict]')).toHaveCount(0)
+  await expect(report.locator('[data-escalation-standing]')).toHaveCount(0)
+
+  // The state file is no longer offered as reading; the report is the chip.
+  await expect(card.locator('a.imp', { hasText: 'state.yaml' })).toHaveCount(0)
+  await expect(card.locator('a.imp', { hasText: 'verification-report.md' })).toHaveCount(1)
+  // The Resolve form is unchanged.
+  await expect(card.locator('[data-decide="resolve"]')).toBeVisible()
+})
+
 test('round cap (#257): the surface compares the last two rounds, not a file list', async ({ page }) => {
   await page.goto(`/runs/${sourceId()}/round-cap`)
   const panel = page.locator('[data-round-cap]')

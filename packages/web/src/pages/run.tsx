@@ -18,6 +18,7 @@ import { AgeBadge, BudgetMeter, Imp, KeyHints, KindChip, PhaseChip, PhaseSpine, 
 import { CloseRunPanel, ClosureRecordBlock } from '../components/close-run.tsx'
 import { BOUNCED_INSTRUCTION, DecidePanel, INFLIGHT_INSTRUCTION, ROUND_CAP_INSTRUCTION } from '../components/decide.tsx'
 import { DiffView } from '../components/diff-view.tsx'
+import { EscalationPacket } from '../components/escalation.tsx'
 import { EvidenceRollupPanel, G2Packet } from '../components/evidence.tsx'
 import { FindingsPanel, useReviews, VerdictChip } from '../components/findings.tsx'
 import { G1Packet } from '../components/g1.tsx'
@@ -668,6 +669,14 @@ function NeedsYouCard({
             rounds at once (#257). The chip list below still offers every report;
             this is the comparison the chips could not be. */}
         {item.kind === 'round-cap' && <RoundCapPanel src={item.source} slug={item.slug} task={mentionedTask?.id ?? null} />}
+        {/* An escalation a role raised is a decision the role wrote down (#407):
+            its Escalation section, verbatim, and the routes as it sees them,
+            so the Resolve form's routes are read against something. An
+            engine-originated one renders nothing here — its reason line above
+            is the whole packet. */}
+        {item.kind === 'escalation' && item.escalationIndex !== null && (
+          <EscalationPacket src={item.source} slug={item.slug} index={item.escalationIndex} />
+        )}
         <DecidePanel
           item={item}
           profile={detail.summary.profile}

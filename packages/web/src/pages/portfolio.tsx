@@ -3,9 +3,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { type ReactNode, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { api, formatAge, type RunSummary } from '../api.ts'
-import { BudgetMeter, GateLedger, Imp, PhaseChip } from '../components/chips.tsx'
+import { api, formatAge, type NeedFact, type RunSummary } from '../api.ts'
+import { BudgetMeter, GateLedger, Imp, type ImpTone, KIND_GLYPH, kindTone, PhaseChip } from '../components/chips.tsx'
 import { UnreadableState } from '../components/unreadable-state.tsx'
+import { gateCardState } from '../gate-state.ts'
 import { EdgeFade, useScrollCue } from '../scroll-cue.tsx'
 import { PageStatus } from './inbox.tsx'
 
@@ -20,25 +21,54 @@ const NUM = 'pr-2.5 py-[12px] border-b border-line align-top text-right font-ui 
  * This used to be the last cell of the last column, which is the one place it
  * could not survive: the table is wider than its wrapper from about 1000px
  * down, so the column the page exists for was the first thing clipped — and
- * clipped silently. Deciding the mark here rather than inline keeps the
- * precedence testable: readiness first (it already counts escalations that
- * have become someone's move), then escalations that have not, then quiet.
+ * clipped silently. Deciding the mark here rather than inline keeps it
+ * testable.
+ *
+ * The mark takes the texture of what is waiting (#452), through the inbox's
+ * own `kindTone`, so a row and its inbox chip never disagree: a ready gate is
+ * the signal blue, a stuck run the caution ink, an unreadable record hatched,
+ * and the machine's turn or a run at rest dotted. Never `fill`, which is for a
+ * decision taken. When several things wait, core has already put the most
+ * urgent first (`NEED_PRECEDENCE`); the count is all of them.
+ *
+ * The colour must not carry what the words do not (SEAM.md §5). Most kinds
+ * are named beside the mark already: the phase chip says `staged`, `paused`
+ * or `unknown`, and the gate ledger shows the gate. An escalation and a round
+ * cap share the caution tone and nothing else on the row names them, so those
+ * two carry their inbox glyph, ⚑ or ⟲, inside the mark: the same glyphs that
+ * tell them apart on the inbox chip.
+ *
+ * It reads `needs` alone. A closed run's escalations stay open in its record,
+ * but the closure answered them, so the run is quiet here (#452).
  */
 export type NeedsYouMark =
-  | { kind: 'needs'; count: number; label: string }
-  | { kind: 'escalation'; count: number; label: string }
+  | { kind: 'needs'; count: number; lead: NeedFact | null; tone: ImpTone; glyph: string; label: string }
   | { kind: 'quiet'; count: 0; label: string }
 
-export function needsYouMark(run: Pick<RunSummary, 'needsHuman' | 'escalationsOpen'>): NeedsYouMark {
-  if (run.needsHuman > 0) {
-    const n = run.needsHuman
-    return { kind: 'needs', count: n, label: `${n} ${n === 1 ? 'item needs' : 'items need'} you` }
+/** The lead item in the record's words: its kind, and for a gate its code and state. */
+function leadWords(need: NeedFact): string {
+  if (need.kind !== 'gate') return need.kind
+  const state = gateCardState(need)
+  const gate = `${need.gate ?? 'a'} gate`
+  return state === 'bounced' ? `${gate}, bounced` : state === 'inflight' ? `${gate}, superseded` : gate
+}
+
+export function needsYouMark(run: Pick<RunSummary, 'needs' | 'needsHuman'>): NeedsYouMark {
+  // A server built before #452 sends no `needs`: the count, with no kind.
+  const count = run.needs?.length ?? run.needsHuman
+  if (count === 0) return { kind: 'quiet', count: 0, label: 'nothing needs you' }
+  const items = `${count} ${count === 1 ? 'item needs' : 'items need'} you`
+  const lead = run.needs?.[0] ?? null
+  if (!lead) return { kind: 'needs', count, lead, tone: '', glyph: '', label: items }
+  const what = leadWords(lead)
+  return {
+    kind: 'needs',
+    count,
+    lead,
+    tone: kindTone(lead),
+    glyph: lead.kind === 'escalation' || lead.kind === 'round-cap' ? KIND_GLYPH[lead.kind] : '',
+    label: count === 1 ? `${items} (${what})` : `${items} (${what} first)`,
   }
-  if (run.escalationsOpen > 0) {
-    const n = run.escalationsOpen
-    return { kind: 'escalation', count: n, label: `${n} open escalation${n === 1 ? '' : 's'}` }
-  }
-  return { kind: 'quiet', count: 0, label: 'nothing needs you' }
 }
 
 export { scrollCue } from '../scroll-cue.tsx'
@@ -72,18 +102,12 @@ function ScrollPane({ children, label }: { children: ReactNode; label: string })
  * marks then read as a rail down the left edge, which is the scan the page
  * exists for. A quiet run leaves the slot empty — absence says it.
  */
-function NeedsYou({ mark }: { mark: NeedsYouMark }) {
+export function NeedsYou({ mark }: { mark: NeedsYouMark }) {
   if (mark.kind === 'quiet') return <span aria-hidden="true" className="w-[34px] shrink-0" />
-  if (mark.kind === 'escalation') {
-    return (
-      <span className="mt-[3px] w-[34px] shrink-0 whitespace-nowrap font-ui text-[11px] font-semibold text-warn" title={mark.label}>
-        {mark.count} esc
-      </span>
-    )
-  }
   return (
     <span className="w-[34px] shrink-0" title={mark.label}>
-      <Imp tone="fill" className="tabular-nums">
+      <Imp tone={mark.tone} className="tabular-nums" data-needs-you={mark.lead?.kind}>
+        {mark.glyph}
         {mark.count}
       </Imp>
     </span>

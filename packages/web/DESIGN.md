@@ -160,10 +160,10 @@ green `approve`, a red `blocking`, a caution `major`.
 
 | the cockpit's state | tone | where |
 |---|---|---|
-| A decision is ready to take | `go` — the signal blue, hollow (blue text and border) | inbox `KindChip` for a reviewable gate; the decide card's `needs you · G<n>` eyebrow |
-| Stuck; a person is needed to unblock | `warn` — the caution ink, hollow | `escalation` and `round-cap`, inbox and card; the glyphs ⚑ / ⟲ tell them apart |
-| The record cannot be read | `hatch mark` — hatched, in the declined red | `malformed`; the `unknown` phase |
-| The machine's turn, or at rest | `dot` — dotted, muted | a bounced packet (the engine re-dispatches; no approval is offered), a superseded in-flight gate, `staged`, `paused` |
+| A decision is ready to take | `go` — the signal blue, hollow (blue text and border) | inbox `KindChip` for a reviewable gate; the decide card's `needs you · G<n>` eyebrow; the portfolio's needs-you mark (#452) |
+| Stuck; a person is needed to unblock | `warn` — the caution ink, hollow | `escalation` and `round-cap`, inbox, card and the portfolio's needs-you mark; the glyphs ⚑ / ⟲ tell them apart |
+| The record cannot be read | `hatch mark` — hatched, in the declined red | `malformed`, on the inbox chip and the needs-you mark; the `unknown` phase |
+| The machine's turn, or at rest | `dot` — dotted, muted | a bounced packet (the engine re-dispatches; no approval is offered), a superseded in-flight gate, `staged`, `paused` — on the inbox chip and the needs-you mark |
 | Approved | `ok` — the approved green, filled, reversed type | `GateChip` ✓ in the gate ledger (portfolio, metrics); the spine's approved gate cells |
 | Declined | `struck mark` — struck, in the declined red | `GateChip` ✕; the spine's declined gate cells |
 | The gate on the table | `cur` — the yellow | the one spine cell in the run header, and the focus ring; nowhere else |

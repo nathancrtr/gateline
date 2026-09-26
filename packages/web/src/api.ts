@@ -100,6 +100,7 @@ export type {
   LexiconResponse,
   ListEntry,
   MetricsResponse,
+  NeedFact,
   PausedFact,
   Phase,
   Profile,

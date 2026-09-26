@@ -19,6 +19,7 @@ import { useQuery } from '@tanstack/react-query'
 import { type ReactNode, useState } from 'react'
 import { api, type ReviewFinding, type ReviewReport, type Severity, type Verdict } from '../api.ts'
 import { CitedText } from './lexicon.tsx'
+import { Address, FieldRow } from './vocabulary.tsx'
 
 const SEVERITY_RANK: Record<Severity, number> = { blocking: 0, major: 1, minor: 2, unknown: 3 }
 
@@ -192,7 +193,13 @@ export function FindingCard({
         <SeverityChip finding={finding} />
         {/* Named only where the card leaves its own report — under a criterion,
             "which review raised this" is not otherwise on screen. */}
-        {source && <span className="shrink-0 font-mono text-[10.5px] text-faint">{source}</span>}
+        {/* #411 step 3: the report is named by its kind and task; the file
+            becomes the Address after that name. */}
+        {source && (
+          <Address size="xs" className="shrink-0">
+            {source}
+          </Address>
+        )}
         {finding.round !== null && <span className="shrink-0 font-ui text-[10.5px] text-faint">round {finding.round}</span>}
         {note}
         {/* The words, and the control that folds them, travel together (#296).
@@ -255,19 +262,18 @@ export function FindingCard({
   )
 }
 
-/** Field values run through the lexicon (#252): a finding that cites R2/AC2.1
- *  resolves it where it stands, which is the whole point at a round cap — the
- *  requirement is where the suspected ambiguity lives. They are quoted out of
- *  markdown, so they run through `Inline` on the way (#282) — a Where cell is
- *  usually a path in backticks, and backticks are not part of the path. */
-function Field({ label, children }: { label: string; children: string }) {
+/** One field of a finding, as the vocabulary's nested `FieldRow`. Values run
+ *  through the lexicon (#252): a finding that cites R2/AC2.1 resolves it where
+ *  it stands, which is the whole point at a round cap — the requirement is
+ *  where the suspected ambiguity lives. They are quoted out of markdown, so
+ *  they run through `Inline` on the way (#282) — a Where cell is usually a path
+ *  in backticks, and backticks are not part of the path. Exported for the
+ *  round-cap comparison's disposition written in another file (#257). */
+export function Field({ label, children }: { label: string; children: string }) {
   return (
-    <div className="flex flex-wrap gap-x-2">
-      <dt className="shrink-0 font-ui text-[10.5px] text-faint">{label}</dt>
-      <dd className="min-w-0 flex-1 text-muted">
-        <Inline>{children}</Inline>
-      </dd>
-    </div>
+    <FieldRow nested label={label}>
+      <Inline>{children}</Inline>
+    </FieldRow>
   )
 }
 

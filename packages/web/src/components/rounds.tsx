@@ -12,8 +12,8 @@
 import { Link } from 'react-router-dom'
 import { compareRounds, type RoundFinding, type RoundSide, reportsForTask } from '../rounds.ts'
 import {
+  Field,
   FindingCard,
-  Inline,
   PACKET_FRAME,
   PACKET_LABEL,
   PacketSweep,
@@ -22,9 +22,7 @@ import {
   useReviewsQuery,
   VerdictChip,
 } from './findings.tsx'
-
-const artifactLink = (src: string, slug: string, path: string) =>
-  `/runs/${src}/${slug}?tab=record&artifact=${encodeURIComponent(path)}`
+import { Address, artifactHref, Withheld } from './vocabulary.tsx'
 
 const NOTE_TONE: Record<RoundFinding['note'], string> = {
   'raised again': 'border-bad-line bg-bad-bg text-bad',
@@ -59,15 +57,16 @@ export function RoundCapPanel({ src, slug, task }: { src: string; slug: string; 
     return (
       <section className={PACKET_FRAME} data-round-cap>
         <p className={PACKET_LABEL}>Rounds — composed from the record</p>
-        <p className="mt-2 border border-warn-line bg-warn-bg px-2.5 py-2 text-[12px] leading-[1.5] text-warn" data-rounds-withheld>
-          Round comparison withheld — {comparison.reason}.
-        </p>
+        <Withheld view="Round comparison withheld" reason={{ sentence: `${comparison.reason}.` }} className="mt-2" data-rounds-withheld />
         <div className="mt-2" data-round-reports>
+          {/* #411 step 3: an Address never wears a chip border. These become
+              reference rows — kind, name, quoted verdict — with the path on
+              hover; until then they keep the chip the card's own row uses. */}
           <span className="flex flex-wrap gap-1.5">
             {scoped.map((r) => (
               <Link
                 key={r.path}
-                to={artifactLink(src, slug, r.path)}
+                to={artifactHref(src, slug, r.path)}
                 className="border border-line-cool bg-surface px-2 py-0.5 font-mono text-[11px] text-muted hover:border-accent hover:text-accent-deep"
               >
                 {r.path}
@@ -129,7 +128,8 @@ function Side({ side }: { side: RoundSide }) {
     <span className="inline-flex items-baseline gap-1.5" data-round-side={side.round}>
       <span className="font-ui text-[11px] text-muted">round {side.round}</span>
       <VerdictChip verdicts={[side.verdict]} compact />
-      {side.paths.length > 0 && <span className="font-mono text-[10.5px] text-faint">{side.paths.join(' · ')}</span>}
+      {/* #411 step 3: the side names its reports by kind; the files follow. */}
+      {side.paths.length > 0 && <Address size="xs">{side.paths.join(' · ')}</Address>}
     </span>
   )
 }
@@ -191,15 +191,9 @@ function Group({
 
 /** A disposition written in a different file from the finding it names — the
  *  file-per-round shape. The card would otherwise have nowhere to show it.
- *  Same bytes as the in-file case, so the same quoting: the bullet and the bold
- *  run are the report's markdown, not the reviewer's words (#282). */
+ *  Same bytes as the in-file case, so the same quoting and the same field: the
+ *  bullet and the bold run are the report's markdown, not the reviewer's words
+ *  (#282). */
 function ExtraDisposition({ text }: { text: string }) {
-  return (
-    <div className="flex flex-wrap gap-x-2">
-      <dt className="shrink-0 font-ui text-[10.5px] text-faint">Disposition</dt>
-      <dd className="min-w-0 flex-1 text-muted">
-        <Inline>{unbulleted(text)}</Inline>
-      </dd>
-    </div>
-  )
+  return <Field label="Disposition">{unbulleted(text)}</Field>
 }

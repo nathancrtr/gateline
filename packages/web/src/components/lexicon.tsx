@@ -140,6 +140,8 @@ function walk(node: HNode, opts: WalkOpts, skip?: SkipOnce): void {
  * a report bullet that happens to start with `AC1.1 —` is a citation and
  * keeps its card. */
 export const lexiconRehype = (pattern: string, sourcePath?: string) => () => (tree: HNode) => {
+  // step 2 (#415): the artifact's kind, derived here from its path;
+  // describeArtifact supplies it instead.
   const base = sourcePath?.split('/').pop() ?? ''
   walk(tree, {
     re: new RegExp(pattern, 'g'),

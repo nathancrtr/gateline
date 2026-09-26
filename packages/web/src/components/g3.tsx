@@ -26,17 +26,29 @@
 // ship", and no link to a deploy target, because the record names none.
 
 import { useQuery } from '@tanstack/react-query'
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { api, type ReleasePacket as ReleasePacketData, type ReleaseStep } from '../api.ts'
 import { ReportVerdict } from './evidence.tsx'
 import { PACKET_FRAME, PACKET_LABEL, PacketSweep } from './findings.tsx'
-import { GroupLabel, Withheld } from './g1.tsx'
+import { GroupLabel } from './g1.tsx'
 import { Markdown } from './markdown.tsx'
+import { Address, artifactHref, FieldRow, Fold, KindLabel, QuotedPassage, QuotedWord, Withheld } from './vocabulary.tsx'
 
+// step 2 (#415): the artifact's path, named here by the kind this packet
+// knows it to be; an ArtifactRef on the packet carries it instead.
 const PLAN = 'release-plan.md'
-const artifactLink = (src: string, slug: string, path: string) =>
-  `/runs/${src}/${slug}?tab=record&artifact=${encodeURIComponent(path)}`
+const VERIFICATION = 'verification-report.md'
+
+/** The fork fallback for a half of this packet, routed to the plan. */
+function PlanWithheld({ reason, src, slug, hook }: { reason: string; src: string; slug: string; hook: string }) {
+  return (
+    <Withheld
+      reason={{ sentence: reason }}
+      open={{ label: `read ${PLAN}`, href: artifactHref(src, slug, PLAN) }}
+      className="mt-1.5"
+      data-withheld={hook}
+    />
+  )
+}
 
 export function G3Packet({ src, slug }: { src: string; slug: string }) {
   const { data, isPending } = useQuery({ queryKey: ['g3', src, slug], queryFn: () => api.g3(src, slug) })
@@ -64,8 +76,8 @@ export function G3Packet({ src, slug }: { src: string; slug: string }) {
           <Shipping packet={packet} src={src} slug={slug} />
           <Steps packet={packet} src={src} slug={slug} />
           <VerifiedAgainst src={src} slug={slug} />
-          <Fold heading="Verification after release" body={packet.verificationAfter} hook="verification-after" />
-          <Fold heading="Blast radius" body={packet.blastRadius} hook="blast-radius" />
+          <PlanFold heading="Verification after release" body={packet.verificationAfter} hook="verification-after" />
+          <PlanFold heading="Blast radius" body={packet.blastRadius} hook="blast-radius" />
         </>
       )}
     </section>
@@ -73,33 +85,15 @@ export function G3Packet({ src, slug }: { src: string; slug: string }) {
 }
 
 /** One fact from the plan, boxed: its label, its value verbatim. */
-function Fact({
-  label,
-  value,
-  tone = 'plain',
-  hook,
-}: {
-  label: string
-  value: string
-  tone?: 'plain' | 'warn'
-  hook: string
-}) {
+function Fact({ label, value, tone = 'plain', hook }: { label: string; value: string; tone?: 'plain' | 'caution'; hook: string }) {
   return (
-    <li
-      className={`border px-3 py-2 ${tone === 'warn' ? 'border-warn-line bg-warn-bg' : 'border-line bg-surface'}`}
-      data-fact={hook}
-    >
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="shrink-0 font-ui text-[11px] text-muted">{label}</span>
-        {/* The value is a line of the plan's markdown — a commit in a code
-            span, a cited requirement — so it renders as one. */}
-        <div className={`prose-card min-w-0 flex-1 ${tone === 'warn' ? 'font-medium text-warn' : ''}`}>
-          <Markdown unwrapped sourcePath={PLAN}>
-            {value}
-          </Markdown>
-        </div>
-      </div>
-    </li>
+    <FieldRow label={label} tone={tone} data-fact={hook}>
+      {/* The value is a line of the plan's markdown — a commit in a code
+          span, a cited requirement — so it renders as one. */}
+      <Markdown unwrapped sourcePath={PLAN}>
+        {value}
+      </Markdown>
+    </FieldRow>
   )
 }
 
@@ -112,24 +106,24 @@ function Rollback({ packet, src, slug }: { packet: ReleasePacketData; src: strin
   return (
     <div data-g3-rollback>
       <GroupLabel hint="the signal that says undo this, and whether the undo has been tried">Rollback</GroupLabel>
-      {packet.fieldsWithheld && <Withheld reason={packet.fieldsWithheld} src={src} slug={slug} path={PLAN} hook="fields" />}
+      {packet.fieldsWithheld && <PlanWithheld reason={packet.fieldsWithheld} src={src} slug={slug} hook="fields" />}
       <ul className="mt-1.5 flex flex-col gap-1">
         {packet.rollbackTrigger !== null && <Fact label="Rollback trigger" value={packet.rollbackTrigger} hook="trigger" />}
         {packet.rollbackExercised !== null && (
           <Fact
             label="Rollback exercised"
             value={packet.rollbackExercised}
-            tone={packet.exercisedWord === 'no' ? 'warn' : 'plain'}
+            tone={packet.exercisedWord === 'no' ? 'caution' : 'plain'}
             hook="exercised"
           />
         )}
       </ul>
       {packet.rollbackPlan && (
-        <div className="mt-1.5 border border-line bg-surface px-3 py-2 text-[12.5px]" data-g3-rollback-plan>
+        <QuotedPassage className="mt-1.5 text-[12.5px]" data-g3-rollback-plan>
           <div className="prose-card">
             <Markdown unwrapped sourcePath={PLAN}>{packet.rollbackPlan}</Markdown>
           </div>
-        </div>
+        </QuotedPassage>
       )}
     </div>
   )
@@ -145,14 +139,16 @@ function Shipping({ packet, src, slug }: { packet: ReleasePacketData; src: strin
         {packet.environment !== null && <Fact label="Environment" value={packet.environment} hook="environment" />}
       </ul>
       {packet.ciHealth === null ? (
-        <Withheld reason="no CI health section." src={src} slug={slug} path={PLAN} hook="ci" />
+        <PlanWithheld reason="no CI health section." src={src} slug={slug} hook="ci" />
       ) : (
-        <div className="mt-1.5 border border-line bg-surface px-3 py-2 text-[12.5px]" data-g3-ci>
-          <p className="font-ui text-[11px] text-muted">CI health</p>
+        <QuotedPassage className="mt-1.5 text-[12.5px]" data-g3-ci>
+          <KindLabel as="p" tone="muted">
+            CI health
+          </KindLabel>
           <div className="prose-card">
             <Markdown unwrapped sourcePath={PLAN}>{packet.ciHealth}</Markdown>
           </div>
-        </div>
+        </QuotedPassage>
       )}
     </div>
   )
@@ -169,7 +165,7 @@ function Steps({ packet, src, slug }: { packet: ReleasePacketData; src: string; 
     <div data-g3-steps>
       <GroupLabel hint="in order, one act per item, executable as written">Release steps</GroupLabel>
       {packet.stepsWithheld ? (
-        <Withheld reason={packet.stepsWithheld} src={src} slug={slug} path={PLAN} hook="steps" />
+        <PlanWithheld reason={packet.stepsWithheld} src={src} slug={slug} hook="steps" />
       ) : (
         <>
           {irreversible.length > 0 && (
@@ -190,8 +186,9 @@ function Steps({ packet, src, slug }: { packet: ReleasePacketData; src: string; 
 
 function StepEntry({ step }: { step: ReleaseStep }) {
   return (
-    <li
-      className={`border px-3 py-2 ${step.irreversible ? 'border-warn-line bg-warn-bg' : 'border-line bg-surface'}`}
+    <QuotedPassage
+      as="li"
+      tone={step.irreversible ? 'caution' : 'plain'}
       data-step={step.n}
       data-irreversible={step.irreversible ? 'true' : undefined}
     >
@@ -203,12 +200,12 @@ function StepEntry({ step }: { step: ReleaseStep }) {
           </Markdown>
         </div>
         {step.irreversible && (
-          <span className="shrink-0 border border-warn-line bg-warn-bg px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none text-warn">
+          <QuotedWord tone="warn" className="shrink-0">
             irreversible
-          </span>
+          </QuotedWord>
         )}
       </div>
-    </li>
+    </QuotedPassage>
   )
 }
 
@@ -244,12 +241,7 @@ function VerifiedAgainst({ src, slug }: { src: string; slug: string }) {
             </p>
           )}
           <p className="mt-1">
-            <Link
-              className="font-mono text-[11px] text-accent underline underline-offset-2"
-              to={artifactLink(src, slug, 'verification-report.md')}
-            >
-              verification-report.md
-            </Link>
+            <Address to={artifactHref(src, slug, VERIFICATION)}>{VERIFICATION}</Address>
           </p>
         </div>
       )}
@@ -258,27 +250,13 @@ function VerifiedAgainst({ src, slug }: { src: string; slug: string }) {
 }
 
 /** An audit-time section, folded to its heading and opened in place to its verbatim body (#217). */
-function Fold({ heading, body, hook }: { heading: string; body: string | null; hook: string }) {
-  const [open, setOpen] = useState(false)
+function PlanFold({ heading, body, hook }: { heading: string; body: string | null; hook: string }) {
   if (body === null) return null
   return (
-    <div className="mt-2.5 border border-line bg-surface" data-g3-fold={hook} data-open={open ? 'true' : 'false'}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-baseline gap-2 px-3 py-2 text-left"
-        aria-expanded={open}
-      >
-        <span className="font-ui text-[10.5px] text-muted">{open ? '▾' : '▸'}</span>
-        <span className="text-[12.5px] font-medium text-ink">{heading}</span>
-      </button>
-      {open && (
-        <div className="px-3 pb-2 text-[12.5px]">
-          <div className="prose-card">
-            <Markdown unwrapped sourcePath={PLAN}>{body}</Markdown>
-          </div>
-        </div>
-      )}
-    </div>
+    <Fold heading={heading} className="mt-2.5" data-g3-fold={hook}>
+      <div className="prose-card">
+        <Markdown unwrapped sourcePath={PLAN}>{body}</Markdown>
+      </div>
+    </Fold>
   )
 }

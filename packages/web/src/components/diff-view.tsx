@@ -14,6 +14,7 @@
 // with a one-line reason rather than an unlabelled one posing as labelled.
 import type { DiffFile, SurfaceItemRef, SurfaceScopedDiff } from '../api.ts'
 import { arrangeDiff, fileLabel, totals } from '../surface.ts'
+import { Withheld } from './vocabulary.tsx'
 
 export function DiffView({ files, surface }: { files: DiffFile[]; surface?: SurfaceScopedDiff }) {
   if (files.length === 0) return <p className="py-8 text-center text-sm text-muted">No diff — the run branch matches the default branch.</p>
@@ -36,9 +37,12 @@ export function DiffView({ files, surface }: { files: DiffFile[]; surface?: Surf
           all. Either way the diff still renders — it is a G2 artifact — but it
           renders unlabelled, saying what it looked for and did not find. */}
       {surface?.withheld && (
-        <p className="border border-warn-line bg-warn-bg px-2.5 py-2 text-[12px] leading-[1.5] text-warn" data-surface-withheld>
-          Contact-surface grouping withheld — {surface.withheld} The full diff is below, in git's order.
-        </p>
+        <Withheld
+          view="Contact-surface grouping withheld"
+          reason={{ sentence: surface.withheld }}
+          after="The full diff is below, in git's order."
+          data-surface-withheld
+        />
       )}
 
       {/* The undeclared files lead. Not because they are worse, but because a

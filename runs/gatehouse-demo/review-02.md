@@ -68,3 +68,41 @@ I read the whole diff against requirements one, two, four, six and nine and the 
 ## Boundary check
 
 Inside the surface. 0b754f2 touches `packages/server/package.json`, `packages/server/src/snapshot.ts`, `packages/server/test/snapshot.test.ts` (all three declared) plus the task file's `notes:` block; no `state.yaml`, `packages/cli`, `vitest.config.ts` or lockfile hunk. The 180s `beforeAll` timeout the notes describe is local to the test file, as claimed. Worktree: the mutants were reverted with `git checkout` and confirmed by an empty `git status`; every CLI output tree, fake bundle, isolated temp dir and probe script lived under `/tmp` and was removed. A concurrent reviewer's `review-03.md` edit was present in the tree during this review and was committed by the orchestrator mid-round; it is not mine.
+
+# Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** `run/gatehouse-demo`, commit 8aa71a0 (`git diff f737876 8aa71a0`); round-1 diff was 0b754f2
+
+## Verify round
+- **F1 — resolved** — `packages/server/test/snapshot.test.ts:62-81` commits four siblings onto the stand-in's `main` (second `done`, `release`, unparseable YAML, no `state.yaml`) and `:105-122` pins `listRuns()` order, `included`, and each exclusion's exact reason with a length guard; re-applied the round-1 mutant (delete `snapshot.ts:62-65`) in place → 3 failed / 16 passed, each because `zzz-wrong-phase` is admitted; restored. One overclaim in the note: `aaa-second-done` does not "exercise the sort" — removing `.sort` at `snapshot.ts:76` still passes 19/19, because `lsTreeDirs` is raw `git ls-tree` (byte order) and the slug charset `[a-z0-9][a-z0-9-]*` (`core/src/record/scaffold.ts:15`) orders identically under `localeCompare`; no valid input can tell the two apart, so this is not a finding.
+- **F2 — resolved** — `packages/server/test/snapshot.test.ts:154-169` asserts each constant `toEqual` the plan's literal list (`plan.md:103-105`, matched token for token); re-applied all three drops (`/api/metrics`, `/diff`, `metrics`) in place → exactly the 3 new tests failed, 16 passed; restored.
+- **F3 — resolved** — `packages/server/src/snapshot.ts:281-298`: every flag reads its value through a helper that throws the usage line on `undefined`, an unrecognised token throws the same, and the parse now runs inside `run()` so it reaches the existing `.catch` → stderr → `exit(1)`. Driven five ways against this checkout (trailing `--repo-id`, trailing `--web-dist`, `--bogus`, a bare positional, `--out` alone): each exits 1 with the usage line on stderr, nothing on stdout, and no output directory created. A valid run still yields 354 routes / 22 runs (7 `gateline`, 15 `fixture`) / 26 shells.
+- **F4 — resolved** — `packages/server/test/snapshot.test.ts:197-198` parses every suffix file; re-applied a mutant overwriting every non-detail suffix route with the body `OK` → 1 failed (`SyntaxError: … "OK" is not valid JSON`), 18 passed; restored.
+- **F5 — resolved** — `packages/server/test/snapshot.test.ts:79` commits `runs/done-merged/notes with space #1.md` on `main`, so the artifact loop at `:203-218` now carries a name where request encoding and file name diverge; re-applied the round-1 mutant (`fileRoute` from `encoded`, `snapshot.ts:245`) in place → 1 failed on `existsSync` for that artifact, 18 passed; restored. Upgraded from PLAUSIBLE to concrete and closed.
+- **F6 — resolved** — `packages/server/test/snapshot.test.ts:40, 98, 257-258, 269-270`: both ad-hoc `mkdtempSync` dirs are pushed to `extraTempDirs` and swept in `afterAll`; ran the file twice under an isolated `TMPDIR` → the only entry left afterwards is Node's own `node-compile-cache`, no `gateline-snapshot-*` directory.
+
+## Coverage
+
+I re-read only the round-2 hunks and the implementer's response note, re-applied every round-1 mutant in place against the current test file and restored the module byte-for-byte after each, drove the command line with malformed and valid arguments against this checkout, reinstalled the workspace dependencies that were absent when this round began, and ran the typecheck, lint, and test claims myself; all six findings are genuinely closed, the reworked argument parser and the new fixture siblings introduce nothing I could break, and the one overclaim in the note concerns a sort that no valid input can disturb.
+
+| Requirement | Where | Mechanism checked | Status |
+|-------------|-------|-------------------|--------|
+| R2 / AC2.1, AC2.2 (F1) | `packages/server/test/snapshot.test.ts:105-122` | phase-drop mutant fails 3 tests; `included`, order, three reasons and `toHaveLength(3)` pinned | ✓ AC2.1, AC2.2 |
+| R1 / AC1.2, R6 / AC6.1 (F2) | `packages/server/test/snapshot.test.ts:154-169` | three literal lists equal `plan.md:103-105`; each drop fails only its own test | ✓ AC1.2, AC6.1 |
+| scope item 4 exit path (F3) | `packages/server/src/snapshot.ts:274-298` | five malformed invocations exit 1 with usage and no output dir; valid run unchanged | ✓ |
+| per-run route parses (F4) | `packages/server/test/snapshot.test.ts:192-201` | non-JSON suffix body fails with `SyntaxError` | ✓ acceptance "parses as JSON" |
+| scope item 3 encoding split (F5) | `packages/server/test/snapshot.test.ts:203-218` | encoded-filename mutant fails `existsSync` on `notes with space #1.md` | ✓ |
+| temp hygiene (F6) | `packages/server/test/snapshot.test.ts:96-102` | isolated `TMPDIR` empty of test dirs after two runs | ✓ |
+| new `beforeAll` fixture commit | `packages/server/test/snapshot.test.ts:62-81` | fixture repo inits on `main` with a local `user.name`/`user.email` and checks `main` back out (`fixtures/src/index.ts:663-665, 1164`), so the commit lands where the wrapper reads and needs no CI identity; `phase: done ` (trailing space before the comment) is present in the generated `state.yaml`, so the `replace` fires | ✓ |
+| slug sort | `packages/server/src/snapshot.ts:76` | `.sort` removal survives; byte order and `localeCompare` coincide on the slug charset | n/a (no failure scenario) |
+| argv flag-consumed-as-value | `packages/server/src/snapshot.ts:287-291` | `--repo --out x` reads `--out` as the repo path then hits usage on the missing `--out`; pre-existing round-1 behaviour, not introduced by the delta, and harmless | n/a |
+| unchanged surfaces | `packages/server/src/snapshot.ts:1-270`, `packages/server/package.json` | not in 8aa71a0; round-1 ✓ rows stand | ✓ |
+| full CLI run | `/tmp` output tree | 354 JSON files all parse, 26 shells, 7 `done` slugs with `kind: default`, `ref: main`, 8 exclusions with reasons on stderr, fixture dir removed from an isolated `TMPDIR` | ✓ AC1.2, AC2.1, AC6.1 |
+| not-yet-dispatched tasks | `runs/gatehouse-demo/plan.md:117` | the plan's invocation is flags-only, so the new unknown-token rejection cannot break task 05's workflow | ✓ no escalation |
+| toolchain claims | `packages/` | `npm run typecheck` exit 0; `npm run lint` 231 files, no fixes; `npx vitest run server/test/snapshot.test.ts` 19/19 in 18s; full `npm test` 101 files / 1292 tests passed, 2 skipped (pre-existing), exit 0 | ✓ |
+
+## Boundary check
+
+Inside the surface. 8aa71a0 touches exactly `packages/server/src/snapshot.ts`, `packages/server/test/snapshot.test.ts`, and the `notes:` block of the task file (additions only, from line 120); `packages/server/package.json` is unchanged this round and no `state.yaml`, `packages/cli`, `vitest.config.ts`, or lockfile hunk appears. Every mutant this round was applied to `snapshot.ts` alone, restored from a pre-mutant copy, and confirmed with `git diff --exit-code` after each; every CLI output tree, fake bundle and isolated temp dir lived under `/tmp` and was removed. Operational note, not a finding: `packages/node_modules` was absent when this round began, so I ran `npm ci --no-audit --no-fund` there — gitignored, nothing tracked moved. `git status --short` after the last restore lists only this report.

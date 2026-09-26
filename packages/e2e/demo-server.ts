@@ -34,6 +34,12 @@ export async function spawnDemoServer(repoDir: string): Promise<DemoServer> {
       if (m) {
         server.stdout?.off('data', onData)
         server.off('exit', onExit)
+        // Detaching the listener leaves the pipe with nothing consuming it;
+        // on Linux a child writing to a full pipe blocks synchronously, which
+        // could hang the server mid-suite. `resume()` puts the stream back in
+        // flowing mode with no listener, which discards data instead of
+        // buffering it — draining the pipe for the rest of the run.
+        server.stdout?.resume()
         resolvePromise(m[1]!)
       }
     }

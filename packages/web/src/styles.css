@@ -452,9 +452,8 @@ code, pre, kbd, samp, .font-mono, .imp {
 .lex-card-def code {
   @apply text-[11px];
 }
-.lex-card-jump {
-  @apply font-mono text-[11px] text-ink underline underline-offset-2;
-}
+/* `.lex-card-jump` is a hook, not a style: the jump is a vocabulary
+   Address (#435), which carries its own face and link colour. */
 
 /* Cited-objects strip: the artifact's reference surface, compressed to one
    line until the reviewer opens it. */

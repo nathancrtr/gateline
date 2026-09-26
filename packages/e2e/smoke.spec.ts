@@ -239,6 +239,10 @@ test('run lexicon (#163): ids resolve to verbatim hover cards and jump to their 
   await expect(card).toContainText('acceptance criterion')
   // Verbatim from the fixture spec — the card quotes, never paraphrases.
   await expect(card).toContainText('running the tool on sample input produces the documented output')
+  // The jump is the definition's line as an Address after a UI word (#435).
+  // It stays in the cockpit, so it never spends ↗, which is Link-out's.
+  await expect(card.locator('.lex-card-jump[data-address]')).toHaveText(/^spec\.md:\d+$/)
+  await expect(card).not.toContainText('↗')
   await card.locator('.lex-card-jump').click()
   await expect(page).toHaveURL(/artifact=spec\.md/)
   await expect(page.locator('#def-R1')).toContainText('Core behavior')

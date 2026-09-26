@@ -60,13 +60,33 @@ describe('1 · the malformed card says the parse error once', () => {
   // byte-equality filter that kept the two from doubling is gone with it. The
   // diagnostic renders once, whole, under the label of what produced it.
   it('renders the parser’s diagnostic once, byte for byte, in a <pre>', () => {
-    const malformed = item({ kind: 'malformed', gate: null, title: 'Malformed run state', detail: PARSE_ERROR, problems: [PARSE_ERROR] })
+    const malformed = item({
+      kind: 'malformed',
+      gate: null,
+      title: 'Malformed run state',
+      detail: PARSE_ERROR,
+      problems: [PARSE_ERROR],
+      unreadable: { kind: 'parser', diagnostic: PARSE_ERROR, ledger: ref('state.yaml') },
+    })
     const html = render(createElement(CardFacts, { item: malformed, now: 2 }))
     const escaped = PARSE_ERROR.replace(/\n$/, '')
     expect(html.split('phase: [this is').length - 1).toBe(1)
     expect(html).toContain('<pre')
     expect(html).toContain(escaped.split('\n')[0])
     expect(html).toContain('Run state parser')
+  })
+
+  // #435: a state with no parse error is the cockpit's to say, with the file
+  // as the Address — never a sentence set under the parser's name.
+  it('an absent or unexplained state names the Ledger, the file as its Address, and no parser', () => {
+    for (const kind of ['absent', 'unexplained'] as const) {
+      const malformed = item({ kind: 'malformed', gate: null, problems: [], unreadable: { kind, ledger: ref('state.yaml') } })
+      const html = render(createElement(CardFacts, { item: malformed, now: 2 }))
+      expect(html).not.toContain('Run state parser')
+      expect(html).toContain('Ledger')
+      expect(html).toMatch(/<[^>]*data-address[^>]*>state\.yaml</)
+      expect(html).toContain(`data-state-problem="${kind}"`)
+    }
   })
 })
 

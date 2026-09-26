@@ -5,6 +5,7 @@ import { type ReactNode, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { api, formatAge, type RunSummary } from '../api.ts'
 import { BudgetMeter, GateLedger, Imp, PhaseChip } from '../components/chips.tsx'
+import { UnreadableState } from '../components/unreadable-state.tsx'
 import { EdgeFade, useScrollCue } from '../scroll-cue.tsx'
 import { PageStatus } from './inbox.tsx'
 
@@ -178,8 +179,17 @@ export function PortfolioPage() {
                       <div className="mt-[2px] font-ui text-[11.5px] text-muted">
                         {run.source} · {run.profile}
                       </div>
-                      {run.malformed && (
-                        <div className="mt-[3px] font-mono text-[11.5px] text-bad before:content-['✕_']">{run.malformed}</div>
+                      {/* Why the state could not be read, from core's fact
+                          (#435): the parser's message as a Diagnostic under
+                          its producer, as the decide card sets it, with `<pre>`
+                          keeping the caret under its column; any other case in
+                          the cockpit's words with the file as the Address. It
+                          was once a red row line, flowed, with the caret
+                          collapsed onto the line before it. */}
+                      {run.unreadable && (
+                        <div className="mt-1.5 max-w-[46ch]">
+                          <UnreadableState problem={run.unreadable} src={run.source} slug={run.slug} />
+                        </div>
                       )}
                       {run.aheadOfOrigin != null && run.aheadOfOrigin > 0 && (run.behindOrigin ?? 0) > 0 ? (
                         <Imp

@@ -221,6 +221,10 @@ function printItem(item: InboxItem): void {
       break
     }
     case 'malformed':
+      // The parser's diagnostic, line for line; any other reason is said here,
+      // since core states it as a fact rather than a sentence (#435).
+      if (item.unreadable?.kind === 'absent') more('state', `${item.unreadable.ledger.path} is missing from the run`)
+      else if (item.unreadable?.kind === 'unexplained') more('state', `no state read from ${item.unreadable.ledger.path}, and no reason given`)
       for (const p of item.problems) for (const line of p.trimEnd().split('\n')) console.log(line ? `${pad}${line}` : '')
       break
   }

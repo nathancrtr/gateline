@@ -6,10 +6,11 @@
  * and this test is what makes that a checked fact rather than a comment in
  * `api.ts`.
  *
- * The one exception is real and deliberate (ADR-6): two pages value-import the
- * record layer so the new-run form can preview the exact commit the server
- * will make, and the run page can read a state document's passthrough intake
- * block. `record/` is browser-safe — yaml and zod, no node builtins, with
+ * The one exception is real and deliberate (ADR-6): three files value-import
+ * the record layer — one so the new-run form can preview the exact commit the
+ * server will make, and two split out of the run page (#413) so it can read a
+ * state document's passthrough intake block and fold an artifact's audit-time
+ * sections in place. `record/` is browser-safe — yaml and zod, no node builtins, with
  * `core/test/layering.test.ts` keeping it that way — but "browser-safe today"
  * is not a licence to spread. The exception is a list, and growing it means
  * editing this file on purpose.
@@ -39,7 +40,14 @@ const RECORD_VALUE_IMPORTERS = new Set([
   // form previews the commit the server would make rather than guessing it.
   'pages/new-run.tsx',
   // readIntake, over the passthrough `intake:` block already on the state doc.
-  'pages/run.tsx',
+  // Moved here from pages/run.tsx when #413 split the run page by surface:
+  // the genesis line is readIntake's only caller, and it lives in the header
+  // now, so the value import moved with it.
+  'pages/run/header.tsx',
+  // splitSections, to fold an artifact's audit-time sections in place (#217).
+  // Moved here from pages/run.tsx in the same split — FoldedMarkdown, its only
+  // caller, is part of the Record surface now.
+  'pages/run/record.tsx',
 ])
 
 interface ImportStatement {

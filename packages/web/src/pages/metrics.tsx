@@ -5,6 +5,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api, type MetricsResponse } from '../api.ts'
 import { Imp } from '../components/chips.tsx'
+import { usd } from '../money.ts'
 import { PageStatus } from './inbox.tsx'
 
 // Ordered burden ramp: one hue (the ink) at three textures — solid, hatched,
@@ -232,8 +233,8 @@ function BudgetSection({ metrics }: { metrics: MetricsResponse }) {
                 <td className={`${TD} font-mono text-xs`}>
                   {r.source}/{r.slug}
                 </td>
-                <td className={`${TD} text-right font-ui text-xs tabular-nums`}>{r.budget.limit === null ? '—' : `$${r.budget.limit}`}</td>
-                <td className={`${TD} text-right font-ui text-xs tabular-nums`}>{r.budget.spent === null ? '—' : `$${r.budget.spent}`}</td>
+                <td className={`${TD} text-right font-ui text-xs tabular-nums`}>{r.budget.limit === null ? '—' : usd(r.budget.limit)}</td>
+                <td className={`${TD} text-right font-ui text-xs tabular-nums`}>{r.budget.spent === null ? '—' : usd(r.budget.spent)}</td>
                 <td className={`${TD} pl-3 text-xs`}>
                   {r.budget.everUpdated ? <Imp>✓ updated during the run</Imp> : <Imp tone="hatch">never updated</Imp>}
                 </td>

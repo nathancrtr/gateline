@@ -52,7 +52,7 @@ test('inbox rows compose their lines from facts (#433)', async ({ page }) => {
   const paused = rows.filter({ hasText: /\/paused-budget/ })
   await expect(paused.locator('[data-inbox-title]')).toHaveText('Run paused budget-exhausted')
   await expect(paused.locator('[data-quoted-word="budget-exhausted"]')).toBeVisible()
-  await expect(paused.locator('[data-inbox-line]')).toHaveText('$10.40 spent · limit $10.00')
+  await expect(paused.locator('[data-inbox-line]')).toHaveText('$10.40 spent · limit $10')
   const cap = rows.filter({ hasText: /\/round-cap/ })
   await expect(cap.locator('[data-inbox-title]')).toHaveText('Round cap reached on 01-core')
   await expect(cap.locator('[data-inbox-line]')).toHaveText('review rounds 3/3 without convergence')
@@ -61,7 +61,7 @@ test('inbox rows compose their lines from facts (#433)', async ({ page }) => {
 test('the paused card states its budget with the key as an address, then the instruction (#433)', async ({ page }) => {
   await goto(page, `/runs/${sourceId()}/paused-budget?decide=paused`)
   const card = page.locator('[data-needs-card]')
-  await expect(card.locator('[data-paused-budget]')).toHaveText('$10.40 spent · limit $10.00, set by cost_limit_usd')
+  await expect(card.locator('[data-paused-budget]')).toHaveText('$10.40 spent · limit $10, set by cost_limit_usd')
   await expect(card.locator('[data-paused-budget] [data-address]')).toHaveText('cost_limit_usd')
   await expect(card.locator('[data-instruction]')).toContainText('Resume with a higher limit')
 })

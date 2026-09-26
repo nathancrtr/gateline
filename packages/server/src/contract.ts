@@ -48,6 +48,8 @@ import type {
   GateMetrics,
   InboxItem,
   LedgerEntry,
+  LedgerQuote,
+  LedgerTarget,
   LexiconEntry,
   Metrics,
   Phase,
@@ -108,6 +110,8 @@ export type {
   GateMetrics,
   InboxItem,
   LedgerEntry,
+  LedgerQuote,
+  LedgerTarget,
   LexiconEntry,
   Phase,
   Profile,
@@ -200,7 +204,9 @@ export interface HistoryEntry {
    * The subject read as a ledger entry (#268), parsed in core on the server —
    * the browser takes types from core but never values.
    * `kind: 'other'` means the subject matched no known grammar and must be
-   * rendered verbatim.
+   * rendered verbatim. Joined to the state the commit wrote (#426): a
+   * decision's `notes`, a closure's `reason`, an escalation's `escalatedBy` /
+   * `escalatedAbout`, an engine row's `target` — facts, which History composes.
    */
   ledger: LedgerEntry
 }

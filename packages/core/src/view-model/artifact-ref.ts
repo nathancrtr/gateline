@@ -5,7 +5,7 @@
 // to print a label has the kind and the id in hand, and must *choose* to print
 // the path. The kind comes from `describeArtifact` in the record layer, the one
 // place a path's kind is derived; nothing downstream re-derives it.
-import { type ArtifactFamily, type ArtifactKind, describeArtifact } from '../record/artifact.ts'
+import { type ArtifactFamily, type ArtifactFormat, type ArtifactKind, describeArtifact } from '../record/artifact.ts'
 import type { ReviewReport } from './review.ts'
 
 /** What a review report says it reviews, read from the report itself. */
@@ -32,6 +32,8 @@ export interface ArtifactRef {
   /** The contract's own name for the kind (`work item`, `review report`), or null for `other`. */
   contractName: string | null
   family: ArtifactFamily
+  /** What its bytes are written in (`describeArtifact`): the reader's choice of renderer. */
+  format: ArtifactFormat
   /**
    * A review report's subject, read from its header — the one fact about a
    * review its path cannot supply. Null on every other kind, and on a review
@@ -54,9 +56,9 @@ function latestRound(rounds: readonly { round: number | null }[]): number | null
  * `reviewOf` is null.
  */
 export function artifactRef(path: string, report?: Pick<ReviewReport, 'task' | 'rounds'>): ArtifactRef {
-  const { kind, id, contract, contractName, family } = describeArtifact(path)
+  const { kind, id, contract, contractName, family, format } = describeArtifact(path)
   const reviewOf = kind === 'review-report' && report ? { task: report.task, round: latestRound(report.rounds) } : null
-  return { kind, id, path, contract, contractName, family, reviewOf }
+  return { kind, id, path, contract, contractName, family, format, reviewOf }
 }
 
 /**

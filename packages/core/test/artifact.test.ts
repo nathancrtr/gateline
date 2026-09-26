@@ -17,38 +17,38 @@ type Row = [path: string, expected: ArtifactDescription]
 
 const TABLE: Row[] = [
   // The one-per-run kinds, at the paths the contracts fix for them.
-  ['intent-brief.md', { kind: 'intent-brief', id: null, contract: 'intent-brief.md', contractName: 'intent brief', family: 'gate' }],
-  ['spec.md', { kind: 'spec', id: null, contract: 'spec.md', contractName: 'spec', family: 'gate' }],
-  ['plan.md', { kind: 'plan', id: null, contract: 'plan.md', contractName: 'plan', family: 'gate' }],
+  ['intent-brief.md', { kind: 'intent-brief', id: null, contract: 'intent-brief.md', contractName: 'intent brief', family: 'gate', format: 'markdown' }],
+  ['spec.md', { kind: 'spec', id: null, contract: 'spec.md', contractName: 'spec', family: 'gate', format: 'markdown' }],
+  ['plan.md', { kind: 'plan', id: null, contract: 'plan.md', contractName: 'plan', family: 'gate', format: 'markdown' }],
   [
     'verification-report.md',
-    { kind: 'verification-report', id: null, contract: 'verification-report.md', contractName: 'verification report', family: 'gate' },
+    { kind: 'verification-report', id: null, contract: 'verification-report.md', contractName: 'verification report', family: 'gate', format: 'markdown' },
   ],
-  ['release-plan.md', { kind: 'release-plan', id: null, contract: 'release-plan.md', contractName: 'release plan', family: 'gate' }],
-  ['state.yaml', { kind: 'state', id: null, contract: 'state.yaml', contractName: 'run state', family: 'ledger' }],
+  ['release-plan.md', { kind: 'release-plan', id: null, contract: 'release-plan.md', contractName: 'release plan', family: 'gate', format: 'markdown' }],
+  ['state.yaml', { kind: 'state', id: null, contract: 'state.yaml', contractName: 'run state', family: 'ledger', format: 'yaml' }],
   // Contracts exist for these two, but they are presence-only today.
   // A sweep's delta is read by a human reviewing a gate-less sweep branch.
-  ['docs-delta.md', { kind: 'docs-delta', id: null, contract: null, contractName: 'docs delta', family: 'other' }],
+  ['docs-delta.md', { kind: 'docs-delta', id: null, contract: null, contractName: 'docs delta', family: 'other', format: 'markdown' }],
   [
     'integration-profile.md',
-    { kind: 'integration-profile', id: null, contract: null, contractName: 'integration profile', family: 'gate' },
+    { kind: 'integration-profile', id: null, contract: null, contractName: 'integration profile', family: 'gate', format: 'markdown' },
   ],
   // Work items: tasks/NN-slug.yaml, named by the id the filename carries.
-  ['tasks/01-core.yaml', { kind: 'work-item', id: '01-core', contract: 'work-item.yaml', contractName: 'work item', family: 'work-items' }],
+  ['tasks/01-core.yaml', { kind: 'work-item', id: '01-core', contract: 'work-item.yaml', contractName: 'work item', family: 'work-items', format: 'yaml' }],
   [
     'tasks/06-pages-workflow.yaml',
-    { kind: 'work-item', id: '06-pages-workflow', contract: 'work-item.yaml', contractName: 'work item', family: 'work-items' },
+    { kind: 'work-item', id: '06-pages-workflow', contract: 'work-item.yaml', contractName: 'work item', family: 'work-items', format: 'yaml' },
   ],
   // Off the NN-slug grammar: still checked as a work item, and its stem is still a name.
-  ['tasks/hotfix.yaml', { kind: 'work-item', id: 'hotfix', contract: 'work-item.yaml', contractName: 'work item', family: 'work-items' }],
+  ['tasks/hotfix.yaml', { kind: 'work-item', id: 'hotfix', contract: 'work-item.yaml', contractName: 'work item', family: 'work-items', format: 'yaml' }],
   // Nested under tasks/: the stem is a path, so there is no name to give it.
-  ['tasks/sub/01-x.yaml', { kind: 'work-item', id: null, contract: 'work-item.yaml', contractName: 'work item', family: 'work-items' }],
+  ['tasks/sub/01-x.yaml', { kind: 'work-item', id: null, contract: 'work-item.yaml', contractName: 'work item', family: 'work-items', format: 'yaml' }],
   // Review reports: review-NN.md, and the suffixed shapes real runs hold.
-  ['review-01.md', { kind: 'review-report', id: '01', contract: 'review-report.md', contractName: 'review report', family: 'reviews' }],
-  ['review-04.md', { kind: 'review-report', id: '04', contract: 'review-report.md', contractName: 'review report', family: 'reviews' }],
+  ['review-01.md', { kind: 'review-report', id: '01', contract: 'review-report.md', contractName: 'review report', family: 'reviews', format: 'markdown' }],
+  ['review-04.md', { kind: 'review-report', id: '04', contract: 'review-report.md', contractName: 'review report', family: 'reviews', format: 'markdown' }],
   [
     'review-03-round2.md',
-    { kind: 'review-report', id: '03-round2', contract: 'review-report.md', contractName: 'review report', family: 'reviews' },
+    { kind: 'review-report', id: '03-round2', contract: 'review-report.md', contractName: 'review report', family: 'reviews', format: 'markdown' },
   ],
   [
     'review-01-candidate-import-desk-r1.md',
@@ -57,26 +57,26 @@ const TABLE: Row[] = [
       id: '01-candidate-import-desk-r1',
       contract: 'review-report.md',
       contractName: 'review report',
-      family: 'reviews',
+      family: 'reviews', format: 'markdown',
     },
   ],
   // Everything else is `other`: presence-only, shown as the file it is.
-  ['retro.md', { kind: 'other', id: null, contract: null, contractName: null, family: 'other' }],
-  ['sweep.yaml', { kind: 'other', id: null, contract: null, contractName: null, family: 'other' }],
-  ['notes/scratch.txt', { kind: 'other', id: null, contract: null, contractName: null, family: 'other' }],
-  ['screenshots/inbox.png', { kind: 'other', id: null, contract: null, contractName: null, family: 'other' }],
+  ['retro.md', { kind: 'other', id: null, contract: null, contractName: null, family: 'other', format: 'markdown' }],
+  ['sweep.yaml', { kind: 'other', id: null, contract: null, contractName: null, family: 'other', format: 'yaml' }],
+  ['notes/scratch.txt', { kind: 'other', id: null, contract: null, contractName: null, family: 'other', format: 'text' }],
+  ['screenshots/inbox.png', { kind: 'other', id: null, contract: null, contractName: null, family: 'other', format: 'text' }],
   // A contract's filename away from where the contract puts it is not a second one.
-  ['design/spec.md', { kind: 'other', id: null, contract: null, contractName: null, family: 'other' }],
-  ['design/review-01.md', { kind: 'other', id: null, contract: null, contractName: null, family: 'other' }],
-  ['review-notes.md', { kind: 'other', id: null, contract: null, contractName: null, family: 'other' }],
-  ['review-01.yaml', { kind: 'other', id: null, contract: null, contractName: null, family: 'other' }],
-  ['tasks/01-core.md', { kind: 'other', id: null, contract: null, contractName: null, family: 'other' }],
-  ['tasks/.yaml', { kind: 'other', id: null, contract: null, contractName: null, family: 'other' }],
+  ['design/spec.md', { kind: 'other', id: null, contract: null, contractName: null, family: 'other', format: 'markdown' }],
+  ['design/review-01.md', { kind: 'other', id: null, contract: null, contractName: null, family: 'other', format: 'markdown' }],
+  ['review-notes.md', { kind: 'other', id: null, contract: null, contractName: null, family: 'other', format: 'markdown' }],
+  ['review-01.yaml', { kind: 'other', id: null, contract: null, contractName: null, family: 'other', format: 'yaml' }],
+  ['tasks/01-core.md', { kind: 'other', id: null, contract: null, contractName: null, family: 'other', format: 'markdown' }],
+  ['tasks/.yaml', { kind: 'other', id: null, contract: null, contractName: null, family: 'other', format: 'yaml' }],
   // A path is arbitrary input: an inherited property name is not a kind.
-  ['constructor', { kind: 'other', id: null, contract: null, contractName: null, family: 'other' }],
-  ['toString', { kind: 'other', id: null, contract: null, contractName: null, family: 'other' }],
-  ['__proto__', { kind: 'other', id: null, contract: null, contractName: null, family: 'other' }],
-  ['hasOwnProperty', { kind: 'other', id: null, contract: null, contractName: null, family: 'other' }],
+  ['constructor', { kind: 'other', id: null, contract: null, contractName: null, family: 'other', format: 'text' }],
+  ['toString', { kind: 'other', id: null, contract: null, contractName: null, family: 'other', format: 'text' }],
+  ['__proto__', { kind: 'other', id: null, contract: null, contractName: null, family: 'other', format: 'text' }],
+  ['hasOwnProperty', { kind: 'other', id: null, contract: null, contractName: null, family: 'other', format: 'text' }],
 ]
 
 describe('describeArtifact', () => {
@@ -128,6 +128,7 @@ describe('artifactRef', () => {
       contract: 'work-item.yaml',
       contractName: 'work item',
       family: 'work-items',
+      format: 'yaml',
       reviewOf: null,
     })
   })

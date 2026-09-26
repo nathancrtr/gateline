@@ -91,18 +91,6 @@ const EXCEPTIONS: Exception[] = [
     reason:
       "KindLabel's dev-time invariant: it throws when a caption *is* a filename. A guard against printing a path, not a classifier of one — it decides nothing about what an artifact is.",
   },
-  {
-    file: 'pages/run/record.tsx',
-    text: "p.endsWith('.md')",
-    reason:
-      "The reader's fallback landing, when no gate's packet decides what opens: the first markdown artifact, a readable document over a YAML dump. A format preference, not a kind — it never says what the artifact is. Step 7 (#411: field views for YAML) gives `state` and `work-item` views of their own, after which the landing can prefer by family off the ref and this goes.",
-  },
-  {
-    file: 'pages/run/record.tsx',
-    text: "path.endsWith('.md')",
-    reason:
-      "The reader's body picks the markdown renderer over `<pre>`: a format choice, not a kind. The kind cannot decide it alone — kind `other` (`retro.md`, a design note, a screenshot) is every format. Step 7 (#411: field views for YAML) moves the view choice onto the kind for `state` and `work-item`; the extension then decides only for `other`, which no contract describes.",
-  },
 ]
 
 interface Finding {

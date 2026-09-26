@@ -626,6 +626,21 @@ test('surfaces (#258): the change reads inside Record, and every artifact stays 
   await page.locator('[data-artifact-entry="tasks/01-core.yaml"]').click()
   await expect(page.locator('[data-task-title]')).toBeVisible()
   await expect(page.locator('article')).toContainText('runs/g2-pending/tasks/01-core.yaml')
+  // …and reads as fields (#434): the contract's words, the bytes one toggle away.
+  const fields = page.locator('[data-field-view="work-item"]')
+  await expect(fields.locator('[data-field="file_contact_surface"] dt')).toHaveText('File-contact surface')
+  await expect(fields.locator('[data-field="file_contact_surface"] [data-address]')).toHaveText('src/core.py')
+  await expect(fields.locator('[data-quoted-word="review-approved"]')).toBeVisible()
+  await expect(page.locator('article pre')).toHaveCount(0)
+  await page.locator('[data-show-bytes]').click()
+  await expect(page.locator('[data-bytes]')).toContainText('file_contact_surface:\n  - src/core.py')
+  await expect(page.locator('[data-show-bytes]')).toHaveText('hide bytes')
+  // The ledger reads as the run's state: its gates, its tasks, the bytes behind the same toggle.
+  await entry('state.yaml').click()
+  await expect(page.locator('[data-field-view="state"] [data-field-entry="G0"] [data-quoted-word="true"]')).toBeVisible()
+  await expect(page.locator('article pre')).toHaveCount(0)
+  await page.locator('[data-show-bytes]').click()
+  await expect(page.locator('[data-bytes]')).toContainText('gates:')
 })
 
 test('G1 packet (#255): a patch run keeps its brief-plus-work-item view', async ({ page }) => {

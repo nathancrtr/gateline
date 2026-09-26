@@ -4,16 +4,36 @@
 // symbol below so no import path a test already uses had to change.
 import { splitSections } from '@gateline/core/record'
 import { useQuery } from '@tanstack/react-query'
-import { type ReactNode, useEffect, useRef } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { type ArtifactKind, type ArtifactRef, api, type RunDetailResponse } from '../../api.ts'
+import {
+  type ArtifactKind,
+  type ArtifactRef,
+  api,
+  type Field,
+  type FieldEntry,
+  type FieldView,
+  type RunDetailResponse,
+} from '../../api.ts'
 import { ValidationBadge } from '../../components/chips.tsx'
 import { DiffView } from '../../components/diff-view.tsx'
 import { EvidenceRollupPanel } from '../../components/evidence.tsx'
 import { FindingsPanel, useReviews, VerdictChip } from '../../components/findings.tsx'
-import { CitedObjects } from '../../components/lexicon.tsx'
+import { CitedObjects, CitedText } from '../../components/lexicon.tsx'
 import { Markdown } from '../../components/markdown.tsx'
-import { Address, Instruction, Name } from '../../components/vocabulary.tsx'
+import {
+  Address,
+  Count,
+  Diagnostic,
+  Fold,
+  Instruction,
+  KindLabel,
+  Name,
+  QuotedPassage,
+  type QuotedTone,
+  QuotedWord,
+  Withheld,
+} from '../../components/vocabulary.tsx'
 import { isAuditSection, itemCount } from '../../fold.ts'
 import { DIFF_SELECTION, landingArtifact } from '../../landing.ts'
 import { orderArtifacts, type RailLabel, railGroups } from '../../record-rail.ts'
@@ -51,11 +71,13 @@ export function RecordSurface({
   const paths = refs.map((r) => r.path)
   const showDiff = selected === DIFF_SELECTION
   // An explicit selection always wins; otherwise the pending gate's own packet
-  // decides what opens (#250), and only then does filename order get a say.
+  // decides what opens (#250); then the first document a gate or a review
+  // reads, by family off the ref (#434) rather than by extension; and only
+  // then does rail order get a say.
   const current =
     (showDiff ? null : selected) ??
     landingArtifact({ items: detail.items, profile: detail.summary.profile, artifacts: refs }) ??
-    paths.find((p) => p.endsWith('.md')) ??
+    refs.find((r) => r.family === 'gate' || r.family === 'reviews')?.path ??
     paths[0] ??
     null
   // Verdict chips on the review entries (#215): what the review concluded,
@@ -248,13 +270,6 @@ function ArtifactBody({ src, slug, path, artifact }: { src: string; slug: string
     queryKey: ['artifact', src, slug, path],
     queryFn: () => api.artifact(src, slug, path),
   })
-  // A work item's `title:` heads its reader (#401): the rail says the id, and
-  // the sentence the architect wrote is the one thing a YAML dump buries. The G1 packet already carries every work item parsed, under the
-  // same query the G1 surface uses, so this is one cache entry, not a second
-  // parser in the browser. Absent until it loads; nothing is invented.
-  const isWorkItem = kind === 'work-item'
-  const g1 = useQuery({ queryKey: ['g1', src, slug], queryFn: () => api.g1(src, slug), enabled: isWorkItem })
-  const taskTitle = isWorkItem ? (g1.data?.tasks.find((t) => t.path === path)?.title ?? null) : null
   // Jump-to-definition (#163): the anchor param lands on the def-<id> heading
   // ids the lexicon rehype stage stamps onto R/ADR definition headings.
   const [params] = useSearchParams()
@@ -271,6 +286,16 @@ function ArtifactBody({ src, slug, path, artifact }: { src: string; slug: string
   if (isLoading) return <LoadingSkeleton text="Reading artifact…" />
   if (error) return <PageStatus text={(error as Error).message} bad />
   const { content, validation } = data!
+  // An older server sends no field view (#434); the reader then shows the
+  // bytes as it always did, and nothing is derived here in its place.
+  const fields = data!.fields ?? null
+  // A work item's `title:` heads its reader (#401): the rail says the id, and
+  // the sentence the architect wrote is the one thing a YAML dump buries. It
+  // arrives with the field view, read by the one work-item parser, so the
+  // field list below does not say it a second time.
+  const title = kind === 'work-item' ? fields?.fields.find((f) => f.key === 'title') : undefined
+  const taskTitle = title?.kind === 'passage' && title.value.trim() !== '' ? title.value : null
+  const form = bodyForm(artifact, fields)
   const contract = contractBadgeName(path, validation.contract, artifact?.contractName ?? null)
   const contractWords = `${contract.name ? `the ${contract.name} ` : ''}contract`
   return (
@@ -310,8 +335,10 @@ function ArtifactBody({ src, slug, path, artifact }: { src: string; slug: string
                 {' '}
                 <Address className="font-normal">{validation.contract}</Address>
               </>
-            )}{' '}
-            — missing: {validation.missing.join(', ')}
+            )}
+            {/* A contract that names missing parts says which; the run state's
+                failure is its parser's, and the diagnostic below says it. */}
+            {validation.missing.length > 0 && ` — missing: ${validation.missing.join(', ')}`}
           </p>
         )}
         <CitedObjects content={content} path={path} />
@@ -321,10 +348,12 @@ function ArtifactBody({ src, slug, path, artifact }: { src: string; slug: string
           </div>
         )}
         {kind === 'review-report' && <FindingsPanel src={src} slug={slug} path={path} />}
-        {path.endsWith('.md') ? (
+        {form === 'markdown' ? (
           <FoldedMarkdown content={content} kind={kind} audit={validation.audit ?? []} />
+        ) : form === 'fields' && fields ? (
+          <FieldViewBody key={path} view={fields} content={content} kind={kind} src={src} slug={slug} />
         ) : (
-          <pre className="overflow-x-auto font-mono text-xs leading-5">{content}</pre>
+          <Bytes content={content} />
         )}
       </div>
     </article>
@@ -379,6 +408,282 @@ function FoldedMarkdown({ content, kind, audit }: { content: string; kind: Artif
       })}
     </div>
   )
+}
+
+/**
+ * Which renderer the reader uses (#434) — read off the artifact's ref, never
+ * its path. A work item and the run state are YAML the server reads into
+ * fields; every other kind says what its bytes are written in through the
+ * ref's `format` (`describeArtifact`, the one classifier): markdown renders as
+ * markdown, anything else reads as its bytes.
+ */
+export function bodyForm(ref: Pick<ArtifactRef, 'kind' | 'format'> | null, fields: FieldView | null): 'markdown' | 'fields' | 'bytes' {
+  if (ref?.kind === 'work-item' || ref?.kind === 'state') return fields ? 'fields' : 'bytes'
+  return ref?.format === 'markdown' ? 'markdown' : 'bytes'
+}
+
+/** The file, verbatim: the record reader's verification target (docs/SEAM.md §10). */
+function Bytes({ content }: { content: string }) {
+  return (
+    <pre data-bytes className="overflow-x-auto font-mono text-xs leading-5">
+      {content}
+    </pre>
+  )
+}
+
+/**
+ * A YAML artifact read as fields (#434): a work item over its contract's
+ * keys, `state.yaml` as the run's ledger, each value through the vocabulary
+ * (docs/SEAM.md §5). The bytes are one toggle away — "show bytes", the same
+ * affordance as History's "show raw commits" — and show the file exactly as
+ * committed. A view that must withhold itself (a fork whose work item writes
+ * its surface as a mapping) says so and shows the bytes alone, with no way to
+ * toggle back to a view that would have had to guess.
+ */
+export function FieldViewBody({
+  view,
+  content,
+  kind,
+  src,
+  slug,
+}: {
+  view: FieldView
+  content: string
+  kind: ArtifactKind
+  src: string
+  slug: string
+}) {
+  const [bytes, setBytes] = useState(false)
+  if (view.withheld) {
+    return (
+      <div data-field-view={view.kind}>
+        <Withheld className="mb-4" view="Field view" reason={view.withheld} src={src} slug={slug} link={false} after="The bytes follow." />
+        <Bytes content={content} />
+      </div>
+    )
+  }
+  // The title heads the reader already (see ArtifactBody); the rest of the
+  // work item reads here in the contract's order.
+  const fields = view.kind === 'work-item' ? view.fields.filter((f) => f.key !== 'title') : view.fields
+  return (
+    <div data-field-view={view.kind}>
+      <div className="mb-3 flex items-center justify-end">
+        <button
+          type="button"
+          onClick={() => setBytes((v) => !v)}
+          className="font-ui text-[11px] text-muted underline decoration-dotted underline-offset-2 hover:text-ink"
+          aria-pressed={bytes}
+          data-show-bytes
+        >
+          {bytes ? 'hide bytes' : 'show bytes'}
+        </button>
+      </div>
+      {bytes ? (
+        <Bytes content={content} />
+      ) : (
+        <>
+          {fields.length > 0 && <FieldList fields={fields} kind={kind} />}
+          {view.groups.map((group) => {
+            const open = group.entries.filter((e) => e.audience !== 'audit')
+            const history = group.entries.filter((e) => e.audience === 'audit')
+            return (
+              <section key={group.key} data-field-group={group.key} className="mt-7">
+                <h3 className="mb-3 border-b border-line pb-1.5">
+                  <KindLabel className="text-[12.5px]">{group.label}</KindLabel>
+                </h3>
+                <ul className="flex flex-col gap-4">
+                  {open.map((entry, i) => (
+                    // An unnamed entry (an escalation, the closure) keys on its place in the record's own list.
+                    <FieldEntryView key={entry.name ?? i} entry={entry} kind={kind} />
+                  ))}
+                </ul>
+                {/* Resolved history folds (docs/SEAM.md §5 Fold): what the run
+                    no longer waits on, reduced to a heading and its count,
+                    opened in place. */}
+                {history.length > 0 && (
+                  <Fold className="mt-4" heading={`Resolved ${group.label.toLowerCase()}`} count={history.length} data-field-fold={group.key}>
+                    <ul className="flex flex-col gap-4 pt-1">
+                      {history.map((entry, i) => (
+                        <FieldEntryView key={entry.name ?? i} entry={entry} kind={kind} />
+                      ))}
+                    </ul>
+                  </Fold>
+                )}
+              </section>
+            )
+          })}
+          {(view.rawKeys.length > 0 || view.comments) && (
+            <p className="mt-7 flex flex-wrap items-baseline gap-x-2 gap-y-1" data-raw-keys>
+              <KindLabel tone="muted">Only in the bytes</KindLabel>
+              {/* Each by its path in the document — a location in the file,
+                  so an Address, after the caption that names what they are. */}
+              {view.rawKeys.map((k) => (
+                <Address key={k}>{k}</Address>
+              ))}
+              {view.comments && <span className="font-ui text-[11px] text-muted">comments</span>}
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+/**
+ * The quartet's tint for a gate's `approved:` token, from the token and the
+ * entry it sits in — a fixed mapping, with the token printed beside the colour
+ * (docs/SEAM.md §5 tinting). `true` is ok; `false` with a name beside it is a
+ * decision against, and bad; `false` with no name is undecided, and plain.
+ */
+function gateTone(entry: FieldEntry): Record<string, QuotedTone> {
+  const approved = entry.fields.find((f) => f.key === 'approved')
+  if (approved?.kind !== 'word') return {}
+  if (approved.value === 'true') return { approved: 'ok' }
+  if (approved.value === 'false' && entry.fields.some((f) => f.key === 'by')) return { approved: 'bad' }
+  return {}
+}
+
+/** One entry of a block — a gate, a task, an escalation — its name leading, its fields after. */
+function FieldEntryView({ entry, kind }: { entry: FieldEntry; kind: ArtifactKind }) {
+  return (
+    <li data-field-entry={entry.name ?? ''} className="flex flex-col gap-2">
+      {entry.name !== null && <Name lead>{entry.name}</Name>}
+      <FieldList fields={entry.fields} kind={kind} tones={gateTone(entry)} />
+    </li>
+  )
+}
+
+/**
+ * Fields as a definition list: the contract's word on the left, the record's
+ * value on the right; below `sm` the two stack. An audit-time field folds to
+ * its label and count.
+ */
+function FieldList({ fields, kind, tones = {} }: { fields: Field[]; kind: ArtifactKind; tones?: Record<string, QuotedTone> }) {
+  return (
+    <dl className="grid grid-cols-[9.5rem_minmax(0,1fr)] items-baseline gap-x-4 gap-y-2.5 max-sm:grid-cols-1 max-sm:gap-y-1">
+      {fields.map((field) =>
+        // A diagnostic names its producer itself (docs/SEAM.md §5), so it
+        // takes the row whole rather than being captioned twice.
+        field.kind === 'diagnostic' ? (
+          <div key={field.key} className="col-span-full" data-field={field.key} data-field-kind={field.kind}>
+            <FieldValue field={field} kind={kind} />
+          </div>
+        ) : field.audience === 'audit' ? (
+          <div key={field.key} className="col-span-full max-sm:mb-1.5">
+            <Fold heading={field.label} count={fieldCount(field)} data-field={field.key}>
+              <FieldValue field={field} kind={kind} />
+            </Fold>
+          </div>
+        ) : (
+          <div key={field.key} className="contents" data-field={field.key} data-field-kind={field.kind}>
+            <KindLabel as="dt" tone="muted">
+              {field.label}
+            </KindLabel>
+            <dd className="min-w-0 text-[13px] max-sm:mb-1.5">
+              <FieldValue field={field} kind={kind} tone={tones[field.key]} />
+              {/* A key the file does not write, read as the contract's
+                  default for its absence — said so, not shown as written. */}
+              {field.defaulted && (
+                <span className="ml-2 font-ui text-[11px] text-faint" data-field-defaulted>
+                  not written — the contract’s default
+                </span>
+              )}
+            </dd>
+          </div>
+        ),
+      )}
+    </dl>
+  )
+}
+
+/** What a folded field's count counts: a list's entries, a passage's items. */
+function fieldCount(field: Field): number | undefined {
+  switch (field.kind) {
+    case 'entries':
+    case 'addresses':
+      return field.value.length
+    case 'passage':
+      return itemCount(field.value).n
+    default:
+      return undefined
+  }
+}
+
+/** The cockpit's word for a value the record wrote empty: its own voice, never quoted. */
+function Empty({ list = false }: { list?: boolean }) {
+  return <span className="font-ui text-[11.5px] text-faint">{list ? 'none' : 'empty'}</span>
+}
+
+function FieldValue({ field, kind, tone = 'plain' }: { field: Field; kind: ArtifactKind; tone?: QuotedTone }) {
+  switch (field.kind) {
+    case 'name':
+      return field.value === '' ? <Empty /> : <Name resolve>{field.value}</Name>
+    case 'word':
+      return field.value === '' ? <Empty /> : <QuotedWord tone={tone}>{field.value}</QuotedWord>
+    case 'passage':
+      if (field.value.trim() === '') return <Empty />
+      return (
+        <QuotedPassage data-field-passage={field.key}>
+          <div className="prose-card">
+            <Markdown sourceKind={kind} unwrapped>
+              {field.value}
+            </Markdown>
+          </div>
+        </QuotedPassage>
+      )
+    case 'entries': {
+      if (field.value.length === 0) return <Empty list />
+      const names = field.value.every((e) => e.face === 'name')
+      return (
+        <ul className={names ? 'flex flex-wrap gap-x-3 gap-y-1' : 'flex flex-col gap-1'}>
+          {field.value.map((entry, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: the record's list in its order; an entry may repeat.
+            <li key={i} data-field-entry-face={entry.face}>
+              {entry.face === 'name' ? (
+                <Name resolve>{entry.text}</Name>
+              ) : (
+                // A YAML list entry is not written in markdown: it is the
+                // line as written, whitespace kept, ids resolved in place.
+                <QuotedPassage className="whitespace-pre-wrap break-words text-[12.5px] leading-[1.5]">
+                  <CitedText>{entry.text}</CitedText>
+                </QuotedPassage>
+              )}
+            </li>
+          ))}
+        </ul>
+      )
+    }
+    case 'count': {
+      const { n, unit, of } = field.value
+      return unit === 'rounds' ? <Count n={n} one="round" many="rounds" of={of} /> : <Count n={n} one="entry" many="entries" />
+    }
+    case 'amount':
+      // The figure as the file spelled it (`10.10`, not `10.1`); a written
+      // `null` is the record's token, shown as written.
+      return field.value.isNull ? (
+        <code className="font-mono text-[12px] text-ink">{field.value.text}</code>
+      ) : (
+        <span className="font-ui tabular-nums" data-amount>
+          {field.value.text} USD
+        </span>
+      )
+    case 'time':
+      return <span className="font-ui text-[11.5px] tabular-nums text-muted">{field.value}</span>
+    case 'addresses':
+      if (field.value.length === 0) return <Empty list />
+      return (
+        <ul className="flex flex-col gap-0.5">
+          {field.value.map((v, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: the record's list in its order; an entry may repeat.
+            <li key={i}>
+              <Address size="md">{v}</Address>
+            </li>
+          ))}
+        </ul>
+      )
+    case 'diagnostic':
+      return <Diagnostic producer={field.label}>{field.value}</Diagnostic>
+  }
 }
 
 function DiffPane({ src, slug }: { src: string; slug: string }) {

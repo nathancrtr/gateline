@@ -4,6 +4,7 @@
 // that carry runs but no contracts/ tree.
 import { parse as parseYaml } from 'yaml'
 import { describeArtifact } from './artifact.ts'
+import { parseRunState } from './schema.ts'
 import { FenceTracker, h2Headings } from './sections.ts'
 
 export interface Validation {
@@ -213,8 +214,12 @@ export async function validateArtifact(
   }
 
   if (contract === 'state.yaml') {
-    // state.yaml is validated by schema.ts (parseRunState); here it's presence-only.
-    return { contract, ok: true, missing: [], notes }
+    // The schema is the run state's contract (schema.ts, parseRunState): a
+    // file it cannot read fails, with the parser's own words as the reason.
+    // Before #434 this was presence-only, and an unparseable ledger read
+    // "passes the run state contract" directly above its parse error.
+    const { error } = parseRunState(content)
+    return error === null ? { contract, ok: true, missing: [], notes } : { contract, ok: false, missing: [], notes: [...notes, error] }
   }
 
   // Markdown contracts: required H2s from the repo's template, else built-in.

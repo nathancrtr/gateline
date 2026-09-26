@@ -47,6 +47,16 @@ export type ArtifactKind = (typeof ARTIFACT_KINDS)[number]
  */
 export type ArtifactFamily = 'gate' | 'work-items' | 'reviews' | 'ledger' | 'other'
 
+/**
+ * What an artifact's bytes are written in (#434): the renderer's question,
+ * answered here beside the kind so there is one classifier of a path. Every
+ * kind the contracts define fixes its own format — the markdown contracts are
+ * markdown, a work item and the run state are YAML. `other` is the one kind
+ * that does not (a retro, a design note, a page of HTML), and for it alone the
+ * extension answers.
+ */
+export type ArtifactFormat = 'markdown' | 'yaml' | 'text'
+
 export interface ArtifactDescription {
   kind: ArtifactKind
   /**
@@ -81,6 +91,7 @@ export interface ArtifactDescription {
   /** The contract's own name for what it defines (`work item`, `review report`), or null for `other`. */
   contractName: string | null
   family: ArtifactFamily
+  format: ArtifactFormat
 }
 
 /**
@@ -89,26 +100,28 @@ export interface ArtifactDescription {
  * `constructor` or `__proto__` must be `other`, not an inherited property.
  */
 const FIXED_KINDS: Record<string, Omit<ArtifactDescription, 'id'>> = {
-  'intent-brief.md': { kind: 'intent-brief', contract: 'intent-brief.md', contractName: 'intent brief', family: 'gate' },
-  'spec.md': { kind: 'spec', contract: 'spec.md', contractName: 'spec', family: 'gate' },
-  'plan.md': { kind: 'plan', contract: 'plan.md', contractName: 'plan', family: 'gate' },
+  'intent-brief.md': { kind: 'intent-brief', contract: 'intent-brief.md', contractName: 'intent brief', family: 'gate', format: 'markdown' },
+  'spec.md': { kind: 'spec', contract: 'spec.md', contractName: 'spec', family: 'gate', format: 'markdown' },
+  'plan.md': { kind: 'plan', contract: 'plan.md', contractName: 'plan', family: 'gate', format: 'markdown' },
   'verification-report.md': {
     kind: 'verification-report',
     contract: 'verification-report.md',
     contractName: 'verification report',
     family: 'gate',
+    format: 'markdown',
   },
   // G3's packet is checkable as of #260. Before that it was bare presence: a
   // release plan of one sentence passed exactly as one carrying a rollback,
   // and G3 was the one gate no structured surface could be built for.
-  'release-plan.md': { kind: 'release-plan', contract: 'release-plan.md', contractName: 'release plan', family: 'gate' },
-  'state.yaml': { kind: 'state', contract: 'state.yaml', contractName: 'run state', family: 'ledger' },
-  'docs-delta.md': { kind: 'docs-delta', contract: null, contractName: 'docs delta', family: 'other' },
+  'release-plan.md': { kind: 'release-plan', contract: 'release-plan.md', contractName: 'release plan', family: 'gate', format: 'markdown' },
+  'state.yaml': { kind: 'state', contract: 'state.yaml', contractName: 'run state', family: 'ledger', format: 'yaml' },
+  'docs-delta.md': { kind: 'docs-delta', contract: null, contractName: 'docs delta', family: 'other', format: 'markdown' },
   'integration-profile.md': {
     kind: 'integration-profile',
     contract: null,
     contractName: 'integration profile',
     family: 'gate',
+    format: 'markdown',
   },
 }
 const FIXED = new Map(Object.entries(FIXED_KINDS))
@@ -135,7 +148,7 @@ export function describeArtifact(path: string): ArtifactDescription {
   const fixed = FIXED.get(path)
   if (fixed) return { ...fixed, id: null }
   const review = REVIEW.exec(path)
-  if (review) return { kind: 'review-report', id: review[1]!, contract: 'review-report.md', contractName: 'review report', family: 'reviews' }
+  if (review) return { kind: 'review-report', id: review[1]!, contract: 'review-report.md', contractName: 'review report', family: 'reviews', format: 'markdown' }
   if (path.startsWith(TASKS_DIR) && path.endsWith(YAML) && path.length > TASKS_DIR.length + YAML.length) {
     const stem = path.slice(TASKS_DIR.length, -YAML.length)
     return {
@@ -144,7 +157,9 @@ export function describeArtifact(path: string): ArtifactDescription {
       contract: 'work-item.yaml',
       contractName: 'work item',
       family: 'work-items',
+      format: 'yaml',
     }
   }
-  return { kind: 'other', id: null, contract: null, contractName: null, family: 'other' }
+  const format: ArtifactFormat = /\.(?:md|markdown)$/i.test(path) ? 'markdown' : /\.ya?ml$/i.test(path) ? 'yaml' : 'text'
+  return { kind: 'other', id: null, contract: null, contractName: null, family: 'other', format }
 }

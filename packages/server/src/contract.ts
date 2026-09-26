@@ -29,6 +29,7 @@
  */
 import type {
   ArtifactFamily,
+  ArtifactFormat,
   ArtifactKind,
   ArtifactRef,
   BounceFact,
@@ -45,6 +46,12 @@ import type {
   EscalationFact,
   EscalationPacket,
   EvidenceRollup,
+  Field,
+  FieldCount,
+  FieldEntry,
+  FieldGroup,
+  FieldKind,
+  FieldView,
   G1Packet,
   GateDecisionRecord,
   GateId,
@@ -54,6 +61,7 @@ import type {
   LedgerQuote,
   LedgerTarget,
   LexiconEntry,
+  ListEntry,
   Metrics,
   PausedFact,
   Phase,
@@ -98,6 +106,7 @@ export const API_VERSION = 2
 /** Core types that cross the wire. Re-exported so a client imports one module. */
 export type {
   ArtifactFamily,
+  ArtifactFormat,
   ArtifactKind,
   ArtifactRef,
   BounceFact,
@@ -113,6 +122,12 @@ export type {
   EscalationFact,
   EscalationPacket,
   EvidenceRollup,
+  Field,
+  FieldCount,
+  FieldEntry,
+  FieldGroup,
+  FieldKind,
+  FieldView,
   G1Packet,
   GateDecisionRecord,
   GateId,
@@ -122,6 +137,7 @@ export type {
   LedgerQuote,
   LedgerTarget,
   LexiconEntry,
+  ListEntry,
   PausedFact,
   Phase,
   Profile,
@@ -269,8 +285,18 @@ export interface RunDetailResponse {
 
 export interface ArtifactResponse {
   path: string
+  /** The bytes, verbatim. Every view below is beside them, never instead of them. */
   content: string
   validation: Validation
+  /**
+   * The typed view of a YAML artifact (#434): a work item over its
+   * contract's keys, `state.yaml` as the run's ledger. Null for every other
+   * kind. Added here rather than on a route of its own because the reader
+   * already fetches this response for the bytes the view sits beside, and
+   * "show bytes" must show exactly the bytes the view was read from.
+   * Optional: an older server omits it, and the reader then shows the bytes.
+   */
+  fields?: FieldView | null
 }
 
 export interface LexiconResponse {

@@ -29,16 +29,18 @@
 // fixture run's git history) a hundred times over. Within it each combination
 // is navigated fresh rather than resized into: an early draft resized, and the
 // stale-layout artefacts it produced were indistinguishable from real findings.
-import { type ChildProcess, spawn } from 'node:child_process'
+import type { ChildProcess } from 'node:child_process'
 import { rmSync } from 'node:fs'
 import { generateFixtureRepo } from '@gateline/fixtures'
 import { type Browser, expect, type Page, test } from '@playwright/test'
+import { spawnDemoServer } from './demo-server.ts'
 
-const PORT = 4395
 // The page is built with `browser.newPage()` rather than taken from the `page`
 // fixture — one context for the whole file — so it carries no `baseURL` and
-// navigates absolutely.
-const ORIGIN = `http://127.0.0.1:${PORT}`
+// navigates absolutely. The server binds an OS-assigned port (demo-server.ts,
+// #438), set once `beforeAll` resolves it, so a concurrent worktree's server
+// on some other port is never the one this file measures.
+let ORIGIN: string
 
 /**
  * The band the design review found broken, plus the pinned width the rest of
@@ -215,20 +217,7 @@ test.beforeAll(async ({ browser }: { browser: Browser }) => {
   // ~25 states × 4 widths, one navigation each: well past the per-test default.
   test.setTimeout(300_000)
   fixtureDir = generateFixtureRepo().dir
-  server = spawn('node', ['server/src/main.ts', '--repo', fixtureDir, '--port', String(PORT)], {
-    cwd: new URL('..', import.meta.url).pathname,
-    stdio: 'ignore',
-  })
-  let up = false
-  for (let i = 0; i < 60 && !up; i++) {
-    try {
-      up = (await fetch(`http://127.0.0.1:${PORT}/api/health`)).ok
-    } catch {
-      /* not up yet */
-    }
-    if (!up) await new Promise((r) => setTimeout(r, 500))
-  }
-  if (!up) throw new Error('server did not come up')
+  ;({ server, origin: ORIGIN } = await spawnDemoServer(fixtureDir))
 
   page = await browser.newPage({ viewport: { width: WIDTHS[WIDTHS.length - 1], height: 900 } })
   for (const state of STATES) {

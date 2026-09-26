@@ -11,7 +11,8 @@
 //      choice is what G0 can still veto cheaply: each list item quoted whole
 //      with its marker, and each run of prose around the list (a lead-in that
 //      tees a choice up, a sub-heading, a fenced example) quoted as its own
-//      passage. Each passage's line is one gesture away.
+//      passage. Each passage's line is one gesture away, and one click lands
+//      on it in the Record reader.
 //   2. Requirements — the roster: each `R<n>` as a resolvable Name and its
 //      short name as the heading says it. A heading the grammar cannot parse
 //      withholds the roster's completeness, and its count with it.
@@ -47,6 +48,7 @@ import {
   type QuotedSection,
   type WithheldReason,
 } from '../api.ts'
+import { lineAnchor } from '../line-anchor.ts'
 import { PACKET_FRAME, PACKET_LABEL, PacketSweep } from './findings.tsx'
 import { GroupLabel } from './g1.tsx'
 import { Markdown } from './markdown.tsx'
@@ -133,14 +135,14 @@ function PartWithheld({ view, reason, src, slug, hook }: { view: string; reason:
 /**
  * Where a quotation starts: `at` and its address, linked into the Record
  * reader. A requirement's link lands on its heading (`def-R<n>`, the anchor
- * the lexicon stamps). The reader stamps no per-line anchor yet, so every
- * other quotation opens its artifact with the line in the address (#441).
+ * the lexicon stamps); every other quotation lands on its line (`L<n>`,
+ * #441), its fold opened.
  */
 function At({ quote, src, slug, anchor }: { quote: Pick<Quotation, 'at'>; src: string; slug: string; anchor?: string }) {
   return (
     <span className="font-ui text-[11px] text-faint" data-at>
       at{' '}
-      <Address size="xs" to={artifactHref(src, slug, quote.at.path, anchor)}>
+      <Address size="xs" to={artifactHref(src, slug, quote.at.path, anchor ?? lineAnchor(quote.at.line))}>
         {`${quote.at.path}:${quote.at.line}`}
       </Address>
     </span>

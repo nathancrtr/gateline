@@ -155,21 +155,15 @@ interface Located {
 
 /**
  * The first H2 section whose heading matches `name` the way the validator
- * matches it, with line numbers. Sections come from `splitSections`, whose
- * sections re-join to the artifact byte for byte; the one thing it drops, an
- * empty preamble, is at the top, so the lines it held are the difference.
+ * matches it, with line numbers: `splitSections`' own, the numbering the
+ * Record reader lands on (#441).
  */
 function section(markdown: string, name: string): Located | null {
-  const sections = splitSections(markdown)
-  const text = sections.map((s) => (s.headingLine === null ? s.body : `${s.headingLine}\n${s.body}`))
-  let line = markdown.split('\n').length - text.join('\n').split('\n').length + 1
   const key = normalizeHeading(name)
-  for (let i = 0; i < sections.length; i++) {
-    const s = sections[i]!
+  for (const s of splitSections(markdown)) {
     if (s.depth === 2 && s.heading !== null && normalizeHeading(s.heading) === key) {
-      return { heading: s.heading, line, body: { lines: s.body.split('\n'), start: line + 1 } }
+      return { heading: s.heading, line: s.line, body: { lines: s.body.split('\n'), start: s.line + 1 } }
     }
-    line += text[i]!.split('\n').length
   }
   return null
 }

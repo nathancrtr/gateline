@@ -72,6 +72,13 @@ the audit trail matters.
   approving this diff and escalating the run are not in tension, so verdict both.
   A gap folded into a low-severity finding or a Coverage-section aside has no
   power to pause dispatch — the next task dispatches right past it.
+- An `escalate` verdict carries an `## Escalation` section, in the contract's
+  shape: the diff's own verdict on its `**Diff verdict:**` line, the spec or plan
+  clause it traces to, the file or area the fix needs and why no remaining task's
+  surface owns it, one plain-words paragraph on what is defective, and the routes
+  as you see them as a bulleted list. A human reads that section on the card and
+  resolves the escalation from it; it is the one place your reason reaches them.
+  Say what you would do, never what you have decided — the human picks.
 - Concision is a contract requirement: reference the spec and diff by number and
   file:line, never re-quote them.
 - Write only inside `runs/<slug>/`; you never modify code.

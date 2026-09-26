@@ -37,6 +37,7 @@ import type {
   DecisionAction,
   DiffFile,
   Disposition,
+  EscalationPacket,
   EvidenceRollup,
   G1Packet,
   GateDecisionRecord,
@@ -89,6 +90,7 @@ export type {
   DecisionAction,
   DiffFile,
   Disposition,
+  EscalationPacket,
   EvidenceRollup,
   G1Packet,
   GateDecisionRecord,
@@ -370,6 +372,7 @@ export interface ApiRoutes {
   'GET /api/runs/:src/:slug/evidence': { response: EvidenceRollup }
   'GET /api/runs/:src/:slug/g1': { response: G1Packet }
   'GET /api/runs/:src/:slug/g3': { response: ReleasePacket }
+  'GET /api/runs/:src/:slug/escalation/:index': { response: EscalationPacket }
   'GET /api/runs/:src/:slug/diff': { response: DiffResponse }
   'GET /api/runs/:src/:slug/decisions': { response: DecisionsResponse }
   'GET /api/metrics': { response: MetricsResponse }

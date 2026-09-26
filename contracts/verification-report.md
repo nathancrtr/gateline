@@ -22,6 +22,18 @@
      appended to this report adds its own verdict line; the last line is the
      verdict in force. Prose in Gaps has no such power: an escalation that
      lives only in a sentence never reaches the gate.
+     ESCALATION (normative — tooling parses the `REQUIRED WHEN:` line and the
+     section's bold fields): the `## Escalation` section is required exactly
+     when the verdict in force is `escalate`, and is what the human resolving
+     the escalation reads on the card. A report whose verdict is `escalate`
+     and carries no Escalation section is malformed. Under any other verdict
+     the section is not required; one left behind by an earlier
+     re-verification is history, not a deviation, since re-verifications
+     append and never overwrite. Options are a bulleted list, one route per
+     item: what the verifier would do, never what it has decided — the human
+     picks. Gaps still lists the unverifiable criterion; the Escalation
+     section says why that is a spec or plan defect and what to do about it.
+     REQUIRED WHEN: Escalation=escalate
      BUDGET: paste FAILING output in full; for passing checks the command plus
      its concluding line/exit code suffices. Never paste entire suites or
      restate the spec — reference criteria by number.
@@ -40,6 +52,24 @@
 **Verdict:** pass | fail | escalate
 **Change verified:** <branch/commit>
 **Environment:** <where this ran: local, CI, staging + versions that matter>
+
+## Escalation
+<!-- Present exactly when Verdict is escalate; omit it otherwise (see
+     ESCALATION above). This is the decision the human is being asked to
+     make — the card shows it verbatim, so write it for that reader. The two
+     bold fields are grammar; the paragraph and the options are prose and
+     READABILITY rules govern them: open with one plain-words sentence
+     stating what is defective, then the criteria it takes down, then the
+     routes as you see them. -->
+
+**Traces to:** <the spec or plan clause the defect lives in — R<n> / AC<n>.<m> / ADR-<n>>
+**Criteria affected:** <the AC ids that cannot be verified until it is fixed>
+
+<one plain-words paragraph: what is defective, and what happens if the run proceeds past it>
+
+The options as I see them:
+- <route one — e.g. amend AC<n>.<m> to name an input that exists>
+- <route two — e.g. add the referenced fixture under a task that owns it>
 
 ## Results
 

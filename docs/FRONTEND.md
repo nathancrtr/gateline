@@ -442,7 +442,50 @@ surface reads. The contract badge still names the contract by its file: that
 is the same question one level down, and the badge is where the file-level
 truth is meant to show.
 
-### 4.9 The G3 surface (#403)
+### 4.9 The escalation surface (#407)
+
+An escalation is two facts in two places. The engine's `state.escalations[i]`
+entry says the run is paused for a human, with one `reason` line; for an
+escalation a role raised, that line is a pointer — `reviewer escalated task
+04-fixture-label — see review-04.md` — and the decision itself is in the report
+it names. The card rendered the pointer and a chip, and the Resolve form asked
+for a disposition and a route before the human had seen what was asked. That is
+the G3 card before #403, plus a pointer.
+
+#405 gave the reason a home: a `## Escalation` section in both report
+contracts, required exactly when the verdict in force is `escalate`, with the
+clause it traces to, whose surface it falls outside (or which criteria it takes
+down), a plain-words paragraph, and the routes as the escalating role sees
+them. The packet joins the record with that section and reads it in the order
+the human resolves it:
+
+- **What is defective.** The section's fields, then its paragraph, verbatim,
+  with `R<n>` and `ADR-<n>` resolving through the lexicon as everywhere else on
+  the card.
+- **Options.** The section's bulleted routes, numbered so the disposition note
+  can name one, in the order the role wrote them. The Resolve form's radio group
+  stays the human's; the packet says what each route would answer.
+- **The report.** Its own verdict on the diff when it gave one — ESCALATE SCOPE
+  lets a review approve the diff and escalate the run at once — the findings
+  still standing, and the artifact one click away.
+
+Who is asking is read from the reason line, not from `from_role`. The engine
+records every escalation under its own identity, which is right for the ledger;
+the card is headed by the role that escalated, and the rail already has the
+engine's authorship. The `state.yaml` chip leaves this card's packet: it is the
+resolution's write target, not something to read, and the packet chip is the
+report the reason names.
+
+An engine-originated escalation — a round cap (§4.4), a bounce cap, a landing
+cap, a phase the profile lacks — has no report behind it. Its reason is the
+whole packet, the card already shows it, and this surface renders nothing. A
+report that predates #405 or is off its grammar withholds the packet and names
+the section it looked for; the reason line and the chip stay.
+
+Presence, not verdicts: no route is recommended, no option is ranked, and
+nothing is restated in the packet's own words.
+
+### 4.10 The G3 surface (#403)
 
 G3 asks "Ship it?". Every other gate had a composed surface by the time #261's
 work items landed; G3 fell through to the generic card — the question, the

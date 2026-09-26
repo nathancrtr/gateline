@@ -106,6 +106,7 @@ import { type Validation, validateArtifact } from '../record/validate.ts'
 import { readBranchOrder, resolutionCommitsOf } from '../sources/branch-order.ts'
 import type { CommitInfo } from '../sources/git.ts'
 import type { RunRef, RunSource } from '../sources/source.ts'
+import { describeEscalation } from './escalation.ts'
 import { formatDuration } from './time.ts'
 
 export const GATE_QUESTIONS: Record<GateId, string> = {
@@ -333,22 +334,28 @@ export function pausedInstruction(state: RunState): string {
  * one of these on a run that is otherwise malformed meets the API's own
  * "run state is malformed" refusal, same as any other write to it would.
  */
-function escalationItems(ref: RunRef, escalations: Escalation[]): InboxItem[] {
+function escalationItems(ref: RunRef, escalations: Escalation[], artifacts: readonly string[] = []): InboxItem[] {
   const items: InboxItem[] = []
   escalations.forEach((esc, i) => {
     if (esc.resolved) return
     const since = esc.at ? Math.floor(Date.parse(esc.at) / 1000) || null : null
+    // Who is asking, not who wrote the entry (#407): the engine records
+    // every escalation under its own identity, and the reason line names
+    // the role that escalated. The human reads the asker; History keeps the
+    // writer. The packet is the report the reason names, when the record
+    // has it — `state.yaml` is the resolution's write target, not reading.
+    const origin = describeEscalation(esc.reason, esc.from_role, artifacts)
     items.push({
       kind: 'escalation',
       gate: null,
       source: ref.source,
       slug: ref.slug,
-      title: `Escalation from ${esc.from_role ?? 'unknown role'}`,
+      title: `Escalation from ${origin.role ?? esc.from_role ?? 'unknown role'}`,
       detail: esc.reason,
       since,
       reviewable: true,
       problems: [],
-      packet: ['state.yaml'],
+      packet: origin.artifact ? [origin.artifact] : [],
       inflight: null,
       escalationIndex: i,
     })
@@ -399,7 +406,7 @@ export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<R
   }
 
   // --- Escalations (surface regardless of phase; a stalled run burns calendar).
-  items.push(...escalationItems(ref, state.escalations))
+  items.push(...escalationItems(ref, state.escalations, artifacts))
 
   // --- Round-cap breaches.
   for (const task of state.tasks) {

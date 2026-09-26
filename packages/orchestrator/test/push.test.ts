@@ -124,13 +124,14 @@ describe('push-then-launch (#103)', () => {
     expect(engine.pushHealth().get('run/toy')).toBeUndefined()
   })
 
-  it('a closing commit under a live checkout stays local and counts against push health', async () => {
+  it('a closing commit above unpushed agent work stays local and counts against push health', async () => {
     const { dir, clock } = toyRepo()
     const bare = addOrigin(dir)
     git(dir, ['checkout', '-q', 'main'])
     // The agent's own dispatch is when origin moves: the intent push has
-    // already been accepted, the run checkout exists (held branch), and the
-    // closing meter's push will be rejected with no safe way to drop.
+    // already been accepted, the fold lands the agent's commit locally but
+    // its push is rejected, and the closing meter's push is rejected above
+    // it — with no safe way to drop, since the meter is not the divergence.
     const dispatcher = new FakeDispatcher((req) => {
       agentCommit(req.cwd, clock as Clock, { 'runs/toy/spec.md': SPEC }, 'toy: spec')
       remoteWrite(bare, (s) => s.replace(/cost_limit_usd: \d+/, 'cost_limit_usd: 60'))

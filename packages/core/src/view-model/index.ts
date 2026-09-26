@@ -3,6 +3,7 @@
 // stack; nothing in record/ or sources/ may import from here.
 
 export * from './config.ts'
+export * from './escalation.ts'
 export * from './evidence.ts'
 export * from './g1.ts'
 export * from './host-link.ts'

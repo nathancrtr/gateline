@@ -138,6 +138,16 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Below `md` the top nav is fixed over the page (app.tsx), and `main` clears
+   it with 4rem of top padding. A scroll to an element (a landed address, a
+   definition jump, a focused control) clears it by the same length, or the
+   thing scrolled to sits under the nav. */
+@media (width < 48rem) {
+  html {
+    scroll-padding-top: 4rem;
+  }
+}
+
 /* Code never ligates: an arrow in a diff or a slug is the characters it is
    made of, as on the site. */
 code, pre, kbd, samp, .font-mono, .imp {
@@ -402,6 +412,33 @@ code, pre, kbd, samp, .font-mono, .imp {
 }
 .prose-artifact :is(h1, h2, h3, h4, h5, h6) {
   scroll-margin-top: 12px;
+}
+
+/* Where an address landed (#449): a 3px ink rule in the gutter beside the
+   block (placed by line-anchor.ts `landingMark`), outside the record's text
+   and in no hue, since a landing is not a gate state. It shows while focus
+   is in the landed block: focus moves there on landing, and a click or a Tab
+   elsewhere clears it. A line-landed block keeps a heading's margin at the
+   top of the window. */
+.prose-artifact [data-line] {
+  scroll-margin-top: 12px;
+}
+.landing-mark {
+  position: absolute;
+  width: 3px;
+  background: var(--color-ink);
+  pointer-events: none;
+  display: none;
+}
+article:has([data-landed]:focus-within) > .landing-mark {
+  display: block;
+}
+/* The landed block is a place, not a control: nobody is wanted there, so the
+   yellow ring stays off it. Chromium shows the ring for this programmatic
+   focus after a keyboard landing or a pasted address (not after a click);
+   the rule above is the block's focus indicator in every case. */
+[data-landed]:focus-visible {
+  outline: none;
 }
 
 /* Run-lexicon references. A cited R/AC/ADR id resolves where it stands:

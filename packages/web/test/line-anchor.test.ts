@@ -8,7 +8,8 @@
 // `runs/`: core's `at.line` for each G0 quotation, resolved against the lines
 // the reader's own renderer stamped, lands on a block whose text is that
 // quotation's first line. A reader stamping the slice's numbering, or off by
-// the heading line, lands on a neighbouring block and fails there.
+// the heading line, lands on a neighbouring block and fails there. The mark
+// that shows where it landed (#449) is placed by `landingMark`, pinned last.
 //
 // Static markup, no DOM (vitest.config.ts, layer 2): the markup is parsed
 // back into stamped blocks by the small tag walker below.
@@ -19,7 +20,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { Markdown } from '../src/components/markdown.tsx'
-import { landingIndex, lineAnchor, lineOfAnchor } from '../src/line-anchor.ts'
+import { LANDING_GUTTER, landingIndex, landingMark, lineAnchor, lineOfAnchor } from '../src/line-anchor.ts'
 import { FoldedMarkdown } from '../src/pages/run/record.tsx'
 
 interface Block {
@@ -102,6 +103,25 @@ describe('the landing rule', () => {
     expect(lineOfAnchor('def-R2')).toBeNull()
     expect(lineOfAnchor('L0')).toBeNull()
     expect(lineOfAnchor('L')).toBeNull()
+  })
+})
+
+describe('the landing mark (#449)', () => {
+  // The reader's article at (100, 300); its column 40px in; blocks in page coordinates.
+  const article = { top: 100, left: 300 }
+  const column = { left: 340 }
+
+  it('sits level with the landed block and as tall, in the article’s coordinates', () => {
+    const mark = landingMark({ top: 460, left: 340, height: 52 }, column, article)
+    expect(mark.top).toBe(360)
+    expect(mark.height).toBe(52)
+  })
+
+  it('sits one gutter left of the column, wherever the block is indented', () => {
+    const heading = landingMark({ top: 200, left: 340, height: 24 }, column, article)
+    const nestedItem = landingMark({ top: 260, left: 384, height: 26 }, column, article)
+    expect(heading.left).toBe(40 - LANDING_GUTTER)
+    expect(nestedItem.left).toBe(heading.left)
   })
 })
 

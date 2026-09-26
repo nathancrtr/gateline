@@ -180,13 +180,22 @@ describe('5 · a zero-spend budget states the record, not a word of its own (#44
     const html = renderToStaticMarkup(createElement(BudgetMeter, { limit: 18.5, spent: null }))
     expect(html).not.toContain('unmetered')
     expect(html).toContain('$0.00 of $18.50')
-    expect(html).toContain('$0 / $19')
+    // A fractional ceiling keeps its cents rather than rounding to a whole
+    // dollar — rounding it away is the same header/card contradiction #443
+    // is about, one digit smaller ($18.50 staged next to a header "$19").
+    expect(html).toContain('$0 / $18.50')
   })
 
   it('draws the bar the moment a dispatch spends something, same shape as zero spend', () => {
     const html = renderToStaticMarkup(createElement(BudgetMeter, { limit: 25, spent: 6.4 }))
     expect(html).toContain('width')
-    expect(html).toContain('$6 / $25')
+    // Fractional spend keeps its cents too; only a whole-dollar amount reads as one.
+    expect(html).toContain('$6.40 / $25')
+  })
+
+  it('keeps cents on the spent side of an over-budget label while the whole-dollar limit stays whole', () => {
+    const html = renderToStaticMarkup(createElement(BudgetMeter, { limit: 10, spent: 10.4 }))
+    expect(html).toContain('$10.40 / $10 · over')
   })
 
   it('still says "no budget" when none is recorded', () => {

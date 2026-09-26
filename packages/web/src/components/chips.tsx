@@ -455,6 +455,13 @@ export function ValidationBadge({ ok, missing }: { ok: boolean; missing?: string
   )
 }
 
+// Whole dollars read as whole dollars; a fractional amount keeps its cents.
+// A meter that always rounded to whole dollars is the label that made a
+// staged $18.50 ceiling read "$19" — a second, smaller instance of the same
+// contradiction #443 is about, between the header and the record's own
+// number (#443 follow-up).
+const label = (n: number) => (Number.isInteger(n) ? `$${n}` : `$${n.toFixed(2)}`)
+
 export function BudgetMeter({ limit, spent }: { limit: number | null; spent: number | null }) {
   if (limit === null) return <span className="text-xs italic text-muted">no budget</span>
   const used = spent ?? 0
@@ -472,7 +479,7 @@ export function BudgetMeter({ limit, spent }: { limit: number | null; spent: num
         <span className={`block h-full ${over ? 'bg-mark' : 'bg-ink'}`} style={{ width: `${pct}%` }} />
       </span>
       <span className={`font-ui text-[11.5px] tabular-nums ${over ? 'font-semibold text-bad' : 'text-muted'}`}>
-        ${used.toFixed(0)} / ${limit.toFixed(0)}
+        {label(used)} / {label(limit)}
         {over ? ' · over' : ''}
       </span>
     </span>

@@ -209,3 +209,59 @@ notes: |
   own build already places 404.html at _site/404.html, so no extra copy step
   is expected in that context, but that is task 06's acceptance to prove,
   not this one's).
+
+  Implementer round 2 — responses to runs/gatehouse-demo/review-05.md, all
+  fixed (no rebuttals). Only file touched: packages/e2e-static/demo.spec.ts.
+
+  - F1 (blocking, strict `h1` race on the deep-link test): fixed. Both the
+    real-run and fixture-run headings at demo.spec.ts:60-74 now read through
+    one `page.getByRole('heading', { level: 1 }).first()` locator instead of
+    the bare `page.locator('h1')` the reviewer flagged — the record surface's
+    `<header>` h1 is first in DOM order, so `.first()` names it whether or
+    not the reader's landing artifact (e.g. `intent-brief.md`) folds to a
+    second `<h1>` beneath it. Verified: rebuilt the clean tree and ran
+    `DEMO_SITE_ROOT=/tmp/gl-site npx playwright test -c
+    playwright.static.config.ts --repeat-each=10` — 70/70 passed (the
+    reviewer's own repro had shown 5/18 passes on the old locator across
+    repeat-each runs at similar volume).
+  - F2 (minor, `EventSource` stub crashes the app instead of failing the
+    intended assertion): fixed. `RecordingEventSource` at demo.spec.ts:82-97
+    now has no-op `addEventListener`/`removeEventListener`/`close` methods.
+    Verified with the reviewer's own mutant: patched `eventsUrl` in
+    web/src/static-mode.ts to always return the events URL (never `null`),
+    rebuilt `dist-static`, snapshotted to a side tree
+    (/tmp/gl-site-mut), and reran the AC4.2 test alone — it now fails at
+    `expect(es).toEqual([])` with the recorded call
+    (`["/demo/api/events"]`) visible in the diff, not at the inbox-row wait
+    with an unmounted shell. Restored static-mode.ts from a backup copy and
+    confirmed `git status --short` was empty before moving on.
+  - F3 (minor, inbox-count recheck can't observe client-side pretend state):
+    fixed per the reviewer's own suggested shape. Added
+    `await expect(page).toHaveURL(/\/demo\/portfolio\/new\/?$/)` right after
+    the network-error flash assertion and before the `goto('/demo/')` at
+    demo.spec.ts (staging test), pinning the page in place before the count
+    reread. Verified with a hand-patched mutant: added `navigate('/')` to
+    `new-run.tsx`'s `onError` alongside the existing `setOutcome(...)` call,
+    rebuilt, snapshotted to /tmp/gl-site-mut, and reran the AC5.2 test alone
+    — it now fails (in this exact mutant, at the preceding
+    `getByRole('alert')).toBeVisible()` check, since the synchronous
+    navigate unmounts the flash before the assertion can observe it; the
+    added `toHaveURL` assertion is the next line of defense for any variant
+    where the flash renders before a delayed navigate). Restored
+    new-run.tsx from a backup copy; `git status --short` empty afterward.
+
+  Full re-verification after the three fixes (packages/ as cwd): rebuilt a
+  clean /tmp/gl-site per the task's recipe (build:static, snapshot: 354
+  routes, 22 runs, 26 shells, bundle clean) and ran
+  `DEMO_SITE_ROOT=/tmp/gl-site npm run e2e:static` — 7 passed. Reran the
+  negative check against the same real run the reviewer's coverage table
+  names (gateline/writestate-kill-window): deleted its detail JSON, reran
+  — 1 failed (the deep-link test, "element(s) not found" on the heading) /
+  6 passed; restored the file, reran — 7 passed again. Also ran clean:
+  `npm run lint` ("Checked 232 files in 79ms. No fixes applied."),
+  `npm run typecheck` (tsc x2, exit 0), `npx playwright test --list`
+  ("Total: 49 tests in 5 files", unchanged), `npx playwright test -c
+  playwright.static.config.ts --list` ("Total: 7 tests in 1 file").
+  All scratch trees (/tmp/gl-site, /tmp/gl-site-mut) and backup copies
+  removed afterward; `git status --short` at the end of the round shows
+  only packages/e2e-static/demo.spec.ts modified.

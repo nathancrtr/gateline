@@ -60,14 +60,20 @@ test('the shell routes resolve on a fresh GET and render their heading (AC6.1)',
 test('a real run and the fixture run both resolve on a deep link; only the fixture carries the label (AC3.1, AC3.2, AC6.1)', async ({
   page,
 }) => {
+  // The record surface's own heading — never a bare `page.locator('h1')`,
+  // which is strict on this page: the reader's landing artifact (e.g.
+  // `intent-brief.md`) folds to its own `# …` heading, a second `<h1>` in
+  // the DOM. The header's is first in document order, so `.first()` names
+  // it unambiguously whether or not a second `h1` is present.
+  const heading = page.getByRole('heading', { level: 1 }).first()
   const realRes = await page.goto(`/demo/runs/${realRun.source}/${realRun.slug}`)
   expect(realRes?.status()).toBe(200)
-  await expect(page.locator('h1')).toHaveText(realRun.slug)
+  await expect(heading).toHaveText(realRun.slug)
   await expect(page.locator('[data-fixture-label]')).toHaveCount(0)
 
   const fixtureRes = await page.goto(`/demo/runs/${FIXTURE_SOURCE}/${FIXTURE_SLUG}`)
   expect(fixtureRes?.status()).toBe(200)
-  await expect(page.locator('h1')).toHaveText(FIXTURE_SLUG)
+  await expect(heading).toHaveText(FIXTURE_SLUG)
   const label = page.locator('[data-fixture-label]')
   await expect(label.first()).toBeVisible()
   await expect(label.first()).toContainText('fixture data')
@@ -86,6 +92,13 @@ test('no EventSource is ever constructed (AC4.2)', async ({ page }) => {
       constructor(...args: unknown[]) {
         ;(window as unknown as { __es: unknown[] }).__es.push(args)
       }
+      // No-ops so a mutant that *does* construct one fails at the `__es`
+      // assertion below, not with a `TypeError` inside the app's connection
+      // effect (`use-live.ts`) that unmounts the shell before that assertion
+      // ever runs.
+      addEventListener() {}
+      removeEventListener() {}
+      close() {}
     }
     // biome-ignore lint/suspicious/noExplicitAny: replacing the global constructor for the length of this test only.
     ;(window as any).EventSource = RecordingEventSource
@@ -143,6 +156,11 @@ test('staging a new run refuses against the demo, and the inbox is unchanged (AC
   ])
   expect(response.ok(), `POST /api/runs answered ${response.status()} — the static host has no such route`).toBe(false)
   await expect(page.getByRole('alert')).toBeVisible()
+  // Same-page: a mutant that optimistically navigates away on error (rather
+  // than rendering the flash in place) would slip past a bare inbox-count
+  // recheck, since the fresh `goto` below discards any client-side state
+  // regardless. Pin the URL first.
+  await expect(page).toHaveURL(/\/demo\/portfolio\/new\/?$/)
 
   await page.goto('/demo/')
   await expect(page.locator('[data-inbox-row]')).toHaveCount(inboxBefore.items.length)

@@ -293,7 +293,7 @@ const summary = (over: Partial<RunSummary> = {}): RunSummary =>
   }) as unknown as RunSummary
 
 describe('9 · a bounced gate’s spine cell stops claiming to be pending', () => {
-  const titles = (items?: InboxItem[]) => {
+  const titles = (items: InboxItem[]) => {
     const html = renderToStaticMarkup(createElement(PhaseSpine, { summary: summary(), items }))
     return [...html.matchAll(/title="([^"]*)"/g)].map((m) => m[1]!)
   }
@@ -309,7 +309,11 @@ describe('9 · a bounced gate’s spine cell stops claiming to be pending', () =
     )
   })
 
-  it('falls back to pending when no items are passed, which is every other call site', () => {
-    expect(titles().find((t) => t.startsWith('G0'))).toContain('pending your decision')
+  // This used to fall back to pending when no items were passed, which is the
+  // guess #420 was filed on: with no gate item, nothing is on the table.
+  it('does not call a gate pending when the inbox holds no item for it (#420)', () => {
+    const g0 = titles([]).find((t) => t.startsWith('G0'))
+    expect(g0).toContain('not on the table yet')
+    expect(g0).not.toContain('pending')
   })
 })

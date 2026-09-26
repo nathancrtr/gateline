@@ -343,7 +343,7 @@ What that replaced said the same four facts three times — an eyebrow reading
 and a GATES column in the rail below. None of them said that gates are the
 transitions, so the page had to spell out in words what it could not show in shape.
 
-Four rules keep the spine a rendering of the record, not a reading of it:
+Five rules keep the spine a rendering of the record, not a reading of it:
 
 - **The profile is the shape.** `patch` shows four phases and two gates; `full` shows
   six and four. A gate absent from the profile is absent from the spine — never an
@@ -360,6 +360,16 @@ Four rules keep the spine a rendering of the record, not a reading of it:
   while a run is at rest, so no gate reads as pending. A closed run's chip carries its
   disposition: the terminal phase exists so the record says why, and a chip that only
   said "closed" would put the untyped state back on the screen.
+- **A gate is on the table only when the inbox holds a gate item for it** (#420). The
+  gate after the run's phase is not the same fact: a run at `implement` with only an
+  escalation open is working toward G2, and nobody is wanted there yet. That gate is
+  the plain undecided mark; the yellow is derived from the item, never from the phase.
+
+At phone width the spine folds rather than crops (#427). Below the width its words
+need, the phase the run stands at keeps its word, every other phase becomes a blank
+tick in its own texture, and every gate keeps its code and glyph. A folded phase keeps
+its name as its accessible text and hover text. The sequence is what the spine is for,
+and the phase words are a closed vocabulary, so the words are what yields.
 
 ### 4.6 Closing a run (#200)
 

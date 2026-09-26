@@ -23,7 +23,17 @@
 import { Fragment, useEffect, useRef } from 'react'
 import { type ClosureRecord, type GateId, type InboxItem, PROFILE_GATES, type Profile, type RunSummary } from '../api.ts'
 import { gateCardState } from '../gate-state.ts'
-import { type GateCell, gateNote, noteRung, type PhaseCell, phaseSpine, type SpineNoteRung } from '../spine.ts'
+import {
+  type GateCell,
+  gateNote,
+  keepsWordFolded,
+  noteRung,
+  type PhaseCell,
+  phaseSpine,
+  type SpineNoteRung,
+  type SpineWordRung,
+  wordRung,
+} from '../spine.ts'
 import type { KeyHint } from '../use-keys.ts'
 
 /**
@@ -248,43 +258,45 @@ export function GateLedger({ gates, profile = 'full' }: { gates: RunSummary['gat
  * its gates as the transitions between them. `spine.ts` decides the shape; this
  * decides how each cell reads.
  *
- * It never wraps (#295): connectors compress to their 8px minimum; below
- * `noteRung` the notes are demoted to the cell's tooltip and the gaps close;
- * past that it crops and scrolls with the gate on the table in view.
+ * It never wraps (#295), and it fits (#427). It yields in two steps as its
+ * row narrows: below `noteRung` the notes are demoted to the cell's tooltip
+ * and the gaps close; below `wordRung` it folds, the standing phase keeping
+ * its word and the others becoming ticks. The row still scrolls past that, as
+ * a safety net under the narrowest phones, with the gate on the table in view.
+ *
+ * `items` is required: the gate on the table is the gate the inbox holds an
+ * item for (#420), and without them the spine could only guess it from the
+ * phase.
  */
-export function PhaseSpine({ summary, items }: { summary: RunSummary; items?: InboxItem[] }) {
-  const spine = phaseSpine(summary)
+export function PhaseSpine({ summary, items }: { summary: RunSummary; items: readonly InboxItem[] }) {
+  const spine = phaseSpine({ ...summary, items })
   const rung = noteRung(spine)
-  // A gate whose packet was bounced is on the table but offers no approval
-  // (core's readiness rule R3); the cell must not tell the reader otherwise.
-  // An in-flight one refuses the approval too, but nothing about it is wrong
-  // (#159): it reads through `gateCardState` like every other surface, so the
-  // spine does not hatch in the red what the card beside it says is at rest.
-  const offTable = new Map<GateId, GateOffTable>()
-  for (const i of items ?? []) {
-    const state = gateCardState(i)
-    if (i.gate === null || state === null || state === 'reviewable') continue
-    offTable.set(i.gate as GateId, state === 'bounced' ? { state } : { state, role: i.inflight?.role ?? null })
-  }
+  const fold = wordRung(spine)
   const pending = spine.cells.find((c) => c.kind === 'gate' && c.state === 'pending')
   const focus = pending?.kind === 'gate' ? pending.gate : (spine.position ?? null)
   const ref = useScrollIntoView(focus)
   return (
     <div className="@container w-full">
+      {/* `relative` makes the row the containing block of every `sr-only` label
+          in it. Absolutely positioned, those labels escape an `overflow` box
+          whose containing block they are not in, and at 390px they pushed
+          the page 143px sideways from inside a row that was meant to scroll
+          (#427). */}
       <ol
         ref={ref}
         data-spine
         data-rest={spine.rest ?? undefined}
         data-spine-rung={rung}
-        className={`flex w-full items-start overflow-x-auto overscroll-x-contain ${NOTE_RUNG_ROW[rung]}`}
+        data-spine-fold={fold}
+        className={`relative flex w-full items-start overflow-x-auto overscroll-x-contain ${NOTE_RUNG_ROW[rung]}`}
       >
         {spine.cells.map((cell, i) => (
           <Fragment key={cell.kind === 'phase' ? `p-${cell.phase}` : `g-${cell.gate}`}>
-            {i > 0 && <li aria-hidden="true" className="mt-[11px] h-px min-w-[8px] max-w-[72px] flex-1 bg-line" />}
+            {i > 0 && <li aria-hidden="true" className={`mt-[11px] h-px max-w-[72px] flex-1 bg-line ${FOLD_LINK[fold]}`} />}
             {cell.kind === 'phase' ? (
-              <SpinePhase cell={cell} atRest={spine.rest !== null} noteClass={NOTE_RUNG_NOTE[rung]} />
+              <SpinePhase cell={cell} atRest={spine.rest !== null} noteClass={NOTE_RUNG_NOTE[rung]} fold={fold} />
             ) : (
-              <SpineGate cell={cell} offTable={offTable.get(cell.gate) ?? null} noteClass={NOTE_RUNG_NOTE[rung]} />
+              <SpineGate cell={cell} noteClass={NOTE_RUNG_NOTE[rung]} />
             )}
           </Fragment>
         ))}
@@ -351,15 +363,59 @@ const NOTE_RUNG_ROW: Record<SpineNoteRung, string> = {
   980: 'gap-x-0 @min-[980px]:gap-x-1.5',
 }
 
-function SpinePhase({ cell, atRest, noteClass }: { cell: PhaseCell; atRest: boolean; noteClass: string }) {
+// The fold rung (#427), written out for the same reason. Below it a folded
+// phase shows its tick and keeps its word for screen readers only; at or
+// above it the word is back in the open and the tick is gone. The connectors
+// may close to 4px while folded, 8px otherwise. The toggles sit on wrapper
+// spans, never on an `Imp`: `.imp` is unlayered CSS and outranks utilities.
+const FOLD_WORD: Record<SpineWordRung, string> = {
+  360: 'sr-only @min-[360px]:not-sr-only',
+  420: 'sr-only @min-[420px]:not-sr-only',
+  480: 'sr-only @min-[480px]:not-sr-only',
+  540: 'sr-only @min-[540px]:not-sr-only',
+  600: 'sr-only @min-[600px]:not-sr-only',
+}
+
+const FOLD_TICK: Record<SpineWordRung, string> = {
+  360: '@min-[360px]:hidden',
+  420: '@min-[420px]:hidden',
+  480: '@min-[480px]:hidden',
+  540: '@min-[540px]:hidden',
+  600: '@min-[600px]:hidden',
+}
+
+const FOLD_LINK: Record<SpineWordRung, string> = {
+  360: 'min-w-[4px] @min-[360px]:min-w-[8px]',
+  420: 'min-w-[4px] @min-[420px]:min-w-[8px]',
+  480: 'min-w-[4px] @min-[480px]:min-w-[8px]',
+  540: 'min-w-[4px] @min-[540px]:min-w-[8px]',
+  600: 'min-w-[4px] @min-[600px]:min-w-[8px]',
+}
+
+function SpinePhase({ cell, atRest, noteClass, fold }: { cell: PhaseCell; atRest: boolean; noteClass: string; fold: SpineWordRung }) {
   // At rest the run still stands somewhere; the cell goes dotted to say it is
   // standing there rather than moving through, and the phase chip beside the
   // spine names the reason. In motion it is doubled, not yellow: the yellow
   // is the gate's, for the one cell that is waiting on a person.
   const tone = cell.state === 'current' ? (atRest ? 'dot' : 'here') : cell.state === 'future' ? 'dot' : ''
+  const folds = !keepsWordFolded(cell)
   return (
     <li data-spine-phase={cell.phase} data-state={cell.state} className="flex shrink-0 flex-col items-center gap-[4px]">
-      <Imp tone={tone}>{cell.phase}</Imp>
+      {folds ? (
+        <>
+          {/* One name per phase in the text and the accessibility tree: the
+              word, which only leaves the open while folded. The tick carries
+              no text, only the texture and the name as hover text. */}
+          <span className={FOLD_WORD[fold]}>
+            <Imp tone={tone}>{cell.phase}</Imp>
+          </span>
+          <span aria-hidden="true" data-spine-tick className={FOLD_TICK[fold]}>
+            <Imp tone={tone} className="imp-tick" title={cell.phase} />
+          </span>
+        </>
+      ) : (
+        <Imp tone={tone}>{cell.phase}</Imp>
+      )}
       {/* The gutter the gate notes sit in. It goes with them, so a spine with
           no notes in the open is not 24px of empty header. */}
       <span aria-hidden="true" className={`h-[24px] ${noteClass}`} />
@@ -369,11 +425,13 @@ function SpinePhase({ cell, atRest, noteClass }: { cell: PhaseCell; atRest: bool
 
 /** The spine's gate cells take the ledger's colours (settled decision 8), and
  *  the gate on the table keeps the yellow — the one cell on the page it is
- *  spent on besides the focus ring. */
+ *  spent on besides the focus ring. The gate the run is working toward, with
+ *  no item up for it, is the ledger's plain undecided mark (#420). */
 export const GATE_STATE_TONE: Record<GateCell['state'], ImpTone> = {
   approved: 'ok',
   declined: 'struck mark',
   pending: 'cur',
+  next: '',
   future: 'dot',
 }
 
@@ -386,11 +444,12 @@ export function spineGateTone(state: GateCell['state'], held: 'bounced' | 'infli
   return GATE_STATE_TONE[state]
 }
 
-const GATE_STATE_GLYPH: Record<GateCell['state'], string> = { approved: '✓', declined: '✕', pending: '●', future: '·' }
+const GATE_STATE_GLYPH: Record<GateCell['state'], string> = { approved: '✓', declined: '✕', pending: '●', next: '·', future: '·' }
 const GATE_STATE_WORD: Record<GateCell['state'], string> = {
   approved: 'approved',
   declined: 'declined',
   pending: 'pending your decision',
+  next: 'not on the table yet',
   future: 'not yet reached',
 }
 
@@ -402,10 +461,6 @@ const GATE_STATE_WORD: Record<GateCell['state'], string> = {
  */
 const GATE_BOUNCED_WORD = 'on the table — packet bounced'
 
-/** A pending gate that offers no decision, and why: its packet bounced, or the
- *  producing role is out with a fresh dispatch and the packet is superseded. */
-type GateOffTable = { state: 'bounced' } | { state: 'inflight'; role: string | null }
-
 function inflightWord(role: string | null): string {
   return `on the table — superseded, waiting on ${role ?? 'the producing role'}`
 }
@@ -413,15 +468,20 @@ function inflightWord(role: string | null): string {
 /** One gate, as the transition it is. Its question is what `G2` alone cannot
  *  say, so it is the accessible name and the hover text — never inferred,
  *  always the fixed GATE_QUESTIONS string for the profile it is asked in. */
-function SpineGate({ cell, offTable, noteClass }: { cell: GateCell; offTable: GateOffTable | null; noteClass: string }) {
+function SpineGate({ cell, noteClass }: { cell: GateCell; noteClass: string }) {
   const decided = cell.by !== null || cell.at !== null
   const provenance = decided ? `${cell.by ?? '—'}${cell.at ? ` · ${String(cell.at).slice(0, 10)}` : ''}` : null
   const note = gateNote(cell)
-  const held = cell.state === 'pending' ? offTable : null
-  const word =
-    held?.state === 'bounced' ? GATE_BOUNCED_WORD : held?.state === 'inflight' ? inflightWord(held.role) : GATE_STATE_WORD[cell.state]
+  // A gate whose packet was bounced is on the table but offers no approval
+  // (core's readiness rule R3); the cell must not tell the reader otherwise.
+  // An in-flight one refuses the approval too, but nothing about it is wrong
+  // (#159): `spine.ts` reads it through `gateCardState` like every other
+  // surface, so the spine does not hatch in the red what the card beside it
+  // says is at rest.
+  const held = cell.card === 'bounced' || cell.card === 'inflight' ? cell.card : null
+  const word = held === 'bounced' ? GATE_BOUNCED_WORD : held === 'inflight' ? inflightWord(cell.role) : GATE_STATE_WORD[cell.state]
   const label = `${cell.gate} — ${cell.question} — ${word}${provenance ? ` by ${provenance}` : ''}`
-  const tone = spineGateTone(cell.state, held?.state ?? null)
+  const tone = spineGateTone(cell.state, held)
   return (
     <li data-spine-gate={cell.gate} data-state={cell.state} className="flex shrink-0 flex-col items-center gap-[4px]">
       <Imp tone={tone} title={label}>

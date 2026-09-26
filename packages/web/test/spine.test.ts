@@ -2,6 +2,8 @@
 // could quietly become a lie: which cells exist for a profile, where the run is
 // standing, and which gate is on the table. The rendering is chips.tsx's job.
 
+import { rm } from 'node:fs/promises'
+import { LocalGitSource } from '@gateline/core'
 import {
   CLOSURE_MEANINGS as CORE_CLOSURE_MEANINGS,
   CLOSURES as CORE_CLOSURES,
@@ -10,20 +12,39 @@ import {
   PROFILE_PHASES as CORE_PROFILE_PHASES,
 } from '@gateline/core/record'
 import { GATE_QUESTIONS as CORE_GATE_QUESTIONS, PATCH_G1_QUESTION as CORE_PATCH_G1_QUESTION } from '@gateline/core/view-model'
-import { describe, expect, it } from 'vitest'
+import { type FixtureRepo, generateFixtureRepo } from '@gateline/fixtures'
+import { createApp } from '@gateline/server'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   CLOSURE_MEANINGS,
   CLOSURES,
   GATE_PHASES,
   GATE_QUESTIONS,
   type GateId,
+  type InboxItem,
   PATCH_G1_QUESTION,
   PROFILE_GATES,
   PROFILE_PHASES,
   type Profile,
+  type RunDetailResponse,
   type RunSummary,
 } from '../src/api.ts'
-import { type GateCell, gateNote, noteRung, type PhaseCell, phaseSpine, SPINE_NOTE_RUNGS, spineFit } from '../src/spine.ts'
+import { PhaseSpine } from '../src/components/chips.tsx'
+import {
+  type GateCell,
+  gateNote,
+  noteRung,
+  type PhaseCell,
+  phaseSpine,
+  SPINE_NOTE_RUNGS,
+  SPINE_WORD_RUNGS,
+  spineFit,
+  spineWordFit,
+  wordRung,
+} from '../src/spine.ts'
+import { NO_FACTS } from './inbox-facts.helper.ts'
 
 type Ledger = RunSummary['gates']
 
@@ -39,8 +60,30 @@ const ledger = (over: Partial<Ledger> = {}): Ledger => ({
   ...over,
 })
 
+/** An inbox item as core would send it; a gate item for `gate` unless told otherwise. */
+const item = (over: Partial<InboxItem>): InboxItem =>
+  ({
+    source: 'local',
+    slug: 'a-run',
+    kind: 'gate',
+    gate: null,
+    escalationIndex: null,
+    inflight: null,
+    reviewable: true,
+    title: '',
+    detail: '',
+    since: 1,
+    packet: [],
+    packetRefs: [],
+    problems: [],
+    ...NO_FACTS,
+    ...(over as object),
+  }) as InboxItem
+/** A gate the inbox holds an item for: what "on the table" means. */
+const up = (gate: GateId, over: Partial<InboxItem> = {}) => item({ kind: 'gate', gate, ...over })
+
 const run = (over: Partial<Parameters<typeof phaseSpine>[0]> = {}) =>
-  phaseSpine({ profile: 'full', phase: 'implement', pausedReason: null, gates: ledger(), ...over })
+  phaseSpine({ profile: 'full', phase: 'implement', pausedReason: null, gates: ledger(), items: [], ...over })
 
 const phases = (cells: ReturnType<typeof phaseSpine>['cells']) =>
   cells.filter((c): c is PhaseCell => c.kind === 'phase').map((c) => c.phase)
@@ -141,13 +184,13 @@ describe('gate states', () => {
   })
 
   it('the gate on the table is pending; the ones beyond it are not', () => {
-    const spine = run({ phase: 'implement', gates: ledger({ G0: approved('operator', 'x'), G1: approved('operator', 'x') }) })
+    const spine = run({ phase: 'implement', gates: ledger({ G0: approved('operator', 'x'), G1: approved('operator', 'x') }), items: [up('G2')] })
     expect(gateCell(spine, 'G2')!.state).toBe('pending')
     expect(gateCell(spine, 'G3')!.state).toBe('future')
   })
 
   it('G2 is on the table through integrate as well as implement', () => {
-    expect(gateCell(run({ phase: 'integrate' }), 'G2')!.state).toBe('pending')
+    expect(gateCell(run({ phase: 'integrate', items: [up('G2')] }), 'G2')!.state).toBe('pending')
   })
 
   it('a declined gate reads as decided, not as waiting', () => {
@@ -156,8 +199,97 @@ describe('gate states', () => {
   })
 
   it('a run at rest has no gate on the table', () => {
-    const spine = run({ phase: 'paused', pausedReason: 'budget-exhausted', gates: ledger({ G0: approved('operator', 'x'), G1: approved('operator', 'x') }) })
+    const spine = run({
+      phase: 'paused',
+      pausedReason: 'budget-exhausted',
+      gates: ledger({ G0: approved('operator', 'x'), G1: approved('operator', 'x') }),
+      items: [item({ kind: 'paused' })],
+    })
     expect(gateCell(spine, 'G2')!.state).toBe('future')
+  })
+})
+
+// #420: the spine called the gate after the current phase "on the table" (the
+// yellow) whenever the run was moving, whether or not a gate item existed. On
+// `escalated` G2 was yellow while the inbox held only the escalation. The
+// yellow means a human is wanted at this spot (settled decision 4), so what
+// makes a gate pending is the item that says so.
+describe('a gate is on the table only when the inbox holds a gate item for it (#420)', () => {
+  const moving = { phase: 'implement', gates: ledger({ G0: approved('operator', 'x'), G1: approved('operator', 'x') }) }
+
+  it('with no gate item, the gate the run is working toward is `next`, never pending', () => {
+    for (const items of [[], [item({ kind: 'escalation' })], [item({ kind: 'round-cap' })]]) {
+      const spine = run({ ...moving, items })
+      expect(gateCell(spine, 'G2')!.state).toBe('next')
+      expect(spine.cells.some((c) => c.kind === 'gate' && c.state === 'pending')).toBe(false)
+      // Nothing to say under it: it is neither up nor decided.
+      expect(gateNote(gateCell(spine, 'G2')!)).toBeNull()
+    }
+  })
+
+  it('an item for another gate does not put this one on the table', () => {
+    expect(gateCell(run({ ...moving, items: [up('G3')] }), 'G2')!.state).toBe('next')
+  })
+
+  it('carries the card state of the item that put it there', () => {
+    expect(gateCell(run({ ...moving, items: [up('G2')] }), 'G2')).toMatchObject({ state: 'pending', card: 'reviewable', role: null })
+    expect(gateCell(run({ ...moving, items: [up('G2', { reviewable: false, problems: ['x'] })] }), 'G2')).toMatchObject({
+      state: 'pending',
+      card: 'bounced',
+    })
+    expect(
+      gateCell(run({ ...moving, items: [up('G2', { reviewable: false, inflight: { role: 'implementer', since: 2 } })] }), 'G2'),
+    ).toMatchObject({ state: 'pending', card: 'inflight', role: 'implementer' })
+  })
+
+  it('a gate beyond the one the run works toward stays `future`, with or without items', () => {
+    expect(gateCell(run(moving), 'G3')!.state).toBe('future')
+  })
+})
+
+// The same rule over the demo fixtures, through the real server route the run
+// page reads, so the spine is asked what the header will actually be handed.
+describe('the demo fixtures put the yellow only where the inbox has a gate up (#420)', () => {
+  const SRC = 'fixture'
+  let fixture: FixtureRepo
+  let app: ReturnType<typeof createApp>
+  beforeAll(async () => {
+    fixture = generateFixtureRepo()
+    app = createApp({ sources: [new LocalGitSource(SRC, fixture.dir)] })
+  }, 120_000)
+  afterAll(() => rm(fixture.dir, { recursive: true, force: true }))
+
+  const detail = async (slug: string): Promise<RunDetailResponse> => {
+    const res = await app.request(`/api/runs/${SRC}/${slug}`)
+    expect(res.status).toBe(200)
+    return (await res.json()) as RunDetailResponse
+  }
+  const spineOf = (d: RunDetailResponse) => phaseSpine({ ...d.summary, items: d.items })
+  const yellow = (d: RunDetailResponse) =>
+    [...renderToStaticMarkup(createElement(PhaseSpine, { summary: d.summary, items: d.items })).matchAll(/imp-cur/g)].length
+
+  it.each(['escalated', 'round-cap'])('%s: moving at implement with no gate item — G2 is next, and nothing is yellow', async (slug) => {
+    const d = await detail(slug)
+    // The premise, so the test cannot pass on a fixture that stopped being this case.
+    expect(d.summary.phase).toBe('implement')
+    expect(d.items.map((i) => i.kind)).toEqual([slug === 'escalated' ? 'escalation' : 'round-cap'])
+    const spine = spineOf(d)
+    expect(gateCell(spine, 'G2')!.state).toBe('next')
+    expect(spine.cells.filter((c) => c.kind === 'gate' && c.state === 'pending')).toEqual([])
+    expect(yellow(d)).toBe(0)
+  })
+
+  it('g2-pending: the reviewable G2 item is on the table, and is the one yellow cell', async () => {
+    const d = await detail('g2-pending')
+    const spine = spineOf(d)
+    expect(gateCell(spine, 'G2')).toMatchObject({ state: 'pending', card: 'reviewable' })
+    expect(yellow(d)).toBe(1)
+  })
+
+  it('malformed-spec: a bounced G0 is on the table but not yellow', async () => {
+    const d = await detail('malformed-spec')
+    expect(gateCell(spineOf(d), 'G0')).toMatchObject({ state: 'pending', card: 'bounced' })
+    expect(yellow(d)).toBe(0)
   })
 })
 
@@ -214,7 +346,11 @@ const notesShownAt = (spine: ReturnType<typeof phaseSpine>, width: number) => wi
 
 describe('the under-cell note is the record, not a gloss (#295)', () => {
   it('a gate on the table says so; a decided one gives approver over date', () => {
-    const spine = run({ phase: 'implement', gates: ledger({ G0: approved('operator', '2026-07-12T09:00:00Z'), G1: approved('operator', 'x') }) })
+    const spine = run({
+      phase: 'implement',
+      gates: ledger({ G0: approved('operator', '2026-07-12T09:00:00Z'), G1: approved('operator', 'x') }),
+      items: [up('G2')],
+    })
     expect(gateNote(gateCell(spine, 'G0')!)).toEqual(['operator', '2026-07-12'])
     expect(gateNote(gateCell(spine, 'G2')!)).toEqual(['on the table'])
   })
@@ -239,7 +375,11 @@ describe('the fit decides when provenance is demoted', () => {
   // than one at a time: the density work this page has been through failed
   // twice by fixing the state under review and breaking a different one.
   const g2Pending = () =>
-    run({ phase: 'implement', gates: ledger({ G0: approved('operator', '2026-07-12T09:00:00Z'), G1: approved('operator', '2026-07-14T11:30:00Z') }) })
+    run({
+      phase: 'implement',
+      gates: ledger({ G0: approved('operator', '2026-07-12T09:00:00Z'), G1: approved('operator', '2026-07-14T11:30:00Z') }),
+      items: [up('G2')],
+    })
   const doneMerged = () =>
     run({
       phase: 'done',
@@ -283,7 +423,12 @@ describe('the fit decides when provenance is demoted', () => {
   })
 
   it('patch keeps its provenance at every width the header offers — it always fitted', () => {
-    const patch = run({ profile: 'patch', phase: 'implement', gates: ledger({ G1: approved('operator', '2026-07-14T11:30:00Z') }) })
+    const patch = run({
+      profile: 'patch',
+      phase: 'implement',
+      gates: ledger({ G1: approved('operator', '2026-07-14T11:30:00Z') }),
+      items: [up('G2')],
+    })
     for (const width of [AT_800, AT_900, AT_1000, AT_1280]) expect(notesShownAt(patch, width)).toBe(true)
   })
 
@@ -292,6 +437,7 @@ describe('the fit decides when provenance is demoted', () => {
       profile: 'standard',
       phase: 'implement',
       gates: ledger({ G0: approved('operator', '2026-07-12T09:00:00Z'), G1: approved('operator', '2026-07-14T11:30:00Z') }),
+      items: [up('G2')],
     })
     expect(notesShownAt(standard, AT_1280)).toBe(true)
     expect(notesShownAt(standard, AT_1000)).toBe(true)
@@ -301,7 +447,8 @@ describe('the fit decides when provenance is demoted', () => {
 
   it('a lighter profile never asks for more room than a heavier one', () => {
     const g = ledger({ G0: approved('operator', '2026-07-12T09:00:00Z'), G1: approved('operator', '2026-07-14T11:30:00Z') })
-    const widths = (['patch', 'standard', 'full'] as Profile[]).map((profile) => spineFit(run({ profile, phase: 'implement', gates: g })).withNotes)
+    const widths = (['patch', 'standard', 'full'] as Profile[]).map((profile) => spineFit(run({ profile, phase: 'implement', gates: g, items: [up('G2')] })).withNotes,
+    )
     expect(widths).toEqual([...widths].sort((a, b) => a - b))
   })
 
@@ -320,9 +467,51 @@ describe('the fit decides when provenance is demoted', () => {
 
   it('the rung is rounded up, so at the rung itself the notes provably fit', () => {
     for (const profile of ['patch', 'standard', 'full'] as Profile[]) {
-      const spine = run({ profile, phase: 'implement', gates: ledger({ G0: approved('operator', 'x'), G1: approved('operator', 'x') }) })
+      const spine = run({ profile, phase: 'implement', gates: ledger({ G0: approved('operator', 'x'), G1: approved('operator', 'x') }), items: [up('G2')] })
       expect(noteRung(spine)).toBeGreaterThanOrEqual(spineFit(spine).withNotes)
     }
+  })
+})
+
+// #427: at 390px the spine needed 574px and cropped inside its row. Below its
+// word rung it now folds instead: the phase the run stands at keeps its word,
+// the others become ticks, every gate keeps its code. What is pinned here is
+// the arithmetic; the e2e geometry sweep measures the real row at 390px and
+// across the 800–1280px band.
+describe('below its word rung the spine folds, and folded it fits a phone (#427)', () => {
+  const PROFILES = ['patch', 'standard', 'full'] as Profile[]
+  /** The row a phone gives the spine: the viewport less `max-md:px-4` on <main>. */
+  const phoneRow = (viewport: number) => viewport - 32
+  /** The row at 900px, as measured in Chromium (#427's before/after table). */
+  const ROW_AT_900 = 636
+  /** Every position a moving run can stand at, for every profile. */
+  const everyPosition = () =>
+    PROFILES.flatMap((profile) => PROFILE_PHASES[profile].filter((p) => p !== 'paused' && p !== 'closed').map((phase) => run({ profile, phase })))
+
+  it('folded, every profile fits a 360px phone at every position — the widest word it keeps is `implement`', () => {
+    for (const spine of everyPosition()) expect(spineWordFit(spine).folded).toBeLessThanOrEqual(phoneRow(360))
+  })
+
+  it('in words, a full spine does not fit a 390px phone — the premise of folding', () => {
+    expect(spineWordFit(run({ profile: 'full' })).words).toBeGreaterThan(phoneRow(390))
+  })
+
+  it('every profile keeps its words at 900px and above: the fold never hides a name that fits', () => {
+    for (const spine of everyPosition()) expect(wordRung(spine)).toBeLessThanOrEqual(ROW_AT_900)
+  })
+
+  it('the rung is rounded up, so at the rung itself the words provably fit', () => {
+    for (const spine of everyPosition()) expect(wordRung(spine)).toBeGreaterThanOrEqual(spineWordFit(spine).words)
+    expect([...SPINE_WORD_RUNGS]).toEqual([...SPINE_WORD_RUNGS].sort((a, b) => a - b))
+  })
+
+  it('the notes yield before the words do: every note rung is wider than the word rung', () => {
+    for (const spine of everyPosition()) expect(noteRung(spine)).toBeGreaterThan(wordRung(spine))
+  })
+
+  it('a lighter profile folds at a narrower width than a heavier one', () => {
+    const rungs = PROFILES.map((profile) => wordRung(run({ profile })))
+    expect(rungs).toEqual([360, 480, 600])
   })
 })
 

@@ -34,7 +34,6 @@ import {
   type Phase,
   PROFILES,
   type Profile,
-  parseLedgerSubject,
   parseReview,
   parseUnifiedDiff,
   planDecision,
@@ -43,6 +42,7 @@ import {
   type RunScaffold,
   type RunSource,
   readEngineHealth,
+  readLedger,
   ScaffoldError,
   SLUG_PATTERN,
   scopeDiff,
@@ -363,6 +363,10 @@ export function createApp(deps: AppDeps): Hono {
         source.originUrl?.() ?? null,
       ])
       const refs = artifactRefs(artifacts, reviews)
+      // The ledger reading (#268), joined to the state each commit wrote
+      // (#426). Read here rather than in the browser because web takes only
+      // types from core, never values.
+      const ledger = readLedger(history, artifacts)
       const refByPath = new Map(refs.map((r) => [r.path, r]))
       return {
         summary,
@@ -382,15 +386,13 @@ export function createApp(deps: AppDeps): Hono {
         // else is decided by host-link.ts, which returns null for any remote
         // it cannot resolve without guessing.
         branchUrl: ref.kind === 'default' ? null : hostBranchUrl(origin, ref.branch),
-        history: history.map((h) => ({
+        history: history.map((h, i) => ({
           oid: h.oid,
           time: h.time,
           author: h.author,
           subject: h.subject,
           phase: h.state?.phase ?? null,
-          // The ledger reading (#268). Parsed here rather than in the browser
-          // because web takes only types from core, never values.
-          ledger: parseLedgerSubject(h.subject),
+          ledger: ledger[i]!,
         })),
       }
     })

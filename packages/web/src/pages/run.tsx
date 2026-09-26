@@ -206,7 +206,7 @@ export function RunPage() {
             }}
           />
         )}
-        {route.surface === 'history' && <HistoryTab history={detail.history} src={src!} slug={slug!} />}
+        {route.surface === 'history' && <HistoryTab history={detail.history} src={src!} slug={slug!} items={items} artifacts={detail.artifactRefs} />}
         {/* The page's own keys, wherever the primary card is not already
             carrying them (#284) — a surface with no decision on it, or one
             whose cards are all bounced and drive no keyboard loop. Above the

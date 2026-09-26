@@ -80,6 +80,8 @@ export type {
   InboxItem,
   InboxResponse,
   LedgerEntry,
+  LedgerQuote,
+  LedgerTarget,
   LexiconEntry,
   LexiconResponse,
   MetricsResponse,

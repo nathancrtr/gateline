@@ -22,7 +22,16 @@
 // `detail` is the byte-identical remainder of the subject, and every extracted
 // field is a substring of it, so a renderer can satisfy "verbatim and reachable"
 // (#261's standing rule) without holding the raw string separately.
-import { BURDENS, type Burden, GATE_IDS, type GateId } from '../record/schema.ts'
+//
+// `readLedger` is the second reading (#426, docs/SEAM.md §8.6): the same
+// entries, joined to the state.yaml each commit wrote. The subject says a gate
+// was decided; the state beside it holds the approver's own `notes:`, the
+// closure's `reason:`, and which escalation entry a row is about. Those are
+// facts, not sentences — the words are the record's, verbatim, and History
+// composes the line. Still pure: it reads only the history it is handed.
+import { BURDENS, type Burden, GATE_IDS, type GateId, gateUndecided, type RunState } from '../record/schema.ts'
+import { type ArtifactRef, artifactRef } from './artifact-ref.ts'
+import { describeEscalation } from './escalation.ts'
 
 /** Who the grammar attributes the entry to. Derived from the verb, not the
  * committer: a human decision is a human decision whichever identity pushed it. */
@@ -50,6 +59,33 @@ export type LedgerKind =
   // grammar this version does not know. Rendered verbatim, never guessed at.
   | 'other'
 
+/**
+ * A human's own words that a commit recorded in state.yaml — SEAM.md §4's
+ * Substance: a gate's `notes:`, the closure's `reason:`, an escalation's
+ * `resolution:`. Byte-identical to the field; attributed by the record's own
+ * `by:` / `resolved_by:`, never by the committer.
+ */
+export interface LedgerQuote {
+  /** The gate whose `notes:` this is; null for a closure reason or a resolution. */
+  gate: GateId | null
+  /** The named human the entry attributes the words to, verbatim, or null when it names none. */
+  by: string | null
+  /** The field's value, verbatim. Never empty. */
+  text: string
+}
+
+/**
+ * Where a row's subject points, so a view can link to what exists. `decide`
+ * names the card the inbox would open (`?decide=` — a gate id or `esc-<n>`),
+ * which a view offers only while the run still has that item; `artifact` is
+ * the reference the Record reader opens otherwise. Either may be null; both
+ * null is never emitted (the entry carries `target: null` instead).
+ */
+export interface LedgerTarget {
+  decide: GateId | `esc-${number}` | null
+  artifact: ArtifactRef | null
+}
+
 export interface LedgerEntry {
   kind: LedgerKind
   actor: LedgerActor
@@ -69,6 +105,30 @@ export interface LedgerEntry {
   by: string | null
   /** The burden recorded alongside an approval. */
   burden: Burden | null
+  /** The disposition token an escalation resolution's subject carries, verbatim. */
+  disposition: string | null
+  /**
+   * The human's notes this commit recorded (#426): on a gate decision, the
+   * gate's `notes:`; on an escalation resolution, its `resolution:`; on a
+   * commit outside the grammar (a v0 harvest, a run's first commit), the
+   * `notes:` of every gate it took from undecided to decided. Empty from
+   * `parseLedgerSubject`, which never reads the state.
+   */
+  notes: LedgerQuote[]
+  /** The closure `reason:` this commit recorded, when it recorded the closure. */
+  reason: LedgerQuote | null
+  /**
+   * The `state.escalations` index the row is about: from the subject on a
+   * resolution (`escalation #<n>`), from the entry the commit appended on an
+   * engine `escalated`. An address — History shows it only in raw mode.
+   */
+  escalationIndex: number | null
+  /** Who escalated: the role the entry's reason names, else its `from_role`, verbatim. */
+  escalatedBy: string | null
+  /** What the escalation is about: the task id, else the gate, the entry's reason names. */
+  escalatedAbout: string | null
+  /** For an engine `bounced` or `escalated` row: the view its subject points at. */
+  target: LedgerTarget | null
 }
 
 const STATE_SUBJECT = /^state\(([^)]*)\):\s*(.*)$/
@@ -101,6 +161,13 @@ export function parseLedgerSubject(subject: string): LedgerEntry {
     gate: null,
     by: null,
     burden: null,
+    disposition: null,
+    notes: [],
+    reason: null,
+    escalationIndex: null,
+    escalatedBy: null,
+    escalatedAbout: null,
+    target: null,
   }
 
   const framed = STATE_SUBJECT.exec(subject)
@@ -132,9 +199,17 @@ export function parseLedgerSubject(subject: string): LedgerEntry {
   }
 
   // `escalation #2 resolved by Nathan Carter [disposition: replan]`
-  const resolved = /^escalation #\d+ resolved by (.+?)(?: \[disposition: [^\]]*\])?$/.exec(detail)
+  const resolved = /^escalation #(\d+) resolved by (.+?)(?: \[disposition: ([^\]]*)\])?$/.exec(detail)
   if (resolved) {
-    return { ...base, kind: 'escalation-resolved', actor: 'human', verb: 'resolved', by: resolved[1] ?? null }
+    return {
+      ...base,
+      kind: 'escalation-resolved',
+      actor: 'human',
+      verb: 'resolved',
+      by: resolved[2] ?? null,
+      escalationIndex: Number(resolved[1]),
+      disposition: resolved[3] ?? null,
+    }
   }
 
   // `paused by Nathan Carter (reason)` — the human pause. The orchestrator's
@@ -168,6 +243,13 @@ export function parseLedgerSubject(subject: string): LedgerEntry {
   // Checked after the human set so that a run slugged e.g. "dispatched" cannot
   // shadow a decision: the human grammars are all anchored on their own verbs.
   if (/^dispatched /.test(detail)) return { ...base, kind: 'dispatched', actor: 'orchestrator', verb: 'dispatched' }
+  // `bounced <artifact> — re-dispatching <role> (missing: …)`: the artifact is
+  // run-relative as the engine names it, and the Record reader can open it.
+  const bounced = /^bounced (\S+)(?: —|$)/.exec(detail)
+  if (bounced) {
+    const artifact = artifactRef(bounced[1]!)
+    return { ...base, kind: 'bounced', actor: 'orchestrator', verb: 'bounced', target: { decide: null, artifact } }
+  }
   if (/^bounced /.test(detail)) return { ...base, kind: 'bounced', actor: 'orchestrator', verb: 'bounced' }
   if (/^advanced(?: |$)/.test(detail)) return { ...base, kind: 'advanced', actor: 'orchestrator', verb: 'advanced' }
   if (/^escalated(?: |$)/.test(detail)) return { ...base, kind: 'escalated', actor: 'orchestrator', verb: 'escalated' }
@@ -181,4 +263,109 @@ export function parseLedgerSubject(subject: string): LedgerEntry {
 /** The verbs that are decisions a human made, as opposed to the engine acting. */
 export function isHumanDecision(entry: LedgerEntry): boolean {
   return entry.actor === 'human'
+}
+
+/** One state.yaml commit as `readLedger` needs it: its subject and the state it wrote. */
+export interface LedgerCommit {
+  subject: string
+  /** The parsed state at this commit, or null when it did not parse. */
+  state: RunState | null
+}
+
+/** A round-cap or landing reason names its task as `task <id>`; the escalation packet's own read comes first. */
+const TASK_NAMED = /\btask\s+([A-Za-z0-9][\w.-]*?)(?=[:\s]|$)/
+const GATE_NAMED = /\b(G[0-3])\b/
+
+function escalationFacts(state: RunState, index: number, artifacts: readonly string[]) {
+  const esc = state.escalations[index]
+  if (!esc) return null
+  const origin = describeEscalation(esc.reason, esc.from_role, artifacts)
+  return {
+    esc,
+    origin,
+    escalatedBy: origin.role ?? esc.from_role,
+    escalatedAbout: origin.task ?? TASK_NAMED.exec(esc.reason)?.[1] ?? GATE_NAMED.exec(esc.reason)?.[1] ?? null,
+  }
+}
+
+const quote = (gate: GateId | null, by: string | null, text: string | null): LedgerQuote | null =>
+  text !== null && text.trim() !== '' ? { gate, by, text } : null
+
+/**
+ * A run's state history (newest first, as `stateHistory` returns it) → one
+ * ledger entry per commit, each joined to the state that commit wrote (#426).
+ *
+ * `parseLedgerSubject` reads the words of the commit; this adds what the
+ * commit put in the record beside them. A decision row gains the approver's
+ * notes; a closure, its reason; an escalation resolution, who escalated and
+ * about what; an engine `escalated`, the card it opened. A commit outside the
+ * grammar gains the notes of any gate it decided and the closure reason if it
+ * closed the run — the v0 runs and a fixture's first commit record decisions
+ * that way. "Decided here" is read against the commit before it, and only when
+ * that commit's state parsed: an unreadable predecessor is not evidence, so
+ * nothing is attributed across it. `artifacts` is the run's artifact list, for
+ * resolving the report an escalation reason names.
+ */
+export function readLedger(history: readonly LedgerCommit[], artifacts: readonly string[] = []): LedgerEntry[] {
+  return history.map((commit, i) => {
+    const entry = parseLedgerSubject(commit.subject)
+    const state = commit.state
+    if (!state) return entry
+    const oldest = i === history.length - 1
+    const before = oldest ? null : (history[i + 1]!.state ?? undefined)
+    // `undefined`: a predecessor exists and did not parse — nothing is "new" against it.
+    const known = before !== undefined
+
+    switch (entry.kind) {
+      case 'gate-approved':
+      case 'gate-declined': {
+        if (!entry.gate) return entry
+        const g = state.gates[entry.gate]
+        const q = quote(entry.gate, g.by ?? entry.by, g.notes)
+        return q ? { ...entry, notes: [q] } : entry
+      }
+      case 'closed': {
+        const c = state.closure
+        return c ? { ...entry, reason: quote(null, c.by ?? entry.by, c.reason) } : entry
+      }
+      case 'escalation-resolved': {
+        if (entry.escalationIndex === null) return entry
+        const f = escalationFacts(state, entry.escalationIndex, artifacts)
+        if (!f) return entry
+        const q = quote(null, f.esc.resolved_by ?? entry.by, f.esc.resolution)
+        return { ...entry, escalatedBy: f.escalatedBy, escalatedAbout: f.escalatedAbout, notes: q ? [q] : [] }
+      }
+      case 'escalated': {
+        // The engine appends one entry per `escalated` commit (engine.ts), so
+        // the entry this commit is about is the last one, provided the list grew.
+        if (!known) return entry
+        const had = before?.escalations.length ?? 0
+        if (state.escalations.length <= had) return entry
+        const index = state.escalations.length - 1
+        const f = escalationFacts(state, index, artifacts)!
+        return {
+          ...entry,
+          escalationIndex: index,
+          escalatedBy: f.escalatedBy,
+          escalatedAbout: f.escalatedAbout,
+          // The report the reason names, else the run state the entry lives in.
+          target: { decide: `esc-${index}`, artifact: artifactRef(f.origin.artifact ?? 'state.yaml') },
+        }
+      }
+      case 'other': {
+        if (!known) return entry
+        const notes: LedgerQuote[] = []
+        for (const gate of GATE_IDS) {
+          const g = state.gates[gate]
+          if (gateUndecided(g) || (before && !gateUndecided(before.gates[gate]))) continue
+          const q = quote(gate, g.by, g.notes)
+          if (q) notes.push(q)
+        }
+        const c = state.closure && !before?.closure ? state.closure : null
+        return { ...entry, notes, reason: c ? quote(null, c.by, c.reason) : null }
+      }
+      default:
+        return entry
+    }
+  })
 }

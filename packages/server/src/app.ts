@@ -51,21 +51,25 @@ import {
   SLUG_PATTERN,
   scopeDiff,
   summarizeRun,
+  TERMINAL_PHASES,
   unreadableStateView,
   validateArtifact,
   workItemContract,
   workItemView,
 } from '@gateline/core'
 import { type Context, Hono } from 'hono'
-import { GenerationCache } from './cache.ts'
+import { ViewCache } from './cache.ts'
 import { API_VERSION, type EngineHealthResponse } from './contract.ts'
+import { RefPrints } from './prints.ts'
 import { fail, respond } from './respond.ts'
 import type { DispatchOutcome, RunnerApi } from './runner-api.ts'
 import { verifySignature, type WebhookConfig } from './webhook.ts'
 
 export interface AppDeps {
   sources: RunSource[]
-  cache?: GenerationCache
+  cache?: ViewCache
+  /** The refs views read (#461); absent → the app reads them itself. */
+  prints?: RefPrints
   /** Called once per SSE client; returns an unsubscribe. */
   subscribe?: (send: (event: string) => void) => () => void
   /** GitHub webhook intake; absent → the route does not exist. */
@@ -75,7 +79,8 @@ export interface AppDeps {
 }
 
 export function createApp(deps: AppDeps): Hono {
-  const cache = deps.cache ?? new GenerationCache()
+  const cache = deps.cache ?? new ViewCache()
+  const prints = deps.prints ?? new RefPrints(deps.sources)
   const app = new Hono()
 
   // R2 note: the webhook is not a second write path — pushes trigger a fetch,
@@ -163,10 +168,26 @@ export function createApp(deps: AppDeps): Hono {
   const findRun = async (src: string, slug: string): Promise<{ source: RunSource; ref: RunRef } | null> => {
     const source = sourceById(src)
     if (!source) return null
-    const runs = await cache.get(`runs:${src}`, () => source.listRuns())
+    const runs = await listRuns(source)
     const ref = runs.find((r) => r.slug === slug)
     return ref ? { source, ref } : null
   }
+
+  const listRuns = async (source: RunSource) => cache.get(`runs:${source.id}`, await prints.repo(source.id), () => source.listRuns())
+
+  // A run's readiness reads the clock — a dispatch ages out after the role
+  // timeout — so a view built on it goes stale by time alone while the run
+  // is in flight. A finished run has nothing left to age.
+  const inFlight = (phase: string) => !(TERMINAL_PHASES as readonly string[]).includes(phase)
+
+  const summarize = async (source: RunSource, ref: RunRef) =>
+    cache.get(`summary:${ref.source}:${ref.slug}`, await prints.run(ref), () => summarizeRun(source, ref), {
+      expires: (v) => inFlight(v.summary.phase),
+    })
+
+  // Composed from per-run entries, so a commit on one run re-derives that
+  // run and leaves the rest as they were.
+  const portfolio = () => buildPortfolio(deps.sources, { listRuns, summarize })
 
   // The one derivation of "required intent-brief.md sections" from a
   // (possibly absent) template, shared verbatim by GET /api/staging (form
@@ -211,12 +232,12 @@ export function createApp(deps: AppDeps): Hono {
   })
 
   app.get('/api/inbox', async (c) => {
-    const { inbox } = await cache.get('portfolio', () => buildPortfolio(deps.sources))
+    const { inbox } = await portfolio()
     return respond<'GET /api/inbox'>(c, { items: inbox, now: Math.floor(Date.now() / 1000) })
   })
 
   app.get('/api/runs', async (c) => {
-    const { runs } = await cache.get('portfolio', () => buildPortfolio(deps.sources))
+    const { runs } = await portfolio()
     return respond<'GET /api/runs'>(c, { runs, now: Math.floor(Date.now() / 1000) })
   })
 
@@ -314,7 +335,7 @@ export function createApp(deps: AppDeps): Hono {
 
     const result = await source.stageRun(scaffold, who ?? { name: '', email: '' })
     if (result.outcome === 'created') {
-      cache.bump()
+      prints.markDirty()
       return respond<'POST /api/runs'>(
         c,
         result.pushFailed
@@ -339,8 +360,8 @@ export function createApp(deps: AppDeps): Hono {
   // parsed from this run's own review-NN.md and shipped as data — the browser
   // must not bundle the core runtime. Every field is a verbatim slice of the
   // committed artifact; nothing here summarizes or judges.
-  const reviewsFor = (source: RunSource, ref: RunRef) =>
-    cache.get(`reviews:${ref.source}:${ref.slug}`, async () => {
+  const reviewsFor = async (source: RunSource, ref: RunRef) =>
+    cache.get(`reviews:${ref.source}:${ref.slug}`, await prints.run(ref), async () => {
       const artifacts = await source.listArtifacts(ref)
       return Promise.all(
         artifacts
@@ -354,9 +375,9 @@ export function createApp(deps: AppDeps): Hono {
     if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
     const key = `run:${ref.source}:${ref.slug}`
-    const payload = await cache.get(key, async () => {
+    const build = async () => {
       const [{ summary, items }, { state, error, raw }, readiness, artifacts, reviews, history, origin] = await Promise.all([
-        summarizeRun(source, ref),
+        summarize(source, ref),
         source.readState(ref),
         deriveReadiness(source, ref),
         source.listArtifacts(ref),
@@ -402,7 +423,8 @@ export function createApp(deps: AppDeps): Hono {
           ledger: ledger[i]!,
         })),
       }
-    })
+    }
+    const payload = await cache.get(key, await prints.run(ref), build, { expires: (v) => inFlight(v.summary.phase) })
     return respond<'GET /api/runs/:src/:slug'>(c, { ...payload, now: Math.floor(Date.now() / 1000) })
   })
 
@@ -435,7 +457,7 @@ export function createApp(deps: AppDeps): Hono {
     const found = await findRun(c.req.param('src'), c.req.param('slug'))
     if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
-    const lexicon = await cache.get(`lexicon:${ref.source}:${ref.slug}`, async () => {
+    const lexicon = await cache.get(`lexicon:${ref.source}:${ref.slug}`, await prints.run(ref), async () => {
       const [spec, plan] = await Promise.all([source.readArtifact(ref, 'spec.md'), source.readArtifact(ref, 'plan.md')])
       return buildLexicon({ spec, plan })
     })
@@ -463,7 +485,7 @@ export function createApp(deps: AppDeps): Hono {
     const raw = await source.readArtifact(ref, 'state.yaml')
     const escalation = raw === null ? undefined : bestEffortEscalations(raw)[index]
     if (!escalation) return fail(c, 404, { error: `no escalation at index ${index}` })
-    const packet = await cache.get(`escalation:${ref.source}:${ref.slug}:${index}`, async () => {
+    const packet = await cache.get(`escalation:${ref.source}:${ref.slug}:${index}`, await prints.run(ref), async () => {
       const [artifacts, reviews, verification] = await Promise.all([
         source.listArtifacts(ref),
         reviewsFor(source, ref),
@@ -481,7 +503,7 @@ export function createApp(deps: AppDeps): Hono {
     const found = await findRun(c.req.param('src'), c.req.param('slug'))
     if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
-    const rollup = await cache.get(`evidence:${ref.source}:${ref.slug}`, async () => {
+    const rollup = await cache.get(`evidence:${ref.source}:${ref.slug}`, await prints.run(ref), async () => {
       const [spec, verification, artifacts] = await Promise.all([
         source.readArtifact(ref, 'spec.md'),
         source.readArtifact(ref, 'verification-report.md'),
@@ -505,7 +527,7 @@ export function createApp(deps: AppDeps): Hono {
     const found = await findRun(c.req.param('src'), c.req.param('slug'))
     if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
-    const packet = await cache.get(`g0:${ref.source}:${ref.slug}`, async () => {
+    const packet = await cache.get(`g0:${ref.source}:${ref.slug}`, await prints.run(ref), async () => {
       const [spec, brief] = await Promise.all([source.readArtifact(ref, 'spec.md'), source.readArtifact(ref, 'intent-brief.md')])
       // Which sections a view folds is the contract's `AUDIENCE:` line, read
       // by validation from the repo's own templates — never the view's call.
@@ -525,7 +547,7 @@ export function createApp(deps: AppDeps): Hono {
     const found = await findRun(c.req.param('src'), c.req.param('slug'))
     if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
-    const packet = await cache.get(`g1:${ref.source}:${ref.slug}`, async () => {
+    const packet = await cache.get(`g1:${ref.source}:${ref.slug}`, await prints.run(ref), async () => {
       const [spec, plan, artifacts] = await Promise.all([
         source.readArtifact(ref, 'spec.md'),
         source.readArtifact(ref, 'plan.md'),
@@ -549,7 +571,7 @@ export function createApp(deps: AppDeps): Hono {
     const found = await findRun(c.req.param('src'), c.req.param('slug'))
     if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
-    const packet = await cache.get(`g3:${ref.source}:${ref.slug}`, async () =>
+    const packet = await cache.get(`g3:${ref.source}:${ref.slug}`, await prints.run(ref), async () =>
       buildReleasePacket({ plan: await source.readArtifact(ref, 'release-plan.md') }),
     )
     return respond<'GET /api/runs/:src/:slug/g3'>(c, packet)
@@ -564,7 +586,7 @@ export function createApp(deps: AppDeps): Hono {
     const found = await findRun(c.req.param('src'), c.req.param('slug'))
     if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
-    const { text, tasks } = await cache.get(`diff:${ref.source}:${ref.slug}`, async () => {
+    const { text, tasks } = await cache.get(`diff:${ref.source}:${ref.slug}`, await prints.run(ref), async () => {
       const [text, artifacts] = await Promise.all([source.readDiff(ref), source.listArtifacts(ref)])
       const tasks = await Promise.all(
         artifacts
@@ -582,7 +604,7 @@ export function createApp(deps: AppDeps): Hono {
   })
 
   app.get('/api/metrics', async (c) => {
-    const metrics = await cache.get('metrics', () => computeMetrics(deps.sources))
+    const metrics = await cache.get('metrics', await prints.everything(), () => computeMetrics(deps.sources))
     return respond<'GET /api/metrics'>(c, metrics)
   })
 
@@ -655,7 +677,7 @@ export function createApp(deps: AppDeps): Hono {
         // serializes to `{}` — a client then renders "undefined" as the reason.
         return fail(c, status, { error: result.message ?? result.reason ?? 'the write was refused' })
       }
-      cache.bump()
+      prints.markDirty()
       return respond<'POST /api/decisions'>(c, {
         ok: true,
         commit: result.commit,
@@ -671,7 +693,7 @@ export function createApp(deps: AppDeps): Hono {
   app.get('/api/runs/:src/:slug/decisions', async (c) => {
     const found = await findRun(c.req.param('src'), c.req.param('slug'))
     if (!found) return fail(c, 404, { error: 'run not found' })
-    const records = await cache.get(`decisions:${found.ref.source}:${found.ref.slug}`, () =>
+    const records = await cache.get(`decisions:${found.ref.source}:${found.ref.slug}`, await prints.run(found.ref), () =>
       collectRunDecisions(found.source, found.ref),
     )
     return respond<'GET /api/runs/:src/:slug/decisions'>(c, { decisions: records })

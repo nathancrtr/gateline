@@ -222,12 +222,23 @@ export interface Portfolio {
   inbox: InboxItem[]
 }
 
-export async function buildPortfolio(sources: RunSource[]): Promise<Portfolio> {
+/**
+ * How a portfolio gets its parts. A caller holding a cache passes its own
+ * readers, so a run whose refs have not moved is not summarized again (#461).
+ */
+export interface PortfolioReaders {
+  listRuns?: (source: RunSource) => Promise<RunRef[]>
+  summarize?: (source: RunSource, ref: RunRef) => Promise<{ summary: RunSummary; items: InboxItem[] }>
+}
+
+export async function buildPortfolio(sources: RunSource[], readers: PortfolioReaders = {}): Promise<Portfolio> {
+  const listRuns = readers.listRuns ?? ((source: RunSource) => source.listRuns())
+  const summarize = readers.summarize ?? summarizeRun
   const runs: RunSummary[] = []
   const inbox: InboxItem[] = []
   for (const source of sources) {
-    for (const ref of await source.listRuns()) {
-      const { summary, items } = await summarizeRun(source, ref)
+    for (const ref of await listRuns(source)) {
+      const { summary, items } = await summarize(source, ref)
       runs.push(summary)
       inbox.push(...items)
     }

@@ -6,6 +6,7 @@ import type { RunScaffold } from '../record/scaffold.ts'
 import type { Identity, RunState, StateDocMutation, StateParseResult } from '../record/schema.ts'
 import type { ContractTemplates } from '../record/validate.ts'
 import type { CommitInfo } from './git.ts'
+import type { ViewRefs } from './view-refs.ts'
 
 export interface RunRef {
   /** Source id this run belongs to. */
@@ -74,6 +75,13 @@ export interface RunSource {
   /** Contract templates of this repo, for R3 validation. */
   readonly templates: ContractTemplates
   listRuns(): Promise<RunRef[]>
+  /**
+   * The refs this source's views read, as comparable strings (#461): what a
+   * cache validates an entry against, and what decides whether a change is
+   * worth announcing. Optional: a driver that cannot say omits it, and its
+   * views are refreshed on a timer instead.
+   */
+  viewRefs?(): Promise<ViewRefs>
   readState(ref: RunRef): Promise<StateParseResult & { raw: string | null }>
   /** Run-relative artifact paths (e.g. "spec.md", "tasks/01-x.yaml"). */
   listArtifacts(ref: RunRef): Promise<string[]>

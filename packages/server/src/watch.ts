@@ -6,13 +6,25 @@ import { Git } from '@gateline/core'
 
 export type Unwatch = () => void
 
-export async function watchRepoRefs(dir: string, onChange: () => void, debounceMs = 300): Promise<Unwatch> {
+/**
+ * `onChange` fires once the writes have settled; `onTouch` fires at once, on
+ * every write. Neither means a ref moved — the git directory is also written
+ * by an index refresh or a fetch that brought nothing (#461) — only that the
+ * refs are worth reading again.
+ */
+export async function watchRepoRefs(
+  dir: string,
+  onChange: () => void,
+  debounceMs = 300,
+  onTouch: () => void = () => {},
+): Promise<Unwatch> {
   const git = new Git(dir)
   // --git-common-dir: worktree-correct home of refs/ and packed-refs.
   const commonDir = (await git.run(['rev-parse', '--path-format=absolute', '--git-common-dir'])).trim()
 
   let timer: NodeJS.Timeout | null = null
   const fire = () => {
+    onTouch()
     if (timer) clearTimeout(timer)
     timer = setTimeout(() => {
       timer = null

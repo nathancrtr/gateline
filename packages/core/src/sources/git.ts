@@ -5,6 +5,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { CatFileBatch, CatFileError } from './cat-file.ts'
+import type { NamedRef } from './view-refs.ts'
 
 export class GitError extends Error {
   readonly args: string[]
@@ -106,6 +107,23 @@ export class Git {
         const [oid, ...rest] = line.split(' ')
         return { oid: oid!, ref: rest.join(' ') }
       })
+  }
+
+  /** Every branch and remote-tracking ref, each with what it points at when symbolic. */
+  async namedRefs(): Promise<NamedRef[]> {
+    const out = await this.run(['for-each-ref', '--format=%(objectname)%00%(refname)%00%(symref)', 'refs/heads', 'refs/remotes'])
+    return out
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => {
+        const [oid, ref, symref] = line.split('\0')
+        return { oid: oid!, ref: ref!, symref: symref ?? '' }
+      })
+  }
+
+  /** The branch HEAD names, or null when HEAD is detached. */
+  async headBranch(): Promise<string | null> {
+    return (await this.run(['symbolic-ref', '--short', '-q', 'HEAD']).catch(() => '')).trim() || null
   }
 
   /** Content of `path` at `rev`, or null when the path/rev doesn't exist. */

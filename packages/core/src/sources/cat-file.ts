@@ -44,8 +44,16 @@ interface Refable {
   unref(): void
 }
 
+/**
+ * `content` reads whole objects (`--batch`). `check` asks only what a name
+ * resolves to (`--batch-check`): the answer is the header alone, with an
+ * empty `content`, so resolving a name never costs reading what it names.
+ */
+export type BatchMode = 'content' | 'check'
+
 export class CatFileBatch {
   private readonly dir: string
+  private readonly mode: BatchMode
   private child: ChildProcess | null = null
   private pending: Pending[] = []
   private chunks: Buffer[] = []
@@ -54,8 +62,9 @@ export class CatFileBatch {
   private stderr = ''
   private idle: NodeJS.Timeout | null = null
 
-  constructor(dir: string) {
+  constructor(dir: string, mode: BatchMode = 'content') {
     this.dir = dir
+    this.mode = mode
   }
 
   /**
@@ -93,7 +102,7 @@ export class CatFileBatch {
 
   private ensure(): ChildProcess {
     if (this.child) return this.child
-    const child = spawn('git', ['-C', this.dir, 'cat-file', '--batch'], { stdio: ['pipe', 'pipe', 'pipe'] })
+    const child = spawn('git', ['-C', this.dir, 'cat-file', this.mode === 'check' ? '--batch-check' : '--batch'], { stdio: ['pipe', 'pipe', 'pipe'] })
     this.child = child
     this.chunks = []
     this.buffered = 0
@@ -140,6 +149,10 @@ export class CatFileBatch {
         const [oid, type, size] = line.split(' ')
         if (!oid || !type || size === undefined || !/^\d+$/.test(size)) {
           throw new CatFileError(`git cat-file answered with an unreadable header: ${line}`, this.stderr)
+        }
+        if (this.mode === 'check') {
+          this.settle(child, { oid, type, content: Buffer.alloc(0) })
+          continue
         }
         this.header = { oid, type, size: Number(size) }
       }

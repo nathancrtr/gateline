@@ -138,12 +138,14 @@ export async function summarizeRun(
   source: RunSource,
   ref: RunRef,
 ): Promise<{ summary: RunSummary; items: InboxItem[] }> {
-  const read = await source.readState(ref)
+  const [read, { items }, touched, aheadOfOrigin, behindOrigin] = await Promise.all([
+    source.readState(ref),
+    deriveReadiness(source, ref),
+    source.lastTouched(ref, ['']),
+    source.aheadOfOrigin?.(ref) ?? null,
+    source.behindOrigin?.(ref) ?? null,
+  ])
   const { state, raw } = read
-  const { items } = await deriveReadiness(source, ref)
-  const touched = await source.lastTouched(ref, [''])
-  const aheadOfOrigin = (await source.aheadOfOrigin?.(ref)) ?? null
-  const behindOrigin = (await source.behindOrigin?.(ref)) ?? null
 
   if (!state) {
     // Best-effort (#49): `escalations:` read on its own even though the rest
@@ -223,6 +225,27 @@ export interface Portfolio {
 }
 
 /**
+ * How many runs are summarized at once. Each summary is a handful of git
+ * processes; enough at once to stop waiting on them one by one, few enough
+ * that a large portfolio does not start hundreds together.
+ */
+const SUMMARIZE_AT_ONCE = 8
+
+/** `fn` over `items`, at most `limit` running at a time, results in the order of `items`. */
+export async function mapBounded<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let next = 0
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++
+      results[i] = await fn(items[i]!)
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
+  return results
+}
+
+/**
  * How a portfolio gets its parts. A caller holding a cache passes its own
  * readers, so a run whose refs have not moved is not summarized again (#461).
  */
@@ -237,8 +260,8 @@ export async function buildPortfolio(sources: RunSource[], readers: PortfolioRea
   const runs: RunSummary[] = []
   const inbox: InboxItem[] = []
   for (const source of sources) {
-    for (const ref of await listRuns(source)) {
-      const { summary, items } = await summarize(source, ref)
+    const refs = await listRuns(source)
+    for (const { summary, items } of await mapBounded(refs, SUMMARIZE_AT_ONCE, (ref) => summarize(source, ref))) {
       runs.push(summary)
       inbox.push(...items)
     }

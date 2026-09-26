@@ -7,7 +7,7 @@
 // a bot identity, and — structurally — no code path that writes gates.*.
 import { hostname } from 'node:os'
 import { type Identity, ROLE_TIMEOUT_MS, TERMINAL_PHASES } from '@gateline/core/record'
-import { ensureDraftPr, Git, LocalGitSource, type RunRef, type WriteResult } from '@gateline/core/sources'
+import { ensureDraftPr, LocalGitSource, type RunRef, type WriteResult } from '@gateline/core/sources'
 import type { Document } from 'yaml'
 import { hasShell, loadRoleCapabilities } from './capabilities.ts'
 import { type Bookkeeping, DEFAULT_ESTIMATE_USD, type DerivedAction, type DispatchIntent, deriveAction } from './derive.ts'
@@ -27,7 +27,7 @@ import {
 import { promptBody } from './prompts.ts'
 import { type Registry, resolveModel } from './registry.ts'
 import type { Dispatcher, DispatchOutcome } from './seam.ts'
-import { checkoutHeldReason, ensureRunCheckout, ensureTaskCheckout, foldHarvestBranch, foldTaskBranch, heldCheckout, isPlanDefect, reapTaskBranches, removeRunCheckout, type TaskCheckout } from './workspace.ts'
+import { checkoutHeldReason, dispatchBranchName, ensureDispatchCheckout, foldHarvestBranch, foldTaskBranch, heldCheckout, isPlanDefect, reapTaskBranches, removeRunCheckout, type TaskCheckout } from './workspace.ts'
 
 export interface EngineConfig {
   repoDir: string
@@ -480,6 +480,13 @@ export class Engine {
     }
   }
 
+  /** Origin's tip of `branch` after a fresh fetch of that one ref, or null when there is no origin or no such branch. */
+  private async originTip(branch: string): Promise<string | null> {
+    const tracking = `refs/remotes/origin/${branch}`
+    await this.source.git.run(['fetch', '--quiet', 'origin', `+refs/heads/${branch}:${tracking}`]).catch(() => {})
+    return this.source.git.revParse(tracking)
+  }
+
   /** Consecutive rejected pushes per branch — cleared by any accepted write.
    *  Read by callers (and eventually the frontend, #100) as push health. */
   private readonly pushRejections = new Map<string, number>()
@@ -496,11 +503,18 @@ export class Engine {
    * (CAS guarantees it is the local tip), so drop it, sync, and let the
    * next derivation start from origin's truth.
    *
-   * When a run checkout holds the branch (jobs in flight), the ref cannot be
-   * moved behind the worktree's back — the commit stays local and unpushed;
-   * the open ledger entry it carries is self-healing via stale-aging, and a
-   * later accepted push carries or supersedes it. Returns true when the
-   * commit was dropped.
+   * Dropped only when the commit is the whole divergence — its parent is
+   * already on origin. When the branch carries unpushed work beneath it (a
+   * fold that landed while origin moved, so its own push was rejected), the
+   * commit is not the stale part and dropping it would lose the meter
+   * without letting the sync fast-forward; it stays local and unpushed, the
+   * open ledger entry it carries is self-healing via stale-aging, and a
+   * later accepted push carries or supersedes it. The same holds when a
+   * checkout the orchestrator does not own holds the branch — the ref
+   * cannot be moved behind that worktree's back. (Before #406 the
+   * orchestrator's own run checkout held the branch for the whole dispatch,
+   * and that was the proxy for the unpushed-work case.) Returns true when
+   * the commit was dropped.
    */
   private async recoverRejectedPush(ref: RunRef, commit: string | undefined, why: string): Promise<boolean> {
     const n = (this.pushRejections.get(ref.branch) ?? 0) + 1
@@ -511,11 +525,13 @@ export class Engine {
       const branchRef = `refs/heads/${ref.branch}`
       const held = (await this.source.git.worktrees()).some((w) => w.branch === branchRef)
       const parent = held ? null : await this.source.git.revParse(`${commit}^`)
-      if (parent) dropped = await this.source.git.updateRefCAS(branchRef, parent, commit)
+      const originTip = parent ? await this.originTip(ref.branch) : null
+      const sole = parent !== null && originTip !== null && (await this.source.git.isAncestor(parent, originTip))
+      if (parent && sole) dropped = await this.source.git.updateRefCAS(branchRef, parent, commit)
       this.log(
         dropped
           ? `${prefix}; dropped the stale commit and syncing from origin`
-          : `${prefix}; commit stays local (${held ? 'branch held by a checkout' : 'ref moved'}) — stale-aging self-heals`,
+          : `${prefix}; commit stays local (${held ? 'branch held by a checkout' : parent && !sole ? 'unpushed work beneath it' : 'ref moved'}) — stale-aging self-heals`,
       )
     } else {
       this.log(prefix)
@@ -1094,12 +1110,12 @@ export class Engine {
     // A dispatcher with managesOwnWorkspace (the remote runner, run
     // "runner-agent" ADR-3) creates and harvests its own checkout — the
     // engine creates no local checkout for it and folds a harvest branch in
-    // place of the local per-task fold. Implementers otherwise get per-task
-    // isolation (§5.3): a private branch and worktree off the run tip,
-    // folded back serially on success — parallel implementers never observe
-    // each other's mid-flight state.
+    // place of the local fold. Every other dispatch is isolated (§5.3, #406):
+    // a private branch and worktree off the run tip, folded back serially on
+    // success — no two jobs ever observe each other's mid-flight state, and
+    // nothing reaches the run branch except through the fold.
     const managesOwnWorkspace = this.cfg.dispatcher.managesOwnWorkspace === true
-    const isolate = !managesOwnWorkspace && intent.role === 'implementer' && intent.task !== null
+    const isolate = !managesOwnWorkspace
     const resumeSession = priorSession(obs.ledger, intent, this.cfg.dispatcher.adapterFor?.(intent.role) ?? this.cfg.dispatcher.adapter)
     if (resumeSession) this.log(`${ref.slug}: ${intent.role}${intent.task ? `(${intent.task})` : ''} retrying — resuming harness session ${resumeSession}`)
     const job = (async () => {
@@ -1110,11 +1126,11 @@ export class Engine {
       // there is a refusal: $0, and not the agent's.
       let spawned = false
       try {
-        const checkout = managesOwnWorkspace
-          ? null
-          : isolate
-            ? await ensureTaskCheckout(this.cfg.repoDir, ref.branch, intent.task!, { log: (line) => this.log(`${ref.slug}: ${line}`) })
-            : { path: await ensureRunCheckout(this.cfg.repoDir, ref.branch), branch: ref.branch }
+        const checkout = isolate
+          ? await ensureDispatchCheckout(this.cfg.repoDir, ref.branch, dispatchBranchName(ref.branch, intent), {
+              log: (line) => this.log(`${ref.slug}: ${line}`),
+            })
+          : null
         const taskFile = intent.task ? (obs.taskFiles.get(intent.task) ?? null) : null
         const taskPath = taskFile?.path ?? null
         const { runs: runsRoot } = await this.source.frameworkRoots()
@@ -1137,17 +1153,26 @@ export class Engine {
         if (outcome.resumeRefused)
           this.log(`${ref.slug}: ${intent.role} could not resume session ${resumeSession} — dispatched fresh instead`)
         if (isolate) {
-          // The fold's own harvest (#184): the isolated counterpart of the
-          // harvest-commit below. The task's declared file-contact surface is
-          // what scopes it — the isolated equivalent of `harvestPathspecs` —
-          // so work the implementer left uncommitted inside its own surface
-          // is committed before the fold discards anything and before the
-          // task worktree is force-removed.
+          // The fold's own harvest (#184, #182): what the dispatch left
+          // uncommitted inside its surface is committed before the fold
+          // discards anything and before the worktree is force-removed. An
+          // implementer's surface is its task's declared file-contact
+          // surface; every other role's is its own artifact list
+          // (`harvestPathspecs`) — the only path a shell-less analyst or
+          // architect has to a branch, and a backstop for a shell-ful role
+          // that simply did not commit.
+          //
+          // A failed dispatch of any other role harvests nothing (#182's
+          // rule: the uncommitted file never reaches the branch); what the
+          // agent committed itself still folds, as it always landed.
+          const task = intent.role === 'implementer' && intent.task !== null
+          const surface = task ? (taskFile?.surface ?? []) : outcome.ok ? harvestPathspecs(runsRoot, ref.slug, intent.role, intent.task) : []
           const harvest = {
             slug: ref.slug,
-            task: intent.task!,
+            role: intent.role,
+            task: intent.task,
             round: intent.round,
-            surface: taskFile?.surface ?? [],
+            surface,
             identity: this.cfg.identity,
           }
           const fold = await this.withLock(ref.slug, () => foldTaskBranch(this.cfg.repoDir, ref.branch, checkout as TaskCheckout, harvest))
@@ -1168,23 +1193,6 @@ export class Engine {
             outcome = { ok: false, costUsd: outcome.costUsd, tokensIn: outcome.tokensIn, tokensOut: outcome.tokensOut, error: fold.message, fatal: isPlanDefect(fold) }
           }
           if (fold.ok) await this.pushBranch(ref.branch)
-        } else if (checkout && outcome.ok) {
-          // Harvest-commit (#182): a shell-less role (analyst, architect) has
-          // no way to commit its own artifacts, and even a shell-ful role may
-          // simply not have (the harvest is a defense-in-depth backstop for
-          // those). Scoped to this role's own outputs so a peer reviewer
-          // sharing the checkout is never swept into a torn commit. Runs
-          // under the run's write lock — the same lock serializing the
-          // worktree-fallback state writes — and, crucially, before
-          // `removeRunCheckout` force-removes this checkout in `finally`
-          // below: this is what rescues the work from that force-remove.
-          // Guarded on `checkout` (never null here — only managesOwnWorkspace
-          // leaves it null, and that branch is handled above): a
-          // managesOwnWorkspace dispatcher has no local checkout to harvest.
-          const harvest = await this.withLock(ref.slug, () => this.harvest(ref, checkout.path, runsRoot, intent))
-          if (!harvest.ok) {
-            outcome = { ok: false, costUsd: outcome.costUsd, tokensIn: outcome.tokensIn, tokensOut: outcome.tokensOut, error: harvest.error }
-          }
         }
       } catch (e) {
         const refused = !spawned
@@ -1198,10 +1206,11 @@ export class Engine {
       job.finally(async () => {
         this.jobs.delete(key)
         this.jobMeta.delete(key)
-        // Last job out releases the run's checkout, so subsequent state
-        // writes go through plumbing + CAS instead of the worktree fallback.
-        // Nothing to release for a managesOwnWorkspace dispatcher — it never
-        // had a local checkout to begin with.
+        // Last job out releases any run checkout still standing — a crashed
+        // predecessor's, or one a sweep left — so state writes go through
+        // plumbing + CAS with nothing holding the branch. Dispatches no
+        // longer create one (#406). Nothing to release for a
+        // managesOwnWorkspace dispatcher either.
         if (!managesOwnWorkspace && ![...this.jobs.keys()].some((k) => k.startsWith(`${ref.slug}|`))) {
           await removeRunCheckout(this.cfg.repoDir, ref.branch)
         }
@@ -1369,56 +1378,6 @@ export class Engine {
       if ((await this.withLock(ref.slug, attemptOnce)) === 'done') return
     }
     this.log(`${ref.slug}: closing commit lost CAS 5×; the heartbeat will age the open entry`)
-  }
-
-  /**
-   * Harvest-commit (#182, ORCHESTRATOR.md §4.4): a non-isolated dispatch may
-   * leave its artifacts uncommitted — the only path for a shell-less role,
-   * and possible for a shell-ful one too. Scoped to this role's own outputs
-   * (`harvestPathspecs`) so a peer sharing the run checkout is never swept
-   * into a torn commit. `git status` first: the normal case (a shell-ful
-   * role already committed) must be a clean no-op. Each pathspec is `git
-   * add`ed independently (run "runner-agent" review-04.md round-2 F10): a
-   * single combined `git add -A -- a b` is all-or-nothing, so one pathspec
-   * matching nothing (e.g. architect's `tasks/` before any task file
-   * exists) would silently drop a pathspec that did match alongside it.
-   * Bot-identity commit via `-c`, since this is a real working-tree commit
-   * (`git add` + `git commit`), not the plumbing path `LocalGitSource` uses
-   * for state.yaml.
-   */
-  private async harvest(
-    ref: RunRef,
-    cwd: string,
-    runsRoot: string,
-    intent: { role: string; task: string | null; round: number | null },
-  ): Promise<{ ok: true } | { ok: false; error: string }> {
-    const pathspecs = harvestPathspecs(runsRoot, ref.slug, intent.role, intent.task)
-    const git = new Git(cwd)
-    try {
-      const status = await git.run(['status', '--porcelain', '--', ...pathspecs])
-      if (!status.trim()) return { ok: true } // nothing uncommitted in scope — the normal case for a shell-ful role
-      for (const pathspec of pathspecs) {
-        try {
-          await git.run(['add', '-A', '--', pathspec])
-        } catch {
-          /* pathspec matched nothing — not an error, nothing to add for it */
-        }
-      }
-      const what = `${intent.role}${intent.task ? `(${intent.task}${intent.round ? ` r${intent.round}` : ''})` : ''}`
-      await git.run([
-        '-c',
-        `user.name=${this.cfg.identity.name}`,
-        '-c',
-        `user.email=${this.cfg.identity.email}`,
-        'commit',
-        '-m',
-        `state(${ref.slug}): harvested ${what} artifacts`,
-      ])
-      await this.pushBranch(ref.branch)
-      return { ok: true }
-    } catch (e) {
-      return { ok: false, error: (e as Error).message }
-    }
   }
 
   /**

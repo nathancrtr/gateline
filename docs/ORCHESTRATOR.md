@@ -250,18 +250,20 @@ commit locally, as above, but the push/fetch half of this section does not apply
 1. Derive a dispatch → **commit the intent first** (task/phase status →
    `dispatched`, ledger entry opened) via CAS.
 2. On CAS success, launch the job.
-3. On completion, the agent's artifacts are on the run branch: a shell-ful role
-   (implementer, reviewer, verifier, ops) commits its own work; a shell-less role
-   (analyst, architect — no adapter maps their capabilities to a git-capable tool,
-   #182) never attempts to, and the engine harvest-commits the run-scoped
-   working-tree diff for it instead, under the bot identity and the `harvested`
-   verb — the same harvest also runs as a defense-in-depth backstop for any
-   non-isolated role that simply didn't commit. This happens before the checkout
-   is force-removed once the run's last in-flight job settles, which is what
-   rescues the artifacts from that teardown. An isolated implementer (§5.3) gets
-   the same rescue on its own path: the fold harvests the task's worktree before
-   it rebases, scoped to the task's declared file-contact surface. The
-   orchestrator then commits the closing bookkeeping — status, rounds, spend.
+3. On completion, the agent's work is folded onto the run branch from the
+   private worktree the job ran in (§5.3). A shell-ful role (implementer,
+   reviewer, verifier, ops) commits its own work on its dispatch branch; a
+   shell-less role (analyst, architect — no adapter maps their capabilities to
+   a git-capable tool, #182) never attempts to, and the fold harvest-commits
+   what it left in the worktree instead, under the bot identity and the
+   `harvested` verb — the same harvest also runs as a defense-in-depth
+   backstop for a shell-ful role that simply didn't commit. The harvest is
+   scoped to the dispatch's surface: an implementer's task-declared
+   file-contact surface, or the role's own artifact list for everyone else
+   (`harvestPathspecs`), so a stray file never rides along. It happens before
+   the fold rebases and before the worktree is force-removed, which is what
+   rescues the artifacts from that teardown. The orchestrator then commits the
+   closing bookkeeping — status, rounds, spend.
 
 The CAS on step 1 is the duplicate-dispatch guard for the *commit*: two orchestrator
 instances, or a tick racing its own heartbeat, serialize on the ref update — the
@@ -483,12 +485,19 @@ component that *consumes* adapters through their manifests (amendment list, §8)
   registry's `avoid_vendor_of` pins stop being advisory: the seam *refuses* to bind
   Reviewer or Verifier to the Implementer's vendor, closing the "P5 only partially
   honored" limitation the claude-code adapter README documents today.
-- **Parallel Implementers run in per-task worktrees** (the wordfreq retro fix:
-  task 03 observed task 02's mid-flight broken state in the shared tree). Each
-  implementer works its task in isolation; the orchestrator folds results back into
-  the run branch serially — mechanical while file-contact surfaces are disjoint,
-  which the Architect already guarantees; an actual conflict escalates as a plan
-  defect.
+- **Every local dispatch runs in its own worktree.** It began as per-task
+  isolation for parallel implementers (the wordfreq retro fix: task 03 observed
+  task 02's mid-flight broken state in the shared tree) and #406 extended it to
+  every role, after two reviewers of one run — which verify by applying mutants
+  in place and restoring them — were found doing so in the same shared checkout,
+  each able to see, run against, or restore the other's mutant. Each job now
+  works on a private branch (`--task/<task>` for an implementer, `--job/<role>-…`
+  for everyone else) in a private worktree, both off the run tip; the
+  orchestrator folds results back into the run branch serially — mechanical while
+  the surfaces are disjoint, which the Architect guarantees for implementers and
+  the role artifact lists guarantee for the rest; an actual conflict escalates as
+  a plan defect. The run branch itself is checked out only for a sweep, so a
+  dispatch never holds it and every state write goes through plumbing and CAS.
 - **Source isolation and dependency isolation are separate concerns** (#229). The
   worktree exists so two implementers never see each other's half-written code.
   It is not a reason for each to own a private install of third-party packages:
@@ -497,9 +506,9 @@ component that *consumes* adapters through their manifests (amendment list, §8)
   taking that literally meant a cold `npm install` on every dispatch and every
   review round — the cost that burned a role timeout in #229.
 
-  So a new task worktree is **seeded** from a warm dependency store instead. The
-  store is the run checkout's installed tree if it has one and the repository's
-  otherwise, and the package directories are found by their shape — a
+  So a new dispatch worktree is **seeded** from a warm dependency store instead.
+  The store is a run checkout's installed tree if one exists with it and the
+  repository's otherwise, and the package directories are found by their shape — a
   `package.json` with a `node_modules` beside it, at the repo root or one level
   down — rather than by a fixed path, so a host repo's own layout works the same
   way. The seed is a clone where the filesystem offers one (`cp -Rc` on APFS:

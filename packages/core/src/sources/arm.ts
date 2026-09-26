@@ -7,7 +7,7 @@
 // reads that stub for meaning: an implementer dispatched against "Fill in
 // what to build" has no spec or plan to fall back on. So the stub is refused
 // at the one moment a human is already acting on the run.
-import { type RunState, workItemIncomplete } from '../record/index.ts'
+import { describeArtifact, type RunState, workItemIncomplete } from '../record/index.ts'
 import type { RunRef, RunSource } from './source.ts'
 
 /**
@@ -18,7 +18,7 @@ import type { RunRef, RunSource } from './source.ts'
 export async function armRefusal(source: RunSource, ref: RunRef, state: RunState): Promise<string | null> {
   if (state.profile !== 'patch') return null
   const remedy = `author it before arming — \`gateline new --profile patch --task-file <path>\` stages a written one, or edit it on run/${ref.slug} from a throwaway worktree (never the blessed checkout, TOPOLOGY.md §3.5)`
-  const items = (await source.listArtifacts(ref)).filter((p) => p.startsWith('tasks/') && p.endsWith('.yaml'))
+  const items = (await source.listArtifacts(ref)).filter((p) => describeArtifact(p).kind === 'work-item')
   if (items.length === 0) return `patch run ${ref.slug} has no work item under tasks/ — ${remedy}`
   for (const path of items) {
     const content = await source.readArtifact(ref, path)

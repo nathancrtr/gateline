@@ -27,6 +27,7 @@
 // the packet still renders what it can, and the plan's own markdown is one
 // click away either way.
 import { splitSections } from '../record/sections.ts'
+import { type ArtifactRef, artifactRef } from './artifact-ref.ts'
 
 export interface ReleaseStep {
   /** The list number as written, e.g. 1 for `1. Tag the merge commit`. */
@@ -38,6 +39,10 @@ export interface ReleaseStep {
 }
 
 export interface ReleasePacket {
+  /** The release plan this packet reads, as a reference (#415): what its quotes are from, and where a withheld view sends the reader. */
+  plan: ArtifactRef
+  /** The verification report the plan is shipped against, as a reference (#415). */
+  verification: ArtifactRef
   /** `release-plan.md` is in the record. Everything below is null or empty when it is not. */
   hasPlan: boolean
   /** `**Change released:**` value, verbatim. */
@@ -75,6 +80,8 @@ const STEP = /^\s*(\d+)[.)]\s+(.*\S)\s*$/
 const CONTINUATION = /^\s{2,}(\S.*)$/
 
 const EMPTY: ReleasePacket = {
+  plan: artifactRef('release-plan.md'),
+  verification: artifactRef('verification-report.md'),
   hasPlan: false,
   changeReleased: null,
   environment: null,
@@ -191,6 +198,7 @@ export function buildReleasePacket(input: { plan: string | null }): ReleasePacke
           .trim()
 
   return {
+    ...EMPTY,
     hasPlan: true,
     changeReleased,
     environment,

@@ -3,6 +3,7 @@
 // contract validates against its own version. Built-in fallbacks cover repos
 // that carry runs but no contracts/ tree.
 import { parse as parseYaml } from 'yaml'
+import { describeArtifact } from './artifact.ts'
 import { FenceTracker, h2Headings } from './sections.ts'
 
 export interface Validation {
@@ -162,21 +163,13 @@ export const BUILTIN_WORK_ITEM_KEYS = [
   'notes',
 ]
 
-/** Map a run-relative artifact path to its contract template filename. */
+/**
+ * Map a run-relative artifact path to its contract template filename — the
+ * `contract` half of `describeArtifact`, which is the one place a path's kind
+ * is derived (#415). Null for a file checked for presence only (`retro.md`).
+ */
 export function contractFor(path: string): string | null {
-  const base = path.split('/').pop()!
-  if (base === 'intent-brief.md') return 'intent-brief.md'
-  if (base === 'spec.md') return 'spec.md'
-  if (base === 'plan.md') return 'plan.md'
-  if (/^review-\d+.*\.md$/.test(base)) return 'review-report.md'
-  if (base === 'verification-report.md') return 'verification-report.md'
-  // G3's packet is checkable as of #260. Before that it was bare presence: a
-  // release plan of one sentence passed exactly as one carrying a rollback,
-  // and G3 was the one gate no structured surface could be built for.
-  if (base === 'release-plan.md') return 'release-plan.md'
-  if (base === 'state.yaml') return 'state.yaml'
-  if (path.startsWith('tasks/') && base.endsWith('.yaml')) return 'work-item.yaml'
-  return null // e.g. retro.md — presence-only, and human-authored
+  return describeArtifact(path).contract
 }
 
 export interface ContractTemplates {

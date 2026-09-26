@@ -5,17 +5,15 @@
 // the evidence, not a gauge. Uncited criteria are the headline.
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { api, type CriterionEvidence, type EvidenceRollup, type Profile, type ReviewFinding, type ReviewReport } from '../api.ts'
+import { type ArtifactRef, api, type CriterionEvidence, type EvidenceRollup, type Profile, type ReviewFinding, type ReviewReport } from '../api.ts'
 import { DIFF_SELECTION } from '../landing.ts'
 import { boundaryLine, fileLabel } from '../surface.ts'
 import { FindingCard, Inline, PACKET_FRAME, PACKET_LABEL, PacketSweep, useReviews, VerdictChip } from './findings.tsx'
 import { useLexicon } from './lexicon.tsx'
 import { Address, artifactHref, Name, Withheld } from './vocabulary.tsx'
 
-// step 2 (#415): the two artifacts this surface names by kind, as paths; an
-// ArtifactRef on the rollup carries them instead.
-const SPEC = 'spec.md'
-const VERIFICATION = 'verification-report.md'
+// The two artifacts this surface reads arrive on the rollup as ArtifactRefs
+// (#415): `rollup.spec` and `rollup.verification`.
 
 export function EvidenceRollupPanel({ src, slug }: { src: string; slug: string }) {
   const { data } = useQuery({ queryKey: ['evidence', src, slug], queryFn: () => api.evidence(src, slug) })
@@ -199,12 +197,12 @@ function findingIndex(reports: ReviewReport[] | undefined): Map<string, ReviewFi
 }
 
 /** The report's own words about a criterion — quoted, attributed, untinted. */
-function ResultLine({ result }: { result: NonNullable<CriterionEvidence['result']> }) {
+function ResultLine({ result, verification }: { result: NonNullable<CriterionEvidence['result']>; verification: ArtifactRef }) {
   return (
     <p className="mt-1 text-[12px] leading-[1.5] text-muted">
       {/* #411 step 3: "Verification states" — a Kind label — replaces the
           filename, and the file becomes the Address it is. */}
-      <Address>{VERIFICATION}</Address>
+      <Address>{verification.path}</Address>
       <span className="font-mono text-[11px] text-faint"> states</span>{' '}
       <span className="font-mono text-ink">“{result.verdict}”</span>
       {result.evidence && (
@@ -305,17 +303,19 @@ function EvidenceBody({ block, restated }: { block: string; restated: string }) 
 /** One criterion: the spec's words, the report's words, the proof, the findings. */
 function CriterionPacket({
   c,
+  rollup,
   src,
   slug,
-  hasVerification,
   findings,
 }: {
   c: CriterionEvidence
+  /** The rollup the criterion is from: its `spec` and `verification` refs, and whether a report exists. */
+  rollup: EvidenceRollup
   src: string
   slug: string
-  hasVerification: boolean
   findings: Map<string, ReviewFinding>
 }) {
+  const { hasVerification } = rollup
   const lex = useLexicon()
   // The criterion verbatim from spec.md. Absent only when the record cites an
   // id the spec never defined — which is itself the fact worth showing.
@@ -337,8 +337,8 @@ function CriterionPacket({
           <span className="min-w-0 flex-1 text-[12.5px] text-warn">cited by the record, defined in no spec</span>
         )}
         {c.defined && (
-          <Address size="xs" className="ml-auto shrink-0" to={artifactHref(src, slug, SPEC, `def-R${c.id.slice(2).split('.')[0]}`)}>
-            {SPEC}
+          <Address size="xs" className="ml-auto shrink-0" to={artifactHref(src, slug, rollup.spec.path, `def-R${c.id.slice(2).split('.')[0]}`)}>
+            {rollup.spec.path}
           </Address>
         )}
       </div>
@@ -349,7 +349,7 @@ function CriterionPacket({
           {c.gap ? '' : ' — and no Gaps entry mentions it'}
         </p>
       )}
-      {c.result && <ResultLine result={c.result} />}
+      {c.result && <ResultLine result={c.result} verification={rollup.verification} />}
       {c.gap && (
         <p className="mt-1 text-[12px] leading-[1.5] text-muted">
           <span className="font-ui text-[11px] text-faint">Gaps</span> “{c.gap}”
@@ -522,7 +522,7 @@ export function G2Packet({ src, slug, profile }: { src: string; slug: string; pr
         <Withheld
           view="Criterion view withheld"
           reason={{ sentence: rollup.withheld }}
-          open={{ label: `read ${VERIFICATION}`, href: artifactHref(src, slug, VERIFICATION) }}
+          open={{ label: `read ${rollup.verification.path}`, href: artifactHref(src, slug, rollup.verification.path) }}
           className="mt-2"
           data-withheld
         />
@@ -530,7 +530,7 @@ export function G2Packet({ src, slug, profile }: { src: string; slug: string; pr
       {!rollup.withheld && ordered.length > 0 && (
         <ul className="mt-2 flex flex-col gap-2">
           {ordered.map((c) => (
-            <CriterionPacket key={c.id} c={c} src={src} slug={slug} hasVerification={rollup.hasVerification} findings={findings} />
+            <CriterionPacket key={c.id} c={c} rollup={rollup} src={src} slug={slug} findings={findings} />
           ))}
         </ul>
       )}

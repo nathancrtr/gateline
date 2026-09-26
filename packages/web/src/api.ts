@@ -51,6 +51,9 @@ import { API_VERSION } from '@gateline/server/contract'
  */
 export type {
   ApiErrorBody,
+  ArtifactFamily,
+  ArtifactKind,
+  ArtifactRef,
   ArtifactResponse,
   Burden,
   Closure,

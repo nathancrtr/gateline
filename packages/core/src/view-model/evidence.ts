@@ -15,6 +15,7 @@
 // verified/unverified ratio would not be, and is out of scope permanently.
 
 import { verdictLines } from '../record/validate.ts'
+import { type ArtifactRef, artifactRef } from './artifact-ref.ts'
 import type { Lexicon } from './lexicon.ts'
 import { parseReview, type ReviewFinding, SEVERITY_RANK } from './review.ts'
 
@@ -67,6 +68,10 @@ export interface CriterionEvidence {
 }
 
 export interface EvidenceRollup {
+  /** The spec whose criteria this rolls up, as a reference (#415). */
+  spec: ArtifactRef
+  /** The verification report whose evidence this rolls up, as a reference (#415). */
+  verification: ArtifactRef
   hasVerification: boolean
   /**
    * The report's overall `**Verdict:**` line, verbatim (#152) — quoted and
@@ -208,6 +213,8 @@ export function buildEvidenceRollup(input: {
   // existence in the map — for a first sighting mid-record that is false,
   // which is exactly right; spec-defined ids stay first, in spec order.
   return {
+    spec: artifactRef('spec.md'),
+    verification: artifactRef(VERIFICATION),
     hasVerification: input.verification !== null,
     verdict,
     criteria: order.map((id) => byId.get(id)!),

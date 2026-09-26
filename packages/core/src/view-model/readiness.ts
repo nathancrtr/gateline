@@ -82,6 +82,7 @@
 // is what stops the card a human is shown and the write the API accepts from
 // disagreeing.
 
+import { describeArtifact } from '../record/artifact.ts'
 import { isOpenDispatch, parseLedger, ROLE_TIMEOUT_MS } from '../record/ledger.ts'
 import {
   BUDGET_REASON,
@@ -94,7 +95,6 @@ import {
   type GateId,
   g2PacketReady,
   gateProducer,
-  isReviewFile,
   LANDED_REASON,
   pendingGate,
   ROUND_CAP,
@@ -106,6 +106,7 @@ import { type Validation, validateArtifact } from '../record/validate.ts'
 import { readBranchOrder, resolutionCommitsOf } from '../sources/branch-order.ts'
 import type { CommitInfo } from '../sources/git.ts'
 import type { RunRef, RunSource } from '../sources/source.ts'
+import { type ArtifactRef, artifactRef } from './artifact-ref.ts'
 import { describeEscalation } from './escalation.ts'
 import { formatDuration } from './time.ts'
 
@@ -145,8 +146,21 @@ export interface InboxItem {
    * item, and on a gate whose producer is at rest.
    */
   inflight: { role: string; since: number } | null
-  /** Run-relative artifact paths that make up the card's packet. */
+  /**
+   * Run-relative artifact paths that make up the card's packet.
+   *
+   * Kept for one release beside `packetRefs` (docs/SEAM.md §8.5): the wire
+   * change is additive, and the views move off paths in their own changes.
+   * New code reads `packetRefs`.
+   */
   packet: string[]
+  /**
+   * The packet as references, one per `packet` path and in its order (#415).
+   * Attached once, from `packet`, as `deriveReadiness` returns — so the two
+   * can never disagree. Built from the path alone, so a review's `reviewOf`
+   * is null; the run detail route resolves it against the run's reports.
+   */
+  packetRefs: ArtifactRef[]
   /** Escalation index into state.escalations, when kind=escalation. */
   escalationIndex: number | null
   /** kind=paused: the recorded reason, so the resume affordance can ask for what the reason needs (#96). */
@@ -161,7 +175,10 @@ export interface RunReadiness {
   validations: Record<string, Validation>
 }
 
-const isTaskFile = (p: string) => p.startsWith('tasks/') && p.endsWith('.yaml')
+const isTaskFile = (p: string) => describeArtifact(p).kind === 'work-item'
+const isReviewFile = (p: string) => describeArtifact(p).kind === 'review-report'
+/** An item as it is derived, before its packet is given as references. */
+type DerivedItem = Omit<InboxItem, 'packetRefs'>
 
 function taskComplete(status: string): boolean {
   return G2_COMPLETE_STATUSES.has(status)
@@ -334,8 +351,8 @@ export function pausedInstruction(state: RunState): string {
  * one of these on a run that is otherwise malformed meets the API's own
  * "run state is malformed" refusal, same as any other write to it would.
  */
-function escalationItems(ref: RunRef, escalations: Escalation[], artifacts: readonly string[] = []): InboxItem[] {
-  const items: InboxItem[] = []
+function escalationItems(ref: RunRef, escalations: Escalation[], artifacts: readonly string[] = []): DerivedItem[] {
+  const items: DerivedItem[] = []
   escalations.forEach((esc, i) => {
     if (esc.resolved) return
     const since = esc.at ? Math.floor(Date.parse(esc.at) / 1000) || null : null
@@ -364,7 +381,12 @@ function escalationItems(ref: RunRef, escalations: Escalation[], artifacts: read
 }
 
 export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<RunReadiness> {
-  const items: InboxItem[] = []
+  const { items, validations } = await deriveItems(source, ref)
+  return { items: items.map((item) => ({ ...item, packetRefs: item.packet.map((p) => artifactRef(p)) })), validations }
+}
+
+async function deriveItems(source: RunSource, ref: RunRef): Promise<{ items: DerivedItem[]; validations: Record<string, Validation> }> {
+  const items: DerivedItem[] = []
   const validations: Record<string, Validation> = {}
   const { state, error, raw } = await source.readState(ref)
 

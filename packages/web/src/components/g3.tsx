@@ -26,24 +26,24 @@
 // ship", and no link to a deploy target, because the record names none.
 
 import { useQuery } from '@tanstack/react-query'
-import { api, type ReleasePacket as ReleasePacketData, type ReleaseStep } from '../api.ts'
+import { type ArtifactRef, api, type ReleasePacket as ReleasePacketData, type ReleaseStep } from '../api.ts'
 import { ReportVerdict } from './evidence.tsx'
 import { PACKET_FRAME, PACKET_LABEL, PacketSweep } from './findings.tsx'
 import { GroupLabel } from './g1.tsx'
 import { Markdown } from './markdown.tsx'
 import { Address, artifactHref, FieldRow, Fold, KindLabel, QuotedPassage, QuotedWord, Withheld } from './vocabulary.tsx'
 
-// step 2 (#415): the artifact's path, named here by the kind this packet
-// knows it to be; an ArtifactRef on the packet carries it instead.
-const PLAN = 'release-plan.md'
-const VERIFICATION = 'verification-report.md'
+// The artifacts this packet reads arrive on it as ArtifactRefs (#415):
+// `packet.plan` and the rollup's `verification`. The plan's quotes render with
+// no `sourceKind` — a release plan defines no ids, so every id in it is a
+// citation, which is the lexicon stage's default.
 
 /** The fork fallback for a half of this packet, routed to the plan. */
-function PlanWithheld({ reason, src, slug, hook }: { reason: string; src: string; slug: string; hook: string }) {
+function PlanWithheld({ reason, plan, src, slug, hook }: { reason: string; plan: ArtifactRef; src: string; slug: string; hook: string }) {
   return (
     <Withheld
       reason={{ sentence: reason }}
-      open={{ label: `read ${PLAN}`, href: artifactHref(src, slug, PLAN) }}
+      open={{ label: `read ${plan.path}`, href: artifactHref(src, slug, plan.path) }}
       className="mt-1.5"
       data-withheld={hook}
     />
@@ -90,7 +90,7 @@ function Fact({ label, value, tone = 'plain', hook }: { label: string; value: st
     <FieldRow label={label} tone={tone} data-fact={hook}>
       {/* The value is a line of the plan's markdown — a commit in a code
           span, a cited requirement — so it renders as one. */}
-      <Markdown unwrapped sourcePath={PLAN}>
+      <Markdown unwrapped>
         {value}
       </Markdown>
     </FieldRow>
@@ -106,7 +106,7 @@ function Rollback({ packet, src, slug }: { packet: ReleasePacketData; src: strin
   return (
     <div data-g3-rollback>
       <GroupLabel hint="the signal that says undo this, and whether the undo has been tried">Rollback</GroupLabel>
-      {packet.fieldsWithheld && <PlanWithheld reason={packet.fieldsWithheld} src={src} slug={slug} hook="fields" />}
+      {packet.fieldsWithheld && <PlanWithheld reason={packet.fieldsWithheld} plan={packet.plan} src={src} slug={slug} hook="fields" />}
       <ul className="mt-1.5 flex flex-col gap-1">
         {packet.rollbackTrigger !== null && <Fact label="Rollback trigger" value={packet.rollbackTrigger} hook="trigger" />}
         {packet.rollbackExercised !== null && (
@@ -121,7 +121,7 @@ function Rollback({ packet, src, slug }: { packet: ReleasePacketData; src: strin
       {packet.rollbackPlan && (
         <QuotedPassage className="mt-1.5 text-[12.5px]" data-g3-rollback-plan>
           <div className="prose-card">
-            <Markdown unwrapped sourcePath={PLAN}>{packet.rollbackPlan}</Markdown>
+            <Markdown unwrapped>{packet.rollbackPlan}</Markdown>
           </div>
         </QuotedPassage>
       )}
@@ -139,14 +139,14 @@ function Shipping({ packet, src, slug }: { packet: ReleasePacketData; src: strin
         {packet.environment !== null && <Fact label="Environment" value={packet.environment} hook="environment" />}
       </ul>
       {packet.ciHealth === null ? (
-        <PlanWithheld reason="no CI health section." src={src} slug={slug} hook="ci" />
+        <PlanWithheld reason="no CI health section." plan={packet.plan} src={src} slug={slug} hook="ci" />
       ) : (
         <QuotedPassage className="mt-1.5 text-[12.5px]" data-g3-ci>
           <KindLabel as="p" tone="muted">
             CI health
           </KindLabel>
           <div className="prose-card">
-            <Markdown unwrapped sourcePath={PLAN}>{packet.ciHealth}</Markdown>
+            <Markdown unwrapped>{packet.ciHealth}</Markdown>
           </div>
         </QuotedPassage>
       )}
@@ -165,7 +165,7 @@ function Steps({ packet, src, slug }: { packet: ReleasePacketData; src: string; 
     <div data-g3-steps>
       <GroupLabel hint="in order, one act per item, executable as written">Release steps</GroupLabel>
       {packet.stepsWithheld ? (
-        <PlanWithheld reason={packet.stepsWithheld} src={src} slug={slug} hook="steps" />
+        <PlanWithheld reason={packet.stepsWithheld} plan={packet.plan} src={src} slug={slug} hook="steps" />
       ) : (
         <>
           {irreversible.length > 0 && (
@@ -195,7 +195,7 @@ function StepEntry({ step }: { step: ReleaseStep }) {
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
         <span className="shrink-0 font-mono text-[11.5px] font-semibold text-ink">{step.n}.</span>
         <div className="prose-card min-w-0 flex-1">
-          <Markdown unwrapped sourcePath={PLAN}>
+          <Markdown unwrapped>
             {step.text}
           </Markdown>
         </div>
@@ -241,7 +241,7 @@ function VerifiedAgainst({ src, slug }: { src: string; slug: string }) {
             </p>
           )}
           <p className="mt-1">
-            <Address to={artifactHref(src, slug, VERIFICATION)}>{VERIFICATION}</Address>
+            <Address to={artifactHref(src, slug, data.verification.path)}>{data.verification.path}</Address>
           </p>
         </div>
       )}
@@ -255,7 +255,7 @@ function PlanFold({ heading, body, hook }: { heading: string; body: string | nul
   return (
     <Fold heading={heading} className="mt-2.5" data-g3-fold={hook}>
       <div className="prose-card">
-        <Markdown unwrapped sourcePath={PLAN}>{body}</Markdown>
+        <Markdown unwrapped>{body}</Markdown>
       </div>
     </Fold>
   )

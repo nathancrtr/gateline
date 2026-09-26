@@ -22,12 +22,20 @@ scope: |
   4. `packages/web/src/pages/portfolio.tsx`: in the run cell, on the
      `{run.source} · {run.profile}` line, render `<FixtureLabel className="ml-2" />`
      when `isFixtureSource(run.source)`.
+  5. `packages/web/src/pages/metrics.tsx`: in the budget-honesty table's run
+     cell (the `{r.source}/{r.slug}` cell), render `<FixtureLabel className="ml-2" />`
+     when `isFixtureSource(r.source)`. The metrics page is shelled and its
+     data snapshotted, so it renders fixture-sourced runs too — the fourth
+     surface R3's "every page" covers, added on the round-1 escalation
+     (review-04.md) rather than narrowing R3.
 
   Tests in `packages/web/test/fixture-label.test.ts`: `isFixtureSource('fixture')`
-  is true and `isFixtureSource('gateline')` is false; `renderToStaticMarkup`
+  is true and `isFixtureSource('gateline')` and `isFixtureSource('fixtures')`
+  are false, so a substring or prefix match cannot survive; `renderToStaticMarkup`
   of `FixtureLabel` contains `data-fixture-label` and the visible text
-  `fixture data` (vitest layer 2 idiom in `packages/vitest.config.ts` — a
-  `.ts` test importing a `.tsx` component, no DOM). Do not add jsdom.
+  `fixture data` as a child node, not only inside `title` (vitest layer 2
+  idiom in `packages/vitest.config.ts` — a `.ts` test importing a `.tsx`
+  component, no DOM). Do not add jsdom.
 
   The browser-level assertion that a fixture run page shows the label and a
   real run page does not (AC3.1) is task 05's e2e; this task supplies the
@@ -43,12 +51,13 @@ file_contact_surface:
   - packages/web/src/pages/run.tsx
   - packages/web/src/pages/inbox.tsx
   - packages/web/src/pages/portfolio.tsx
+  - packages/web/src/pages/metrics.tsx
   - packages/web/test/fixture-label.test.ts
 
 acceptance_tests:
   - AC3.1
   - AC3.2
-  - "vitest fixture-label.test.ts: isFixtureSource('fixture') true, isFixtureSource('gateline') false; static markup of FixtureLabel contains data-fixture-label and 'fixture data'"
+  - "vitest fixture-label.test.ts: isFixtureSource('fixture') true, isFixtureSource('gateline') and isFixtureSource('fixtures') false; static markup of FixtureLabel contains data-fixture-label and 'fixture data' as visible text, not only in title"
   - "npx tsc -p web/tsconfig.json && npx vitest run web/test && npm run lint pass; web/test/boundary.test.ts stays green"
 
 depends_on: [01-artifact-path-route]

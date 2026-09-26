@@ -231,6 +231,13 @@ escalations:
         at: 2026-09-25T23:37:38.219Z,
         from_role: orchestrator,
         reason: reviewer escalated task 04-fixture-label — see review-04.md,
-        resolved: false
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-09-26T00:39:51.724Z,
+        resolution: "Widened task 04 rather than narrowing R3: metrics.tsx joins its
+          contact surface and its scope gains the metrics run cell (afe5809).
+          Implementer takes round 2 with the surface widened and the two test
+          gaps in review-04 (F1 visible-text assertion, F2 negative case).",
+        disposition: return-to-implement
       }
   ]

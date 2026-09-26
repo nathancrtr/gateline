@@ -49,6 +49,39 @@ let ORIGIN: string
  */
 const WIDTHS = [800, 900, 1000, 1280] as const
 
+/**
+ * A phone (#427). Swept over the run pages only, one per fixture at the page
+ * the run lands on: the inbox, portfolio, metrics and record pages have not
+ * been laid out for a phone, and sweeping them here would declare that debt
+ * rather than guard the one fixed.
+ *
+ * 390px is the phone the defect was found on, where every spine must fit.
+ * 320px is the narrowest phone still in use, and the one width where a full
+ * spine folded is still wider than its row (317px in 288), so it crops inside
+ * its own `overflow-x` box as a safety net. That crop is exactly where the
+ * `sr-only` labels escaped, so 320px is what guards their containment.
+ */
+const PHONE = 390
+const NARROW_PHONE = 320
+const PHONE_RUNS = [
+  'staged',
+  'g0-pending',
+  'g1-pending',
+  'g2-pending',
+  'g3-pending',
+  'patch-g1-pending',
+  'patch-g2-pending',
+  'forked-contract',
+  'round-cap',
+  'escalated',
+  'paused-budget',
+  'done-merged',
+  'closed-delivered',
+  'malformed-spec',
+  'malformed-release',
+  'bad-state',
+] as const
+
 interface KnownBroken {
   /** The open issue that owns the defect. Every entry needs one: an excluded
    *  combination with nobody's name on it is a debt that never gets paid. */
@@ -66,6 +99,8 @@ type InvariantId =
   | 'needs-you-visible'
   | 'idle-card-collapsed'
   | 'inbox-rows-contained'
+  | 'spine-fits'
+  | 'spine-words-when-wide'
 
 interface SweepState {
   name: string
@@ -196,6 +231,10 @@ interface Measurement {
   /** Distinct top edges among the spine's cells; 1 is the only correct answer. */
   spineRows: number
   spineCells: number
+  /** How far the spine's row scrolls inside itself; 0 means it fits. */
+  spineCrop: number
+  /** Folded phases on show (#427): ticks with a box. */
+  spineTicks: number
   findingTitles: { id: string; width: number; floor: number }[]
   needsYou: { slug: string; overflowLeft: number; overflowRight: number }[]
   /** Lexicon hover cards on the page. The sweep hovers and focuses nothing, so
@@ -210,6 +249,8 @@ let fixtureDir: string
 let server: ChildProcess
 let page: Page
 const measurements: Measurement[] = []
+const phone: Measurement[] = []
+const narrowHeader: { state: string; headerOnly: number; viewport: number; spineCrop: number }[] = []
 
 const sourceId = () => fixtureDir.replace(/\/+$/, '').split('/').pop()!
 
@@ -229,7 +270,46 @@ test.beforeAll(async ({ browser }: { browser: Browser }) => {
       measurements.push({ state: state.name, width, ...(await measure(page)) })
     }
   }
+  for (const width of [PHONE, NARROW_PHONE]) {
+    await page.setViewportSize({ width, height: 844 })
+    for (const slug of PHONE_RUNS) {
+      await page.goto(`${ORIGIN}/runs/${sourceId()}/${slug}`)
+      await expect(page.locator(slug === 'bad-state' ? 'main h1' : '[data-spine]').first()).toBeVisible()
+      await settle(page)
+      phone.push({ state: slug, width, ...(await measure(page)) })
+      if (width === NARROW_PHONE) narrowHeader.push({ state: slug, ...(await measureHeaderAlone(page)) })
+    }
+  }
 })
+
+/**
+ * The page's width with only the run header laid out: every sibling on the
+ * path from the header up to <main> is set to `display: none`, the width is
+ * read, and the page is restored. This is the header's own contribution, and
+ * nothing else on the page can move it — which is what the 320px containment
+ * check needs, since at that width the rest of a run page has its own defects
+ * (see the test).
+ */
+async function measureHeaderAlone(p: Page): Promise<{ headerOnly: number; viewport: number; spineCrop: number }> {
+  return await p.evaluate(() => {
+    const header = document.querySelector<HTMLElement>('main header')
+    const viewport = document.documentElement.clientWidth
+    const row = document.querySelector<HTMLElement>('[data-spine]')
+    const spineCrop = row ? Math.max(0, row.scrollWidth - row.clientWidth) : 0
+    if (!header) return { headerOnly: document.documentElement.scrollWidth, viewport, spineCrop }
+    const hidden: [HTMLElement, string][] = []
+    for (let el: HTMLElement = header; el.parentElement && el.tagName !== 'MAIN'; el = el.parentElement) {
+      for (const sib of el.parentElement.children) {
+        if (sib === el || !(sib instanceof HTMLElement)) continue
+        hidden.push([sib, sib.style.display])
+        sib.style.display = 'none'
+      }
+    }
+    const headerOnly = document.documentElement.scrollWidth
+    for (const [el, display] of hidden) el.style.display = display
+    return { headerOnly, viewport, spineCrop }
+  })
+}
 
 test.afterAll(async () => {
   await page?.close()
@@ -279,6 +359,11 @@ async function measure(p: Page): Promise<Omit<Measurement, 'state' | 'width'>> {
     // Subpixel rounding differs between a phase pill and a gate pill on the
     // same line; whole pixels is the resolution the question is asked at.
     const spineRows = new Set(spineCells.map((c) => Math.round(c.getBoundingClientRect().top)))
+    const spineRow = document.querySelector<HTMLElement>('[data-spine]')
+    const spineCrop = spineRow ? Math.max(0, spineRow.scrollWidth - spineRow.clientWidth) : 0
+    const spineTicks = [...document.querySelectorAll<HTMLElement>('[data-spine] [data-spine-tick]')].filter(
+      (t) => t.getBoundingClientRect().width > 0,
+    ).length
 
     // 24ch, or the card's own content width where that is narrower —
     // recomputed from the element's font rather than read out of the
@@ -363,6 +448,32 @@ async function measure(p: Page): Promise<Omit<Measurement, 'state' | 'width'>> {
           right: box.right,
         })
       }
+      // Text that spills out of its own element (#427's CI finding): a flex
+      // item squeezed to a sliver keeps its box inside the viewport while its
+      // words paint past the edge, so the element walk above never sees it.
+      // The words are measured as ranges, and attributed to the element they
+      // escaped, with that element's own right edge beside theirs.
+      const texts = document.createTreeWalker(document.querySelector('main') ?? document.body, NodeFilter.SHOW_TEXT)
+      for (let n = texts.nextNode(); n; n = texts.nextNode()) {
+        const parent = n.parentElement
+        if (!parent || !n.textContent?.trim()) continue
+        const range = document.createRange()
+        range.selectNodeContents(n)
+        const right = Math.max(0, ...[...range.getClientRects()].filter((r) => r.width > 0).map((r) => r.right))
+        if (right <= viewport + 0.5) continue
+        let contained = false
+        for (let p: HTMLElement | null = parent; p && p !== document.body; p = p.parentElement) {
+          if (getComputedStyle(p).overflowX !== 'visible') contained = true
+        }
+        if (contained) continue
+        const cls = parent.getAttribute('class')?.split(/\s+/).slice(0, 4).join('.') ?? ''
+        culprits.push({
+          label: `text "${n.textContent.trim().slice(0, 40)}" in <${parent.tagName.toLowerCase()}${cls ? `.${cls}` : ''}> (box ends ${round(
+            parent.getBoundingClientRect().right,
+          )}px) reaches ${round(right)}px`,
+          right,
+        })
+      }
       // Widest first: the element whose right edge *is* the body's scroll width
       // is the one that set it, and everything else is riding along.
       culprits.sort((a, b) => b.right - a.right)
@@ -395,6 +506,8 @@ async function measure(p: Page): Promise<Omit<Measurement, 'state' | 'width'>> {
       culprits: culprits.slice(0, 3).map((c) => c.label),
       spineRows: spineRows.size,
       spineCells: spineCells.length,
+      spineCrop,
+      spineTicks,
       findingTitles,
       needsYou,
       lexCards,
@@ -423,8 +536,9 @@ const CHECKS: Record<InvariantId, (m: Measurement) => string | null> = {
       : null,
 
   /**
-   * #295: a wrapped sequence is not a sequence. The spine is nowrap and crops,
-   * so its cells occupy one row at every width or the fix has regressed. This
+   * #295: a wrapped sequence is not a sequence. The spine is nowrap (and since
+   * #427 it folds rather than crops), so its cells occupy one row at every
+   * width or the fix has regressed. This
    * is the rule the retired `rows.size <= 2` in `smoke.spec.ts` refused to
    * state.
    */
@@ -484,6 +598,23 @@ const CHECKS: Record<InvariantId, (m: Measurement) => string | null> = {
     const spilled = m.inboxRows.filter((r) => r.over > 0.5)
     return spilled.length === 0 ? null : spilled.map((r) => `${r.slug} paints ${r.over}px past its cell`).join('; ')
   },
+
+  /**
+   * #427: below its word fit the spine cropped and scrolled inside its row, so
+   * at 390px a reader saw half the sequence and had to scroll a header to find
+   * where the run stood. It folds now, and the rule is that the row never has
+   * to scroll to show itself. Stated apart from `no-sideways-scroll` because
+   * the row is its own `overflow-x` box: a crop inside it never reaches the
+   * page body.
+   */
+  'spine-fits': (m) => (m.spineCells > 0 && m.spineCrop > 0.5 ? `the spine's row scrolls ${m.spineCrop}px inside itself` : null),
+
+  /**
+   * The other side of folding: a spine that folds where its words fit has
+   * hidden names for nothing. Every profile's words fit from 900px up.
+   */
+  'spine-words-when-wide': (m) =>
+    m.width >= 900 && m.spineTicks > 0 ? `${m.spineTicks} phases folded to ticks at ${m.width}px` : null,
 }
 
 /** The declarations, if any, that own this combination. */
@@ -521,6 +652,61 @@ test('the phase spine occupies exactly one row at every width', () => {
   expect(measurements.filter((m) => m.spineCells > 0).length).toBeGreaterThan(40)
   const failures = sweep('one-row-spine')
   expect(failures, `spines that wrapped:\n${failures.join('\n')}`).toEqual([])
+})
+
+test('the phase spine shows all of itself at every width, folding rather than cropping (#427)', () => {
+  const failures = [...sweep('spine-fits'), ...sweep('spine-words-when-wide')]
+  expect(failures, `spines that crop, or fold where their words fit:\n${failures.join('\n')}`).toEqual([])
+  // Non-vacuity: the band must include a spine that had to fold (a full
+  // profile at 800px), or this rule stopped testing the fold at all.
+  expect(measurements.some((m) => m.width === 800 && m.spineTicks > 0)).toBe(true)
+})
+
+// #427: at 390px the run pages scrolled sideways by 143px (24px on the
+// standard-profile runs). The spine's row was an `overflow-x` box, but its
+// gate cells' `sr-only` labels are absolutely positioned and their containing
+// block was outside it, so they escaped the crop and widened the page.
+test('no run page scrolls sideways on a 390px phone, and its spine fits folded (#427)', () => {
+  const at390 = phone.filter((m) => m.width === PHONE)
+  expect(at390.length).toBe(PHONE_RUNS.length)
+  const empty = at390.filter((m) => m.elementCount < 40).map((m) => m.state)
+  expect(empty, `run pages that rendered almost nothing at ${PHONE}px:\n${empty.join('\n')}`).toEqual([])
+  const failures: string[] = []
+  for (const m of at390) {
+    for (const rule of ['no-sideways-scroll', 'one-row-spine', 'spine-fits'] as const) {
+      const problem = CHECKS[rule](m)
+      if (problem !== null) failures.push(`${m.state} @ ${PHONE}px — ${rule}: ${problem}`)
+    }
+  }
+  expect(failures, `run pages that break at ${PHONE}px:\n${failures.join('\n')}`).toEqual([])
+  // Every run with a spine has one on the phone, and a full-profile run folds.
+  expect(at390.filter((m) => m.spineCells > 0).length).toBe(PHONE_RUNS.length - 1)
+  expect(at390.find((m) => m.state === 'g2-pending')?.spineTicks).toBeGreaterThan(0)
+})
+
+// Asked of the header alone, not the whole page. At 320px the rest of a run
+// page is not yet laid out for the width: on CI's Linux fonts g1-pending's G1
+// packet measured 321px, because a Decisions row (ADR-2) squeezes its
+// `min-w-0 flex-1` title to a 2px box between `shrink-0` chips and the words
+// "Shared config module" paint past it to the viewport edge. That is the #296
+// squeeze in another component, independent of the spine (the page is still
+// 321px with the header hidden, and 320px with only the header shown), so it
+// is not this test's to catch. What #427 fixed is the header's own overflow.
+test('at 320px a spine that still crops keeps its labels inside its own row (#427)', () => {
+  const at320 = phone.filter((m) => m.width === NARROW_PHONE)
+  expect(at320.length).toBe(PHONE_RUNS.length)
+  expect(narrowHeader.length).toBe(PHONE_RUNS.length)
+  // Non-vacuity: the crop is the case under test, so at least one spine must
+  // still be wider than its row here, or this no longer tests containment.
+  expect(narrowHeader.some((h) => h.spineCrop > 0.5)).toBe(true)
+  const failures: string[] = []
+  for (const h of narrowHeader) {
+    if (h.headerOnly > h.viewport) failures.push(`${h.state} — the header alone is ${h.headerOnly}px in a ${h.viewport}px viewport`)
+  }
+  for (const m of at320) {
+    const problem = CHECKS['one-row-spine'](m)
+    if (problem !== null) failures.push(`${m.state} — one-row-spine: ${problem}`)  }
+  expect(failures, `run headers that break at ${NARROW_PHONE}px:\n${failures.join('\n')}`).toEqual([])
 })
 
 test('no finding title is squeezed below its width floor', () => {

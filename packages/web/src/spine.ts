@@ -9,10 +9,16 @@
 // both are derivable: PROFILE_PHASES fixes the sequence, GATE_PHASES fixes where
 // each gate sits in it, and PROFILE_GATES fixes which ones exist at all.
 //
-// Two rules keep this a rendering of the record rather than a reading of it:
+// Three rules keep this a rendering of the record rather than a reading of it:
 //
 //   * A gate absent from the profile is absent from the spine — never an empty
 //     cell, never an auto-approved one.
+//   * A gate is on the table only when the inbox holds a gate item for it
+//     (#420). Being the next gate after the run's phase is not the same fact:
+//     a run at `implement` with only an escalation open is working toward G2,
+//     and nobody is wanted there yet. The yellow means a human is wanted at
+//     this spot (packages/web/DESIGN.md, settled decision 4), so it is derived
+//     from the item that says so, never from the phase.
 //   * A run at rest has no gate on the table. `paused`, `staged` and `closed`
 //     are rest states overlaid on the sequence (ADR-1: `staged` is `phase:
 //     paused` with a reason, not a seventh phase; `closed` is a real phase but
@@ -26,6 +32,7 @@ import {
   GATE_PHASES,
   GATE_QUESTIONS,
   type GateId,
+  type InboxItem,
   PATCH_G1_QUESTION,
   type Phase,
   PROFILE_GATES,
@@ -33,10 +40,17 @@ import {
   type Profile,
   type RunSummary,
 } from './api.ts'
+import { type GateCardState, gateCardState } from './gate-state.ts'
 
 export type PhaseCellState = 'past' | 'current' | 'future'
-/** `pending` is the gate on the table; `future` is one the run has not reached. */
-export type GateCellState = 'approved' | 'declined' | 'pending' | 'future'
+/**
+ * `pending` is the gate on the table — the inbox holds a gate item for it.
+ * `next` is the undecided gate the moving run is working toward, with nothing
+ * on the table yet (#420): the plain mark, as the ledger draws an undecided
+ * gate. `future` is one the run has not reached, or any undecided gate of a run
+ * at rest.
+ */
+export type GateCellState = 'approved' | 'declined' | 'pending' | 'next' | 'future'
 
 export interface PhaseCell {
   kind: 'phase'
@@ -52,6 +66,14 @@ export interface GateCell {
   by: string | null
   at: string | null
   question: string
+  /**
+   * The gate item's card state when the gate is `pending` — reviewable, in
+   * flight or bounced, read through `gateCardState` like every other surface —
+   * and null otherwise. Only `reviewable` offers a decision.
+   */
+  card: GateCardState | null
+  /** The producing role out with a fresh dispatch, when `card` is `inflight`. */
+  role: string | null
 }
 
 export type SpineCell = PhaseCell | GateCell
@@ -70,6 +92,12 @@ export interface SpineInput {
   phase: string
   pausedReason: string | null
   gates: RunSummary['gates']
+  /**
+   * The run's inbox items. Required rather than defaulted: the gate on the
+   * table is the gate an item says is up, and a spine drawn without the items
+   * could only guess it from the phase — the bug #420 was filed on.
+   */
+  items: readonly InboxItem[]
 }
 
 /** The profile's phase sequence. `paused` and `closed` are rest states, not steps in it. */
@@ -134,6 +162,12 @@ export function phaseSpine(run: SpineInput): Spine {
       : null
   const here = position === null ? -1 : sequence.indexOf(position)
 
+  // The gate items in the inbox, by gate: the only evidence a gate is up.
+  const onTable = new Map<GateId, InboxItem>()
+  for (const item of run.items) {
+    if (item.kind === 'gate' && item.gate !== null) onTable.set(item.gate, item)
+  }
+
   const cells: SpineCell[] = []
   sequence.forEach((phase, i) => {
     cells.push({
@@ -144,15 +178,31 @@ export function phaseSpine(run: SpineInput): Spine {
     const gate = closedBy.get(phase)
     if (!gate) return
     const cell = run.gates[gate]
-    // Pending means *on the table*, which a run at rest has nothing on.
+    const item = onTable.get(gate) ?? null
+    // On the table means an item is up for it; nothing else says so. A run at
+    // rest gets no item from core (readiness: closed and declined runs get
+    // none, paused and staged ones get a pause item, never a gate item), so
+    // the rest rule holds by the same reading.
     const state: GateCellState = cell.approved
       ? 'approved'
       : cell.decided
         ? 'declined'
-        : !rest && position !== null && GATE_PHASES[gate].includes(position)
+        : item
           ? 'pending'
-          : 'future'
-    cells.push({ kind: 'gate', gate, state, by: cell.by, at: cell.at, question: gateQuestion(gate, run.profile) })
+          : !rest && position !== null && GATE_PHASES[gate].includes(position)
+            ? 'next'
+            : 'future'
+    const card = state === 'pending' && item ? gateCardState(item) : null
+    cells.push({
+      kind: 'gate',
+      gate,
+      state,
+      by: cell.by,
+      at: cell.at,
+      question: gateQuestion(gate, run.profile),
+      card,
+      role: card === 'inflight' ? (item?.inflight?.role ?? null) : null,
+    })
   })
 
   return { cells, rest, position }
@@ -177,8 +227,11 @@ export function gateNote(cell: GateCell): string[] | null {
 //
 // The spine never wraps: a wrapped sequence is not one shape, its wrap point is
 // an accident of label widths, and its connectors dangle at row ends meaning
-// nothing. So the row is `nowrap` and scrolls, and the only question left is how
-// much of itself it can show in the open before it has to crop.
+// nothing. So the row is `nowrap`, and the only question left is how much of
+// itself it can show in the open before it has to yield. The notes yield first
+// (below); since #427 the phase words yield next (*Folding*, further down), so
+// the row fits every width the app supports and its `overflow-x-auto` is a
+// safety net rather than the layout.
 //
 // The answer is arithmetic on the cells, because a container query needs a
 // literal width in the stylesheet and CSS cannot measure text for us. The
@@ -258,4 +311,92 @@ export type SpineNoteRung = (typeof SPINE_NOTE_RUNGS)[number]
 export function noteRung(spine: Spine): SpineNoteRung {
   const { withNotes } = spineFit(spine)
   return SPINE_NOTE_RUNGS.find((r) => r >= withNotes) ?? SPINE_NOTE_RUNGS[SPINE_NOTE_RUNGS.length - 1]!
+}
+
+// --- Folding (#427) -------------------------------------------------------
+//
+// The note rungs decide when the *notes* yield. Below them the sequence used
+// to crop and scroll inside its row, and at phone width that was most of it: a
+// full spine needs about 574px in words, a 390px phone gives it 358, and the
+// reader saw half the cells and had to scroll a header to learn where the run
+// stood. The commitment behind the crop was that every phase is labelled in
+// words at every width. That is the one that yields now, because the sequence
+// is what the spine is for, and the phase words are a fixed, closed vocabulary.
+//
+// So below its word rung a spine *folds*. The phase the run stands at keeps its
+// word. Every other phase becomes a blank tick in its own texture: hollow
+// behind, dotted ahead. Every gate keeps its code and glyph, because a gate is
+// what a person decides. A folded phase keeps its name as its accessible text
+// and its hover text, so nothing becomes unreachable; it only stops taking
+// room.
+//
+// The shapes not chosen:
+//
+//   * Wrapping splits one sequence into two rows at an accident of label
+//     widths (#295 settled that).
+//   * A vertical spine at phone width is ten rows of header above the decision.
+//   * Abbreviated words (`impl`, `intg`) still overflow 358px for a full
+//     spine, and invent spellings the record never uses.
+//
+// These constants are measured, and they are not the note fit's. `spineFit`
+// predates the impression's 6px padding and over-estimates a phase pill by 8px.
+// That is the safe side for deciding when notes show, and the 800–1280px tests
+// pin the rungs it produces. The word rung has to be close instead: a spine
+// that folds at a width where its words fit (900px) hides names for nothing.
+
+/** `.imp`'s 6px side padding and 1px border, both sides. */
+const IMP_CHROME = 14
+/** IBM Plex Mono at 11px (6.60) plus `.imp`'s 0.02em letter-spacing. */
+const IMP_CHAR = 6.82
+/** A gate pill reads `G2 ●`: code, space, glyph. */
+const GATE_LABEL_CHARS = 4
+/** A folded phase: `.imp-tick`, 3px padding either side of nothing, plus the border. */
+const TICK = 8
+/** A connector between folded cells, where the row is tightest. */
+const FOLDED_CONNECTOR_MIN = 4
+
+function impWidth(cell: SpineCell): number {
+  return IMP_CHROME + IMP_CHAR * (cell.kind === 'phase' ? cell.phase.length : GATE_LABEL_CHARS)
+}
+
+/** Whether a phase keeps its word when the spine folds: it is where the run stands. */
+export function keepsWordFolded(cell: PhaseCell): boolean {
+  return cell.state === 'current'
+}
+
+export interface SpineWordFit {
+  /** px the row needs with every phase in words, notes demoted, connectors at 8px. */
+  words: number
+  /** px it needs folded: only the standing phase in words, connectors at 4px. */
+  folded: number
+}
+
+/** How wide this spine needs to be in words, and folded. */
+export function spineWordFit(spine: Spine): SpineWordFit {
+  const cells = spine.cells
+  if (cells.length === 0) return { words: 0, folded: 0 }
+  const connectors = cells.length - 1
+  const words = cells.reduce((w, c) => w + impWidth(c), 0) + connectors * CONNECTOR_MIN
+  const folded =
+    cells.reduce((w, c) => w + (c.kind === 'phase' && !keepsWordFolded(c) ? TICK : impWidth(c)), 0) +
+    connectors * FOLDED_CONNECTOR_MIN
+  return { words: Math.ceil(words), folded: Math.ceil(folded) }
+}
+
+/**
+ * The widths a fold breakpoint may land on. Literal for the same reason the
+ * note rungs are: `chips.tsx` maps each to a static container-query variant.
+ * Today's profiles land on 360 (patch), 480 (standard) and 600 (full).
+ */
+export const SPINE_WORD_RUNGS = [360, 420, 480, 540, 600] as const
+export type SpineWordRung = (typeof SPINE_WORD_RUNGS)[number]
+
+/**
+ * The container width at or above which every phase keeps its word. Rounded
+ * up, so at the rung the words provably fit; below it the spine folds rather
+ * than crop.
+ */
+export function wordRung(spine: Spine): SpineWordRung {
+  const { words } = spineWordFit(spine)
+  return SPINE_WORD_RUNGS.find((r) => r >= words) ?? SPINE_WORD_RUNGS[SPINE_WORD_RUNGS.length - 1]!
 }

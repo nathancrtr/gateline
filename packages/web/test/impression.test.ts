@@ -122,7 +122,7 @@ describe('the gate ledger reads approved and declined by colour and glyph', () =
 
 describe('the spine’s gate cells take the ledger’s colours, and keep the yellow for the gate on the table', () => {
   it('maps each cell state', () => {
-    expect(GATE_STATE_TONE).toEqual({ approved: 'ok', declined: 'struck mark', pending: 'cur', future: 'dot' })
+    expect(GATE_STATE_TONE).toEqual({ approved: 'ok', declined: 'struck mark', pending: 'cur', next: '', future: 'dot' })
   })
 
   it('dots a pending gate that offers no decision, bounced or in flight', () => {
@@ -133,18 +133,32 @@ describe('the spine’s gate cells take the ledger’s colours, and keep the yel
     expect(spineGateTone('approved', 'bounced')).toBe('ok')
   })
 
-  const cellClasses = (items: InboxItem[] | undefined, gate: GateId) => {
-    const html = renderToStaticMarkup(
+  const spineHtml = (items: InboxItem[]) =>
+    renderToStaticMarkup(
       createElement(PhaseSpine, { summary: summary({ G0: { approved: true, decided: true, by: 'operator', at: '2026-09-25' } } as never), items }),
     )
+  const cellClasses = (items: InboxItem[], gate: GateId) => {
+    const html = spineHtml(items)
     const span = new RegExp(`data-spine-gate="${gate}"[^>]*>\\s*(<span[^>]*>)`).exec(html)?.[1]
     if (!span) throw new Error(`no ${gate} cell in ${html}`)
     return { classes: impClasses(span), title: /title="([^"]*)"/.exec(span)?.[1] ?? '' }
   }
 
   it('renders the approved cell green and the table’s gate yellow', () => {
-    expect(cellClasses(undefined, 'G0').classes).toContain('imp-ok')
-    expect(cellClasses(undefined, 'G1').classes).toContain('imp-cur')
+    expect(cellClasses([item(READY)], 'G0').classes).toContain('imp-ok')
+    expect(cellClasses([item(READY)], 'G1').classes).toContain('imp-cur')
+  })
+
+  // #420: the yellow is derived from the gate item, never from the phase. A
+  // run at `plan` with only an escalation open is working toward G1, and
+  // nobody is wanted there: the plain undecided mark, and no yellow anywhere.
+  it('keeps the yellow off a gate with no item up for it, whatever the run’s phase', () => {
+    for (const items of [[], [item({ kind: 'escalation', gate: null })], [item({ kind: 'round-cap', gate: null })]]) {
+      const g1 = cellClasses(items, 'G1')
+      expect(g1.classes).toEqual(['imp'])
+      expect(g1.title).toContain('not on the table yet')
+      expect(spineHtml(items)).not.toContain('imp-cur')
+    }
   })
 
   it('does not call an in-flight gate bounced — the fix found on the way (#159 reaches the spine)', () => {

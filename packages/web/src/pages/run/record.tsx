@@ -36,7 +36,7 @@ import {
 } from '../../components/vocabulary.tsx'
 import { isAuditSection, itemCount } from '../../fold.ts'
 import { DIFF_SELECTION, landingArtifact } from '../../landing.ts'
-import { landingIndex, lineOfAnchor } from '../../line-anchor.ts'
+import { landingIndex, landingMark, lineOfAnchor, type Rect } from '../../line-anchor.ts'
 import { orderArtifacts, type RailLabel, railGroups } from '../../record-rail.ts'
 import { EdgeFade, useScrollCue } from '../../scroll-cue.tsx'
 import { PageStatus } from '../inbox.tsx'
@@ -285,18 +285,48 @@ function ArtifactBody({ src, slug, path, artifact }: { src: string; slug: string
   const [params] = useSearchParams()
   const anchor = params.get('anchor')
   const articleRef = useRef<HTMLElement>(null)
+  const [mark, setMark] = useState<Rect | null>(null)
   useEffect(() => {
-    if (!anchor || !data) return
+    const article = articleRef.current
+    if (!anchor || !data || !article) return
     const line = lineOfAnchor(anchor)
-    const target = line === null ? document.getElementById(anchor) : lineTarget(articleRef.current, line)
+    const target = line === null ? document.getElementById(anchor) : lineTarget(article, line)
+    if (!target) return
     // A definition inside a folded audit-time section (#217) opens its fold
     // before the jump, so a citation never lands on a closed heading.
-    const fold = target?.closest('details')
+    const fold = target.closest('details')
     if (fold && !fold.open) fold.open = true
-    target?.scrollIntoView({ block: 'start' })
     // Which block the address landed on, for whoever checks the landing.
-    target?.setAttribute('data-landed', '')
-    return () => target?.removeAttribute('data-landed')
+    target.setAttribute('data-landed', '')
+    // The page is the scroller (the reader pane contains only sideways
+    // overflow, #281), so the rail scrolls away here as it does when the
+    // artifact is read down to the same place.
+    target.scrollIntoView({ block: 'start' })
+    // Focus follows the landing (#449), which is what a screen reader
+    // announces, and the gutter mark shows while focus stays in the block
+    // (styles.css, `.landing-mark`). `tabindex` only while it is there: once
+    // focus leaves, a later click in the block must not light it again. A
+    // window losing focus is not leaving.
+    target.setAttribute('tabindex', '-1')
+    target.focus({ preventScroll: true })
+    const leave = (e: FocusEvent) => {
+      if (document.hasFocus() && !target.contains(e.relatedTarget as Node | null)) target.removeAttribute('tabindex')
+    }
+    target.addEventListener('focusout', leave)
+    // The mark is placed from the block's box, and placed again whenever the
+    // artifact reflows around it (a fold opening above, a font arriving, the
+    // window narrowing).
+    const column = target.closest<HTMLElement>('.prose-artifact') ?? article
+    const place = () => setMark(landingMark(target.getBoundingClientRect(), column.getBoundingClientRect(), article.getBoundingClientRect()))
+    const reflow = new ResizeObserver(place)
+    reflow.observe(article)
+    return () => {
+      reflow.disconnect()
+      target.removeEventListener('focusout', leave)
+      target.removeAttribute('tabindex')
+      target.removeAttribute('data-landed')
+      setMark(null)
+    }
   }, [anchor, data])
   if (isLoading) return <LoadingSkeleton text="Reading artifact…" />
   if (error) return <PageStatus text={(error as Error).message} bad />
@@ -371,6 +401,7 @@ function ArtifactBody({ src, slug, path, artifact }: { src: string; slug: string
           <Bytes content={content} />
         )}
       </div>
+      {mark && <span aria-hidden="true" data-landing-mark className="landing-mark" style={{ top: mark.top, left: mark.left, height: mark.height }} />}
     </article>
   )
 }

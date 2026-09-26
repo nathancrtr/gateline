@@ -25,6 +25,7 @@
 import type { MouseEventHandler, ReactNode } from 'react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import type { WithheldReason } from '../api.ts'
 import { CitedText } from './lexicon.tsx'
 
 /** `data-*` hooks pass through untouched: tests and e2e find surfaces by them. */
@@ -403,60 +404,78 @@ export function LinkOut({ href, children, className }: { href: string | null | u
 // Withheld view — the framework's voice (§5 row 9, §7 "structured withheld").
 
 /**
- * Why a packet half was not composed. `grammar` is the §5 shape: the grammar
- * the view looked for, and the token in the code face. `sentence` is what
- * callers have today — a sentence core composed — and #411 step 5 moves every
- * caller to the structured arm and deletes this one.
- */
-export type WithheldReason = { grammar: string; token?: string } | { sentence: string }
-
-/**
- * The fork fallback: a caution field, a UI-face sentence naming what was
- * looked for, and at most one link to the artifact that has the answer.
+ * The fork fallback: a caution field, and one UI-face sentence composed here
+ * from the packet's structured reason (#424) —
+ *
+ *   <view> withheld — looked for <grammar> <token> in the <kind>. Open the <kind>
+ *
+ * The grammar is the framework's words for a contract section or key; the
+ * token is the record's own spelling, set in the code face; the kind is the
+ * contract's name for the artifact looked in, and the one link opens it. When
+ * the record has no such artifact, the sentence says so and there is nothing
+ * to open. Core states only the facts; the words are the cockpit's.
  *
  * Must never: read as a fault (caution, never the declined red); be silent
- * (a reason is required); cite an issue number, or link by filename (today's
- * `sentence` reasons and "read plan.md" labels still do; step 5 fixes both —
- * the link becomes "Open the <kind>").
+ * (a reason is required); cite an issue number, or link by filename (the
+ * reason carries neither, and the link is named by the contract's kind).
  */
 export function Withheld({
   view,
   reason,
+  src,
+  slug,
   after,
-  open,
+  link = true,
   className,
   ...rest
 }: {
-  /** What stood down, as a UI-face lead: "Criterion view withheld". */
-  view?: string
+  /** What stood down, as a UI-face noun: "Criterion view", "Coverage". The component says "withheld". */
+  view: string
   reason: WithheldReason
+  /** The run the artifact is in, for the one link to it. */
+  src: string
+  slug: string
   /** A cockpit sentence after the reason — what the reader still has. */
   after?: string
-  open?: { label: string; href: string }
+  /**
+   * Whether to link the artifact looked in. Off only where the reader is
+   * already on that artifact (the Record reader's own panel), where the link
+   * would open the page it sits on.
+   */
+  link?: boolean
   className?: string
 } & DataAttrs) {
+  const at = reason.lookedIn
+  const kind = at?.contractName ?? 'artifact'
   return (
-    <p className={cx('border border-warn-line bg-warn-bg px-2.5 py-2 text-[12px] leading-[1.5] text-warn', className)} {...dataAttrs(rest)}>
-      {view && `${view} — `}
-      {'sentence' in reason ? (
-        reason.sentence
-      ) : (
-        <>
-          {reason.grammar}
-          {reason.token && (
-            <>
-              {' '}
-              <span className="font-mono">{reason.token}</span>
-            </>
-          )}
-        </>
-      )}
-      {after && ` ${after}`}
-      {open && (
+    <p
+      className={cx('border border-warn-line bg-warn-bg px-2.5 py-2 text-[12px] leading-[1.5] text-warn', className)}
+      data-withheld-view
+      {...dataAttrs(rest)}
+    >
+      {view} withheld — looked for {reason.grammar}
+      {reason.token && (
         <>
           {' '}
-          <Link className="text-accent underline underline-offset-2" to={open.href}>
-            {open.label}
+          <span className="font-mono">{reason.token}</span>
+        </>
+      )}
+      {at === null ? (
+        ', and the record has none.'
+      ) : at.kind === 'work-item' && at.id !== null ? (
+        <>
+          {' in work item '}
+          <Name size="sm">{at.id}</Name>.
+        </>
+      ) : (
+        ` in the ${kind}.`
+      )}
+      {after && ` ${after}`}
+      {at !== null && link && (
+        <>
+          {' '}
+          <Link className="text-accent underline underline-offset-2" to={artifactHref(src, slug, at.path)} data-withheld-open>
+            Open the {kind}
           </Link>
         </>
       )}

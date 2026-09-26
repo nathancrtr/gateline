@@ -88,10 +88,15 @@ describe('buildReleasePacket', () => {
 `
     const p = buildReleasePacket({ plan: malformed })
     expect(p.hasPlan).toBe(true)
-    expect(p.fieldsWithheld).toContain('**Change released:**')
-    expect(p.fieldsWithheld).toContain('**Rollback exercised:**')
+    // The first missing field is the reason (#424); the plan says the rest.
+    expect(p.fieldsWithheld).toEqual({
+      grammar: 'a bold-label line',
+      token: '**Change released:**',
+      lookedIn: expect.objectContaining({ kind: 'release-plan', path: 'release-plan.md', contractName: 'release plan' }),
+    })
     expect(p.rollbackTrigger).toBeNull()
     expect(p.ciHealth).toBeNull()
+    expect(p.ciWithheld).toMatchObject({ grammar: 'a section headed', token: '## CI health', lookedIn: { path: 'release-plan.md' } })
     expect(p.steps).toEqual([{ n: 1, text: 'Ship it.', irreversible: false }])
     expect(p.stepsWithheld).toBeNull()
   })
@@ -103,7 +108,7 @@ describe('buildReleasePacket', () => {
     )
     const p = buildReleasePacket({ plan: prose })
     expect(p.steps).toEqual([])
-    expect(p.stepsWithheld).toMatch(/not a numbered list/)
+    expect(p.stepsWithheld).toMatchObject({ grammar: 'a numbered list under', token: '## Release steps', lookedIn: { kind: 'release-plan' } })
     expect(p.fieldsWithheld).toBeNull()
   })
 
@@ -136,6 +141,7 @@ describe('buildReleasePacket', () => {
     expect(p.steps).toEqual([])
     expect(p.fieldsWithheld).toBeNull()
     expect(p.stepsWithheld).toBeNull()
+    expect(p.ciWithheld).toBeNull()
   })
 
   it('does not read a field or a heading from inside a fence', () => {

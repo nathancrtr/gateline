@@ -53,12 +53,7 @@ export function EscalationPacket({ src, slug, index }: { src: string; slug: stri
     <section className={PACKET_FRAME} data-escalation-packet data-origin={packet.origin}>
       <p className={PACKET_LABEL}>Escalation packet — composed from the record</p>
       {packet.withheld ? (
-        <Withheld
-          reason={{ sentence: packet.withheld }}
-          open={{ label: `read ${packet.artifact}`, href: artifactHref(src, slug, packet.artifact!) }}
-          className="mt-1.5"
-          data-withheld="section"
-        />
+        <Withheld view="Escalation view" reason={packet.withheld} src={src} slug={slug} className="mt-1.5" data-withheld="section" />
       ) : (
         <>
           <Defect packet={packet} who={who} />

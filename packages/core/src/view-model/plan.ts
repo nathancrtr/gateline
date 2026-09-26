@@ -36,9 +36,16 @@ export interface RequirementMapping {
    * forkable: a plan may legitimately carry another shape, and the honest move
    * is to name the shape looked for and fall back to the markdown, never to
    * report an empty mapping as full coverage.
+   *
+   * The grammar looked for, never a sentence (#424): `g1.ts` adds where it
+   * looked, and each surface composes its own words. Written structurally —
+   * this leaf imports nothing — so it is `withheld.ts`'s `WithheldGrammar`.
    */
-  withheld: string | null
+  withheld: { grammar: string; token?: string } | null
 }
+
+/** The heading the contract fixes for the mapping, as the record spells it. */
+const MAPPING_HEADING = '## Requirement → task mapping'
 
 const HEADING = /^(#{1,6})\s+(.*?)\s*$/
 const FENCE = /^\s*(```|~~~)/
@@ -87,7 +94,7 @@ function taskTokens(cell: string): string[] {
  */
 export function parseRequirementMapping(plan: string | null): RequirementMapping {
   if (plan === null) {
-    return { rows: [], withheld: 'This run commits no `plan.md`, so no requirement → task mapping exists to read.' }
+    return { rows: [], withheld: { grammar: 'a plan' } }
   }
   const lines = plan.split('\n')
   let inFence = false
@@ -114,11 +121,7 @@ export function parseRequirementMapping(plan: string | null): RequirementMapping
   }
 
   if (depth === null) {
-    return {
-      rows: [],
-      withheld:
-        '`plan.md` carries no `## Requirement → task mapping` section, so this view cannot say which task covers which requirement.',
-    }
+    return { rows: [], withheld: { grammar: 'a section headed', token: MAPPING_HEADING } }
   }
 
   const rows: MappingRow[] = []
@@ -139,9 +142,6 @@ export function parseRequirementMapping(plan: string | null): RequirementMapping
 
   return {
     rows,
-    withheld:
-      rows.length === 0
-        ? '`plan.md` has a Requirement → task mapping section, but no table row in it names a requirement, so there is no mapping to read.'
-        : null,
+    withheld: rows.length === 0 ? { grammar: 'a table row naming a requirement under', token: MAPPING_HEADING } : null,
   }
 }

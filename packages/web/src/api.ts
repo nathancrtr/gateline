@@ -106,6 +106,7 @@ export type {
   SurfaceScopedDiff,
   Validation,
   Verdict,
+  WithheldReason,
   WorkItem,
 } from '@gateline/server/contract'
 export { API_VERSION }

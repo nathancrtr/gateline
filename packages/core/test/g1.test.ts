@@ -101,16 +101,19 @@ describe('the mapping table', () => {
     const forked = '# Technical Plan: x\n\n## Approach\nx\n\n## Coverage\n| Req | Task |\n|---|---|\n| R1 | 01 |\n'
     const mapping = parseRequirementMapping(forked)
     expect(mapping.rows).toEqual([])
-    expect(mapping.withheld).toContain('Requirement → task mapping')
+    expect(mapping.withheld).toEqual({ grammar: 'a section headed', token: '## Requirement → task mapping' })
   })
 
   it('withholds when the section exists but names no requirement', () => {
     const empty = '# Plan\n\n## Requirement → task mapping\n| Requirement | Task(s) |\n|---|---|\n\n## Risks\nx\n'
-    expect(parseRequirementMapping(empty).withheld).toContain('no table row')
+    expect(parseRequirementMapping(empty).withheld).toEqual({
+      grammar: 'a table row naming a requirement under',
+      token: '## Requirement → task mapping',
+    })
   })
 
   it('withholds when there is no plan at all', () => {
-    expect(parseRequirementMapping(null).withheld).toContain('no `plan.md`')
+    expect(parseRequirementMapping(null).withheld).toEqual({ grammar: 'a plan' })
   })
 
   it('reads the heading through a fork’s punctuation', () => {
@@ -154,7 +157,8 @@ describe('coverage joins the spec, the table, and the work items', () => {
 
   it('withholds coverage rather than reporting an empty mapping as full coverage', () => {
     const p = buildG1Packet({ lexicon: buildLexicon({ spec: SPEC }), plan: null, tasks: TASKS })
-    expect(p.mappingWithheld).toContain('no `plan.md`')
+    // No plan: nothing to look in, so nothing to open (#424).
+    expect(p.mappingWithheld).toEqual({ grammar: 'a plan', lookedIn: null })
     expect(p.coverage.every((r) => r.mapped.length === 0)).toBe(true)
   })
 })
@@ -203,13 +207,17 @@ describe('parallel safety', () => {
   it('an unreadable work item speaks for nothing, and says so', () => {
     const forked = { path: 'tasks/04-forked.yaml', content: 'id: 04-forked\ntitle: t\nstatus: pending\n' }
     const p = buildG1Packet({ lexicon: buildLexicon({ spec: SPEC }), plan: PLAN, tasks: [...TASKS, forked] })
-    expect(p.tasks.find((t) => t.path === forked.path)!.withheld).toContain('work-item.yaml')
+    expect(p.tasks.find((t) => t.path === forked.path)!.withheld).toEqual({
+      grammar: 'a top-level key',
+      token: 'file_contact_surface:',
+      lookedIn: expect.objectContaining({ kind: 'work-item', id: '04-forked', path: forked.path, contractName: 'work item' }),
+    })
     expect(p.overlaps.some((o) => o.a === '04-forked' || o.b === '04-forked')).toBe(false)
   })
 
   it('withholds the whole view when no work item is readable', () => {
     const p = buildG1Packet({ lexicon: buildLexicon({ spec: SPEC }), plan: PLAN, tasks: [] })
-    expect(p.tasksWithheld).toContain('no `tasks/*.yaml`')
+    expect(p.tasksWithheld).toEqual({ grammar: 'a work item', lookedIn: null })
     expect(p.overlaps).toEqual([])
   })
 })

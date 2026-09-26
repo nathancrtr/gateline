@@ -113,14 +113,14 @@ rename to src/new.py
 
   it('AC5 — an absent task set withholds with a reason, and the diff survives', () => {
     const scoped = scopeDiff(FILES, buildTaskSet([]))
-    expect(scoped.withheld).toContain('no work item declares a file-contact surface')
+    expect(scoped.withheld).toEqual({ grammar: 'a work item', lookedIn: null })
     expect(scoped.items).toEqual([])
     expect(scoped.declaredBy).toEqual([[], [], []])
   })
 
   it('AC5 — an unreadable task set withholds rather than labelling from nothing', () => {
     const scoped = scopeDiff(FILES, buildTaskSet([{ path: 'tasks/01-a.yaml', content: '# not a work item\n' }]))
-    expect(scoped.withheld).toContain('contracts/work-item.yaml')
+    expect(scoped.withheld).toMatchObject({ grammar: 'a top-level key', token: 'id:', lookedIn: { kind: 'work-item', path: 'tasks/01-a.yaml' } })
     expect(scoped.items).toEqual([])
   })
 

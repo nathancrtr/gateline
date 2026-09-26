@@ -83,19 +83,26 @@ describe('2 · the ledger states a burden once', () => {
   })
 })
 
-describe('3 · the contract badge stops echoing the filename', () => {
-  it('says nothing extra when the contract is the file’s own name', () => {
-    expect(contractBadgeName('verification-report.md', 'verification-report.md')).toBe('')
-    expect(contractBadgeName('state.yaml', 'state.yaml')).toBe('')
+describe('3 · the contract badge names the contract by kind, and stops echoing the filename', () => {
+  it('names the kind, with no Address when the contract is the file’s own name', () => {
+    expect(contractBadgeName('verification-report.md', 'verification-report.md', 'verification report')).toEqual({
+      name: 'verification report',
+      address: null,
+    })
+    expect(contractBadgeName('state.yaml', 'state.yaml', 'run state')).toEqual({ name: 'run state', address: null })
   })
 
-  it('names the contract when it is a different file, which the path did not say', () => {
-    expect(contractBadgeName('review-01.md', 'review-report.md')).toBe('review-report.md ')
-    expect(contractBadgeName('tasks/01-core.yaml', 'work-item.yaml')).toBe('work-item.yaml ')
+  it('names the kind and follows it with the contract’s file when the path did not say it (#424)', () => {
+    expect(contractBadgeName('review-01.md', 'review-report.md', 'review report')).toEqual({ name: 'review report', address: 'review-report.md' })
+    expect(contractBadgeName('tasks/01-core.yaml', 'work-item.yaml', 'work item')).toEqual({ name: 'work item', address: 'work-item.yaml' })
+  })
+
+  it('never mints a name from the file when no reference names the kind', () => {
+    expect(contractBadgeName('review-01.md', 'review-report.md', null)).toEqual({ name: null, address: 'review-report.md' })
   })
 
   it('has nothing to name for a presence-only artifact', () => {
-    expect(contractBadgeName('retro.md', null)).toBe('')
+    expect(contractBadgeName('retro.md', null, null)).toEqual({ name: null, address: null })
   })
 })
 

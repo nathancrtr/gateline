@@ -23,6 +23,7 @@
 import type { Escalation } from '../record/schema.ts'
 import { verdictLines } from '../record/validate.ts'
 import { type EscalationSection, extractEscalation, type ReviewReport, standing } from './review.ts'
+import { type WithheldReason, withheldIn } from './withheld.ts'
 
 export interface EscalationOrigin {
   /** The role the reason line names as the escalator, or `from_role`, or null. */
@@ -53,8 +54,8 @@ export interface EscalationPacket {
   reportVerdict: string | null
   /** Standing findings in the review, or null when the report is not a review. */
   standingFindings: number | null
-  /** Why the section view must withhold itself, or null. */
-  withheld: string | null
+  /** Why the section view must withhold itself, or null — looked for in the report (#424). */
+  withheld: WithheldReason | null
 }
 
 const ESCALATED_BY = /^(\S+)\s+escalated\b/i
@@ -114,9 +115,9 @@ export function buildEscalationPacket(input: {
       standingFindings = standing(review.findings).length
     }
   }
-  const withheld =
-    section === null
-      ? `${artifact} carries no Escalation section — contracts require one under an escalate verdict since #405.`
-      : null
+  // A report that predates the section, or one off its grammar: the contracts
+  // require the section under an escalate verdict, and the report is one click
+  // away from the withheld view.
+  const withheld = section === null ? withheldIn({ grammar: 'a section headed', token: '## Escalation' }, artifact) : null
   return { ...base, origin: 'role', section, reportVerdict, standingFindings, withheld }
 }

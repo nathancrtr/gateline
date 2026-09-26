@@ -66,15 +66,24 @@ export interface WorkItem {
    * the UI is to say so and fall back to the raw file, never to guess. The
    * other fields still carry whatever did parse — a withheld item is not an
    * empty one, it is one no derived view may speak for.
+   *
+   * The grammar looked for, never a sentence (#424): a packet adds where it
+   * looked — this file — and each surface composes its own words. Written
+   * structurally, since this leaf imports nothing: `withheld.ts`'s
+   * `WithheldGrammar`.
    */
-  withheld: string | null
+  withheld: { grammar: string; token?: string } | null
 }
 
 export interface TaskSet {
   /** Items in the order given — filenames order display, `depends_on` orders execution. */
   items: WorkItem[]
-  /** Non-null when no item in the set contributes a readable contact surface. */
-  withheld: string | null
+  /**
+   * Non-null when no item in the set contributes a readable contact surface:
+   * the first item's reason, or — for a set with no files — a work item
+   * itself. `withheld.ts`'s `taskSetWithheld` adds where it looked.
+   */
+  withheld: { grammar: string; token?: string } | null
 }
 
 // --- the work-item YAML subset -------------------------------------------
@@ -420,11 +429,13 @@ export function parseWorkItem(path: string, content: string): WorkItem {
     status: (WORK_ITEM_STATUSES as readonly string[]).includes(statusText) ? (statusText as WorkItemStatus) : null,
     statusText,
     notes: asText(map.get('notes')),
+    // The first cause only: a file missing `id` and writing its surface as a
+    // mapping names the missing key, and the file itself says the rest.
     withheld:
       absent.length > 0
-        ? `${path} declares no top-level \`${absent.join('` and `')}\`, so it does not follow the contracts/work-item.yaml grammar this view reads.`
+        ? { grammar: 'a top-level key', token: `${absent[0]}:` }
         : unreadable.length > 0
-          ? `${path} writes \`${unreadable.join('` and `')}\` as a nested block rather than the list contracts/work-item.yaml fixes, so this view cannot say which files it declared.`
+          ? { grammar: 'a list under the key', token: `${unreadable[0]}:` }
           : null,
   }
 }
@@ -437,18 +448,13 @@ export function parseWorkItem(path: string, content: string): WorkItem {
 export function buildTaskSet(files: { path: string; content: string }[]): TaskSet {
   const items = files.map((f) => parseWorkItem(f.path, f.content))
   const readable = items.filter((i) => i.withheld === null)
-  // When nothing is readable, the set says what each item said. A summary that
-  // counted the files instead would drop the one thing the fork fallback owes
-  // the reader: which grammar was looked for, in which file.
-  const reasons = [...new Set(items.map((i) => i.withheld).filter((r): r is string => r !== null))]
+  // When nothing is readable, the set says what its first item said — the
+  // first cause. A summary that counted the files instead would drop the one
+  // thing the fork fallback owes the reader: which grammar was looked for, in
+  // which file (`taskSetWithheld` names the file).
   return {
     items,
-    withheld:
-      files.length === 0
-        ? 'This run commits no `tasks/*.yaml`, so no work item declares a file-contact surface.'
-        : readable.length === 0
-          ? reasons.join(' ')
-          : null,
+    withheld: files.length === 0 ? { grammar: 'a work item' } : readable.length === 0 ? (items[0]!.withheld ?? null) : null,
   }
 }
 

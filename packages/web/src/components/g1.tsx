@@ -23,7 +23,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
-import { type ArtifactRef, api, type CoverageRow, type G1Packet as G1PacketData, type SurfaceOverlap } from '../api.ts'
+import { api, type CoverageRow, type G1Packet as G1PacketData, type SurfaceOverlap, type WithheldReason } from '../api.ts'
 import { PACKET_FRAME, PACKET_LABEL, PacketSweep } from './findings.tsx'
 import { CitedText, useLexicon } from './lexicon.tsx'
 import { Address, artifactHref, Name, Withheld } from './vocabulary.tsx'
@@ -58,16 +58,9 @@ export function G1Packet({ src, slug }: { src: string; slug: string }) {
 }
 
 /** The fork fallback for a half of this packet (the vocabulary's `Withheld`),
- *  routed to the plan, which has the answer. */
-function PlanWithheld({ reason, plan, src, slug, hook }: { reason: string; plan: ArtifactRef; src: string; slug: string; hook: string }) {
-  return (
-    <Withheld
-      reason={{ sentence: reason }}
-      open={{ label: `read ${plan.path}`, href: artifactHref(src, slug, plan.path) }}
-      className="mt-1.5"
-      data-withheld={hook}
-    />
-  )
+ *  composed from the packet's structured reason (#424). */
+function PacketWithheld({ view, reason, src, slug, hook }: { view: string; reason: WithheldReason; src: string; slug: string; hook: string }) {
+  return <Withheld view={view} reason={reason} src={src} slug={slug} className="mt-1.5" data-withheld={hook} />
 }
 
 export function GroupLabel({ children, hint }: { children: string; hint?: string }) {
@@ -92,7 +85,7 @@ function Coverage({ packet, src, slug }: { packet: G1PacketData; src: string; sl
     <div data-g1-coverage>
       <GroupLabel hint="contracts/plan.md: every spec requirement maps to at least one task">Coverage</GroupLabel>
       {packet.mappingWithheld ? (
-        <PlanWithheld reason={packet.mappingWithheld} plan={packet.plan} src={src} slug={slug} hook="mapping" />
+        <PacketWithheld view="Coverage" reason={packet.mappingWithheld} src={src} slug={slug} hook="mapping" />
       ) : (
         <>
           {uncovered.length > 0 && (
@@ -191,7 +184,7 @@ function ParallelSafety({ packet, src, slug }: { packet: G1PacketData; src: stri
     <div data-g1-safety>
       <GroupLabel hint="two tasks with no dependency between them, declaring the same path">Parallel safety</GroupLabel>
       {packet.tasksWithheld ? (
-        <PlanWithheld reason={packet.tasksWithheld} plan={packet.plan} src={src} slug={slug} hook="tasks" />
+        <PacketWithheld view="Parallel safety" reason={packet.tasksWithheld} src={src} slug={slug} hook="tasks" />
       ) : (
         <>
           {unordered.length > 0 ? (
@@ -283,7 +276,9 @@ function TaskEntry({ item, src, slug }: { item: G1WorkItem; src: string; slug: s
           surface{open ? ' ▾' : ' ▸'}
         </button>
       </div>
-      {item.withheld && <p className="mt-1 text-[11.5px] leading-[1.5] text-warn">{item.withheld}</p>}
+      {item.withheld && (
+        <Withheld view="Surface view" reason={item.withheld} src={src} slug={slug} className="mt-1" data-task-withheld />
+      )}
       {open && (
         <>
           <ul className="mt-1 flex flex-col gap-0.5">

@@ -70,7 +70,7 @@ describe('arrangeDiff', () => {
   })
 
   it('AC5 — a withheld scoping arranges nothing, so the caller renders the plain diff', () => {
-    const withheld: SurfaceScopedDiff = { items: [], declaredBy: [], withheld: 'This run commits no `tasks/*.yaml`.' }
+    const withheld: SurfaceScopedDiff = { items: [], declaredBy: [], withheld: { grammar: 'a work item', lookedIn: null } }
     expect(arrangeDiff(FILES, withheld)).toEqual({ undeclared: [], groups: [], scoped: false })
     expect(arrangeDiff(FILES, undefined)).toEqual({ undeclared: [], groups: [], scoped: false })
   })
@@ -109,7 +109,7 @@ describe('boundaryLine', () => {
   })
 
   it('says nothing when the scoping withheld, rather than implying a clean check', () => {
-    expect(boundaryLine(FILES, { items: [], declaredBy: [], withheld: 'no task set' })).toBeNull()
+    expect(boundaryLine(FILES, { items: [], declaredBy: [], withheld: { grammar: 'a work item', lookedIn: null } })).toBeNull()
     expect(boundaryLine(FILES, undefined)).toBeNull()
   })
 })

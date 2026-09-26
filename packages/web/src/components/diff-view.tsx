@@ -16,7 +16,7 @@ import type { DiffFile, SurfaceItemRef, SurfaceScopedDiff } from '../api.ts'
 import { arrangeDiff, fileLabel, totals } from '../surface.ts'
 import { Withheld } from './vocabulary.tsx'
 
-export function DiffView({ files, surface }: { files: DiffFile[]; surface?: SurfaceScopedDiff }) {
+export function DiffView({ files, surface, src, slug }: { files: DiffFile[]; surface?: SurfaceScopedDiff; src: string; slug: string }) {
   if (files.length === 0) return <p className="py-8 text-center text-sm text-muted">No diff — the run branch matches the default branch.</p>
 
   const { undeclared, groups } = arrangeDiff(files, surface)
@@ -38,8 +38,10 @@ export function DiffView({ files, surface }: { files: DiffFile[]; surface?: Surf
           renders unlabelled, saying what it looked for and did not find. */}
       {surface?.withheld && (
         <Withheld
-          view="Contact-surface grouping withheld"
-          reason={{ sentence: surface.withheld }}
+          view="Contact-surface grouping"
+          reason={surface.withheld}
+          src={src}
+          slug={slug}
           after="The full diff is below, in git's order."
           data-surface-withheld
         />

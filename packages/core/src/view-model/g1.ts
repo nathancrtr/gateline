@@ -26,6 +26,7 @@ import { type ArtifactRef, artifactRef } from './artifact-ref.ts'
 import type { Lexicon } from './lexicon.ts'
 import { type MappingRow, parseRequirementMapping, type RequirementMapping } from './plan.ts'
 import { buildTaskSet, type TaskSet, type WorkItem } from './tasks.ts'
+import { taskSetWithheld, type WithheldReason, withheldIn } from './withheld.ts'
 
 export interface CoverageRow {
   /** 'R1' — a requirement id, from the spec or from the mapping. */
@@ -59,9 +60,11 @@ export interface SurfaceOverlap {
 }
 
 /** A work item as G1 carries it: the parsed file, and the file as a reference (#415). */
-export interface G1WorkItem extends WorkItem {
+export interface G1WorkItem extends Omit<WorkItem, 'withheld'> {
   /** The kind and the id its filename gives it — the name to use when `id:` is missing. */
   ref: ArtifactRef
+  /** Why no view may speak for this item, looked for in the item's own file (#424), or null. */
+  withheld: WithheldReason | null
 }
 
 export interface G1Packet {
@@ -75,10 +78,10 @@ export interface G1Packet {
   overlaps: SurfaceOverlap[]
   /** The work items themselves, so the surface view needs no second fetch. */
   tasks: G1WorkItem[]
-  /** Why the coverage view must withhold itself, or null. */
-  mappingWithheld: string | null
-  /** Why the parallel-safety view must withhold itself, or null. */
-  tasksWithheld: string | null
+  /** Why the coverage view must withhold itself, or null — looked for in the plan (#424). */
+  mappingWithheld: WithheldReason | null
+  /** Why the parallel-safety view must withhold itself, or null — looked for in the first work item (#424). */
+  tasksWithheld: WithheldReason | null
 }
 
 /**
@@ -182,8 +185,8 @@ export function buildG1Packet(input: {
     coverage,
     unmappedTasks: [...knownIds].filter((id) => !mappedTasks.has(id)),
     overlaps: surfaceOverlaps(items),
-    tasks: items.map((item) => ({ ...item, ref: artifactRef(item.path) })),
-    mappingWithheld: mapping.withheld,
-    tasksWithheld: taskSet.withheld,
+    tasks: items.map((item) => ({ ...item, ref: artifactRef(item.path), withheld: withheldIn(item.withheld, item.path) })),
+    mappingWithheld: withheldIn(mapping.withheld, input.plan === null ? null : 'plan.md'),
+    tasksWithheld: taskSetWithheld(taskSet),
   }
 }

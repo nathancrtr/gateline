@@ -20,6 +20,7 @@ import { describe, expect, it } from 'vitest'
 import type { ReviewReport } from '../src/api.ts'
 import { FindingCard } from '../src/components/findings.tsx'
 import { RoundCapPanel } from '../src/components/rounds.tsx'
+import { ref } from './artifact-refs.helper.ts'
 
 const report = (path: string, body: string): ReviewReport => parseReview(path, body) as ReviewReport
 
@@ -133,6 +134,9 @@ describe('FindingCard title column (#296)', () => {
 function renderPanel(reports: ReviewReport[], task: string | null = null): string {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   client.setQueryData(['reviews', 'local', 'round-cap'], { reports })
+  // The run page's cache entry, whose refs name the report a withheld
+  // comparison looked in (#424).
+  client.setQueryData(['run', 'local', 'round-cap'], { artifactRefs: reports.map((r) => ref(r.path, r.task, r.rounds.at(-1)?.round ?? null)) })
   const tree: ReactNode = createElement(
     QueryClientProvider,
     { client },
@@ -161,7 +165,10 @@ describe('RoundCapPanel report links (#296)', () => {
     // One round: nothing to compare, and the decide card around it may carry
     // no chips at all, so this branch is the only escape hatch there is.
     const markup = renderPanel([REPORTS[0]!])
-    expect(markup).toContain('Round comparison withheld')
+    // Composed in web from the structured reason (#424), with the one link
+    // named by the contract's kind, never by filename.
+    expect(markup).toContain('Round comparison withheld — looked for a second numbered round <span class="font-mono">**Round:** &lt;n of 3&gt;</span> in the review report.')
+    expect(markup).toMatch(/<a [^>]*data-withheld-open[^>]*>Open the review report<\/a>/)
     expect(markup).toContain('data-round-reports')
     expect(markup).toMatch(/<a[^>]*>review-01\.md<\/a>/)
   })

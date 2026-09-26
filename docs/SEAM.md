@@ -7,11 +7,11 @@ another ad hoc one. It refines FRONTEND.md §4 (the principles), §4.7 (the
 verbatim rule in code) and §4.8–4.10 (the three fixes), and the type rules in
 `packages/web/DESIGN.md`. The companion epic is #411.
 
-**Status (2026-09-26): proposed.** Written from three inputs — an inventory of
+**Status (2026-09-26): decided.** Written from three inputs — an inventory of
 every surface in the web UI, a task analysis of who reads the record and for
 what, and a design pass on the representation vocabulary and the layering —
-and one cheap factual check. The decisions in §8 are the maintainer's to
-confirm; the order of work in §9 assumes they hold.
+and one cheap factual check. The maintainer confirmed all six decisions in §8
+on 2026-09-26; the order of work in §9 follows from them.
 
 ## 1. The problem, and its cause
 
@@ -216,7 +216,8 @@ ad hoc surface.
 ## 8. Decisions taken here
 
 The three inputs disagreed, or reopened earlier calls, in six places. The
-maintainer confirms or reverses each; the order of work in §9 assumes these.
+maintainer confirmed all six on 2026-09-26; the order of work in §9 assumes
+them.
 
 1. **The verbatim rule's scope is the record's content.** Addresses are
    cited, framework vocabulary is named, machine output is labelled, the

@@ -27,14 +27,11 @@
 // nothing is restated in the packet's own words.
 
 import { useQuery } from '@tanstack/react-query'
-import { Link } from 'react-router-dom'
 import { api, type EscalationPacket as EscalationPacketData } from '../api.ts'
 import { PACKET_FRAME, PACKET_LABEL, PacketSweep } from './findings.tsx'
-import { GroupLabel, Withheld } from './g1.tsx'
+import { GroupLabel } from './g1.tsx'
 import { Markdown } from './markdown.tsx'
-
-const artifactLink = (src: string, slug: string, path: string) =>
-  `/runs/${src}/${slug}?tab=record&artifact=${encodeURIComponent(path)}`
+import { Address, artifactHref, FieldRow, QuotedPassage, Withheld } from './vocabulary.tsx'
 
 export function EscalationPacket({ src, slug, index }: { src: string; slug: string; index: number }) {
   const { data, isPending } = useQuery({
@@ -56,7 +53,12 @@ export function EscalationPacket({ src, slug, index }: { src: string; slug: stri
     <section className={PACKET_FRAME} data-escalation-packet data-origin={packet.origin}>
       <p className={PACKET_LABEL}>Escalation packet — composed from the record</p>
       {packet.withheld ? (
-        <Withheld reason={packet.withheld} src={src} slug={slug} path={packet.artifact!} hook="section" />
+        <Withheld
+          reason={{ sentence: packet.withheld }}
+          open={{ label: `read ${packet.artifact}`, href: artifactHref(src, slug, packet.artifact!) }}
+          className="mt-1.5"
+          data-withheld="section"
+        />
       ) : (
         <>
           <Defect packet={packet} who={who} />
@@ -65,20 +67,6 @@ export function EscalationPacket({ src, slug, index }: { src: string; slug: stri
       )}
       <Report packet={packet} src={src} slug={slug} />
     </section>
-  )
-}
-
-/** One field from the section, boxed: its label as written, its value verbatim. */
-function Field({ label, value, hook }: { label: string; value: string; hook: string }) {
-  return (
-    <li className="border border-line bg-surface px-3 py-2" data-escalation-field={hook}>
-      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="shrink-0 font-ui text-[11px] text-muted">{label}</span>
-        <div className="prose-card min-w-0 flex-1">
-          <Markdown unwrapped>{value}</Markdown>
-        </div>
-      </div>
-    </li>
   )
 }
 
@@ -114,16 +102,18 @@ function Defect({ packet, who }: { packet: EscalationPacketData; who: string }) 
       {fields.length > 0 && (
         <ul className="mt-1.5 flex flex-col gap-1">
           {fields.map(([label, value]) => (
-            <Field key={label} label={label} value={value} hook={label.toLowerCase().replace(/[^a-z]+/g, '-')} />
+            <FieldRow key={label} label={label} data-escalation-field={label.toLowerCase().replace(/[^a-z]+/g, '-')}>
+              <Markdown unwrapped>{value}</Markdown>
+            </FieldRow>
           ))}
         </ul>
       )}
       {body && (
-        <div className="mt-1.5 border border-line bg-surface px-3 py-2" data-escalation-prose>
+        <QuotedPassage className="mt-1.5" data-escalation-prose>
           <div className="prose-card">
             <Markdown unwrapped>{body}</Markdown>
           </div>
-        </div>
+        </QuotedPassage>
       )}
     </div>
   )
@@ -148,14 +138,14 @@ function Routes({ packet, who }: { packet: EscalationPacketData; who: string }) 
       )}
       <ol className="mt-1.5 flex flex-col gap-1">
         {options.map((o, i) => (
-          <li key={o} className="border border-line bg-surface px-3 py-2" data-escalation-option={i + 1}>
+          <QuotedPassage as="li" key={o} data-escalation-option={i + 1}>
             <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
               <span className="shrink-0 font-mono text-[11.5px] font-semibold text-ink">{i + 1}.</span>
               <div className="prose-card min-w-0 flex-1">
                 <Markdown unwrapped>{o}</Markdown>
               </div>
             </div>
-          </li>
+          </QuotedPassage>
         ))}
       </ol>
     </div>
@@ -173,9 +163,11 @@ function Report({ packet, src, slug }: { packet: EscalationPacketData; src: stri
     <div data-escalation-report>
       <GroupLabel hint="the artifact the escalation lives in">The report</GroupLabel>
       <div className="mt-1.5 flex flex-wrap items-baseline gap-x-2.5 gap-y-1 border border-line bg-surface px-3 py-2 text-[12.5px]">
-        <Link className="font-mono text-[11.5px] text-accent underline underline-offset-2" to={artifactLink(src, slug, packet.artifact!)}>
-          {packet.artifact}
-        </Link>
+        {/* #411 step 3: the report is named by its kind, and this Address
+            follows the name instead of leading the row. */}
+        <Address size="md" to={artifactHref(src, slug, packet.artifact!)}>
+          {packet.artifact!}
+        </Address>
         {packet.reportVerdict && (
           <span className="text-muted">
             verdict <span className="font-mono text-ink">{packet.reportVerdict}</span>

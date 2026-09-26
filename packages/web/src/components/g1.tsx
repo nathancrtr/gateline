@@ -23,13 +23,14 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import { api, type CoverageRow, type G1Packet as G1PacketData, type SurfaceOverlap, type WorkItem } from '../api.ts'
 import { PACKET_FRAME, PACKET_LABEL, PacketSweep } from './findings.tsx'
 import { CitedText, useLexicon } from './lexicon.tsx'
+import { Address, artifactHref, Name, Withheld } from './vocabulary.tsx'
 
-const artifactLink = (src: string, slug: string, path: string) =>
-  `/runs/${src}/${slug}?tab=record&artifact=${encodeURIComponent(path)}`
+// step 2 (#415): the plan's path, named here by the kind this packet knows it
+// to be; an ArtifactRef on the packet carries it instead.
+const PLAN = 'plan.md'
 
 export function G1Packet({ src, slug }: { src: string; slug: string }) {
   const { data, isPending } = useQuery({ queryKey: ['g1', src, slug], queryFn: () => api.g1(src, slug) })
@@ -56,20 +57,16 @@ export function G1Packet({ src, slug }: { src: string; slug: string }) {
   )
 }
 
-/** The fork fallback, in the one shape every packet half uses: name the grammar
- *  that was looked for, and route to the artifact that has the answer. Shared
- *  with the G3 packet (#403). */
-export function Withheld({ reason, src, slug, path, hook }: { reason: string; src: string; slug: string; path: string; hook: string }) {
+/** The fork fallback for a half of this packet (the vocabulary's `Withheld`),
+ *  routed to the plan, which has the answer. */
+function PlanWithheld({ reason, src, slug, hook }: { reason: string; src: string; slug: string; hook: string }) {
   return (
-    <p
-      className="mt-1.5 border border-warn-line bg-warn-bg px-2.5 py-2 text-[12px] leading-[1.5] text-warn"
+    <Withheld
+      reason={{ sentence: reason }}
+      open={{ label: `read ${PLAN}`, href: artifactHref(src, slug, PLAN) }}
+      className="mt-1.5"
       data-withheld={hook}
-    >
-      {reason}{' '}
-      <Link className="text-accent underline underline-offset-2" to={artifactLink(src, slug, path)}>
-        read {path}
-      </Link>
-    </p>
+    />
   )
 }
 
@@ -95,7 +92,7 @@ function Coverage({ packet, src, slug }: { packet: G1PacketData; src: string; sl
     <div data-g1-coverage>
       <GroupLabel hint="contracts/plan.md: every spec requirement maps to at least one task">Coverage</GroupLabel>
       {packet.mappingWithheld ? (
-        <Withheld reason={packet.mappingWithheld} src={src} slug={slug} path="plan.md" hook="mapping" />
+        <PlanWithheld reason={packet.mappingWithheld} src={src} slug={slug} hook="mapping" />
       ) : (
         <>
           {uncovered.length > 0 && (
@@ -143,7 +140,9 @@ function CoverageEntry({ row }: { row: CoverageRow }) {
       data-mapped={row.mapped.length}
     >
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="shrink-0 font-mono text-[11.5px] font-semibold text-ink">{row.id}</span>
+        <Name lead className="shrink-0">
+          {row.id}
+        </Name>
         {row.shortName && <span className="shrink-0 text-[12.5px] font-medium text-ink">{row.shortName}</span>}
         {!row.defined && (
           <span className="shrink-0 font-ui text-[11px] text-warn">named by the mapping, defined in no spec</span>
@@ -192,7 +191,7 @@ function ParallelSafety({ packet, src, slug }: { packet: G1PacketData; src: stri
     <div data-g1-safety>
       <GroupLabel hint="two tasks with no dependency between them, declaring the same path">Parallel safety</GroupLabel>
       {packet.tasksWithheld ? (
-        <Withheld reason={packet.tasksWithheld} src={src} slug={slug} path="plan.md" hook="tasks" />
+        <PlanWithheld reason={packet.tasksWithheld} src={src} slug={slug} hook="tasks" />
       ) : (
         <>
           {unordered.length > 0 ? (
@@ -231,9 +230,7 @@ function OverlapEntry({ overlap }: { overlap: SurfaceOverlap }) {
       data-ordered={overlap.ordered ? 'true' : 'false'}
     >
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="shrink-0 font-mono text-[11.5px] font-semibold text-ink">
-          {overlap.a} ↔ {overlap.b}
-        </span>
+        <Name lead className="shrink-0">{`${overlap.a} ↔ ${overlap.b}`}</Name>
         <span
           className={`shrink-0 border px-[7px] py-px font-mono text-[10.5px] font-semibold leading-none ${
             overlap.ordered ? 'border-line bg-inset text-muted' : 'border-warn-line bg-warn-bg text-warn'
@@ -259,7 +256,15 @@ function TaskEntry({ item, src, slug }: { item: WorkItem; src: string; slug: str
   return (
     <li className="border border-line bg-surface px-3 py-2" data-task={item.id || item.path}>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="shrink-0 font-mono text-[11.5px] font-semibold text-ink">{item.id || item.path}</span>
+        {item.id ? (
+          <Name lead className="shrink-0">
+            {item.id}
+          </Name>
+        ) : (
+          // A work item whose `id:` is missing falls back to its path, which is
+          // not a Name; step 2 (#415) gives it an ArtifactRef to name it by.
+          <span className="shrink-0 font-mono text-[11.5px] font-semibold text-ink">{item.path}</span>
+        )}
         <span className="min-w-0 flex-1 text-[12.5px] text-ink">
           <CitedText>{item.title}</CitedText>
         </span>
@@ -285,9 +290,7 @@ function TaskEntry({ item, src, slug }: { item: WorkItem; src: string; slug: str
             ))}
           </ul>
           <p className="mt-1">
-            <Link className="font-mono text-[11px] text-accent underline underline-offset-2" to={artifactLink(src, slug, item.path)}>
-              {item.path}
-            </Link>
+            <Address to={artifactHref(src, slug, item.path)}>{item.path}</Address>
           </p>
         </>
       )}
@@ -316,7 +319,9 @@ function Decisions({ src, slug }: { src: string; slug: string }) {
           return (
             <li key={key} className="border border-line bg-surface px-3 py-2" data-adr={entry.id}>
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <span className="shrink-0 font-mono text-[11.5px] font-semibold text-ink">{entry.id}</span>
+                <Name lead className="shrink-0">
+                  {entry.id}
+                </Name>
                 {entry.qualifier && (
                   <span className="shrink-0 border border-info-line bg-info-bg px-[7px] py-px font-mono text-[10.5px] leading-none text-info">
                     {entry.qualifier}
@@ -341,12 +346,7 @@ function Decisions({ src, slug }: { src: string; slug: string }) {
                 </pre>
               )}
               <p className="mt-1">
-                <Link
-                  className="font-mono text-[11px] text-accent underline underline-offset-2"
-                  to={`/runs/${src}/${slug}?tab=record&artifact=${encodeURIComponent(entry.artifact)}&anchor=def-${entry.id}`}
-                >
-                  {entry.artifact}:{entry.line}
-                </Link>
+                <Address to={artifactHref(src, slug, entry.artifact, `def-${entry.id}`)}>{`${entry.artifact}:${entry.line}`}</Address>
               </p>
             </li>
           )

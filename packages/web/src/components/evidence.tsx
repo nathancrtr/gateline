@@ -10,9 +10,12 @@ import { DIFF_SELECTION } from '../landing.ts'
 import { boundaryLine, fileLabel } from '../surface.ts'
 import { FindingCard, Inline, PACKET_FRAME, PACKET_LABEL, PacketSweep, useReviews, VerdictChip } from './findings.tsx'
 import { useLexicon } from './lexicon.tsx'
+import { Address, artifactHref, Name, Withheld } from './vocabulary.tsx'
 
-const artifactLink = (src: string, slug: string, artifact: string, anchor?: string) =>
-  `/runs/${src}/${slug}?tab=record&artifact=${encodeURIComponent(artifact)}${anchor ? `&anchor=${anchor}` : ''}`
+// step 2 (#415): the two artifacts this surface names by kind, as paths; an
+// ArtifactRef on the rollup carries them instead.
+const SPEC = 'spec.md'
+const VERIFICATION = 'verification-report.md'
 
 export function EvidenceRollupPanel({ src, slug }: { src: string; slug: string }) {
   const { data } = useQuery({ queryKey: ['evidence', src, slug], queryFn: () => api.evidence(src, slug) })
@@ -23,9 +26,7 @@ export function EvidenceRollupPanel({ src, slug }: { src: string; slug: string }
   // below this panel, so nothing is lost.
   if (data.withheld) {
     return (
-      <p className="mt-3 border border-line bg-inset px-3 py-2.5 text-xs leading-[1.5] text-muted" data-evidence-withheld>
-        Evidence citations not computed — {data.withheld}
-      </p>
+      <Withheld view="Evidence citations not computed" reason={{ sentence: data.withheld }} className="mt-3" data-evidence-withheld />
     )
   }
   const defined = data.criteria.filter((c) => c.defined)
@@ -131,7 +132,7 @@ function EvidenceRow({ c, src, slug }: { c: CriterionEvidence; src: string; slug
         <Link
           key={`${a.label}-${a.line}`}
           className="font-mono text-[11px] text-accent underline underline-offset-2"
-          to={artifactLink(src, slug, a.artifact, `def-${a.label}`)}
+          to={artifactHref(src, slug, a.artifact, `def-${a.label}`)}
         >
           {a.label}
         </Link>
@@ -147,9 +148,7 @@ function EvidenceRow({ c, src, slug }: { c: CriterionEvidence; src: string; slug
           {c.reviewMentions.map((a, i) => (
             <span key={`${a.artifact}:${a.line}`}>
               {i > 0 && ', '}
-              <Link className="underline underline-offset-2" to={artifactLink(src, slug, a.artifact)}>
-                {a.artifact}:{a.line}
-              </Link>
+              <Address to={artifactHref(src, slug, a.artifact)}>{`${a.artifact}:${a.line}`}</Address>
             </span>
           ))}
         </span>
@@ -203,7 +202,10 @@ function findingIndex(reports: ReviewReport[] | undefined): Map<string, ReviewFi
 function ResultLine({ result }: { result: NonNullable<CriterionEvidence['result']> }) {
   return (
     <p className="mt-1 text-[12px] leading-[1.5] text-muted">
-      <span className="font-mono text-[11px] text-faint">verification-report.md states</span>{' '}
+      {/* #411 step 3: "Verification states" — a Kind label — replaces the
+          filename, and the file becomes the Address it is. */}
+      <Address>{VERIFICATION}</Address>
+      <span className="font-mono text-[11px] text-faint"> states</span>{' '}
       <span className="font-mono text-ink">“{result.verdict}”</span>
       {result.evidence && (
         <>
@@ -326,19 +328,18 @@ function CriterionPacket({
       data-criterion={c.id}
     >
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="shrink-0 font-mono text-[11.5px] font-semibold text-ink">{c.id}</span>
+        <Name lead className="shrink-0">
+          {c.id}
+        </Name>
         {text ? (
           <span className="min-w-0 flex-1 text-[12.5px] leading-[1.5] text-ink">{text}</span>
         ) : (
           <span className="min-w-0 flex-1 text-[12.5px] text-warn">cited by the record, defined in no spec</span>
         )}
         {c.defined && (
-          <Link
-            className="ml-auto shrink-0 font-mono text-[10.5px] text-accent underline underline-offset-2"
-            to={artifactLink(src, slug, 'spec.md', `def-R${c.id.slice(2).split('.')[0]}`)}
-          >
-            spec.md
-          </Link>
+          <Address size="xs" className="ml-auto shrink-0" to={artifactHref(src, slug, SPEC, `def-R${c.id.slice(2).split('.')[0]}`)}>
+            {SPEC}
+          </Address>
         )}
       </div>
 
@@ -361,13 +362,9 @@ function CriterionPacket({
         <details key={`${a.label}-${a.line}`} open className="mt-1.5" data-evidence-block={a.label}>
           <summary className="cursor-pointer font-ui text-[11px] text-muted marker:text-faint">
             {a.label} ·{' '}
-            <Link
-              className="text-accent underline underline-offset-2"
-              to={artifactLink(src, slug, a.artifact, `def-${a.label}`)}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {a.artifact}:{a.line}
-            </Link>
+            <Address to={artifactHref(src, slug, a.artifact, `def-${a.label}`)} onClick={(e) => e.stopPropagation()}>
+              {`${a.artifact}:${a.line}`}
+            </Address>
           </summary>
           <EvidenceBody block={a.block} restated={`${a.label} — ${c.id}`} />
         </details>
@@ -380,9 +377,9 @@ function CriterionPacket({
               <FindingCard key={`${ref.artifact}#${ref.id}`} finding={finding} source={ref.artifact} />
             ) : (
               <li key={`${ref.artifact}#${ref.id}`} className="font-mono text-[11.5px] text-muted">
-                <Link className="underline underline-offset-2" to={artifactLink(src, slug, ref.artifact)}>
-                  {ref.artifact} · {ref.id}
-                </Link>
+                {/* #411 step 3: named by the report's kind and the finding's
+                    id, the file after them as its Address. */}
+                <Address size="md" to={artifactHref(src, slug, ref.artifact)}>{`${ref.artifact} · ${ref.id}`}</Address>
               </li>
             ),
           )}
@@ -418,7 +415,7 @@ function UnattributedFindings({
     <div className="mt-3" data-unattributed-findings>
       <p className="font-ui text-[11px] text-muted">
         Findings citing no criterion
-        <Link className="ml-2 normal-case text-accent underline underline-offset-2" to={artifactLink(src, slug, loose[0]!.path)}>
+        <Link className="ml-2 normal-case text-accent underline underline-offset-2" to={artifactHref(src, slug, loose[0]!.path)}>
           open the reports
         </Link>
       </p>
@@ -438,9 +435,11 @@ function ReportsPacket({ reports, src, slug }: { reports: ReviewReport[]; src: s
       {reports.map((r) => (
         <li key={r.path} className="border border-line bg-surface px-3 py-2.5" data-report={r.path}>
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <Link className="font-mono text-[11.5px] font-semibold text-accent underline underline-offset-2" to={artifactLink(src, slug, r.path)}>
+            {/* #411 step 3: an Address never leads a row. The report is named
+                by its kind and task, and the path follows as provenance. */}
+            <Address size="md" to={artifactHref(src, slug, r.path)}>
               {r.path}
-            </Link>
+            </Address>
             {r.task && <span className="font-mono text-[11px] text-faint">{r.task}</span>}
             <VerdictChip verdicts={r.rounds.map((x) => x.verdict)} />
             <span className="ml-auto font-ui text-[11px] text-faint">
@@ -520,12 +519,13 @@ export function G2Packet({ src, slug, profile }: { src: string; slug: string; pr
           the grammar does not match, say which grammar and stand down — the
           report itself renders as its own markdown one click away. */}
       {rollup.withheld && (
-        <p className="mt-2 border border-warn-line bg-warn-bg px-2.5 py-2 text-[12px] leading-[1.5] text-warn" data-withheld>
-          Criterion view withheld — {rollup.withheld}{' '}
-          <Link className="text-accent underline underline-offset-2" to={artifactLink(src, slug, 'verification-report.md')}>
-            read verification-report.md
-          </Link>
-        </p>
+        <Withheld
+          view="Criterion view withheld"
+          reason={{ sentence: rollup.withheld }}
+          open={{ label: `read ${VERIFICATION}`, href: artifactHref(src, slug, VERIFICATION) }}
+          className="mt-2"
+          data-withheld
+        />
       )}
       {!rollup.withheld && ordered.length > 0 && (
         <ul className="mt-2 flex flex-col gap-2">
@@ -574,7 +574,7 @@ function BoundaryCheck({ src, slug }: { src: string; slug: string }) {
           <span className="font-mono text-[11.5px] text-warn">{line.undeclared.map(fileLabel).join(', ')}</span>.
         </>
       )}{' '}
-      <Link className="text-accent underline underline-offset-2" to={`/runs/${src}/${slug}?tab=record&artifact=${encodeURIComponent(DIFF_SELECTION)}`}>
+      <Link className="text-accent underline underline-offset-2" to={artifactHref(src, slug, DIFF_SELECTION)}>
         read the diff by surface
       </Link>
     </p>

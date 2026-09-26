@@ -19,6 +19,7 @@ import type { InboxItem } from '../src/api.ts'
 import { KeyHints } from '../src/components/chips.tsx'
 import { DecidePanel, decideHints } from '../src/components/decide.tsx'
 import type { KeyHint } from '../src/use-keys.ts'
+import { NO_FACTS } from './inbox-facts.helper.ts'
 
 const item = (over: Partial<InboxItem>): InboxItem => ({
   source: 'local',
@@ -34,6 +35,8 @@ const item = (over: Partial<InboxItem>): InboxItem => ({
   packet: [],
   packetRefs: [],
   problems: [],
+  ...NO_FACTS,
+  question: 'Does the evidence support merging?',
   ...(over as object),
 }) as InboxItem
 

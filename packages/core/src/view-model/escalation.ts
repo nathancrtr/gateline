@@ -67,7 +67,10 @@ export function describeEscalation(reason: string, fromRole: string | null, arti
   const by = ESCALATED_BY.exec(reason)?.[1]?.toLowerCase() ?? null
   const role = by ?? (fromRole && fromRole !== 'orchestrator' ? fromRole : null)
   const task = TASK.exec(reason)?.[1] ?? null
-  const named = SEE.exec(reason)?.[1] ?? null
+  // Only a role's own line points at its report (#433): an engine line that
+  // mentions a file — D23's `(see plan.md's dated ADR)` — is not naming a
+  // report to lift an Escalation section out of.
+  const named = by !== null ? (SEE.exec(reason)?.[1] ?? null) : null
   let artifact: string | null = null
   if (named && artifacts.includes(named)) artifact = named
   else if (role === 'verifier' && artifacts.includes('verification-report.md')) artifact = 'verification-report.md'

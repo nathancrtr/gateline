@@ -11,6 +11,7 @@ import { KindChip } from '../src/components/chips.tsx'
 import { BOUNCED_INSTRUCTION, DecidePanel, INFLIGHT_INSTRUCTION } from '../src/components/decide.tsx'
 import { gateCardState, isBouncedGate, isInflightGate } from '../src/gate-state.ts'
 import { cardInstruction } from '../src/pages/run.tsx'
+import { NO_FACTS } from './inbox-facts.helper.ts'
 
 const item = (over: Partial<InboxItem>): InboxItem =>
   ({
@@ -27,6 +28,8 @@ const item = (over: Partial<InboxItem>): InboxItem =>
     packet: [],
     packetRefs: [],
     problems: [],
+    ...NO_FACTS,
+    question: 'Is this what we actually want built?',
     ...(over as object),
   }) as InboxItem
 

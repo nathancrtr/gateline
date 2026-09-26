@@ -17,9 +17,11 @@ import type { G1Packet as G1PacketData, InboxItem, RunSummary } from '../src/api
 import { AgeBadge, BudgetMeter, PhaseSpine } from '../src/components/chips.tsx'
 import { BOUNCED_INSTRUCTION, DecidePanel, ROUND_CAP_INSTRUCTION } from '../src/components/decide.tsx'
 import { G1Packet } from '../src/components/g1.tsx'
-import { burdenPillNeeded, cardInstruction, contractBadgeName, roundsLabel, visibleProblems } from '../src/pages/run.tsx'
+import { CardFacts } from '../src/pages/run/decide-card.tsx'
+import { burdenPillNeeded, cardInstruction, contractBadgeName, roundsLabel } from '../src/pages/run.tsx'
 import { artifactRank, orderArtifacts } from '../src/record-rail.ts'
 import { paths, ref, refs } from './artifact-refs.helper.ts'
+import { NO_FACTS } from './inbox-facts.helper.ts'
 
 const item = (over: Partial<InboxItem>): InboxItem =>
   ({
@@ -36,6 +38,8 @@ const item = (over: Partial<InboxItem>): InboxItem =>
     packet: [],
     packetRefs: [],
     problems: [],
+    ...NO_FACTS,
+    question: 'Does the evidence support merging?',
     ...(over as object),
   }) as InboxItem
 
@@ -52,23 +56,17 @@ const PARSE_ERROR =
   'state.yaml is not valid YAML: Implicit keys of flow sequence pairs need to be on a single line at line 3, column 9:\n\nphase: [this is\n        ^\n'
 
 describe('1 · the malformed card says the parse error once', () => {
-  it('drops the problem that is the description again, byte for byte', () => {
+  // #433: the card no longer prints core's `detail` beside `problems`, so the
+  // byte-equality filter that kept the two from doubling is gone with it. The
+  // diagnostic renders once, whole, under the label of what produced it.
+  it('renders the parser’s diagnostic once, byte for byte, in a <pre>', () => {
     const malformed = item({ kind: 'malformed', gate: null, title: 'Malformed run state', detail: PARSE_ERROR, problems: [PARSE_ERROR] })
-    expect(visibleProblems(malformed)).toEqual([])
-  })
-
-  it('keeps a bounced gate’s problems, which name sections the description does not', () => {
-    const bounced = item({
-      reviewable: false,
-      detail: 'Packet malformed — bounced, not reviewable',
-      problems: ['spec.md: missing required sections — Requirements, Assumptions'],
-    })
-    expect(visibleProblems(bounced)).toEqual(['spec.md: missing required sections — Requirements, Assumptions'])
-  })
-
-  it('is byte equality, not containment — a problem that merely overlaps still renders', () => {
-    const overlapping = item({ detail: 'Packet malformed', problems: ['Packet malformed — and one more thing'] })
-    expect(visibleProblems(overlapping)).toHaveLength(1)
+    const html = render(createElement(CardFacts, { item: malformed, now: 2 }))
+    const escaped = PARSE_ERROR.replace(/\n$/, '')
+    expect(html.split('phase: [this is').length - 1).toBe(1)
+    expect(html).toContain('<pre')
+    expect(html).toContain(escaped.split('\n')[0])
+    expect(html).toContain('Run state parser')
   })
 })
 

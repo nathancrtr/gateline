@@ -147,15 +147,111 @@ program
     for (const item of inbox) printItem(item)
   })
 
+/**
+ * One inbox entry in the terminal, composed here from the item's facts (#433).
+ * The first line is what the item is; the indented lines are what a terminal
+ * reader needs to act on it without opening Gatehouse — the gate's question,
+ * who escalated about what and in what words, why a run is paused and what it
+ * spent, who staged a run and on what terms. Core used to send one title for
+ * every surface, and this printed only that, so an escalation's reason and a
+ * paused run's way out were unreachable from here.
+ */
 function printItem(item: InboxItem): void {
   const kind = item.kind === 'gate' ? item.gate : item.kind
-  console.log(`${(kind ?? '').padEnd(10)} ${age(item.since).padStart(4)}  ${item.source}/${item.slug}  ${item.title}`)
-  if (!item.reviewable && item.problems.length) {
-    for (const p of item.problems) console.log(`${' '.repeat(17)}✕ BOUNCED: ${p}`)
+  const pad = ' '.repeat(17)
+  // A multi-line value (an engine line with a diagnostic, a hold reason)
+  // keeps its continuation lines under its first, not at the left margin.
+  const more = (label: string, text: string) =>
+    console.log(`${pad}${label.padEnd(9)} ${text.trimEnd().split('\n').join(`\n${pad}${' '.repeat(10)}`)}`)
+  console.log(`${(kind ?? '').padEnd(10)} ${age(item.since).padStart(4)}  ${item.source}/${item.slug}  ${headline(item)}`)
+  switch (item.kind) {
+    case 'gate':
+      for (const b of item.bouncedBy ?? []) {
+        const what = b.contractName ?? 'artifact'
+        console.log(
+          b.absent
+            ? `${pad}✕ BOUNCED: the ${what} is missing (${b.path})`
+            : `${pad}✕ BOUNCED: ${b.path} fails its ${what} contract — missing ${b.unit}: ${b.missing.join(', ')}`,
+        )
+      }
+      // The terminal's half of #159: a gate whose producer is out is listed,
+      // since it is still the gate on the table, but it must not read as
+      // ready to decide.
+      if (item.waitingOn && !item.waitingOn.lost)
+        console.log(`${pad}⋯ SUPERSEDED: ${item.waitingOn.role} is re-producing ${item.waitingOn.artifact.path}; no approval until it lands`)
+      else if (item.waitingOn?.lost)
+        more('waiting', `${item.waitingOn.role} re-dispatched ${age(item.waitingOn.since)} ago, ${item.waitingOn.artifact.path} not landed`)
+      break
+    case 'escalation': {
+      const esc = item.escalation
+      if (!esc) break
+      if (esc.about) more('about', 'task' in esc.about ? `task ${esc.about.task}` : `gate ${esc.about.gate}`)
+      more('reason', esc.reason)
+      if (esc.artifact) more('report', esc.artifact.path)
+      if (item.escalationIndex !== null) more('resolve', `gateline resolve-escalation ${item.slug} ${item.escalationIndex} --note <text>`)
+      break
+    }
+    case 'round-cap':
+      if (item.roundCap) more('rounds', `${item.roundCap.rounds}/${item.roundCap.cap} review rounds without convergence`)
+      break
+    case 'paused': {
+      const paused = item.paused
+      if (!paused) break
+      if (paused.budget) {
+        const spent = paused.budget.spent === null ? '?' : `$${paused.budget.spent.toFixed(2)}`
+        const limit = paused.budget.limit === null ? 'no cost_limit_usd' : `cost_limit_usd $${paused.budget.limit.toFixed(2)}`
+        more('budget', `${spent} spent, ${limit}`)
+      }
+      if (paused.freeText && paused.reason) more('held', paused.reason)
+      if (paused.cause) more('cause', paused.cause)
+      const edit = paused.handEdit
+      if (edit?.kind === 'contract-dispute') more('fix', `${edit.artifact.path} is still malformed after the engine's bounces`)
+      if (edit?.kind === 'profile-violation') more('fix', `the run is outside profile ${edit.profile}: edit profile: or phase: in state.yaml`)
+      if (edit?.kind === 'no-task-files') more('fix', 'the G1 breakdown never landed: commit tasks/*.yaml')
+      if (edit?.kind === 'unknown-status') more('fix', `task ${edit.task} has status "${edit.status}"; known: ${edit.known.join(', ')}`)
+      more('next', pausedNext(item.slug, paused))
+      break
+    }
+    case 'staged': {
+      const staged = item.staged
+      if (!staged) break
+      const ceiling = staged.budgetCeiling === null ? 'no cost_limit_usd' : `cost_limit_usd $${staged.budgetCeiling.toFixed(2)}`
+      more('staged', `${staged.by ? `by ${staged.by}, ` : ''}profile ${staged.profile}, ${ceiling}`)
+      more('next', `gateline arm ${item.slug} — dispatch begins and the budget starts metering`)
+      break
+    }
+    case 'malformed':
+      for (const p of item.problems) for (const line of p.trimEnd().split('\n')) console.log(line ? `${pad}${line}` : '')
+      break
   }
-  // The terminal's half of #159: a gate whose producer is out is listed, since
-  // it is still the gate on the table, but it must not read as ready to decide.
-  if (item.inflight) console.log(`${' '.repeat(17)}⋯ SUPERSEDED: ${item.detail}`)
+}
+
+/** The entry's first line: the kind's own words and its record facts, never a sentence core wrote. */
+function headline(item: InboxItem): string {
+  switch (item.kind) {
+    case 'gate':
+      return item.question ? `${item.gate} — ${item.question}` : (item.gate ?? '')
+    case 'escalation':
+      return item.escalation?.role ? `escalation from ${item.escalation.role}` : 'escalation'
+    case 'round-cap':
+      return item.roundCap ? `round cap reached on ${item.roundCap.task}` : 'round cap reached'
+    case 'paused':
+      return item.paused?.freeText ? 'run paused (held)' : `run paused: ${item.paused?.reason ?? 'no reason recorded'}`
+    case 'staged':
+      return 'run staged, awaiting arm'
+    case 'malformed':
+      return 'malformed run state'
+  }
+}
+
+/** What clears a pause, in the terminal's own words and commands (#96, #348). */
+function pausedNext(slug: string, paused: NonNullable<InboxItem['paused']>): string {
+  const close = `gateline close ${slug} --as <disposition> --reason <text>`
+  if (paused.reason === 'budget-exhausted')
+    return `gateline resume ${slug} --cost-limit <usd> (a higher limit; resuming without one re-pauses), or ${close}`
+  if (paused.reason === 'slug-landed') return `${close.replace('<disposition>', 'already-delivered')}; carry remaining work on a fresh slug`
+  if (paused.handEdit) return `make the edit above, then gateline resume ${slug} (resolving alone re-pauses)`
+  return `gateline resume ${slug}, or ${close}`
 }
 
 // The run lexicon in a terminal (#164): a hover can't exist here, so cited

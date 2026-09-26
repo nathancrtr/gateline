@@ -7,17 +7,15 @@ import {
   bestEffortEscalations,
   buildPortfolio,
   deriveReadiness,
+  escalationFact,
   parseRunState,
-  pausedInstruction,
+  pausedFacts,
   ROUND_CAP,
   type RunRef,
   type RunState,
   summarizeRun,
 } from '../src/index.ts'
 import { dropFixture, type FixtureContext, makeFixture } from './fixture.helper.ts'
-
-/** The sentence a pause with nothing specific to say still gets. */
-const GENERIC_PAUSE = 'Resume the run, or close it with a disposition saying why it ends here'
 
 let ctx: FixtureContext
 let refs: Map<string, RunRef>
@@ -351,15 +349,27 @@ describe('readiness derivation (§2.3, one row per test)', () => {
     const esc = items.find((i) => i.kind === 'escalation')
     expect(esc).toBeDefined()
     expect(esc!.escalationIndex).toBe(0)
-    expect(esc!.detail).toMatch(/unverifiable/)
     expect(esc!.since).toBeGreaterThan(0)
+  })
+
+  // #433: the item states facts; the views compose their own lines.
+  it('escalation facts: the asker, the report, and the reason line verbatim — the line is the substance here', async () => {
+    const esc = (await gateItem('escalated')).find((i) => i.kind === 'escalation')!
+    expect(esc.escalation).toEqual({
+      role: 'verifier',
+      about: null,
+      artifact: expect.objectContaining({ kind: 'verification-report', path: 'verification-report.md' }),
+      reason: 'AC2.1 unverifiable: sample input referenced by the spec does not exist in the repo',
+      pointer: false,
+    })
+    expect(esc).toMatchObject({ question: null, waitingOn: null, bouncedBy: null, paused: null, staged: null, roundCap: null })
   })
 
   it('round-cap: review_rounds ≥ ROUND_CAP on an unfinished task', async () => {
     const items = await gateItem('round-cap')
     const cap = items.find((i) => i.kind === 'round-cap')
     expect(cap).toBeDefined()
-    expect(cap!.title).toContain('01-core')
+    expect(cap!.roundCap).toEqual({ task: '01-core', rounds: 3, cap: ROUND_CAP })
     expect(cap!.packet).toContain('review-03.md')
   })
 
@@ -386,7 +396,8 @@ describe('readiness derivation (§2.3, one row per test)', () => {
     const items = await gateItem('paused-budget')
     expect(items).toHaveLength(1)
     expect(items[0]).toMatchObject({ kind: 'paused' })
-    expect(items[0]!.title).toContain('budget-exhausted')
+    // The fixture records no DB escalation, so there is no engine line to carry.
+    expect(items[0]!.paused).toEqual({ reason: 'budget-exhausted', freeText: false, cause: null, budget: { spent: 10.4, limit: 10 }, handEdit: null })
   })
 
   // #96: the card's instruction is the reason's. A budget pause is a condition
@@ -396,23 +407,19 @@ describe('readiness derivation (§2.3, one row per test)', () => {
     const items = await gateItem('paused-budget')
     expect(items[0]).toMatchObject({ kind: 'paused', pausedReason: 'budget-exhausted' })
     expect(items[0]!.costLimitUsd).toBeTypeOf('number')
-    expect(items[0]!.detail).toContain(`cost_limit_usd $${items[0]!.costLimitUsd}`)
-    expect(items[0]!.detail).toContain('higher limit')
-    expect(items[0]!.detail).toContain('re-pauses')
+    expect(items[0]!.paused!.budget!.limit).toBe(items[0]!.costLimitUsd)
   })
 
   it('paused slug-landed: the card says close and use a fresh slug — nothing to raise (#213)', async () => {
     const items = await gateItem('paused-landed')
     expect(items).toHaveLength(1)
     expect(items[0]).toMatchObject({ kind: 'paused', pausedReason: 'slug-landed' })
-    expect(items[0]!.detail).toContain('runs/paused-landed/')
-    expect(items[0]!.detail).toContain('fresh slug')
-    expect(items[0]!.detail).toContain('already-delivered')
+    expect(items[0]!.paused).toMatchObject({ reason: 'slug-landed', handEdit: null })
   })
 
-  it('paused for a human reason keeps the generic instruction', async () => {
+  it('paused for another reason states the token and no hand edit', async () => {
     const items = await gateItem('paused-other-reason')
-    expect(items[0]!.detail).toBe(GENERIC_PAUSE)
+    expect(items[0]!.paused).toEqual({ reason: 'round-cap', freeText: false, cause: null, budget: { spent: 0, limit: 25 }, handEdit: null })
   })
 
   it('staged: paused_reason=staged yields exactly one staged item, never a paused one (AC6.1, ADR-4)', async () => {
@@ -421,14 +428,17 @@ describe('readiness derivation (§2.3, one row per test)', () => {
     expect(items[0]).toMatchObject({
       kind: 'staged',
       gate: null,
-      title: 'Run staged: awaiting arm',
-      detail: 'Arm to start the run — dispatch begins and the budget starts metering',
       reviewable: true,
       problems: [],
       escalationIndex: null,
     })
     expect(items[0]!.packet).toEqual(['state.yaml', 'intent-brief.md'])
     expect(items[0]!.since).toBeGreaterThan(0)
+    // #433: who staged it, when, the profile, and what arming lets it spend.
+    // No intake block here, so the run's first commit — the staging commit —
+    // names who staged it.
+    expect(items[0]!.staged).toEqual({ by: expect.any(String), at: expect.any(Number), profile: 'patch', budgetCeiling: 25 })
+    expect(items[0]!.staged!.by).not.toBe('')
     expect(items.some((i) => i.kind === 'paused')).toBe(false)
     // A staged run, like a paused one, surfaces no gate item.
     expect(items.some((i) => i.kind === 'gate')).toBe(false)
@@ -438,7 +448,7 @@ describe('readiness derivation (§2.3, one row per test)', () => {
     const items = await gateItem('paused-other-reason')
     expect(items).toHaveLength(1)
     expect(items[0]).toMatchObject({ kind: 'paused' })
-    expect(items[0]!.title).toContain('round-cap')
+    expect(items[0]!.paused!.reason).toBe('round-cap')
     expect(items.some((i) => i.kind === 'staged')).toBe(false)
   })
 
@@ -473,14 +483,6 @@ describe('readiness derivation (§2.3, one row per test)', () => {
     expect(inbox.some((i) => i.slug === 'closed-delivered')).toBe(false)
   })
 
-  it('the paused card offers closing rather than telling the human to decline a gate (#200)', async () => {
-    for (const slug of ['paused-budget', 'paused-landed', 'paused-other-reason']) {
-      const items = await gateItem(slug)
-      expect(items[0]!.detail.toLowerCase()).toContain('close')
-      expect(items[0]!.detail.toLowerCase()).not.toContain('decline')
-    }
-  })
-
   it('a run paused FOR an escalation shows the escalation, not a second card restating it', async () => {
     const items = await gateItem('escalated')
     expect(items.filter((i) => i.kind === 'escalation')).toHaveLength(1)
@@ -493,6 +495,18 @@ describe('readiness derivation (§2.3, one row per test)', () => {
     expect(items[0]).toMatchObject({ kind: 'gate', gate: 'G0', reviewable: false })
     expect(items[0]!.problems.join(' ')).toMatch(/Requirements/)
     expect(items[0]!.problems.join(' ')).toMatch(/Assumptions/)
+    // #433: the bounce as facts — the contract by name, the file as its address.
+    expect(items[0]!.bouncedBy).toEqual([
+      {
+        artifact: expect.objectContaining({ kind: 'spec', path: 'spec.md' }),
+        path: 'spec.md',
+        contractName: 'spec',
+        missing: expect.arrayContaining(['Requirements', 'Assumptions']),
+        unit: 'sections',
+        absent: false,
+      },
+    ])
+    expect(items[0]).toMatchObject({ question: 'Is this what we actually want built?', waitingOn: null, superseded: false })
   })
 
   it('in flight: an open producer entry newer than the packet makes the gate non-reviewable (#159)', async () => {
@@ -503,8 +517,10 @@ describe('readiness derivation (§2.3, one row per test)', () => {
     // Empty problems is what tells this apart from the R3 bounce view: nothing
     // is malformed here, the artifact is simply being replaced.
     expect(items[0]!.problems).toEqual([])
-    expect(items[0]!.detail).toContain('analyst')
-    expect(items[0]!.detail).toContain('superseded')
+    expect(items[0]!.superseded).toBe(true)
+    expect(items[0]!.waitingOn).toMatchObject({ role: 'analyst', since: items[0]!.inflight!.since, lost: false })
+    expect(items[0]!.waitingOn!.artifact).toMatchObject({ kind: 'spec', path: 'spec.md' })
+    expect(items[0]!.bouncedBy).toBeNull()
     expect(items[0]!.inflight!.since).toBeGreaterThan(items[0]!.since!)
   })
 
@@ -514,15 +530,14 @@ describe('readiness derivation (§2.3, one row per test)', () => {
     const items = await gateItem('g0-lost-dispatch')
     expect(items).toHaveLength(1)
     expect(items[0]).toMatchObject({ kind: 'gate', gate: 'G0', reviewable: true, inflight: null })
-    expect(items[0]!.detail).toContain('analyst was re-dispatched')
-    expect(items[0]!.detail).toContain('ages out a lost dispatch')
+    expect(items[0]).toMatchObject({ superseded: false, waitingOn: { role: 'analyst', lost: true } })
   })
 
   it('a closed producer entry is not in flight — the artifact landed and the gate is ordinary (#159)', async () => {
     const items = await gateItem('g0-producer-landed')
     expect(items).toHaveLength(1)
     expect(items[0]).toMatchObject({ kind: 'gate', gate: 'G0', reviewable: true, inflight: null })
-    expect(items[0]!.detail).toBe('g0-producer-landed is waiting on G0')
+    expect(items[0]).toMatchObject({ question: 'Is this what we actually want built?', waitingOn: null, superseded: false, bouncedBy: null })
   })
 
   it('an open entry for another role leaves G0 alone — only the gate’s own producer supersedes it (#159)', async () => {
@@ -543,6 +558,28 @@ describe('readiness derivation (§2.3, one row per test)', () => {
     const items = await gateItem('bad-state')
     expect(items).toHaveLength(1)
     expect(items[0]).toMatchObject({ kind: 'malformed', reviewable: false })
+    // The parser's diagnostic is the one problem; the item carries no other facts.
+    expect(items[0]!.problems).toHaveLength(1)
+    expect(items[0]).toMatchObject({ question: null, escalation: null, paused: null, staged: null, bouncedBy: null })
+  })
+
+  it('facts for a gate: the profile table’s question, patch G1 included (#433)', async () => {
+    for (const [slug, question] of [
+      ['g1-pending', 'Is this how we’d want it built, cut into safe parallel pieces?'],
+      ['g2-pending', 'Does the evidence support merging?'],
+      ['g3-pending', 'Ship it?'],
+      ['patch-g1-pending', 'Is this the change we want, scoped this way?'],
+    ] as const) {
+      const items = await gateItem(slug)
+      expect(items[0], slug).toMatchObject({ kind: 'gate', question, escalation: null, paused: null, staged: null, roundCap: null })
+    }
+  })
+
+  it('G3 bounce as facts: the release plan, by its contract’s name (#433)', async () => {
+    const items = await gateItem('malformed-release')
+    expect(items[0]!.bouncedBy).toHaveLength(1)
+    expect(items[0]!.bouncedBy![0]).toMatchObject({ path: 'release-plan.md', contractName: 'release plan', unit: 'sections', absent: false })
+    expect(items[0]!.bouncedBy![0]!.missing).toContain('Rollback plan')
   })
 
   it('done run needs nothing', async () => {
@@ -597,10 +634,9 @@ describe('best-effort escalations independent of full state-schema validity (#49
     expect(items[1]).toMatchObject({
       kind: 'escalation',
       escalationIndex: 0,
-      title: 'Escalation from reviewer',
-      detail: 'contract dispute — needs a human',
       reviewable: true,
     })
+    expect(items[1]!.escalation).toEqual({ role: 'reviewer', about: null, artifact: null, reason: 'contract dispute — needs a human', pointer: false })
 
     const { summary } = await summarizeRun(ctx.source, ref)
     expect(summary.malformed).not.toBeNull()
@@ -629,7 +665,7 @@ describe('best-effort escalations independent of full state-schema validity (#49
  * composed in `orchestrator/src/derive.ts` (rules D8, D21, D4) and quoted here
  * verbatim: this is the test that catches a reword on either side.
  */
-describe('pausedInstruction reads the resolved escalation (#348)', () => {
+describe('pausedFacts reads the resolved escalation (#348, #433)', () => {
   const pausedOn = (...escalations: { reason: string; resolvedAt: string }[]): RunState => {
     const { state, error } = parseRunState(
       `run: toy
@@ -668,53 +704,53 @@ ${escalations
 
   const at = (hour: string) => `2026-09-01T${hour}:00:00Z`
 
-  it('D8 contract dispute: name the artifact, and say a resolution alone re-pauses', () => {
-    const detail = pausedInstruction(pausedOn({ reason: 'plan.md bounced 2× and is still malformed — contract dispute, a human should look', resolvedAt: at('11') }))
-    expect(detail).toContain('plan.md')
-    expect(detail).toContain('by hand')
-    expect(detail).toContain('contract')
-    expect(detail).toContain('re-pauses')
+  const edit = (...escalations: { reason: string; resolvedAt: string }[]) => pausedFacts(pausedOn(...escalations)).handEdit
+
+  it('D8 contract dispute: names the artifact, as a reference', () => {
+    const fact = edit({ reason: 'plan.md bounced 2× and is still malformed — contract dispute, a human should look', resolvedAt: at('11') })
+    expect(fact).toEqual({ kind: 'contract-dispute', artifact: expect.objectContaining({ kind: 'plan', path: 'plan.md', contractName: 'plan' }) })
   })
 
-  it('D21 profile violation: say edit profile: heavier, and that profiles never downgrade', () => {
-    const detail = pausedInstruction(pausedOn({ reason: 'phase "release" does not exist in profile standard', resolvedAt: at('11') }))
-    expect(detail).toContain('profile:')
-    expect(detail).toContain('never downgrade')
-    expect(detail).toContain('re-pauses')
-    // The gate half of D21 is the same edit and gets the same sentence.
+  it('D21 profile violation: the phase half and the gate half are the same edit', () => {
+    const fact = edit({ reason: 'phase "release" does not exist in profile standard', resolvedAt: at('11') })
+    expect(fact).toEqual({ kind: 'profile-violation', profile: 'full' })
     expect(
-      pausedInstruction(pausedOn({ reason: 'gate G3 is decided but does not exist in profile patch — profiles upgrade mid-run, never downgrade', resolvedAt: at('11') })),
-    ).toBe(detail)
+      edit({ reason: 'gate G3 is decided but does not exist in profile patch — profiles upgrade mid-run, never downgrade', resolvedAt: at('11') }),
+    ).toEqual(fact)
   })
 
-  it('D4 no task files: say which files have to land, and where', () => {
-    const detail = pausedInstruction(pausedOn({ reason: 'phase is implement but the run has no task files — the G1 packet did not carry into state', resolvedAt: at('11') }))
-    expect(detail).toContain('tasks/*.yaml')
-    expect(detail).toContain('runs/toy/')
-    expect(detail).toContain('re-pauses')
+  it('D4 no task files: the breakdown never landed', () => {
+    expect(edit({ reason: 'phase is implement but the run has no task files — the G1 packet did not carry into state', resolvedAt: at('11') })).toEqual({
+      kind: 'no-task-files',
+    })
   })
 
-  it('D4 unknown status: quote the status and list the ones the table knows', () => {
-    const detail = pausedInstruction(pausedOn({ reason: 'task 01-core has status "wedged" the derivation table has no rule for', resolvedAt: at('11') }))
-    expect(detail).toContain('01-core')
-    expect(detail).toContain('"wedged"')
-    expect(detail).toContain('in-review')
+  it('D4 unknown status: the task, the status as written, and the statuses the table knows', () => {
+    const fact = edit({ reason: 'task 01-core has status "wedged" the derivation table has no rule for', resolvedAt: at('11') })
+    expect(fact).toMatchObject({ kind: 'unknown-status', task: '01-core', status: 'wedged' })
+    expect(fact && 'known' in fact ? fact.known : []).toContain('in-review')
   })
 
-  it('any other escalation keeps the generic sentence — the match is deliberately narrow', () => {
-    expect(pausedInstruction(pausedOn({ reason: 'reviewer escalated task 01-core — see runs/toy/review-01.md', resolvedAt: at('11') }))).toBe(GENERIC_PAUSE)
-    expect(pausedInstruction(pausedOn())).toBe(GENERIC_PAUSE) // paused for an escalation nobody recorded
+  it('any other escalation names no edit — the match is deliberately narrow', () => {
+    expect(edit({ reason: 'reviewer escalated task 01-core — see runs/toy/review-01.md', resolvedAt: at('11') })).toBeNull()
+    expect(edit()).toBeNull() // paused for an escalation nobody recorded
+  })
+
+  it('carries the resolved line it read as the pause’s cause, verbatim', () => {
+    const reason = 'phase "release" does not exist in profile standard'
+    expect(pausedFacts(pausedOn({ reason, resolvedAt: at('11') })).cause).toBe(reason)
   })
 
   it('the most recently resolved escalation governs, not the first one recorded', () => {
-    const detail = pausedInstruction(
-      pausedOn(
-        { reason: 'spec.md bounced 2× and is still malformed — contract dispute, a human should look', resolvedAt: at('11') },
-        { reason: 'phase "release" does not exist in profile standard', resolvedAt: at('14') },
-      ),
+    const fact = edit(
+      { reason: 'spec.md bounced 2× and is still malformed — contract dispute, a human should look', resolvedAt: at('11') },
+      { reason: 'phase "release" does not exist in profile standard', resolvedAt: at('14') },
     )
-    expect(detail).toContain('profile:')
-    expect(detail).not.toContain('spec.md')
+    expect(fact).toMatchObject({ kind: 'profile-violation' })
+  })
+
+  it('states the reason token and the budget as recorded', () => {
+    expect(pausedFacts(pausedOn())).toEqual({ reason: 'escalation', freeText: false, cause: null, budget: { spent: 0, limit: 25 }, handEdit: null })
   })
 })
 
@@ -727,5 +763,90 @@ describe('inbox ordering', () => {
     const done = runs.find((r) => r.slug === 'done-merged')!
     expect(done.needsHuman).toBe(0)
     expect(done.gates.G3.approved).toBe(true)
+  })
+})
+
+/**
+ * #433 review: an escalation's facts over the engine's real reason lines,
+ * quoted from `orchestrator/src/derive.ts` and the run history. `pointer` is
+ * true only for a role's bare pointer at its report; `about` finds the task in
+ * every shape the engine names one.
+ */
+describe('escalationFact over the engine’s real lines (#433)', () => {
+  const artifacts = ['spec.md', 'plan.md', 'review-04.md', 'verification-report.md', 'tasks/01-core.yaml']
+
+  it('D17, a reviewer pointing at its report, is a pointer about the task', () => {
+    expect(escalationFact('reviewer escalated task 04-label — see review-04.md', 'orchestrator', artifacts)).toMatchObject({
+      role: 'reviewer',
+      about: { task: '04-label' },
+      artifact: expect.objectContaining({ path: 'review-04.md' }),
+      pointer: true,
+    })
+  })
+
+  it('D23 mentions plan.md but carries an instruction: substance, and not a report to read a section from', () => {
+    const reason = "task 01-core: architect amendment landed for the re-plan disposition — acknowledge to proceed (see plan.md's dated ADR)"
+    expect(escalationFact(reason, 'orchestrator', artifacts)).toEqual({
+      role: 'orchestrator',
+      about: { task: '01-core' },
+      artifact: null,
+      reason,
+      pointer: false,
+    })
+  })
+
+  it('D24, the verifier’s line, states a claim the section need not repeat: substance, with its report', () => {
+    const reason = 'verifier escalated — a failure traces to the spec, plan, or gate process, not the implementation; see verification-report.md'
+    expect(escalationFact(reason, 'orchestrator', artifacts)).toMatchObject({
+      role: 'verifier',
+      about: null,
+      artifact: expect.objectContaining({ path: 'verification-report.md' }),
+      pointer: false,
+    })
+  })
+
+  it('D20, a dispatch that failed twice, is about its task', () => {
+    const reason = 'implementer (01-core) failed twice: exit 1: npm test failed in packages/web'
+    expect(escalationFact(reason, 'orchestrator', artifacts)).toMatchObject({ about: { task: '01-core' }, pointer: false, artifact: null })
+  })
+
+  it('DL, the landing cap, is about its task', () => {
+    const reason = 'architect on 01-core returned 3× without landing plan.md — a human should look'
+    expect(escalationFact(reason, 'orchestrator', artifacts)).toMatchObject({ about: { task: '01-core' }, pointer: false })
+  })
+
+  it('D4 round cap and D21’s gate half', () => {
+    expect(escalationFact('task 01-core: 3 review rounds without convergence — usually a spec ambiguity', 'orchestrator', artifacts).about).toEqual({ task: '01-core' })
+    expect(
+      escalationFact('gate G3 is decided but does not exist in profile patch — profiles upgrade mid-run, never downgrade', 'orchestrator', artifacts).about,
+    ).toEqual({ gate: 'G3' })
+  })
+})
+
+describe('pausedFacts: the cause and the free-text hold (#433)', () => {
+  const paused = (reason: string, escalations = '[]') =>
+    parseRunState(`run: toy
+branch: run/toy
+phase: paused
+profile: full
+paused_reason: ${JSON.stringify(reason)}
+budget: {cost_limit_usd: 40, cost_spent_usd: 36.09, ledger: []}
+gates:
+  G0: {approved: false, by: null, at: null, notes: null}
+  G1: {approved: false, by: null, at: null, notes: null}
+  G2: {approved: false, by: null, at: null, notes: null}
+  G3: {approved: false, by: null, at: null, notes: null}
+tasks: []
+escalations: ${escalations}
+`).state!
+
+  it('a budget pause carries rule DB’s line, which says the spend is projected', () => {
+    const db = 'projected spend $44.09 (ledger $36.09 + estimates) exceeds cost_limit_usd $40 — pausing rather than degrading'
+    const state = paused('budget-exhausted', `\n  - {at: "2026-09-01T09:00:00Z", from_role: orchestrator, reason: ${JSON.stringify(db)}, resolved: false}`)
+    expect(pausedFacts(state)).toMatchObject({ reason: 'budget-exhausted', freeText: false, cause: db, budget: { spent: 36.09, limit: 40 } })
+  })
+
+  it('a human’s hold reason is free text, not a token', () => {
+    expect(pausedFacts(paused('waiting on the security review before G2'))).toMatchObject({ freeText: true, cause: null })
   })
 })

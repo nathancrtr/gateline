@@ -19,7 +19,9 @@
 //                level further (#348) and reads the last resolved
 //                escalation's own words, because that reason covers both
 //                conditions that clear themselves and ones whose only exit is
-//                a hand edit of an artifact, a `profile:` or a `phase:`
+//                a hand edit of an artifact, a `profile:` or a `phase:`. The
+//                instruction itself is the cockpit's, composed in web from
+//                `InboxItem.paused` (#433); core states which edit is owed.
 //   Staged       phase=paused ∧ paused_reason = staged — awaiting arm, not resume/kill
 //   Declined     phase=paused ∧ paused_reason = gate-declined — no item at all
 //   Closed       phase=closed — no item at all, whatever else the record holds
@@ -84,6 +86,7 @@
 
 import { describeArtifact } from '../record/artifact.ts'
 import { isOpenDispatch, parseLedger, ROLE_TIMEOUT_MS } from '../record/ledger.ts'
+import { readIntake } from '../record/scaffold.ts'
 import {
   BUDGET_REASON,
   bestEffortEscalations,
@@ -95,7 +98,8 @@ import {
   type GateId,
   g2PacketReady,
   gateProducer,
-  LANDED_REASON,
+  PAUSED_REASONS,
+  type Profile,
   pendingGate,
   ROUND_CAP,
   type RunState,
@@ -122,13 +126,147 @@ export const PATCH_G1_QUESTION = 'Is this the change we want, scoped this way?'
 
 export type InboxKind = 'gate' | 'escalation' | 'round-cap' | 'paused' | 'staged' | 'malformed'
 
+/**
+ * What the producing role is doing while a gate waits (#159, #433): it holds
+ * an open ledger entry opened after the packet landed. `lost` is the entry
+ * aged past `ROLE_TIMEOUT_MS` — the engine would already have swept it, so
+ * the wait is said, not obeyed, and the gate stays reviewable.
+ */
+export interface WaitingOn {
+  role: string
+  /** Epoch seconds: the dispatch's own `at`. */
+  since: number
+  /** The artifact the role is re-producing. */
+  artifact: ArtifactRef
+  lost: boolean
+}
+
+/**
+ * One artifact that fails the gate's packet contract (R3, #433). The facts a
+ * bounce view composes its line from; the view writes the sentence.
+ */
+export interface BounceFact {
+  artifact: ArtifactRef
+  /** Run-relative path: the Address. */
+  path: string
+  /** The contract's own name for the kind (`spec`, `work item`), or null. */
+  contractName: string | null
+  /** Required sections (markdown) or keys (YAML) absent, as the contract spells them. */
+  missing: string[]
+  /** What `missing` names: a markdown contract's sections, a YAML contract's keys. */
+  unit: 'sections' | 'keys'
+  /** The artifact is not in the run directory at all; `missing` is then empty. */
+  absent: boolean
+}
+
+/**
+ * An open escalation, as facts (#433). `reason` is the entry's own line,
+ * verbatim — the engine's words, or the role's. What core used to add around
+ * it (a composed title, the line reused as a row's detail) is gone; a view
+ * composes its own line from `role` and `about`.
+ */
+export interface EscalationFact {
+  /** Who escalated, per the reason line; else the entry's `from_role`; else null. */
+  role: string | null
+  /** What the escalation is about, when the reason line names it. */
+  about: { task: string } | { gate: GateId } | null
+  /** The report the reason line points at, when the record has it. */
+  artifact: ArtifactRef | null
+  /** The entry's `reason`, byte for byte. */
+  reason: string
+  /**
+   * The line is a role's pointer and nothing more — `<role> escalated [task
+   * <id>] — see <report>` (rule D17's template) — so the report is the
+   * substance and the line is not (docs/SEAM.md §3). False for every other
+   * line, including ones that merely mention a file: D23's `… acknowledge to
+   * proceed (see plan.md's dated ADR)` carries an instruction, and D24's
+   * `verifier escalated — a failure traces to the spec, plan, or gate
+   * process, not the implementation; see verification-report.md` carries a
+   * claim the report's own section need not restate — both are substance.
+   */
+  pointer: boolean
+}
+
+/**
+ * The hand edit a pause for `escalation` is waiting on (#348), read from the
+ * last resolved escalation's own words. Null when the words name none.
+ */
+export type HandEdit =
+  | { kind: 'contract-dispute'; artifact: ArtifactRef }
+  | { kind: 'profile-violation'; profile: Profile }
+  | { kind: 'no-task-files' }
+  | { kind: 'unknown-status'; task: string; status: string; known: string[] }
+
+/** A paused run, as facts (#433). The instruction is the view's. */
+export interface PausedFact {
+  /** The recorded `paused_reason`, verbatim, or null when none is recorded. */
+  reason: string | null
+  /**
+   * `reason` is not one of the engine's tokens (`PAUSED_REASONS`): a human's
+   * free-text hold reason (approve-and-hold), to be quoted as a passage
+   * rather than as a token.
+   */
+  freeText: boolean
+  /**
+   * The engine's own line for the pause, verbatim, when the record has it:
+   * for `budget-exhausted`, the newest escalation rule DB wrote (it pauses on
+   * *projected* spend, which the counts alone would misstate); for
+   * `escalation`, the last resolved escalation's line. Null otherwise.
+   */
+  cause: string | null
+  /** `budget.cost_spent_usd` and `budget.cost_limit_usd`, as recorded; null when the run has no budget. */
+  budget: { spent: number | null; limit: number | null } | null
+  /** For reason `escalation`: the hand edit owed, or null. */
+  handEdit: HandEdit | null
+}
+
+/** A staged, unarmed run, as facts (#433). */
+export interface StagedFact {
+  /** `intake.staged_by`, else the author of the run's first commit (the staging commit), else null. */
+  by: string | null
+  /** Epoch seconds of the run's first commit (the staging commit), or null. */
+  at: number | null
+  profile: Profile
+  /** `budget.cost_limit_usd`: what arming lets the run spend. Null = no ceiling. */
+  budgetCeiling: number | null
+}
+
+/** A round-cap breach, as facts (#433). */
+export interface RoundCapFact {
+  task: string
+  rounds: number
+  cap: number
+}
+
 export interface InboxItem {
   kind: InboxKind
   gate: GateId | null
   source: string
   slug: string
+  /**
+   * Kept for one release (#411 step 8): sentences core composed for the inbox
+   * row, which every surface then reused. Nothing in web or the CLI reads
+   * them; views compose their own lines from the facts below.
+   */
   title: string
+  /** Kept for one release (#411 step 8) — see `title`. */
   detail: string
+  /** kind=gate: the gate's question, from the profile's gate table. Null on every other kind. */
+  question: string | null
+  /** kind=gate: the producing role holding an open dispatch newer than the packet, or null. */
+  waitingOn: WaitingOn | null
+  /** kind=gate: true when `waitingOn` is in flight — the packet on the card is about to be replaced (#159). */
+  superseded: boolean
+  /** kind=gate: the packet's artifacts that fail their contract (R3), or null when none does. */
+  bouncedBy: BounceFact[] | null
+  /** kind=escalation: the entry as facts. */
+  escalation: EscalationFact | null
+  /** kind=paused: the pause as facts. */
+  paused: PausedFact | null
+  /** kind=staged: the staging as facts. */
+  staged: StagedFact | null
+  /** kind=round-cap: the breach as facts. */
+  roundCap: RoundCapFact | null
   /** Epoch seconds when this began waiting (commit time of the trigger), or null. */
   since: number | null
   /**
@@ -294,53 +432,103 @@ async function grantedAnotherRound(
 }
 
 /**
- * What actually clears the pause (#96). The old card said "resume or decline"
- * for every reason, and for the two reasons the orchestrator itself writes
- * that advice was a closed loop: a budget pause is recomputed from the
- * ledger and the limit, a landed-slug pause from the default branch, and a
- * resume that changes neither re-pauses seconds later — each cycle costing
- * two decisions and one more escalation entry.
+ * A paused run as facts (#96, #348, #433). The instruction that says what
+ * clears the pause is the cockpit's, composed in web per reason; core states
+ * the reason, the budget, and — for `escalation` — which hand edit is owed.
  *
- * `escalation` is the third such reason and the hardest of the three (#348),
- * because it does not name a condition at all — only that a human is owed.
- * Some of what it stands for clears itself; some of it (a contract dispute, a
- * profile violation, a breakdown that never landed) has no exit but a hand
- * edit, and there the same closed loop applies: resolving is an
- * acknowledgment, the engine re-derives from files nobody changed, and the run
- * re-pauses within a tick. So the card goes one level deeper and reads the
- * resolved escalation's own words.
+ * `escalation` is the hardest reason (#348), because it does not name a
+ * condition at all — only that a human is owed. Some of what it stands for
+ * clears itself; some of it (a contract dispute, a profile violation, a
+ * breakdown that never landed) has no exit but a hand edit, and there a
+ * resume is a closed loop: resolving is an acknowledgment, the engine
+ * re-derives from files nobody changed, and the run re-pauses within a tick.
+ * So core reads the resolved escalation's own words and names the edit.
  */
-export function pausedInstruction(state: RunState): string {
-  const limit = state.budget?.cost_limit_usd ?? null
-  const generic = 'Resume the run, or close it with a disposition saying why it ends here'
-  switch (state.paused_reason) {
-    case BUDGET_REASON:
-      return limit !== null
-        ? `Spend reached cost_limit_usd $${limit}. Resume with a higher limit, or close the run with a disposition — resuming without raising the limit re-pauses on the next tick`
-        : 'This orchestrator requires a per-run cost_limit_usd and the run has none. Resume with a limit, or close the run with a disposition'
-    case LANDED_REASON:
-      return `runs/${state.run}/ already shipped on the default branch and this branch moved on after the merge. Close the run with a disposition (already-delivered) and carry any remaining work on a fresh slug — resuming re-pauses on the next tick`
-    case ESCALATION_REASON: {
-      // Resolving one of these acknowledges the condition; it does not change
-      // it. The engine re-derives from the same files and re-pauses unless the
-      // edit the reason names has landed too, so the card names the edit.
-      const reason = lastResolved(state)
-      if (reason === null) return generic
-      const dispute = HAND_EDIT_ESCALATIONS.contractDispute.exec(reason)
-      if (dispute)
-        return `${dispute[1]} is still malformed after two bounces. Fix it by hand — or fix the contract it fails — then resume: the engine re-validates, and resolving alone re-pauses`
-      if (HAND_EDIT_ESCALATIONS.profileViolation.test(reason))
-        return 'The run is outside its own profile. Edit profile: to one that includes it, or correct phase: by hand, then resume — profiles upgrade mid-run, never downgrade, and resolving alone re-pauses'
-      if (HAND_EDIT_ESCALATIONS.noTaskFiles.test(reason))
-        return `The G1 breakdown never reached this branch. Commit the tasks/*.yaml files under runs/${state.run}/ by hand, then resume — resolving alone re-pauses`
-      const status = HAND_EDIT_ESCALATIONS.unknownStatus.exec(reason)
-      if (status)
-        return `Task ${status[1]} carries a status the derivation has no rule for ("${status[2]}"). Edit it by hand to one the table knows (${TASK_STATUSES.join(', ')}), then resume — resolving alone re-pauses`
-      return generic
-    }
-    default:
-      return generic
+export function pausedFacts(state: RunState): PausedFact {
+  const budget = state.budget ? { spent: state.budget.cost_spent_usd, limit: state.budget.cost_limit_usd } : null
+  const reason = state.paused_reason
+  const cause =
+    reason === BUDGET_REASON
+      ? ([...state.escalations].reverse().find((e) => BUDGET_ESCALATION.test(e.reason))?.reason ?? null)
+      : reason === ESCALATION_REASON
+        ? lastResolved(state)
+        : null
+  return {
+    reason,
+    freeText: reason !== null && !(PAUSED_REASONS as readonly string[]).includes(reason),
+    cause,
+    budget,
+    handEdit: reason === ESCALATION_REASON ? handEditOf(state) : null,
   }
+}
+
+/**
+ * Rule DB's line (`projected spend $… (ledger $… + estimates) exceeds
+ * cost_limit_usd $… — pausing rather than degrading`), matched on its most
+ * stable fragment — the same deliberate duplication, with the same caveat, as
+ * HAND_EDIT_ESCALATIONS above.
+ */
+const BUDGET_ESCALATION = /\bexceeds cost_limit_usd\b/
+
+/** The hand edit the last resolved escalation names, or null (#348). */
+function handEditOf(state: RunState): HandEdit | null {
+  const reason = lastResolved(state)
+  if (reason === null) return null
+  const dispute = HAND_EDIT_ESCALATIONS.contractDispute.exec(reason)
+  if (dispute) return { kind: 'contract-dispute', artifact: artifactRef(dispute[1]!) }
+  if (HAND_EDIT_ESCALATIONS.profileViolation.test(reason)) return { kind: 'profile-violation', profile: state.profile }
+  if (HAND_EDIT_ESCALATIONS.noTaskFiles.test(reason)) return { kind: 'no-task-files' }
+  const status = HAND_EDIT_ESCALATIONS.unknownStatus.exec(reason)
+  if (status) return { kind: 'unknown-status', task: status[1]!, status: status[2]!, known: [...TASK_STATUSES] }
+  return null
+}
+
+/** The item's facts, all absent — each builder below sets its own kind's. */
+const NO_FACTS = {
+  question: null,
+  waitingOn: null,
+  superseded: false,
+  bouncedBy: null,
+  escalation: null,
+  paused: null,
+  staged: null,
+  roundCap: null,
+} as const satisfies Partial<InboxItem>
+
+/** `task <id>:` (the engine's round-cap and routing lines), `gate G<n> …` (D21). */
+/**
+ * The engine's stable shapes for naming a task (`orchestrator/src/derive.ts`,
+ * the keys its own resolution checks match on — as stable as the engine can
+ * make them):
+ *   `task <id>:`                 D4 round cap, D23, the routing lines
+ *   `<role> (<id>) failed …`     D20, a dispatch that failed twice
+ *   `<role> on <id> returned …`  DL, the landing cap
+ * and `gate G<n> …` for D21's gate half.
+ */
+const ABOUT_TASK = [/^task (\S+?):?\s/, /^\S+ \((\S+)\) failed\b/, /^\S+ on (\S+) returned\b/]
+const ABOUT_GATE = /^gate (G[0-3])\b/
+/** D17's template, and nothing else: a role pointing at its report. */
+const ROLE_POINTER = /^\S+ escalated(?: task \S+)? — see (\S+\.md)$/
+
+/** An open escalation's facts, from its entry and the run's artifacts (#433). Pure. */
+export function escalationFact(reason: string, fromRole: string | null, artifacts: readonly string[]): EscalationFact {
+  const origin = describeEscalation(reason, fromRole, artifacts)
+  const pointed = ROLE_POINTER.exec(reason)?.[1] ?? null
+  return {
+    role: origin.role ?? fromRole ?? null,
+    about: aboutOf(reason, origin.task),
+    artifact: origin.artifact ? artifactRef(origin.artifact) : null,
+    reason,
+    pointer: pointed !== null && pointed === origin.artifact,
+  }
+}
+
+/** What an escalation is about, when its reason line names it. */
+function aboutOf(reason: string, task: string | null): EscalationFact['about'] {
+  const named = task ?? ABOUT_TASK.map((re) => re.exec(reason)?.[1]).find((t) => t !== undefined) ?? null
+  if (named !== null) return { task: named }
+  const gate = ABOUT_GATE.exec(reason)?.[1] as GateId | undefined
+  return gate ? { gate } : null
 }
 
 /**
@@ -362,13 +550,16 @@ function escalationItems(ref: RunRef, escalations: Escalation[], artifacts: read
     // writer. The packet is the report the reason names, when the record
     // has it — `state.yaml` is the resolution's write target, not reading.
     const origin = describeEscalation(esc.reason, esc.from_role, artifacts)
+    const fact = escalationFact(esc.reason, esc.from_role, artifacts)
     items.push({
       kind: 'escalation',
       gate: null,
       source: ref.source,
       slug: ref.slug,
-      title: `Escalation from ${origin.role ?? esc.from_role ?? 'unknown role'}`,
+      title: `Escalation from ${fact.role ?? 'unknown role'}`,
       detail: esc.reason,
+      ...NO_FACTS,
+      escalation: fact,
       since,
       reviewable: true,
       problems: [],
@@ -399,6 +590,7 @@ async function deriveItems(source: RunSource, ref: RunRef): Promise<{ items: Der
       slug: ref.slug,
       title: 'Malformed run state',
       detail: error ?? 'state.yaml unreadable',
+      ...NO_FACTS,
       since: touched?.time ?? null,
       reviewable: false,
       problems: [error ?? 'state.yaml unreadable'],
@@ -449,6 +641,8 @@ async function deriveItems(source: RunSource, ref: RunRef): Promise<{ items: Der
         slug: ref.slug,
         title: `Round cap reached: ${task.id}`,
         detail: `${task.review_rounds} review rounds without convergence — usually a spec ambiguity, not an implementation defect`,
+        ...NO_FACTS,
+        roundCap: { task: task.id, rounds: task.review_rounds, cap: ROUND_CAP },
         since: touched?.time ?? null,
         reviewable: true,
         problems: [],
@@ -466,6 +660,11 @@ async function deriveItems(source: RunSource, ref: RunRef): Promise<{ items: Der
   if (state.phase === 'paused') {
     const touched = await source.lastTouched(ref, ['state.yaml'])
     if (state.paused_reason === STAGED_REASON) {
+      // The staging commit is the run's first: `gateline new` mints the
+      // branch with it, authored by the human who staged (commit authorship
+      // is authoritative, scaffold.ts). `runHistory` is newest first; a
+      // driver with no history to walk leaves both facts unknown.
+      const genesis = source.runHistory ? ((await source.runHistory(ref)).at(-1) ?? null) : null
       items.push({
         kind: 'staged',
         gate: null,
@@ -473,6 +672,13 @@ async function deriveItems(source: RunSource, ref: RunRef): Promise<{ items: Der
         slug: ref.slug,
         title: 'Run staged: awaiting arm',
         detail: 'Arm to start the run — dispatch begins and the budget starts metering',
+        ...NO_FACTS,
+        staged: {
+          by: readIntake(state)?.staged_by ?? genesis?.author ?? null,
+          at: genesis?.time ?? null,
+          profile: state.profile,
+          budgetCeiling: state.budget?.cost_limit_usd ?? null,
+        },
         since: touched?.time ?? null,
         reviewable: true,
         problems: [],
@@ -495,7 +701,10 @@ async function deriveItems(source: RunSource, ref: RunRef): Promise<{ items: Der
       source: ref.source,
       slug: ref.slug,
       title: `Run paused: ${state.paused_reason ?? 'no reason recorded'}`,
-      detail: pausedInstruction(state),
+      // The instruction moved to web (#433); the kept field states the token.
+      detail: `paused_reason: ${state.paused_reason ?? 'null'}`,
+      ...NO_FACTS,
+      paused: pausedFacts(state),
       since: touched?.time ?? null,
       reviewable: true,
       problems: [],
@@ -513,6 +722,13 @@ async function deriveItems(source: RunSource, ref: RunRef): Promise<{ items: Der
   if (!gate) return { items, validations }
 
   const problems: string[] = []
+  const bounces: BounceFact[] = []
+  /** The brief is the packet's first half at G0 and patch G1; without it there is nothing to approve. */
+  const briefAbsent = () => {
+    problems.push('intent-brief.md missing from run directory')
+    const artifact = artifactRef('intent-brief.md')
+    bounces.push({ artifact, path: artifact.path, contractName: artifact.contractName, missing: [], unit: 'sections', absent: true })
+  }
   let packet: string[] = []
   let trigger: string[] = []
   let ready = false
@@ -521,14 +737,14 @@ async function deriveItems(source: RunSource, ref: RunRef): Promise<{ items: Der
     packet = ['intent-brief.md', 'spec.md']
     trigger = ['spec.md']
     ready = has('spec.md')
-    if (ready && !has('intent-brief.md')) problems.push('intent-brief.md missing from run directory')
+    if (ready && !has('intent-brief.md')) briefAbsent()
   } else if (gate === 'G1' && state.profile === 'patch') {
     // Patch: no plan.md — G1 approves the human-authored brief + work item together.
     const tasks = artifacts.filter(isTaskFile)
     packet = ['intent-brief.md', ...tasks]
     trigger = ['intent-brief.md', 'tasks']
     ready = tasks.length > 0
-    if (ready && !has('intent-brief.md')) problems.push('intent-brief.md missing from run directory')
+    if (ready && !has('intent-brief.md')) briefAbsent()
   } else if (gate === 'G1') {
     const tasks = artifacts.filter(isTaskFile)
     packet = ['plan.md', ...tasks]
@@ -552,7 +768,11 @@ async function deriveItems(source: RunSource, ref: RunRef): Promise<{ items: Der
   for (const path of packet) {
     if (!has(path)) continue
     const v = await validate(path)
-    if (!v.ok) problems.push(`${path}: missing required ${v.contract === 'work-item.yaml' ? 'keys' : 'sections'} — ${v.missing.join(', ')}`)
+    if (v.ok) continue
+    const unit = v.contract === 'work-item.yaml' ? 'keys' : 'sections'
+    problems.push(`${path}: missing required ${unit} — ${v.missing.join(', ')}`)
+    const artifact = artifactRef(path)
+    bounces.push({ artifact, path, contractName: artifact.contractName, missing: [...v.missing], unit, absent: false })
   }
 
   const touched = await source.lastTouched(ref, trigger)
@@ -566,7 +786,12 @@ async function deriveItems(source: RunSource, ref: RunRef): Promise<{ items: Der
   const openAgeMs = openAt === null ? 0 : Date.now() - openAt
   const inflight =
     openAt !== null && openAgeMs < ROLE_TIMEOUT_MS ? { role: producer!.role, since: Math.floor(openAt / 1000) } : null
+  const waitingOn: WaitingOn | null =
+    openAt === null
+      ? null
+      : { role: producer!.role, since: Math.floor(openAt / 1000), artifact: artifactRef(producer!.artifact), lost: inflight === null }
 
+  // Kept for one release (#411 step 8); views compose from the facts.
   let detail: string
   if (problems.length) detail = 'Packet malformed — bounced, not reviewable'
   else if (inflight)
@@ -579,13 +804,19 @@ async function deriveItems(source: RunSource, ref: RunRef): Promise<{ items: Der
       `${producer!.artifact} — the engine ages out a lost dispatch; review what is here, or wait`
   else detail = `${ref.slug} is waiting on ${gate}`
 
+  const question = state.profile === 'patch' && gate === 'G1' ? PATCH_G1_QUESTION : GATE_QUESTIONS[gate]
   items.push({
     kind: 'gate',
     gate,
     source: ref.source,
     slug: ref.slug,
-    title: `${gate} — ${state.profile === 'patch' && gate === 'G1' ? PATCH_G1_QUESTION : GATE_QUESTIONS[gate]}`,
+    title: `${gate} — ${question}`,
     detail,
+    ...NO_FACTS,
+    question,
+    waitingOn,
+    superseded: inflight !== null,
+    bouncedBy: bounces.length > 0 ? bounces : null,
     since: touched?.time ?? null,
     reviewable: problems.length === 0 && inflight === null,
     problems,

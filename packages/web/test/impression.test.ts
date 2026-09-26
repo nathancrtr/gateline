@@ -18,6 +18,7 @@ import { describe, expect, it } from 'vitest'
 import type { GateId, InboxItem, RunDetailResponse, RunSummary } from '../src/api.ts'
 import { GATE_STATE_TONE, GateChip, KindChip, kindTone, PhaseSpine, spineGateTone } from '../src/components/chips.tsx'
 import { NeedsYouCard } from '../src/pages/run/decide-card.tsx'
+import { NO_FACTS } from './inbox-facts.helper.ts'
 
 const item = (over: Partial<InboxItem>): InboxItem =>
   ({
@@ -34,6 +35,8 @@ const item = (over: Partial<InboxItem>): InboxItem =>
     packet: [],
     packetRefs: [],
     problems: [],
+    ...NO_FACTS,
+    question: 'Is this how we’d want it built, cut into safe parallel pieces?',
     ...(over as object),
   }) as InboxItem
 

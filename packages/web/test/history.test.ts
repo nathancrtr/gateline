@@ -16,6 +16,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import type { ArtifactRef, HistoryEntry, InboxItem, LedgerEntry } from '../src/api.ts'
 import { HistoryTab, ledgerLink, noteCaption, noteFolds } from '../src/pages/run/history.tsx'
+import { NO_FACTS } from './inbox-facts.helper.ts'
 
 let n = 0
 const row = (subject: string, facts: Partial<LedgerEntry> = {}, phase: string | null = 'implement'): HistoryEntry => ({
@@ -52,7 +53,7 @@ const block = (html: string, attr: string) => {
 }
 
 const escalationItem = (index: number): InboxItem =>
-  ({ kind: 'escalation', gate: null, escalationIndex: index, source: 'fixture', slug: 'toy', title: '', detail: '', since: 0, reviewable: true, problems: [], inflight: null, packet: [], packetRefs: [] }) as InboxItem
+  ({ kind: 'escalation', gate: null, escalationIndex: index, source: 'fixture', slug: 'toy', title: '', detail: '', since: 0, reviewable: true, problems: [], inflight: null, packet: [], packetRefs: [], ...NO_FACTS }) as InboxItem
 
 describe('a gate decision carries the approver’s note', () => {
   const notes = 'Accept **ADR-2** as written.\n\nThe fixture label stays.'

@@ -5,7 +5,17 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
-import { ApiError, api, type Burden, type Disposition, type GateId, type InboxItem, type Profile } from '../api.ts'
+import {
+  ApiError,
+  api,
+  type Burden,
+  type Disposition,
+  type GateId,
+  type HandEdit,
+  type InboxItem,
+  type PausedFact,
+  type Profile,
+} from '../api.ts'
 import { type KeyHint, useKeys } from '../use-keys.ts'
 import { KeyHints } from './chips.tsx'
 
@@ -39,11 +49,66 @@ export const ROUND_CAP_INSTRUCTION =
  * none the most carefully: nothing is wrong here. The producing role is out
  * with a fresh dispatch — the usual cause is the decline you just made — so the
  * packet on screen is the superseded one, and the card returns on its own when
- * the replacement lands. The role and the artifact are in the item's `detail`,
- * in the run's own words; this sentence is what to do about it.
+ * the replacement lands. The role and the artifact are the item's `waitingOn`
+ * facts, which the card names; this sentence is what to do about it.
  */
 export const INFLIGHT_INSTRUCTION =
   'Superseded — the producing role is in flight, so no approval is offered for this packet; the card returns when the new one lands.'
+
+/**
+ * A gate whose producer was re-dispatched and never landed (#159): the open
+ * ledger entry has aged past the role timeout, so the engine that wrote it is
+ * gone and the gate is reviewable again, with the wait said out loud.
+ */
+export const LOST_DISPATCH_INSTRUCTION = 'The engine ages out a lost dispatch: review what is here, or wait.'
+
+/** What arming does, on the staged card (#433): the act that spends. */
+export const ARM_INSTRUCTION = 'Arm to start the run: dispatch begins and the budget starts metering.'
+
+/**
+ * What clears a pause, per recorded reason (#96, #213, #348, #433). These
+ * were composed in core as `pausedInstruction`, with `runs/<slug>/` paths
+ * inside the sentence; they are the cockpit's voice, so they live here and
+ * say nothing the record states. The facts beside them — the budget, the
+ * artifact to fix, the task and its status — are rendered by the card from
+ * `InboxItem.paused`, the key and the paths as Addresses.
+ *
+ * Every instruction offers closing, never "decline the gate" (#200): a
+ * paused run has no gate card to decline.
+ */
+export const PAUSED_INSTRUCTIONS = {
+  /** The engine recomputes a budget pause from the ledger and the limit, so a bare resume re-pauses. */
+  budget: 'Resume with a higher limit, or close the run with a disposition. Resuming without raising the limit re-pauses on the next tick.',
+  /** `budget-exhausted` from an orchestrator that requires a limit the run does not have. */
+  budgetNoLimit: 'This orchestrator requires a per-run cost limit and the run has none. Resume with a limit, or close the run with a disposition.',
+  /** The engine recomputes a landed-slug pause from the default branch. */
+  landed:
+    'This run already shipped on the default branch, and its branch moved on after the merge. Close the run as already-delivered and carry any remaining work on a fresh slug. Resuming re-pauses on the next tick.',
+  /** Any reason that names no condition the engine recomputes. */
+  generic: 'Resume the run, or close it with a disposition saying why it ends here.',
+} as const
+
+/**
+ * The hand edit a pause for `escalation` is waiting on (#348). Resolving the
+ * escalation acknowledges the condition without changing it, so the engine
+ * re-derives from the same files and re-pauses unless the edit has landed.
+ */
+export const HAND_EDIT_INSTRUCTIONS: Record<HandEdit['kind'], string> = {
+  'contract-dispute': 'Fix it by hand, or fix the contract it fails, then resume: the engine re-validates, and resolving alone re-pauses.',
+  'profile-violation':
+    'The run is outside its own profile. Edit the profile to one that includes it, or correct the phase by hand, then resume. Profiles upgrade mid-run and never downgrade, and resolving alone re-pauses.',
+  'no-task-files': 'The G1 breakdown never reached this branch. Commit the work items by hand, then resume. Resolving alone re-pauses.',
+  'unknown-status':
+    'A task carries a status the derivation has no rule for. Edit it by hand to one the table knows, then resume. Resolving alone re-pauses.',
+}
+
+/** The instruction a paused card gives, from its facts alone. */
+export function pausedInstruction(paused: PausedFact): string {
+  if (paused.reason === 'budget-exhausted') return paused.budget?.limit != null ? PAUSED_INSTRUCTIONS.budget : PAUSED_INSTRUCTIONS.budgetNoLimit
+  if (paused.reason === 'slug-landed') return PAUSED_INSTRUCTIONS.landed
+  if (paused.handEdit) return HAND_EDIT_INSTRUCTIONS[paused.handEdit.kind]
+  return PAUSED_INSTRUCTIONS.generic
+}
 
 /**
  * What the keyboard can do to *this* card, in the words the card uses (#284).

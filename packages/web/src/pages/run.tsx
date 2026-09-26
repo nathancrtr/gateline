@@ -19,7 +19,7 @@ import { decideTargetIndex, resolveSurface, type Surface } from '../landing.ts'
 import { orderArtifacts } from '../record-rail.ts'
 import { type KeyHint, useKeys } from '../use-keys.ts'
 import { PageStatus } from './inbox.tsx'
-import { burdenPillNeeded, cardInstruction, NeedsYouCard, restatesWhatIsShown, visibleProblems } from './run/decide-card.tsx'
+import { burdenPillNeeded, cardInstruction, NeedsYouCard } from './run/decide-card.tsx'
 import { LoadingSkeleton, RunHeader, RunMetadata, roundsLabel, SurfaceTab, TaskBoard } from './run/header.tsx'
 import { HistoryTab } from './run/history.tsx'
 import { contractBadgeName, navEntryClass, RECORD_ENTRY_SHAPE, RecordSurface } from './run/record.tsx'
@@ -30,9 +30,7 @@ export {
   contractBadgeName,
   navEntryClass,
   RECORD_ENTRY_SHAPE,
-  restatesWhatIsShown,
   roundsLabel,
-  visibleProblems,
 }
 
 export function RunPage() {

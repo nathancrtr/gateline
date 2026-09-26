@@ -128,6 +128,23 @@ describe('read routes', () => {
     expect(body.stateRaw).toContain('# a gate entry is written ONLY by the named human')
   })
 
+  it('GET /api/runs/:src/:slug carries a ref per artifact, and names each review by its task (#415)', async () => {
+    const { body } = await get('/api/runs/fixture/g2-pending')
+    // Additive (SEAM §8.5): the paths keep their shape, the refs sit beside them in the same order.
+    expect(body.artifactRefs.map((r: { path: string }) => r.path)).toEqual(body.artifacts)
+    const verification = body.artifactRefs.find((r: { path: string }) => r.path === 'verification-report.md')
+    expect(verification).toMatchObject({ kind: 'verification-report', id: null, contract: 'verification-report.md', contractName: 'verification report' })
+    // A review's ref is resolved against its report on the server, so the rail
+    // has the task on first paint rather than after the reviews route answers.
+    const reviews = body.artifactRefs.filter((r: { kind: string }) => r.kind === 'review-report')
+    expect(reviews.length).toBeGreaterThan(0)
+    for (const review of reviews) expect(typeof review.reviewOf.task).toBe('string')
+    // The G2 card's packet names its reviews the same way the rail does.
+    const packetReviews = body.items[0].packetRefs.filter((r: { kind: string }) => r.kind === 'review-report')
+    expect(packetReviews).toEqual(reviews.filter((r: { path: string }) => body.items[0].packet.includes(r.path)))
+    expect(body.items[0].packetRefs.map((r: { path: string }) => r.path)).toEqual(body.items[0].packet)
+  })
+
   it('404s an unknown run', async () => {
     expect((await get('/api/runs/fixture/nope')).status).toBe(404)
   })

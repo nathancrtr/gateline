@@ -1,6 +1,7 @@
 // Metrics (I8): computed from state.yaml git history plus the burden field —
 // no scribe, no store (rule R1). Latency is readiness-commit → decision-commit;
 // approval rate carries the >90% over-triggering flag from FRONTEND.md §4.4.
+import { describeArtifact } from '../record/artifact.ts'
 import { type Burden, GATE_IDS, type GateId, gateUndecided, ROUND_CAP } from '../record/schema.ts'
 import type { RunRef, RunSource, StateCommit } from '../sources/source.ts'
 
@@ -48,7 +49,7 @@ export interface Metrics {
 const GATE_TRIGGERS: Record<GateId, (artifacts: string[]) => string[]> = {
   G0: () => ['spec.md'],
   G1: () => ['plan.md', 'tasks'],
-  G2: (a) => [...a.filter((p) => /^review-\d+.*\.md$/.test(p)), 'verification-report.md'],
+  G2: (a) => [...a.filter((p) => describeArtifact(p).kind === 'review-report'), 'verification-report.md'],
   G3: () => ['release-plan.md'],
 }
 

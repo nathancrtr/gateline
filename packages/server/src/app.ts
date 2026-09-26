@@ -5,6 +5,8 @@
 import { timingSafeEqual } from 'node:crypto'
 import {
   armRefusal,
+  artifactRef,
+  artifactRefs,
   BUILTIN_SECTIONS,
   type Burden,
   bestEffortEscalations,
@@ -22,6 +24,7 @@ import {
   DecisionError,
   type Disposition,
   deriveReadiness,
+  describeArtifact,
   engineHealthStale,
   extractSections,
   type GateId,
@@ -325,28 +328,53 @@ export function createApp(deps: AppDeps): Hono {
     )
   })
 
+  // Typed review reports (#214): findings, severities, verdicts and rounds,
+  // parsed from this run's own review-NN.md and shipped as data — the browser
+  // must not bundle the core runtime. Every field is a verbatim slice of the
+  // committed artifact; nothing here summarizes or judges.
+  const reviewsFor = (source: RunSource, ref: RunRef) =>
+    cache.get(`reviews:${ref.source}:${ref.slug}`, async () => {
+      const artifacts = await source.listArtifacts(ref)
+      return Promise.all(
+        artifacts
+          .filter((p) => describeArtifact(p).kind === 'review-report')
+          .map(async (p) => parseReview(p, (await source.readArtifact(ref, p)) ?? '')),
+      )
+    })
+
   app.get('/api/runs/:src/:slug', async (c) => {
     const found = await findRun(c.req.param('src'), c.req.param('slug'))
     if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
     const key = `run:${ref.source}:${ref.slug}`
     const payload = await cache.get(key, async () => {
-      const [{ summary, items }, { state, error, raw }, readiness, artifacts, history, origin] = await Promise.all([
+      const [{ summary, items }, { state, error, raw }, readiness, artifacts, reviews, history, origin] = await Promise.all([
         summarizeRun(source, ref),
         source.readState(ref),
         deriveReadiness(source, ref),
         source.listArtifacts(ref),
+        // The review reports, from the cache the reviews route fills: a
+        // review's ref names the task it reviews (#415), so the rail labels
+        // it on first paint instead of relabelling once the reports arrive.
+        // Best-effort: a report that cannot be read costs its `reviewOf`
+        // (the rail falls back to the report's number), never the run page.
+        reviewsFor(source, ref).catch(() => []),
         source.stateHistory(ref),
         source.originUrl?.() ?? null,
       ])
+      const refs = artifactRefs(artifacts, reviews)
+      const refByPath = new Map(refs.map((r) => [r.path, r]))
       return {
         summary,
-        items,
+        // An item's packet refs are built from paths in readiness; resolve
+        // them against this run's refs so one payload names a review one way.
+        items: items.map((item) => ({ ...item, packetRefs: item.packet.map((p) => refByPath.get(p) ?? artifactRef(p)) })),
         state,
         stateError: error,
         stateRaw: raw,
         validations: readiness.validations,
         artifacts,
+        artifactRefs: refs,
         // The link out to the host (#267). A `default`-kind run is one whose
         // branch exists neither locally nor on origin — it merged and was
         // cleaned up — so there is no branch page to send anyone to, and the
@@ -395,19 +423,6 @@ export function createApp(deps: AppDeps): Hono {
     return respond<'GET /api/runs/:src/:slug/lexicon'>(c, { entries: lexicon.entries, pattern: ID_PATTERN })
   })
 
-  // Typed review reports (#214): findings, severities, verdicts and rounds,
-  // parsed from this run's own review-NN.md and shipped as data — the browser
-  // must not bundle the core runtime. Every field is a verbatim slice of the
-  // committed artifact; nothing here summarizes or judges.
-  const reviewsFor = (source: RunSource, ref: RunRef) =>
-    cache.get(`reviews:${ref.source}:${ref.slug}`, async () => {
-      const artifacts = await source.listArtifacts(ref)
-      return Promise.all(
-        artifacts
-          .filter((p) => /^review-\d+.*\.md$/.test(p))
-          .map(async (p) => parseReview(p, (await source.readArtifact(ref, p)) ?? '')),
-      )
-    })
   app.get('/api/runs/:src/:slug/reviews', async (c) => {
     const found = await findRun(c.req.param('src'), c.req.param('slug'))
     if (!found) return fail(c, 404, { error: 'run not found' })
@@ -455,7 +470,7 @@ export function createApp(deps: AppDeps): Hono {
       ])
       const reviews = await Promise.all(
         artifacts
-          .filter((p) => /^review-\d+.*\.md$/.test(p))
+          .filter((p) => describeArtifact(p).kind === 'review-report')
           .map(async (p) => ({ path: p, content: (await source.readArtifact(ref, p)) ?? '' })),
       )
       return buildEvidenceRollup({ lexicon: buildLexicon({ spec }), verification, reviews })
@@ -479,7 +494,7 @@ export function createApp(deps: AppDeps): Hono {
       ])
       const tasks = await Promise.all(
         artifacts
-          .filter((p) => /^tasks\/.*\.yaml$/.test(p))
+          .filter((p) => describeArtifact(p).kind === 'work-item')
           .map(async (p) => ({ path: p, content: (await source.readArtifact(ref, p)) ?? '' })),
       )
       return buildG1Packet({ lexicon: buildLexicon({ spec }), plan, tasks })
@@ -514,7 +529,7 @@ export function createApp(deps: AppDeps): Hono {
       const [text, artifacts] = await Promise.all([source.readDiff(ref), source.listArtifacts(ref)])
       const tasks = await Promise.all(
         artifacts
-          .filter((p) => /^tasks\/.*\.yaml$/.test(p))
+          .filter((p) => describeArtifact(p).kind === 'work-item')
           .map(async (p) => ({ path: p, content: (await source.readArtifact(ref, p)) ?? '' })),
       )
       return { text, tasks }

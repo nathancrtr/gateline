@@ -22,6 +22,7 @@
 // coverage percentage. Whether an overlap is acceptable is the approver's call
 // — two tasks may touch one file by design, which is why an ordered overlap is
 // reported as ordered rather than dropped.
+import { type ArtifactRef, artifactRef } from './artifact-ref.ts'
 import type { Lexicon } from './lexicon.ts'
 import { type MappingRow, parseRequirementMapping, type RequirementMapping } from './plan.ts'
 import { buildTaskSet, type TaskSet, type WorkItem } from './tasks.ts'
@@ -57,7 +58,15 @@ export interface SurfaceOverlap {
   ordered: boolean
 }
 
+/** A work item as G1 carries it: the parsed file, and the file as a reference (#415). */
+export interface G1WorkItem extends WorkItem {
+  /** The kind and the id its filename gives it — the name to use when `id:` is missing. */
+  ref: ArtifactRef
+}
+
 export interface G1Packet {
+  /** The plan this packet reads, as a reference (#415): where its withheld views send the reader. */
+  plan: ArtifactRef
   /** One row per requirement the spec defines, then any the mapping invents. */
   coverage: CoverageRow[]
   /** Work-item ids no mapping row names — the reverse of an uncovered requirement. */
@@ -65,7 +74,7 @@ export interface G1Packet {
   /** Surface overlaps between work items, ordered ones included and marked. */
   overlaps: SurfaceOverlap[]
   /** The work items themselves, so the surface view needs no second fetch. */
-  tasks: WorkItem[]
+  tasks: G1WorkItem[]
   /** Why the coverage view must withhold itself, or null. */
   mappingWithheld: string | null
   /** Why the parallel-safety view must withhold itself, or null. */
@@ -169,10 +178,11 @@ export function buildG1Packet(input: {
 
   const mappedTasks = new Set(mapping.rows.flatMap((r) => r.tasks))
   return {
+    plan: artifactRef('plan.md'),
     coverage,
     unmappedTasks: [...knownIds].filter((id) => !mappedTasks.has(id)),
     overlaps: surfaceOverlaps(items),
-    tasks: items,
+    tasks: items.map((item) => ({ ...item, ref: artifactRef(item.path) })),
     mappingWithheld: mapping.withheld,
     tasksWithheld: taskSet.withheld,
   }

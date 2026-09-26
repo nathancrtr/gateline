@@ -1,74 +1,78 @@
 // The Record rail's entries name kinds, not files (#401). The order they read
-// in is pinned in polish.test.ts; this file pins the words.
+// in is pinned in polish.test.ts; this file pins the words. What each file is
+// arrives as an ArtifactRef (#415) — built here the way the server builds it.
 import { describe, expect, it } from 'vitest'
-import type { ReviewReport } from '../src/api.ts'
 import { railGroups, railLabel } from '../src/record-rail.ts'
+import { ref, refs } from './artifact-refs.helper.ts'
 
-const report = (path: string, task: string | null, round: number | null = null): ReviewReport =>
-  ({
-    path,
-    task,
-    rounds: round === null ? [] : [{ round, verdict: 'approve', diff: null, line: 1 }],
-    findings: [],
-    dispositions: [],
-    verdict: null,
-    escalation: null,
-  }) as ReviewReport
+const label = (path: string) => railLabel(ref(path))
 
 describe('railLabel', () => {
   it('names the one-per-run kinds by their kind', () => {
-    expect(railLabel('intent-brief.md')).toEqual({ text: 'Brief', literal: false })
-    expect(railLabel('spec.md')).toEqual({ text: 'Spec', literal: false })
-    expect(railLabel('plan.md')).toEqual({ text: 'Plan', literal: false })
-    expect(railLabel('verification-report.md')).toEqual({ text: 'Verification', literal: false })
-    expect(railLabel('release-plan.md')).toEqual({ text: 'Release plan', literal: false })
+    expect(label('intent-brief.md')).toEqual({ text: 'Brief', literal: false })
+    expect(label('spec.md')).toEqual({ text: 'Spec', literal: false })
+    expect(label('plan.md')).toEqual({ text: 'Plan', literal: false })
+    expect(label('verification-report.md')).toEqual({ text: 'Verification', literal: false })
+    expect(label('release-plan.md')).toEqual({ text: 'Release plan', literal: false })
   })
 
   it('names a work item by its id, without the directory or the extension', () => {
-    expect(railLabel('tasks/06-pages-workflow.yaml')).toEqual({ text: '06-pages-workflow', literal: false })
+    expect(label('tasks/06-pages-workflow.yaml')).toEqual({ text: '06-pages-workflow', literal: false })
   })
 
-  it('shows a work item off the NN-slug grammar as its own stem', () => {
-    expect(railLabel('tasks/hotfix.yaml')).toEqual({ text: 'hotfix', literal: true })
+  it('names a work item off the NN-slug grammar by its own stem, never its filename', () => {
+    expect(label('tasks/hotfix.yaml')).toEqual({ text: 'hotfix', literal: false })
+  })
+
+  it('shows only a work item nested under tasks/, which has no name, as the file it is', () => {
+    expect(label('tasks/sub/01-x.yaml')).toEqual({ text: 'tasks/sub/01-x.yaml', literal: true })
   })
 
   it('keeps state.yaml as the one deliberate filename', () => {
-    expect(railLabel('state.yaml')).toEqual({ text: 'state.yaml', literal: true })
+    expect(label('state.yaml')).toEqual({ text: 'state.yaml', literal: true })
   })
 
   it('shows a file the framework has no position for as the file it is', () => {
-    expect(railLabel('retro.md')).toEqual({ text: 'retro.md', literal: true })
-    expect(railLabel('notes/scratch.txt')).toEqual({ text: 'notes/scratch.txt', literal: true })
+    expect(label('retro.md')).toEqual({ text: 'retro.md', literal: true })
+    expect(label('notes/scratch.txt')).toEqual({ text: 'notes/scratch.txt', literal: true })
   })
 
-  it('names a review by the task its header names', () => {
-    const reports = [report('review-01.md', '01-core'), report('review-02.md', '02-errors')]
-    expect(railLabel('review-01.md', reports)).toEqual({ text: '01-core', literal: false })
-    expect(railLabel('review-02.md', reports)).toEqual({ text: '02-errors', literal: false })
+  it('names a review by the task its header names, from the ref alone', () => {
+    const all = [ref('review-01.md', '01-core'), ref('review-02.md', '02-errors')]
+    expect(railLabel(all[0]!, all)).toEqual({ text: '01-core', literal: false })
+    expect(railLabel(all[1]!, all)).toEqual({ text: '02-errors', literal: false })
   })
 
-  it('falls back to the stem while reports are loading, and when a header is unreadable', () => {
-    expect(railLabel('review-01.md')).toEqual({ text: 'review-01', literal: true })
-    expect(railLabel('review-01.md', [report('review-01.md', null)])).toEqual({ text: 'review-01', literal: true })
+  it('names a review whose header is unreadable, or was not read, by its id — never its filename', () => {
+    expect(railLabel(ref('review-01.md', null))).toEqual({ text: '01', literal: false })
+    expect(label('review-01.md')).toEqual({ text: '01', literal: false })
   })
 
   it('keeps a file-per-round record distinct by carrying each round', () => {
-    const reports = [report('review-01.md', '01-core', 1), report('review-02.md', '01-core', 2), report('review-03.md', '01-core', 3)]
-    expect(railLabel('review-01.md', reports).text).toBe('01-core · round 1')
-    expect(railLabel('review-03.md', reports).text).toBe('01-core · round 3')
+    const all = [ref('review-01.md', '01-core', 1), ref('review-02.md', '01-core', 2), ref('review-03.md', '01-core', 3)]
+    expect(railLabel(all[0]!, all).text).toBe('01-core · round 1')
+    expect(railLabel(all[2]!, all).text).toBe('01-core · round 3')
   })
 
-  it('falls back to the stem when rounds share a task but carry no round number', () => {
-    const reports = [report('review-01.md', '01-core'), report('review-02.md', '01-core')]
-    expect(railLabel('review-02.md', reports)).toEqual({ text: 'review-02', literal: true })
+  it('carries each report\'s id when rounds share a task but state no round number', () => {
+    const all = [ref('review-01.md', '01-core'), ref('review-02.md', '01-core')]
+    expect(railLabel(all[0]!, all)).toEqual({ text: '01-core · 01', literal: false })
+    expect(railLabel(all[1]!, all)).toEqual({ text: '01-core · 02', literal: false })
   })
 })
 
 describe('railGroups', () => {
   it('gathers the numbered families under one caption each and leaves the rest alone', () => {
-    const paths = ['state.yaml', 'review-02.md', 'tasks/02-errors.yaml', 'spec.md', 'tasks/01-core.yaml', 'review-01.md', 'intent-brief.md']
-    const reports = [report('review-01.md', '01-core'), report('review-02.md', '02-errors')]
-    expect(railGroups(paths, reports)).toEqual([
+    const given = [
+      ref('state.yaml'),
+      ref('review-02.md', '02-errors'),
+      ref('tasks/02-errors.yaml'),
+      ref('spec.md'),
+      ref('tasks/01-core.yaml'),
+      ref('review-01.md', '01-core'),
+      ref('intent-brief.md'),
+    ]
+    expect(railGroups(given)).toEqual([
       { caption: null, entries: [{ path: 'intent-brief.md', text: 'Brief', literal: false }] },
       { caption: null, entries: [{ path: 'spec.md', text: 'Spec', literal: false }] },
       {
@@ -89,12 +93,20 @@ describe('railGroups', () => {
     ])
   })
 
+  it('labels a review by its task on the first render — there is no second, relabelling one', () => {
+    // The rail used to take the reports as a second argument and relabel
+    // once they loaded (#401). It takes only the refs now: the label a
+    // review has on first paint is the label it keeps.
+    const [group] = railGroups([ref('review-04.md', '02-record-scaffold-and-arm')])
+    expect(group!.entries[0]!.text).toBe('02-record-scaffold-and-arm')
+  })
+
   it('gives a family with no members no caption', () => {
-    expect(railGroups(['spec.md', 'state.yaml']).every((g) => g.caption === null)).toBe(true)
+    expect(railGroups(refs(['spec.md', 'state.yaml'])).every((g) => g.caption === null)).toBe(true)
   })
 
   it('reads in the record order, whatever order it was handed', () => {
-    const paths = railGroups(['state.yaml', 'plan.md', 'intent-brief.md']).flatMap((g) => g.entries.map((e) => e.path))
-    expect(paths).toEqual(['intent-brief.md', 'plan.md', 'state.yaml'])
+    const order = railGroups(refs(['state.yaml', 'plan.md', 'intent-brief.md'])).flatMap((g) => g.entries.map((e) => e.path))
+    expect(order).toEqual(['intent-brief.md', 'plan.md', 'state.yaml'])
   })
 })

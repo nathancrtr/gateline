@@ -23,14 +23,14 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
-import { api, type CoverageRow, type G1Packet as G1PacketData, type SurfaceOverlap, type WorkItem } from '../api.ts'
+import { type ArtifactRef, api, type CoverageRow, type G1Packet as G1PacketData, type SurfaceOverlap } from '../api.ts'
 import { PACKET_FRAME, PACKET_LABEL, PacketSweep } from './findings.tsx'
 import { CitedText, useLexicon } from './lexicon.tsx'
 import { Address, artifactHref, Name, Withheld } from './vocabulary.tsx'
 
-// step 2 (#415): the plan's path, named here by the kind this packet knows it
-// to be; an ArtifactRef on the packet carries it instead.
-const PLAN = 'plan.md'
+// The plan and each work item arrive on the packet as ArtifactRefs (#415):
+// `packet.plan`, and `ref` on every task.
+type G1WorkItem = G1PacketData['tasks'][number]
 
 export function G1Packet({ src, slug }: { src: string; slug: string }) {
   const { data, isPending } = useQuery({ queryKey: ['g1', src, slug], queryFn: () => api.g1(src, slug) })
@@ -59,11 +59,11 @@ export function G1Packet({ src, slug }: { src: string; slug: string }) {
 
 /** The fork fallback for a half of this packet (the vocabulary's `Withheld`),
  *  routed to the plan, which has the answer. */
-function PlanWithheld({ reason, src, slug, hook }: { reason: string; src: string; slug: string; hook: string }) {
+function PlanWithheld({ reason, plan, src, slug, hook }: { reason: string; plan: ArtifactRef; src: string; slug: string; hook: string }) {
   return (
     <Withheld
       reason={{ sentence: reason }}
-      open={{ label: `read ${PLAN}`, href: artifactHref(src, slug, PLAN) }}
+      open={{ label: `read ${plan.path}`, href: artifactHref(src, slug, plan.path) }}
       className="mt-1.5"
       data-withheld={hook}
     />
@@ -92,7 +92,7 @@ function Coverage({ packet, src, slug }: { packet: G1PacketData; src: string; sl
     <div data-g1-coverage>
       <GroupLabel hint="contracts/plan.md: every spec requirement maps to at least one task">Coverage</GroupLabel>
       {packet.mappingWithheld ? (
-        <PlanWithheld reason={packet.mappingWithheld} src={src} slug={slug} hook="mapping" />
+        <PlanWithheld reason={packet.mappingWithheld} plan={packet.plan} src={src} slug={slug} hook="mapping" />
       ) : (
         <>
           {uncovered.length > 0 && (
@@ -191,7 +191,7 @@ function ParallelSafety({ packet, src, slug }: { packet: G1PacketData; src: stri
     <div data-g1-safety>
       <GroupLabel hint="two tasks with no dependency between them, declaring the same path">Parallel safety</GroupLabel>
       {packet.tasksWithheld ? (
-        <PlanWithheld reason={packet.tasksWithheld} src={src} slug={slug} hook="tasks" />
+        <PlanWithheld reason={packet.tasksWithheld} plan={packet.plan} src={src} slug={slug} hook="tasks" />
       ) : (
         <>
           {unordered.length > 0 ? (
@@ -251,19 +251,23 @@ function OverlapEntry({ overlap }: { overlap: SurfaceOverlap }) {
 }
 
 /** One work item: what it declared it would touch, and what orders it. */
-function TaskEntry({ item, src, slug }: { item: WorkItem; src: string; slug: string }) {
+function TaskEntry({ item, src, slug }: { item: G1WorkItem; src: string; slug: string }) {
   const [open, setOpen] = useState(false)
   return (
     <li className="border border-line bg-surface px-3 py-2" data-task={item.id || item.path}>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        {item.id ? (
+        {item.id || item.ref.id ? (
+          // A work item whose `id:` is missing is named by the id its filename
+          // gives it (#415) — still a Name, never the path.
           <Name lead className="shrink-0">
-            {item.id}
+            {item.id || item.ref.id!}
           </Name>
         ) : (
-          // A work item whose `id:` is missing falls back to its path, which is
-          // not a Name; step 2 (#415) gives it an ArtifactRef to name it by.
-          <span className="shrink-0 font-mono text-[11.5px] font-semibold text-ink">{item.path}</span>
+          // Only a file nested under `tasks/` has no name at all; it is shown
+          // as the Address it is.
+          <Address className="shrink-0" to={artifactHref(src, slug, item.path)}>
+            {item.path}
+          </Address>
         )}
         <span className="min-w-0 flex-1 text-[12.5px] text-ink">
           <CitedText>{item.title}</CitedText>

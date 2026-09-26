@@ -7,40 +7,45 @@
 // pair names exactly one artifact to open on.
 //
 // Pure and type-only by design, so it is unit-testable without a DOM and
-// carries no React or core-runtime weight into the bundle.
-import type { InboxItem, Profile } from './api.ts'
+// carries no React or core-runtime weight into the bundle. What each artifact
+// is arrives on the payload as an `ArtifactRef` (#415); nothing here reads a
+// path to learn its kind.
+import type { ArtifactKind, ArtifactRef, InboxItem, Profile } from './api.ts'
 
-const REVIEW = /^review-\d+.*\.md$/
-const isTask = (p: string) => p.startsWith('tasks/') && p.endsWith('.yaml')
+/** The paths of one kind, in filename order — numbered, so that is record order. */
+const pathsOf = (artifacts: readonly ArtifactRef[], kind: ArtifactKind) =>
+  artifacts
+    .filter((a) => a.kind === kind)
+    .map((a) => a.path)
+    .sort()
 
 /** The latest review report in filename order, or null when there are none. */
-function newestReview(artifacts: string[]): string | null {
-  const reviews = artifacts.filter((p) => REVIEW.test(p)).sort()
-  return reviews[reviews.length - 1] ?? null
+function newestReview(artifacts: readonly ArtifactRef[]): string | null {
+  return pathsOf(artifacts, 'review-report').at(-1) ?? null
 }
 
-function firstTask(artifacts: string[]): string | null {
-  return artifacts.filter(isTask).sort()[0] ?? null
+function firstTask(artifacts: readonly ArtifactRef[]): string | null {
+  return pathsOf(artifacts, 'work-item')[0] ?? null
 }
 
 /** The artifact one pending item wants open, or null when it has no opinion. */
-function wantedBy(item: InboxItem, profile: Profile, artifacts: string[]): string | null {
+function wantedBy(item: InboxItem, profile: Profile, artifacts: readonly ArtifactRef[]): string | null {
   // A round cap asks "what didn't converge" — that starts at the last round.
   if (item.kind === 'round-cap') return newestReview(artifacts)
-  // Escalations, paused, staged and malformed runs point at state.yaml, which
+  // Escalations, paused, staged and malformed runs point at the ledger, which
   // is not a reading surface; they keep the caller's default.
   if (item.kind !== 'gate') return null
   switch (item.gate) {
     case 'G0':
-      return 'spec.md'
+      return pathsOf(artifacts, 'spec')[0] ?? null
     case 'G1':
-      // A patch run has no plan.md — G1 approves the human-authored work item.
-      return profile === 'patch' ? firstTask(artifacts) : 'plan.md'
+      // A patch run has no plan — G1 approves the human-authored work item.
+      return profile === 'patch' ? firstTask(artifacts) : (pathsOf(artifacts, 'plan')[0] ?? null)
     case 'G2':
       // A patch run has no verifier, so the reviews are the whole packet.
-      return profile === 'patch' ? newestReview(artifacts) : 'verification-report.md'
+      return profile === 'patch' ? newestReview(artifacts) : (pathsOf(artifacts, 'verification-report')[0] ?? null)
     case 'G3':
-      return 'release-plan.md'
+      return pathsOf(artifacts, 'release-plan')[0] ?? null
     default:
       return null
   }
@@ -55,10 +60,10 @@ function wantedBy(item: InboxItem, profile: Profile, artifacts: string[]): strin
  * A bounced (non-reviewable) gate still lands on its packet: seeing what is
  * malformed is exactly the job in that state.
  */
-export function landingArtifact(input: { items: InboxItem[]; profile: Profile; artifacts: string[] }): string | null {
+export function landingArtifact(input: { items: InboxItem[]; profile: Profile; artifacts: readonly ArtifactRef[] }): string | null {
   for (const item of input.items) {
     const wanted = wantedBy(item, input.profile, input.artifacts)
-    if (wanted !== null && input.artifacts.includes(wanted)) return wanted
+    if (wanted !== null && input.artifacts.some((a) => a.path === wanted)) return wanted
   }
   return null
 }

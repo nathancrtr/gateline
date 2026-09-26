@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import type { InboxItem, Profile } from '../src/api.ts'
 import { DIFF_SELECTION, decideTargetIndex, landingArtifact, resolveSurface } from '../src/landing.ts'
+import { refs } from './artifact-refs.helper.ts'
 
 function item(over: Partial<InboxItem>): InboxItem {
   return {
@@ -18,13 +19,16 @@ function item(over: Partial<InboxItem>): InboxItem {
     reviewable: true,
     problems: [],
     packet: [],
+    packetRefs: [],
     escalationIndex: null,
     ...over,
   } as InboxItem
 }
 
+// The refs are built the way the server builds them (#415); the cases stay
+// in paths because that is what a reader recognises.
 const land = (items: InboxItem[], profile: Profile, artifacts: string[]) =>
-  landingArtifact({ items, profile, artifacts })
+  landingArtifact({ items, profile, artifacts: refs(artifacts) })
 
 const FULL = [
   'intent-brief.md',

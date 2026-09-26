@@ -2,6 +2,7 @@
 // portfolio rows, metrics, multi-repo config, and display helpers. Top of the
 // stack; nothing in record/ or sources/ may import from here.
 
+export * from './artifact-ref.ts'
 export * from './config.ts'
 export * from './escalation.ts'
 export * from './evidence.ts'

@@ -1,14 +1,16 @@
 import { useMemo } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import type { ArtifactKind } from '../api.ts'
 import { LexRef, lexiconRehype, useLexicon } from './lexicon.tsx'
 
 // Inside a LexiconProvider (#163), R/AC/ADR ids resolve in place; elsewhere
-// this stays a plain renderer. `sourcePath` (the run-relative artifact path)
-// lets the lexicon stage treat definition sites differently from citations.
-export function Markdown({ children, sourcePath, unwrapped }: { children: string; sourcePath?: string; unwrapped?: boolean }) {
+// this stays a plain renderer. `sourceKind` (the artifact's kind, off its
+// ArtifactRef) lets the lexicon stage treat definition sites differently from
+// citations.
+export function Markdown({ children, sourceKind, unwrapped }: { children: string; sourceKind?: ArtifactKind; unwrapped?: boolean }) {
   const lex = useLexicon()
-  const rehypePlugins = useMemo(() => (lex ? [lexiconRehype(lex.pattern, sourcePath)] : []), [lex, sourcePath])
+  const rehypePlugins = useMemo(() => (lex ? [lexiconRehype(lex.pattern, sourceKind)] : []), [lex, sourceKind])
   const components = useMemo(() => (lex ? ({ 'lex-ref': LexRef } as unknown as Components) : undefined), [lex])
   const rendered = (
     <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={rehypePlugins} components={components} skipHtml>

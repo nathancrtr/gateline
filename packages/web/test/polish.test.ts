@@ -19,6 +19,7 @@ import { BOUNCED_INSTRUCTION, DecidePanel, ROUND_CAP_INSTRUCTION } from '../src/
 import { G1Packet } from '../src/components/g1.tsx'
 import { burdenPillNeeded, cardInstruction, contractBadgeName, roundsLabel, visibleProblems } from '../src/pages/run.tsx'
 import { artifactRank, orderArtifacts } from '../src/record-rail.ts'
+import { paths, ref, refs } from './artifact-refs.helper.ts'
 
 const item = (over: Partial<InboxItem>): InboxItem =>
   ({
@@ -33,6 +34,7 @@ const item = (over: Partial<InboxItem>): InboxItem =>
     detail: 'a-run is waiting on G2',
     since: 1,
     packet: [],
+    packetRefs: [],
     problems: [],
     ...(over as object),
   }) as InboxItem
@@ -110,7 +112,7 @@ describe('4 · the record reads in pipeline order', () => {
       'tasks/02-errors.yaml',
       'verification-report.md',
     ]
-    expect(orderArtifacts(alphabetical)).toEqual([
+    expect(paths(orderArtifacts(refs(alphabetical)))).toEqual([
       'intent-brief.md',
       'spec.md',
       'plan.md',
@@ -124,17 +126,17 @@ describe('4 · the record reads in pipeline order', () => {
   })
 
   it('keeps the ledger last and the release plan after the verification it follows', () => {
-    const ordered = orderArtifacts(['state.yaml', 'release-plan.md', 'verification-report.md'])
-    expect(ordered).toEqual(['verification-report.md', 'release-plan.md', 'state.yaml'])
+    const ordered = orderArtifacts(refs(['state.yaml', 'release-plan.md', 'verification-report.md']))
+    expect(paths(ordered)).toEqual(['verification-report.md', 'release-plan.md', 'state.yaml'])
   })
 
   it('lands an artifact the framework has no position for between the phases and the ledger', () => {
-    expect(artifactRank('retro.md')).toBeGreaterThan(artifactRank('release-plan.md'))
-    expect(artifactRank('retro.md')).toBeLessThan(artifactRank('state.yaml'))
+    expect(artifactRank(ref('retro.md'))).toBeGreaterThan(artifactRank(ref('release-plan.md')))
+    expect(artifactRank(ref('retro.md'))).toBeLessThan(artifactRank(ref('state.yaml')))
   })
 
   it('sorts numbered siblings by name, which is their own order', () => {
-    expect(orderArtifacts(['tasks/03-cli.yaml', 'tasks/01-core.yaml', 'tasks/02-errors.yaml'])).toEqual([
+    expect(paths(orderArtifacts(refs(['tasks/03-cli.yaml', 'tasks/01-core.yaml', 'tasks/02-errors.yaml'])))).toEqual([
       'tasks/01-core.yaml',
       'tasks/02-errors.yaml',
       'tasks/03-cli.yaml',
@@ -142,9 +144,9 @@ describe('4 · the record reads in pipeline order', () => {
   })
 
   it('does not mutate the list it was handed', () => {
-    const given = ['state.yaml', 'spec.md']
+    const given = refs(['state.yaml', 'spec.md'])
     orderArtifacts(given)
-    expect(given).toEqual(['state.yaml', 'spec.md'])
+    expect(paths(given)).toEqual(['state.yaml', 'spec.md'])
   })
 })
 

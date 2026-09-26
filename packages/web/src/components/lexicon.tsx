@@ -11,7 +11,7 @@ import { createContext, type ReactNode, useContext, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import { Link } from 'react-router-dom'
 import remarkGfm from 'remark-gfm'
-import { api, type LexiconEntry } from '../api.ts'
+import { type ArtifactKind, api, type LexiconEntry } from '../api.ts'
 
 export interface RunLexicon {
   src: string
@@ -135,18 +135,16 @@ function walk(node: HNode, opts: WalkOpts, skip?: SkipOnce): void {
   node.children = next
 }
 
-/** A rehype plugin parameterized by the served grammar. `sourcePath` scopes
+/** A rehype plugin parameterized by the served grammar. `sourceKind` scopes
  * definition-site suppression to the artifacts that actually define ids —
  * a report bullet that happens to start with `AC1.1 —` is a citation and
- * keeps its card. */
-export const lexiconRehype = (pattern: string, sourcePath?: string) => () => (tree: HNode) => {
-  // step 2 (#415): the artifact's kind, derived here from its path;
-  // describeArtifact supplies it instead.
-  const base = sourcePath?.split('/').pop() ?? ''
+ * keeps its card. The kind arrives on the payload's ArtifactRef (#415); it is
+ * never read off a path here. */
+export const lexiconRehype = (pattern: string, sourceKind?: ArtifactKind) => () => (tree: HNode) => {
   walk(tree, {
     re: new RegExp(pattern, 'g'),
-    definesCriteria: base === 'spec.md',
-    definesHeadings: base === 'spec.md' || base === 'plan.md',
+    definesCriteria: sourceKind === 'spec',
+    definesHeadings: sourceKind === 'spec' || sourceKind === 'plan',
   })
 }
 

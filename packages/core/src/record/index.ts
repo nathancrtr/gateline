@@ -4,6 +4,7 @@
 // test/layering.test.ts), so it stays extractable on its own.
 
 export * from './actions.ts'
+export * from './artifact.ts'
 export * from './ledger.ts'
 export * from './scaffold.ts'
 export * from './schema.ts'

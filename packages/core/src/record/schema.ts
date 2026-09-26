@@ -4,6 +4,7 @@
 // visible, never guessed around (the contracts' bounce rule applied to us).
 import { type Document, parse as parseYaml } from 'yaml'
 import { z } from 'zod'
+import { describeArtifact } from './artifact.ts'
 
 export type StateDocMutation = (doc: Document) => void
 
@@ -425,11 +426,6 @@ export function gateProducer(gate: GateId, profile: Profile): { role: string; ar
   }
 }
 
-/** A review report, as the contract names one: `review-<nn>[-suffix].md`. */
-export function isReviewFile(path: string): boolean {
-  return /^review-\d+.*\.md$/.test(path)
-}
-
 /**
  * Is the evidence G2 decides on complete — every task carried to
  * review-approved or beyond, at least one review report, and, outside `patch`
@@ -442,5 +438,5 @@ export function isReviewFile(path: string): boolean {
 export function g2PacketReady(state: RunState, artifacts: string[]): boolean {
   const tasksComplete = state.tasks.length > 0 && state.tasks.every((t) => G2_COMPLETE_STATUSES.has(t.status))
   const verification = state.profile === 'patch' || artifacts.includes('verification-report.md')
-  return tasksComplete && artifacts.some(isReviewFile) && verification
+  return tasksComplete && artifacts.some((p) => describeArtifact(p).kind === 'review-report') && verification
 }

@@ -72,7 +72,7 @@ export function RunPage() {
       e: () => {
         // The same order the picker is in, so `e` walks the list the reader is
         // looking at rather than the alphabet behind it (#285/4).
-        const paths = orderArtifacts(data?.artifacts ?? [])
+        const paths = orderArtifacts(data?.artifactRefs ?? []).map((r) => r.path)
         if (!paths.length) return
         const current = new URLSearchParams(window.location.search).get('artifact')
         const idx = current ? paths.indexOf(current) : -1

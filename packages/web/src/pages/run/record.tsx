@@ -6,16 +6,17 @@ import { splitSections } from '@gateline/core/record'
 import { useQuery } from '@tanstack/react-query'
 import { type ReactNode, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { api, type RunDetailResponse } from '../../api.ts'
+import { type ArtifactKind, type ArtifactRef, api, type RunDetailResponse } from '../../api.ts'
 import { ValidationBadge } from '../../components/chips.tsx'
 import { DiffView } from '../../components/diff-view.tsx'
 import { EvidenceRollupPanel } from '../../components/evidence.tsx'
 import { FindingsPanel, useReviews, VerdictChip } from '../../components/findings.tsx'
 import { CitedObjects } from '../../components/lexicon.tsx'
 import { Markdown } from '../../components/markdown.tsx'
+import { Instruction } from '../../components/vocabulary.tsx'
 import { isAuditSection, itemCount } from '../../fold.ts'
 import { DIFF_SELECTION, landingArtifact } from '../../landing.ts'
-import { isReviewPath, isTaskPath, orderArtifacts, railGroups } from '../../record-rail.ts'
+import { orderArtifacts, railGroups } from '../../record-rail.ts'
 import { EdgeFade, useScrollCue } from '../../scroll-cue.tsx'
 import { PageStatus } from '../inbox.tsx'
 import { LoadingSkeleton } from './header.tsx'
@@ -40,19 +41,26 @@ export function RecordSurface({
   selected: string | null
   onSelect: (path: string) => void
 }) {
-  const paths = orderArtifacts(detail.artifacts)
+  // What each artifact is arrives on the payload (#415): the rail, the landing
+  // and the reader all read the kind off the ref, never off the path. A server
+  // older than this page sends no refs — it happens for minutes under `up`,
+  // while `self-update` has rebuilt the page and the old server drains — and
+  // then nothing is derived: the rail says why instead of guessing kinds.
+  const wireRefs = (detail as { artifactRefs?: ArtifactRef[] }).artifactRefs
+  const refs = orderArtifacts(wireRefs ?? [])
+  const paths = refs.map((r) => r.path)
   const showDiff = selected === DIFF_SELECTION
   // An explicit selection always wins; otherwise the pending gate's own packet
   // decides what opens (#250), and only then does filename order get a say.
   const current =
     (showDiff ? null : selected) ??
-    landingArtifact({ items: detail.items, profile: detail.summary.profile, artifacts: paths }) ??
+    landingArtifact({ items: detail.items, profile: detail.summary.profile, artifacts: refs }) ??
     paths.find((p) => p.endsWith('.md')) ??
     paths[0] ??
     null
   // Verdict chips on the review entries (#215): what the review concluded,
-  // without opening it. Reports load lazily; until they do, the list is
-  // exactly what it was.
+  // without opening it. Reports load lazily; until they do, an entry has no
+  // chip. Its label never waits on them — the ref names the task (#415).
   const reports = useReviews(detail.summary.source, detail.summary.slug)
   const verdictsFor = (path: string) => {
     const report = reports?.find((r) => r.path === path)
@@ -68,8 +76,13 @@ export function RecordSurface({
               artifact is, the reader header says where its bytes are. The
               numbered families sit under one caption each, so `tasks/` and
               `review-` are said once instead of on every line. */}
+          {wireRefs === undefined && (
+            <Instruction className="px-[18px] pb-2.5">
+              This server is older than the page and does not say what each artifact is. Restart it to see the run’s record.
+            </Instruction>
+          )}
           <ul className="flex flex-col max-lg:contents">
-            {railGroups(paths, reports).map((group) =>
+            {railGroups(refs).map((group) =>
               group.entries.map((entry, i) => {
                 const p = entry.path
                 const v = detail.validations[p]
@@ -113,7 +126,12 @@ export function RecordSurface({
         {showDiff ? (
           <DiffPane src={detail.summary.source} slug={detail.summary.slug} />
         ) : current ? (
-          <ArtifactBody src={detail.summary.source} slug={detail.summary.slug} path={current} />
+          <ArtifactBody
+            src={detail.summary.source}
+            slug={detail.summary.slug}
+            path={current}
+            artifact={refs.find((r) => r.path === current) ?? null}
+          />
         ) : (
           <PageStatus text="No artifacts yet." />
         )}
@@ -209,7 +227,10 @@ export function contractBadgeName(path: string, contract: string | null): string
   return `${contract} `
 }
 
-function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: string }) {
+function ArtifactBody({ src, slug, path, artifact }: { src: string; slug: string; path: string; artifact: ArtifactRef | null }) {
+  // The kind, off the ref (#415). A path the URL names that the run does not
+  // list has no ref, and reads as a plain file.
+  const kind = artifact?.kind ?? 'other'
   const { data, isLoading, error } = useQuery({
     queryKey: ['artifact', src, slug, path],
     queryFn: () => api.artifact(src, slug, path),
@@ -218,8 +239,9 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
   // the sentence the architect wrote is the one thing a YAML dump buries. The G1 packet already carries every work item parsed, under the
   // same query the G1 surface uses, so this is one cache entry, not a second
   // parser in the browser. Absent until it loads; nothing is invented.
-  const g1 = useQuery({ queryKey: ['g1', src, slug], queryFn: () => api.g1(src, slug), enabled: isTaskPath(path) })
-  const taskTitle = isTaskPath(path) ? (g1.data?.tasks.find((t) => t.path === path)?.title ?? null) : null
+  const isWorkItem = kind === 'work-item'
+  const g1 = useQuery({ queryKey: ['g1', src, slug], queryFn: () => api.g1(src, slug), enabled: isWorkItem })
+  const taskTitle = isWorkItem ? (g1.data?.tasks.find((t) => t.path === path)?.title ?? null) : null
   // Jump-to-definition (#163): the anchor param lands on the def-<id> heading
   // ids the lexicon rehype stage stamps onto R/ADR definition headings.
   const [params] = useSearchParams()
@@ -262,14 +284,14 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
           </p>
         )}
         <CitedObjects content={content} path={path} />
-        {path === 'verification-report.md' && (
+        {kind === 'verification-report' && (
           <div className="mb-4">
             <EvidenceRollupPanel src={src} slug={slug} />
           </div>
         )}
-        {isReviewPath(path) && <FindingsPanel src={src} slug={slug} path={path} />}
+        {kind === 'review-report' && <FindingsPanel src={src} slug={slug} path={path} />}
         {path.endsWith('.md') ? (
-          <FoldedMarkdown content={content} path={path} audit={validation.audit ?? []} />
+          <FoldedMarkdown content={content} kind={kind} audit={validation.audit ?? []} />
         ) : (
           <pre className="overflow-x-auto font-mono text-xs leading-5">{content}</pre>
         )}
@@ -287,8 +309,8 @@ function ArtifactBody({ src, slug, path }: { src: string; slug: string; path: st
  * through the same single `Markdown` call as before: the split exists only
  * when there is something to fold.
  */
-function FoldedMarkdown({ content, path, audit }: { content: string; path: string; audit: string[] }) {
-  if (audit.length === 0) return <Markdown sourcePath={path}>{content}</Markdown>
+function FoldedMarkdown({ content, kind, audit }: { content: string; kind: ArtifactKind; audit: string[] }) {
+  if (audit.length === 0) return <Markdown sourceKind={kind}>{content}</Markdown>
   // One `.prose-artifact` wrapper for the whole artifact, however many
   // renders it takes: the styles are descendant rules, and the DOM keeps
   // reading as one artifact.
@@ -300,7 +322,7 @@ function FoldedMarkdown({ content, path, audit }: { content: string; path: strin
         if (section.heading === null || section.depth !== 2 || !isAuditSection(section.heading, audit)) {
           return (
             // biome-ignore lint/suspicious/noArrayIndexKey: sections split from one static artifact body in document order; a heading can be null (the preamble) or repeat (review rounds).
-            <Markdown key={i} sourcePath={path} unwrapped>
+            <Markdown key={i} sourceKind={kind} unwrapped>
               {section.headingLine ? `${section.headingLine}\n${section.body}` : section.body}
             </Markdown>
           )
@@ -318,7 +340,7 @@ function FoldedMarkdown({ content, path, audit }: { content: string; path: strin
                 {count.n} {count.unit} · audit-time, folded until opened
               </span>
             </summary>
-            <Markdown sourcePath={path} unwrapped>
+            <Markdown sourceKind={kind} unwrapped>
               {section.body}
             </Markdown>
           </details>

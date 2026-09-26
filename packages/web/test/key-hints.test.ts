@@ -32,6 +32,7 @@ const item = (over: Partial<InboxItem>): InboxItem => ({
   detail: 'a-run is waiting on G2',
   since: 1,
   packet: [],
+  packetRefs: [],
   problems: [],
   ...(over as object),
 }) as InboxItem

@@ -28,6 +28,9 @@
  *    in someone's browser.
  */
 import type {
+  ArtifactFamily,
+  ArtifactKind,
+  ArtifactRef,
   Burden,
   Closure,
   ClosureRecord,
@@ -81,6 +84,9 @@ export const API_VERSION = 1
 
 /** Core types that cross the wire. Re-exported so a client imports one module. */
 export type {
+  ArtifactFamily,
+  ArtifactKind,
+  ArtifactRef,
   Burden,
   Closure,
   ClosureRecord,
@@ -201,7 +207,17 @@ export interface RunDetailResponse {
   stateError: string | null
   stateRaw: string | null
   validations: Record<string, Validation>
+  /**
+   * The run's artifact paths. Kept for one release beside `artifactRefs`
+   * (docs/SEAM.md §8.5) so the change is additive; new code reads the refs.
+   */
   artifacts: string[]
+  /**
+   * The same artifacts as references (#415), in the same order: kind, id,
+   * contract, and — for a review report — the task it reviews, read from the
+   * report on the server so the rail names it from the first render.
+   */
+  artifactRefs: ArtifactRef[]
   history: HistoryEntry[]
   /**
    * The run branch's page on the git host (#267), derived on the server from

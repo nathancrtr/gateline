@@ -15,6 +15,12 @@
 // Labelling `spec.md` "Spec" is a view, not a paraphrase: the #261 rule is
 // about the artifact's words, and the address stays one glance away.
 //
+// What each file *is* arrives on the payload (#415): the server sends an
+// `ArtifactRef` per artifact — kind, id, and for a review the task its header
+// names — derived once, by core's `describeArtifact`. Nothing here reads a
+// path to learn a kind. That is also why a review's entry names its task from
+// the first paint: it used to wait for the reports to load and then relabel.
+//
 // Two entries keep their filename on purpose. `state.yaml` is the record's
 // index rather than an artifact in the reader's sense, and the human decision
 // grammar lives in it by name. A file the framework has no position for is
@@ -24,7 +30,7 @@
 // a path, a proportional one is a name.
 //
 // Pure and type-only, so it is unit-testable without a DOM.
-import type { ReviewReport } from './api.ts'
+import type { ArtifactKind, ArtifactRef } from './api.ts'
 
 /**
  * The picker was alphabetical, which is not an order — it is the absence of
@@ -34,37 +40,48 @@ import type { ReviewReport } from './api.ts'
  * brief, spec, plan, the work items, the reviews of them, the verification, the
  * release plan, and `state.yaml` last as the ledger that records all of it.
  *
- * Ranks, not a comparator table: a file the framework has not met yet lands
- * between the phases and the ledger rather than at an arbitrary end, and ties
- * inside a rank stay alphabetical, which is the right order for `tasks/*` and
- * `review-*` because their names are numbered.
+ * Ranks, not a comparator table: a file the framework has no position for
+ * lands between the phases and the ledger rather than at an arbitrary end, and
+ * ties inside a rank stay alphabetical, which is the right order for `tasks/*`
+ * and `review-*` because their names are numbered.
  */
-export function artifactRank(path: string): number {
-  if (path === 'intent-brief.md') return 0
-  if (path === 'spec.md') return 1
-  if (path === 'plan.md') return 2
-  if (isTaskPath(path)) return 3
-  if (isReviewPath(path)) return 4
-  if (path === 'verification-report.md') return 5
-  if (path === 'release-plan.md') return 6
-  if (path === 'state.yaml') return 8
-  return 7
+const RANK: Record<ArtifactKind, number> = {
+  'intent-brief': 0,
+  spec: 1,
+  plan: 2,
+  'work-item': 3,
+  'review-report': 4,
+  'verification-report': 5,
+  'release-plan': 6,
+  'docs-delta': 7,
+  'integration-profile': 7,
+  other: 7,
+  state: 8,
 }
 
-export function orderArtifacts(paths: readonly string[]): string[] {
-  return [...paths].sort((a, b) => artifactRank(a) - artifactRank(b) || a.localeCompare(b))
+export function artifactRank(ref: ArtifactRef): number {
+  return RANK[ref.kind]
 }
 
-export const isTaskPath = (path: string) => path.startsWith('tasks/') && path.endsWith('.yaml')
+export function orderArtifacts(refs: readonly ArtifactRef[]): ArtifactRef[] {
+  return [...refs].sort((a, b) => artifactRank(a) - artifactRank(b) || a.path.localeCompare(b.path))
+}
+
+/**
+ * @deprecated A path test, kept only because `pages/run/decide-card.tsx`'s
+ * packet chip row still reads bare paths. It goes in #411 step 3 (packet chips
+ * become reference rows), which moves that row onto `InboxItem.packetRefs`.
+ * New code reads `ArtifactRef.kind`.
+ */
 export const isReviewPath = (path: string) => /^review-\d+.*\.md$/.test(path)
 
-/** The kinds the framework fixes, and what each one's rail entry says. */
-const KIND_LABELS: Record<string, string> = {
-  'intent-brief.md': 'Brief',
-  'spec.md': 'Spec',
-  'plan.md': 'Plan',
-  'verification-report.md': 'Verification',
-  'release-plan.md': 'Release plan',
+/** The kinds the framework fixes one per run, and what each one's rail entry says. */
+const KIND_LABELS: Partial<Record<ArtifactKind, string>> = {
+  'intent-brief': 'Brief',
+  spec: 'Spec',
+  plan: 'Plan',
+  'verification-report': 'Verification',
+  'release-plan': 'Release plan',
 }
 
 export interface RailLabel {
@@ -75,48 +92,49 @@ export interface RailLabel {
 }
 
 /**
- * A work item's entry is its id, verbatim from the filename the architect
- * chose, without the `tasks/` that is the group's heading and the `.yaml`
- * that is the contract's. The id is the record's own name for the task — what
+ * A work item's entry is its id — the record's own name for the task, what
  * `depends_on` cites, what the task board shows, what a review's header
  * names — so the entry reads the same as every other mention of it. The
  * leading number stays because `contracts/work-item.yaml` makes it a display
- * fact. A filename off the `NN-slug` grammar is shown as it is.
+ * fact. A filename off the `NN-slug` grammar still gives a name (`hotfix`);
+ * only a file nested under `tasks/` has none, and is shown as the file it is.
  */
-function taskLabel(path: string): RailLabel {
-  const stem = path.slice('tasks/'.length, -'.yaml'.length)
-  return /^\d+-.+$/.test(stem) ? { text: stem, literal: false } : { text: stem, literal: true }
+function taskLabel(ref: ArtifactRef): RailLabel {
+  return ref.id !== null ? { text: ref.id, literal: false } : { text: ref.path, literal: true }
 }
 
 /**
- * A review's entry names the task it reviews, read from the report's own
- * `# Review Report: <id>` header (core's `parseReview` carries it as `task`).
- * Reports load lazily; until they do, or when a report has no readable
- * header, the entry is the filename stem, which is the same fallback an
- * unknown file gets. Where a run keeps a file per round, several reports name
- * one task, and each entry carries its round so they stay distinct.
+ * A review's entry names the task it reviews, as the report's own
+ * `# Review Report: <id>` header says (`reviewOf`, read on the server). A
+ * report with no readable header is named by the id its filename gives it
+ * (`01`), under the Reviews caption that says what it is — a name, never the
+ * filename (docs/SEAM.md §2). Where a run keeps a file per round, several
+ * reports name one task, and each entry carries its round so they stay
+ * distinct; one that states no round carries its id instead.
  */
-function reviewLabel(path: string, reports: readonly ReviewReport[] | undefined, sharedTask: boolean): RailLabel {
-  const report = reports?.find((r) => r.path === path)
-  if (!report?.task) return { text: path.slice(0, -'.md'.length), literal: true }
-  if (!sharedTask) return { text: report.task, literal: false }
-  const round = report.rounds[0]?.round ?? null
-  return round === null
-    ? { text: path.slice(0, -'.md'.length), literal: true }
-    : { text: `${report.task} · round ${round}`, literal: false }
+function reviewLabel(ref: ArtifactRef, sharedTask: boolean): RailLabel {
+  const id = ref.id ?? ref.path
+  const task = ref.reviewOf?.task ?? null
+  if (task === null) return { text: id, literal: false }
+  if (!sharedTask) return { text: task, literal: false }
+  const round = ref.reviewOf?.round ?? null
+  return { text: round === null ? `${task} · ${id}` : `${task} · round ${round}`, literal: false }
 }
 
-/** The words one rail entry goes by. `reports` may be absent while loading. */
-export function railLabel(path: string, reports?: readonly ReviewReport[]): RailLabel {
-  const kind = KIND_LABELS[path]
+/**
+ * The words one rail entry goes by. `all` is the rail's whole set of refs,
+ * which a review needs to know whether another report names the same task.
+ */
+export function railLabel(ref: ArtifactRef, all: readonly ArtifactRef[] = [ref]): RailLabel {
+  const kind = KIND_LABELS[ref.kind]
   if (kind) return { text: kind, literal: false }
-  if (isTaskPath(path)) return taskLabel(path)
-  if (isReviewPath(path)) {
-    const task = reports?.find((r) => r.path === path)?.task ?? null
-    const shared = task !== null && (reports ?? []).filter((r) => r.task === task).length > 1
-    return reviewLabel(path, reports, shared)
+  if (ref.kind === 'work-item') return taskLabel(ref)
+  if (ref.kind === 'review-report') {
+    const task = ref.reviewOf?.task ?? null
+    const shared = task !== null && all.filter((r) => r.kind === 'review-report' && r.reviewOf?.task === task).length > 1
+    return reviewLabel(ref, shared)
   }
-  return { text: path, literal: true }
+  return { text: ref.path, literal: true }
 }
 
 export interface RailEntry extends RailLabel {
@@ -129,17 +147,23 @@ export interface RailGroup {
   entries: RailEntry[]
 }
 
+/** The numbered families, and the caption each one reads under. */
+const FAMILY_CAPTIONS: Partial<Record<ArtifactRef['family'], string>> = {
+  'work-items': 'Work items',
+  reviews: 'Reviews',
+}
+
 /**
  * The rail, in reading order, with the numbered families gathered under a
  * caption: `Work items · 6` and `Reviews · 2` say once what `tasks/` and
  * `review-` said on every line. Every other entry stands alone under no
  * caption, as before. A family with no members has no caption.
  */
-export function railGroups(paths: readonly string[], reports?: readonly ReviewReport[]): RailGroup[] {
+export function railGroups(refs: readonly ArtifactRef[]): RailGroup[] {
   const groups: RailGroup[] = []
-  for (const path of orderArtifacts(paths)) {
-    const entry: RailEntry = { path, ...railLabel(path, reports) }
-    const family = isTaskPath(path) ? 'Work items' : isReviewPath(path) ? 'Reviews' : null
+  for (const ref of orderArtifacts(refs)) {
+    const entry: RailEntry = { path: ref.path, ...railLabel(ref, refs) }
+    const family = FAMILY_CAPTIONS[ref.family] ?? null
     const last = groups.at(-1)
     if (family && last?.caption?.startsWith(family)) {
       last.entries.push(entry)

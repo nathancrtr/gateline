@@ -174,7 +174,12 @@ describe('buildEvidenceRollup', () => {
       verification: '# Verification Report: sample\n\n## Results\n\nEverything checked out; see the transcript below.\n',
     })
     expect(forked.hasVerification).toBe(true)
-    expect(forked.withheld).toMatch(/evidence-block grammar/)
+    // Structured (#424): the first grammar looked for, and the report it looked in.
+    expect(forked.withheld).toEqual({
+      grammar: 'an evidence block headed',
+      token: '### E<k> — AC<n>.<m>',
+      lookedIn: expect.objectContaining({ kind: 'verification-report', path: 'verification-report.md', contractName: 'verification report' }),
+    })
     expect(forked.criteria.every((c) => c.evidence.length === 0 && c.result === null)).toBe(true)
   })
 })

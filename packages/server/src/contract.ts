@@ -66,6 +66,7 @@ import type {
   SurfaceScopedDiff,
   Validation,
   Verdict,
+  WithheldReason,
   WorkItem,
 } from '@gateline/core'
 
@@ -79,8 +80,11 @@ import type {
  * with it, so this is not a compatibility negotiation; it is how a client that
  * arrives from somewhere else (a cached tab, a separately released Gatehouse)
  * can say so instead of failing in pieces.
+ *
+ * 2 (#424): every packet's withheld reason is a `WithheldReason` — the grammar
+ * looked for and the artifact looked in — where it was a sentence string.
  */
-export const API_VERSION = 1
+export const API_VERSION = 2
 
 /** Core types that cross the wire. Re-exported so a client imports one module. */
 export type {
@@ -120,6 +124,7 @@ export type {
   SurfaceScopedDiff,
   Validation,
   Verdict,
+  WithheldReason,
   WorkItem,
 }
 
@@ -260,7 +265,8 @@ export interface DiffResponse {
   /**
    * Which work item declared each changed file (#270), positional against
    * `files`. `surface.withheld` is non-null when the run has no readable task
-   * set, and the view then renders the plain diff with that reason.
+   * set — the grammar looked for and the work item looked in (#424) — and the
+   * view then renders the plain diff under a withheld notice composed from it.
    */
   surface: SurfaceScopedDiff
 }

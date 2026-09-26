@@ -21,10 +21,20 @@ export function EvidenceRollupPanel({ src, slug }: { src: string; slug: string }
   // A report written to another grammar (#256): "no evidence cites AC1.1" would
   // state as fact about the record something the parser has just said it cannot
   // determine. Stand down to the reason — the report's own markdown is directly
-  // below this panel, so nothing is lost.
+  // below this panel, so nothing is lost, and a link to it would open the page
+  // it sits on.
   if (data.withheld) {
     return (
-      <Withheld view="Evidence citations not computed" reason={{ sentence: data.withheld }} className="mt-3" data-evidence-withheld />
+      <Withheld
+        view="Evidence citations"
+        reason={data.withheld}
+        src={src}
+        slug={slug}
+        link={false}
+        after="The report is below."
+        className="mt-3"
+        data-evidence-withheld
+      />
     )
   }
   const defined = data.criteria.filter((c) => c.defined)
@@ -519,13 +529,7 @@ export function G2Packet({ src, slug, profile }: { src: string; slug: string; pr
           the grammar does not match, say which grammar and stand down — the
           report itself renders as its own markdown one click away. */}
       {rollup.withheld && (
-        <Withheld
-          view="Criterion view withheld"
-          reason={{ sentence: rollup.withheld }}
-          open={{ label: `read ${rollup.verification.path}`, href: artifactHref(src, slug, rollup.verification.path) }}
-          className="mt-2"
-          data-withheld
-        />
+        <Withheld view="Criterion view" reason={rollup.withheld} src={src} slug={slug} className="mt-2" data-withheld />
       )}
       {!rollup.withheld && ordered.length > 0 && (
         <ul className="mt-2 flex flex-col gap-2">

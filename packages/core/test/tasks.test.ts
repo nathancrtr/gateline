@@ -16,6 +16,7 @@ import {
   parseWorkItem,
   WORK_ITEM_STATUSES,
 } from '../src/view-model/tasks.ts'
+import { taskSetWithheld } from '../src/view-model/withheld.ts'
 
 const REPO = resolve(import.meta.dirname, '../../..')
 const RUNS = join(REPO, 'runs')
@@ -210,15 +211,16 @@ describe('parseWorkItem', () => {
   it('AC3 — withholds and names the key when the contact surface is absent', () => {
     const stripped = WELL_FORMED.replace(/file_contact_surface:\n( {2}- .*\n)+/, '')
     const item = parseWorkItem('tasks/01-example.yaml', stripped)
-    expect(item.withheld).toContain('file_contact_surface')
-    expect(item.withheld).toContain('tasks/01-example.yaml')
+    // The grammar only (#424): this leaf knows no references; a packet adds
+    // the file it looked in.
+    expect(item.withheld).toEqual({ grammar: 'a top-level key', token: 'file_contact_surface:' })
     expect(item.id).toBe('01-example') // what parsed is still there to render
   })
 
   it('AC3 — withholds on a file that is not a work item at all', () => {
     const item = parseWorkItem('tasks/notes.yaml', '# just a comment\n')
-    expect(item.withheld).toContain('id')
-    expect(item.withheld).toContain('file_contact_surface')
+    // Two keys missing: the reason names the first cause.
+    expect(item.withheld).toEqual({ grammar: 'a top-level key', token: 'id:' })
   })
 
   it('AC3 — withholds when a fork writes the surface as a nested block, not a list', () => {
@@ -230,8 +232,7 @@ describe('parseWorkItem', () => {
       'file_contact_surface:\n  paths:\n    - src/example/thing.ts\n  mode: exclusive\n',
     )
     const item = parseWorkItem('tasks/01-example.yaml', forked)
-    expect(item.withheld).toContain('nested block')
-    expect(item.withheld).toContain('file_contact_surface')
+    expect(item.withheld).toEqual({ grammar: 'a list under the key', token: 'file_contact_surface:' })
     expect(item.fileContactSurface).toEqual([])
     // The keys after the nested block are still read — the block is skipped,
     // not swallowed.
@@ -286,18 +287,19 @@ describe('buildTaskSet', () => {
   it('AC3 — an absent task set withholds rather than reading as an empty surface', () => {
     const set = buildTaskSet([])
     expect(set.items).toEqual([])
-    expect(set.withheld).toContain('no work item declares a file-contact surface')
+    expect(set.withheld).toEqual({ grammar: 'a work item' })
   })
 
-  it('AC3 — a set no item of which parses withholds with each item’s own reason', () => {
+  it('AC3 — a set no item of which parses withholds with its first item’s reason', () => {
     const set = buildTaskSet([
       { path: 'tasks/01-a.yaml', content: 'tasks:\n  - some: other\n    shape: entirely\n' },
       { path: 'tasks/02-b.yaml', content: '# nothing here\n' },
     ])
-    // Naming the files beats counting them: the fork fallback owes the reader
-    // which grammar was looked for, and where.
-    expect(set.withheld).toContain('tasks/01-a.yaml')
-    expect(set.withheld).toContain('tasks/02-b.yaml')
+    // Naming a grammar beats counting files: the fork fallback owes the reader
+    // which grammar was looked for, and where — the first cause, whose file
+    // `taskSetWithheld` names (#424).
+    expect(set.withheld).toEqual({ grammar: 'a top-level key', token: 'id:' })
+    expect(taskSetWithheld(set)).toMatchObject({ lookedIn: { kind: 'work-item', id: '01-a', path: 'tasks/01-a.yaml', contractName: 'work item' } })
     expect(set.items).toHaveLength(2)
   })
 

@@ -56,3 +56,42 @@ describe('RecordSurface without artifactRefs', () => {
     expect(html).toContain('data-artifact-entry="spec.md"')
   })
 })
+
+// The contract badge and the failure notice (#424): the contract is named by
+// its kind, with its file as the Address after it, and the notice is said
+// once — in the reader, beside the bytes it is about. The rail keeps the badge.
+describe('the reader names a failed contract by kind, once', () => {
+  const REVIEW = 'review-01.md'
+  const validation = { contract: 'review-report.md', ok: false, missing: ['## Findings'], notes: [] }
+
+  function renderFailing(): string {
+    const d = {
+      ...detail(true),
+      artifacts: [...PATHS, REVIEW],
+      artifactRefs: refs([...PATHS, REVIEW]),
+      validations: { [REVIEW]: validation },
+    } as unknown as RunDetailResponse
+    const client = new QueryClient()
+    client.setQueryData(['artifact', 'repo', 'run', REVIEW], { content: '# Review Report: 01-core\n\n**Verdict:** approve\n', validation })
+    return renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        null,
+        createElement(QueryClientProvider, { client }, createElement(RecordSurface, { detail: d, selected: REVIEW, onSelect: () => {} })),
+      ),
+    )
+  }
+
+  it('says the failure once, in the reader, naming the review report contract with its file after it', () => {
+    const html = renderFailing()
+    expect(html.match(/Fails its/g)).toHaveLength(1)
+    const notice = html.match(/<p [^>]*data-contract-failure[^>]*>(.*?)<\/p>/)?.[1] ?? ''
+    expect(notice.replace(/<[^>]+>/g, '')).toBe('Fails its review report contract review-report.md — missing: ## Findings')
+    expect(notice).toMatch(/<span [^>]*data-address[^>]*>review-report\.md<\/span>/)
+  })
+
+  it('badges the reader by kind, the contract’s file as the Address beside it', () => {
+    const badge = renderFailing().match(/<span [^>]*data-contract-badge[^>]*>(.*?)<\/span><\/div>/)?.[1] ?? ''
+    expect(badge.replace(/<[^>]+>/g, '')).toBe('✕fails the review report contract review-report.md')
+  })
+})

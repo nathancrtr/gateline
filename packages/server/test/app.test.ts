@@ -198,8 +198,8 @@ describe('read routes', () => {
 
   it('GET g1 withholds both halves on a run with no plan and no tasks (#255)', async () => {
     const { body } = await get('/api/runs/fixture/g0-pending/g1')
-    expect(body.mappingWithheld).toContain('no `plan.md`')
-    expect(body.tasksWithheld).toContain('no `tasks/*.yaml`')
+    expect(body.mappingWithheld).toEqual({ grammar: 'a plan', lookedIn: null })
+    expect(body.tasksWithheld).toEqual({ grammar: 'a work item', lookedIn: null })
     expect(body.overlaps).toEqual([])
   })
 
@@ -235,7 +235,7 @@ describe('read routes', () => {
 
   it('GET diff withholds the labelling for a run with no task set, keeping the diff (#270)', async () => {
     const { body } = await get('/api/runs/fixture/g0-pending/diff')
-    expect(body.surface.withheld).toContain('no work item declares a file-contact surface')
+    expect(body.surface.withheld).toEqual({ grammar: 'a work item', lookedIn: null })
     expect(body.surface.items).toEqual([])
     expect(body.surface.declaredBy).toHaveLength(body.files.length)
   })

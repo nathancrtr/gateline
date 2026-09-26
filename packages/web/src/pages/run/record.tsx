@@ -13,7 +13,7 @@ import { EvidenceRollupPanel } from '../../components/evidence.tsx'
 import { FindingsPanel, useReviews, VerdictChip } from '../../components/findings.tsx'
 import { CitedObjects } from '../../components/lexicon.tsx'
 import { Markdown } from '../../components/markdown.tsx'
-import { Instruction } from '../../components/vocabulary.tsx'
+import { Address, Instruction } from '../../components/vocabulary.tsx'
 import { isAuditSection, itemCount } from '../../fold.ts'
 import { DIFF_SELECTION, landingArtifact } from '../../landing.ts'
 import { orderArtifacts, railGroups } from '../../record-rail.ts'
@@ -116,11 +116,9 @@ export function RecordSurface({
             </button>
           </div>
         </div>
-        {!showDiff && current && detail.validations[current] && !detail.validations[current].ok && (
-          <div className="mx-[18px] mt-3.5 border border-bad-line bg-bad-bg px-3 py-2.5 text-[12px] text-bad max-lg:mt-2.5">
-            Fails its {detail.validations[current].contract} contract — missing: {detail.validations[current].missing.join(', ')}
-          </div>
-        )}
+        {/* The rail carries the badge only (#424): the failure notice, naming
+            the contract by kind with the file after it, is the reader's, and
+            saying it twice on one screen made neither the place to read it. */}
       </nav>
       <ReaderPane artifact={showDiff ? DIFF_SELECTION : current}>
         {showDiff ? (
@@ -207,24 +205,28 @@ function ReaderPane({ children, artifact }: { children: ReactNode; artifact?: st
 }
 
 /**
- * The contract's name in the reader's badge — and nothing when the badge would
- * only be echoing the filename beside it (#285/3).
+ * How the reader's badge and failure notice name the contract (#424): by the
+ * contract's own name for the kind — `review report`, `work item` — with the
+ * contract's file as an Address after it (docs/SEAM.md §2, §4 Container).
  *
- * "runs/g2-pending/verification-report.md ✓ passes verification-report.md
- * contract" says one filename twice in one strip, and the second one is what
- * pushed the badge onto its own line in the narrow band. The path is already
- * naming the file, which is the reviewer's argument, and it applies exactly
- * where the two strings are the same string — `review-01.md` is checked against
- * `review-report.md`, and naming that is the badge telling the reader something
- * the path did not. Either way the full sentence is in the badge's hover text.
+ * The Address is dropped when it would only echo the filename in the header
+ * beside it (#285/3): "runs/g2-pending/verification-report.md ✓ passes the
+ * verification report contract verification-report.md" says one filename
+ * twice in one strip. `review-01.md` checked against `review-report.md` is
+ * the case the Address earns its place, since the path did not say it.
  *
  * A `null` contract — `retro.md` and anything else the framework checks for
- * presence only — has no name to print, and printing it left a double space
- * mid-sentence.
+ * presence only — has neither a name nor a file. A null name with a contract
+ * is a path the run does not list, so no reference names its kind; the file
+ * still follows as the Address, and the name is never minted from it.
  */
-export function contractBadgeName(path: string, contract: string | null): string {
-  if (contract === null || contract === path.split('/').pop()) return ''
-  return `${contract} `
+export function contractBadgeName(
+  path: string,
+  contract: string | null,
+  contractName: string | null,
+): { name: string | null; address: string | null } {
+  if (contract === null) return { name: null, address: null }
+  return { name: contractName, address: contract === path.split('/').pop() ? null : contract }
 }
 
 function ArtifactBody({ src, slug, path, artifact }: { src: string; slug: string; path: string; artifact: ArtifactRef | null }) {
@@ -258,6 +260,8 @@ function ArtifactBody({ src, slug, path, artifact }: { src: string; slug: string
   if (isLoading) return <LoadingSkeleton text="Reading artifact…" />
   if (error) return <PageStatus text={(error as Error).message} bad />
   const { content, validation } = data!
+  const contract = contractBadgeName(path, validation.contract, artifact?.contractName ?? null)
+  const contractWords = `${contract.name ? `the ${contract.name} ` : ''}contract`
   return (
     <article className="relative min-h-0 px-10 py-8 max-lg:px-4 max-lg:py-6">
       <div className="max-w-[var(--measure)]">
@@ -270,17 +274,33 @@ function ArtifactBody({ src, slug, path, artifact }: { src: string; slug: string
           <span className="text-ink">runs/{slug}/{path}</span>
           <span
             className="ml-auto max-lg:ml-0 font-semibold"
-            title={validation.contract ? `${validation.ok ? 'passes' : 'fails'} the ${validation.contract} contract` : undefined}
+            title={validation.contract ? `${validation.ok ? 'passes' : 'fails'} ${contractWords}, ${validation.contract}` : undefined}
+            data-contract-badge
           >
-            <span className={validation.ok ? 'text-ok' : 'text-bad'}>
+            <span className={`font-ui ${validation.ok ? 'text-ok' : 'text-bad'}`}>
               <span className="mr-1">{validation.ok ? '✓' : '✕'}</span>
-              {validation.ok ? 'passes' : 'fails'} {contractBadgeName(path, validation.contract)}contract
+              {validation.ok ? 'passes' : 'fails'} {contractWords}
             </span>
+            {contract.address && (
+              <>
+                {' '}
+                <Address size="md" className="font-normal">
+                  {contract.address}
+                </Address>
+              </>
+            )}
           </span>
         </div>
         {!validation.ok && (
-          <p className="mb-4 border border-bad-line bg-bad-bg px-3 py-2 text-xs font-medium text-bad">
-            Fails its {validation.contract} contract — missing: {validation.missing.join(', ')}
+          <p className="mb-4 border border-bad-line bg-bad-bg px-3 py-2 text-xs font-medium text-bad" data-contract-failure>
+            Fails {contract.name ? `its ${contract.name}` : 'its'} contract
+            {validation.contract && (
+              <>
+                {' '}
+                <Address className="font-normal">{validation.contract}</Address>
+              </>
+            )}{' '}
+            — missing: {validation.missing.join(', ')}
           </p>
         )}
         <CitedObjects content={content} path={path} />
@@ -357,7 +377,7 @@ function DiffPane({ src, slug }: { src: string; slug: string }) {
   if (data!.merged) return <PageStatus text="Run is merged — its change lives in the default branch history now." />
   return (
     <div className="px-[18px] py-[18px]">
-      <DiffView files={data!.files} surface={data!.surface} />
+      <DiffView files={data!.files} surface={data!.surface} src={src} slug={slug} />
     </div>
   )
 }

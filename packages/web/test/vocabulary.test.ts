@@ -28,6 +28,7 @@ import {
   QuotedWord,
   Withheld,
 } from '../src/components/vocabulary.tsx'
+import { ref } from './artifact-refs.helper.ts'
 
 /** `createElement` for the vocabulary: their children are typed as a required
  *  prop (a string, for most kinds), which the element's third argument fills. */
@@ -39,6 +40,16 @@ function render(node: ReactNode): string {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return renderToStaticMarkup(el(QueryClientProvider, { client }, el(MemoryRouter, null, node)))
 }
+
+/** The markup's text, as a reader sees it: tags dropped, entities decoded. */
+const textOf = (html: string) =>
+  html
+    .replace(/<[^>]+>/g, '')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;/g, "'")
+    .replace(/&amp;/g, '&')
 
 /** The class list of the first element carrying `attr`. */
 function classesOf(html: string, attr: string): string[] {
@@ -237,7 +248,7 @@ describe('LinkOut — link blue, ↗, a new tab; the only ↗ in the vocabulary'
   it('is the only kind that renders ↗', () => {
     const others = [
       render(el(Address, { to: '/x' }, 'a.md')),
-      render(el(Withheld, { reason: { sentence: 'no section.' }, open: { label: 'read a.md', href: '/x' } })),
+      render(el(Withheld, { view: 'Coverage', reason: { grammar: 'a section headed', token: '## X', lookedIn: ref('plan.md') }, src: 's', slug: 'r' })),
       render(el(Fold, { heading: 'H' }, 'b')),
       render(el(Instruction, null, 'Do the thing.')),
     ]
@@ -246,28 +257,66 @@ describe('LinkOut — link blue, ↗, a new tab; the only ↗ in the vocabulary'
 })
 
 describe('Withheld — a caution field naming the grammar, one link', () => {
+  const plan = ref('plan.md')
+
   it('is the caution field, never the declined red', () => {
-    const cls = classesOf(render(el(Withheld, { reason: { sentence: 'x' }, 'data-w': true })), 'data-w')
+    const cls = classesOf(render(el(Withheld, { view: 'Coverage', reason: { grammar: 'a plan', lookedIn: null }, src: 's', slug: 'r', 'data-w': true })), 'data-w')
     expect(cls).toEqual(expect.arrayContaining(['border-warn-line', 'bg-warn-bg', 'text-warn']))
     expect(cls.some((c) => c.includes('bad'))).toBe(false)
   })
 
-  it('names what stood down, the reason, the reader’s remedy, and one link, in that order', () => {
+  it('composes the sentence from the structured reason: view, grammar, token in the code face, the kind looked in (#424)', () => {
     const html = render(
-      el(Withheld, {
-        view: 'Criterion view withheld',
-        reason: { sentence: 'no Results table.' },
-        after: 'The report is below.',
-        open: { label: 'read verification-report.md', href: '/r' },
-      }),
+      el(Withheld, { view: 'Coverage', reason: { grammar: 'a section headed', token: '## Requirement → task mapping', lookedIn: plan }, src: 'local', slug: 'a-run' }),
     )
-    expect(html).toContain('Criterion view withheld — no Results table. The report is below. <a')
-    expect(html.match(/<a /g)).toHaveLength(1)
+    expect(html).toContain(
+      'Coverage withheld — looked for a section headed <span class="font-mono">## Requirement → task mapping</span> in the plan. <a',
+    )
   })
 
-  it('sets the structured reason’s token in the code face', () => {
-    const html = render(el(Withheld, { reason: { grammar: 'No section headed', token: '## Escalation' } }))
-    expect(html).toContain('No section headed <span class="font-mono">## Escalation</span>')
+  it('links once, to the artifact looked in, named by its kind — never by filename', () => {
+    const html = render(el(Withheld, { view: 'Coverage', reason: { grammar: 'a section headed', token: '## X', lookedIn: plan }, src: 'local', slug: 'a-run' }))
+    expect(html.match(/<a /g)).toHaveLength(1)
+    expect(html).toMatch(/<a [^>]*href="\/runs\/local\/a-run\?tab=record&amp;artifact=plan\.md"[^>]*>Open the plan<\/a>/)
+    expect(textOf(html)).not.toContain('plan.md')
+  })
+
+  it('names a work item by its id, a Name in the code face', () => {
+    const html = render(
+      el(Withheld, {
+        view: 'Surface view',
+        reason: { grammar: 'a list under the key', token: 'file_contact_surface:', lookedIn: ref('tasks/01-core.yaml') },
+        src: 'local',
+        slug: 'a-run',
+      }),
+    )
+    expect(textOf(html)).toBe(
+      'Surface view withheld — looked for a list under the key file_contact_surface: in work item 01-core. Open the work item',
+    )
+    expect(html).toContain('data-name="true">01-core</span>')
+  })
+
+  it('says the record has none, and links nothing, when there is nothing to open', () => {
+    const html = render(el(Withheld, { view: 'Parallel safety', reason: { grammar: 'a work item', lookedIn: null }, src: 's', slug: 'r' }))
+    expect(textOf(html)).toBe('Parallel safety withheld — looked for a work item, and the record has none.')
+    expect(html).not.toContain('<a ')
+  })
+
+  it('puts the reader’s remedy after the reason, and drops the link where the reader is already on the artifact', () => {
+    const html = render(
+      el(Withheld, {
+        view: 'Evidence citations',
+        reason: { grammar: 'an evidence block headed', token: '### E<k> — AC<n>.<m>', lookedIn: ref('verification-report.md') },
+        src: 's',
+        slug: 'r',
+        after: 'The report is below.',
+        link: false,
+      }),
+    )
+    expect(textOf(html)).toBe(
+      'Evidence citations withheld — looked for an evidence block headed ### E<k> — AC<n>.<m> in the verification report. The report is below.',
+    )
+    expect(html).not.toContain('<a ')
   })
 })
 

@@ -184,7 +184,13 @@ describe('buildEscalationPacket', () => {
     })
     expect(p.origin).toBe('role')
     expect(p.section).toBeNull()
-    expect(p.withheld).toMatch(/review-04\.md carries no Escalation section/)
+    // Structured (#424): no sentence, no issue number — the section looked
+    // for and the report it looked in.
+    expect(p.withheld).toEqual({
+      grammar: 'a section headed',
+      token: '## Escalation',
+      lookedIn: expect.objectContaining({ kind: 'review-report', path: 'review-04.md', contractName: 'review report' }),
+    })
     // The report's own facts still travel: the human still gets the verdict and the link.
     expect(p.reportVerdict).toBe('escalate')
     expect(p.standingFindings).toBe(2)

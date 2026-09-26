@@ -24,7 +24,7 @@
 // either shape compares the same way.
 //
 // Pure and type-only by design, like landing.ts and spine.ts.
-import type { ReviewFinding, ReviewReport, Severity, Verdict } from './api.ts'
+import type { ArtifactRef, ReviewFinding, ReviewReport, Severity, Verdict, WithheldReason } from './api.ts'
 
 const SEVERITY_RANK: Record<Severity, number> = { blocking: 0, major: 1, minor: 2, unknown: 3 }
 
@@ -64,8 +64,12 @@ export interface RoundDelta {
 
 export interface RoundWithheld {
   ok: false
-  /** Why no comparison is offered, in plain words, for the panel to show. */
-  reason: string
+  /**
+   * Why no comparison is offered, as the structured reason every packet
+   * carries (#424): the grammar looked for, the token, and the report looked
+   * in. The panel's `Withheld` composes the sentence.
+   */
+  reason: WithheldReason
 }
 
 export type RoundComparison = RoundDelta | RoundWithheld
@@ -134,6 +138,9 @@ function groupById(reports: ReviewReport[]): Map<string, Group> {
   return groups
 }
 
+/** The line a review round numbers itself with, as the contract spells it. */
+const ROUND_TOKEN = '**Round:** <n of 3>'
+
 const rank = (a: RoundFinding, b: RoundFinding) =>
   SEVERITY_RANK[a.finding.severity] - SEVERITY_RANK[b.finding.severity] || Number(a.finding.id.slice(1)) - Number(b.finding.id.slice(1))
 
@@ -144,23 +151,24 @@ const rank = (a: RoundFinding, b: RoundFinding) =>
  * that numbers fewer than two rounds has nothing to compare, and one whose
  * findings do not match the contract's heading grammar is a forked contract,
  * where the honest move is to stand down and let the reports speak.
+ *
+ * `refs` are the run's artifact references, from which the reason names the
+ * latest report as the one it looked in. Without them — a server older than
+ * the page — the reason looks in nothing, which the panel says plainly.
  */
-export function compareRounds(reports: ReviewReport[]): RoundComparison {
+export function compareRounds(reports: ReviewReport[], refs: readonly ArtifactRef[] = []): RoundComparison {
+  const latest = reports.at(-1)
+  const lookedIn = (latest && refs.find((r) => r.path === latest.path)) ?? null
+  const withheld = (grammar: string, token: string): RoundWithheld => ({ ok: false, reason: { grammar, token, lookedIn } })
   const rounds = roundNumbers(reports)
   if (rounds.length < 2) {
-    return {
-      ok: false,
-      reason:
-        rounds.length === 0
-          ? 'the reports number no rounds, so there are no two rounds to compare'
-          : `the record carries one numbered round (round ${rounds[0]}), so there is nothing to compare it against`,
-    }
+    return rounds.length === 0 ? withheld('a numbered round', ROUND_TOKEN) : withheld('a second numbered round', ROUND_TOKEN)
   }
   const earlierRound = rounds[rounds.length - 2]!
   const laterRound = rounds[rounds.length - 1]!
   const groups = [...groupById(reports).values()].filter((g) => g.raisings.length > 0)
   if (groups.length === 0) {
-    return { ok: false, reason: 'no findings in the record match the `### F<n> — <severity> — <title>` grammar' }
+    return withheld('a finding headed', '### F<n> — <severity> — <title>')
   }
 
   const standing: RoundFinding[] = []

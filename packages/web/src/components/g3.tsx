@@ -26,7 +26,7 @@
 // ship", and no link to a deploy target, because the record names none.
 
 import { useQuery } from '@tanstack/react-query'
-import { type ArtifactRef, api, type ReleasePacket as ReleasePacketData, type ReleaseStep } from '../api.ts'
+import { api, type ReleasePacket as ReleasePacketData, type ReleaseStep, type WithheldReason } from '../api.ts'
 import { ReportVerdict } from './evidence.tsx'
 import { PACKET_FRAME, PACKET_LABEL, PacketSweep } from './findings.tsx'
 import { GroupLabel } from './g1.tsx'
@@ -38,16 +38,10 @@ import { Address, artifactHref, FieldRow, Fold, KindLabel, QuotedPassage, Quoted
 // no `sourceKind` — a release plan defines no ids, so every id in it is a
 // citation, which is the lexicon stage's default.
 
-/** The fork fallback for a half of this packet, routed to the plan. */
-function PlanWithheld({ reason, plan, src, slug, hook }: { reason: string; plan: ArtifactRef; src: string; slug: string; hook: string }) {
-  return (
-    <Withheld
-      reason={{ sentence: reason }}
-      open={{ label: `read ${plan.path}`, href: artifactHref(src, slug, plan.path) }}
-      className="mt-1.5"
-      data-withheld={hook}
-    />
-  )
+/** The fork fallback for a half of this packet, composed from the packet's
+ *  structured reason (#424) and routed to the plan. */
+function PlanWithheld({ view, reason, src, slug, hook }: { view: string; reason: WithheldReason; src: string; slug: string; hook: string }) {
+  return <Withheld view={view} reason={reason} src={src} slug={slug} className="mt-1.5" data-withheld={hook} />
 }
 
 export function G3Packet({ src, slug }: { src: string; slug: string }) {
@@ -106,7 +100,7 @@ function Rollback({ packet, src, slug }: { packet: ReleasePacketData; src: strin
   return (
     <div data-g3-rollback>
       <GroupLabel hint="the signal that says undo this, and whether the undo has been tried">Rollback</GroupLabel>
-      {packet.fieldsWithheld && <PlanWithheld reason={packet.fieldsWithheld} plan={packet.plan} src={src} slug={slug} hook="fields" />}
+      {packet.fieldsWithheld && <PlanWithheld view="Rollback facts" reason={packet.fieldsWithheld} src={src} slug={slug} hook="fields" />}
       <ul className="mt-1.5 flex flex-col gap-1">
         {packet.rollbackTrigger !== null && <Fact label="Rollback trigger" value={packet.rollbackTrigger} hook="trigger" />}
         {packet.rollbackExercised !== null && (
@@ -138,9 +132,9 @@ function Shipping({ packet, src, slug }: { packet: ReleasePacketData; src: strin
         {packet.changeReleased !== null && <Fact label="Change released" value={packet.changeReleased} hook="change" />}
         {packet.environment !== null && <Fact label="Environment" value={packet.environment} hook="environment" />}
       </ul>
-      {packet.ciHealth === null ? (
-        <PlanWithheld reason="no CI health section." plan={packet.plan} src={src} slug={slug} hook="ci" />
-      ) : (
+      {packet.ciWithheld ? (
+        <PlanWithheld view="CI health" reason={packet.ciWithheld} src={src} slug={slug} hook="ci" />
+      ) : packet.ciHealth === null ? null : (
         <QuotedPassage className="mt-1.5 text-[12.5px]" data-g3-ci>
           <KindLabel as="p" tone="muted">
             CI health
@@ -165,7 +159,7 @@ function Steps({ packet, src, slug }: { packet: ReleasePacketData; src: string; 
     <div data-g3-steps>
       <GroupLabel hint="in order, one act per item, executable as written">Release steps</GroupLabel>
       {packet.stepsWithheld ? (
-        <PlanWithheld reason={packet.stepsWithheld} plan={packet.plan} src={src} slug={slug} hook="steps" />
+        <PlanWithheld view="Release steps" reason={packet.stepsWithheld} src={src} slug={slug} hook="steps" />
       ) : (
         <>
           {irreversible.length > 0 && (
@@ -227,7 +221,7 @@ function VerifiedAgainst({ src, slug }: { src: string; slug: string }) {
         <div className="mt-1.5 border border-line bg-surface px-3 py-2 text-[12.5px]">
           <ReportVerdict rollup={data} />
           {data.withheld ? (
-            <p className="mt-1 text-[12px] leading-[1.5] text-muted">Evidence citations not computed — {data.withheld}</p>
+            <Withheld view="Evidence citations" reason={data.withheld} src={src} slug={slug} className="mt-1" data-evidence-withheld />
           ) : (
             <p className="mt-1 text-[12.5px] leading-[1.5] text-muted" data-cited={cited.length} data-uncited={uncited.length}>
               {cited.length === 1 ? '1 criterion is' : `${cited.length} criteria are`} cited by verification evidence

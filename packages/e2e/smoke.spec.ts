@@ -404,13 +404,13 @@ test('G2 packet (#256): a forked verification grammar withholds the view and say
   await expect(page.locator('[data-needs-card]')).toContainText('Does the evidence support merging?')
   await expect(page.locator('[data-decide="approve"]')).toHaveCount(1)
   // …but the parser does not guess: it names the grammar it looked for.
-  await expect(packet.locator('[data-withheld]')).toContainText('evidence-block grammar')
+  await expect(packet.locator('[data-withheld]')).toContainText('looked for an evidence block headed ### E<k> — AC<n>.<m> in the verification report')
   await expect(packet.locator('[data-criterion]')).toHaveCount(0)
   // Never a claim the record cannot support.
   await expect(packet).not.toContainText('No verification evidence cites')
   // The reviews still render, and the report is one click away.
   await expect(packet.locator('[data-report="review-01.md"]')).toContainText('off-by-one in boundary handling')
-  await packet.getByRole('link', { name: 'read verification-report.md' }).click()
+  await packet.getByRole('link', { name: 'Open the verification report' }).click()
   await expect(page).toHaveURL(/artifact=verification-report\.md/)
   // The artifact page stands down too, rather than asserting nothing cites AC1.1.
   await expect(page.locator('[data-evidence-withheld]')).toBeVisible()
@@ -487,7 +487,7 @@ test('surface-scoped diff (#270): a forked work-item grammar withholds the group
   // required key is there, so the gate is reviewable — the view stands down and
   // names the grammar rather than reporting every file as out of surface.
   await page.goto(`/runs/${sourceId()}/forked-contract?tab=record&artifact=@diff`)
-  await expect(page.locator('[data-surface-withheld]')).toContainText('nested block')
+  await expect(page.locator('[data-surface-withheld]')).toContainText('looked for a list under the key file_contact_surface: in work item 01-core')
   await expect(page.locator('[data-surface-group]')).toHaveCount(0)
   await expect(page.locator('[data-undeclared]')).toHaveCount(0)
   // AC3 — the diff itself is untouched by the scoping standing down.
@@ -644,14 +644,14 @@ test('G3 packet (#403): the release plan composed for "Ship it?"', async ({ page
 test('G3 packet (#403): a malformed plan withholds what it cannot read and shows what it can', async ({ page }) => {
   // AC3 — the fixture's plan has a Release steps list and nothing else. The
   // card is bounced (readiness says so); the packet still renders the steps
-  // and names every field line it looked for.
+  // and names the first field line it looked for (#424); the plan, one click
+  // away, shows the rest.
   await page.goto(`/runs/${sourceId()}/malformed-release?decide=G3`)
   const packet = page.locator('[data-g3-packet]')
   await expect(packet).toBeVisible()
   const withheld = packet.locator('[data-withheld="fields"]')
-  await expect(withheld).toContainText('**Rollback trigger:**')
-  await expect(withheld).toContainText('**Rollback exercised:**')
-  await expect(withheld.getByRole('link', { name: 'read release-plan.md' })).toBeVisible()
+  await expect(withheld).toContainText('looked for a bold-label line **Change released:** in the release plan')
+  await expect(withheld.getByRole('link', { name: 'Open the release plan' })).toBeVisible()
   await expect(packet.locator('[data-withheld="ci"]')).toBeVisible()
   await expect(packet.locator('[data-g3-steps] [data-step]')).toHaveCount(1)
   await expect(packet.locator('[data-g3-steps] [data-step]')).toContainText('Ship it.')

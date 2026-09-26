@@ -28,6 +28,7 @@
 // click away either way.
 import { splitSections } from '../record/sections.ts'
 import { type ArtifactRef, artifactRef } from './artifact-ref.ts'
+import { type WithheldGrammar, type WithheldReason, withheldIn } from './withheld.ts'
 
 export interface ReleaseStep {
   /** The list number as written, e.g. 1 for `1. Tag the merge commit`. */
@@ -69,18 +70,23 @@ export interface ReleasePacket {
   verificationAfter: string | null
   /** The `## Blast radius` body, verbatim. */
   blastRadius: string | null
-  /** Why the fields view must withhold itself, or null. */
-  fieldsWithheld: string | null
-  /** Why the steps view must withhold itself, or null. */
-  stepsWithheld: string | null
+  /** Why the fields view must withhold itself, or null — the first bold-label line missing (#424). */
+  fieldsWithheld: WithheldReason | null
+  /** Why the steps view must withhold itself, or null (#424). */
+  stepsWithheld: WithheldReason | null
+  /** Why the CI health view must withhold itself — a plan with no such section — or null (#424). */
+  ciWithheld: WithheldReason | null
 }
 
+const PLAN = 'release-plan.md'
+
+const STEPS_HEADING = '## Release steps'
 const FIELD = /^\*\*([^*]+?):\*\*\s*(.*)$/
 const STEP = /^\s*(\d+)[.)]\s+(.*\S)\s*$/
 const CONTINUATION = /^\s{2,}(\S.*)$/
 
 const EMPTY: ReleasePacket = {
-  plan: artifactRef('release-plan.md'),
+  plan: artifactRef(PLAN),
   verification: artifactRef('verification-report.md'),
   hasPlan: false,
   changeReleased: null,
@@ -95,6 +101,7 @@ const EMPTY: ReleasePacket = {
   blastRadius: null,
   fieldsWithheld: null,
   stepsWithheld: null,
+  ciWithheld: null,
 }
 
 /**
@@ -126,7 +133,7 @@ function fields(lines: string[]): { values: Map<string, string>; consumed: Set<n
 }
 
 /** The numbered list in the Release steps body, one act per item. */
-export function parseReleaseSteps(body: string): { steps: ReleaseStep[]; withheld: string | null } {
+export function parseReleaseSteps(body: string): { steps: ReleaseStep[]; withheld: WithheldGrammar | null } {
   // Prose between or around the items is not a deviation the view refuses
   // over: the list is what it renders, and the section is one click away.
   const steps: ReleaseStep[] = []
@@ -145,7 +152,8 @@ export function parseReleaseSteps(body: string): { steps: ReleaseStep[]; withhel
   }
   for (const s of steps) s.irreversible = /\birreversible\b/i.test(s.text)
   if (steps.length === 0) {
-    return { steps: [], withheld: 'Release steps is not a numbered list — the contract fixes one act per numbered item.' }
+    // The contract fixes one act per numbered item.
+    return { steps: [], withheld: { grammar: 'a numbered list under', token: STEPS_HEADING } }
   }
   return { steps, withheld: null }
 }
@@ -175,16 +183,17 @@ export function buildReleasePacket(input: { plan: string | null }): ReleasePacke
     rollbackTrigger === null && '**Rollback trigger:**',
     rollbackExercised === null && '**Rollback exercised:**',
   ].filter((x): x is string => typeof x === 'string')
-  const fieldsWithheld =
-    missing.length === 0
-      ? null
-      : `no ${missing.join(', ')} line — the contract fixes ${missing.length === 1 ? 'it' : 'them'} as bold-label lines.`
+  // The first missing field is the reason; the plan, one click away, shows
+  // which of the others are there.
+  const fieldsWithheld = missing.length === 0 ? null : withheldIn({ grammar: 'a bold-label line', token: missing[0]! }, PLAN)
 
   const firstWord = rollbackExercised?.trim().split(/\s+/)[0]?.replace(/[^a-z]/gi, '').toLowerCase() ?? ''
   const exercisedWord = firstWord === 'yes' || firstWord === 'no' ? firstWord : null
 
   const stepsBody = body('Release steps')
-  const parsed = stepsBody === null ? { steps: [], withheld: 'no Release steps section.' } : parseReleaseSteps(stepsBody)
+  const parsed =
+    stepsBody === null ? { steps: [], withheld: { grammar: 'a section headed', token: STEPS_HEADING } } : parseReleaseSteps(stepsBody)
+  const ciHealth = body('CI health')
 
   // The rollback prose, with the two fields lifted out — every line each one
   // occupied — so the fields are not said twice on the card. Byte-identical
@@ -205,12 +214,13 @@ export function buildReleasePacket(input: { plan: string | null }): ReleasePacke
     rollbackTrigger,
     rollbackExercised,
     exercisedWord,
-    ciHealth: body('CI health'),
+    ciHealth,
     steps: parsed.steps,
     rollbackPlan,
     verificationAfter: body('Verification after release'),
     blastRadius: body('Blast radius'),
     fieldsWithheld,
-    stepsWithheld: parsed.withheld,
+    stepsWithheld: withheldIn(parsed.withheld, PLAN),
+    ciWithheld: ciHealth === null ? withheldIn({ grammar: 'a section headed', token: '## CI health' }, PLAN) : null,
   }
 }

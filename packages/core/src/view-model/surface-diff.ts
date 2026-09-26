@@ -23,6 +23,7 @@
 // the way web/src/landing.ts already holds "which artifact opens".
 import { inSurface, type TaskSet, type WorkItem } from './tasks.ts'
 import type { DiffFile } from './unidiff.ts'
+import { taskSetWithheld, type WithheldReason } from './withheld.ts'
 
 /**
  * A work item as the diff view needs it: enough to name the item and show the
@@ -55,8 +56,9 @@ export interface SurfaceScopedDiff {
    * Why the scoping must withhold itself, or null when it applies. A run with
    * no readable task set gets the plain diff and this reason, per the fork
    * fallback (FRONTEND.md §4.1) — never a diff silently labelled from nothing.
+   * Looked for in the set's first work item, the first cause (#424).
    */
-  withheld: string | null
+  withheld: WithheldReason | null
 }
 
 /** Both sides of a rename count: a surface may name the path before or after. */
@@ -83,7 +85,7 @@ export function scopeDiff(files: DiffFile[], set: TaskSet): SurfaceScopedDiff {
     declaredBy: files.map((file) =>
       readable.filter((item) => pathsOf(file).some((p) => inSurface(item, p))).map((item) => item.id),
     ),
-    withheld: set.withheld,
+    withheld: taskSetWithheld(set),
   }
 }
 

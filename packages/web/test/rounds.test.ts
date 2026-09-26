@@ -7,6 +7,7 @@ import { parseReview } from '@gateline/core/view-model'
 import { describe, expect, it } from 'vitest'
 import type { ReviewReport } from '../src/api.ts'
 import { compareRounds, reportsForTask } from '../src/rounds.ts'
+import { ref } from './artifact-refs.helper.ts'
 
 /** A report built the way a reviewer writes one, then parsed by core — the
  *  comparison must hold against the real parse, not a hand-built object. */
@@ -154,9 +155,16 @@ describe('ordering', () => {
 
 describe('the comparison withholds itself rather than guessing', () => {
   it('one numbered round offers no comparison, and says so', () => {
-    const result = compareRounds([report('review-01.md', round(1, F1))])
+    const result = compareRounds([report('review-01.md', round(1, F1))], [ref('review-01.md', '01-core', 1)])
     expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.reason).toContain('one numbered round')
+    // Structured (#424): the grammar looked for, in the contract's spelling,
+    // and the report it looked in; the panel composes the sentence.
+    if (!result.ok)
+      expect(result.reason).toEqual({
+        grammar: 'a second numbered round',
+        token: '**Round:** <n of 3>',
+        lookedIn: expect.objectContaining({ kind: 'review-report', path: 'review-01.md', contractName: 'review report' }),
+      })
   })
 
   it('a forked finding grammar withholds and names the grammar it looked for', () => {
@@ -176,11 +184,15 @@ describe('the comparison withholds itself rather than guessing', () => {
 `
     const result = compareRounds([report('review-01.md', forked)])
     expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.reason).toContain('F<n>')
+    if (!result.ok) expect(result.reason).toMatchObject({ grammar: 'a finding headed', token: '### F<n> — <severity> — <title>' })
+    // No refs — a server older than the page — and it looked in nothing it can name.
+    if (!result.ok) expect(result.reason.lookedIn).toBeNull()
   })
 
   it('no reports at all is withheld, not an empty comparison', () => {
-    expect(compareRounds([]).ok).toBe(false)
+    const result = compareRounds([])
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.reason).toEqual({ grammar: 'a numbered round', token: '**Round:** <n of 3>', lookedIn: null })
   })
 })
 

@@ -18,6 +18,7 @@ import { verdictLines } from '../record/validate.ts'
 import { type ArtifactRef, artifactRef } from './artifact-ref.ts'
 import type { Lexicon } from './lexicon.ts'
 import { parseReview, type ReviewFinding, SEVERITY_RANK } from './review.ts'
+import { type WithheldReason, withheldIn } from './withheld.ts'
 
 export interface EvidenceAnchor {
   /** Run-relative artifact path. */
@@ -84,9 +85,11 @@ export interface EvidenceRollup {
    * Why the structured view must withhold itself, or null when it applies.
    * Contracts are forkable, so a report may legitimately follow a grammar this
    * parser does not know; the contracts' own bounce rule turned on the UI is to
-   * say so and fall back to the raw markdown, never to guess.
+   * say so and fall back to the raw markdown, never to guess. Looked for in
+   * the verification report (#424); the Results-table grammar the view also
+   * reads is the second cause, and the report says it.
    */
-  withheld: string | null
+  withheld: WithheldReason | null
 }
 
 const AC_ID = /\bAC\d+\.\d+\b/g
@@ -220,7 +223,7 @@ export function buildEvidenceRollup(input: {
     criteria: order.map((id) => byId.get(id)!),
     withheld:
       input.verification !== null && blocks === 0 && rows === 0
-        ? 'verification-report.md follows neither the `### E<k> — AC<n>.<m>` evidence-block grammar nor the Results-table row grammar, so this view cannot say which criterion each piece of evidence proves.'
+        ? withheldIn({ grammar: 'an evidence block headed', token: '### E<k> — AC<n>.<m>' }, VERIFICATION)
         : null,
   }
 }

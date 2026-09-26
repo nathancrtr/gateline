@@ -9,7 +9,9 @@
 // click away, so folding here is never truncation. The group headings state
 // what the record shows: a finding the later round did not mention is reported
 // as not mentioned, never as resolved.
+import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
+import { api } from '../api.ts'
 import { compareRounds, type RoundFinding, type RoundSide, reportsForTask } from '../rounds.ts'
 import {
   Field,
@@ -34,6 +36,9 @@ const NOTE_TONE: Record<RoundFinding['note'], string> = {
 
 export function RoundCapPanel({ src, slug, task }: { src: string; slug: string; task: string | null }) {
   const { reports, pending } = useReviewsQuery(src, slug)
+  // The run page's own query, so this is its cache entry: the references a
+  // withheld comparison names the report it looked in by (#424).
+  const refs = useQuery({ queryKey: ['run', src, slug], queryFn: () => api.run(src, slug) }).data?.artifactRefs
   // "Not read yet" and "no reports in this record" are different facts (#299),
   // and the second is the one an empty card already states. Say the first.
   if (pending) {
@@ -46,7 +51,7 @@ export function RoundCapPanel({ src, slug, task }: { src: string; slug: string; 
   }
   if (!reports || reports.length === 0) return null
   const scoped = reportsForTask(reports, task)
-  const comparison = compareRounds(scoped)
+  const comparison = compareRounds(scoped, refs ?? [])
 
   // A forked grammar, or a single round: say which and stand down. The reports
   // are the answer in both cases, so they are what the panel offers. This is
@@ -57,7 +62,7 @@ export function RoundCapPanel({ src, slug, task }: { src: string; slug: string; 
     return (
       <section className={PACKET_FRAME} data-round-cap>
         <p className={PACKET_LABEL}>Rounds — composed from the record</p>
-        <Withheld view="Round comparison withheld" reason={{ sentence: `${comparison.reason}.` }} className="mt-2" data-rounds-withheld />
+        <Withheld view="Round comparison" reason={comparison.reason} src={src} slug={slug} className="mt-2" data-rounds-withheld />
         <div className="mt-2" data-round-reports>
           {/* #411 step 3: an Address never wears a chip border. These become
               reference rows — kind, name, quoted verdict — with the path on

@@ -408,6 +408,12 @@ may reorder, group, fold, badge, and diff, but every word shown comes byte-ident
 from the committed artifact and every word stays reachable. Folding is never
 truncation, and nothing here summarizes.
 
+The rule's scope — it governs the record's words, not its addresses, its
+machinery or its container names — and the vocabulary of representations that
+follows from that scope are the subject of [`SEAM.md`](SEAM.md). Sections 4.8
+to 4.10 below are the three surfaces that were fixed before the rule was
+scoped; SEAM.md §6 reads them against it and §8 reverses two of §4.8's calls.
+
 ### 4.8 The record rail names kinds, not files (#401)
 
 The Record rail was a directory listing: `tasks/06-pages-workflow.yaml` in

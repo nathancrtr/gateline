@@ -46,3 +46,39 @@ I read the whole diff against requirement three and the plan's fixture-label con
 ## Boundary check
 
 Inside the surface. eac2e95 touches exactly the five declared files plus the task file's `notes:` block; nothing under `packages/server`, `packages/core`, `e2e/` or the root config moved. Every mutant was applied to `fixture-label.tsx` alone and restored with `git checkout --` (worktree diff empty after each); the one scratch test lived under `web/test/` for a single run and was deleted. Operational note for the orchestrator, not a finding: at 19:33 local time, while this review was running, `packages/server/src/snapshot.ts` became modified in the worktree (a four-line deletion of the `phase !== 'done'` exclusion in `DoneOnDefaultBranchSource`). HEAD did not move, the change is not in eac2e95, and nothing I ran touches that file; the edit was gone again by the time this report was written and an untracked `review-02.md` had appeared beside it, so task 02's reviewer is working in this same worktree concurrently and that was almost certainly one of their in-place mutants. I touched neither. The worktree is otherwise clean apart from this report and theirs.
+
+# Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** `run/gatehouse-demo`, commit bd10b19 (`git diff bd10b19^ bd10b19`); cumulative task diff `git diff eac2e95^ bd10b19 -- packages/`
+
+## Verify round
+- **F1 — resolved** — `packages/web/test/fixture-label.test.ts:32-38` strips every tag and requires the remainder to equal `fixture data`, then pins `/>fixture data</`; re-applied the round-1 mutant (`title="fixture data"`, no children) in place → 1 failed / 4 passed (`expected '' to be 'fixture data'`), restored.
+- **F2 — resolved** — `packages/web/test/fixture-label.test.ts:20-22` adds `isFixtureSource('fixtures')` → `false`; re-applied `includes` and `startsWith` in place → each 1 failed / 4 passed (`expected true to be false`), restored. The case-fold variant round 1 also named is not killed by this case (see F3); round 1 overclaimed that one negative case covered it.
+- **Escalation — resolved** — the human widened the surface rather than narrowing R3 (`afe5809`, disposition `return-to-implement` in `ab8571a`); `packages/web/src/pages/metrics.tsx:234` now renders `<FixtureLabel className="ml-2" />` gated on `isFixtureSource(r.source)` in the budget-honesty run cell, the only per-run row on that page (`metrics.tsx:231-234`), matching scope item 5 word for word.
+
+### F3 — minor — A case-insensitive match still passes the suite, so exact equality is pinned only up to case
+- **Where:** `packages/web/test/fixture-label.test.ts:11-23`
+- **Failure scenario:** mutant: `fixture-label.tsx:14` becomes `source.toLowerCase() === FIXTURE_SOURCE_ID` → 5/5 pass (verified in place, restored). Source ids come from directory basenames (`core/src/view-model/config.ts:146`), so `gateline ui --repo ~/Fixture` would label every real run in that checkout. Residual of round-1 F2, not something this delta introduced; the shipped code is `===` and the task's acceptance-test line is met as amended. One line kills it: `expect(isFixtureSource('Fixture')).toBe(false)`. Non-blocking.
+- **Requirement:** R3 negative half; plan "Fixture label" (`source === FIXTURE_SOURCE_ID`)
+
+## Coverage
+
+I re-read only the round-2 hunks and the implementer's response note, re-ran the round-1 mutants plus two variants against the current test file with the component restored and byte-compared after each, reinstalled `packages/node_modules` (absent when this round started) and ran the three toolchain claims myself; the two test gaps are closed, the fourth surface is gated the same way as the other three, and the one residual is a minor test-discrimination gap on case.
+
+| Requirement | Where | Mechanism checked | Status |
+|-------------|-------|-------------------|--------|
+| R3 "every page" (escalation) | `packages/web/src/pages/metrics.tsx:8,234` | import plus one gated render in `BudgetSection`'s run cell; `r.source` is `string` (`core/src/view-model/metrics.ts:34`); no other per-run row exists on the page | ✓ scope item 5 |
+| R3 / AC3.2 test pin (F1) | `packages/web/test/fixture-label.test.ts:32-38` | tag-stripped text equals `fixture data`; `>fixture data<` present; title-only mutant fails | ✓ AC3.2 |
+| R3 negative half (F2) | `packages/web/test/fixture-label.test.ts:20-22` | `'fixtures'` → false kills `includes` and `startsWith`; case-fold survives | partial — F3 |
+| unchanged surfaces | `packages/web/src/components/fixture-label.tsx`, `run.tsx`, `inbox.tsx`, `portfolio.tsx` | not in bd10b19 (`git show --stat`); round-1 ✓ rows stand | ✓ |
+| round-1 mutants (a)(b) | `packages/web/src/components/fixture-label.tsx:14,19-26` | not re-run; the test cases that killed them are unchanged in the delta | n/a |
+| `sr-only` variant (e) | — | still survives; class-based hiding is outside static markup, as round 1 recorded | n/a |
+| toolchain claims | `packages/` | `npx tsc -p web/tsconfig.json` exit 0, no output; `npx vitest run web/test` 22 files / 263 tests passed (261 + 2 new); `npm run lint` 231 files, no fixes | ✓ |
+| Playwright | `packages/e2e/smoke.spec.ts:134-137`, `geometry.spec.ts:127` | `/metrics` is visited but no assertion reads the run cell, and `ui --demo`'s source id is never `fixture`; not run | n/a |
+| task 05 hook | `packages/web/src/components/fixture-label.tsx:21` | `[data-fixture-label]` unchanged; metrics gate adds a fourth page carrying it | ✓ |
+
+## Boundary check
+
+Inside the surface. bd10b19 touches exactly `packages/web/src/pages/metrics.tsx`, `packages/web/test/fixture-label.test.ts`, and the `notes:` block of the task file (hunk starts at `notes: |` line 102, additions only). The cumulative range `eac2e95^..bd10b19` also lists `review-02.md`, `review-04.md`, and `state.yaml`, all from orchestrator and reviewer commits, none from the implementer. This round every mutant was applied to `fixture-label.tsx` alone, restored with `git checkout --`, and `cmp`-verified against a pre-mutant copy; `git status --short` was empty after the last restore. Operational note, not a finding: `packages/node_modules` did not exist when this round began (round 1 ran the suite here, so it was removed in between); a concurrent `npm ci` was running in a different worktree (`contracts-escalation-section`), not this one, so I ran `npm ci --no-audit --no-fund` here — gitignored, nothing tracked moved. No unexpected modified files from task 02's agents appeared during this round.

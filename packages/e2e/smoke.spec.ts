@@ -134,6 +134,15 @@ test('a G0 quotation’s address lands on its line in the reader, its fold open 
   await expect(landed).toContainText('input fits in memory')
   await expect(landed).toHaveAttribute('data-line', String(line))
   await expect(landed).toBeInViewport()
+  await expectMarked(page)
+
+  // The mark clears when focus leaves the block, and a later click in the
+  // block does not light it again.
+  await page.locator('[data-reader] article [data-line]').first().click()
+  await expect(landed).not.toBeFocused()
+  await expect(page.locator('[data-landing-mark]')).toBeHidden()
+  await landed.click()
+  await expect(page.locator('[data-landing-mark]')).toBeHidden()
 
   // Out of scope: audit-time, so the reader folds it — the landing opens it.
   await goto(page, `/runs/${sourceId()}/g0-pending?decide=G0`)
@@ -143,6 +152,7 @@ test('a G0 quotation’s address lands on its line in the reader, its fold open 
   await expect(landed).toHaveText('Concurrency; internationalization.')
   await expect(page.locator('[data-reader] details[data-fold="Out of scope"]')).toHaveJSProperty('open', true)
   await expect(landed).toBeInViewport()
+  await expectMarked(page)
 
   // A brief section: the intent brief renders whole, numbered from its line 1.
   await goto(page, `/runs/${sourceId()}/g0-pending?decide=G0`)
@@ -150,7 +160,46 @@ test('a G0 quotation’s address lands on its line in the reader, its fold open 
   await expect(page).toHaveURL(new RegExp(`artifact=intent-brief\\.md&anchor=L${line}$`))
   await expect(landed).toHaveText('Must run offline; none otherwise known.')
   await expect(landed).toBeInViewport()
+  await expectMarked(page)
+
+  // A pasted address: with no click before it, Chromium matches
+  // :focus-visible on the landing's focus, and the yellow ring stays off the
+  // block all the same — the gutter mark is its focus indicator.
+  await goto(page, `/runs/${sourceId()}/g0-pending?tab=record&artifact=intent-brief.md&anchor=L${line}`)
+  await expect(landed).toHaveText('Must run offline; none otherwise known.')
+  await expect(landed).toBeFocused()
+  expect(await landed.evaluate((el) => el.matches(':focus-visible'))).toBe(true)
+  await expectMarked(page)
+
+  // At phone width the top nav is fixed over the page: a landing that
+  // scrolls clears it, and the landed block is what shows at its own top edge.
+  await page.setViewportSize({ width: 390, height: 420 })
+  await goto(page, `/runs/${sourceId()}/g0-pending?tab=record&artifact=spec.md&anchor=def-R1`)
+  await expect(landed).toContainText('R1')
+  await expectMarked(page)
+  const underTop = await landed.evaluate((el) => {
+    const r = el.getBoundingClientRect()
+    return el.contains(document.elementFromPoint(r.left + 4, r.top + 4))
+  })
+  expect(underTop).toBe(true)
 })
+
+/**
+ * The landing is marked (#449): focus is on the landed block, the yellow ring
+ * is not, and the ink rule in the gutter shows level with it and as tall,
+ * left of the column.
+ */
+async function expectMarked(page: Page) {
+  const landed = page.locator('[data-reader] article [data-landed]')
+  const mark = page.locator('[data-landing-mark]')
+  await expect(landed).toBeFocused()
+  await expect(landed).toHaveCSS('outline-style', 'none')
+  await expect(mark).toBeVisible()
+  const [b, m] = [(await landed.boundingBox())!, (await mark.boundingBox())!]
+  expect(Math.abs(m.y - b.y)).toBeLessThan(1)
+  expect(Math.abs(m.height - b.height)).toBeLessThan(1)
+  expect(m.x + m.width).toBeLessThan(b.x)
+}
 
 test('the pointer decision loop: approve G0 with burden → correct commit', async ({ page }) => {
   await goto(page, `/runs/${sourceId()}/g0-pending?decide=G0`)

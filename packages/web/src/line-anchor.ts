@@ -46,3 +46,33 @@ export function landingIndex(spans: readonly LineSpan[], line: number): number {
   }
   return inside !== -1 ? inside : below
 }
+
+// Marking the landing (#449). The scroll puts the block at the top of the
+// window only when the artifact is long enough to scroll that far; a short
+// one stops at its end, with the target on screen and nothing saying which it
+// is. So the reader marks it, in its own voice and not the record's: a rule in
+// the gutter beside the block, outside the text, in the ink. The record's
+// words are never tinted by a condition they do not state (docs/SEAM.md §5),
+// and a landing is not a gate state, so the mark spends no hue. The yellow
+// stays the focus ring's and the gate on the table's (packages/web/DESIGN.md,
+// settled decision 4).
+
+/** How far left of the artifact's column the mark sits, in px: inside the reader's padding at every width. */
+export const LANDING_GUTTER = 12
+
+/** A box, in the viewport coordinates `getBoundingClientRect` reports. */
+export interface Rect {
+  top: number
+  left: number
+  height: number
+}
+
+/**
+ * Where the mark sits, in the coordinates of the reader's `<article>` (its
+ * containing block): level with the landed block and as tall, at one gutter
+ * position for every block, so a nested list item's mark lines up with a
+ * heading's.
+ */
+export function landingMark(block: Rect, column: Pick<Rect, 'left'>, article: Pick<Rect, 'top' | 'left'>): Rect {
+  return { top: block.top - article.top, left: column.left - article.left - LANDING_GUTTER, height: block.height }
+}

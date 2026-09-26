@@ -78,7 +78,9 @@ export function visibleProblems(item: InboxItem): string[] {
 export function cardInstruction(item: InboxItem): { text: string; tone: string } | null {
   if (item.kind === 'round-cap') return { text: ROUND_CAP_INSTRUCTION, tone: 'text-ink' }
   if (gateCardState(item) === 'inflight') return { text: INFLIGHT_INSTRUCTION, tone: 'font-medium text-muted' }
-  if (item.kind === 'gate' && !item.reviewable) return { text: BOUNCED_INSTRUCTION, tone: 'font-medium text-bad' }
+  // Ink, not the declined red: a bounced packet is the machine's turn, not an
+  // error on the reader's screen (settled decision 8).
+  if (item.kind === 'gate' && !item.reviewable) return { text: BOUNCED_INSTRUCTION, tone: 'font-medium text-ink' }
   return null
 }
 
@@ -178,10 +180,16 @@ export function NeedsYouCard({
   // claiming the human's attention for work that is already moving.
   const gateState = gateCardState(item)
   const inflight = gateState === 'inflight' ? item.inflight : null
-  // Three impressions for three states (#159). Something to decide is the
-  // filled mark; a card waiting on a machine is dotted, at rest; a bounced
-  // packet is hatched. The card itself is not boxed: it is a posting on the
-  // page, ruled above, with its evidence and its affordance below.
+  // Three impressions for three states (#159), in the inbox's colours
+  // (settled decision 8): a gate ready to decide is the signal blue, hollow;
+  // a card waiting on a machine and a bounced packet — which the engine
+  // re-dispatches — are both dotted, the machine's turn, with the words
+  // saying which. Any other kind's card says `needs you` in the plain mark and
+  // lets its kind chip carry the colour (an escalation's caution, a malformed
+  // record's red): an ink fill there was the heaviest mark on the card and, in
+  // the impression grammar, the texture of a decision already taken. The card
+  // itself is not boxed: it is a posting on the page, ruled above, with its
+  // evidence and its affordance below.
   // No overflow-hidden on the card: the lexicon hover card (#252) is
   // absolutely positioned and would be clipped by it.
   return (
@@ -201,9 +209,9 @@ export function NeedsYouCard({
               {item.gate ? ` · ${item.gate}` : ''}
             </Imp>
           ) : gateState === 'bounced' ? (
-            <Imp tone="hatch">bounced{item.gate ? ` · ${item.gate}` : ''}</Imp>
+            <Imp tone="dot">bounced{item.gate ? ` · ${item.gate}` : ''}</Imp>
           ) : (
-            <Imp tone="fill">needs you{item.gate ? ` · ${item.gate}` : ''}</Imp>
+            <Imp tone={item.kind === 'gate' ? 'go' : ''}>needs you{item.gate ? ` · ${item.gate}` : ''}</Imp>
           )}
           {/* On a gate the KindChip says `● G2` eight pixels from a chip that
               already says `NEEDS YOU · G2` (#294) — two markers, one fact. Every
@@ -242,7 +250,7 @@ export function NeedsYouCard({
         {problems.length > 0 && (
           <ul className="mt-2 flex flex-col gap-1">
             {problems.map((p) => (
-              <li key={p} className="font-mono text-[12px] text-bad">
+              <li key={p} className={`font-mono text-[12px] ${item.kind === 'gate' ? 'text-ink' : 'text-bad'}`}>
                 ✕ {p}
               </li>
             ))}

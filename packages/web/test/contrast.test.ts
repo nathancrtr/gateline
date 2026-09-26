@@ -47,9 +47,9 @@ export const TEXT_PAIRS: [text: string, surface: string, floor: number][] = [
   ['faint', 'ground', 4.5],
   ['faint', 'inset', 4.5],
   ['faint', 'raised', 4.5],
-  ['accent', 'ground', 4.5], // links, the active entry
+  ['accent', 'ground', 4.5], // links, the active entry, a ready gate's chip
   ['accent', 'inset', 4.5],
-  ['accent', 'accent-tint', 4.5], // a link inside the selected entry
+  ['accent', 'accent-tint', 4.5], // a link inside the selected entry; a ready gate's chip on the selected row
   ['accent-deep', 'accent-tint', 4.5], // the selected record entry's own text
   ['accent-hover', 'ground', 4.5],
   ['ok', 'ground', 4.5], // approved
@@ -58,13 +58,16 @@ export const TEXT_PAIRS: [text: string, surface: string, floor: number][] = [
   ['info', 'info-bg', 4.5],
   ['warn', 'ground', 4.5], // the caution ink
   ['warn', 'inset', 4.5],
+  ['warn', 'accent-tint', 4.5], // a stuck item's chip on the selected inbox row
   ['warn', 'warn-bg', 4.5],
   ['bad', 'ground', 4.5], // declined
   ['bad', 'inset', 4.5],
+  ['bad', 'accent-tint', 4.5], // a malformed record's chip on the selected inbox row
   ['bad', 'bad-bg', 4.5],
   ['ink', 'focus', 4.5], // the position cell: ink on the yellow
   ['on-solid', 'ink', 4.5], // reversed type on a filled impression / the primary button
   ['on-solid', 'mark', 4.5], // reversed type on the danger button
+  ['on-solid', 'ok', 4.5], // reversed type on an approved gate (settled decision 8)
 ]
 
 /** Marks that carry meaning against the surface they sit on: 3.0. */
@@ -73,7 +76,12 @@ export const MARK_PAIRS: [mark: string, surface: string, floor: number][] = [
   ['mark', 'inset', 3.0],
   ['line-cool', 'ground', 3.0], // form control borders
   ['ink', 'ground', 3.0], // impression borders, meters, the band
-  ['accent', 'ground', 3.0], // the selected entry's rule
+  ['accent', 'ground', 3.0], // the selected entry's rule, a ready gate's border
+  ['accent', 'accent-tint', 3.0], // a ready gate's border on the selected inbox row
+  ['warn', 'ground', 3.0], // a stuck item's border
+  ['warn', 'accent-tint', 3.0],
+  ['mark', 'accent-tint', 3.0], // a malformed record's hatch on the selected row
+  ['ok', 'ground', 3.0], // an approved gate's fill against the page
 ]
 
 /** Listed for the table; not floored (see the header). */

@@ -6,7 +6,8 @@ per-token provenance lives beside the code in
 [`packages/web/DESIGN.md`](../packages/web/DESIGN.md) once a direction is
 built. Earlier rounds are kept at the end as history.
 
-**Status (2026-09-25): round 4 — the site's direction, carried in.** The
+**Status (2026-09-26): round 4 — the site's direction, carried in — with
+round 5's colour-for-state pass on top (below).** The
 public documentation site took its design first (`site/`, PR #392, lineage
 in `site/README.md` §Design: British Rail 1965, GOV.UK's functional colour,
 Stripe's frame, Go's neutrals), with the decision that Gatehouse follows.
@@ -19,6 +20,26 @@ floors by `packages/web/test/contrast.test.ts`. What survives from round 3
 is its structure: one surface, rules not cards, no elevation, and the
 impression grammar for status. Round 3's seeded process and the three
 directions below are kept as the record of how that structure was reached.
+
+### Round 5 — colour carries state (2026-09-26)
+
+Round 4 spent colour only where a gate state is named, and the inbox paid
+for it: a gate ready to decide, a bounced packet, a stuck escalation and a
+run at rest were four rows in one ink. Round 5 (#419) lets a little more
+colour in, with no new hue: on an impression, colour now means **health,
+plus the one ready decision**. The ready gate is the signal blue, hollow; a
+stuck escalation or round cap is the caution ink; an unreadable record is
+hatched in the red; a bounced or superseded packet, a staged run and a
+paused one stay dotted, the machine's turn; the ledger's approved and
+declined gates are the green and the red; the yellow keeps the spine's one
+gate on the table.
+
+The first cut of the round put the yellow on every ready gate and the red on
+a bounced packet, and was rejected in review: they read as warning and
+error, and misstated what the reader could do. Hue had been mapped to the
+cockpit's urgency with tokens that mean verdict and warning. The mapping,
+the amendment to the blue ban it needed, and the record of the rejected cut
+are settled decision 8 in [`packages/web/DESIGN.md`](../packages/web/DESIGN.md).
 
 ### What round 4 changed (2026-09-25)
 
@@ -479,3 +500,8 @@ The public site's palette and grammar (PR #392) carried into the cockpit:
 white ground, ink, one signal blue, approved green, declined red, the
 yellow for a human's attention, hairlines and the 3px band. See *What
 round 4 changed* at the top.
+
+### Round 5 — colour carries state (2026-09-26, shipping)
+
+Round 4's palette and grammar, unchanged, with colour on the impression now
+carrying health and the one ready decision (#419). See *Round 5* at the top.

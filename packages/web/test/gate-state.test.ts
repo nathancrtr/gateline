@@ -72,12 +72,15 @@ describe('the in-flight card', () => {
     expect(ok).toContain('data-decide="approve"')
   })
 
-  it('is not hatched like a malformed packet — nothing here is wrong', () => {
-    // A bounced packet's impression is hatched (the texture for "on the
-    // table, offering no decision"); an in-flight one is the plain mark.
+  it('is not hatched like a malformed record — nothing here is wrong', () => {
+    // Since settled decision 8 a bounced packet and an in-flight one are both
+    // the machine's turn, dotted; neither takes the malformed record's hatch.
+    // The words, not the texture, tell the two apart (test/impression.test.ts).
     const inflight = renderToStaticMarkup(createElement(KindChip, { item: item(INFLIGHT) }))
     const bounced = renderToStaticMarkup(createElement(KindChip, { item: item(BOUNCED) }))
     expect(inflight).not.toContain('imp-hatch')
-    expect(bounced).toContain('imp-hatch')
+    expect(bounced).not.toContain('imp-hatch')
+    expect(inflight).toContain('imp-dot')
+    expect(bounced).toContain('imp-dot')
   })
 })

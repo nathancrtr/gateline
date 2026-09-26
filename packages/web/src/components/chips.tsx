@@ -7,9 +7,19 @@
 // hatched for bounced, dotted for a state not reached or a run at rest,
 // doubled for the phase the machine is working in, and filled in the yellow
 // for the gate on the table, because that is where a human is wanted. There
-// is no hue per phase: the word and the texture carry the difference, and
-// colour is spent only where the site spends it — approved, declined,
-// caution, and the one signal blue.
+// is no hue per phase: the word and the texture carry the difference.
+//
+// Colour means health, plus the one ready decision (packages/web/DESIGN.md,
+// settled decision 8; #419). A decision ready to take is the signal blue,
+// hollow — it is where the reader goes, and the row carrying it is a link. A
+// run stuck until a person unblocks it is the caution ink, hollow. A record
+// that cannot be read is hatched in the declined red. The machine's turn — a
+// bounced packet the engine re-dispatches, a superseded one — and a run at
+// rest stay dotted. An approved gate is filled in the approved green and a
+// declined one struck in the red. The yellow stays on the spine's one gate on
+// the table. That is tinting by a computed condition (docs/SEAM.md §5), so the
+// words inside the mark always state the fact and the colour never says
+// anything they do not.
 import { Fragment, useEffect, useRef } from 'react'
 import { type ClosureRecord, type GateId, type InboxItem, PROFILE_GATES, type Profile, type RunSummary } from '../api.ts'
 import { gateCardState } from '../gate-state.ts'
@@ -45,14 +55,34 @@ export function KeyHints({ hints, className = '' }: { hints: readonly KeyHint[];
   )
 }
 
-/** The impression itself. `tone` is a texture, never a hue. */
+/** A tone the impression can take: textures, plus the state colours settled
+ *  decision 8 spends (`go`, `warn`, `ok`, `mark`, and `cur` on the spine). */
+export type ImpTone =
+  | ''
+  | 'fill'
+  | 'dot'
+  | 'struck'
+  | 'struck mark'
+  | 'hatch'
+  | 'hatch mark'
+  | 'cur'
+  | 'here'
+  | 'mark'
+  | 'go'
+  | 'warn'
+  | 'ok'
+  | 'stamped'
+  | 'fill stamped'
+
+/** The impression itself. `tone` is a texture, and a state colour only where
+ *  the mapping in DESIGN.md names one. */
 export function Imp({
   children,
   tone = '',
   className = '',
   title,
   ...rest
-}: React.HTMLAttributes<HTMLSpanElement> & { tone?: '' | 'fill' | 'dot' | 'struck' | 'hatch' | 'hatch mark' | 'cur' | 'here' | 'mark' | 'stamped' | 'fill stamped' }) {
+}: React.HTMLAttributes<HTMLSpanElement> & { tone?: ImpTone }) {
   const tones = tone
     .split(' ')
     .filter(Boolean)
@@ -122,24 +152,40 @@ export function PhaseChip({
   return <Imp data-phase-chip>{phase}</Imp>
 }
 
+/**
+ * The tone an inbox item's chip takes (settled decision 8). A reviewable gate
+ * is the signal blue, hollow: a decision is ready to take, and the row is the
+ * link to it. An escalation or a round cap is the caution ink, hollow: stuck
+ * until a person unblocks it, and the glyphs ⚑ / ⟲ keep the two apart. A
+ * malformed record is hatched in the declined red: it cannot be read. A
+ * bounced packet (R3) is the machine's turn — the engine re-dispatches and no
+ * approval is offered — so it is dotted, like an in-flight gate (#159), a
+ * staged run and a paused one. Never the yellow, never red on a bounce.
+ */
+export function kindTone(item: InboxItem): ImpTone {
+  switch (item.kind) {
+    case 'gate': {
+      const state = gateCardState(item)
+      return state === 'reviewable' ? 'go' : 'dot'
+    }
+    case 'malformed':
+      return 'hatch mark'
+    case 'escalation':
+    case 'round-cap':
+      return 'warn'
+    default:
+      return 'dot'
+  }
+}
+
 export function KindChip({ item }: { item: InboxItem }) {
+  const tone = kindTone(item)
   if (item.kind === 'gate') {
-    // A bounced packet is hatched: on the table, offering no decision (R3).
-    // An in-flight one is dotted — at rest, waiting on a machine — and not a
-    // fault (#159); the reviewable one is the plain mark.
-    const state = gateCardState(item)
-    return (
-      <Imp tone={state === 'bounced' ? 'hatch' : state === 'inflight' ? 'dot' : ''}>
-        {item.gate} · gate
-      </Imp>
-    )
+    return <Imp tone={tone}>{item.gate} · gate</Imp>
   }
-  if (item.kind === 'staged') {
-    return <Imp tone="dot">staged</Imp>
-  }
-  const glyph = { escalation: '⚑', 'round-cap': '⟲', paused: '', malformed: '⚠' }[item.kind] ?? ''
+  const glyph = { escalation: '⚑', 'round-cap': '⟲', paused: '', staged: '', malformed: '⚠' }[item.kind] ?? ''
   return (
-    <Imp tone={item.kind === 'malformed' ? 'hatch' : ''}>
+    <Imp tone={tone}>
       {glyph ? `${glyph} ` : ''}
       {item.kind}
     </Imp>
@@ -170,10 +216,15 @@ export function AgeBadge({ label, urgent, stale }: { label: string; urgent: bool
 
 const GATE_GLYPH = { approved: '✓', declined: '✕', pending: '·' } as const
 
+/** The ledger's decided states in colour (settled decision 8): approved is the
+ *  green fill, declined is struck in the red, and an undecided gate stays the
+ *  plain mark — the glyph beside each says the same thing in a word's place. */
+const LEDGER_TONE = { approved: 'ok', declined: 'struck mark', pending: '' } as const satisfies Record<string, ImpTone>
+
 /** One gate cell of the G0–G3 ledger strip. */
 export function GateChip({ id, cell }: { id: GateId; cell: RunSummary['gates'][GateId] }) {
   const state = cell.approved ? 'approved' : cell.decided ? 'declined' : 'pending'
-  const tone = state === 'approved' ? 'fill' : state === 'declined' ? 'struck' : ''
+  const tone = LEDGER_TONE[state]
   const title = cell.decided ? `${id} ${cell.approved ? 'approved' : 'declined'} by ${cell.by}${cell.at ? ` · ${cell.at}` : ''}` : `${id} pending`
   return (
     <Imp tone={tone} title={title}>
@@ -206,9 +257,15 @@ export function PhaseSpine({ summary, items }: { summary: RunSummary; items?: In
   const rung = noteRung(spine)
   // A gate whose packet was bounced is on the table but offers no approval
   // (core's readiness rule R3); the cell must not tell the reader otherwise.
-  const bounced = new Set(
-    (items ?? []).filter((i) => i.kind === 'gate' && !i.reviewable && i.gate !== null).map((i) => i.gate as GateId),
-  )
+  // An in-flight one refuses the approval too, but nothing about it is wrong
+  // (#159): it reads through `gateCardState` like every other surface, so the
+  // spine does not hatch in the red what the card beside it says is at rest.
+  const offTable = new Map<GateId, GateOffTable>()
+  for (const i of items ?? []) {
+    const state = gateCardState(i)
+    if (i.gate === null || state === null || state === 'reviewable') continue
+    offTable.set(i.gate as GateId, state === 'bounced' ? { state } : { state, role: i.inflight?.role ?? null })
+  }
   const pending = spine.cells.find((c) => c.kind === 'gate' && c.state === 'pending')
   const focus = pending?.kind === 'gate' ? pending.gate : (spine.position ?? null)
   const ref = useScrollIntoView(focus)
@@ -227,7 +284,7 @@ export function PhaseSpine({ summary, items }: { summary: RunSummary; items?: In
             {cell.kind === 'phase' ? (
               <SpinePhase cell={cell} atRest={spine.rest !== null} noteClass={NOTE_RUNG_NOTE[rung]} />
             ) : (
-              <SpineGate cell={cell} bounced={bounced.has(cell.gate)} noteClass={NOTE_RUNG_NOTE[rung]} />
+              <SpineGate cell={cell} offTable={offTable.get(cell.gate) ?? null} noteClass={NOTE_RUNG_NOTE[rung]} />
             )}
           </Fragment>
         ))}
@@ -310,11 +367,23 @@ function SpinePhase({ cell, atRest, noteClass }: { cell: PhaseCell; atRest: bool
   )
 }
 
-const GATE_STATE_TONE: Record<GateCell['state'], 'fill' | 'struck' | 'cur' | 'dot'> = {
-  approved: 'fill',
-  declined: 'struck',
+/** The spine's gate cells take the ledger's colours (settled decision 8), and
+ *  the gate on the table keeps the yellow — the one cell on the page it is
+ *  spent on besides the focus ring. */
+export const GATE_STATE_TONE: Record<GateCell['state'], ImpTone> = {
+  approved: 'ok',
+  declined: 'struck mark',
   pending: 'cur',
   future: 'dot',
+}
+
+/** A spine gate cell's tone: the ledger's mapping, except that a pending gate
+ *  offering no decision — its packet bounced, or superseded while the producer
+ *  is out again — is dotted: it is the machine's turn, the same reading as the
+ *  inbox chip, and the cell's words say which. */
+export function spineGateTone(state: GateCell['state'], held: 'bounced' | 'inflight' | null): ImpTone {
+  if (state === 'pending' && held !== null) return 'dot'
+  return GATE_STATE_TONE[state]
 }
 
 const GATE_STATE_GLYPH: Record<GateCell['state'], string> = { approved: '✓', declined: '✕', pending: '●', future: '·' }
@@ -333,16 +402,26 @@ const GATE_STATE_WORD: Record<GateCell['state'], string> = {
  */
 const GATE_BOUNCED_WORD = 'on the table — packet bounced'
 
+/** A pending gate that offers no decision, and why: its packet bounced, or the
+ *  producing role is out with a fresh dispatch and the packet is superseded. */
+type GateOffTable = { state: 'bounced' } | { state: 'inflight'; role: string | null }
+
+function inflightWord(role: string | null): string {
+  return `on the table — superseded, waiting on ${role ?? 'the producing role'}`
+}
+
 /** One gate, as the transition it is. Its question is what `G2` alone cannot
  *  say, so it is the accessible name and the hover text — never inferred,
  *  always the fixed GATE_QUESTIONS string for the profile it is asked in. */
-function SpineGate({ cell, bounced, noteClass }: { cell: GateCell; bounced: boolean; noteClass: string }) {
+function SpineGate({ cell, offTable, noteClass }: { cell: GateCell; offTable: GateOffTable | null; noteClass: string }) {
   const decided = cell.by !== null || cell.at !== null
   const provenance = decided ? `${cell.by ?? '—'}${cell.at ? ` · ${String(cell.at).slice(0, 10)}` : ''}` : null
   const note = gateNote(cell)
-  const word = bounced && cell.state === 'pending' ? GATE_BOUNCED_WORD : GATE_STATE_WORD[cell.state]
+  const held = cell.state === 'pending' ? offTable : null
+  const word =
+    held?.state === 'bounced' ? GATE_BOUNCED_WORD : held?.state === 'inflight' ? inflightWord(held.role) : GATE_STATE_WORD[cell.state]
   const label = `${cell.gate} — ${cell.question} — ${word}${provenance ? ` by ${provenance}` : ''}`
-  const tone = bounced && cell.state === 'pending' ? 'hatch' : GATE_STATE_TONE[cell.state]
+  const tone = spineGateTone(cell.state, held?.state ?? null)
   return (
     <li data-spine-gate={cell.gate} data-state={cell.state} className="flex shrink-0 flex-col items-center gap-[4px]">
       <Imp tone={tone} title={label}>

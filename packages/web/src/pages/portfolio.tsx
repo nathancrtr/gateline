@@ -230,16 +230,16 @@ export function PortfolioPage() {
             </span>
             <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <span>
-                approved <Imp tone="fill">✓</Imp>
+                approved <Imp tone="ok">✓</Imp>
               </span>
               <span>
-                declined <Imp tone="struck">✕</Imp>
+                declined <Imp tone="struck mark">✕</Imp>
               </span>
               <span>
                 pending <Imp>·</Imp>
               </span>
               <span>
-                bounced <Imp tone="hatch">⚠</Imp>
+                bounced <Imp tone="dot">⚠</Imp>
               </span>
               <span>
                 not reached <Imp tone="dot">·</Imp>

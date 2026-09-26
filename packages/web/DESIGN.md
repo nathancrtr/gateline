@@ -38,10 +38,11 @@ because that tradition's whole job is guiding people through gates
   a 2px ink rule opens a section; a 3px ink band tops the page. Nothing
   floats and nothing is rounded.
 - **One signal blue** for the things a reader can go to: links, the active
-  entry, the selected row. Nothing else is blue.
+  entry, the selected row — and, since settled decision 8, the ready
+  decision, which is where the reader goes. Nothing else is blue.
 - **Every other colour has one job, and the job is a gate state.** Green is
   approved. Red is declined, and by extension a fault: a malformed record,
-  a bounced packet, an over-spent budget. The caution ink is for what a
+  an over-spent budget. A bounced packet is not one (settled decision 8). The caution ink is for what a
   reviewer should look at without anything being wrong yet. The yellow
   means one thing on the site and one thing here: a human is wanted at
   this spot — the focus ring, and the gate on the table.
@@ -151,8 +152,33 @@ phase the machine is in, and filled in the yellow for the gate on the table
 — the one cell on the page waiting on a person. A human's own decision on
 the History ledger is pressed — set 1.6° askew and roughened with an SVG
 displacement filter — because it is the one mark on the page a person made.
-Colour is spent only where a gate state is named: a green `approve`, a red
-`blocking`, a caution `major`.
+
+Colour on an impression means **health, plus the one ready decision**
+(settled decision 8). It is spent on trouble and on the happy-path decision,
+and on nothing else. A gate state the record names keeps its colour too: a
+green `approve`, a red `blocking`, a caution `major`.
+
+| the cockpit's state | tone | where |
+|---|---|---|
+| A decision is ready to take | `go` — the signal blue, hollow (blue text and border) | inbox `KindChip` for a reviewable gate; the decide card's `needs you · G<n>` eyebrow |
+| Stuck; a person is needed to unblock | `warn` — the caution ink, hollow | `escalation` and `round-cap`, inbox and card; the glyphs ⚑ / ⟲ tell them apart |
+| The record cannot be read | `hatch mark` — hatched, in the declined red | `malformed`; the `unknown` phase |
+| The machine's turn, or at rest | `dot` — dotted, muted | a bounced packet (the engine re-dispatches; no approval is offered), a superseded in-flight gate, `staged`, `paused` |
+| Approved | `ok` — the approved green, filled, reversed type | `GateChip` ✓ in the gate ledger (portfolio, metrics); the spine's approved gate cells |
+| Declined | `struck mark` — struck, in the declined red | `GateChip` ✕; the spine's declined gate cells |
+| The gate on the table | `cur` — the yellow | the one spine cell in the run header, and the focus ring; nowhere else |
+| Done, or a decision taken | `fill` — the ink | the `done` phase chip, History stamps |
+
+Red is never on a bounced packet, and yellow is never in the inbox or on a
+card. A card whose kind is not a gate says `needs you` in the plain mark and
+lets its kind chip carry the colour.
+
+This is the cockpit tinting by a *computed* condition — the third affordance
+in [`docs/SEAM.md`](../../docs/SEAM.md) §5 — and it holds to that
+affordance's trust condition: the words inside and beside the mark always
+state the fact (`G1 · gate`, `⚑ escalation`, `bounced · G2`), and the colour
+never carries what the words do not. It is distinct from tinting a *record
+token* (SEAM.md §8.4), which stays as written.
 
 The gate sigil (two posts and a crossbar) stays as the wordmark's mark, in
 the ink.
@@ -163,7 +189,10 @@ the ink.
 - Any per-phase hue, any coloured frame on a state box, any pill radius,
   any shadow or gradient.
 - Blue on anything that cannot be followed; yellow on anything that is not
-  waiting on a person.
+  waiting on a person. *Amended by settled decision 8:* the ready decision's
+  `go` impression is blue — it is where the reader goes, and the inbox row
+  that carries it is a link. The yellow keeps its one cell: the spine's gate
+  on the table, and the focus ring.
 - Letterspaced uppercase labels, middot-chained metadata, trailing arrows
   on actions (the commit-subject arrows in History are the record's own
   words and stay).
@@ -192,6 +221,21 @@ the ink.
    headings, Atkinson Hyperlegible Next for the UI, IBM Plex Mono for code,
    Overpass for the wordmark. The serif reading face retires with the
    site's own choice to set long pages in the sans.
+8. **Colour carries state: health, plus the one ready decision** (#419,
+   2026-09-26). Every inbox row used to look the same whether it was a gate
+   ready to decide, a bounced packet, a stuck escalation or a run at rest;
+   the maintainer's call was to let a little more colour in, with the quartet
+   and the existing yellow only, no new hue and no per-phase hue. The mapping
+   is the table under *The signature gesture*. A first mapping was built and
+   rejected in review the same day: it put the yellow on every ready gate and
+   the declined red on a bounced packet. Both read as warning and error, and
+   misstated both the run's state and what the reader could do — the cause
+   was mapping hue to the cockpit's *urgency* with tokens whose meaning is
+   *verdict* and *warning*, and in an inbox where every row wants a person
+   only the warning reading survives. The revised mapping gives the ready
+   decision the signal blue, which amends the blue ban (see *Banned*),
+   leaves a bounced packet dotted as the machine's turn, and keeps the yellow
+   on the spine's one cell.
 
 ## Contrast
 
@@ -220,18 +264,26 @@ on a floor breach. Floors: 4.5 text, 3.0 large text and meaningful non-text.
 | info on info-bg | 4.57 | 4.5 |
 | warn on ground | 5.75 | 4.5 |
 | warn on inset | 5.18 | 4.5 |
+| warn on accent-tint | 5.09 | 4.5 |
 | warn on warn-bg | 5.38 | 4.5 |
 | bad on ground | 5.67 | 4.5 |
 | bad on inset | 5.1 | 4.5 |
+| bad on accent-tint | 5.01 | 4.5 |
 | bad on bad-bg | 4.94 | 4.5 |
 | ink on focus | 14.55 | 4.5 |
 | on-solid on ink | 19.59 | 4.5 |
 | on-solid on mark | 5.67 | 4.5 |
+| on-solid on ok | 5.35 | 4.5 |
 | mark vs ground (non-text) | 5.67 | 3.0 |
 | mark vs inset (non-text) | 5.1 | 3.0 |
 | line-cool vs ground (non-text) | 3.22 | 3.0 |
 | ink vs ground (non-text) | 19.59 | 3.0 |
 | accent vs ground (non-text) | 5.17 | 3.0 |
+| accent vs accent-tint (non-text) | 4.57 | 3.0 |
+| warn vs ground (non-text) | 5.75 | 3.0 |
+| warn vs accent-tint (non-text) | 5.09 | 3.0 |
+| mark vs accent-tint (non-text) | 5.01 | 3.0 |
+| ok vs ground (non-text) | 5.35 | 3.0 |
 | line vs ground (decorative) | 1.64 | — |
 | line vs inset (decorative) | 1.48 | — |
 | focus vs ground (decorative) | 1.35 | — |

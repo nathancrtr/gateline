@@ -36,7 +36,9 @@ Then, by area:
 * [`docs/ORCHESTRATOR.md`](docs/ORCHESTRATOR.md) — the v1 agent-orchestrated mode
   (runbook in `packages/orchestrator/README.md`)
 * [`docs/FRONTEND.md`](docs/FRONTEND.md) — the gate frontend design
-  (plan: [`docs/FRONTEND-PLAN.md`](docs/FRONTEND-PLAN.md))
+  (plan: [`docs/FRONTEND-PLAN.md`](docs/FRONTEND-PLAN.md));
+  [`docs/SEAM.md`](docs/SEAM.md) — how the record on disk becomes the record on
+  screen: the verbatim rule's scope, the representation vocabulary, the layering
 * [`docs/INTEGRATION.md`](docs/INTEGRATION.md) — importing the framework into a host
   repo (plan: [`docs/INTEGRATION-PLAN.md`](docs/INTEGRATION-PLAN.md))
 * [`docs/TOPOLOGY.md`](docs/TOPOLOGY.md) — control-plane topology: one authority per

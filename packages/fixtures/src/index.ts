@@ -458,6 +458,17 @@ const escalatingVerification = () => `# Verification Report: run
 **Change verified:** run branch tip
 **Environment:** local, python 3.12
 
+## Escalation
+
+**Traces to:** R2 / AC2.1
+**Criteria affected:** AC2.1
+
+The sample input the second requirement points at does not exist, so its criterion cannot be exercised by anyone. The spec names \`fixtures/sample-queue.json\` as the input for AC2.1 and no task creates it; the implementation under test is not at fault.
+
+The options as I see them:
+- amend AC2.1 to name an input that exists, and re-verify against it
+- add the referenced fixture under a task that owns \`fixtures/\`, then re-verify
+
 ## Results
 
 | Criterion | Verdict | Evidence |
@@ -630,8 +641,8 @@ const CONTRACTS: Record<string, string> = {
   'intent-brief.md': `# Intent Brief: <title>\n\n## Problem\n\n## Motivation\n\n## Constraints\n\n## Out of scope\n`,
   'spec.md': `# Specification: <title>\n\n<!-- AUDIENCE: Out of scope=audit -->\n\n## Context\n\n## Requirements\n\n## Assumptions\n\n## Out of scope\n`,
   'plan.md': `# Technical Plan: <title>\n\n## Approach\n\n## Interface contracts\n\n## Decisions (ADRs)\n\n## Requirement → task mapping\n\n## Risks\n`,
-  'review-report.md': `# Review Report: <task id>\n\n<!-- AUDIENCE: Coverage=audit; Boundary check=audit -->\n\n**Verdict:** approve | request-changes | escalate\n\n## Findings\n\n## Coverage\n\n## Boundary check\n`,
-  'verification-report.md': `# Verification Report: <run or task id>\n\n**Change verified:** <branch/commit>\n\n## Results\n\n## Beyond the happy path\n\n## Gaps\n`,
+  'review-report.md': `# Review Report: <task id>\n\n<!-- AUDIENCE: Coverage=audit; Boundary check=audit\n     REQUIRED WHEN: Escalation=escalate -->\n\n**Verdict:** approve | request-changes | escalate\n\n## Escalation\n\n## Findings\n\n## Coverage\n\n## Boundary check\n`,
+  'verification-report.md': `# Verification Report: <run or task id>\n\n<!-- REQUIRED WHEN: Escalation=escalate -->\n\n**Change verified:** <branch/commit>\n\n## Escalation\n\n## Results\n\n## Beyond the happy path\n\n## Gaps\n`,
   'work-item.yaml': `id: 01-example\ntitle: One-line description\nrequirements: [R1]\nscope: |\n  What to build.\nfile_contact_surface:\n  - src/example.py\nacceptance_tests:\n  - AC1.1\ndepends_on: []\nstatus: pending\nnotes: |\n`,
   'state.yaml': stateYaml({ slug: 'example-slug', phase: 'spec', gates: {} }),
 }

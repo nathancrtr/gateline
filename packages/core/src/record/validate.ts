@@ -58,6 +58,41 @@ export const BUILTIN_AUDIT_SECTIONS: Record<string, string[]> = {
   'spec.md': ['Out of scope'],
 }
 
+/**
+ * The `REQUIRED WHEN:` line of a contract header (#405): `<section>=<verdict>`
+ * pairs separated by `;`, e.g. `REQUIRED WHEN: Escalation=escalate`. A section
+ * so listed is required exactly when the report's verdict in force is that
+ * word, and is otherwise not required — not forbidden: rounds and
+ * re-verifications append and never overwrite, so a section an earlier round
+ * wrote stays in the file as history. Keyed by normalized heading, like the
+ * audience map, and read the same way: the template's own word, never a
+ * UI's. Sections in this map are lifted out of the unconditional list a
+ * template's H2s would otherwise imply.
+ */
+export function extractConditional(template: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  const fences = new FenceTracker()
+  for (const line of template.split('\n')) {
+    if (fences.feed(line)) continue
+    const m = /^\s*(?:<!--\s*)?REQUIRED WHEN:\s*(.+?)\s*(?:-->.*)?$/.exec(line)
+    if (!m) continue
+    for (const pair of m[1]!.split(';')) {
+      const eq = pair.lastIndexOf('=')
+      if (eq < 0) continue
+      const name = normalize(pair.slice(0, eq))
+      const verdict = pair.slice(eq + 1).trim().toLowerCase()
+      if (name && verdict) out[name] = verdict
+    }
+  }
+  return out
+}
+
+/** Built-in conditional sections, mirroring the `REQUIRED WHEN:` lines in contracts/ at the time of writing. */
+export const BUILTIN_CONDITIONAL_SECTIONS: Record<string, Record<string, string>> = {
+  'review-report.md': { Escalation: 'escalate' },
+  'verification-report.md': { Escalation: 'escalate' },
+}
+
 /** H2 headings are the required-section signal in every markdown contract. */
 export function extractSections(markdown: string): string[] {
   return h2Headings(markdown)
@@ -192,10 +227,23 @@ export async function validateArtifact(
   // Markdown contracts: required H2s from the repo's template, else built-in.
   let required = BUILTIN_SECTIONS[contract] ?? []
   let audit = BUILTIN_AUDIT_SECTIONS[contract] ?? []
+  // Sections required only under one verdict (#405), keyed by normalized
+  // heading, spelled as the template spells them for the message.
+  let conditional: Record<string, string> = Object.fromEntries(
+    Object.entries(BUILTIN_CONDITIONAL_SECTIONS[contract] ?? {}).map(([heading, verdict]) => [normalize(heading), verdict]),
+  )
+  let spelled: Record<string, string> = Object.fromEntries(
+    Object.keys(BUILTIN_CONDITIONAL_SECTIONS[contract] ?? {}).map((heading) => [normalize(heading), heading]),
+  )
   const template = await templates.read(contract)
   if (template) {
     const fromTemplate = extractSections(template)
-    if (fromTemplate.length) required = fromTemplate
+    // The template's own word on conditions, or silence: a contract with no
+    // `REQUIRED WHEN:` line requires every H2 it carries, unconditionally.
+    conditional = extractConditional(template)
+    spelled = Object.fromEntries(fromTemplate.map((s) => [normalize(s), s]))
+    const unconditional = fromTemplate.filter((s) => !(normalize(s) in conditional))
+    if (unconditional.length) required = unconditional
     // The template's own word on audience, or silence: a contract with no
     // `AUDIENCE:` line folds nothing, whatever the built-in list says.
     const audience = extractAudience(template)
@@ -211,6 +259,14 @@ export async function validateArtifact(
   if (contract === 'verification-report.md') {
     const last = verdictLines(content).at(-1)
     if (last !== undefined && verificationVerdict(last) === null) missing.push('Verdict: pass | fail | escalate')
+  }
+  // A section the contract requires under the verdict in force (#405): the
+  // last verdict line's first word, since rounds append. A report with no
+  // verdict line has no verdict in force and no conditional section is
+  // required of it — the same leniency #152 gives the line itself.
+  const inForce = verdictLines(content).at(-1)?.trim().split(/\s+/)[0]?.toLowerCase() ?? null
+  for (const [key, verdict] of Object.entries(conditional)) {
+    if (inForce === verdict && !have.has(key)) missing.push(`${spelled[key] ?? key} (required when Verdict is ${verdict})`)
   }
   return { contract, ok: missing.length === 0, missing, notes, audit }
 }

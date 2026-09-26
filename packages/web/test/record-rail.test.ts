@@ -12,6 +12,7 @@ const report = (path: string, task: string | null, round: number | null = null):
     findings: [],
     dispositions: [],
     verdict: null,
+    escalation: null,
   }) as ReviewReport
 
 describe('railLabel', () => {

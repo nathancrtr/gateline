@@ -8,9 +8,22 @@
      diff under review is itself approvable — including one that only
      threatens a not-yet-dispatched task (its fix lives outside every
      remaining task's file_contact_surface). Verdict carries both signals at
-     once: approve this diff, escalate the run. Say so plainly; a defect
-     folded into a low-severity finding or a Coverage-section aside has no
-     power to pause dispatch.
+     once: approve this diff, escalate the run. Say so in the Escalation
+     section below; a defect folded into a low-severity finding or a
+     Coverage-section aside has no power to pause dispatch.
+     ESCALATION (normative — tooling parses the `REQUIRED WHEN:` line and the
+     section's bold fields): the `## Escalation` section is required exactly
+     when the verdict in force is `escalate`, and is what the human resolving
+     the escalation reads on the card. A report whose verdict is `escalate`
+     and carries no Escalation section is malformed. Under any other verdict
+     the section is not required; one left behind by an earlier round is
+     history, not a deviation, since rounds append and never overwrite.
+     `**Diff verdict:**` inside it is the diff's own verdict — the second
+     signal ESCALATE SCOPE describes — and is one of `approve` or
+     `request-changes`; the run-level verdict line stays `escalate`.
+     Options are a bulleted list, one route per item: what the escalating
+     role would do, never what it has decided — the human picks.
+     REQUIRED WHEN: Escalation=escalate
      READABILITY (normative — human-facing section: Coverage). The G2 approver
      reads it to trust the review; a breach is bounced like a malformed
      finding, with the rule cited. (a) Open with one plain-words sentence
@@ -42,6 +55,25 @@
 **Verdict:** approve | request-changes | escalate
 **Round:** <n of 3>
 **Diff reviewed:** <branch/commit>
+
+## Escalation
+<!-- Present exactly when Verdict is escalate; omit it otherwise (see
+     ESCALATION above). This is the decision the human is being asked to
+     make — the card shows it verbatim, so write it for that reader. The
+     three bold fields are grammar; the paragraph and the options are prose
+     and READABILITY rules govern them: open with one plain-words sentence
+     stating what is defective, then name where the fix would have to land
+     and why no remaining task owns it, then the routes as you see them. -->
+
+**Diff verdict:** approve | request-changes
+**Traces to:** <the spec or plan clause the defect lives in — R<n> / AC<n>.<m> / ADR-<n>>
+**Outside every remaining surface:** <the file or area the fix needs, and which task's file_contact_surface would have to name it — or "no" if a remaining task owns it>
+
+<one plain-words paragraph: what is defective, and what happens if the run proceeds past it>
+
+The options as I see them:
+- <route one — e.g. widen task NN's surface by the file above>
+- <route two — e.g. amend R<n> to name the surfaces in scope and record the rest out of scope>
 
 ## Findings
 

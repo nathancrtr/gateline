@@ -98,6 +98,14 @@ export interface ReviewReport {
   dispositions: ReviewDisposition[]
   /** The verdict in force: the last round's. */
   verdict: Verdict | null
+  /**
+   * The `## Escalation` section (#405) — what the reviewer wrote for the
+   * human who resolves it — or null when the report carries none. The
+   * contract requires it exactly when the verdict in force is `escalate`;
+   * a report predating the section, or off its grammar, reads as null and
+   * the surface withholds itself rather than guessing.
+   */
+  escalation: EscalationSection | null
 }
 
 const FENCE = /^\s*(```|~~~)/
@@ -284,7 +292,15 @@ export function parseReview(path: string, content: string): ReviewReport {
     byId.set(id, finding)
   }
 
-  return { path, task, rounds, findings, dispositions, verdict: rounds.at(-1)?.verdict ?? null }
+  return {
+    path,
+    task,
+    rounds,
+    findings,
+    dispositions,
+    verdict: rounds.at(-1)?.verdict ?? null,
+    escalation: extractEscalation(content),
+  }
 }
 
 /** Findings ordered as the contract ranks them: blocking first, then by id. */
@@ -297,4 +313,105 @@ export function bySeverity(findings: ReviewFinding[]): ReviewFinding[] {
 /** Findings a later round has not closed — what is still open at the gate. */
 export function standing(findings: ReviewFinding[]): ReviewFinding[] {
   return findings.filter((f) => f.resolution?.state !== 'resolved')
+}
+
+// --- The Escalation section (#405) -----------------------------------------
+//
+// Before this, an `escalate` verdict had no home for its reason. The
+// reviewer's contract fixed the verdict word and said "say so plainly"; the
+// verifier's said "name the condition in Gaps". Each escalation then landed
+// wherever its author chose — an improvised bold paragraph above Findings, a
+// bullet in Gaps — and nothing could put it on the card. The engine's own
+// record carried one line: `reviewer escalated task <id> — see review-NN.md`.
+//
+// Both report contracts now require a `## Escalation` section exactly when
+// the verdict in force is `escalate` (validate.ts enforces the `REQUIRED
+// WHEN:` line). Its grammar: bold-label fields — `**Diff verdict:**` (review
+// only), `**Traces to:**`, `**Outside every remaining surface:**` (review),
+// `**Criteria affected:**` (verification) — a prose paragraph, and a bulleted
+// list of options. The reader lives here rather than in its own file because
+// this file is the browser-safe leaf, and the verification report shares the
+// same section shape.
+//
+// Presence, not verdicts: the section is lifted out verbatim and its fields
+// named; nothing ranks the options or recommends a route. A report with more
+// than one Escalation section (a round that escalated again) yields the last —
+// the one in force, the reading rounds get above.
+
+export interface EscalationSection {
+  /** The section body, verbatim, without its heading line. */
+  body: string
+  /**
+   * `**Diff verdict:**` value, lower-cased, when it is one of the two words the
+   * review contract allows. Null on a verification report, or when absent or
+   * off-grammar — the value as written is still in `fields`.
+   */
+  diffVerdict: 'approve' | 'request-changes' | null
+  /** `**Traces to:**` value, verbatim. */
+  tracesTo: string | null
+  /** Every bold-label field in the section, keyed by label as written, values verbatim. */
+  fields: Record<string, string>
+  /** The prose outside the fields and the options, verbatim, trimmed. */
+  prose: string
+  /** The bulleted options, one per list item, verbatim, continuation lines joined. */
+  options: string[]
+  /** 1-based line of the section heading. */
+  line: number
+}
+
+const ESCALATION_HEADING = /^##\s+Escalation\s*#*\s*$/i
+const H1_OR_H2 = /^#{1,2}\s/
+const SECTION_FIELD = /^\*\*([^*]+?):\*\*\s*(.*)$/
+const OPTION_ITEM = /^\s*[-*]\s+(.*\S)\s*$/
+const OPTION_CONTINUATION = /^\s{2,}(\S.*)$/
+
+/** The last `## Escalation` section of a report, or null when there is none. */
+export function extractEscalation(markdown: string): EscalationSection | null {
+  const lines = toLines(markdown)
+  let start = -1
+  for (const l of lines) if (!l.inFence && ESCALATION_HEADING.test(l.text)) start = l.n - 1
+  if (start < 0) return null
+  // The section runs to the next H1 or H2 outside a fence — an H1 opens a
+  // section too, so a round appended after it never reads as part of it.
+  let end = start + 1
+  while (end < lines.length && (lines[end]!.inFence || !H1_OR_H2.test(lines[end]!.text))) end++
+  const bodyLines = lines.slice(start + 1, end).map((l) => l.text)
+
+  const fields: Record<string, string> = {}
+  const proseLines: string[] = []
+  const options: string[] = []
+  let inList = false
+  for (const raw of bodyLines) {
+    const field = SECTION_FIELD.exec(raw.trim())
+    if (field && !inList) {
+      if (!(field[1]! in fields)) fields[field[1]!] = field[2]!.trim()
+      continue
+    }
+    const item = OPTION_ITEM.exec(raw)
+    if (item) {
+      options.push(item[1]!)
+      inList = true
+      continue
+    }
+    const cont = OPTION_CONTINUATION.exec(raw)
+    if (inList && cont && options.length > 0) {
+      options[options.length - 1] = `${options[options.length - 1]} ${cont[1]}`
+      continue
+    }
+    if (raw.trim() === '') inList = false
+    if (!inList) proseLines.push(raw)
+  }
+
+  const dv = fields['Diff verdict']?.trim().toLowerCase() ?? null
+  return {
+    body: bodyLines.join('\n').trim(),
+    diffVerdict: dv === 'approve' || dv === 'request-changes' ? dv : null,
+    tracesTo: fields['Traces to'] ?? null,
+    fields,
+    // The list's lead-in sentence ("The options as I see them:") is prose
+    // too; keeping it is the verbatim reading.
+    prose: proseLines.join('\n').trim(),
+    options,
+    line: start + 1,
+  }
 }

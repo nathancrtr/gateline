@@ -46,6 +46,13 @@ on the current branch). Read `runs/<slug>/spec.md` for the acceptance criteria, 
   exist is a spec defect. The verdict line is the channel — it is what pauses the
   run and puts the condition in front of a human. A sentence in Gaps alone
   reaches nobody.
+- An `escalate` verdict carries an `## Escalation` section, in the contract's
+  shape: the spec or plan clause it traces to, the criteria it takes down, one
+  plain-words paragraph on what is defective, and the routes as you see them as
+  a bulleted list. A human reads that section on the card and resolves the
+  escalation from it. Gaps still lists the unverifiable criterion; the section
+  says why that is a spec or plan defect and what to do about it. Say what you
+  would do, never what you have decided — the human picks.
 
 ## Report back
 

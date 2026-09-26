@@ -303,6 +303,18 @@ budget:
           tokens_in: 6,
           tokens_out: 1347,
           cost_usd: 0.8724121000000001
+        },
+      {
+          at: 2026-09-26T02:05:08.923Z,
+          role: reviewer,
+          task: 06-pages-workflow,
+          round: 1,
+          adapter: claude-code,
+          model: claude-fable-5-1,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:21055,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:

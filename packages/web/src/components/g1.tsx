@@ -83,7 +83,11 @@ function Coverage({ packet, src, slug }: { packet: G1PacketData; src: string; sl
   const rest = packet.coverage.filter((r) => !uncovered.includes(r))
   return (
     <div data-g1-coverage>
-      <GroupLabel hint="contracts/plan.md: every spec requirement maps to at least one task">Coverage</GroupLabel>
+      {/* The rule is the plan contract's, named by its kind (#435) as the
+          reader's contract badge names it (step 5). No Address follows: the
+          badge drops the contract's file when it is the artifact's own
+          filename (`contractBadgeName`), and the plan's is. */}
+      <GroupLabel hint="per the plan contract, every spec requirement maps to at least one task">Coverage</GroupLabel>
       {packet.mappingWithheld ? (
         <PacketWithheld view="Coverage" reason={packet.mappingWithheld} src={src} slug={slug} hook="mapping" />
       ) : (

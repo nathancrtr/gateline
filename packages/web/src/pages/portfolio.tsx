@@ -5,6 +5,7 @@ import { type ReactNode, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { api, formatAge, type RunSummary } from '../api.ts'
 import { BudgetMeter, GateLedger, Imp, PhaseChip } from '../components/chips.tsx'
+import { Diagnostic } from '../components/vocabulary.tsx'
 import { EdgeFade, useScrollCue } from '../scroll-cue.tsx'
 import { PageStatus } from './inbox.tsx'
 
@@ -178,8 +179,16 @@ export function PortfolioPage() {
                       <div className="mt-[2px] font-ui text-[11.5px] text-muted">
                         {run.source} · {run.profile}
                       </div>
+                      {/* The parser's message is the machine's word, so it is a
+                          Diagnostic under its producer (#435), as the decide
+                          card sets the same string, and `<pre>` keeps its caret
+                          under the column it names. It was once a red row
+                          line, flowed, with the caret collapsed onto the
+                          line before it. */}
                       {run.malformed && (
-                        <div className="mt-[3px] font-mono text-[11.5px] text-bad before:content-['✕_']">{run.malformed}</div>
+                        <div className="mt-1.5 max-w-[46ch]">
+                          <Diagnostic producer="Run state parser">{run.malformed}</Diagnostic>
+                        </div>
                       )}
                       {run.aheadOfOrigin != null && run.aheadOfOrigin > 0 && (run.behindOrigin ?? 0) > 0 ? (
                         <Imp

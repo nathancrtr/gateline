@@ -9,9 +9,12 @@
 import { useQuery } from '@tanstack/react-query'
 import { createContext, type ReactNode, useContext, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { Link } from 'react-router-dom'
 import remarkGfm from 'remark-gfm'
 import { type ArtifactKind, api, type LexiconEntry } from '../api.ts'
+// A cycle, and a harmless one: vocabulary's `Name` resolves through
+// `CitedText` here, and the definition links here are vocabulary Addresses.
+// Neither module touches the other's bindings until render.
+import { Address, artifactHref, Name } from './vocabulary.tsx'
 
 export interface RunLexicon {
   src: string
@@ -220,13 +223,18 @@ export function LexRef({ children }: { children?: ReactNode }) {
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.body}</ReactMarkdown>
           </span>
         )}
+        {/* Where the definition lives (#435): a UI word, and the line as the
+            Address it is, which is also the link. It was once the address set
+            as a link label, `spec.md:13 — jump to definition ↗`, spending the
+            arrow SEAM.md §5 keeps for leaving the site; this link stays in the
+            cockpit and opens the Record reader on the heading. */}
         {entry && (
-          <Link
-            className="lex-card-jump"
-            to={`/runs/${lex.src}/${lex.slug}?tab=record&artifact=${encodeURIComponent(entry.artifact)}&anchor=${anchorFor(id)}`}
-          >
-            {entry.artifact}:{entry.line} — jump to definition ↗
-          </Link>
+          <span className="font-ui text-[11px] text-muted">
+            defined at{' '}
+            <Address className="lex-card-jump" to={artifactHref(lex.src, lex.slug, entry.artifact, anchorFor(id))}>
+              {`${entry.artifact}:${entry.line}`}
+            </Address>
+          </span>
         )}
       </span>
     </span>
@@ -326,19 +334,24 @@ export function CitedObjects({ content, path }: { content: string; path: string 
           const entry = lex.byId.get(id)?.at(-1)
           return (
             <li key={id} className="flex items-baseline gap-2">
-              <span className={`shrink-0 font-mono text-[11px] font-semibold ${entry ? 'text-accent' : 'text-warn'}`}>{id}</span>
+              {/* The id is a Name and its line the Address after it (#435),
+                  as G1's Decisions sets the same lexicon entry. The id was
+                  link blue, though it was never the link. */}
               {entry ? (
                 <>
+                  <Name lead size="sm" className="shrink-0">
+                    {id}
+                  </Name>
                   <span className="min-w-0 truncate text-muted">{entry.shortName || entry.body.replace(/\s+/g, ' ')}</span>
-                  <Link
-                    className="ml-auto shrink-0 font-ui text-[11px] text-accent underline underline-offset-2"
-                    to={`/runs/${lex.src}/${lex.slug}?tab=record&artifact=${encodeURIComponent(entry.artifact)}&anchor=${anchorFor(id)}`}
-                  >
-                    {entry.artifact}:{entry.line}
-                  </Link>
+                  <Address className="ml-auto shrink-0" to={artifactHref(lex.src, lex.slug, entry.artifact, anchorFor(id))}>
+                    {`${entry.artifact}:${entry.line}`}
+                  </Address>
                 </>
               ) : (
-                <span className="text-warn">not defined in this run's spec/plan</span>
+                <>
+                  <span className="shrink-0 font-mono text-[11px] font-semibold text-warn">{id}</span>
+                  <span className="text-warn">not defined in this run's spec/plan</span>
+                </>
               )}
             </li>
           )

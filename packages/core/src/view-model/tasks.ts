@@ -404,6 +404,18 @@ const asList = (raw: Raw | undefined): string[] =>
 const SURFACE = 'file_contact_surface'
 
 /**
+ * The top-level keys a work-item file writes, in document order, read by the
+ * same subset as `parseWorkItem` (#434). `WorkItem` reads an absent key as
+ * empty, which is right for a surface-scoped view and wrong for a field view:
+ * a key the file does not write is not a key it wrote empty. `readable` is
+ * false for a key written in a shape this subset does not read (a surface
+ * written as a mapping) — which is not a key written empty either.
+ */
+export function workItemKeys(content: string): { key: string; readable: boolean }[] {
+  return [...parseMapping(content)].map(([key, raw]) => ({ key, readable: raw.kind !== 'unreadable' }))
+}
+
+/**
  * Parse one work item. The two keys a derived view cannot do without are `id`
  * and `file_contact_surface`; a file missing either withholds rather than
  * letting a view speak for a record it has not read.

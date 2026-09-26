@@ -27,6 +27,7 @@ import {
   describeArtifact,
   engineHealthStale,
   extractSections,
+  type FieldView,
   type GateId,
   hostBranchUrl,
   ID_PATTERN,
@@ -35,6 +36,7 @@ import {
   PROFILES,
   type Profile,
   parseReview,
+  parseRunState,
   parseUnifiedDiff,
   planDecision,
   planRunScaffold,
@@ -43,11 +45,15 @@ import {
   type RunSource,
   readEngineHealth,
   readLedger,
+  runStateView,
   ScaffoldError,
   SLUG_PATTERN,
   scopeDiff,
   summarizeRun,
+  unreadableStateView,
   validateArtifact,
+  workItemContract,
+  workItemView,
 } from '@gateline/core'
 import { type Context, Hono } from 'hono'
 import { GenerationCache } from './cache.ts'
@@ -408,7 +414,17 @@ export function createApp(deps: AppDeps): Hono {
     const content = await source.readArtifact(ref, path)
     if (content === null) return fail(c, 404, { error: `no artifact at ${path}` })
     const validation = await validateArtifact(path, content, source.templates)
-    return respond<'GET /api/runs/:src/:slug/artifact'>(c, { path, content, validation })
+    // The typed view beside the bytes (#434): a work item over its
+    // contract's keys, `state.yaml` as the run's ledger. The bytes stay the
+    // response's `content`, unchanged; the view names what is in them.
+    const { kind } = describeArtifact(path)
+    let fields: FieldView | null = null
+    if (kind === 'work-item') fields = workItemView(path, content, workItemContract(await source.templates.read('work-item.yaml')))
+    else if (kind === 'state') {
+      const { state, error } = parseRunState(content)
+      fields = state ? runStateView(state, content) : unreadableStateView(error ?? 'state.yaml could not be read')
+    }
+    return respond<'GET /api/runs/:src/:slug/artifact'>(c, { path, content, validation, fields })
   })
 
   // The run lexicon (#163): verbatim R/AC/ADR definitions from this run's

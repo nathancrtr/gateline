@@ -86,6 +86,11 @@ const EXCEPTIONS: { within: string; notWithin?: string; reason: string; standing
       'The record\'s own words, quoted (§2, §5 Quoted passage): the artifact body in the Record reader, and a section, field or escalation quoted on a card. A filename the agent wrote is its word, byte-identical.',
   },
   {
+    within: '[data-reader] [data-bytes]',
+    reason:
+      "§10: the file verbatim. A field view that is withheld — a fork whose work item writes its surface as a mapping (#434) — shows the bytes in its place, and the verbatim file shown because the view is withheld is the record's own bytes, like the artifact body above. Everywhere else it is behind \"show bytes\", so the sweep meets it only there.",
+  },
+  {
     within: '[data-ledger-actor="orchestrator"]',
     reason:
       "§10: the engine's verbs in the ledger — an engine row's words are its commit subject, verbatim (§5 Diagnostic: a commit subject is the machine's word where it is the fact). Step 10 (#430) linked the row to the view it names beside the subject; the subject stays as written.",
@@ -111,7 +116,6 @@ interface Pending {
   why: string
 }
 
-const STEP_7 = { step: 7, issue: 434 } as const
 const OUTSIDE_STEPS = { step: null, issue: 435 } as const
 
 /**
@@ -130,15 +134,6 @@ const OUTSIDE_STEPS = { step: null, issue: 435 } as const
  * the round-cap report chips, which step 3 already set as Addresses.
  */
 const PENDING: Pending[] = [
-  // Step 7 (#434): field views for YAML.
-  {
-    surface: / · record · (state\.yaml|tasks\/[\w.-]+\.yaml)$/,
-    within: '[data-reader] pre',
-    pattern: 'filename',
-    owner: STEP_7,
-    why: 'The reader dumps a work item and state.yaml as a raw <pre>. Step 7 gives both a field view over their contract keys, with the bytes behind "show bytes". Today the filenames inside (a work item\'s file_contact_surface, the state contract\'s header comment) are bytes where a view belongs.',
-  },
-
   // Outside §9's steps (#435), found by this sweep.
   {
     surface: /./,

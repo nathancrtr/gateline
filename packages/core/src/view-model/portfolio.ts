@@ -4,6 +4,7 @@
 import { bestEffortEscalations, type ClosureRecord, type GateEntry, type Profile, ROUND_CAP, type RunState } from '../record/schema.ts'
 import type { RunRef, RunSource } from '../sources/source.ts'
 import { deriveReadiness, type InboxItem } from './readiness.ts'
+import { type StateProblem, stateProblem } from './state-problem.ts'
 
 export interface GateLedgerCell {
   approved: boolean
@@ -26,6 +27,16 @@ export interface RunSummary {
    * state the phase exists to avoid.
    */
   closure: ClosureRecord | null
+  /**
+   * Why no state could be read from `state.yaml`, as a fact (#435): the run
+   * state parser's diagnostic when it refused the file, or which other case
+   * it was. Null when the state parsed.
+   */
+  unreadable: StateProblem | null
+  /**
+   * Kept for one release beside `unreadable` (#435): the read's error string,
+   * for a Gatehouse built before the fact. New code reads `unreadable`.
+   */
   malformed: string | null
   /** Run profile (DESIGN.md §4.1); display layers filter the gate ledger through PROFILE_GATES. */
   profile: Profile
@@ -64,7 +75,8 @@ export async function summarizeRun(
   source: RunSource,
   ref: RunRef,
 ): Promise<{ summary: RunSummary; items: InboxItem[] }> {
-  const { state, error, raw } = await source.readState(ref)
+  const read = await source.readState(ref)
+  const { state, error, raw } = read
   const { items } = await deriveReadiness(source, ref)
   const touched = await source.lastTouched(ref, [''])
   const aheadOfOrigin = (await source.aheadOfOrigin?.(ref)) ?? null
@@ -85,7 +97,8 @@ export async function summarizeRun(
         phase: 'unknown',
         pausedReason: null,
         closure: null,
-        malformed: error ?? 'state.yaml unreadable',
+        unreadable: stateProblem(read),
+        malformed: error,
         profile: 'full',
         gates: emptyLedger(),
         tasks: { total: 0, done: 0, maxRounds: 0, roundCap: ROUND_CAP },
@@ -109,6 +122,7 @@ export async function summarizeRun(
       phase: state.phase,
       pausedReason: state.paused_reason,
       closure: state.closure,
+      unreadable: null,
       malformed: null,
       profile: state.profile,
       gates: {

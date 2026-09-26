@@ -12,4 +12,5 @@ export const NO_FACTS = {
   paused: null,
   staged: null,
   roundCap: null,
+  unreadable: null,
 } satisfies Partial<InboxItem>

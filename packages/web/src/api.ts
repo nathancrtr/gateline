@@ -124,6 +124,7 @@ export type {
   StageResponse,
   StagingConfigResponse,
   StagingSourceConfig,
+  StateProblem,
   SurfaceItemRef,
   SurfaceOverlap,
   SurfaceScopedDiff,

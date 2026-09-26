@@ -20,7 +20,8 @@ export async function makeFixture(): Promise<FixtureContext> {
  * `ENOTEMPTY: directory not empty, rmdir '…/.git/objects'`. The audit that
  * followed found no writer to await — the fixture generator is synchronous
  * (`execFileSync` throughout), every `Git.run` resolves only when its child
- * exits, `LocalGitSource` holds no timers, and a fresh fixture carries ~200
+ * exits, `LocalGitSource` holds no timers (the blob reader added since is a
+ * reader only: it writes nothing under the repository), and a fresh fixture carries ~200
  * loose objects against git's auto-gc threshold of 6700, so no background
  * `gc` detaches from a commit. What remains is the filesystem: Node
  * documents that `rmdir` can report `ENOTEMPTY` transiently on a busy or

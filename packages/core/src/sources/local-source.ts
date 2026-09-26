@@ -6,7 +6,7 @@ import { access, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parseDocument } from 'yaml'
 import { type RunScaffold, readIntake } from '../record/scaffold.ts'
-import { parseRunState, STAGED_REASON } from '../record/schema.ts'
+import { parseRunState, type RunState, STAGED_REASON } from '../record/schema.ts'
 import type { ContractTemplates } from '../record/validate.ts'
 import { type FrameworkRoots, memoizedFrameworkRoots } from './framework-roots.ts'
 import { type CommitInfo, Git } from './git.ts'
@@ -14,6 +14,13 @@ import type { Identity, RunRef, RunSource, StageOutcome, StateCommit, StateDocMu
 
 const RUN_BRANCH_PREFIX = 'run/'
 const ZERO_OID = '0'.repeat(40)
+const PARSED_STATES_MAX = 4096
+
+function deepFreeze<T>(value: T): T {
+  if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return value
+  for (const child of Object.values(value)) deepFreeze(child)
+  return Object.freeze(value)
+}
 
 export class LocalGitSource implements RunSource {
   readonly id: string
@@ -42,6 +49,7 @@ export class LocalGitSource implements RunSource {
    * (the orchestrator's Engine, #95) so the layout is probed once.
    */
   readonly frameworkRoots: () => Promise<FrameworkRoots>
+  private readonly parsedStates = new Map<string, Promise<RunState | null>>()
 
   /**
    * `options.identity` pins the author of every write from this source —
@@ -249,12 +257,26 @@ export class LocalGitSource implements RunSource {
   async stateHistory(ref: RunRef): Promise<StateCommit[]> {
     const path = `${await this.runDir(ref.slug)}/state.yaml`
     const commits = await this.git.log(ref.ref, [path])
-    const result: StateCommit[] = []
-    for (const c of commits) {
-      const raw = await this.git.show(c.oid, path)
-      result.push({ ...c, state: raw === null ? null : parseRunState(raw).state })
-    }
-    return result
+    return Promise.all(commits.map(async (c) => ({ ...c, state: await this.stateAt(c.oid, path) })))
+  }
+
+  /**
+   * `state.yaml` as parsed at one commit. A commit id names content that can
+   * never change, so an entry is never invalidated — only dropped, oldest
+   * first, to bound the memo. A rebuildable projection in R1's sense:
+   * deleting it loses nothing. The parsed state is shared between callers and
+   * frozen so that sharing cannot leak one caller's change into another's read.
+   */
+  private stateAt(oid: string, path: string): Promise<RunState | null> {
+    const key = `${oid}:${path}`
+    const hit = this.parsedStates.get(key)
+    if (hit) return hit
+    const parsed = this.git.show(oid, path).then((raw) => (raw === null ? null : deepFreeze(parseRunState(raw).state)))
+    this.parsedStates.set(key, parsed)
+    // A failed read must not stick around as a poisoned entry.
+    parsed.catch(() => this.parsedStates.delete(key))
+    if (this.parsedStates.size > PARSED_STATES_MAX) this.parsedStates.delete(this.parsedStates.keys().next().value!)
+    return parsed
   }
 
   async runHistory(ref: RunRef): Promise<CommitInfo[]> {

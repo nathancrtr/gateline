@@ -100,6 +100,112 @@ acceptance_tests:
 
 depends_on: [02-snapshot-generator, 03-web-static-mode, 04-fixture-label]
 
-status: pending
+status: in-review
 
 notes: |
+  Implementer round 1.
+
+  Built exactly the five files in file_contact_surface:
+  - packages/web/scripts/serve-static.mjs (new) — node:http + node:fs/promises
+    + node:path only. GET/HEAD only (405 plain text otherwise); paths resolved
+    under --root and refused (404) if they escape it; directory without a
+    trailing slash -> 301 with query string preserved; directory -> its
+    index.html or 404; missing -> <root>/404.html when present (text/html)
+    else plain text; prints "serve-static: http://127.0.0.1:<port> ← <root>"
+    on listen. Mirrors the MIME table shape in server/src/main.ts (html, js,
+    css, svg, png, ico, woff2, json; default application/octet-stream) as a
+    sibling literal rather than an import, so this script never reaches into
+    `server` (it must stay a plain static host, never a second server per R4).
+  - packages/playwright.static.config.ts (new) — testDir './e2e-static',
+    timeout 60_000, expect.timeout 15_000, retries 0, baseURL
+    'http://127.0.0.1:4397', viewport 1280x900, webServer command
+    "node web/scripts/serve-static.mjs --root <DEMO_SITE_ROOT|../_site>
+    --port 4397", url 'http://127.0.0.1:4397/demo/api/health.json',
+    reuseExistingServer false, timeout 30_000. playwright.config.ts
+    untouched.
+  - packages/e2e-static/demo.spec.ts (new) — 7 tests covering AC3.1, AC3.2,
+    AC4.2, AC5.1, AC5.2, AC6.1, AC6.2, AC7.3 (this suite failing a PR's
+    `build` job is what AC7.3 asks of task 06's workflow wiring; this task
+    proves the check itself discriminates). beforeAll reads
+    /demo/api/runs.json and resolves one non-fixture run plus the fixture
+    run g2-pending, failing loudly if either is missing. Every test does a
+    fresh page.goto. Notable idioms carried over from packages/e2e: the
+    sr-only burden radio is clicked via its label text ("Light correction",
+    smoke.spec.ts's own idiom), and the staging form's required sections are
+    read live from GET /api/staging (sources[0].briefSections) rather than
+    hardcoded, so the test can't drift from whichever source new-run.tsx
+    defaults to.
+  - packages/package.json — added "e2e:static": "playwright test -c
+    playwright.static.config.ts".
+  - packages/biome.json — added "e2e-static/**" to files.includes (same
+    treatment as the existing "e2e/**" entry). Did not add packages/web/scripts
+    to the includes list: the existing web/scripts/check-bundle.mjs (task 03)
+    is likewise not linted today, and the task only asked for the e2e-static
+    entry — kept the addition to exactly what was scoped.
+
+  Local recipe run (packages/ as cwd unless noted), verbatim per the task's
+  scope item 4, plus `npm install` first since packages/node_modules was
+  missing @vitejs/plugin-react et al. in this worktree:
+
+    npm install
+    mkdir -p /tmp/gl-site && cp site/404.html /tmp/gl-site/
+    npm run build:static -w @gateline/web
+    node server/src/snapshot.ts --repo "$PWD/.." --out /tmp/gl-site/demo --web-dist web/dist-static
+    DEMO_SITE_ROOT=/tmp/gl-site npm run e2e:static
+
+  Results:
+  - npm install: ok (5 packages added — the worktree's node_modules was
+    incomplete for @gateline/web's deps).
+  - build:static: ok — "check-bundle: 1 bundle file(s) clean — no node
+    builtins".
+  - snapshot generator: ok — "snapshot: 354 routes, 22 runs (fixture: 15,
+    gateline: 7), 26 shells", excluding 8 non-done/missing-state runs by
+    name (matches the plan's ADR-3 excluded-log behaviour; nothing here is
+    this task's concern beyond confirming the generator still runs clean
+    under the recipe).
+  - DEMO_SITE_ROOT=/tmp/gl-site npm run e2e:static: 7 passed (1.5s), first
+    try, no flakes.
+
+  Negative check (required by acceptance_tests): deleted one real run's
+  detail JSON from the assembled tree
+  (/tmp/gl-site/demo/api/runs/gateline/writestate-kill-window.json — the
+  first non-fixture entry /demo/api/runs.json actually lists; runs.json
+  itself is unaffected by the deletion, only that run's own detail route
+  is now a 404) and reran `DEMO_SITE_ROOT=/tmp/gl-site npm run e2e:static`:
+  1 failed / 6 passed — the "a real run and the fixture run both resolve on
+  a deep link" test (AC3.1/AC3.2/AC6.1) timed out waiting for `h1`, since
+  page.goto to that run's route now 404s. Restored the file from a backup
+  copy and reran: 7 passed again, confirming the failure was solely the
+  deleted fixture and the suite is otherwise stable. (First attempt at this
+  negative check deleted packages/e2e-static's expected pick's neighbor by
+  mistake — /api/runs/gateline/creation-seam.json — which the suite didn't
+  read because the test's `find()` over runs.json picks the first
+  non-fixture entry in *that file's own order*, which is age/priority-based,
+  not alphabetical; the run actually visited was writestate-kill-window.
+  Restored that no-op deletion too before moving on — no lasting effect,
+  noted here only because it is the reason two file names appear above.)
+
+  Also ran, both clean:
+  - npm run lint → "Checked 232 files in 65ms. No fixes applied."
+  - npm run typecheck → tsc -p tsconfig.json && tsc -p web/tsconfig.json,
+    no output, exit 0. (e2e-static is not in either tsconfig's `include`
+    list, same as e2e/ today — Playwright itself still runs the spec via
+    esbuild transform regardless, which is what the e2e:static run above
+    exercises.)
+  - npx playwright test --list (root config, no -c flag) → still exactly
+    "Total: 49 tests in 5 files", all under e2e/ — confirms the live suite
+    is unaffected and playwright.config.ts's testDir './e2e' never sees
+    packages/e2e-static.
+  - npx playwright test -c playwright.static.config.ts --list → "Total: 7
+    tests in 1 file" (e2e-static/demo.spec.ts only).
+
+  No deviations from the task's scope. One judgment call, recorded rather
+  than silently made: AC6.2's 404 check relies on this task's own recipe
+  copying site/404.html to the *served root*'s top level (DEMO_SITE_ROOT),
+  not under demo/ — exactly as the task's own note says ("serve-static
+  serves 404.html from its root, which is why the recipe copies the site's
+  404 page beside demo/"). This task does not touch the Pages workflow
+  (task 06's job) that will need to make the equivalent true there (site's
+  own build already places 404.html at _site/404.html, so no extra copy step
+  is expected in that context, but that is task 06's acceptance to prove,
+  not this one's).

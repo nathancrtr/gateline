@@ -27,6 +27,7 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json && tsc -p web/tsconfig.json",
     "lint": "biome check .",
+    "e2e:static": "playwright test -c playwright.static.config.ts",
     "check-lockfile": "node scripts/check-lockfile.mjs",
     "fixture": "node fixtures/src/main.ts"
   },

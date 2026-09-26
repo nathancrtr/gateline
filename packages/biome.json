@@ -6,6 +6,7 @@
       "*/src/**",
       "*/test/**",
       "e2e/**",
+      "e2e-static/**",
       "scripts/**",
       "!**/node_modules",
       "!web/dist",

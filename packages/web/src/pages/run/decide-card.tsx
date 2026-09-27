@@ -11,6 +11,7 @@ import {
   ARM_INSTRUCTION,
   BOUNCED_INSTRUCTION,
   DecidePanel,
+  Flash,
   INFLIGHT_INSTRUCTION,
   LOST_DISPATCH_INSTRUCTION,
   pausedInstruction,
@@ -249,6 +250,7 @@ export function NeedsYouCard({
   primary,
   sentHere,
   pageHints,
+  onCommitted,
 }: {
   item: InboxItem
   now: number
@@ -256,6 +258,7 @@ export function NeedsYouCard({
   primary?: boolean
   sentHere?: boolean
   pageHints?: readonly KeyHint[]
+  onCommitted?: (text: string) => void
 }) {
   const urgent = item.since !== null && now - item.since > 3 * 86_400
   const ageLabel = `waiting ${formatAge(item.since, now)}`
@@ -299,7 +302,7 @@ export function NeedsYouCard({
   // absolutely positioned and would be clipped by it.
   return (
     <section
-      className="relative border-t border-ink pt-5 first:border-t-0 first:pt-1"
+      className={CARD_SECTION}
       data-needs-card
       data-card-state={gateState ?? undefined}
       data-sent-here={sentHere ? 'true' : undefined}
@@ -329,7 +332,7 @@ export function NeedsYouCard({
             <AgeBadge label={ageLabel} urgent={urgent} />
           </span>
         </div>
-        <h2 className="mt-3 mb-1.5 text-[22px] font-semibold leading-[1.2] text-ink" data-card-title>
+        <h2 className={CARD_TITLE} data-card-title>
           {inboxTitle(item)}
         </h2>
         <CardFacts item={item} now={now} />
@@ -391,7 +394,35 @@ export function NeedsYouCard({
           sentHere={sentHere}
           chips={chips}
           pageHints={pageHints}
+          onCommitted={onCommitted}
         />
+      </div>
+    </section>
+  )
+}
+
+const CARD_SECTION = 'relative border-t border-ink pt-5 first:border-t-0 first:pt-1'
+const CARD_TITLE = 'mt-3 mb-1.5 text-[22px] font-semibold leading-[1.2] text-ink'
+
+/**
+ * What a card becomes once its decision commits (#506): its title, and the
+ * confirmation the decide panel gave, in the same status line.
+ *
+ * The decision's own write moves the refs, the run is refetched, and the item
+ * is gone from it, so the card that held the confirmation unmounts. Since #462
+ * that refetch takes under a tenth of a second, and the confirmation went with
+ * it before anyone could read it. The run page keeps the words and renders this
+ * where the card stood. It says only what the server answered; the record's
+ * own account of the decision is the spine above.
+ */
+export function DecidedCard({ item, text }: { item: InboxItem; text: string }) {
+  return (
+    <section className={CARD_SECTION} data-needs-card data-card-state="decided">
+      <h2 className={CARD_TITLE} data-card-title>
+        {inboxTitle(item)}
+      </h2>
+      <div className="mt-3">
+        <Flash kind="ok" text={text} />
       </div>
     </section>
   )

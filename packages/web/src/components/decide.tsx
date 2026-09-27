@@ -177,6 +177,7 @@ export function DecidePanel({
   sentHere = false,
   chips = null,
   pageHints = [],
+  onCommitted,
 }: {
   item: InboxItem
   /** The run's profile — decides where a decline sends the run (#253). */
@@ -192,6 +193,12 @@ export function DecidePanel({
    * stop meaning what the line says.
    */
   pageHints?: readonly KeyHint[]
+  /**
+   * Told the confirmation once the decision commits (#506). The refetch the
+   * decision itself triggers usually removes this card, and this panel's own
+   * state with it, so the page keeps the words where the card stood.
+   */
+  onCommitted?: (text: string) => void
 }) {
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<Mode>('idle')
@@ -250,7 +257,9 @@ export function DecidePanel({
   const mutation = useMutation({
     mutationFn: api.decide,
     onSuccess: (result) => {
-      setFlash({ kind: 'ok', text: `${result.summary} — committed ${result.commit?.slice(0, 10)}${result.note ? ` (${result.note})` : ''}` })
+      const text = `${result.summary} — committed ${result.commit?.slice(0, 10)}${result.note ? ` (${result.note})` : ''}`
+      setFlash({ kind: 'ok', text })
+      onCommitted?.(text)
       setMode('idle')
       setBurden(null)
       setNotes('')
@@ -583,7 +592,7 @@ function NotesField({
   )
 }
 
-function Flash({ kind, text }: { kind: 'ok' | 'conflict' | 'error'; text: string }) {
+export function Flash({ kind, text }: { kind: 'ok' | 'conflict' | 'error'; text: string }) {
   const tone = kind === 'ok' ? 'border-ink text-ink' : 'border-mark text-bad'
   return (
     <p className={`mb-2 border-t border-b py-2 text-xs font-semibold ${tone}`} role="status">

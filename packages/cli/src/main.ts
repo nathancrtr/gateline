@@ -40,6 +40,7 @@ import {
   type RunRef,
   type RunScaffold,
   type RunSource,
+  repoToplevel,
   resolveCodeRepo,
   resolveId,
   ScaffoldError,
@@ -935,6 +936,21 @@ export function resolveUpMode(
   return { enginePush, localOnly, marker }
 }
 
+/**
+ * Resolves `up`'s `--repo` (or the cwd default) to its work-tree toplevel —
+ * the same normalization `loadSources` already applies to `--repo` and
+ * config entries (#493, the engine-side half of #83). The engine reads by
+ * pathspec (`ls-tree`/`log -- <path>`), which resolves relative to the cwd's
+ * prefix inside a work tree, unlike `show(ref:path)` — a subdirectory
+ * `repoDir` would dispatch against an engine that lists no artifacts and
+ * misses default-branch runs, with no warning.
+ */
+export async function resolveUpRepoDir(raw: string): Promise<{ ok: true; dir: string } | { ok: false; error: string }> {
+  const dir = await repoToplevel(raw)
+  if (dir === null) return { ok: false, error: `${raw} is not a git repository — \`up\` needs one writable clone (pass --repo)` }
+  return { ok: true, dir }
+}
+
 program
   .command('up')
   .description('Gatehouse + the v1 orchestrator over one clone — the single-authority deployment (docs/TOPOLOGY.md §3.1)')
@@ -1000,7 +1016,12 @@ program
         console.error('`up` runs one engine over one clone — pass a single --repo (the server may still aggregate more via config)')
         process.exit(1)
       }
-      const repoDir = opts.repo[0] ?? process.cwd()
+      const resolvedRepoDir = await resolveUpRepoDir(opts.repo[0] ?? process.cwd())
+      if (!resolvedRepoDir.ok) {
+        console.error(resolvedRepoDir.error)
+        process.exit(1)
+      }
+      const repoDir = resolvedRepoDir.dir
 
       // Explicitness, not just the resolved boolean: auto-detect and an
       // explicit `--push`/`--no-push` must be distinguishable for both the

@@ -218,14 +218,14 @@ is doable without the pointer.
 **Server** — Hono on `@hono/node-server`, one process, serves the built SPA and:
 
 ```
-GET  /api/inbox                     ranked InboxItems across sources
-GET  /api/runs                      portfolio rows
-GET  /api/runs/:src/:slug           state + readiness + validation + history
-GET  /api/runs/:src/:slug/artifact  ?path=…  (raw + rendered)
-GET  /api/runs/:src/:slug/diff      unified diff, parsed server-side
-POST /api/decisions                 {src, slug, action, gate?, notes?, burden?} → CAS result
-GET  /api/metrics                   §6 aggregates
-GET  /api/events                    SSE: ref/file changes → client revalidation
+GET  /api/inbox                            ranked InboxItems across sources
+GET  /api/runs                             portfolio rows
+GET  /api/repos/:id/-/runs/:slug           state + readiness + validation + history
+GET  /api/repos/:id/-/runs/:slug/artifact  ?path=…  (raw + rendered)
+GET  /api/repos/:id/-/runs/:slug/diff      unified diff, parsed server-side
+POST /api/decisions                        {src, slug, action, gate?, notes?, burden?} → CAS result
+GET  /api/metrics                          §6 aggregates
+GET  /api/events                           SSE: ref/file changes → client revalidation
 ```
 
 Bound to `127.0.0.1` by default; `--host` exists but the README states plainly that

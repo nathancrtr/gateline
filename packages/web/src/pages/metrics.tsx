@@ -5,6 +5,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api, type MetricsResponse } from '../api.ts'
 import { Imp } from '../components/chips.tsx'
+import { fullRunName, REPOSITORY_COLUMN, REPOSITORY_FOLD, RepositoryName, useNamesRepository } from '../components/repository.tsx'
 import { usd } from '../money.ts'
 import { PageStatus } from './inbox.tsx'
 
@@ -38,7 +39,9 @@ function formatLatency(seconds: number | null): string {
 }
 
 export function MetricsPage() {
-  const { data, isLoading, error } = useQuery({ queryKey: ['metrics'], queryFn: api.metrics })
+  const { data, isLoading: metricsLoading, error } = useQuery({ queryKey: ['metrics'], queryFn: api.metrics })
+  const names = useNamesRepository()
+  const isLoading = metricsLoading || !names.ready
 
   if (isLoading) {
     return (
@@ -71,7 +74,7 @@ export function MetricsPage() {
       )}
 
       <RoundsSection metrics={metrics} />
-      <BudgetSection metrics={metrics} />
+      <BudgetSection metrics={metrics} showRepository={names.show} />
     </div>
   )
 }
@@ -209,7 +212,7 @@ function RoundsSection({ metrics }: { metrics: MetricsResponse }) {
 }
 
 /** Budget honesty: "never updated" is itself the finding (the wordfreq lesson). */
-function BudgetSection({ metrics }: { metrics: MetricsResponse }) {
+function BudgetSection({ metrics, showRepository }: { metrics: MetricsResponse; showRepository: boolean }) {
   if (metrics.runs.length === 0) return null
   return (
     <section>
@@ -221,6 +224,9 @@ function BudgetSection({ metrics }: { metrics: MetricsResponse }) {
         <table className="w-full min-w-[420px] border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
+              {/* A register, like the Portfolio (#497): the repository is its
+                  own column, left of the run, when the set has several. */}
+              {showRepository && <th className={`${TH} ${REPOSITORY_COLUMN}`}>repository</th>}
               <th className={TH}>run</th>
               <th className={`${TH} text-right`}>limit</th>
               <th className={`${TH} text-right`}>recorded spend</th>
@@ -230,8 +236,15 @@ function BudgetSection({ metrics }: { metrics: MetricsResponse }) {
           <tbody>
             {metrics.runs.map((r) => (
               <tr key={`${r.source}/${r.slug}`}>
-                <td className={`${TD} font-mono text-xs`}>
-                  {r.source}/{r.slug}
+                {showRepository && (
+                  <td className={`${TD} ${REPOSITORY_COLUMN}`}>
+                    <RepositoryName className="font-mono text-xs" source={r.source} sourceName={r.sourceName} />
+                  </td>
+                )}
+                <td className={`${TD} font-mono text-xs`} title={fullRunName(r.source, r.slug)}>
+                  {r.slug}
+                  {/* Below 1280px the column folds under the slug. */}
+                  {showRepository && <RepositoryName className={`${REPOSITORY_FOLD} mt-[2px]`} source={r.source} sourceName={r.sourceName} />}
                 </td>
                 <td className={`${TD} text-right font-ui text-xs tabular-nums`}>{r.budget.limit === null ? '—' : usd(r.budget.limit)}</td>
                 <td className={`${TD} text-right font-ui text-xs tabular-nums`}>{r.budget.spent === null ? '—' : usd(r.budget.spent)}</td>

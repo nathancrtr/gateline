@@ -3,10 +3,13 @@
 // approval rate carries the >90% over-triggering flag from FRONTEND.md §4.4.
 import { describeArtifact } from '../record/artifact.ts'
 import { type Burden, GATE_IDS, type GateId, gateUndecided, ROUND_CAP } from '../record/schema.ts'
-import type { RunRef, RunSource, StateCommit } from '../sources/source.ts'
+import { displayNameOf, type RunRef, type RunSource, type StateCommit } from '../sources/source.ts'
 
 export interface GateDecisionRecord {
+  /** The repository's id (docs/MULTI-REPO.md §6): what URLs, logs and copies carry. */
   source: string
+  /** The repository's display name (§6.2, #497): presentation only, from `displayNameOf`. */
+  sourceName: string
   slug: string
   gate: GateId
   approved: boolean
@@ -32,7 +35,10 @@ export interface GateMetrics {
 }
 
 export interface RunMetricsSummary {
+  /** The repository's id (docs/MULTI-REPO.md §6): what URLs, logs and copies carry. */
   source: string
+  /** The repository's display name (§6.2, #497): presentation only, from `displayNameOf`. */
+  sourceName: string
   slug: string
   rounds: { taskId: string; rounds: number }[]
   budget: { limit: number | null; spent: number | null; everUpdated: boolean }
@@ -67,6 +73,7 @@ export async function collectRunDecisions(
   if (history.length === 0) return []
   const artifacts = await source.listArtifacts(ref)
   const records: GateDecisionRecord[] = []
+  const sourceName = displayNameOf(source)
 
   for (const gate of GATE_IDS) {
     const decision = findDecision(history, gate)
@@ -79,6 +86,7 @@ export async function collectRunDecisions(
     const readyAt = touched && touched.time <= decision.time ? touched.time : null
     records.push({
       source: ref.source,
+      sourceName,
       slug: ref.slug,
       gate,
       approved: entry.approved,
@@ -119,6 +127,7 @@ export async function computeMetrics(sources: RunSource[]): Promise<Metrics> {
       const spentValues = history.map((h) => h.state?.budget?.cost_spent_usd ?? null).filter((v) => v !== null)
       runs.push({
         source: source.id,
+        sourceName: displayNameOf(source),
         slug: ref.slug,
         rounds: state.tasks.map((t) => ({ taskId: t.id, rounds: t.review_rounds })),
         budget: {

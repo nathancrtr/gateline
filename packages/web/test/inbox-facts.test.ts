@@ -31,6 +31,7 @@ const HOUR = 3600
 const item = (over: Partial<InboxItem>): InboxItem =>
   ({
     source: 'local',
+    sourceName: 'local',
     slug: 'a-run',
     kind: 'gate',
     gate: null,
@@ -226,7 +227,7 @@ function row(entry: InboxItem): { title: string; line: string | null; html: stri
 }
 
 /** The whole row as the inbox renders it — so a stray `{item.detail}` anywhere in it fails the sentinel check. */
-const inboxRow = (entry: InboxItem) => render(createElement('ul', null, createElement(InboxRow, { item: entry, now: NOW, selected: false })))
+const inboxRow = (entry: InboxItem) => render(createElement('ul', null, createElement(InboxRow, { item: entry, now: NOW, selected: false, showRepository: true })))
 
 function card(entry: InboxItem): string {
   const refs: ArtifactRef[] = entry.packetRefs

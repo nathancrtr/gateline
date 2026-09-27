@@ -53,7 +53,7 @@ const block = (html: string, attr: string) => {
 }
 
 const escalationItem = (index: number): InboxItem =>
-  ({ kind: 'escalation', gate: null, escalationIndex: index, source: 'fixture', slug: 'toy', title: '', detail: '', since: 0, reviewable: true, problems: [], inflight: null, packet: [], packetRefs: [], ...NO_FACTS }) as InboxItem
+  ({ kind: 'escalation', gate: null, escalationIndex: index, source: 'fixture', sourceName: 'fixture', slug: 'toy', title: '', detail: '', since: 0, reviewable: true, problems: [], inflight: null, packet: [], packetRefs: [], ...NO_FACTS }) as InboxItem
 
 describe('a gate decision carries the approver’s note', () => {
   const notes = 'Accept **ADR-2** as written.\n\nThe fixture label stays.'

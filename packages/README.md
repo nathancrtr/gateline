@@ -143,7 +143,10 @@ framework on its default branch, read through git: a lock at
 `.gateline/framework-lock.json` (or under `gateline_prefix`), or `roles/`,
 `contracts/` and `registry/` at its root, which `repo list` marks "no lock".
 Anything else is refused with a message naming `gateline init`. An `init`
-that has not merged to the default branch does not count yet.
+that has not merged to the default branch does not count yet. A refused
+repository, or an entry whose path is not a git repository, is left out of
+the set with a warning and the others load; startup stops only when no listed
+repository can be served. `repo add` refuses such a repository outright.
 
 **Limits and engine defaults** are parsed and checked (a repository's
 `spend_limit_usd` above the machine's is an error) and not yet used: `up`

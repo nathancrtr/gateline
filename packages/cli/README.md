@@ -94,7 +94,9 @@ listed and `repo remove billing` drops it. Every entry states a mode: `view`
 reads only, `decide` also records decisions, and `dispatch` also lets `up` run
 an engine. A decision in a `view` repository is refused with
 `refused (view-mode): …` and exit code 1. `repo add` refuses a repository
-whose default branch does not carry the framework, and one already listed.
+whose default branch does not carry the framework, and one already listed;
+a listed repository that stops passing is left out with a warning while the
+others load.
 The file format, and the migration for a file written before modes existed,
 is in the [frontend README](../README.md). To point at one repository ad hoc,
 use `--repo <path>`. A host integrated with a custom `gateline init --prefix`

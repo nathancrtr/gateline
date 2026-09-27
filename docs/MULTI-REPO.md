@@ -304,7 +304,9 @@ existing reader of framework roots does. It passes in either of two cases.
    repository "no lock".
 
 Anything else is refused with a message. The message names `gateline init`, and
-names `gateline_prefix` when a lock is found under another directory.
+names `gateline_prefix` when a lock is found under another directory. A refused
+config entry is left out of the set with that message as a warning, and the
+other repositories load (§10); startup stops only when none can be served.
 
 Three limits of the check are stated here so that it is not over-read.
 

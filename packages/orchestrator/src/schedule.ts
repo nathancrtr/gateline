@@ -423,7 +423,7 @@ export class Scheduler {
     // `launch` hands the reservation to the sweep's job, this frame owns it,
     // and releases it on every other way out — a lost CAS, a missing default
     // tip, an exception.
-    const { granted, refusal } = this.governor.reserve({ repository: this.repository, intents: [{ key: sweepKey(slug), estimateUsd }] })
+    const { granted, refusal } = this.governor.reserve({ repository: this.repository, intents: [{ key: sweepKey(slug), estimateUsd, kind: 'sweep' }] })
     const reservation = granted[0]
     if (!reservation) {
       const detail = refusalReason(refusal!, `${entry.role} sweep`, 'the sweep re-derives')
@@ -516,8 +516,9 @@ export class Scheduler {
         this.onSettled?.()
       }),
     )
-    // The hand-over: from here the job's settlement owns the slot.
-    reservation.commit()
+    // The hand-over: from here the job's settlement owns the slot. The
+    // marker's `at` is what the governor recognises it by once it is metered.
+    reservation.commit(now.toISOString())
     this.log(`sweep(${slug}): dispatched ${entry.role} on ${branch}`)
     return { role: entry.role, slug, kind: 'dispatched', rule: 'S4', detail: `covering since ${coveringSince ?? 'repo start'}` }
   }

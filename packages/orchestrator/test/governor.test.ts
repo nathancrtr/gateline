@@ -205,6 +205,110 @@ describe('reserve — the spend window', () => {
     expect(gov.snapshot().settled).toBe(0)
   })
 
+  it('a dispatch the report reads closed after it settled is counted once (key and at join them)', async () => {
+    const { gov, at } = governor({ spendLimitUsd: 100, maxConcurrentDispatches: 0 })
+    const [a] = gov.reserve({ repository: 'A', intents: one('k', 5) }).granted
+    a!.commit(at(0))
+    let finish: () => void = () => {}
+    const gate = new Promise<void>((resolve) => {
+      finish = resolve
+    })
+    // The report starts; the closing commit lands and the job releases; then
+    // the gathering reads that ledger and finds the entry closed.
+    const inFlight = gov.report('A', async () => {
+      await gate
+      return { closed: [{ key: 'k', at: at(0), costUsd: 2 }], open: [] }
+    })
+    a!.release(2)
+    finish()
+    await inFlight
+    expect(gov.machineSpend()).toEqual({ closed: 2, open: 0 })
+  })
+
+  it('a report gathered between the closing commit and the release counts the dispatch once, before the release and after', async () => {
+    const { gov, at } = governor({ spendLimitUsd: 100, maxConcurrentDispatches: 0 })
+    const [a] = gov.reserve({ repository: 'A', intents: one('k', 5) }).granted
+    a!.commit(at(0))
+    await report(gov, 'A', { closed: [{ key: 'k', at: at(0), costUsd: 2 }], open: [] })
+    expect(gov.machineSpend()).toEqual({ closed: 2, open: 0 }) // not $2 closed + $5 for the still-live slot
+    a!.release(2)
+    expect(gov.machineSpend()).toEqual({ closed: 2, open: 0 }) // not $2 closed + $2 settled
+  })
+
+  it('a retry under the same key is not mistaken for the earlier attempt the report shows closed', async () => {
+    const { gov, at } = governor({ spendLimitUsd: 100, maxConcurrentDispatches: 0 })
+    // The first attempt closed (failed) at $3; the retry reuses the key.
+    await report(gov, 'A', { closed: [{ key: 'k', at: at(-60_000), costUsd: 3 }], open: [] })
+    const [retry] = gov.reserve({ repository: 'A', intents: one('k', 5) }).granted
+    retry!.commit(at(0))
+    expect(gov.machineSpend()).toEqual({ closed: 3, open: 5 })
+    retry!.release(4)
+    expect(gov.machineSpend()).toEqual({ closed: 7, open: 0 })
+  })
+
+  it('a settled dispatch leaves the window when the window rolls, whether or not its repository reports again', async () => {
+    const { gov, advance } = governor({ spendLimitUsd: 8, maxConcurrentDispatches: 0 })
+    const [a] = gov.reserve({ repository: 'A', intents: one('k', 5) }).granted
+    a!.commit()
+    a!.release(5)
+    expect(gov.reserve({ repository: 'B', intents: one('b', 5) }).refusal!.limit).toBe('spend')
+    advance(48 * HOUR) // A's engine has stopped, or its report fails every time
+    expect(gov.machineSpend()).toEqual({ closed: 0, open: 0 })
+    expect(gov.reserve({ repository: 'B', intents: one('b', 5) }).granted).toHaveLength(1)
+  })
+
+  it('settlements that have left the window are dropped, even when every report fails', async () => {
+    const { gov, advance } = governor({ spendLimitUsd: 1000, maxConcurrentDispatches: 0 })
+    for (let i = 0; i < 50; i++) {
+      const [r] = gov.reserve({ repository: 'A', intents: one(`k${i}`, 1) }).granted
+      r!.commit()
+      r!.release(1)
+      await gov
+        .report('A', () => {
+          throw new Error('git broke')
+        })
+        .catch(() => {})
+      advance(HOUR) // fifty hours in all: the first twenty-six are out of the window by the end
+    }
+    // Pruned as each new settlement arrives, so at most the last window's
+    // worth is kept; of those, the ones still inside the window count.
+    expect(gov.snapshot().settled).toBeLessThanOrEqual(25)
+    expect(gov.machineSpend().closed).toBe(24)
+  })
+
+  it('a cost below zero, or one that is not a finite number, counts as unknown: the estimate stands in', async () => {
+    for (const bad of [-100, Number.NaN, Number.POSITIVE_INFINITY, '3.5' as unknown as number]) {
+      const { gov } = governor({ spendLimitUsd: 8, maxConcurrentDispatches: 0 })
+      const [a] = gov.reserve({ repository: 'A', intents: one('k', 5) }).granted
+      a!.commit()
+      a!.release(bad)
+      expect(gov.machineSpend()).toEqual({ closed: 5, open: 0 })
+    }
+  })
+
+  it('a report that could not read the sweep markers keeps the sweep figures the governor had', async () => {
+    const { gov, at } = governor({ spendLimitUsd: 100, maxConcurrentDispatches: 0 })
+    await report(gov, 'A', { closed: [{ key: 'sweep:historian-old', at: at(-HOUR), costUsd: 3, kind: 'sweep' }], open: [] })
+    const [s] = gov.reserve({ repository: 'A', intents: [{ key: 'sweep:historian-new', estimateUsd: 2, kind: 'sweep' }] }).granted
+    s!.commit(at(0))
+    s!.release(1)
+    expect(gov.machineSpend()).toEqual({ closed: 4, open: 0 })
+    // The next report read the ledgers but not the markers.
+    await report(gov, 'A', { closed: [{ key: 'A|analyst||', at: at(0), costUsd: 2, kind: 'dispatch' }], open: [], sweepsRead: false })
+    expect(gov.machineSpend()).toEqual({ closed: 6, open: 0 }) // $2 run + $3 old sweep + $1 new sweep, nothing dropped
+    // A report that did read them replaces both, and still counts each once.
+    await report(gov, 'A', {
+      closed: [
+        { key: 'A|analyst||', at: at(0), costUsd: 2, kind: 'dispatch' },
+        { key: 'sweep:historian-old', at: at(-HOUR), costUsd: 3, kind: 'sweep' },
+        { key: 'sweep:historian-new', at: at(0), costUsd: 1, kind: 'sweep' },
+      ],
+      open: [],
+    })
+    expect(gov.machineSpend()).toEqual({ closed: 6, open: 0 })
+    expect(gov.snapshot().settled).toBe(0)
+  })
+
   it('a report that finishes gathering after a newer one was applied is ignored', async () => {
     const { gov } = governor({ spendLimitUsd: 100 })
     let finish: () => void = () => {}

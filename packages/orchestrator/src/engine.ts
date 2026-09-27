@@ -41,7 +41,7 @@ import {
 } from './observe.ts'
 import { promptBody } from './prompts.ts'
 import { type Registry, resolveModel } from './registry.ts'
-import { DEFAULT_SWEEP_TIMEOUT_MS, readSweepMarkers, sweepKey } from './schedule.ts'
+import { DEFAULT_SWEEP_TIMEOUT_MS, readSweepMarkers, type SweepMarker, sweepKey } from './schedule.ts'
 import type { Dispatcher, DispatchOutcome } from './seam.ts'
 import { checkoutHeldReason, dispatchBranchName, ensureDispatchCheckout, foldHarvestBranch, foldTaskBranch, heldCheckout, isPlanDefect, reapTaskBranches, removeRunCheckout, type TaskCheckout } from './workspace.ts'
 
@@ -702,7 +702,7 @@ export class Engine {
     }
     const now = (this.cfg.now?.() ?? new Date()).getTime()
     const sweepTimeoutMs = this.cfg.sweepTimeoutMs ?? DEFAULT_SWEEP_TIMEOUT_MS
-    for (const m of await this.sweepMarkers(now - sweepTimeoutMs)) {
+    for (const m of (await this.sweepMarkers(now - sweepTimeoutMs)) ?? []) {
       if (m.costUsd !== null) continue
       entries.push({ key: sweepKey(m.slug), at: m.at, estimateUsd: this.estimateFor(m.role), timeoutMs: sweepTimeoutMs, kind: 'sweep' })
     }
@@ -714,17 +714,19 @@ export class Engine {
   }
 
   /**
-   * Sweep markers for the seed and the spend report. A failure to read them
-   * (no resolvable default branch, a broken tree) costs the sweep terms and
-   * says so; it does not fail the tick, which never needed them before #501.
+   * Sweep markers for the seed and the spend report, or null when they could
+   * not be read (no resolvable default branch, a broken tree). A failure does
+   * not fail the tick, which never needed them before #501: the report says
+   * the markers went unread, and the governor keeps the sweep figures it
+   * already has rather than dropping them.
    */
-  private async sweepMarkers(sinceMs: number) {
+  private async sweepMarkers(sinceMs: number): Promise<SweepMarker[] | null> {
     try {
       const { runs } = await this.source.frameworkRoots()
       return await readSweepMarkers(this.source.git, runs, (await this.hostTip()).ref, sinceMs)
     } catch (e) {
-      this.log(`could not read sweep markers: ${(e as Error).message} — sweep costs and open sweeps are left out of the governor's figures this tick`)
-      return []
+      this.log(`could not read sweep markers: ${(e as Error).message} — the governor keeps the sweep figures it had`)
+      return null
     }
   }
 
@@ -769,13 +771,15 @@ export class Engine {
           if (!e.failed) report.open.push({ key: jobKey(ref.slug, e.role, e.task, e.round), at: e.at, estimateUsd: this.estimateFor(e.role), kind: 'dispatch' })
           continue
         }
-        report.closed.push({ at: e.at, costUsd: e.cost_usd })
+        report.closed.push({ key: jobKey(ref.slug, e.role, e.task, e.round), at: e.at, costUsd: e.cost_usd, kind: 'dispatch' })
       }
     }
     const now = (this.cfg.now?.() ?? new Date()).getTime()
-    for (const m of await this.sweepMarkers(now - this.governor.spendWindowMs)) {
+    const markers = await this.sweepMarkers(now - this.governor.spendWindowMs)
+    if (markers === null) report.sweepsRead = false
+    for (const m of markers ?? []) {
       if (m.costUsd === null) report.open.push({ key: sweepKey(m.slug), at: m.at, estimateUsd: this.estimateFor(m.role), kind: 'sweep' })
-      else report.closed.push({ at: m.at, costUsd: m.costUsd })
+      else report.closed.push({ key: sweepKey(m.slug), at: m.at, costUsd: m.costUsd, kind: 'sweep' })
     }
     return report
   }
@@ -1476,10 +1480,13 @@ export class Engine {
     )
     // The hand-over, in the same synchronous step as the job's registration:
     // from here the job's settlement owns the slot, and the tick's release of
-    // whatever is left in `pending` no longer touches it.
+    // whatever is left in `pending` no longer touches it. `openedAt` is the
+    // `at` the intent commit wrote on the ledger entry: with the key, it is
+    // how the governor recognises this dispatch among a report's closed
+    // entries.
     if (reservation) {
       pending.delete(key)
-      reservation.commit()
+      reservation.commit(openedAt)
     }
   }
 

@@ -259,6 +259,44 @@ describe('one engine: the same dispatches are admitted as before #501', () => {
     expect(launched(outcomes)).toBe(1)
   })
 
+  it('a settled dispatch reaches the governor at the cost its closing commit metered, not the estimate', async () => {
+    const { dir, clock } = toyRepo()
+    const gov = new Governor({ maxConcurrentDispatches: 1, spendLimitUsd: 100 })
+    const engine = makeEngine(dir, promptSpec(clock), { governor: gov }) // FakeDispatcher reports $1.25; analyst estimate $2
+    expect(launched(await engine.tick())).toBe(1)
+    await engine.drain()
+    // Settled, and no report since: the governor's own record is the only place it can be.
+    expect(gov.snapshot().settled).toBe(1)
+    expect(gov.machineSpend()).toEqual({ closed: 1.25, open: 0 })
+  })
+
+  it('a job that settles while the next tick reads its ledger is counted once: $1.25 closed and $2 asked fit a $3.50 window', { timeout: 60_000 }, async () => {
+    const { dir, clock } = toyRepo()
+    addRun(dir, 'zzz', new Date(Date.now() + 60_000).toISOString()) // newest tip: considered second
+    const { dispatcher, open } = heldSpec(clock)
+    const gov = new Governor({ maxConcurrentDispatches: 1, spendLimitUsd: 3.5 })
+    const engine = makeEngine(dir, dispatcher, { governor: gov })
+    const first = await engine.tick()
+    expect(first.find((o) => o.slug === 'toy')!.launched).toBe(1)
+    // The second tick's report reads toy's ledger after its closing commit,
+    // while toy's release comes during that same reading.
+    const readState = engine.source.readState.bind(engine.source)
+    let waited = false
+    engine.source.readState = (async (ref: Parameters<typeof readState>[0]) => {
+      if (ref.slug === 'toy' && !waited) {
+        waited = true
+        open()
+        await vi.waitFor(() => expect(engine.inFlight()).toBe(0), { timeout: 10_000, interval: 20 })
+      }
+      return readState(ref)
+    }) as typeof readState
+    const second = await engine.tick()
+    expect(waited).toBe(true)
+    // Counted twice this would be $1.25 + $1.25 + $2 = $4.50, over $3.50.
+    expect(second.find((o) => o.slug === 'zzz')!.launched).toBe(1)
+    await engine.drain()
+  })
+
   it('three runs under a cap of 2: two go in one tick', async () => {
     const { dir, clock } = toyRepo()
     addRun(dir, 'aaa', new Date(Date.now() + 60_000).toISOString())
@@ -549,6 +587,21 @@ describe('sweeps pass through the governor', () => {
   const REGISTRY = { ...TEST_REGISTRY, estimates: { ...TEST_REGISTRY.estimates, historian: 1 } }
   const CONFIG = 'schedules:\n  historian:\n    every: 7d\n    cost_limit_usd: 5\n'
   const DELTA = '# Docs Delta: sweep\n\n## Drift found\n\n## Applied changes\n\n## Proposed actions\n\n## Escalations\n\n## Surfaces checked, no drift\n'
+
+  it('a settled sweep reaches the governor at the cost its marker was metered at, not the estimate', async () => {
+    const { dir, clock } = toyRepo()
+    agentCommit(dir, clock, { 'orchestrator.yaml': CONFIG }, 'seed orchestrator.yaml')
+    const gov = new Governor({ maxConcurrentDispatches: 1, spendLimitUsd: 100 })
+    const sweeper = new FakeDispatcher((req) => {
+      agentCommit(req.cwd, clock, { [`runs/${sweepSlug('historian', new Date())}/docs-delta.md`]: DELTA }, 'docs delta')
+      return { costUsd: 0.5 } // the historian's estimate is $1
+    })
+    const scheduler = new Scheduler({ repoDir: dir, identity: BOT, dispatcher: sweeper, registry: REGISTRY, governor: gov, repository: dir })
+    expect(await scheduler.tick()).toMatchObject([{ kind: 'dispatched' }])
+    await scheduler.drain()
+    expect(gov.snapshot().settled).toBe(1)
+    expect(gov.machineSpend()).toEqual({ closed: 0.5, open: 0 })
+  })
 
   it('a sweep is deferred while the cap is taken, writes nothing, and goes once a slot frees', async () => {
     const { dir, clock } = toyRepo()

@@ -667,7 +667,7 @@ nothing to any repository. It keeps everything in process memory.
    it: a lost compare-and-swap on the intent commit, a rejected push, the
    terminal-run guard (I6), RB, and any exception between the grant and the
    launch. Release is idempotent. A job releases with the cost its closing commit
-   metered, which the spend window keeps counting until the next report (below).
+   computed, which the spend window keeps counting until the next report (below).
 4. **Wake.** A release wakes every repository refused since it was last woken,
    through that engine's own trigger (§4.1). The free slots are offered one each,
    in round-robin order, to the repositories that were refused a slot; an offered
@@ -704,29 +704,53 @@ Reading ledgers is per repository and asynchronous, so the two halves are kept
 apart: each engine reads its own repository's ledgers at the start of every tick
 (after the stale sweep) and reports them, and the governor keeps the last report
 per repository. It applies the window itself, at the moment it decides, so a report
-does not go stale by the window rolling. A reservation and the open ledger entry it
-became are joined by key and counted once.
+does not go stale by the window rolling.
+
+Each dispatch is counted once. A report names every ledger entry and sweep marker
+by its key (run, role, task and round, or the sweep's slug) and by the `at` its
+intent commit wrote. The reservation learns that `at` when the intent commit lands,
+so the governor can recognise the dispatch however the report, the reservation and
+the settlement overlap. The key alone would not do, because a retry reuses it.
 
 A report is read at the start of a tick, before that tick's intent commits, so a
 dispatch that launches and settles before the next report would appear in neither.
 The governor closes that gap itself. When a committed reservation is released, it
-keeps the dispatch's cost (the real cost the closing commit metered, or the estimate
-if the close failed before metering) and counts it until a report replaces it. Which
-report replaces it is fixed by order, not by clock: the governor takes a sequence
-number when a report starts gathering and when a dispatch settles, and a report
-clears only the settlements that came before it started. The closing commit lands
-before the release, so those are exactly the settlements its ledgers show. A
-settlement during the gathering stays counted, and its stale open entry is not
-counted beside it. A report that finishes gathering after a newer one was applied
-is ignored.
+keeps the dispatch's cost and counts it until a report replaces it. The cost is the
+one the close computed: the real cost the harness reported or the registry prices,
+the estimate for a dispatch launched and lost, $0 for a refusal. It is kept even when
+the close could not write it. The estimate stands in only when the close threw
+before computing a cost. Which report replaces the settlement is fixed by order, not
+by clock: the governor takes a sequence number when a report starts gathering and
+when a dispatch settles, and a report clears only the settlements that came before
+it started.
 
-That leaves two small inaccuracies, each bounded by that repository's next tick. A
-dispatch that settles while its report is gathering, and that the gathering read as
-closed, counts twice until the next report: an overcount. A ledger change nobody in
-this process made (a hand edit, a second writer) goes unseen until the next report;
-every engine ticks at least once per heartbeat. Uncommitted reservations, the term
-several engines ticking at once would otherwise miss, are never stale: the governor
-holds them.
+A report that started after a settlement shows it one of two ways. Normally the
+closing commit landed before the release, and the report shows the entry closed at
+its real cost. On four paths the close returns without writing: the state could not
+be read, the entry was already closed, a write failed for a reason other than a
+moved ref, or the compare-and-swap was lost five times (and `closeSweep` likewise).
+Then the entry stays open in the ledger, counts at its estimate from that report on,
+and is aged out by the stale sweep like any lost dispatch.
+
+A settlement during the gathering stays counted until a later report. If the
+gathering read its entry closed, the key and `at` match it and it is counted once;
+if it read the entry still open, the open entry is not counted beside the
+settlement. A report that finishes gathering after a newer one was applied is
+ignored. A report whose sweep markers could not be read keeps the previous report's
+sweep entries and the sweep settlements the governor holds, rather than dropping
+them for a tick. A settlement leaves the window like a closed entry, by when it
+settled, whether or not its repository reports again.
+
+What is left errs toward counting too much. A ledger change nobody in this process
+made (a hand edit, a second writer) goes unseen until that repository's next report,
+and every engine ticks at least once per heartbeat. A repository that never reports
+again (a stopped engine, a report that fails every time) keeps its last report and
+its settlements. Its closed entries and settlements leave the sum as the window
+rolls past them. Entries its last report showed open keep counting at their
+estimate, as open ledger entries always have, until the repository is removed
+(an `unregister` is left to #502). Uncommitted
+reservations, the term several engines ticking at once would otherwise miss, are
+never stale: the governor holds them.
 
 **After a restart** the governor holds nothing. Roles are launched as detached
 processes and can outlive the engine that launched them, so before it grants

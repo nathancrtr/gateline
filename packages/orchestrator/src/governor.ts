@@ -56,6 +56,8 @@ export interface GovernorRefusal {
 export interface ReservationIntent {
   key: string
   estimateUsd: number
+  /** A run dispatch (the default) or a sweep — which report entries the governor matches it against. */
+  kind?: 'dispatch' | 'sweep'
 }
 
 export interface ReservationRequest {
@@ -95,14 +97,27 @@ export interface Reservation {
   readonly estimateUsd: number
   readonly committed: boolean
   readonly released: boolean
-  commit(): void
+  /** The `at` of the ledger entry (or sweep marker) the intent commit wrote, once committed. */
+  readonly ledgerAt: string | null
+  /**
+   * The intent commit landed. `ledgerAt` is the `at` it wrote on the ledger
+   * entry or sweep marker: with the key, it is how the governor recognises
+   * this dispatch among a report's closed entries, and so never counts it
+   * twice. A retry reuses its key, so the key alone would not do.
+   */
+  commit(ledgerAt?: string | null): void
   release(costUsd?: number | null): void
 }
 
 /** A repository's own ledgers, as its engine read them on its last tick. */
 export interface SpendReport {
-  /** Closed ledger entries and closed sweep markers: when they opened and what they cost. */
-  closed: { at: string | null; costUsd: number }[]
+  /**
+   * Closed ledger entries and closed sweep markers: when they opened and what
+   * they cost. `key` and `at` together name the dispatch, so the governor can
+   * see that a settlement it still holds, or a live reservation whose close
+   * has landed but not yet been released, is already in this list.
+   */
+  closed: { key?: string; at: string | null; costUsd: number; kind?: 'dispatch' | 'sweep' }[]
   /**
    * Entries still open, keyed like a reservation, at their estimate. An open
    * run ledger entry counts whenever it opened (as it always has); an open
@@ -110,6 +125,12 @@ export interface SpendReport {
    * nothing ever closes the marker of a sweep whose process died.
    */
   open: { key: string; at: string | null; estimateUsd: number; kind: 'dispatch' | 'sweep' }[]
+  /**
+   * False when the sweep markers could not be read this time. The governor
+   * then keeps the sweep entries of the previous report and the sweep
+   * settlements it holds, rather than dropping them for a tick. Default true.
+   */
+  sweepsRead?: boolean
 }
 
 /**
@@ -254,8 +275,22 @@ interface RepoState {
    * the intent commit — so the governor counts them itself until a report
    * that began after their release replaces them.
    */
-  settled: { key: string; amountUsd: number; seq: number }[]
+  settled: Settled[]
 }
+
+interface Settled {
+  key: string
+  amountUsd: number
+  seq: number
+  /** When it settled, by the governor's clock: it leaves the window like any closed entry. */
+  settledAt: number
+  /** The `at` its intent commit wrote, for recognising it among a report's closed entries. */
+  ledgerAt: string | null
+  kind: 'dispatch' | 'sweep'
+}
+
+/** A dispatch's identity in the ledger: its key and the `at` of the entry its intent commit opened. */
+const ledgerId = (key: string, at: string | null) => `${key}\u0000${at ?? ''}`
 
 interface Hold {
   repository: string
@@ -276,6 +311,8 @@ class Slot implements Reservation {
   readonly repository: string
   readonly key: string
   readonly estimateUsd: number
+  readonly kind: 'dispatch' | 'sweep'
+  ledgerAt: string | null = null
   // No parameter properties: the packages run from source under Node's
   // type stripping, which does not support them.
   constructor(
@@ -283,11 +320,13 @@ class Slot implements Reservation {
     repository: string,
     key: string,
     estimateUsd: number,
+    kind: 'dispatch' | 'sweep',
   ) {
     this.onRelease = onRelease
     this.repository = repository
     this.key = key
     this.estimateUsd = estimateUsd
+    this.kind = kind
   }
   get committed(): boolean {
     return this.state === 'committed'
@@ -295,14 +334,19 @@ class Slot implements Reservation {
   get released(): boolean {
     return this.state === 'released'
   }
-  commit(): void {
-    if (this.state === 'granted') this.state = 'committed'
+  commit(ledgerAt?: string | null): void {
+    if (this.state !== 'granted') return
+    this.state = 'committed'
+    this.ledgerAt = ledgerAt ?? null
   }
   release(costUsd?: number | null): void {
     if (this.state === 'released') return
     const wasCommitted = this.state === 'committed'
     this.state = 'released'
-    this.onRelease(this, wasCommitted, typeof costUsd === 'number' && Number.isFinite(costUsd) ? costUsd : null)
+    // A cost that is not a finite, non-negative number is no cost at all:
+    // the estimate stands in, as for a close that could not meter.
+    const known = typeof costUsd === 'number' && Number.isFinite(costUsd) && costUsd >= 0 ? costUsd : null
+    this.onRelease(this, wasCommitted, known)
   }
 }
 
@@ -376,17 +420,31 @@ export class Governor implements GovernorPort {
 
   async report(repository: string, gather: () => SpendReport | Promise<SpendReport>): Promise<void> {
     this.register(repository)
-    // Every settlement released before this point closed its ledger entry
-    // before it was released (the closing commit comes first), so the ledger
-    // `gather` reads from here on shows it. Settlements after this point may
-    // or may not be in what it reads; they stay counted by the governor.
+    // A settlement released before this point had its closing commit written
+    // first, or its close gave up without writing. Either way the ledger
+    // `gather` reads from here on accounts for it: as closed, or as still
+    // open at its estimate. Settlements after this point may or may not be in
+    // what it reads; they stay counted by the governor, and the ones this
+    // report shows closed are recognised by key and `at` and counted once.
     const asOf = this.seq++
-    const report = await gather()
+    const gathered = await gather()
     const repo = this.repos.get(repository)!
     if (asOf < repo.reportSeq) return // a newer report was applied while this one was gathering
+    // Sweep markers that could not be read this time are not evidence that
+    // there are none: keep the last report's sweep entries and the sweep
+    // settlements the governor holds, rather than undercount for a tick.
+    const sweepsRead = gathered.sweepsRead !== false
+    const report: SpendReport =
+      sweepsRead || !repo.report
+        ? gathered
+        : {
+            closed: [...gathered.closed.filter((e) => e.kind !== 'sweep'), ...repo.report.closed.filter((e) => e.kind === 'sweep')],
+            open: [...gathered.open.filter((e) => e.kind !== 'sweep'), ...repo.report.open.filter((e) => e.kind === 'sweep')],
+            sweepsRead: false,
+          }
     repo.report = report
     repo.reportSeq = asOf
-    repo.settled = repo.settled.filter((s) => s.seq > asOf)
+    repo.settled = repo.settled.filter((s) => s.seq > asOf || (!sweepsRead && s.kind === 'sweep'))
     const open = new Set(report.open.map((e) => e.key))
     let freed = false
     for (const [k, hold] of this.holds) {
@@ -497,7 +555,7 @@ export class Governor implements GovernorPort {
 
     for (const key of superseded) this.holds.delete(holdKey(repository, key))
     const granted = take.map((i) => {
-      const slot = new Slot(this.released, repository, i.key, i.estimateUsd)
+      const slot = new Slot(this.released, repository, i.key, i.estimateUsd, i.kind ?? 'dispatch')
       this.live.add(slot)
       return slot
     })
@@ -530,7 +588,18 @@ export class Governor implements GovernorPort {
   private readonly released = (slot: Slot, wasCommitted: boolean, costUsd: number | null): void => {
     if (!this.live.delete(slot)) return
     if (wasCommitted) {
-      this.repos.get(slot.repository)?.settled.push({ key: slot.key, amountUsd: costUsd ?? slot.estimateUsd, seq: this.seq++ })
+      const repo = this.repos.get(slot.repository)
+      if (repo) {
+        this.pruneSettled(repo)
+        repo.settled.push({
+          key: slot.key,
+          amountUsd: costUsd ?? slot.estimateUsd,
+          seq: this.seq++,
+          settledAt: this.now(),
+          ledgerAt: slot.ledgerAt,
+          kind: slot.kind,
+        })
+      }
       this.freed()
     } else this.freed(slot.repository)
   }
@@ -587,12 +656,19 @@ export class Governor implements GovernorPort {
    * more), plus dispatches that settled since the report began gathering, at
    * the cost they were released with. Then entries still open at their
    * estimate, and the governor's own reservations and startup holds at
-   * theirs. Those are joined by key, so a dispatch whose intent has landed
-   * in the ledger is counted once however the report and the reservation
-   * overlap, and an entry the report still lists open but that has since
-   * settled counts only as settled. `superseded` names holds a request is
-   * about to take over, so their estimate is not counted beside the
-   * request's own.
+   * theirs. Every dispatch is counted once, however the report, the
+   * reservation and the settlement overlap:
+   *
+   * - a settlement or a committed reservation that the report shows closed
+   *   (same key, same `at`) counts only as that closed entry;
+   * - an open entry the report still lists but that has since settled counts
+   *   only as settled;
+   * - an open entry and a reservation or hold with the same key count once.
+   *
+   * A settlement leaves the window like a closed entry, by when it settled,
+   * whether or not its repository reports again. `superseded` names holds a
+   * request is about to take over, so their estimate is not counted beside
+   * the request's own.
    */
   repoSpend(repository: string, superseded?: ReadonlySet<string>): { closed: number; open: number } {
     const since = this.now() - this.spendWindowMs
@@ -603,24 +679,51 @@ export class Governor implements GovernorPort {
     const state = this.repos.get(repository)
     const report = state?.report
     let closed = 0
-    for (const e of report?.closed ?? []) if (inWindow(e.at)) closed += e.costUsd
-    const settledKeys = new Set<string>()
+    const reportedClosed = new Set<string>()
+    for (const e of report?.closed ?? []) {
+      if (e.key !== undefined) reportedClosed.add(ledgerId(e.key, e.at))
+      if (inWindow(e.at)) closed += e.costUsd
+    }
+    const inReport = (key: string, at: string | null) => at !== null && reportedClosed.has(ledgerId(key, at))
+    const settledIds = new Set<string>()
+    const settledUndated = new Set<string>()
     for (const s of state?.settled ?? []) {
+      if (s.ledgerAt === null) settledUndated.add(s.key)
+      else settledIds.add(ledgerId(s.key, s.ledgerAt))
+      if (inReport(s.key, s.ledgerAt) || s.settledAt < since) continue
       closed += s.amountUsd
-      settledKeys.add(s.key)
     }
     const byKey = new Map<string, number>()
     for (const e of report?.open ?? []) {
       if (e.kind === 'sweep' && !inWindow(e.at)) continue
-      if (settledKeys.has(e.key) || superseded?.has(e.key)) continue
+      if (settledIds.has(ledgerId(e.key, e.at)) || settledUndated.has(e.key) || superseded?.has(e.key)) continue
       byKey.set(e.key, e.estimateUsd)
     }
     for (const hold of this.holds.values())
       if (hold.repository === repository && !superseded?.has(hold.key)) byKey.set(hold.key, hold.estimateUsd)
-    for (const slot of this.live) if (slot.repository === repository) byKey.set(slot.key, slot.estimateUsd)
+    for (const slot of this.live) {
+      if (slot.repository !== repository) continue
+      // Its close has landed and the report read it, but the job has not
+      // released yet: the closed entry already carries it.
+      if (slot.committed && inReport(slot.key, slot.ledgerAt)) {
+        byKey.delete(slot.key)
+        continue
+      }
+      byKey.set(slot.key, slot.estimateUsd)
+    }
     let open = 0
     for (const v of byKey.values()) open += v
     return { closed, open }
+  }
+
+  /**
+   * Drop settlements that have left the window: they count for nothing, and
+   * a repository that never reports again (a stopped engine, a report that
+   * fails every time) would otherwise keep them forever.
+   */
+  private pruneSettled(repo: RepoState): void {
+    const since = this.now() - this.spendWindowMs
+    if (repo.settled.some((s) => s.settledAt < since)) repo.settled = repo.settled.filter((s) => s.settledAt >= since)
   }
 
   /** Resolves once every wake sent has finished. For tests and orderly shutdown. */
@@ -634,9 +737,10 @@ export class Governor implements GovernorPort {
     return { granted: [], refusal }
   }
 
-  /** Drop startup holds and offers whose time is up. True when a slot came free. */
+  /** Drop startup holds and offers whose time is up, and settlements out of the window. True when a slot came free. */
   private expire(): boolean {
     const now = this.now()
+    for (const repo of this.repos.values()) this.pruneSettled(repo)
     let freed = false
     for (const [k, hold] of this.holds) {
       if (hold.expiresAt <= now) {

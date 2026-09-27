@@ -679,9 +679,11 @@ older ones as new ones arrive, so a busy repository displaces a quiet one.
 
 Decided, for now: collapse, for the `malformed` kind only, when a repository
 contributes more than three. Gate decisions and escalations are never
-collapsed. The collapsed row is a count with a link and never drops an item.
-Its sentence is the interface speaking, so under SEAM.md §2 it is composed in
-the web package from a count and a repository that core supplies.
+collapsed. The collapsed row is a count that opens in place to the full list,
+and never drops an item: every count on the page counts the items it stands
+for. Its sentence is the interface speaking, so under SEAM.md §2 it is
+composed in the web package from a count and a repository that core supplies
+(`inboxCollapses`, sent on `/api/inbox` as `collapsed`).
 
 The maintainer took this provisionally and does not hold "oldest first" as a
 literal promise. Splitting the inbox into items that can be decided and items
@@ -725,8 +727,15 @@ comes from the mode.
 
 Drift between the running code and the code checkout is written into every
 repository's health file, because each engine writes its own. It describes the
-one code checkout, so Gatehouse shows it once, taken from the process, and
-names no repository.
+one code checkout, so Gatehouse shows it once and names no repository. It is
+shown when any health file reports it, and the most recent of those speaks
+for it.
+
+The server sends the two facts separately: each repository's mode on
+`/api/health`, its health file on `/api/engine-health`. Gatehouse applies the
+table. The outage banner stays at the top of the page. The plain facts sit
+beside the repository's name in the rail: under each entry of the scope
+control when the set has several, and at the rail's foot when it has one.
 
 ### 9.6 The CLI
 
@@ -881,7 +890,10 @@ passing. Where a step depends on another, it says so.
    `status` and `inbox`. The Metrics gate table does not follow the scope
    until step 6 splits it by repository; under a scope it says so.
 6. **Flooding, metrics and liveness by mode.** The collapse, per-repository
-   metrics, and the table in §9.5.
+   metrics, and the table in §9.5. Split in two by #499. The collapse, the
+   notice for a repository that cannot be read, liveness by mode and the
+   repository's name and mode on the wire are done by the inbox, rail and
+   liveness part. Per-repository metrics are the other part, and pending.
 7. **Host inputs at the default-branch tip.** Adapter manifests and role
    capabilities are read through git (R4). Independent of steps 1 to 6. Done
    by #500 (PR #505).

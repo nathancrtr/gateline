@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { Git } from '@gateline/core'
 import { describe, expect, it } from 'vitest'
 import { Engine } from '../src/engine.ts'
-import { loadHeadlessManifest } from '../src/manifest.ts'
+import { loadHeadlessManifest, loadHeadlessManifestAt } from '../src/manifest.ts'
 import { loadRegistry } from '../src/registry.ts'
 import { Scheduler, sweepSlug } from '../src/schedule.ts'
 import { agentCommit, FakeDispatcher, humanDecide, makeToyRepo, reconcile, SPEC, TEST_REGISTRY, toyRef } from './engine.helper.ts'
@@ -41,7 +41,7 @@ describe('loadRegistry against a prefixed host', () => {
   })
 })
 
-describe('loadHeadlessManifest against a prefixed host', () => {
+describe('loadHeadlessManifestAt against a prefixed host', () => {
   it('reads adapters/<name>/manifest.json from under the metadata prefix', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'gateline-manifest-'))
     mkdirSync(join(dir, '.gateline', 'adapters', 'fake'), { recursive: true })
@@ -54,6 +54,28 @@ describe('loadHeadlessManifest against a prefixed host', () => {
       JSON.stringify({
         headless: { command: ['fake', '{prompt}'], usage_report: { format: 'static-estimate' } },
       }),
+    )
+    const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' }
+    execFileSync('git', ['-C', dir, 'init', '-q', '-b', 'main'], { env })
+    execFileSync('git', ['-C', dir, 'add', '-A'], { env })
+    execFileSync('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@example.test', 'commit', '-q', '-m', 'seed'], { env })
+    const git = new Git(dir)
+    const manifest = await loadHeadlessManifestAt(git, await git.defaultBranch(), 'fake')
+    expect(manifest.command).toEqual(['fake', '{prompt}'])
+    expect(manifest.usage.format).toBe('static-estimate')
+  })
+})
+
+// The working-tree loader is not the engine's (#500), but the runner agent
+// still reads its per-dispatch clone with it, so its prefixed layout keeps a test.
+describe('loadHeadlessManifest (working tree, runner agent) against a prefixed host', () => {
+  it('reads adapters/<name>/manifest.json from under the metadata prefix on disk', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'gateline-manifest-'))
+    mkdirSync(join(dir, '.gateline', 'adapters', 'fake'), { recursive: true })
+    writeFileSync(join(dir, '.gateline', 'framework-lock.json'), JSON.stringify({ layout: 'prefixed', prefix: '.gateline' }))
+    writeFileSync(
+      join(dir, '.gateline', 'adapters', 'fake', 'manifest.json'),
+      JSON.stringify({ headless: { command: ['fake', '{prompt}'], usage_report: { format: 'static-estimate' } } }),
     )
     const manifest = await loadHeadlessManifest(dir, 'fake')
     expect(manifest.command).toEqual(['fake', '{prompt}'])

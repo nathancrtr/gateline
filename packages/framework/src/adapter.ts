@@ -37,10 +37,26 @@ export interface AdapterManifest {
  * needs its own copy of "find the file, parse it, say which file failed".
  */
 export async function readAdapterManifest(path: string): Promise<Record<string, unknown>> {
+  let text: string
   try {
-    return JSON.parse(await readFile(path, 'utf8')) as Record<string, unknown>
+    text = await readFile(path, 'utf8')
   } catch (e) {
     throw new FrameworkError(`${path}: ${e instanceof Error ? e.message : String(e)}`)
+  }
+  return parseAdapterManifest(text, path)
+}
+
+/**
+ * The same parse, over content the caller has already read. The orchestrator
+ * reads a host's manifests through git at the default-branch tip rather than
+ * from disk, and this package stays free of git: the caller fetches the text
+ * and names where it came from in `label`, which errors quote.
+ */
+export function parseAdapterManifest(text: string, label: string): Record<string, unknown> {
+  try {
+    return JSON.parse(text) as Record<string, unknown>
+  } catch (e) {
+    throw new FrameworkError(`${label}: ${e instanceof Error ? e.message : String(e)}`)
   }
 }
 

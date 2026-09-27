@@ -373,8 +373,8 @@ Decided: the ceiling. What each party owns:
 | Push and local-only | Operator | Config file, or flags to `up` |
 | Sweep schedules | Host | `orchestrator.yaml`, default-branch tip |
 | Model bindings, prices and per-role cost estimates | Host | `registry/models.yaml`, default-branch tip |
-| The command an adapter runs | Host | The adapter's `manifest.json`, working tree today |
-| Role capabilities | Host | Role specs, working tree today |
+| The command an adapter runs | Host | The adapter's `manifest.json`, default-branch tip |
+| Role capabilities | Host | Role specs, default-branch tip |
 | A run's own budget cap | Host, by the human who stages the run | `state.yaml` |
 
 **Decision R4.** The ceiling is a ceiling on spend as metered, and the host
@@ -385,13 +385,18 @@ design keeps them so. Listing a repository as `dispatch` therefore means
 trusting what that repository has merged. The document says so plainly, and
 two things follow.
 
-- Adapter manifests and role capabilities are read from the working tree
-  today, on whatever branch is checked out. They move to the default-branch
-  tip, where the registry and `orchestrator.yaml` are already read. After
-  that, every host input the engine acts on has been merged.
-- "Host configuration is read at the default-branch tip" becomes an invariant.
-  Atlantis documents the alternative, reading configuration from the change's
-  own branch, as a security risk.
+- Adapter manifests and role capabilities are read through git at the
+  default-branch tip, where the registry and `orchestrator.yaml` are read, so
+  every host input the engine itself acts on has been merged (#500).
+- "Host configuration is read at the default-branch tip" is an invariant in
+  AGENTS.md. Atlantis documents the alternative, reading configuration from
+  the change's own branch, as a security risk.
+
+The tip is the local default-branch ref, with no fetch, and a host with no
+determinable default branch reads its checked-out branch with a startup
+warning. The remote runner still reads its manifest from the run branch
+(#507), and the harness loads the rendered agent file from the run branch by
+design.
 
 Every per-repository setting applies at any size of set. No setting is dropped
 because a second repository was added.
@@ -526,7 +531,7 @@ pinned to different refs. What a dispatch uses, and where it comes from:
 
 | Comes from | What |
 |---|---|
-| The host, default-branch tip | The registry, contract templates, the lock, sweep schedules. After R4, adapter manifests and role capabilities too. |
+| The host, default-branch tip | The registry, contract templates, the lock, sweep schedules, adapter manifests and role capabilities. |
 | The host, the run's branch | The rendered agent files the harness loads, and the run's record. |
 | The code checkout | The rules that derive the next action, the role list, dispatch prompt bodies, the `state.yaml` parser, contract validation, generated PR descriptions. |
 
@@ -858,7 +863,8 @@ passing. Where a step depends on another, it says so.
 6. **Flooding, metrics and liveness by mode.** The collapse, per-repository
    metrics, and the table in §9.5.
 7. **Host inputs at the default-branch tip.** Adapter manifests and role
-   capabilities are read through git (R4). Independent of steps 1 to 6.
+   capabilities are read through git (R4). Independent of steps 1 to 6. Done
+   by #500 (PR #505).
 8. **The governor.** Reserve, commit, release and wake, with sweeps admitted
    through it, built while `up` still serves one repository. This changes
    behaviour and is not a refactor: admission moves from a count at launch to

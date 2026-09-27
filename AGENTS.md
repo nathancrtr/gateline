@@ -122,6 +122,19 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   it is clean and back on the default branch (a clean fast-forward instead exits the
   engine `75` to be restarted on the new code). Trial an unmerged frontend change
   from that branch's own worktree with `ui`, never `up`.
+* **Host configuration the engine reads comes from the host's local
+  default-branch ref** — the registry, `orchestrator.yaml`, adapter manifests and
+  role capabilities, read through git, never from the working tree or a run
+  branch, so a checked-out branch cannot change what the engine executes or
+  meters. It is the local ref, with no fetch: an unpushed commit on it counts,
+  and a local branch behind origin reads the older value. A host with no
+  `origin/HEAD`, `main` or `master` has no default branch to find, so the
+  engine reads the checked-out branch and warns at startup. An input missing
+  from the ref is an error or a named default, never a silent fallback to the
+  working tree. Two reads sit outside this: the remote runner still takes its
+  manifest from the run branch ([#507](https://github.com/nathancrtr/gateline/issues/507)),
+  and the harness loads the rendered agent file (model, tools) from the run
+  branch's worktree by design.
 * **Completed runs are historical records, and `run/*` branches are test
   fixtures.** Do not retro-edit artifacts under `runs/<slug>/` for a finished run —
   fold new lessons into roles, contracts, or docs — and do not delete or rewrite

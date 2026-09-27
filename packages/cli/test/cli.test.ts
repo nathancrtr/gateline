@@ -661,6 +661,45 @@ describe('show — artifacts with lexicon footnotes (#164)', () => {
     expect(footnotes).not.toContain('ADR-1')
   })
 
+  // The demo spec's AC1.1 carries a `Check:` line; AC2.1 carries none.
+  it('quotes a checked criterion by its promise alone in the default mode (AC7.1)', async () => {
+    const { stdout } = await run(['show', 'g2-pending', 'plan.md'])
+    const [, footnotes] = stdout.split('\n---\n')
+    const acLine = footnotes!.split('\n').find((l) => l.trimStart().startsWith('AC1.1'))!
+    expect(acLine).not.toContain('Check:')
+    expect(acLine).toContain('"running the tool on sample input produces the documented output"')
+  })
+
+  it('prints the check of a checked criterion on the next line under its promise with --refs full (AC7.2)', async () => {
+    const { stdout } = await run(['show', 'g2-pending', 'plan.md', '--refs', 'full'])
+    const [, footnotes] = stdout.split('\n---\n')
+    const lines = footnotes!.split('\n')
+    const at = lines.findIndex((l) => l.trimStart().startsWith('AC1.1'))
+    expect(lines[at]).toBe('  AC1.1  "running the tool on sample input produces the documented output')
+    const next = lines[at + 1]!
+    expect(next.trimStart().startsWith('Check:')).toBe(true)
+    // `width` is the id column: the longest cited id, here AC1.1.
+    const width = 'AC1.1'.length
+    expect(next.length - next.trimStart().length).toBe(width + 5)
+    expect(next.trimStart()).toBe('Check: run it on the bundled sample and compare against the documented output."')
+  })
+
+  // Literals captured from the pre-change code: a criterion without a check
+  // prints exactly as it did before checks were split out.
+  it('prints a criterion without a check as before, in the default mode (AC7.3)', async () => {
+    const { stdout } = await run(['show', 'g2-pending', 'verification-report.md'])
+    const [, footnotes] = stdout.split('\n---\n')
+    const acLine = footnotes!.split('\n').find((l) => l.trimStart().startsWith('AC2.1'))
+    expect(acLine).toBe('  AC2.1  "malformed input exits non-zero with a one-line diagnosis"')
+  })
+
+  it('prints a criterion without a check as before, with --refs full (AC7.4)', async () => {
+    const { stdout } = await run(['show', 'g2-pending', 'verification-report.md', '--refs', 'full'])
+    const [, footnotes] = stdout.split('\n---\n')
+    const acLine = footnotes!.split('\n').find((l) => l.trimStart().startsWith('AC2.1'))
+    expect(acLine).toBe('  AC2.1  "malformed input exits non-zero with a one-line diagnosis"')
+  })
+
   it('--refs off suppresses the footnote block', async () => {
     const { stdout } = await run(['show', 'g2-pending', 'verification-report.md', '--refs', 'off'])
     expect(stdout).not.toContain('\n---\nReferences')

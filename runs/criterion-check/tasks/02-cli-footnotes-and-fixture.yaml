@@ -59,3 +59,10 @@ depends_on: [01-lexicon-promise-check]
 status: pending
 
 notes: |
+  round 1:
+  claim: AC8.5 — with HEAD's main.ts and the new fixture line, `npx vitest run cli/test/cli.test.ts -t "AC7\."` fails AC7.1 (the footnote contains `Check:`) and AC7.2 (the check runs into the promise's line).
+  claim: AC8.6 — truncating the no-check default quote at 40 instead of 110 fails AC7.3 alone; upper-casing the no-check full-mode body fails AC7.4 alone. Both pass once restored.
+  claim: indenting the check `width + 4` fails AC7.2 (9 vs 10).
+  claim: the AC7.3/AC7.4 literals were captured from HEAD's CLI on a generated fixture repo before any edit. Both modes printed the same AC2.1 line.
+  discovery: the fixture line broke no test outside this surface. Playwright e2e was not run; its demo-spec pins in smoke.spec.ts are containment checks.
+  `npm test` in packages/: 123 files passed, 2 skipped; 1786 tests passed. `npx vitest run cli/test/cli.test.ts`: 52 passed. `npm run typecheck` and `npm run lint`: exit 0.

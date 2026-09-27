@@ -96,6 +96,7 @@ The repository currently handles ${title} by hand. This spec automates it.
 The tool reads sample input and emits the documented output, end to end.
 **Acceptance criteria:**
 - [ ] AC1.1 — running the tool on sample input produces the documented output
+  Check: run it on the bundled sample and compare against the documented output.
 
 ### R2 — Error handling
 **Acceptance criteria:**

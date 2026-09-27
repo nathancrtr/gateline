@@ -27,7 +27,13 @@ export interface ServeOptions {
   port?: number
   host?: string
   repoOverrides?: string[]
-  demo?: boolean
+  /**
+   * Generate and serve the demo (#498): `true` serves two fixture
+   * repositories, `local/demo` and `local/demo-small`, so the scope control,
+   * grouping and the two-number badge can be tried; `'single'` serves
+   * `local/demo` alone, the one-repository form.
+   */
+  demo?: boolean | 'single'
   open?: boolean
   /**
    * Zero-config sources push human writes when the repo has an origin
@@ -74,10 +80,10 @@ const RECHECK_MS = 30_000
 export async function startServer(opts: ServeOptions = {}): Promise<{ url: string; close: () => void }> {
   let repoOverrides = opts.repoOverrides
   if (opts.demo) {
-    const { generateFixtureRepo } = await import('@gateline/fixtures')
-    const fixture = generateFixtureRepo()
-    console.log(`demo repository generated at ${fixture.dir}`)
-    repoOverrides = [fixture.dir]
+    const { generateDemoSet } = await import('@gateline/fixtures')
+    const demo = generateDemoSet({ single: opts.demo === 'single' })
+    for (const fixture of demo.repos) console.log(`demo repository generated at ${fixture.dir}`)
+    repoOverrides = demo.repos.map((fixture) => fixture.dir)
   }
 
   const { sources, configPath, warnings } = await loadSources({ repoOverrides, push: opts.push, localOnly: opts.localOnly, engine: opts.engine })
@@ -234,7 +240,7 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
   }
 }
 
-// Direct invocation: node src/main.ts [--port N] [--host H] [--repo path]... [--demo] [--open]
+// Direct invocation: node src/main.ts [--port N] [--host H] [--repo path]... [--demo | --demo=single] [--open]
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const args = process.argv.slice(2)
   const opts: ServeOptions = { repoOverrides: [] }
@@ -244,6 +250,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     else if (a === '--host') opts.host = args[++i]
     else if (a === '--repo') opts.repoOverrides!.push(args[++i]!)
     else if (a === '--demo') opts.demo = true
+    else if (a === '--demo=single') opts.demo = 'single'
     else if (a === '--open') opts.open = true
   }
   if (!opts.repoOverrides!.length) delete opts.repoOverrides

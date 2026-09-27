@@ -5,11 +5,13 @@ import { type ReactNode, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, formatAge, type InboxItem } from '../api.ts'
 import { AgeBadge, KeyHints, KindChip } from '../components/chips.tsx'
-import { RunName, useNamesRepository } from '../components/repository.tsx'
+import { RunName, useDocumentTitle } from '../components/repository.tsx'
+import { GroupHeadingContent, GroupToggle, inScope, ScopeHeading, ScopeLine, UnknownScopeNotice, useScope } from '../components/scope.tsx'
 import { Count, isName, Name, QuotedWord } from '../components/vocabulary.tsx'
 import { gateCardState } from '../gate-state.ts'
 import { usd } from '../money.ts'
 import { runPath } from '../run-path.ts'
+import { groupRows, scopeTitle } from '../scope.ts'
 import { type KeyHint, useKeys } from '../use-keys.ts'
 
 const STALE_SECONDS = 3 * 86_400 // aging turns urgent at 3 days
@@ -238,12 +240,19 @@ export function InboxRow({
   now,
   selected,
   showRepository,
+  announceRepository = false,
 }: {
   item: InboxItem
   now: number
   selected: boolean
-  /** Whether the row names the run's repository: false only when the set has one (docs/MULTI-REPO.md §6.2). */
+  /**
+   * Whether the row names the run's repository: false when the set has one,
+   * when the page is scoped to one (docs/MULTI-REPO.md §6.2), and under a
+   * group heading, which names it for every row below it (#498).
+   */
   showRepository: boolean
+  /** Under a group heading: the name leaves the screen but stays for a screen reader, whose list of links carries no headings. */
+  announceRepository?: boolean
 }) {
   const age = formatAge(item.since, now)
   const urgent = item.since !== null && now - item.since > STALE_SECONDS
@@ -281,6 +290,7 @@ export function InboxRow({
               sourceName={item.sourceName}
               slug={item.slug}
               showRepository={showRepository}
+              announceRepository={announceRepository}
               clipped
             />
           </span>
@@ -319,14 +329,29 @@ interface KindFilter {
 
 export function InboxPage() {
   const { data, isLoading: inboxLoading, error } = useQuery({ queryKey: ['inbox'], queryFn: api.inbox })
-  // The rows wait for the set's size too, so a row never gains or loses its
-  // repository after it first paints.
-  const names = useNamesRepository()
-  const isLoading = inboxLoading || !names.ready
+  // The rows wait for the set, its names and the scope too (#498), so a row
+  // never gains or loses its repository after it first paints.
+  const scope = useScope()
+  const isLoading = inboxLoading || !scope.ready
+  useDocumentTitle(scopeTitle('Inbox', scope.scope))
   const navigate = useNavigate()
   const [cursor, setCursor] = useState(0)
   const [filter, setFilter] = useState<KindFilterKey>(null)
-  const items = data?.items
+  // The scope narrows the rows before anything else reads them: the kind
+  // filters count what is in scope, and the cursor walks it.
+  const scoped = useMemo(() => (data ? inScope(data.items, scope.scope) : undefined), [data, scope.scope])
+  const filteredItems = useMemo(() => {
+    if (!scoped) return null
+    if (!filter) return scoped
+    return scoped.filter((it) => it.kind === filter)
+  }, [scoped, filter])
+  // Grouped, each repository's rows keep the queue's order, oldest first,
+  // and the cursor walks the rows in the order they are drawn.
+  const groups = useMemo(
+    () => (filteredItems && scope.grouped ? groupRows(filteredItems, scope.set) : null),
+    [filteredItems, scope.grouped, scope.set],
+  )
+  const items = useMemo(() => (groups ? groups.flatMap((g) => g.rows) : (filteredItems ?? undefined)), [groups, filteredItems])
   const keyHandlers = useMemo(
     () => ({
       j: () => setCursor((c) => Math.min((items?.length ?? 1) - 1, c + 1)),
@@ -340,22 +365,16 @@ export function InboxPage() {
   )
   useKeys(keyHandlers, Boolean(items?.length))
 
-  const filteredItems = useMemo(() => {
-    if (!items) return null
-    if (!filter) return items
-    return items.filter((it) => it.kind === filter)
-  }, [items, filter])
-
-  // Build filter tab counts from the unfiltered list
+  // Build filter tab counts from the scope's rows, before the kind filter
   const filters: KindFilter[] = useMemo(() => {
-    if (!items) return []
+    if (!scoped) return []
     const kinds: KindFilterKey[] = [null, 'gate', 'escalation', 'round-cap', 'paused', 'staged', 'malformed']
     return kinds.map((k) => ({
       label: k === null ? 'All' : k,
       kind: k,
-      count: k === null ? items.length : items.filter((it) => it.kind === k).length,
+      count: k === null ? scoped.length : scoped.filter((it) => it.kind === k).length,
     }))
-  }, [items])
+  }, [scoped])
 
   if (isLoading)
     return (
@@ -381,14 +400,36 @@ export function InboxPage() {
     )
   if (error) return <PageStatus text={`Could not load the inbox: ${(error as Error).message}`} bad />
   const now = data!.now
+  const one = scope.scope.kind === 'one'
+  // A row names its repository only on a joined, ungrouped page over several:
+  // under a scope the page heading names it once, and under a group heading
+  // the heading does (docs/MULTI-REPO.md §9.2, D7).
+  const showRepository = scope.several && !one && !scope.grouped
+  const row = (item: InboxItem, i: number) => (
+    <InboxRow
+      key={`${item.source}/${item.slug}/${item.kind}/${item.gate ?? item.escalationIndex ?? i}`}
+      item={item}
+      now={now}
+      selected={items?.[cursor] === item}
+      showRepository={showRepository}
+      announceRepository={scope.grouped}
+    />
+  )
 
   return (
     <div className="mx-auto max-w-[1080px]">
+      <ScopeHeading scope={scope.scope} />
       <h1 className="text-[20px] font-semibold leading-[1.25] text-ink">Inbox</h1>
-      <p className="mt-1 text-[13px] text-muted">Pending human decisions across every run, oldest first.</p>
+      <p className="mt-1 text-[13px] text-muted">
+        {one ? 'Pending human decisions in this repository, oldest first.' : 'Pending human decisions across every run, oldest first.'}
+      </p>
+      <ScopeLine scope={scope.scope} outside={scope.scoped === null ? null : scope.total - scope.scoped} path="/" />
+      <UnknownScopeNotice scope={scope.scope} />
 
       {/* Kind filters: plain type, the active one underlined. Wraps at narrow
-          widths; the gaps carry it (#280). */}
+          widths; the gaps carry it (#280). The grouping toggle ends the line,
+          in the same type, because it too rearranges the list below rather
+          than going anywhere. */}
       <div className="mt-[22px] flex flex-wrap items-center gap-x-[18px] gap-y-2 font-ui text-[12.5px] font-medium" data-inbox-filters>
         {filters.map((f) => (
           <button
@@ -403,6 +444,9 @@ export function InboxPage() {
             {f.label} <span className="tabular-nums">{f.count}</span>
           </button>
         ))}
+        <span className="ml-auto">
+          <GroupToggle state={scope} />
+        </span>
       </div>
 
       {filteredItems!.length === 0 ? (
@@ -414,29 +458,44 @@ export function InboxPage() {
               <rect x="3.5" y="8.6" width="17" height="2.2" fill="currentColor" />
             </svg>
           </span>
-          <h2 className="text-[20px] font-semibold text-ink">Nothing is waiting on you.</h2>
+          <h2 className="text-[20px] font-semibold text-ink">{one ? 'Nothing is waiting on you in this repository.' : 'Nothing is waiting on you.'}</h2>
           <p className="mx-auto mt-1.5 max-w-[46ch] text-[13.5px] text-muted">
             The agents are reading, writing and reviewing on their own. Open the portfolio to look in on a run.
           </p>
         </div>
       ) : (
         <>
-          <ul className="mt-[14px] border-t border-ink">
-            <li className="grid text-[11.5px] text-muted" style={{ gridTemplateColumns: INBOX_COLUMNS }} aria-hidden="true">
-              <span className="py-1.5">kind</span>
-              <span className="py-1.5">entry</span>
-              <span className="py-1.5 text-right">waiting</span>
-            </li>
-            {filteredItems!.map((item, i) => (
-              <InboxRow
-                key={`${item.source}/${item.slug}/${item.kind}/${item.gate ?? item.escalationIndex ?? i}`}
-                item={item}
-                now={now}
-                selected={i === cursor}
-                showRepository={names.show}
-              />
-            ))}
-          </ul>
+          {groups ? (
+            // Grouped (#498): one section per repository of the set, in the
+            // order every page and the CLI list them, each opening on the ink
+            // rule a section opens on, under a heading that names the
+            // repository, its id and its count. A repository with nothing
+            // here keeps its heading, and its count says so.
+            <div className="mt-[14px] border-t border-ink" data-inbox-groups>
+              <div className="grid text-[11.5px] text-muted" style={{ gridTemplateColumns: INBOX_COLUMNS }} aria-hidden="true">
+                <span className="py-1.5">kind</span>
+                <span className="py-1.5">entry</span>
+                <span className="py-1.5 text-right">waiting</span>
+              </div>
+              {groups.map((g) => (
+                <section key={g.repository.id} className="border-t border-ink" aria-label={g.repository.name} data-inbox-group={g.repository.id}>
+                  <h2 className="py-2.5">
+                    <GroupHeadingContent group={g} counts={<Count n={g.rows.length} one="entry" many="entries" />} />
+                  </h2>
+                  {g.rows.length > 0 && <ul className="border-t border-line">{g.rows.map(row)}</ul>}
+                </section>
+              ))}
+            </div>
+          ) : (
+            <ul className="mt-[14px] border-t border-ink">
+              <li className="grid text-[11.5px] text-muted" style={{ gridTemplateColumns: INBOX_COLUMNS }} aria-hidden="true">
+                <span className="py-1.5">kind</span>
+                <span className="py-1.5">entry</span>
+                <span className="py-1.5 text-right">waiting</span>
+              </li>
+              {filteredItems!.map(row)}
+            </ul>
+          )}
           <div className="flex items-baseline justify-between pt-2 text-[12px] text-muted">
             <span className="tabular-nums">
               {filteredItems!.length} {filteredItems!.length === 1 ? 'entry' : 'entries'}

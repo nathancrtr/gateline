@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { type FixtureRepo, generateFixtureRepo } from '@gateline/fixtures'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { registrationOffer } from '../src/main.ts'
+import { listingOrder, registrationOffer } from '../src/main.ts'
 
 const exec = promisify(execFile)
 const cliPath = resolve(dirname(fileURLToPath(import.meta.url)), '../src/main.ts')
@@ -356,6 +356,186 @@ describe('next steps name the repository when the set has several (#497)', () =>
     expect(entryOf(stdout, 'the demo/escalated')).toContain(
       "                 resolve   gateline resolve-escalation escalated 0 --repository 'the demo' --note <text>",
     )
+  })
+})
+
+describe('status and inbox group by repository, and --repository scopes them (#498)', () => {
+  let box: Awaited<ReturnType<typeof sandbox>>
+  let demo: FixtureRepo
+  let small: FixtureRepo
+
+  beforeAll(async () => {
+    box = await sandbox()
+    demo = fixture('demo')
+    const f = generateFixtureRepo(undefined, { name: 'demo-small', runs: 'small' })
+    fixtures.push(f)
+    small = f
+    await mkdir(dirname(box.configPath), { recursive: true })
+  })
+  afterAll(() => box.drop())
+
+  const useSet = (...dirs: string[]) =>
+    writeFile(box.configPath, `repositories:\n${dirs.map((d) => `  - path: ${d}\n    mode: decide\n`).join('')}`)
+
+  const SINGLE_STATUS = [
+    'RUN                     PHASE                       GATES    TASKS  UPDATED  NEEDS',
+    'demo/staged             paused (staged)             · · ·    —      12h      1',
+    'demo/bad-state          unknown                     · · · ·  —      1d       1',
+    'demo/g0-pending         spec                        · · · ·  —      1d       1',
+    'demo/patch-g1-pending   plan                        · ·      0/1    1d       1',
+    'demo/forked-contract    implement                   ✓ ✓ ·    0/1    2d       1',
+    'demo/g1-pending         plan                        ✓ · · ·  0/3    2d       1',
+    'demo/malformed-release  release                     ✓ ✓ ✓ ·  1/1    2d       1',
+    'demo/malformed-spec     spec                        · · · ·  —      2d       1',
+    'demo/patch-g2-pending   implement                   ✓ ·      0/1    2d       1',
+    'demo/g2-pending         implement                   ✓ ✓ · ·  0/2    3d       1',
+    'demo/closed-delivered   closed (already-delivered)  ✓ · · ·  0/1    4d',
+    'demo/round-cap          implement                   ✓ ✓ · ·  0/1    4d       1',
+    'demo/g3-pending         release                     ✓ ✓ ✓ ·  1/1    5d       1',
+    'demo/paused-budget      paused (budget-exhausted)   ✓ · · ·  —      6d       1',
+    'demo/escalated          implement                   ✓ ✓ · ·  0/1    7d       1',
+    'demo/done-merged        done                        ✓ ✓ ✓ ✓  1/1    15d',
+    '',
+    '14 item(s) need a human — run `gateline inbox`',
+    '',
+  ].join('\n')
+
+  it('prints status as it always did with one repository, whether or not --repository names it', async () => {
+    await useSet(demo.dir)
+    expect(await cli(box.xdg, box.cwd, ['status'])).toEqual({ code: 0, stdout: SINGLE_STATUS, stderr: '' })
+    expect(await cli(box.xdg, box.cwd, ['status', '--repository', 'demo'])).toEqual({ code: 0, stdout: SINGLE_STATUS, stderr: '' })
+  })
+
+  it('prints inbox as it always did with one repository: no heading, and bare next steps', async () => {
+    await useSet(demo.dir)
+    const { stdout } = await cli(box.xdg, box.cwd, ['inbox'])
+    const lines = stdout.split('\n')
+    expect(lines[0]).toBe('escalation   7d  demo/escalated  escalation from verifier')
+    expect(lines.filter((l) => l.startsWith('#'))).toEqual([])
+    expect(lines.at(-2)).toBe('                 next      gateline arm staged — dispatch begins and the budget starts metering')
+  })
+
+  it('groups status by repository, in listing order, with its counts in each heading', async () => {
+    // Listed in the config the other way round: the groups are by display name.
+    await useSet(small.dir, demo.dir)
+    expect(await cli(box.xdg, box.cwd, ['status'])).toEqual({
+      code: 0,
+      stdout: [
+        '# demo  local/demo  16 runs, 14 need a human',
+        'RUN                        PHASE                       GATES    TASKS  UPDATED  NEEDS',
+        'demo/staged                paused (staged)             · · ·    —      12h      1',
+        'demo/bad-state             unknown                     · · · ·  —      1d       1',
+        'demo/g0-pending            spec                        · · · ·  —      1d       1',
+        'demo/patch-g1-pending      plan                        · ·      0/1    1d       1',
+        'demo/forked-contract       implement                   ✓ ✓ ·    0/1    2d       1',
+        'demo/g1-pending            plan                        ✓ · · ·  0/3    2d       1',
+        'demo/malformed-release     release                     ✓ ✓ ✓ ·  1/1    2d       1',
+        'demo/malformed-spec        spec                        · · · ·  —      2d       1',
+        'demo/patch-g2-pending      implement                   ✓ ·      0/1    2d       1',
+        'demo/g2-pending            implement                   ✓ ✓ · ·  0/2    3d       1',
+        'demo/closed-delivered      closed (already-delivered)  ✓ · · ·  0/1    4d',
+        'demo/round-cap             implement                   ✓ ✓ · ·  0/1    4d       1',
+        'demo/g3-pending            release                     ✓ ✓ ✓ ·  1/1    5d       1',
+        'demo/paused-budget         paused (budget-exhausted)   ✓ · · ·  —      6d       1',
+        'demo/escalated             implement                   ✓ ✓ · ·  0/1    7d       1',
+        'demo/done-merged           done                        ✓ ✓ ✓ ✓  1/1    15d',
+        '',
+        '# demo-small  local/demo-small  4 runs, 3 need a human',
+        'RUN                        PHASE                       GATES    TASKS  UPDATED  NEEDS',
+        'demo-small/csv-export      spec                        · · ·    —      1d       1',
+        'demo-small/nightly-report  paused (budget-exhausted)   ✓ · · ·  —      3d       1',
+        'demo-small/retry-policy    implement                   ✓ ✓ · ·  0/1    5d       1',
+        'demo-small/docs-refresh    done                        ✓ ✓ ✓    1/1    12d',
+        '',
+        '17 item(s) need a human — run `gateline inbox`',
+        '',
+      ].join('\n'),
+      stderr: '',
+    })
+  })
+
+  it('scopes status to one repository, by display name or id in any case, and counts what waits elsewhere', async () => {
+    await useSet(demo.dir, small.dir)
+    const expected = [
+      '# demo-small  local/demo-small  4 runs, 3 need a human',
+      'RUN                        PHASE                      GATES    TASKS  UPDATED  NEEDS',
+      'demo-small/csv-export      spec                       · · ·    —      1d       1',
+      'demo-small/nightly-report  paused (budget-exhausted)  ✓ · · ·  —      3d       1',
+      'demo-small/retry-policy    implement                  ✓ ✓ · ·  0/1    5d       1',
+      'demo-small/docs-refresh    done                       ✓ ✓ ✓    1/1    12d',
+      '',
+      '3 item(s) need a human here — run `gateline inbox --repository demo-small`',
+      '14 more in other repositories — run `gateline inbox`',
+      '',
+    ].join('\n')
+    for (const name of ['demo-small', 'LOCAL/Demo-Small'])
+      expect(await cli(box.xdg, box.cwd, ['status', '--repository', name])).toEqual({ code: 0, stdout: expected, stderr: '' })
+    expect((await cli(box.xdg, box.cwd, ['status', '--source', 'demo-small'])).stdout).toBe(expected)
+  })
+
+  it('groups inbox by repository, oldest first inside each, every next step still naming its repository', async () => {
+    await useSet(demo.dir, small.dir)
+    const { stdout } = await cli(box.xdg, box.cwd, ['inbox'])
+    const lines = stdout.split('\n')
+    expect(lines.filter((l) => l.startsWith('#'))).toEqual(['# demo  local/demo  14 waiting', '# demo-small  local/demo-small  3 waiting'])
+    expect(lines.slice(lines.indexOf('# demo-small  local/demo-small  3 waiting'))).toEqual([
+      '# demo-small  local/demo-small  3 waiting',
+      'escalation   5d  demo-small/retry-policy  escalation from implementer',
+      '                 reason    R1 asks for exponential backoff with no ceiling; the plan caps it at 30 seconds. Which one holds?',
+      '                 resolve   gateline resolve-escalation retry-policy 0 --repository demo-small --note <text>',
+      'paused       3d  demo-small/nightly-report  run paused: budget-exhausted',
+      '                 budget    $6.30 spent, cost_limit_usd $6.00',
+      '                 next      gateline resume nightly-report --repository demo-small --cost-limit <usd> (a higher limit; resuming without one re-pauses), or gateline close nightly-report --repository demo-small --as <disposition> --reason <text>',
+      'G0           1d  demo-small/csv-export  G0 — Is this what we actually want built?',
+      '',
+    ])
+    // The demo group is the one-repository inbox, with each next step naming it.
+    await useSet(demo.dir)
+    const alone = (await cli(box.xdg, box.cwd, ['inbox'])).stdout
+    const group = lines.slice(1, lines.indexOf('# demo-small  local/demo-small  3 waiting') - 1).join('\n')
+    expect(group.replaceAll(' --repository demo', '')).toBe(alone.trimEnd())
+  })
+
+  it('scopes inbox to one repository, and says what waits elsewhere', async () => {
+    await useSet(demo.dir, small.dir)
+    const { stdout } = await cli(box.xdg, box.cwd, ['inbox', '--repository', 'local/demo-small'])
+    expect(stdout).toBe(
+      [
+        '# demo-small  local/demo-small  3 waiting',
+        'escalation   5d  demo-small/retry-policy  escalation from implementer',
+        '                 reason    R1 asks for exponential backoff with no ceiling; the plan caps it at 30 seconds. Which one holds?',
+        '                 resolve   gateline resolve-escalation retry-policy 0 --repository demo-small --note <text>',
+        'paused       3d  demo-small/nightly-report  run paused: budget-exhausted',
+        '                 budget    $6.30 spent, cost_limit_usd $6.00',
+        '                 next      gateline resume nightly-report --repository demo-small --cost-limit <usd> (a higher limit; resuming without one re-pauses), or gateline close nightly-report --repository demo-small --as <disposition> --reason <text>',
+        'G0           1d  demo-small/csv-export  G0 — Is this what we actually want built?',
+        '',
+        '14 more in other repositories — run `gateline inbox`',
+        '',
+      ].join('\n'),
+    )
+  })
+
+  it('refuses a --repository the set does not hold, naming the set', async () => {
+    await useSet(demo.dir, small.dir)
+    for (const verb of ['status', 'inbox'])
+      expect(await cli(box.xdg, box.cwd, [verb, '--repository', 'billing'])).toEqual({
+        code: 1,
+        stdout: '',
+        stderr: 'no repository "billing" is served here — the set is demo (local/demo), demo-small (local/demo-small)\n',
+      })
+  })
+})
+
+describe('the listing order (#498)', () => {
+  it('is by display name without case, then by id — the order Gatehouse uses', () => {
+    const listed = listingOrder([
+      { id: 'local/b', name: 'Zeta' },
+      { id: 'local/c', name: 'alpha' },
+      { id: 'local/a', name: 'Beta' },
+      { id: 'github.com/x/alpha', name: 'Alpha' },
+    ])
+    expect(listed.map((r) => r.id)).toEqual(['github.com/x/alpha', 'local/c', 'local/a', 'local/b'])
   })
 })
 

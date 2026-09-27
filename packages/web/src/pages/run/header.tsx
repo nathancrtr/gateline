@@ -314,10 +314,10 @@ export function RunHeader({ summary, detail }: { summary: RunSummary; detail: Ru
 }
 
 /**
- * Where the header's repository name leads: the Portfolio. The `repo`
- * parameter is the repository id, as the scope control will carry it
- * (docs/MULTI-REPO.md §9.1); until that lands (#498) the Portfolio ignores
- * it and shows the whole set.
+ * Where the header's repository name leads: the Portfolio, scoped to the
+ * run's repository. The `repo` parameter is the repository id, as the scope
+ * control carries it (docs/MULTI-REPO.md §9.1, #498). With one repository in
+ * the set the scope is the whole set, and the Portfolio shows it unchanged.
  */
 export const repositoryPortfolioHref = (source: string): string => `/portfolio?${new URLSearchParams({ repo: source })}`
 

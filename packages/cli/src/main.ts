@@ -200,14 +200,59 @@ const GATE_GLYPH = (approved: boolean, decided: boolean) => (approved ? '✓' : 
 
 // --- read commands ----------------------------------------------------------
 
+/**
+ * The order the set is listed in (#498): by display name without case, then
+ * by id — the order Gatehouse's scope control and groups use
+ * (`compareRepositories` in packages/web/src/scope.ts, which this repeats
+ * because the CLI does not import the web package). Alphabetical by the name
+ * printed, so a reader finds a repository where they expect it, whatever
+ * order the config file or the `--repo` flags gave.
+ */
+export function listingOrder<T extends { id: string; name: string }>(set: readonly T[]): T[] {
+  return [...set].sort((a, b) => {
+    const an = a.name.toLowerCase()
+    const bn = b.name.toLowerCase()
+    if (an !== bn) return an < bn ? -1 : 1
+    const ai = a.id.toLowerCase()
+    const bi = b.id.toLowerCase()
+    return ai < bi ? -1 : ai > bi ? 1 : 0
+  })
+}
+
+/**
+ * The repositories `status` and `inbox` print (#498; MULTI-REPO.md §9.6), in
+ * listing order: every one when no `--repository` is given, else the one it
+ * names. With one repository in the set the answer is always that one and the
+ * output is as it always was. A value naming nothing in the set exits 1,
+ * listing the set: a script asking for one repository must not be handed all
+ * of them.
+ */
+function readScope(sources: readonly RunSource[], value: string | undefined): { shown: RunSource[]; scoped: boolean } {
+  const ordered = listingOrder(sources.map((s) => ({ id: s.id, name: displayNameOf(s), source: s }))).map((e) => e.source)
+  if (value === undefined) return { shown: ordered, scoped: false }
+  const named = ordered.find((s) => namesSource(s, value))
+  if (!named) {
+    console.error(`no repository "${value}" is served here — the set is ${ordered.map((s) => `${displayNameOf(s)} (${s.id})`).join(', ')}`)
+    process.exit(1)
+  }
+  return { shown: [named], scoped: sources.length > 1 }
+}
+
+/** A repository's heading line: a shell comment, so a pasted block runs its commands and skips its headings. */
+const groupHeading = (source: RunSource, counts: string) => `# ${displayNameOf(source)}  ${source.id}  ${counts}`
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`
+
 program
   .command('status')
-  .description('portfolio: every run, phase, gates, and what needs a human')
-  .action(async () => {
+  .description('portfolio: every run, phase, gates, and what needs a human; grouped by repository when there are several')
+  .addOption(repositoryFlag('show one repository: its id or display name'))
+  .addOption(sourceAlias())
+  .action(async (flags: RepositoryFlags) => {
     const { sources } = await resolveSources()
+    const { shown, scoped } = readScope(sources, chosenRepository(flags))
     const { runs, inbox } = await buildPortfolio(sources)
-    if (runs.length === 0) return console.log('no runs found')
-    const rows = runs.map((r) => ({
+    const row = (r: (typeof runs)[number]) => ({
       run: runLabel(sources, r.source, r.slug),
       // A closed run reads as its disposition, never bare "closed": the whole
       // point of the phase is that it says why (#200).
@@ -216,19 +261,69 @@ program
       tasks: r.tasks.total ? `${r.tasks.done}/${r.tasks.total}` : '—',
       updated: age(r.updatedAt),
       needs: r.needsHuman ? String(r.needsHuman) : '',
-    }))
-    table(rows, ['run', 'phase', 'gates', 'tasks', 'updated', 'needs'])
-    if (inbox.length) console.log(`\n${inbox.length} item(s) need a human — run \`gateline inbox\``)
+    })
+    const cols = ['run', 'phase', 'gates', 'tasks', 'updated', 'needs']
+    if (sources.length === 1) {
+      if (runs.length === 0) return console.log('no runs found')
+      table(runs.map(row), cols)
+      if (inbox.length) console.log(`\n${inbox.length} item(s) need a human — run \`gateline inbox\``)
+      return
+    }
+    // Several repositories: a heading line per repository, each followed by
+    // its runs, most recently updated first, with the columns aligned across
+    // every group. Each row still names its repository, so a line read alone
+    // (grepped, say) says where the run lives.
+    const groups = shown.map((source) => ({ source, runs: runs.filter((r) => r.source === source.id) }))
+    if (groups.every((g) => g.runs.length === 0)) return console.log(scoped ? `no runs found in ${displayNameOf(shown[0]!)}` : 'no runs found')
+    const widths = columnWidths(
+      groups.flatMap((g) => g.runs.map(row)),
+      cols,
+    )
+    groups.forEach((g, i) => {
+      if (i > 0) console.log('')
+      const waiting = g.runs.filter((r) => r.needsHuman > 0).length
+      console.log(groupHeading(g.source, `${plural(g.runs.length, 'run', 'runs')}${waiting ? `, ${waiting} need${waiting === 1 ? 's' : ''} a human` : ''}`))
+      if (g.runs.length) table(g.runs.map(row), cols, widths)
+    })
+    if (!scoped) {
+      if (inbox.length) console.log(`\n${inbox.length} item(s) need a human — run \`gateline inbox\``)
+      return
+    }
+    const one = shown[0]!
+    const here = inbox.filter((i) => i.source === one.id).length
+    const at = repositoryArg(sources, one.id)
+    if (here) console.log(`\n${here} item(s) need a human here — run \`gateline inbox${at}\``)
+    if (inbox.length > here) console.log(`${here ? '' : '\n'}${inbox.length - here} more in other repositories — run \`gateline inbox\``)
   })
 
 program
   .command('inbox')
-  .description('everything that needs a human, oldest first')
-  .action(async () => {
+  .description('everything that needs a human, oldest first; grouped by repository when there are several')
+  .addOption(repositoryFlag('show one repository: its id or display name'))
+  .addOption(sourceAlias())
+  .action(async (flags: RepositoryFlags) => {
     const { sources } = await resolveSources()
+    const { shown, scoped } = readScope(sources, chosenRepository(flags))
     const { inbox } = await buildPortfolio(sources)
-    if (inbox.length === 0) return console.log('inbox zero — nothing needs a human')
-    for (const item of inbox) printItem(item, runLabel(sources, item.source, item.slug), sources)
+    if (sources.length === 1) {
+      if (inbox.length === 0) return console.log('inbox zero — nothing needs a human')
+      for (const item of inbox) printItem(item, runLabel(sources, item.source, item.slug), sources)
+      return
+    }
+    if (!scoped && inbox.length === 0) return console.log('inbox zero — nothing needs a human')
+    // Several repositories: a heading line per repository, then its entries,
+    // oldest first, each keeping its `name/slug` label and its pasteable
+    // next step.
+    shown.forEach((source, i) => {
+      const items = inbox.filter((item) => item.source === source.id)
+      if (i > 0) console.log('')
+      console.log(groupHeading(source, `${items.length} waiting`))
+      for (const item of items) printItem(item, runLabel(sources, item.source, item.slug), sources)
+    })
+    if (scoped) {
+      const others = inbox.length - inbox.filter((item) => item.source === shown[0]!.id).length
+      if (others) console.log(`\n${others} more in other repositories — run \`gateline inbox\``)
+    }
   })
 
 /**
@@ -1534,16 +1629,20 @@ program
   .description('serve the web app on localhost')
   .option('--port <n>', 'port', '4310')
   .option('--host <h>', 'bind address (multi-user serving is out of scope; see README)', '127.0.0.1')
-  .option('--demo', 'generate and serve a demo repository')
+  .option('--demo [form]', 'generate and serve the demo: two repositories, or one with --demo=single')
   .option('--no-open', 'do not open the browser')
-  .action(async (flags: { port: string; host: string; demo?: boolean; open?: boolean }) => {
+  .action(async (flags: { port: string; host: string; demo?: boolean | string; open?: boolean }) => {
+    if (typeof flags.demo === 'string' && flags.demo !== 'single') {
+      console.error(`gateline ui: --demo takes no value, or single (--demo=single); got ${flags.demo}`)
+      process.exit(1)
+    }
     const { startServer } = await import('@gateline/server/main')
     const opts = program.opts<{ repo: string[] }>()
     try {
       await startServer({
         port: Number(flags.port),
         host: flags.host,
-        demo: flags.demo,
+        demo: flags.demo === 'single' ? 'single' : flags.demo === true,
         open: flags.open !== false,
         repoOverrides: opts.repo.length ? opts.repo : undefined,
       })
@@ -1566,8 +1665,12 @@ function truncate(text: string, max: number): string {
   return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`
 }
 
-function table(rows: Record<string, string>[], cols: string[]): void {
-  const widths = cols.map((c) => Math.max(c.length, ...rows.map((r) => (r[c] ?? '').length)))
+function columnWidths(rows: Record<string, string>[], cols: string[]): number[] {
+  return cols.map((c) => Math.max(c.length, ...rows.map((r) => (r[c] ?? '').length)))
+}
+
+/** `widths` aligns several tables as one: the groups of `status` (#498). */
+function table(rows: Record<string, string>[], cols: string[], widths = columnWidths(rows, cols)): void {
   console.log(cols.map((c, i) => c.toUpperCase().padEnd(widths[i]!)).join('  ').trimEnd())
   for (const r of rows) console.log(cols.map((c, i) => (r[c] ?? '').padEnd(widths[i]!)).join('  ').trimEnd())
 }

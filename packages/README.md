@@ -44,9 +44,16 @@ npm install
 npm run build          # builds the SPA once
 
 node cli/src/main.ts ui            # serve the current repo
-node cli/src/main.ts ui --demo     # explore a generated demo repo
+node cli/src/main.ts ui --demo     # explore two generated demo repositories
+node cli/src/main.ts ui --demo=single  # the same demo as one repository
 node cli/src/main.ts status        # portfolio in the terminal
 ```
+
+The demo serves `local/demo`, a repository with runs in every state, and
+`local/demo-small`, a second repository with four runs, so the scope control,
+grouping by repository and the Inbox badge's two numbers can be tried
+(docs/MULTI-REPO.md §9.1, §9.7). `--demo=single` serves `local/demo` alone,
+which is how a one-repository deployment looks.
 
 `gateline ui` binds to `127.0.0.1` and opens the browser. `--host` exists, but
 multi-user serving (auth, routing, rotation) is Stage C's problem and
@@ -57,8 +64,8 @@ instance (one URL, you behind an authenticating proxy) is supported: see
 ## CLI
 
 ```
-gateline status                          portfolio: phases, gates, needs-a-human
-gateline inbox                           everything waiting, oldest first
+gateline status [--repository …]         portfolio: phases, gates, needs-a-human
+gateline inbox [--repository …]          everything waiting, oldest first
 gateline approve <slug> <gate>           --burden confirmation|light-correction|heavy-correction
                                         [--notes …] [--no-advance] (burden prompted on a TTY)
 gateline decline <slug> <gate>           --reason … (pauses the run as gate-declined)
@@ -69,7 +76,7 @@ gateline sync [--live]                   copy approved PR reviews into undecided
 gateline repo add <path> --mode <mode>   list a repository [--name …] [--gateline-prefix …]
 gateline repo remove <id or name>        drop it from the list
 gateline repo list                       id, origin, display name, mode, framework ref
-gateline ui [--demo] [--port N]          serve the web app
+gateline ui [--demo[=single]] [--port N] serve the web app
 gateline render [repo] [--check]         re-render the adapter agent files
 gateline self-update                     pull + rebuild the checkout this CLI runs from
 ```
@@ -77,6 +84,8 @@ gateline self-update                     pull + rebuild the checkout this CLI ru
 Global: `--repo <path>` (repeatable) names repositories by path in place of
 the config file. `--repository <id or name>` picks one repository on any
 command that takes a slug (`--source` is the older spelling, still accepted).
+With several repositories, `status` and `inbox` print a heading line per
+repository and take `--repository` to show one.
 
 Common terminal workflows and pitfalls — deciding gates, approve-and-hold,
 PR-review sync, headless engine operation:
@@ -199,7 +208,9 @@ npm run dev            # API server; pair with: npm run dev -w @gateline/web
 
 `fixtures/` generates a repo with runs in every interesting state — each gate
 pending, an escalation, a round-cap breach, a paused run, malformed artifacts,
-a merged run. Tests, Playwright, and `--demo` all use it.
+a merged run. Tests, Playwright, and `--demo` all use it. Its `small` set is
+the demo's second repository, four runs in four states; `generateDemoSet`
+makes both side by side under the fixed names `demo` and `demo-small`.
 
 Three test layers, and picking the wrong one is how a defect goes uncaught
 (#301). Pure derivation modules are the default and take no DOM. A component's

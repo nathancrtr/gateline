@@ -3,10 +3,12 @@
 // (FRONTEND.md §4.4), burden mix as an ordered sequential ramp, latency.
 // Charts are plain HTML; the table itself is the accessibility relief.
 import { useQuery } from '@tanstack/react-query'
-import { api, type MetricsResponse } from '../api.ts'
+import { api, type MetricsResponse, type RunMetricsSummary } from '../api.ts'
 import { Imp } from '../components/chips.tsx'
-import { fullRunName, REPOSITORY_COLUMN, REPOSITORY_FOLD, RepositoryName, useNamesRepository } from '../components/repository.tsx'
+import { fullRunName, REPOSITORY_COLUMN, REPOSITORY_FOLD, RepositoryName, useDocumentTitle } from '../components/repository.tsx'
+import { inScope, ScopeHeading, ScopeLine, UnknownScopeNotice, useScope } from '../components/scope.tsx'
 import { usd } from '../money.ts'
+import { scopeTitle } from '../scope.ts'
 import { PageStatus } from './inbox.tsx'
 
 // Ordered burden ramp: one hue (the ink) at three textures — solid, hatched,
@@ -40,8 +42,9 @@ function formatLatency(seconds: number | null): string {
 
 export function MetricsPage() {
   const { data, isLoading: metricsLoading, error } = useQuery({ queryKey: ['metrics'], queryFn: api.metrics })
-  const names = useNamesRepository()
-  const isLoading = metricsLoading || !names.ready
+  const scope = useScope()
+  const isLoading = metricsLoading || !scope.ready
+  useDocumentTitle(scopeTitle('Metrics', scope.scope))
 
   if (isLoading) {
     return (
@@ -56,12 +59,21 @@ export function MetricsPage() {
   if (error) return <PageStatus text={`Could not compute metrics: ${(error as Error).message}`} bad />
   const metrics = data!
   const total = metrics.decisions.length
+  // The run-level sections follow the scope (#498): their rows are runs, and
+  // each run carries its repository. The gate table is computed on the
+  // server over every repository and cannot be split here, so under a scope
+  // it says it covers them all; per-repository gate figures are #499.
+  const runs = inScope(metrics.runs, scope.scope)
+  const one = scope.scope.kind === 'one'
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-9">
       <header>
+        <ScopeHeading scope={scope.scope} />
         <h1 className="text-[20px] font-semibold leading-[1.25] text-ink">Metrics</h1>
         <p className="mt-1 text-[13px] text-muted">Computed from state.yaml git history — nothing is logged separately.</p>
+        <ScopeLine scope={scope.scope} outside={null} path="/metrics" />
+        <UnknownScopeNotice scope={scope.scope} />
       </header>
 
       {total === 0 ? (
@@ -70,19 +82,30 @@ export function MetricsPage() {
           <p className="mt-1.5 text-xs text-muted">Decisions made through the app or CLI will appear here from their commits.</p>
         </div>
       ) : (
-        <GateTable metrics={metrics} />
+        <GateTable metrics={metrics} allRepositories={one} />
       )}
 
-      <RoundsSection metrics={metrics} />
-      <BudgetSection metrics={metrics} showRepository={names.show} />
+      <RoundsSection runs={runs} roundCap={metrics.roundCap} />
+      <BudgetSection runs={runs} showRepository={scope.several && !one} />
     </div>
   )
 }
 
-function GateTable({ metrics }: { metrics: MetricsResponse }) {
+/**
+ * Under a scope the table still counts every repository: the server computes
+ * it from all of them, and its rows carry no repository to filter by. It says
+ * so in the cockpit's words rather than sitting under a scoped heading as if
+ * it followed the scope.
+ */
+function GateTable({ metrics, allRepositories }: { metrics: MetricsResponse; allRepositories: boolean }) {
   return (
     <section>
       <h2 className="mb-[3px] text-[15px] font-semibold">Gate decisions</h2>
+      {allRepositories && (
+        <p className="mb-[3px] max-w-[var(--measure)] font-ui text-[12px] text-ink" data-gate-scope>
+          Counted across all repositories. Gate figures are not yet split by repository, so this table does not follow the scope.
+        </p>
+      )}
       <p className="mb-3 max-w-[var(--measure)] text-xs text-muted">
         Sustained approval above 90% means the gate is over-triggering (or reviews have gone reflexive) — its scope should move down the tier ladder.
       </p>
@@ -174,10 +197,10 @@ function BurdenBar({ mix, unrecorded, total }: { mix: Record<string, number>; un
 }
 
 /** Review-round distribution: how often the loop converges in 1, 2, 3 rounds. */
-function RoundsSection({ metrics }: { metrics: MetricsResponse }) {
+function RoundsSection({ runs, roundCap }: { runs: RunMetricsSummary[]; roundCap: number }) {
   const counts = new Map<number, number>()
-  for (const run of metrics.runs) for (const t of run.rounds) counts.set(t.rounds, (counts.get(t.rounds) ?? 0) + 1)
-  const cap = metrics.roundCap
+  for (const run of runs) for (const t of run.rounds) counts.set(t.rounds, (counts.get(t.rounds) ?? 0) + 1)
+  const cap = roundCap
   const buckets = Array.from({ length: cap + 1 }, (_, r) => ({
     label: r === cap ? `${cap}+ (cap)` : String(r),
     n: r === cap ? [...counts].filter(([k]) => k >= cap).reduce((s, [, v]) => s + v, 0) : (counts.get(r) ?? 0),
@@ -212,8 +235,8 @@ function RoundsSection({ metrics }: { metrics: MetricsResponse }) {
 }
 
 /** Budget honesty: "never updated" is itself the finding (the wordfreq lesson). */
-function BudgetSection({ metrics, showRepository }: { metrics: MetricsResponse; showRepository: boolean }) {
-  if (metrics.runs.length === 0) return null
+function BudgetSection({ runs, showRepository }: { runs: RunMetricsSummary[]; showRepository: boolean }) {
+  if (runs.length === 0) return null
   return (
     <section>
       <h2 className="mb-[3px] text-[15px] font-semibold">Budget honesty</h2>
@@ -234,7 +257,7 @@ function BudgetSection({ metrics, showRepository }: { metrics: MetricsResponse; 
             </tr>
           </thead>
           <tbody>
-            {metrics.runs.map((r) => (
+            {runs.map((r) => (
               <tr key={`${r.source}/${r.slug}`}>
                 {showRepository && (
                   <td className={`${TD} ${REPOSITORY_COLUMN}`}>

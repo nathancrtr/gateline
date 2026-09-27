@@ -1,7 +1,7 @@
 run: criterion-check
 branch: run/criterion-check
-phase: implement # staged — not yet armed; `gateline arm criterion-check` starts the run
-paused_reason: null
+phase: paused # staged — not yet armed; `gateline arm criterion-check` starts the run
+paused_reason: escalation
 profile: standard # patch | standard | full
 intake:
   # source-agnostic staging provenance; free-form path: nulls + client_key
@@ -140,4 +140,12 @@ tasks:
     { id: 05-record-reader-check, status: review-approved, review_rounds: 1 },
     { id: 06-e2e-criterion-check, status: pending, review_rounds: 0 }
   ]
-escalations: []
+escalations:
+  [
+    {
+        at: 2026-09-27T03:13:15.193Z,
+        from_role: orchestrator,
+        reason: reviewer escalated task 01-lexicon-promise-check — see review-01.md,
+        resolved: false
+      }
+  ]

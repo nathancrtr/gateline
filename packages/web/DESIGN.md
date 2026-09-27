@@ -250,8 +250,7 @@ the ink.
   words and stay).
 - Ambient motion: the skeleton is a static block; nothing sweeps.
 - A vertical rule that mimics a writing pad.
-- A global element, such as the navigation, that changes by surface to solve
-  one surface's layout (settled decision 13, 2026-09-27).
+- Navigation that changes by surface (settled decision 13, 2026-09-27).
 
 ## Settled decisions
 
@@ -307,8 +306,8 @@ the record's labels, addresses and the brief, is in `docs/SEAM.md` §13.
     pinned pane beside the packet's column.
 13. **Navigation is unchanged, and the same on every surface** (2026-09-27).
     A sketch had turned the navigation into a top strip on the Decide
-    surface, only to give the brief's pane 200px. That was rejected, and
-    the rule it leaves is under *Banned*.
+    surface, only to give the brief's pane 200px. That was rejected (see
+    *Banned*).
 
 ## Contrast
 

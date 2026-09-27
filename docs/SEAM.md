@@ -421,9 +421,9 @@ the layout it implies are in `packages/web/DESIGN.md`.
 
 **Rejected on 2026-09-27: navigation that changes by surface.** A sketch
 turned the navigation into a top strip on the Decide surface, to give the
-brief's pane 200px, and had no reason beyond that. The rule it leaves is to
-never vary a global element per surface to solve one surface's layout. The
-pane's room comes from the wider Decide surface instead.
+brief's pane 200px, and had no reason beyond that. The navigation stays the
+same on every surface. The pane's room comes from the wider Decide surface
+instead.
 
 **What stays.** The verbatim rule and the four voices. Assumptions leading the
 packet. The requirement roster. The phase spine. Folding decided by each

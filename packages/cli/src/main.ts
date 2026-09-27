@@ -5,10 +5,11 @@ import { execFileSync, spawn } from 'node:child_process'
 import { existsSync, realpathSync } from 'node:fs'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import { createInterface } from 'node:readline/promises'
 import { fileURLToPath } from 'node:url'
 import {
+  addRepository,
   armRefusal,
   BUILTIN_SECTIONS,
   BURDENS,
@@ -18,6 +19,8 @@ import {
   CLOSURE_MEANINGS,
   CLOSURES,
   type Closure,
+  ConfigError,
+  DEFAULT_FRAMEWORK_PREFIX,
   DecisionError,
   type DecisionInput,
   DISPOSITIONS,
@@ -30,6 +33,7 @@ import {
   type Identity,
   type InboxItem,
   LocalOnlyPushConflictError,
+  listRepositories,
   loadSources,
   missingSections,
   type Phase,
@@ -38,10 +42,13 @@ import {
   type Profile,
   planDecision,
   planRunScaffold,
+  REPOSITORY_MODES,
   RepositoryIdError,
+  type RepositoryListing,
   type RunRef,
   type RunScaffold,
   type RunSource,
+  removeRepository,
   repoToplevel,
   resolveCodeRepo,
   resolveId,
@@ -51,6 +58,7 @@ import {
   sameRepositoryId,
   scanIds,
   validateArtifact,
+  viewModeRefusal,
   workItemIncomplete,
   workItemPath,
 } from '@gateline/core'
@@ -70,6 +78,17 @@ interface Resolved {
   sources: RunSource[]
 }
 
+/**
+ * A startup error the operator fixes in the config or on the command line —
+ * printed as its message, never a stack trace: two repositories with one id
+ * (#494), a config file that breaks a rule of MULTI-REPO.md §7 or lists a
+ * repository that does not carry the framework (#495), a local-only/push
+ * conflict.
+ */
+function isStartupError(e: unknown): e is Error {
+  return e instanceof LocalOnlyPushConflictError || e instanceof RepositoryIdError || e instanceof ConfigError
+}
+
 async function resolveSources(): Promise<Resolved> {
   const opts = program.opts<{ repo: string[] }>()
   let sources: RunSource[]
@@ -77,7 +96,7 @@ async function resolveSources(): Promise<Resolved> {
   try {
     ;({ sources, warnings } = await loadSources({ repoOverrides: opts.repo.length ? opts.repo : undefined }))
   } catch (e) {
-    if (e instanceof LocalOnlyPushConflictError || e instanceof RepositoryIdError) {
+    if (isStartupError(e)) {
       console.error(e.message)
       process.exit(1)
     }
@@ -92,11 +111,45 @@ async function resolveSources(): Promise<Resolved> {
 }
 
 /**
- * Whether `--source <value>` names this source (#494): its full repository id
- * (compared without case, as ids are) or its display name.
+ * Whether `--repository <value>` names this source (#494, #497): its full
+ * repository id (compared without case, as ids are) or its display name
+ * (also without case).
  */
 function namesSource(source: RunSource, value: string): boolean {
   return sameRepositoryId(source.id, value) || displayNameOf(source).toLowerCase() === value.toLowerCase()
+}
+
+/**
+ * `--repository <id or display name>` (#497): selects a repository on every
+ * command that reads or writes one run. `--source`, its spelling before the
+ * interfaces settled on "repository" (MULTI-REPO.md §4, P12), stays as a
+ * hidden alias. The global `--repo <path>` is a different thing: it names a
+ * repository by path in place of the config file.
+ */
+const repositoryFlag = (help = 'repository id or display name, when the slug is ambiguous') =>
+  new Option('--repository <repository>', help)
+const sourceAlias = () => new Option('--source <repository>', 'alias of --repository').hideHelp()
+interface RepositoryFlags {
+  repository?: string
+  source?: string
+}
+const chosenRepository = (flags: RepositoryFlags): string | undefined => flags.repository ?? flags.source
+
+/** A word a POSIX shell reads back as itself: bare when it is safe, else single-quoted. */
+function shellWord(word: string): string {
+  return /^[A-Za-z0-9._/:@+-]+$/.test(word) ? word : `'${word.replace(/'/g, `'\\''`)}'`
+}
+
+/**
+ * What a printed next step needs to name its run's repository (MULTI-REPO.md
+ * §9.6): nothing when the set has one repository, and `--repository <display
+ * name>` when it has several, so the command can be pasted and run whichever
+ * repositories share the slug.
+ */
+function repositoryArg(sources: readonly RunSource[], sourceId: string): string {
+  if (sources.length <= 1) return ''
+  const source = sources.find((s) => s.id === sourceId)
+  return ` --repository ${shellWord(source ? displayNameOf(source) : sourceId)}`
 }
 
 /**
@@ -118,11 +171,14 @@ async function findRun(sources: RunSource[], slug: string, sourceId?: string) {
     }
   }
   if (matches.length === 0) {
-    console.error(`run "${slug}" not found${sourceId ? ` in source ${sourceId}` : ''}`)
+    console.error(`run "${slug}" not found${sourceId ? ` in repository ${sourceId}` : ''}`)
     process.exit(1)
   }
   if (matches.length > 1) {
-    console.error(`run "${slug}" exists in multiple sources (${matches.map((m) => m.source.id).join(', ')}) — pass --source`)
+    console.error(
+      `run "${slug}" exists in several repositories (${matches.map((m) => `${displayNameOf(m.source)}: ${m.source.id}`).join(', ')}) — ` +
+        `pass --repository, as in: --repository ${shellWord(displayNameOf(matches[0]!.source))}`,
+    )
     process.exit(1)
   }
   return matches[0]!
@@ -166,7 +222,7 @@ program
     const { sources } = await resolveSources()
     const { inbox } = await buildPortfolio(sources)
     if (inbox.length === 0) return console.log('inbox zero — nothing needs a human')
-    for (const item of inbox) printItem(item, runLabel(sources, item.source, item.slug))
+    for (const item of inbox) printItem(item, runLabel(sources, item.source, item.slug), sources)
   })
 
 /**
@@ -178,8 +234,13 @@ program
  * every surface, and this printed only that, so an escalation's reason and a
  * paused run's way out were unreachable from here.
  */
-function printItem(item: InboxItem, label: string): void {
+function printItem(item: InboxItem, label: string, sources: readonly RunSource[]): void {
   const kind = item.kind === 'gate' ? item.gate : item.kind
+  // Each next step names the repository when the set has several (#497); a
+  // `view` repository gets no command at all, since every decision in it is
+  // refused (MULTI-REPO.md §7.3), and says so once instead.
+  const at = repositoryArg(sources, item.source)
+  const view = sources.find((s) => s.id === item.source)?.mode === 'view'
   const pad = ' '.repeat(17)
   // A multi-line value (an engine line with a diagnostic, a hold reason)
   // keeps its continuation lines under its first, not at the left margin.
@@ -210,7 +271,8 @@ function printItem(item: InboxItem, label: string): void {
       if (esc.about) more('about', 'task' in esc.about ? `task ${esc.about.task}` : `gate ${esc.about.gate}`)
       more('reason', esc.reason)
       if (esc.artifact) more('report', esc.artifact.path)
-      if (item.escalationIndex !== null) more('resolve', `gateline resolve-escalation ${item.slug} ${item.escalationIndex} --note <text>`)
+      if (item.escalationIndex !== null && !view)
+        more('resolve', `gateline resolve-escalation ${item.slug} ${item.escalationIndex}${at} --note <text>`)
       break
     }
     case 'round-cap':
@@ -231,7 +293,7 @@ function printItem(item: InboxItem, label: string): void {
       if (edit?.kind === 'profile-violation') more('fix', `the run is outside profile ${edit.profile}: edit profile: or phase: in state.yaml`)
       if (edit?.kind === 'no-task-files') more('fix', 'the G1 breakdown never landed: commit tasks/*.yaml')
       if (edit?.kind === 'unknown-status') more('fix', `task ${edit.task} has status "${edit.status}"; known: ${edit.known.join(', ')}`)
-      more('next', pausedNext(item.slug, paused))
+      if (!view) more('next', pausedNext(item.slug, paused, at))
       break
     }
     case 'staged': {
@@ -239,7 +301,7 @@ function printItem(item: InboxItem, label: string): void {
       if (!staged) break
       const ceiling = staged.budgetCeiling === null ? 'no cost_limit_usd' : `cost_limit_usd $${staged.budgetCeiling.toFixed(2)}`
       more('staged', `${staged.by ? `by ${staged.by}, ` : ''}profile ${staged.profile}, ${ceiling}`)
-      more('next', `gateline arm ${item.slug} — dispatch begins and the budget starts metering`)
+      if (!view) more('next', `gateline arm ${item.slug}${at} — dispatch begins and the budget starts metering`)
       break
     }
     case 'malformed':
@@ -250,6 +312,7 @@ function printItem(item: InboxItem, label: string): void {
       for (const p of item.problems) for (const line of p.trimEnd().split('\n')) console.log(line ? `${pad}${line}` : '')
       break
   }
+  if (view) more('mode', 'view: this deployment records no decisions in this repository (`gateline repo list`)')
 }
 
 /** The entry's first line: the kind's own words and its record facts, never a sentence core wrote. */
@@ -270,14 +333,17 @@ function headline(item: InboxItem): string {
   }
 }
 
-/** What clears a pause, in the terminal's own words and commands (#96, #348). */
-function pausedNext(slug: string, paused: NonNullable<InboxItem['paused']>): string {
-  const close = `gateline close ${slug} --as <disposition> --reason <text>`
+/**
+ * What clears a pause, in the terminal's own words and commands (#96, #348).
+ * `at` is `repositoryArg`'s ` --repository <name>`, or empty.
+ */
+function pausedNext(slug: string, paused: NonNullable<InboxItem['paused']>, at: string): string {
+  const close = `gateline close ${slug}${at} --as <disposition> --reason <text>`
   if (paused.reason === 'budget-exhausted')
-    return `gateline resume ${slug} --cost-limit <usd> (a higher limit; resuming without one re-pauses), or ${close}`
+    return `gateline resume ${slug}${at} --cost-limit <usd> (a higher limit; resuming without one re-pauses), or ${close}`
   if (paused.reason === 'slug-landed') return `${close.replace('<disposition>', 'already-delivered')}; carry remaining work on a fresh slug`
-  if (paused.handEdit) return `make the edit above, then gateline resume ${slug} (resolving alone re-pauses)`
-  return `gateline resume ${slug}, or ${close}`
+  if (paused.handEdit) return `make the edit above, then gateline resume ${slug}${at} (resolving alone re-pauses)`
+  return `gateline resume ${slug}${at}, or ${close}`
 }
 
 // The run lexicon in a terminal (#164): a hover can't exist here, so cited
@@ -289,15 +355,15 @@ program
   .description('print a run artifact, with cited R/AC/ADR definitions as footnotes (omit the artifact to list them)')
   .argument('<slug>', 'run slug')
   .argument('[artifact]', 'run-relative artifact path, e.g. plan.md or tasks/01-core.yaml')
-  .option('--source <id>', 'repository id or name when the slug is ambiguous')
+  .addOption(repositoryFlag()).addOption(sourceAlias())
   .option('--refs <mode>', 'footnotes: first-line | full | off', 'first-line')
-  .action(async (slug: string, artifact: string | undefined, flags: { source?: string; refs: string }) => {
+  .action(async (slug: string, artifact: string | undefined, flags: RepositoryFlags & { refs: string }) => {
     if (!['first-line', 'full', 'off'].includes(flags.refs)) {
       console.error('--refs must be one of: first-line | full | off')
       process.exit(1)
     }
     const { sources } = await resolveSources()
-    const { source, ref } = await findRun(sources, slug, flags.source)
+    const { source, ref } = await findRun(sources, slug, chosenRepository(flags))
     if (!artifact) {
       const paths = await source.listArtifacts(ref)
       if (paths.length === 0) return console.log('no artifacts yet')
@@ -337,8 +403,7 @@ program
 
 // --- decision commands (the write path) -------------------------------------
 
-interface DecideFlags {
-  source?: string
+interface DecideFlags extends RepositoryFlags {
   notes?: string
   note?: string
   burden?: string
@@ -402,7 +467,7 @@ async function planAndWrite(source: RunSource, ref: RunRef, who: Identity, input
 
 async function decide(slug: string, flags: DecideFlags, input: Omit<DecisionInput, 'notes' | 'burden'> & { notes?: string; burden?: Burden }) {
   const { sources } = await resolveSources()
-  const { source, ref } = await findRun(sources, slug, flags.source)
+  const { source, ref } = await findRun(sources, slug, chosenRepository(flags))
   const who = await source.identity()
   if (!who) {
     console.error('git user.name/user.email are unset — decisions must be attributable to a named human')
@@ -439,7 +504,7 @@ program
   .description('approve a gate (records name, timestamp, notes, burden; advances the phase)')
   .argument('<slug>', 'run slug')
   .argument('<gate>', 'G0 | G1 | G2 | G3')
-  .option('--source <id>', 'repository id or name when the slug is ambiguous')
+  .addOption(repositoryFlag()).addOption(sourceAlias())
   .option('--burden <category>', BURDENS.join(' | '))
   .option('--notes <text>', 'approval notes')
   .addOption(hiddenAlias('--note'))
@@ -465,7 +530,7 @@ program
   .argument('<gate>', 'G0 | G1 | G2 | G3')
   .option('--reason <text>', 'why — this is the correction channel back to the producing role')
   .addOption(hiddenAlias('--note, --notes'))
-  .option('--source <id>')
+  .addOption(repositoryFlag()).addOption(sourceAlias())
   .action(async (slug: string, gate: string, flags: DecideFlags, cmd: Command) => {
     const notes = requireNoteText(cmd, flags, '--reason')
     await decide(slug, flags, { action: 'decline', gate: gate.toUpperCase() as GateId, notes })
@@ -479,7 +544,7 @@ program
   .option('--note <text>', 'disposition')
   .addOption(hiddenAlias('--notes'))
   .option('--disposition <route>', `${DISPOSITIONS.join(' | ')} — optional machine-actionable route for the engine; omit for the engine default`)
-  .option('--source <id>')
+  .addOption(repositoryFlag()).addOption(sourceAlias())
   .action(async (slug: string, index: string, flags: DecideFlags & { disposition?: string }, cmd: Command) => {
     const notes = requireNoteText(cmd, flags, '--note')
     let disposition: Disposition | undefined
@@ -498,7 +563,7 @@ program
   .description('pause a run')
   .argument('<slug>', 'run slug')
   .option('--reason <r>', 'budget-exhausted | round-cap | escalation | gate-declined', 'escalation')
-  .option('--source <id>')
+  .addOption(repositoryFlag()).addOption(sourceAlias())
   .action(async (slug: string, flags: DecideFlags & { reason: string }) => {
     await decide(slug, flags, { action: 'pause', pauseReason: flags.reason })
   })
@@ -509,7 +574,7 @@ program
   .argument('<slug>', 'run slug')
   .option('--phase <phase>', 'spec | plan | implement | integrate | release')
   .option('--cost-limit <usd>', 'new budget.cost_limit_usd, written in the same commit; required from a budget-exhausted pause (#96)', parseFloat)
-  .option('--source <id>')
+  .addOption(repositoryFlag()).addOption(sourceAlias())
   .action(async (slug: string, flags: DecideFlags & { costLimit?: number }) => {
     await decide(slug, flags, { action: 'resume', resumePhase: flags.phase as Phase | undefined, costLimitUsd: flags.costLimit })
   })
@@ -520,7 +585,7 @@ program
   .argument('<slug>', 'run slug')
   .requiredOption('--as <disposition>', CLOSURES.map((c) => `${c} — ${CLOSURE_MEANINGS[c]}`).join('; '))
   .requiredOption('--reason <text>', 'the comment on the disposition — why this run ends here')
-  .option('--source <id>')
+  .addOption(repositoryFlag()).addOption(sourceAlias())
   .action(async (slug: string, flags: DecideFlags & { as: string }) => {
     if (!(CLOSURES as readonly string[]).includes(flags.as)) {
       console.error(`--as must be one of: ${CLOSURES.join(' | ')}`)
@@ -533,7 +598,7 @@ program
   .command('reopen')
   .description('undo a closure — the run returns to the phase its gate ledger derives')
   .argument('<slug>', 'run slug')
-  .option('--source <id>')
+  .addOption(repositoryFlag()).addOption(sourceAlias())
   .action(async (slug: string, flags: DecideFlags) => {
     await decide(slug, flags, { action: 'reopen' })
   })
@@ -549,6 +614,7 @@ interface NewFlags {
   budget: string
   key?: string
   source?: string
+  repository?: string
 }
 
 /**
@@ -680,16 +746,28 @@ export async function stageNewRun(flags: NewFlags): Promise<number> {
   }
 
   const { sources } = await resolveSources()
-  const candidates = flags.source ? sources.filter((s) => namesSource(s, flags.source!)) : sources
+  const wanted = chosenRepository(flags)
+  const candidates = wanted ? sources.filter((s) => namesSource(s, wanted)) : sources
   if (candidates.length === 0) {
-    console.error(flags.source ? `no source "${flags.source}" configured` : 'no run source configured')
+    console.error(wanted ? `no repository "${wanted}" is configured` : 'no repository is configured')
     return 1
   }
   if (candidates.length > 1) {
-    console.error(`several sources are configured — pass --source (${candidates.map((s) => s.id).join(', ')})`)
+    console.error(
+      `several repositories are configured — pass --repository (${candidates.map((s) => `${displayNameOf(s)}: ${s.id}`).join(', ')})`,
+    )
     return 1
   }
   const source = candidates[0]!
+
+  // The source refuses the write itself (MULTI-REPO.md §7.3); asking first
+  // spares the operator an editor session that could only end in refusal —
+  // the same reason the identity check below is hoisted (F3).
+  const refusal = viewModeRefusal(source)
+  if (refusal) {
+    console.error(`refused (view-mode): ${refusal}`)
+    return 1
+  }
 
   // Identity check before staging (AC7.1's CLI half) — decide()'s own
   // refusal shape, adapted for staging, and hoisted above the interactive
@@ -831,7 +909,7 @@ program
   .option('--task-file <path>', 'patch profile: path to the human-authored work item, staged as tasks/01-<slug>.yaml')
   .option('--budget <usd>', 'cost ceiling in USD', '50')
   .option('--key <key>', 'idempotency / replay client key (optional)')
-  .option('--source <id>', 'repository id or name when several are configured')
+  .addOption(repositoryFlag('repository id or display name, when several are configured')).addOption(sourceAlias())
   .action(async (flags: NewFlags) => {
     process.exit(await stageNewRun(flags))
   })
@@ -843,9 +921,9 @@ program
  * best-effort draft-PR ensure (R8) using the source's dir (the `sync`
  * command's `(source as {dir?}).dir` pattern) — a skipped note is success.
  */
-export async function armRun(slug: string, flags: { source?: string }): Promise<number> {
+export async function armRun(slug: string, flags: RepositoryFlags): Promise<number> {
   const { sources } = await resolveSources()
-  const { source, ref } = await findRun(sources, slug, flags.source)
+  const { source, ref } = await findRun(sources, slug, chosenRepository(flags))
   const who = await source.identity()
   if (!who) {
     console.error('git user.name/user.email are unset — decisions must be attributable to a named human')
@@ -875,8 +953,8 @@ program
   .command('arm')
   .description("arm a staged run — starts it at the profile's first undecided-gate phase")
   .argument('<slug>', 'run slug')
-  .option('--source <id>', 'repository id or name when the slug is ambiguous')
-  .action(async (slug: string, flags: { source?: string }) => {
+  .addOption(repositoryFlag()).addOption(sourceAlias())
+  .action(async (slug: string, flags: RepositoryFlags) => {
     process.exit(await armRun(slug, flags))
   })
 
@@ -885,12 +963,14 @@ program
 program
   .command('sync')
   .description('copy PR-review approvals into state.yaml G2 entries (dry-run unless --live)')
-  .option('--source <id>', 'only this repository (id or name)')
+  .addOption(repositoryFlag('only this repository (id or display name)')).addOption(sourceAlias())
   .option('--live', 'apply the plan (default: print it)')
-  .action(async (flags: { source?: string; live?: boolean }) => {
+  .action(async (flags: RepositoryFlags & { live?: boolean }) => {
     const { planSyncForSource, applySync, GhCliProvider } = await import('@gateline/core')
     const { sources } = await resolveSources()
+    const wanted = chosenRepository(flags)
     let any = false
+    let failed = false
     // A local-only source already prints its own line below; the trailing
     // generic "nothing to sync" would otherwise contradict it (scope note:
     // "keep output non-contradictory") — suppressed only when every
@@ -898,7 +978,20 @@ program
     let anyConsidered = false
     let allLocalOnly = true
     for (const source of sources) {
-      if (flags.source && !namesSource(source, flags.source)) continue
+      if (wanted && !namesSource(source, wanted)) continue
+      // A `view` repository records nothing (MULTI-REPO.md §7.3). Its source
+      // would refuse each write; asking first spares the call to GitHub. A
+      // repository named on purpose is refused; one met while syncing the
+      // whole set is skipped, since its mode is the operator's choice.
+      const refusal = viewModeRefusal(source)
+      if (refusal) {
+        if (wanted && flags.live) {
+          console.error(`refused (view-mode): ${refusal}`)
+          process.exit(1)
+        }
+        console.log(`skipped: ${displayNameOf(source)} is in view mode, so nothing is recorded there`)
+        continue
+      }
       const dir = (source as { dir?: string }).dir
       if (!dir) continue
       anyConsidered = true
@@ -916,7 +1009,10 @@ program
       } else {
         for (const r of await applySync(source, plan)) {
           if (r.ok) console.log(`recorded: ${runLabel(sources, r.source, r.slug)} ${r.gate} ← PR #${r.approval.number} → ${r.commit!.slice(0, 10)}`)
-          else console.error(`failed: ${runLabel(sources, r.source, r.slug)} — ${r.error}`)
+          else {
+            failed = true
+            console.error(`failed: ${runLabel(sources, r.source, r.slug)} — ${r.error}`)
+          }
         }
       }
     }
@@ -924,6 +1020,8 @@ program
       // Every considered source already printed its own local-only line.
     } else if (!any) console.log('nothing to sync — no undecided G2 with an approved PR review')
     else if (!flags.live) console.log('\ndry-run; pass --live to record')
+    // A write the source refused is a failed command, not a line in passing.
+    if (failed) process.exitCode = 1
   })
 
 // --- ui ----------------------------------------------------------------------
@@ -1058,9 +1156,11 @@ program
           repoOverrides: [repoDir],
           push: pushExplicit ? flags.push : undefined,
           localOnly: flags.localOnly || undefined,
+          // `up` runs an engine: its one repository is `dispatch` (§7.3).
+          engine: true,
         }))
       } catch (e) {
-        if (e instanceof LocalOnlyPushConflictError || e instanceof RepositoryIdError) {
+        if (isStartupError(e)) {
           console.error(e.message)
           process.exit(1)
         }
@@ -1088,6 +1188,7 @@ program
         // conflict gate, so the server never re-derives (or re-throws) it.
         push: enginePush,
         localOnly,
+        engine: true,
       })
       // `orchestrator` and the supersede callback below both close over
       // `stop`, but `stop` needs `orchestrator` to drain it — same
@@ -1180,18 +1281,132 @@ program
   .action(
     async (target: string, flags: { take: string; layout: string; prefix: string; provenance: string; adapters: string }) => {
       const { runInit } = await import('@gateline/framework')
-      process.exit(
-        await runInit({
-          target,
-          provenance: flags.provenance as 'redistribute' | 'private',
-          take: flags.take,
-          layout: flags.layout as 'prefixed' | 'root',
-          prefix: flags.prefix,
-          adapters: flags.adapters,
-        }),
-      )
+      const code = await runInit({
+        target,
+        provenance: flags.provenance as 'redistribute' | 'private',
+        take: flags.take,
+        layout: flags.layout as 'prefixed' | 'root',
+        prefix: flags.prefix,
+        adapters: flags.adapters,
+      })
+      if (code === 0) console.log(await registrationOffer(target, flags.prefix))
+      process.exit(code)
     },
   )
+
+/**
+ * The end of `gateline init` (MULTI-REPO.md §7.1, INTEGRATION.md §10 question
+ * 7): the command that registers the host with this machine's deployment,
+ * offered and never run. It is printed here, in the CLI, because the
+ * operator's config is none of `@gateline/framework`'s business, and never
+ * prompted for, because agents and CI run `init` with no terminal. The
+ * framework check reads the default branch, so the step comes after the
+ * scaffold PR merges.
+ */
+export async function registrationOffer(target: string, prefix: string): Promise<string> {
+  const absolute = resolve(target)
+  const top = (await repoToplevel(absolute)) ?? absolute
+  const prefixArg = prefix === DEFAULT_FRAMEWORK_PREFIX ? '' : ` --gateline-prefix ${shellWord(prefix)}`
+  return (
+    '  4. once that PR is merged to the default branch, you may register the repository\n' +
+    '     with this machine (nothing is registered for you; view reads, decide also\n' +
+    '     records decisions, dispatch also lets `up` run an engine):\n' +
+    `       gateline repo add ${shellWord(top)} --mode decide${prefixArg}`
+  )
+}
+
+// --- repo: the operator's list (MULTI-REPO.md §7.1) ---------------------------
+
+const repo = program
+  .command('repo')
+  .description("edit and print the list of repositories in the operator's config file")
+
+/** How `repo list` prints the framework check: the ref the lock pins, "no lock", or "refused". */
+function frameworkColumn(check: RepositoryListing['framework']): string {
+  if (check === null) return 'unreadable'
+  if (!check.ok) return 'refused'
+  if (check.carries === 'root') return 'no lock'
+  const ref = check.pinnedRef
+  if (ref === null) return 'lock (no ref)'
+  return /^[0-9a-f]{40}$/.test(ref) ? ref.slice(0, 10) : ref
+}
+
+repo
+  .command('list')
+  .description("each repository's id, origin, display name, mode, and the framework ref its lock pins")
+  .action(async () => {
+    let list: Awaited<ReturnType<typeof listRepositories>>
+    try {
+      list = await listRepositories()
+    } catch (e) {
+      if (isStartupError(e)) {
+        console.error(e.message)
+        process.exit(1)
+      }
+      throw e
+    }
+    if (!list.exists) {
+      console.log(
+        `no config file at ${list.configPath}: the set is the repository you run in, or --repo.\n` +
+          'Start one with: gateline repo add <path> --mode <view|decide|dispatch>',
+      )
+      return
+    }
+    if (list.entries.length === 0) return console.log(`no repositories listed in ${list.configPath}`)
+    table(
+      list.entries.map((e) => ({
+        id: e.id ?? '-',
+        origin: e.origin ?? 'none',
+        name: e.displayName,
+        mode: e.mode,
+        framework: frameworkColumn(e.framework),
+      })),
+      ['id', 'origin', 'name', 'mode', 'framework'],
+    )
+    for (const e of list.entries) {
+      if (e.framework === null) console.error(`warning: ${e.path} is not a git repository`)
+      else if (!e.framework.ok) console.error(`warning: ${e.framework.message}`)
+    }
+  })
+
+repo
+  .command('add')
+  .description('list a repository: it must carry the framework on its default branch')
+  .argument('<path>', 'the repository (any directory inside it)')
+  .addOption(new Option('--mode <mode>', 'view reads only; decide also records decisions; dispatch also lets `up` run an engine').choices([...REPOSITORY_MODES]).makeOptionMandatory())
+  .option('--name <name>', 'a display name; with no origin it also names the id, local/<name>')
+  .option('--gateline-prefix <dir>', 'where the framework lock is, for a host integrated with `gateline init --prefix <dir>`')
+  .action(async (path: string, flags: { mode: string; name?: string; gatelinePrefix?: string }) => {
+    try {
+      const added = await addRepository({ path, mode: flags.mode, name: flags.name, gatelinePrefix: flags.gatelinePrefix })
+      const carries = added.framework.carries === 'root' ? 'no lock' : `lock at ${added.framework.prefix}/framework-lock.json`
+      console.log(`added ${added.id} (${added.displayName}) as ${added.mode}, ${carries}, to ${added.configPath}`)
+      if (added.stillInvalid) console.error(`warning: the config file does not load yet — ${added.stillInvalid}`)
+    } catch (e) {
+      if (isStartupError(e)) {
+        console.error(e.message)
+        process.exit(1)
+      }
+      throw e
+    }
+  })
+
+repo
+  .command('remove')
+  .description('drop a repository from the list; nothing in the repository changes')
+  .argument('<repository>', 'its id or display name')
+  .action(async (which: string) => {
+    try {
+      const removed = await removeRepository({ which })
+      console.log(`removed ${removed.id ?? removed.path}${removed.displayName ? ` (${removed.displayName})` : ''} from ${removed.configPath}`)
+    } catch (e) {
+      if (isStartupError(e)) {
+        console.error(e.message)
+        process.exit(1)
+      }
+      throw e
+    }
+  })
 
 program
   .command('validate')
@@ -1327,9 +1542,10 @@ program
         repoOverrides: opts.repo.length ? opts.repo : undefined,
       })
     } catch (e) {
-      // Two repositories with one id, or an id that cannot be used (#494): a
-      // startup error the operator fixes in the config, not a stack trace.
-      if (e instanceof RepositoryIdError) {
+      // Two repositories with one id, an id that cannot be used (#494), or a
+      // config entry with no mode or no framework (#495): a startup error the
+      // operator fixes in the config, not a stack trace.
+      if (isStartupError(e)) {
         console.error(e.message)
         process.exit(1)
       }
@@ -1346,8 +1562,8 @@ function truncate(text: string, max: number): string {
 
 function table(rows: Record<string, string>[], cols: string[]): void {
   const widths = cols.map((c) => Math.max(c.length, ...rows.map((r) => (r[c] ?? '').length)))
-  console.log(cols.map((c, i) => c.toUpperCase().padEnd(widths[i]!)).join('  '))
-  for (const r of rows) console.log(cols.map((c, i) => (r[c] ?? '').padEnd(widths[i]!)).join('  '))
+  console.log(cols.map((c, i) => c.toUpperCase().padEnd(widths[i]!)).join('  ').trimEnd())
+  for (const r of rows) console.log(cols.map((c, i) => (r[c] ?? '').padEnd(widths[i]!)).join('  ').trimEnd())
 }
 
 // Only parse argv when this module is the process entrypoint (the bin

@@ -47,6 +47,14 @@ export interface ServeOptions {
    * precedence chain (auto-detect included) rather than a second mechanism.
    */
   localOnly?: boolean
+  /**
+   * Whether an engine runs beside this server (`gateline up`). It decides
+   * each repository's mode as `loadSources` resolves it (MULTI-REPO.md
+   * §7.3): a repository with no config entry is `dispatch` under `up` and
+   * `decide` otherwise, and a `dispatch` entry behaves as `decide` when no
+   * engine runs.
+   */
+  engine?: boolean
 }
 
 const MIME: Record<string, string> = {
@@ -72,7 +80,7 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
     repoOverrides = [fixture.dir]
   }
 
-  const { sources, configPath, warnings } = await loadSources({ repoOverrides, push: opts.push, localOnly: opts.localOnly })
+  const { sources, configPath, warnings } = await loadSources({ repoOverrides, push: opts.push, localOnly: opts.localOnly, engine: opts.engine })
   for (const w of warnings) console.warn(`warning: ${w}`)
   if (sources.length === 0) {
     throw new Error('no run sources — run inside a repository, pass --repo <path>, or create ~/.config/gateline/config.yaml')

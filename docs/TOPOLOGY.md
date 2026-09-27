@@ -188,10 +188,16 @@ tiers below hold for both.
    local-only. Whether a not-local-only source then pushes is a separate
    question, answered by rule 3's push default for its tier — CLI-tier
    sources (`gateline up` against `--repo` paths or the cwd default) also
-   auto-detect push the same way (`push = originExists`, #149); config-file
-   entries and the standalone binary default `push` to `false` even with an
-   origin present, and stay a read-only poller (or touch origin not at all)
-   unless `push`/`--push` is set explicitly.
+   auto-detect push the same way (`push = originExists`, #149), and so does
+   a config-file entry in `dispatch` mode ([MULTI-REPO.md](MULTI-REPO.md)
+   §7.3, R2: an engine that commits without pushing is the split state §3.2
+   exists to prevent). Config-file entries in `view` or `decide` mode, and
+   the standalone binary, default `push` to `false` even with an origin
+   present, and stay a read-only poller (or touch origin not at all) unless
+   `push`/`--push` is set explicitly. The default follows the mode the entry
+   declares, so a `dispatch` entry served by `ui`, where no engine runs,
+   still pushes the decisions recorded through it. Rules 1 to 3 apply to
+   every entry whatever its mode: an explicit `push` or `local_only` wins.
 
 **The `--no-push` alias, and where it stops.** `gateline up --no-push` resolves
 to full local-only — no push, no `gh` calls, no origin fetch — not merely a

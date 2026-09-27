@@ -11,7 +11,17 @@ import type { ContractTemplates } from '../record/validate.ts'
 import { type FrameworkRoots, memoizedFrameworkRoots } from './framework-roots.ts'
 import { type CommitInfo, Git } from './git.ts'
 import { lastIdSegment } from './repository-id.ts'
-import type { Identity, RunRef, RunSource, StageOutcome, StateCommit, StateDocMutation, WriteResult } from './source.ts'
+import {
+  type Identity,
+  type RepositoryMode,
+  type RunRef,
+  type RunSource,
+  type StageOutcome,
+  type StateCommit,
+  type StateDocMutation,
+  viewModeRefusal,
+  type WriteResult,
+} from './source.ts'
 import { type ViewRefs, viewRefsOf } from './view-refs.ts'
 
 export interface LocalGitSourceOptions {
@@ -24,6 +34,8 @@ export interface LocalGitSourceOptions {
   displayName?: string
   /** Names old links may carry for this repository (see `RunSource.formerIds`). */
   formerIds?: readonly string[]
+  /** What this deployment may do here (see `RunSource.mode`); absent means no restriction. */
+  mode?: RepositoryMode
 }
 
 const RUN_BRANCH_PREFIX = 'run/'
@@ -41,6 +53,7 @@ export class LocalGitSource implements RunSource {
   readonly id: string
   readonly displayName: string
   readonly formerIds: readonly string[]
+  readonly mode: RepositoryMode | undefined
   readonly dir: string
   readonly git: Git
   readonly templates: ContractTemplates
@@ -82,11 +95,16 @@ export class LocalGitSource implements RunSource {
    * and checks it, and a direct constructor — the engine, a test — names its
    * source as it likes. `options.displayName` defaults to the id's last
    * segment; `options.formerIds` to none.
+   *
+   * `options.mode` is what `loadSources` resolved (§7.3). A `view` source
+   * refuses `writeState` and `stageRun` before anything else; absent — the
+   * engine's own source, a test — refuses nothing, as before modes existed.
    */
   constructor(id: string, dir: string, options: LocalGitSourceOptions = {}) {
     this.id = id
     this.displayName = options.displayName ?? lastIdSegment(id)
     this.formerIds = Object.freeze([...(options.formerIds ?? [])])
+    this.mode = options.mode
     this.dir = dir
     this.localOnly = options.localOnly === true
     this.options = this.localOnly ? { ...options, push: false } : options
@@ -123,6 +141,14 @@ export class LocalGitSource implements RunSource {
   private async runDir(slug: string): Promise<string> {
     const { runs } = await this.frameworkRoots()
     return `${runs}/${slug}`
+  }
+
+  /**
+   * Whether a write from this source is pushed to origin, as resolved by
+   * `loadSources` (TOPOLOGY.md §3.6) — false whenever `localOnly` is.
+   */
+  get push(): boolean {
+    return this.options.push === true
   }
 
   /** Seconds between remote syncs, when this source is configured to poll. */
@@ -369,6 +395,8 @@ export class LocalGitSource implements RunSource {
   }
 
   async writeState(ref: RunRef, mutate: StateDocMutation, message: string, options: { expectedTip?: string } = {}): Promise<WriteResult> {
+    const refusal = viewModeRefusal(this)
+    if (refusal) return { ok: false, reason: 'view-mode', message: refusal }
     if (!(await this.identity()))
       return { ok: false, reason: 'no-identity', message: 'git user.name/user.email are unset — decisions must be attributable to a named human' }
 
@@ -592,6 +620,7 @@ export class LocalGitSource implements RunSource {
   /**
    * The only branch-minting path (plan ADR-3, R1): sequence per plan §"sources
    * deltas" —
+   *   0. mode precondition: a `view` source mints nothing (§7.3)
    *   1. identity precondition (before any git write)
    *   2. existence scan (ADR-4)
    *   3. genesis commit against the default branch tip, composing
@@ -600,6 +629,8 @@ export class LocalGitSource implements RunSource {
    *   5. push when configured
    */
   async stageRun(scaffold: RunScaffold, who: Identity): Promise<StageOutcome> {
+    const refusal = viewModeRefusal(this)
+    if (refusal) return { outcome: 'refused', reason: 'view-mode', message: refusal }
     if (!who?.name || !who?.email || !(await this.identity()))
       return {
         outcome: 'refused',

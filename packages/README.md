@@ -66,12 +66,17 @@ gateline resolve-escalation <slug> <n>   --note …
 gateline pause <slug> [--reason …]
 gateline resume <slug> [--phase …]       phase derived from the gate ledger if omitted
 gateline sync [--live]                   copy approved PR reviews into undecided G2 entries
+gateline repo add <path> --mode <mode>   list a repository [--name …] [--gateline-prefix …]
+gateline repo remove <id or name>        drop it from the list
+gateline repo list                       id, origin, display name, mode, framework ref
 gateline ui [--demo] [--port N]          serve the web app
 gateline render [repo] [--check]         re-render the adapter agent files
 gateline self-update                     pull + rebuild the checkout this CLI runs from
 ```
 
-Global: `--repo <path>` (repeatable) overrides source discovery.
+Global: `--repo <path>` (repeatable) names repositories by path in place of
+the config file. `--repository <id or name>` picks one repository on any
+command that takes a slug (`--source` is the older spelling, still accepted).
 
 Common terminal workflows and pitfalls — deciding gates, approve-and-hold,
 PR-review sync, headless engine operation:
@@ -79,27 +84,79 @@ PR-review sync, headless engine operation:
 
 ## Multi-repo configuration
 
-`~/.config/gateline/config.yaml`:
+`~/.config/gateline/config.yaml` (under `$XDG_CONFIG_HOME` when that is set)
+lists the repositories one deployment serves. `gateline repo add|remove|list`
+edit and print it, keeping its comments and order; the file can also be
+edited by hand:
 
 ```yaml
-sources:
-  - name: sandbox       # a display name; with no origin it also names the id, local/sandbox
-    path: ~/repos/gateline-sandbox
-  - path: ~/repos/billing           # id from its origin: github.com/acme/billing
-    push: true          # push run branches after each decision commit
-    fetch_interval: 60  # seconds between `git fetch`es of origin; unset = never poll
+limits:                           # the machine's, across every repository
+  max_concurrent_dispatches: 2
+  spend_limit_usd: 40
+  spend_window_hours: 24
+engine:                           # defaults for every dispatch repository
+  adapters: [claude-code]
+  role_timeout_seconds: 1800
+  heartbeat_seconds: 180
+repositories:
+  - path: ~/repos/billing         # id from its origin: github.com/acme/billing
+    mode: dispatch                # view | decide | dispatch — required
+    fetch_interval: 60            # seconds between `git fetch`es of origin; unset = never poll
     former_ids: [github.com/acme/billing-service]  # links under an old id keep redirecting
+    limits:
+      spend_limit_usd: 25         # beneath the machine's, never above it
+  - name: sandbox                 # a display name; with no origin it also names the id, local/sandbox
+    path: ~/repos/gateline-sandbox
+    mode: decide
+  - path: ~/repos/website
+    mode: view
+    gateline_prefix: .framework   # only for a host integrated with `gateline init --prefix .framework`
 ```
 
-No config file → the current repository, zero setup.
+No config file → the current repository, zero setup. `--repo <path>` and the
+working directory behave as they always have: `decide` for the CLI and `ui`,
+`dispatch` under `up`, with no framework check.
+
+**Modes** (docs/MULTI-REPO.md §7.3). Every entry states one, and an entry
+without one is refused at startup:
+
+| Mode | Reads | Records decisions | Engine under `up` |
+|---|---|---|---|
+| `view` | yes | no | no |
+| `decide` | yes | yes | no |
+| `dispatch` | yes | yes | yes |
+
+A `view` repository refuses every write, from Gatehouse and from the CLI
+alike. Under `ui` and the CLI no engine runs, so a `dispatch` entry behaves as
+`decide`. A `dispatch` entry pushes decisions when the repository has an
+origin; `view` and `decide` entries push only with `push: true`. An explicit
+`push` or `local_only` always wins (docs/TOPOLOGY.md §3.6).
+
+**An older file** lists entries under `sources:` with no `mode`. `sources:` is
+still read as the list, but startup refuses each entry until it has a `mode`:
+add `mode: decide` for what the entry did before (or `view`, or `dispatch`).
+A file with both `repositories:` and `sources:` is refused, as is any key this
+section does not name.
+
+**Carrying the framework** (§7.2). A listed repository must carry the
+framework on its default branch, read through git: a lock at
+`.gateline/framework-lock.json` (or under `gateline_prefix`), or `roles/`,
+`contracts/` and `registry/` at its root, which `repo list` marks "no lock".
+Anything else is refused with a message naming `gateline init`. An `init`
+that has not merged to the default branch does not count yet.
+
+**Limits and engine defaults** are parsed and checked (a repository's
+`spend_limit_usd` above the machine's is an error) and not yet used: `up`
+still takes its limits from its flags until it serves the list (#501, #502).
 
 Each repository has an id (docs/MULTI-REPO.md §6). With an origin, it is
 `<host>/<owner>/<name>`, derived from `git remote get-url origin`; without
 one, it is `local/<name>`, the name being the entry's `name` or else the
 directory's basename. A run's page is `/repos/<id>/-/runs/<slug>`. An entry
 may state `id:` outright where the origin would give the wrong one, such as
-an ssh host alias. Two entries with one id, or with one display name, are a
-startup error. Links in the old `/runs/<name>/<slug>` shape redirect.
+an ssh host alias. One repository listed twice, two entries with one id, or
+two with one display name, are a startup error. Links in the old
+`/runs/<name>/<slug>` shape redirect.
 
 ## Keyboard model
 

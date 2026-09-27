@@ -534,9 +534,14 @@ read check is an operator step from that checkout.
    and instance checkpoints are namespaced apart from `G<n>`). Still open:
    where do the declarations live — the adapter manifest, an overlay header, or
    a dedicated vocabulary file the renderer and `validate` both read?
-7. **Fleet registration** — should `init` also register the host in the operator's
-   frontend/orchestrator multi-repo config, or is pointing the toolchain at the
-   host a deliberately separate operator step?
+7. **Fleet registration** — *resolved: offered, never automatic*
+   ([MULTI-REPO.md](MULTI-REPO.md) §7.1, #495). `gateline init` ends by printing
+   the `gateline repo add <path> --mode decide` command that would list the host
+   in the operator's config, to run once the scaffold PR has merged, because
+   the framework check reads the host's default branch. It writes nothing to
+   that config and asks nothing, since agents and CI run `init` with no
+   terminal. The offer is printed by the CLI's wrapper; `packages/framework`
+   stays unaware of the operator's config.
 
 ## 11. Build phasing
 

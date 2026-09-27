@@ -384,9 +384,9 @@ export interface StageRequest {
  * Why a staging request was refused (R8) — the taxonomy the form renders.
  *
  * Defined as core's `StageRefusal` plus the two the route decides for itself,
- * rather than restating all five. If core ever adds a refusal reason, it widens
+ * rather than restating them. If core ever adds a refusal reason, it widens
  * here automatically instead of arriving as a value the wire type says is
- * impossible.
+ * impossible — as `view-mode` did (MULTI-REPO.md §7.3, answered with a 403).
  */
 export type StageRefusalReason = StageRefusal | 'missing-sections' | 'invalid-input'
 

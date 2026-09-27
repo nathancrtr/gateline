@@ -370,9 +370,11 @@ export function createApp(deps: AppDeps): Hono {
     }
     if (result.outcome === 'exists')
       return respond<'POST /api/runs'>(c, { outcome: 'exists', slug: result.slug, branch: result.branch }, 200)
-    // refused: no-identity is a 400 (nothing to retry against); slug-taken
+    // refused: no-identity is a 400 (nothing to retry against); a `view`
+    // repository is a 403, since its mode forbids the write (MULTI-REPO.md
+    // §7.3 — the source refuses it, this only chooses the status); slug-taken
     // and conflict are 409s naming the branch that already holds the slug.
-    const status = result.reason === 'no-identity' ? 400 : 409
+    const status = result.reason === 'no-identity' ? 400 : result.reason === 'view-mode' ? 403 : 409
     return respond<'POST /api/runs'>(
       c,
       { outcome: 'refused', reason: result.reason, message: result.message },
@@ -696,7 +698,10 @@ export function createApp(deps: AppDeps): Hono {
       const planned = planDecision(state, { ...body, action: body.action }, who)
       const result = await source.writeState(ref, planned.mutate, planned.message)
       if (!result.ok) {
-        const status = result.reason === 'ref-moved' ? 409 : result.reason === 'dirty-worktree' ? 423 : 400
+        // A `view` repository's source refuses every write (MULTI-REPO.md
+        // §7.3); that refusal is a 403, the mode forbidding what was asked.
+        const status =
+          result.reason === 'view-mode' ? 403 : result.reason === 'ref-moved' ? 409 : result.reason === 'dirty-worktree' ? 423 : 400
         // Neither field is required by WriteResult, and `{ error: undefined }`
         // serializes to `{}` — a client then renders "undefined" as the reason.
         return fail(c, status, { error: result.message ?? result.reason ?? 'the write was refused' })

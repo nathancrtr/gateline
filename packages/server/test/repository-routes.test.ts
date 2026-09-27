@@ -144,6 +144,13 @@ describe('links made under the old names', () => {
     const dir = join(base, rel)
     await mkdir(dir, { recursive: true })
     git(dir, 'init', '-q', '-b', 'main')
+    // The root layout, so a config entry passes the framework check (MULTI-REPO.md §7.2).
+    for (const tree of ['roles', 'contracts', 'registry']) {
+      mkdirSync(join(dir, tree))
+      writeFileSync(join(dir, tree, 'README'), `${tree}\n`)
+    }
+    git(dir, 'add', '-A')
+    git(dir, '-c', 'user.name=Seed', '-c', 'user.email=seed@example.test', 'commit', '-q', '-m', 'seed')
     if (origin) git(dir, 'remote', 'add', 'origin', origin)
     return realpath(dir)
   }
@@ -159,13 +166,16 @@ describe('links made under the old names', () => {
     writeFileSync(
       configPath,
       [
-        'sources:',
+        'repositories:',
         `  - path: ${billing}`,
+        '    mode: view',
         '    former_ids: [github.com/acme/old-billing]',
         '  - name: other-billing',
         `    path: ${otherBilling}`,
+        '    mode: view',
         '  - name: jot',
         `    path: ${scratch}`,
+        '    mode: view',
         '',
       ].join('\n'),
     )

@@ -62,8 +62,8 @@ change; a run whose `state.yaml` carries no `profile:` is `full`. Three runner
 adapters are built: `claude-code`, `copilot-cli`, and `opencode` (the any-provider
 one). The gate frontend (Gatehouse) and the v1 orchestrator are implemented and
 co-located by design — `gateline up` runs both in one process, with one engine for
-each repository it dispatches in, which is the blessed topology; the hosted recipe under `deploy/` remains a documented self-host
-option. Integration tooling ships as `gateline init|validate|fork`.
+each repository it dispatches in, which is the blessed topology; the hosted recipe
+under `deploy/` remains a documented self-host option. Integration tooling ships as `gateline init|validate|fork`.
 Autonomy remains gated on the DESIGN.md §7 promotion criterion.
 
 ## Invariants — check before editing
@@ -120,8 +120,8 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   writable clone's, or the standalone `gateline-orchestrator` beside `up`, whose
   limits are its own), and never move the checkout the global `gateline` resolves
   to onto a branch — an engine there would put unreviewed code in charge of live,
-  metered dispatch. The code-tree monitor enforces this: a checkout that leaves the default
-  branch, goes dirty, or moves by anything but a fast-forward pauses dispatch until
+  metered dispatch. The code-tree monitor enforces this: a checkout that leaves the
+  default branch, goes dirty, or moves by anything but a fast-forward pauses dispatch until
   it is clean and back on the default branch (a clean fast-forward instead exits the
   engine `75` to be restarted on the new code). Trial an unmerged frontend change
   from that branch's own worktree with `ui`, never `up`.
@@ -177,8 +177,9 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
     (`already-delivered | superseded | obsolete | abandoned`); `reopen` undoes it
   * create a run — `new` stages `runs/<slug>/` on its branch; `arm <slug>` starts it
   * serve — `up [--repo <path>]...` (Gatehouse over the set, and one engine per
-    `dispatch` repository in one process — the blessed topology), `ui` (viewer only), `self-update` (pull + rebuild the web dist, then
-    let the running engine self-supersede)
+    `dispatch` repository in one process — the blessed topology), `ui` (viewer
+    only), `self-update` (pull + rebuild the web dist, then let the running
+    engine self-supersede)
   * render — `render [repo]` re-renders that tree's adapter agent files
 * Verify the orchestrator without dispatching: `gateline-orchestrator tick --dry-run`
   or `shadow <slug>` (replay a finished run); `watch` and `sweep <role>` are live

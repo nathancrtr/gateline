@@ -447,8 +447,8 @@ entry, and the refusal message says so.
 
 TOPOLOGY.md §3.1 read "one authority per deployment", meaning one supervised
 unit over one clone. This design restated it, and #502 made the restatement
-true: **one authority per repository, and one process per machine**. Each repository still has exactly
-one engine. The machine has one process to supervise, one liveness signal and
+true: **one authority per repository, and one process per machine**. Each
+repository still has exactly one engine. The machine has one process to supervise, one liveness signal and
 one place where limits are enforced.
 
 ### 8.1 What each engine keeps

@@ -13,7 +13,7 @@ import { Count, isName, Name, QuotedWord } from '../components/vocabulary.tsx'
 import { gateCardState } from '../gate-state.ts'
 import { usd } from '../money.ts'
 import { runPath } from '../run-path.ts'
-import { groupRows, scopeTitle } from '../scope.ts'
+import { groupRows, readInView, scopeTitle } from '../scope.ts'
 import { type KeyHint, useKeys } from '../use-keys.ts'
 
 const STALE_SECONDS = 3 * 86_400 // aging turns urgent at 3 days
@@ -541,7 +541,7 @@ export function InboxPage() {
   // under a scope the page heading names it once, and under a group heading
   // the heading does (docs/MULTI-REPO.md §9.2, D7).
   const showRepository = scope.several && !one && !scope.grouped
-  const unreadableInView = (data!.unreadable ?? []).some((u) => scope.scope.kind !== 'one' || u.source.toLowerCase() === scope.scope.repository.id.toLowerCase())
+  const read = readInView(scope.scope, scope.set)
   const row = (item: InboxItem, i: number) => (
     <InboxRow
       key={`${item.source}/${item.slug}/${item.kind}/${item.gate ?? item.escalationIndex ?? i}`}
@@ -616,17 +616,21 @@ export function InboxPage() {
           <h2 className="text-[20px] font-semibold text-ink">
             {/* With a repository that could not be read in view, "nothing is
                 waiting" is not known; the heading says only what is. */}
-            {unreadableInView
-              ? one
+            {read === 'none'
+              ? one || scope.set.length === 1
                 ? 'This repository could not be read.'
-                : 'Nothing is waiting on you in the repositories that could be read.'
-              : one
-                ? 'Nothing is waiting on you in this repository.'
-                : 'Nothing is waiting on you.'}
+                : 'No repository here could be read.'
+              : read === 'some'
+                ? 'Nothing is waiting on you in the repositories that could be read.'
+                : one
+                  ? 'Nothing is waiting on you in this repository.'
+                  : 'Nothing is waiting on you.'}
           </h2>
-          <p className="mx-auto mt-1.5 max-w-[46ch] text-[13.5px] text-muted">
-            The agents are reading, writing and reviewing on their own. Open the portfolio to look in on a run.
-          </p>
+          {read !== 'none' && (
+            <p className="mx-auto mt-1.5 max-w-[46ch] text-[13.5px] text-muted">
+              The agents are reading, writing and reviewing on their own. Open the portfolio to look in on a run.
+            </p>
+          )}
         </div>
       ) : (
         <>

@@ -219,6 +219,19 @@ export function badgeText(total: number, scoped: number | null, partial = false)
   return scoped === null ? String(total) : `${scoped} of ${total}`
 }
 
+/**
+ * How much of what a page shows could be read (§10): `all`, `some` (one or
+ * more repositories in view could not be), or `none` (not one could). In
+ * view means the scope's repository, or the whole set. An empty page says
+ * "nothing is waiting" only when everything in view was read.
+ */
+export function readInView(scope: Scope, set: readonly Repository[]): 'all' | 'some' | 'none' {
+  const shown = scope.kind === 'one' ? [scope.repository] : set
+  const unread = shown.filter((r) => r.unreadable !== undefined).length
+  if (unread === 0) return 'all'
+  return unread === shown.length ? 'none' : 'some'
+}
+
 /** The browser tab's title on a scoped page: the page, then the repository — so two tabs can be told apart. */
 export function scopeTitle(page: string, scope: Scope): string | null {
   return scope.kind === 'one' ? `${page} · ${scope.repository.name} — Gatehouse` : null

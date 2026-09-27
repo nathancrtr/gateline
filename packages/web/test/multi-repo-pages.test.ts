@@ -270,6 +270,17 @@ describe('a repository that could not be read', () => {
     expect(text(/data-repository-facts="unreadable"[^>]*>([^<]*)</.exec(ledger)![1]!)).toBe('Could not be read.')
   })
 
+  it('keeps an empty page from claiming nothing waits when nothing could be read', async () => {
+    const heading = (html: string) => text(/<h2 class="text-\[20px\][^"]*">([\s\S]*?)<\/h2>/.exec(html)![1]!)
+    const alone = await serve([broken('local/ledger', 'ledger', 'gone')])
+    expect(heading(renderWith(alone, createElement(InboxPage), '/'))).toBe('This repository could not be read.')
+    expect(text(/data-portfolio-unread[^>]*>([^<]*)</.exec(renderWith(alone, createElement(PortfolioPage), '/portfolio'))![1]!)).toBe(
+      'This repository could not be read.',
+    )
+    const both = await serve([broken('local/ledger', 'ledger', 'gone'), broken('local/infra', 'infra', 'gone')])
+    expect(heading(renderWith(both, createElement(InboxPage), '/'))).toBe('No repository here could be read.')
+  })
+
   it('leaves the badge its size, and has it say what it did not count', () => {
     expect(badge(renderApp(unreadable, '/'))).toEqual({
       shown: '30',

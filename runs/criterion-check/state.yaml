@@ -230,6 +230,18 @@ budget:
           tokens_in: null,
           tokens_out: null,
           cost_usd: null
+        },
+      {
+          at: 2026-09-27T04:57:36.109Z,
+          role: reviewer,
+          task: 02-cli-footnotes-and-fixture,
+          round: 2,
+          adapter: claude-code,
+          model: claude-fable-5-1,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:26814,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:

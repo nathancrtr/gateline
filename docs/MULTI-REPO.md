@@ -11,9 +11,8 @@ repositories), both under the scaling epic #27.
 
 **Status (2026-09-26): decided, reviewed.** The maintainer confirmed the
 twenty-three decisions in §11 on 2026-09-26. Nineteen were confirmed before an
-adversarial review of this document and four after it. One, the collapsing of
-inbox rows (P10), is provisional. §17 lists what remains open. Nothing in this
-document is built.
+adversarial review of this document and four after it. §17 lists what remains
+open. Nothing in this document is built.
 
 **Prerequisite reading:** [TOPOLOGY.md](TOPOLOGY.md) §3,
 [FRONTEND.md](FRONTEND.md) §4–§5, [ORCHESTRATOR.md](ORCHESTRATOR.md) §4 and §6,
@@ -677,7 +676,7 @@ older ones as new ones arrive, so a busy repository displaces a quiet one.
 | Rank decidable items above undecidable ones | No collapsing. | Changes "oldest first", which the inbox promises. |
 | Leave it to the scope control | No new behaviour. | The default view stays unusable until the operator acts. |
 
-Decided, for now: collapse, for the `malformed` kind only, when a repository
+Decided: collapse, for the `malformed` kind only, when a repository
 contributes more than three. Gate decisions and escalations are never
 collapsed. The collapsed row is a count that opens in place to the full list,
 and never drops an item: every count on the page counts the items it stands
@@ -685,10 +684,9 @@ for. Its sentence is the interface speaking, so under SEAM.md §2 it is
 composed in the web package from a count and a repository that core supplies
 (`inboxCollapses`, sent on `/api/inbox` as `collapsed`).
 
-The maintainer took this provisionally and does not hold "oldest first" as a
-literal promise. Splitting the inbox into items that can be decided and items
-that cannot, with the second group collapsible, may be the better shape. The
-second option in the table is therefore still live, and §17 carries it.
+Both shapes were compared on a flooded set on 2026-09-27, and the collapse was
+kept because a bounced packet needs a person's work and stays visible at its
+age.
 
 ### 9.4 Metrics
 
@@ -736,6 +734,16 @@ The server sends the two facts separately: each repository's mode on
 table. The outage banner stays at the top of the page. The plain facts sit
 beside the repository's name in the rail: under each entry of the scope
 control when the set has several, and at the rail's foot when it has one.
+
+A fact every repository shares is said once. When all the repositories that
+could be read have the same mode and the same outcome in the table above, the
+rail's foot states it for the set and no entry repeats it. When they differ,
+each entry states its own and the foot says nothing about mode or engine.
+Last-seen times do not count toward a difference, but an engine outside the
+deployment is shown with its own last-seen time, so any such repository makes
+the set differ. A repository that could not be read is left out of the
+comparison and keeps its own mark under its entry. Below 768px the facts sit
+at the foot of the page under the same rule.
 
 ### 9.6 The CLI
 
@@ -802,7 +810,7 @@ Confirmed by the maintainer on 2026-09-26, before review:
 | P7 | One bot identity per install, unchanged. | §8.4 |
 | P8 | Credentials are process-wide by default with a per-repository override. Webhooks route by payload. | §8.4 |
 | P9 | The scope lives in the URL only. | §9.1 |
-| P10 | One repository's unreadable runs collapse into one row. Provisional. | §9.3 |
+| P10 | One repository's unreadable runs collapse into one row. | §9.3 |
 | P11 | Metrics follow a scope without requiring one, with one row per repository when unscoped. | §9.4 |
 | P12 | "Repository" is the word in every interface. "Source" stays in code. | §4 |
 
@@ -887,13 +895,12 @@ passing. Where a step depends on another, it says so.
 5. **Scope and grouping.** The scope control, the `repo` parameter, the
    two-number badge, the two-fixture demo. Depends on step 1's fixtures.
    Done by #498, with the CLI's grouping and `--repository` scope on
-   `status` and `inbox`. The Metrics gate table does not follow the scope
-   until step 6 splits it by repository; under a scope it says so.
+   `status` and `inbox`. The Metrics gate table follows the scope since
+   step 6 split it by repository (#540).
 6. **Flooding, metrics and liveness by mode.** The collapse, per-repository
-   metrics, and the table in §9.5. Split in two by #499. The collapse, the
-   notice for a repository that cannot be read, liveness by mode and the
-   repository's name and mode on the wire are done by the inbox, rail and
-   liveness part. Per-repository metrics are the other part, and pending.
+   metrics, and the table in §9.5. Done by #540 (per-repository metrics) and
+   #541 (the collapse, the notice for a repository that cannot be read,
+   liveness by mode, and each repository's name and mode on the wire).
 7. **Host inputs at the default-branch tip.** Adapter manifests and role
    capabilities are read through git (R4). Independent of steps 1 to 6. Done
    by #500 (PR #505).
@@ -947,23 +954,19 @@ Each is changed in the same pull request as the step that makes it untrue.
 1. **Major versions.** P6 dispatches across any version difference. Once
    releases are tagged, a difference across a major version may need to refuse
    dispatch, and that depends on what a major version will mean.
-2. **The inbox's order.** P10 collapses unreadable runs and leaves the order
-   oldest first. The alternative is two groups, items that can be decided
-   above items that cannot, with the second group collapsible. The choice
-   should be made against the two-fixture demo (§9.7), where both can be seen.
-3. **A host whose runs are another shape.** The second repository in the trial
+2. **A host whose runs are another shape.** The second repository in the trial
    holds runs that do not match the state contract. Whether Gatehouse should
    read them is a question for DESIGN.md §4.2 and is outside this document.
    The collapse in §9.3 only makes the symptom bearable.
-4. **The promotion criterion.** DESIGN.md §7 ties autonomy to measured gate
+3. **The promotion criterion.** DESIGN.md §7 ties autonomy to measured gate
    burden. With several repositories, it is undecided whether promotion is
    judged per repository or across the set.
-5. **`arm` in a `decide` repository.** Arming ensures a draft PR, and no
+4. **`arm` in a `decide` repository.** Arming ensures a draft PR, and no
    engine in this deployment will dispatch the run. It may still be wanted by
    a human driving the pipeline by hand.
-6. **The hosted recipe.** It runs two processes, and DEPLOY.md's security
+5. **The hosted recipe.** It runs two processes, and DEPLOY.md's security
    model is written for one repository and one scoped token. Serving several
    needs its own design.
-7. **Cross-run citations.** Issue #171 records that a reference such as `R3`
+6. **Cross-run citations.** Issue #171 records that a reference such as `R3`
    resolves in the current run's namespace. Several repositories widen the
    ways that can go wrong, and the fix belongs to that issue.

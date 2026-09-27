@@ -1,0 +1,2 @@
+# build.py writes the page; the template and data/ are its source.
+index.html

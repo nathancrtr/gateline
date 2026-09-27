@@ -314,7 +314,7 @@ tasks:
         review_rounds: 2
       },
     { id: 05-record-reader-check, status: review-approved, review_rounds: 1 },
-    { id: 06-e2e-criterion-check, status: in-review, review_rounds: 0 }
+    { id: 06-e2e-criterion-check, status: in-review, review_rounds: 1 }
   ]
 escalations:
   [

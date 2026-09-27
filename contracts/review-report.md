@@ -36,8 +36,9 @@
      prove it. (c) A finding about test strength opens with the present
      state in plain words (what the code does today, what a missing test
      would let through) before the demonstration that shows it. (d) A
-     verify-round disposition line stays the one line its grammar already
-     requires (below).
+     verify-round disposition line (grammar below) is 60 words or fewer; one
+     that needs more is a sign the fix introduced something that belongs in
+     its own finding, not a longer disposition line.
      (e) Coverage opens with one plain-words sentence stating overall
      coverage — no code spans, paths, or parenthetical cites — 40 words or
      fewer. (f) Then the Coverage table (shape below): one row per
@@ -56,12 +57,13 @@
      diff's changed hunks since the round you're checking, and the disposition
      of each prior finding. Disposition each prior finding in one compact line
      instead of restating it — grammar `- **F<n> — resolved|stands** —
-     <one-line reason>`; "stands" is the only word for a finding that is not
-     resolved; tooling reads exactly these two disposition words and no
-     others. A defect the delta introduces — in the changed hunks, or in a fix
-     itself — is a full new finding (`### F<n> — <severity> — <title>`, the
-     same fields as any other), never a third disposition word: a fix earns
-     the same scrutiny as new code, never less. Coverage and Boundary check
+     <one-line reason, 60 words or fewer>`; "stands" is the only word for a
+     finding that is not resolved; tooling reads exactly these two
+     disposition words and no others. A defect the delta introduces — in the
+     changed hunks, or in a fix itself — is a full new finding (`### F<n> —
+     <severity> — <title>`, the same fields as any other), never a third
+     disposition word or an overlong disposition line: a fix earns the same
+     scrutiny as new code, never less. Coverage and Boundary check
      follow the same economy: restate only what changed since the round
      you're checking — new rows for newly-checked areas, a new line for new
      housekeeping — and let earlier rounds' rows and lines stand unrepeated.
@@ -109,9 +111,9 @@ The options as I see them:
 **Diff reviewed:** <delta since the round-1 diff>
 
 ## Verify round
-- **F1 — resolved** — <one line: what changed, why the deliberately-broken
-  version of the code now fails>
-- **F2 — stands** — <one line: why the fix doesn't close it>
+- **F1 — resolved** — <60 words or fewer: what changed, why the
+  deliberately-broken version of the code now fails>
+- **F2 — stands** — <60 words or fewer: why the fix doesn't close it>
 
 ### F3 — major — <a defect the delta itself introduced>
 - **Where:** `path/to/file.py:200`

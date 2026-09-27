@@ -75,13 +75,16 @@ matters.
   whom — before the inputs, counts, or trace that prove it: the reader learns
   what breaks before they parse how you found it.
 - A finding about test strength opens with the present state in plain words —
-  what the code does today, what a missing test would let through — for example
-  "The code is correct today. No test would notice if the phase filter were
-  removed." — before the demonstration (the deliberately-broken version you
-  tried, and what it did). Don't make the reader simulate the edit themselves.
+  what the code does today, what a missing test would let through — before the
+  demonstration (the deliberately-broken version you tried, and what it did).
+  For example: "The code is correct today. No test would notice if the phase
+  filter were removed." Don't make the reader simulate the edit themselves.
 - A testing term or a label you coin this run (mutant, kill, survive, pin) is
   explained in plain words at first use — name the actor and what changes, not
   just the term.
+- A verify-round disposition line (`- **F<n> — resolved|stands** — <reason>`)
+  is 60 words or fewer. One that needs more is a sign the fix introduced
+  something that belongs in its own finding, not a longer disposition line.
 - The Coverage section states what you checked and found *clean* — the G2 human
   relies on it as much as on findings. Its shape is fixed by the contract: one
   plain-words sentence on overall coverage (40 words or fewer), then the

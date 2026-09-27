@@ -24,8 +24,8 @@ the web app that `ui`/`up` serve.)
 ## Commands
 
 ```
-gateline status                          portfolio: phases, gates, needs-a-human
-gateline inbox                           everything waiting on a human, oldest first
+gateline status [--repository …]         portfolio: phases, gates, needs-a-human
+gateline inbox [--repository …]          everything waiting on a human, oldest first
 gateline new --slug … --title …          stage a run: --brief-file … [--profile patch|standard|full]
                                          [--task-file …] (patch: the work item; arm refuses a stub)
 gateline arm <slug>                      start a staged run (also ensures its draft PR)
@@ -40,7 +40,8 @@ gateline repo add <path> --mode <mode>   list a repository: view | decide | disp
                                          [--name …] [--gateline-prefix …]
 gateline repo remove <id or name>        drop a repository from the list
 gateline repo list                       id, origin, display name, mode, framework ref
-gateline ui [--demo] [--port N]          serve the web app (no engine)
+gateline ui [--demo[=single]] [--port N] serve the web app (no engine); the demo
+                                         is two generated repositories, or one
 gateline up [--spend-limit-usd N]        web app + the v1 orchestrator over one clone
                                          [--spend-window H] (the limit is per rolling window, default 24h)
 ```
@@ -52,6 +53,14 @@ exists in more than one. It takes the repository's full id
 (`github.com/acme/billing`, `local/sandbox`) or its display name (`billing`),
 in any case, and the display name is what `status` and `inbox` print before
 each slug. `--source` is its older spelling and still works.
+
+With several repositories, `status` and `inbox` group by repository: a
+heading line per repository (`# billing  github.com/acme/billing  3 waiting`),
+listed by display name, then its rows in the usual order. The heading is a
+shell comment, so a pasted block skips it. `--repository <id or name>` shows
+one repository and counts what waits in the others; a value that names no
+repository in the set exits 1 and lists the set. With one repository the
+output is as it always was.
 
 Every next step `inbox` prints can be pasted and run: with several
 repositories it carries `--repository <display name>`, as in

@@ -654,7 +654,9 @@ Decided: URL only.
 - **Grouping:** Portfolio and Inbox gain a "group by repository" toggle. Group
   headings carry the display name, the full id and the counts. An open Argo CD
   issue describes what happens without this, where a filtered list no longer
-  shows the dimension it was filtered by.
+  shows the dimension it was filtered by. Under a group heading the rows leave
+  the name off, as they do under a one-repository scope, because the heading
+  states it; a screen reader still hears it with each row.
 - **Tooltips and copies** carry the full id.
 - **The page title** names the scope, so browser tabs can be told apart.
 
@@ -740,10 +742,11 @@ names no repository.
 
 ### 9.7 The demo
 
-`ui --demo` generates one fixture repository with a random id. It becomes two
-fixtures in directories with fixed names, so their ids are `local/demo` and
-`local/demo-small`, and every state in §9.1 to §9.5 can be trialed and
-captured. `--demo=single` keeps the one-repository form.
+`ui --demo` generates two fixtures in directories with fixed names, so their
+ids are `local/demo` and `local/demo-small`, and every state in §9.1 to §9.5
+can be trialed and captured. `demo` holds a run in every state; `demo-small`
+holds four runs in four states, so the two are easy to tell apart and their
+counts differ. `--demo=single` keeps the one-repository form.
 
 ## 10. Freshness and faults
 
@@ -874,6 +877,9 @@ passing. Where a step depends on another, it says so.
    CLI next steps. This fixes the one-repository run page too.
 5. **Scope and grouping.** The scope control, the `repo` parameter, the
    two-number badge, the two-fixture demo. Depends on step 1's fixtures.
+   Done by #498, with the CLI's grouping and `--repository` scope on
+   `status` and `inbox`. The Metrics gate table does not follow the scope
+   until step 6 splits it by repository; under a scope it says so.
 6. **Flooding, metrics and liveness by mode.** The collapse, per-repository
    metrics, and the table in §9.5.
 7. **Host inputs at the default-branch tip.** Adapter manifests and role

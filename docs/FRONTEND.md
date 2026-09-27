@@ -566,7 +566,11 @@ What a custom frontend confers that Claude Code + GitHub cannot:
 - **A portfolio view (I6).** N runs across M repos, each with phase, gate waits,
   escalations, budget state, task rollup — all derivable by parsing `runs/*/state.yaml`
   across repos. Neither a terminal session nor a PR list shows "what needs a human,
-  everywhere, ranked by age."
+  everywhere, ranked by age." Across several repositories the Inbox, Portfolio and
+  Metrics stay joined by default; a scope control in the navigation rail narrows all
+  three to one repository through the URL's `repo` parameter, the Inbox badge keeps
+  counting the whole set, and Inbox and Portfolio can be grouped by repository. The
+  design is [MULTI-REPO.md](MULTI-REPO.md) §9 (#498).
 - **A unified decision inbox (I2–I4)** with routing ("G2s for the pilot go to whoever owns
   that rotation"), SLA aging, and per-gate affordances — the Agent Inbox pattern over
   our file-based interrupts.

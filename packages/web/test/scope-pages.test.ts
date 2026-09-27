@@ -275,7 +275,7 @@ describe('grouping', () => {
     [...html.matchAll(/data-group-heading="([^"]*)"[^>]*>([\s\S]*?)<\/span><\/span>/g)].map((m) => ({
       id: m[1],
       name: text(/data-group-name[^>]*>([^<]*)</.exec(m[2]!)![1]!),
-      address: text(/data-address[^>]*>([^<]*)</.exec(m[2]!)![1]!),
+      address: text(/data-address[^>]*>([^<]*)</.exec(m[2]!)?.[1] ?? '(none)'),
       counts: text(/data-group-counts[^>]*>([\s\S]*)$/.exec(m[2]!)![1]!),
     }))
 

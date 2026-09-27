@@ -9,10 +9,10 @@ document it amends). The companion issues are #33 (the view across many
 repositories as a rebuildable projection) and #34 (budget caps shared across
 repositories), both under the scaling epic #27.
 
-**Status (2026-09-26): decided, reviewed.** The maintainer confirmed the
-twenty-three decisions in §11 on 2026-09-26. Nineteen were confirmed before an
-adversarial review of this document and four after it. §17 lists what remains
-open. Nothing in this document is built.
+**Status (2026-09-27): decided, and built through step 8.** The maintainer
+confirmed twenty-three decisions in §11 on 2026-09-26, and five more while the
+work was built. Steps 0 to 8 of §14 have merged. Step 9, several engines under
+`up`, is in progress under #502. §17 lists what remains open.
 
 **Prerequisite reading:** [TOPOLOGY.md](TOPOLOGY.md) §3,
 [FRONTEND.md](FRONTEND.md) §4–§5, [ORCHESTRATOR.md](ORCHESTRATOR.md) §4 and §6,
@@ -156,7 +156,7 @@ to fleet scale (decision D1).
 | Stage | What it is | State |
 |---|---|---|
 | 0 | Several repositories can be read. Nothing is designed around them. | Today |
-| 1 | Operator scale. §6 to §10 of this document. | Decided, not built |
+| 1 | Operator scale. §6 to §10 of this document. | Built, except several engines under `up` (§14 step 9) |
 | 2 | Fleet scale. Sketched in §13 to the level of interfaces. | Parked on #33's trigger |
 
 Stage 1 can be held indefinitely because it adds no infrastructure. There is no
@@ -175,9 +175,11 @@ stage 1 work.
    already requires this.
 3. **The view model reads a repository only through `RunSource`.** The source
    reports its own id. A later `GitHubSource` must be able to stand in without
-   the pages changing. The server breaks this rule today in three places, where
-   it casts a source to reach its directory for liveness, the webhook and the
-   runner. Stage 1 moves each behind a method on the source.
+   the pages changing. The server reaches a repository's directory through
+   methods on the source, each optional so that a source with no local clone
+   can leave it out, and a test fails if a cast to reach the directory
+   returns (#496). The CLI still casts in two places, for `arm` and `sync`,
+   which need a working directory to hand to `gh`.
 4. **Admission to dispatch passes through one interface.** The governor is that
    interface. At stage 1 it is a function call inside one process. At stage 2
    it is where #34's coordinator attaches.
@@ -231,8 +233,9 @@ the name is the config entry's `name`, or else the directory's basename.
 A run's full name is `<repository id>/<slug>`. Interfaces shorten it in two
 cases only, following the practice GitLab and Argo CD document for their own
 references: when the set has one repository, and when the current scope is one
-repository. Anything written to disk, logged or copied to the clipboard uses
-the full name.
+repository. Anything written to disk or logged uses the full name. A control
+whose purpose is to copy an address gives the full name. A selection copied
+from a page gives what is on the screen, and the full name is on hover.
 
 ### 6.3 When an id changes
 
@@ -389,7 +392,8 @@ two things follow.
 
 - Adapter manifests and role capabilities are read through git at the
   default-branch tip, where the registry and `orchestrator.yaml` are read, so
-  every host input the engine itself acts on has been merged (#500).
+  no host input the engine itself acts on comes from a checked-out branch or
+  a run branch (#500).
 - "Host configuration is read at the default-branch tip" is an invariant in
   AGENTS.md. Atlantis documents the alternative, reading configuration from
   the change's own branch, as a security risk.
@@ -646,17 +650,22 @@ Decided: URL only.
 
 ### 9.2 Where the repository's name goes
 
-- **Inbox and Portfolio rows:** before the slug, in the row's existing
-  secondary text style, as `billing / add-export`.
+- **Inbox rows:** before the slug, in the row's existing secondary text
+  style, as `billing / add-export`. An inbox row is a sentence, so the name is
+  part of it.
+- **Portfolio and the Metrics budget table:** a `repository` column to the
+  left of `run`. These are registers, and a name printed inside the run cell
+  left the slugs ragged, so they could not be scanned down the column. Below
+  1280px the column is not drawn and the name folds under the slug.
 - **Run page:** in the header, above the run's name, linking to the Portfolio
-  scoped to that repository. Today the header never states it.
+  scoped to that repository.
 - **Grouping:** Portfolio and Inbox gain a "group by repository" toggle. Group
   headings carry the display name, the full id and the counts. An open Argo CD
   issue describes what happens without this, where a filtered list no longer
   shows the dimension it was filtered by. Under a group heading the rows leave
   the name off, as they do under a one-repository scope, because the heading
   states it; a screen reader still hears it with each row.
-- **Tooltips and copies** carry the full id.
+- **Tooltips** carry the full id.
 - **The page title** names the scope, so browser tabs can be told apart.
 
 Text alone distinguishes repositories, so display names must be unique (§6.2),
@@ -823,6 +832,16 @@ Confirmed by the maintainer on 2026-09-26, after review:
 | R3 | A config entry must state its mode. | §7.3 |
 | R4 | The document states that dispatch trusts the host's merged registry and manifests, and manifest and capability reads move to the default-branch tip. | §7.4 |
 
+Confirmed by the maintainer on 2026-09-27, while the work was built:
+
+| # | Decision | Section |
+|---|---|---|
+| B1 | In the Portfolio and the Metrics budget table the repository has a column of its own. The Inbox keeps it before the slug. This refines D7. | §9.2 |
+| B2 | A selection copied from a page gives what is on the screen. | §6.2 |
+| B3 | The collapse is kept. It was compared with a two-group inbox on a flooded set. P10 is no longer provisional. | §9.3 |
+| B4 | A mode and engine state shared by every repository is stated once. | §9.5 |
+| B5 | A repository that fails the framework check is left out of the set with a warning. An error in the config file itself stops startup. | §7.2 |
+
 ## 12. Prior art
 
 Surveyed on 2026-09-26 from each product's current documentation. Claims are
@@ -875,13 +894,12 @@ passing. Where a step depends on another, it says so.
 
 0. **Resolve every path to the repository's top.** Fixes the sixth finding in
    §2 for config entries, for `up` and for the standalone binary, with a test
-   for the config-file path. A defect today, and independent of everything
-   below.
+   for the config-file path. Independent of everything below. Done by #493.
 1. **Identity.** Derive the id with one parser, add the `local/` fallback,
    refuse duplicates, and have the source report its id. Move the web and API
    routes, the typed contract, the client and the end-to-end suite together.
    Add redirects. Generate the demo and fixtures in directories with fixed
-   names. Done after PR #462 merges, since it re-keys that work.
+   names. Done by #494, after PR #462 merged, since it re-keys that work.
 2. **Registration and modes.** `gateline repo add|remove|list`, the framework
    check, the required `mode`, the push default, enforcement in the server and
    the CLI, the offer at the end of `init`. Fixtures gain the root layout or a
@@ -891,7 +909,8 @@ passing. Where a step depends on another, it says so.
    repository, concurrent reads, webhook routing, and the three casts moved
    behind methods on the source. Done by #496.
 4. **Naming in the interface.** The run header, row placement, the page title,
-   CLI next steps. This fixes the one-repository run page too.
+   CLI next steps. This fixes the one-repository run page too. Done by #497:
+   the web in #515, the CLI with step 2.
 5. **Scope and grouping.** The scope control, the `repo` parameter, the
    two-number badge, the two-fixture demo. Depends on step 1's fixtures.
    Done by #498, with the CLI's grouping and `--repository` scope on
@@ -930,9 +949,12 @@ The remote runner and the hosted recipe are outside this order (§8.5).
 - Registry and adapter manifests remain the host's, as INTEGRATION.md has
   them.
 - Git is the only authoritative store.
-- A deployment with one repository and no config file behaves as it does
-  today. It differs in one visible way: its URLs take the new shape, and old
-  links redirect.
+- A deployment with one repository and no config file behaves as it did
+  before this work, with four visible differences. Its URLs take the new
+  shape, and old links redirect. The run page names the repository in its
+  header. On the Metrics page a gate with fewer than five decisions shows its
+  counts and no rate. Runs are dispatched oldest-waiting first, where they
+  went in alphabetical order of slug.
 
 ## 16. Documents this design amends
 

@@ -150,7 +150,7 @@ is untouched and ctrl-C removes the trial. Rules of the road:
 
 - **`ui`, never `up`, from a trial tree.** `up` starts the dispatch engine;
   trying UI changes never requires one.
-- **Decision clicks belong to `ui --demo`** (a generated throwaway repository).
+- **Decision clicks belong to `ui --demo`** (generated throwaway repositories).
   `POST /api/decisions` writes real state commits to whatever repo is observed.
 - **Web-only changes** can use the hot-reload loop instead: `npm run dev -w
   @gateline/web` (vite on 4311, proxying `/api` to 4310). For changes that touch

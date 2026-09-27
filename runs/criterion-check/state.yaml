@@ -12,7 +12,7 @@ intake:
   staged_by: "Nathan Carter"
 budget:
   cost_limit_usd: 100
-  cost_spent_usd: 42.57
+  cost_spent_usd: 44.93
   ledger:
     [
       {
@@ -239,9 +239,9 @@ budget:
           adapter: claude-code,
           model: claude-fable-5-1,
           engine: Carter-Nathan-MacBook Pro-L0295K7GD7:26814,
-          tokens_in: null,
-          tokens_out: null,
-          cost_usd: null
+          tokens_in: 8,
+          tokens_out: 2343,
+          cost_usd: 2.36434475
         },
       {
           at: 2026-09-27T05:07:42.571Z,

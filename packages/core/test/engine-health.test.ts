@@ -1,13 +1,14 @@
-// Engine liveness plumbing (#100): machine-local, under the git common dir,
-// presence = expectation. See engine-health.ts for why it is deliberately
-// not committed state.
+// Engine liveness plumbing (#100): machine-local, under the git common dir.
+// Whether an engine is expected comes from the repository's mode (#499); see
+// engine-health.ts for that, and for why it is deliberately not committed
+// state.
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { type EngineHealth, engineHealthPath, engineHealthStale, readEngineHealth, writeEngineHealth } from '../src/sources/engine-health.ts'
+import { type EngineHealth, engineHealthPath, engineHealthStale, heartbeatOf, readEngineHealth, writeEngineHealth } from '../src/sources/engine-health.ts'
 
 const cleanups: string[] = []
 afterEach(() => {
@@ -81,5 +82,54 @@ describe('engine health (#100)', () => {
     expect(engineHealthStale(fresh, now)).toBe(false)
     expect(engineHealthStale(gone, now)).toBe(true)
     expect(engineHealthStale(health({ at: 'not-a-date' }), now)).toBe(true)
+  })
+})
+
+describe('engine health, read by a server older than its engine (#499)', () => {
+  it('reads a deferral with the governor limit and repository written since #513', async () => {
+    const dir = gitRepo()
+    const deferral = {
+      slug: 'csv-export',
+      rule: 'MC',
+      reason: '2/2 dispatches running; cap 2',
+      since: '2026-09-27T10:00:00Z',
+      limit: 'turn',
+      repository: 'github.com/acme/billing',
+    }
+    await writeEngineHealth(dir, health({ deferrals: [deferral] }))
+    expect((await readEngineHealth(dir))?.deferrals).toEqual([deferral])
+  })
+
+  it('reads a heartbeat carrying fields it does not know, and keeps them off the deferrals', async () => {
+    const dir = gitRepo()
+    const path = await engineHealthPath(dir)
+    await mkdir(dirname(path), { recursive: true })
+    const h = health()
+    await writeFile(
+      path,
+      JSON.stringify({
+        ...h,
+        failed: { at: '2026-09-27T10:00:00Z', reason: 'a later engine field' },
+        unseeded: ['github.com/acme/billing'],
+        deferrals: [
+          { slug: 'a', rule: 'HB', reason: 'spend window', since: '2026-09-27T09:00:00Z', limit: 'a-limit-from-later', extra: 1 },
+          { slug: 'b', rule: 'MC' },
+        ],
+      }),
+      'utf8',
+    )
+    const read = await readEngineHealth(dir)
+    expect(read?.at).toBe(h.at)
+    expect(read?.heartbeatMs).toBe(h.heartbeatMs)
+    // The unknown limit is kept as written, the unknown field on it is not, and
+    // the deferral missing its reason and since is left out, not shown in part.
+    expect(read?.deferrals).toEqual([{ slug: 'a', rule: 'HB', reason: 'spend window', since: '2026-09-27T09:00:00Z', limit: 'a-limit-from-later' }])
+  })
+
+  it('says whether a heartbeat is fresh, stale or absent', () => {
+    const now = new Date('2026-07-16T12:00:00Z')
+    expect(heartbeatOf(null, now)).toBe('absent')
+    expect(heartbeatOf(health({ at: new Date(now.getTime() - 60_000).toISOString() }), now)).toBe('fresh')
+    expect(heartbeatOf(health({ at: new Date(now.getTime() - 3_600_000).toISOString() }), now)).toBe('stale')
   })
 })

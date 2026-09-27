@@ -333,12 +333,14 @@ export function InboxRow({
  *
  * The row says what it is in the cockpit's voice, composed here from core's
  * facts (docs/SEAM.md §2): how many runs, in which repository, and — so the
- * arithmetic of the page stays visible — that each is counted as an entry in
- * the kind filters and the rail. It takes the place, the kind mark and the age
+ * arithmetic of the page stays visible — how many of the page's entries it
+ * stands for: every count on the page, the kind filters, the footer and the
+ * rail, counts each of them. Its sentence wraps rather than truncates, so the
+ * count and the repository survive a phone's width. It takes the place, the kind mark and the age
  * of the oldest run it stands for.
  *
  * A screen reader hears the button as "24 runs in website have unreadable
- * state. Counted as 24 entries in the filters and the rail. Show them,
+ * state. Stands for 24 of the 41 entries. Show them,
  * collapsed", and the revealed rows as a list named for them.
  */
 export function CollapsedRow({
@@ -349,6 +351,7 @@ export function CollapsedRow({
   showRepository,
   onToggle,
   renderRow,
+  of,
 }: {
   entry: Extract<InboxEntry, { kind: 'collapsed' }>
   now: number
@@ -358,6 +361,8 @@ export function CollapsedRow({
   showRepository: boolean
   onToggle: () => void
   renderRow: (item: InboxItem) => ReactNode
+  /** The entries the page lists, which the row states it is part of. */
+  of: number
 }) {
   const oldest = entry.items[0]!
   const count = entry.items.length
@@ -382,7 +387,7 @@ export function CollapsedRow({
           <KindChip item={oldest} />
         </span>
         <span className="flex min-w-0 flex-col gap-[3px] py-[11px] pr-[14px]" data-inbox-text>
-          <span className="truncate text-[15px] font-semibold text-ink" data-inbox-title data-collapsed-title>
+          <span className="text-[15px] font-semibold break-words text-ink" data-inbox-title data-collapsed-title>
             {count} runs{' '}
             {showRepository ? (
               <>
@@ -397,7 +402,7 @@ export function CollapsedRow({
             have unreadable state
           </span>
           <span className="text-[13.5px] text-muted" data-collapsed-line>
-            Counted as {count} entries in the filters and the rail.{' '}
+            Stands for {count} of the {of} entries.{' '}
             <span className="text-accent underline underline-offset-2" data-collapsed-toggle>
               {open ? 'Hide them' : 'Show them'}
             </span>
@@ -410,6 +415,25 @@ export function CollapsedRow({
       {open && (
         <ul id={listId} aria-label={`${count} runs in ${name} with unreadable state`} data-collapsed-rows={entry.source}>
           {entry.items.map(renderRow)}
+          {/* The disclosure ends where its rows do, and says so: the rows are
+              ordinary rows, and without this nothing marks where they stop
+              and the queue resumes. It closes the row too, for a reader who
+              has scrolled past its top. */}
+          <li className="border-b border-line">
+            <button
+              type="button"
+              onClick={onToggle}
+              className="grid w-full items-start py-2 text-left font-ui text-[12.5px] text-muted hover:bg-inset"
+              style={{ gridTemplateColumns: INBOX_COLUMNS }}
+              data-collapsed-end
+            >
+              <span />
+              <span>
+                End of the {count} runs in {name}.{' '}
+                <span className="text-accent underline underline-offset-2">Hide them</span>
+              </span>
+            </button>
+          </li>
         </ul>
       )}
     </li>
@@ -528,7 +552,8 @@ export function InboxPage() {
       announceRepository={scope.grouped}
     />
   )
-  const entry = (e: InboxEntry, i: number) =>
+  // `of` is the entries the row is counted among: the page's, or its group's.
+  const entry = (of: number) => (e: InboxEntry, i: number) =>
     e.kind === 'item' ? (
       row(e.item, i)
     ) : (
@@ -541,6 +566,7 @@ export function InboxPage() {
         showRepository={showRepository}
         onToggle={() => toggle(e.source)}
         renderRow={(item) => row(item, 0)}
+        of={of}
       />
     )
 
@@ -621,7 +647,7 @@ export function InboxPage() {
                   <h2 className="py-2.5">
                     <GroupHeadingContent group={g} counts={<Count n={g.rows.length} one="entry" many="entries" />} />
                   </h2>
-                  {g.rows.length > 0 && <ul className="border-t border-line">{groupEntries![gi]!.map(entry)}</ul>}
+                  {g.rows.length > 0 && <ul className="border-t border-line">{groupEntries![gi]!.map(entry(g.rows.length))}</ul>}
                 </section>
               ))}
             </div>
@@ -632,7 +658,7 @@ export function InboxPage() {
                 <span className="py-1.5">entry</span>
                 <span className="py-1.5 text-right">waiting</span>
               </li>
-              {entries.map(entry)}
+              {entries.map(entry(filteredItems!.length))}
             </ul>
           )}
           <div className="flex items-baseline justify-between pt-2 text-[12px] text-muted">

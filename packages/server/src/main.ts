@@ -5,14 +5,14 @@ import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { dirname, extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { loadSources } from '@gateline/core'
+import { LOCAL_ID_PREFIX, loadSources } from '@gateline/core'
 import { serve } from '@hono/node-server'
+import { createAnnouncer } from './announce.ts'
 import { createApp } from './app.ts'
 import { ViewCache } from './cache.ts'
 import { RefPrints } from './prints.ts'
-import { buildRunnerApi, type RunnerCallback } from './runner-api.ts'
-import { watchRepoRefs } from './watch.ts'
-import { buildWebhook } from './webhook.ts'
+import { buildRunnerApi, type RunnerCallback, runnerRepositoryOf } from './runner-api.ts'
+import { buildWebhook, unroutableSources } from './webhook.ts'
 
 // Re-exported for cross-package tests (run "runner-agent", task 05's
 // wiring.test.ts, orchestrator package): the only consumer of the runner-api
@@ -93,23 +93,19 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
 
   const cache = new ViewCache()
   const prints = new RefPrints(sources)
-  const clients = new Set<(event: string) => void>()
+  const clients = new Set<(event: string, data?: unknown) => void>()
   // A change is announced when a ref that views read has moved, and only
-  // then (#461). The watcher and the timer both just ask the question; the
-  // timer is what covers a write the watcher missed.
-  const announce = async () => {
-    try {
-      if (await prints.changed()) for (const send of clients) send('change')
-    } catch (e) {
-      console.warn(`warning: reading refs failed: ${(e as Error).message}`)
-    }
-  }
+  // then (#461), naming the repository and the run that moved (#496). The
+  // watchers and the timer all just ask the question; the timer is what
+  // covers a write a watcher missed, and a source with no watcher.
+  const announce = createAnnouncer(prints, (event) => {
+    for (const send of clients) send('change', event)
+  })
   await announce()
   const unwatchers: (() => void)[] = []
   for (const source of sources) {
-    const dir = (source as { dir?: string }).dir
-    if (!dir) continue
-    unwatchers.push(await watchRepoRefs(dir, () => void announce(), 300, () => prints.markDirty()))
+    if (!source.watchRefs) continue
+    unwatchers.push(await source.watchRefs(() => void announce(), { debounceMs: 300, onTouch: () => prints.markDirty() }))
   }
   const recheck = setInterval(() => void announce(), RECHECK_MS)
   recheck.unref()
@@ -119,12 +115,12 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
   // becomes an SSE change signal through the ref watcher above.
   const syncTimers: NodeJS.Timeout[] = []
   for (const source of sources) {
-    const s = source as { id: string; fetchIntervalSeconds?: number; syncFromRemote?: () => Promise<void>; localOnly?: boolean }
-    if (!s.fetchIntervalSeconds || !s.syncFromRemote) continue
+    const syncFromRemote = source.syncFromRemote?.bind(source)
+    if (!source.fetchIntervalSeconds || !syncFromRemote) continue
     // LocalGitSource.syncFromRemote self-guards under local-only (AC2.4) — this
     // skip is honesty in the log, not the safety mechanism.
-    if (s.localOnly) {
-      console.log(`local-only: not syncing ${s.id} from origin`)
+    if (source.localOnly) {
+      console.log(`local-only: not syncing ${source.id} from origin`)
       continue
     }
     let inFlight = false
@@ -132,16 +128,16 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
       if (inFlight) return
       inFlight = true
       try {
-        await s.syncFromRemote!()
+        await syncFromRemote()
       } catch (e) {
-        console.warn(`warning: sync of ${s.id} failed: ${(e as Error).message}`)
+        console.warn(`warning: sync of ${source.id} failed: ${(e as Error).message}`)
       } finally {
         inFlight = false
       }
     }
     void sync()
-    syncTimers.push(setInterval(sync, s.fetchIntervalSeconds * 1000))
-    console.log(`syncing ${s.id} from origin every ${s.fetchIntervalSeconds}s`)
+    syncTimers.push(setInterval(sync, source.fetchIntervalSeconds * 1000))
+    console.log(`syncing ${source.id} from origin every ${source.fetchIntervalSeconds}s`)
   }
 
   // Webhook intake (hosted mode): GITHUB_WEBHOOK_SECRET arms the route;
@@ -152,19 +148,30 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
     githubToken: process.env.GITHUB_TOKEN,
     log: (line) => console.log(line),
   })
-  if (webhook) console.log('github webhook armed at /api/webhooks/github')
+  if (webhook) {
+    console.log('github webhook armed at /api/webhooks/github')
+    // Said once, so an operator who wonders why a push did not show at once
+    // can find the reason (MULTI-REPO.md §8.4).
+    for (const s of await unroutableSources(sources)) {
+      const why = s.id.startsWith(LOCAL_ID_PREFIX)
+        ? 'its id is local: it has no origin'
+        : s.localOnly
+          ? 'it is served local-only'
+          : `its id is stated in the config and is not the one its origin gives${s.fetchIntervalSeconds ? `; it fetches every ${s.fetchIntervalSeconds}s instead` : ''}`
+      console.log(`webhook: ${s.id} is not reached by webhook events (${why})`)
+    }
+  }
 
   // Runner-agent intake (opt-in remote dispatch, R6/R9): RUNNER_TOKEN arms
   // the poll/claim/report routes; without a wired `runnerCallback` (task
   // 05's orchestrator assembly) the routes stay unmounted even if the token
   // is set — there would be nothing to serve. Base-OID augmentation
-  // (ADR-2) uses the first source with a local repo, matching the
-  // engine-health/webhook convention above.
-  const runnerRepoDir = sources.map((s) => (s as { dir?: string }).dir).find((d): d is string => !!d)
+  // (ADR-2) uses the first source that can resolve a branch — today, the
+  // first with a local clone (MULTI-REPO.md §8.5).
   const runnerApi = buildRunnerApi({
     token: process.env.RUNNER_TOKEN,
     callback: opts.runnerCallback,
-    repoDir: runnerRepoDir,
+    repository: runnerRepositoryOf(sources),
     log: (line) => console.log(line),
   })
   if (runnerApi) console.log('runner agent API armed at /api/runner/*')

@@ -4,6 +4,7 @@
 import { describeArtifact } from '../record/artifact.ts'
 import { type Burden, GATE_IDS, type GateId, gateUndecided, ROUND_CAP } from '../record/schema.ts'
 import { displayNameOf, type RunRef, type RunSource, type StateCommit } from '../sources/source.ts'
+import { readEachRepository, type UnreadableRepository } from './portfolio.ts'
 
 export interface GateDecisionRecord {
   /** The repository's id (docs/MULTI-REPO.md §6): what URLs, logs and copies carry. */
@@ -50,6 +51,12 @@ export interface Metrics {
   runs: RunMetricsSummary[]
   /** The review-round cap the `rounds` counts are read against (record `ROUND_CAP`). */
   roundCap: number
+  /**
+   * Repositories left out because reading them failed (docs/MULTI-REPO.md
+   * §10), in the order they are listed. Their decisions and runs are absent
+   * from every figure above, so a reader must know they are missing.
+   */
+  unreadable: UnreadableRepository[]
 }
 
 const GATE_TRIGGERS: Record<GateId, (artifacts: string[]) => string[]> = {
@@ -115,10 +122,11 @@ function findDecision(newestFirst: StateCommit[], gate: GateId): StateCommit | n
 }
 
 export async function computeMetrics(sources: RunSource[]): Promise<Metrics> {
-  const decisions: GateDecisionRecord[] = []
-  const runs: RunMetricsSummary[] = []
-
-  for (const source of sources) {
+  // One repository's history per boundary (§10): one that cannot be read is
+  // named in `unreadable`, and the figures are computed from the rest.
+  const { read, unreadable } = await readEachRepository(sources, async (source) => {
+    const decisions: GateDecisionRecord[] = []
+    const runs: RunMetricsSummary[] = []
     for (const ref of await source.listRuns()) {
       const history = await source.stateHistory(ref)
       decisions.push(...(await collectRunDecisions(source, ref, history)))
@@ -137,7 +145,10 @@ export async function computeMetrics(sources: RunSource[]): Promise<Metrics> {
         },
       })
     }
-  }
+    return { decisions, runs }
+  })
+  const decisions = read.flatMap(({ value }) => value.decisions)
+  const runs = read.flatMap(({ value }) => value.runs)
 
   const perGate: GateMetrics[] = GATE_IDS.map((gate) => {
     const ofGate = decisions.filter((d) => d.gate === gate)
@@ -163,5 +174,5 @@ export async function computeMetrics(sources: RunSource[]): Promise<Metrics> {
     }
   })
 
-  return { decisions, perGate, runs, roundCap: ROUND_CAP }
+  return { decisions, perGate, runs, roundCap: ROUND_CAP, unreadable }
 }

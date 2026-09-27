@@ -578,9 +578,12 @@ org-level audit. Several repositories do not change the argument.
 - **The webhook.** `GITHUB_WEBHOOK_SECRET` stays process-wide by default, with
   the same override. Each event is routed by the repository named in its
   payload, compared with the ids in the set without regard to case, so one
-  repository's push syncs only that repository. A repository whose id was
-  stated by hand or is `local/` receives no webhook routing and relies on its
-  fetch interval.
+  repository's push syncs only that repository. The payload's id comes from
+  its clone URL, by the same parser as the sources' ids. A repository whose
+  id is not the one its origin gives (a `local/` id, or one stated by hand
+  that differs), and one served local-only, receives no webhook routing and
+  relies on its fetch interval; the server says so once at startup. The per-repository secret
+  is not built yet.
 - **The model provider.** Roles inherit the process environment, so every
   repository's agents run under the same provider login and bill the same
   account. This design does not change that. The per-repository spend ceiling
@@ -749,16 +752,21 @@ ordinary engineering and carry no fork.
 
 - **Change events name what changed.** The event stream sends the repository
   id, and the run where it is known. Pages refetch only queries that read it.
+  One event lists everything that moved since the last, as
+  `{ changes: [{ source, slug }] }`. A slug of null means the repository as a
+  whole: its default branch moved, which every run's views read, or more
+  runs moved at once than are worth listing.
 - **A repository that cannot be read is reported and skipped.** The portfolio
-  is built per repository with a fault boundary between them. The failed one
-  appears in the scope control and at the top of the page with its error.
-- **Repositories are read concurrently,** with a bound.
+  and the metrics are built per repository with a fault boundary between
+  them. The failed one is returned beside the rows, with its error on one
+  line, and the page shows it in the scope control and at the top (§14
+  step 6).
+- **Repositories are read concurrently,** with a bound. Four are read at a
+  time, and each summarizes up to eight runs at a time, so at most 32
+  summaries are in flight.
 
-Two unmerged changes rewrite the same code, both under issue #461. PR #462
-replaces the generation counter with views that stay valid until the refs they
-were derived from move, keyed by source id. PR #463, stacked on it, builds the
-portfolio several runs at a time. This section's work is done after both have
-merged, and the identity change in §6 re-keys what #462 introduces.
+This was built by #496 on the views that stay valid until their refs move
+(PR #462) and the portfolio built several runs at a time (PR #463).
 
 ## 11. Decisions
 
@@ -860,7 +868,8 @@ passing. Where a step depends on another, it says so.
    lock. Done by #495, together with the CLI half of step 4 (`--repository`,
    and next steps that name the repository).
 3. **Faults and freshness.** The fault boundary, change events that name the
-   repository, concurrent reads. After PRs #462 and #463.
+   repository, concurrent reads, webhook routing, and the three casts moved
+   behind methods on the source. Done by #496.
 4. **Naming in the interface.** The run header, row placement, the page title,
    CLI next steps. This fixes the one-repository run page too.
 5. **Scope and grouping.** The scope control, the `repo` parameter, the

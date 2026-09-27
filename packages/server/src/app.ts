@@ -44,7 +44,6 @@ import {
   type RunRef,
   type RunScaffold,
   type RunSource,
-  readEngineHealth,
   readLedger,
   runStateView,
   ScaffoldError,
@@ -71,8 +70,11 @@ export interface AppDeps {
   cache?: ViewCache
   /** The refs views read (#461); absent → the app reads them itself. */
   prints?: RefPrints
-  /** Called once per SSE client; returns an unsubscribe. */
-  subscribe?: (send: (event: string) => void) => () => void
+  /**
+   * Called once per SSE client; returns an unsubscribe. `data` is the event's
+   * JSON payload — a `ChangeEvent` for `change` — and `{}` when absent.
+   */
+  subscribe?: (send: (event: string, data?: unknown) => void) => () => void
   /** GitHub webhook intake; absent → the route does not exist. */
   webhook?: WebhookConfig
   /** Runner-agent poll/claim/report surface (R6); absent → the routes do not exist. */
@@ -230,12 +232,14 @@ export function createApp(deps: AppDeps): Hono {
   // reported on this deployment (a viewer-only install — not an outage);
   // stale = one was configured here and has gone silent, which the UI
   // renders as an outage banner instead of "waiting on gate".
+  //
+  // A source that cannot see a local engine (no `engineHealth`, as a driver
+  // with no clone would be) is left out of the map, which reads as none.
   app.get('/api/engine-health', async (c) => {
     const out: EngineHealthResponse['engines'] = {}
     for (const s of deps.sources) {
-      const dir = (s as { dir?: string }).dir
-      if (!dir) continue
-      const health = await readEngineHealth(dir)
+      if (!s.engineHealth) continue
+      const health = await s.engineHealth()
       out[s.id] = health
         ? {
             at: health.at,
@@ -255,14 +259,16 @@ export function createApp(deps: AppDeps): Hono {
     return respond<'GET /api/engine-health'>(c, { engines: out, now: Math.floor(Date.now() / 1000) })
   })
 
+  // A repository that cannot be read is left out and named in `unreadable`
+  // (MULTI-REPO.md §10); the response is a 200 even when that is every one.
   app.get('/api/inbox', async (c) => {
-    const { inbox } = await portfolio()
-    return respond<'GET /api/inbox'>(c, { items: inbox, now: Math.floor(Date.now() / 1000) })
+    const { inbox, unreadable } = await portfolio()
+    return respond<'GET /api/inbox'>(c, { items: inbox, unreadable, now: Math.floor(Date.now() / 1000) })
   })
 
   app.get('/api/runs', async (c) => {
-    const { runs } = await portfolio()
-    return respond<'GET /api/runs'>(c, { runs, now: Math.floor(Date.now() / 1000) })
+    const { runs, unreadable } = await portfolio()
+    return respond<'GET /api/runs'>(c, { runs, unreadable, now: Math.floor(Date.now() / 1000) })
   })
 
   // The staging form's configuration (plan "Server routes"): per-source
@@ -630,7 +636,11 @@ export function createApp(deps: AppDeps): Hono {
   })
 
   app.get('/api/metrics', async (c) => {
-    const metrics = await cache.get('metrics', await prints.everything(), () => computeMetrics(deps.sources))
+    // A result that left a repository out expires on the timer: the failure
+    // may clear without any ref moving (a lock released, a path restored).
+    const metrics = await cache.get('metrics', await prints.everything(), () => computeMetrics(deps.sources), {
+      expires: (m) => m.unreadable.length > 0,
+    })
     return respond<'GET /api/metrics'>(c, metrics)
   })
 
@@ -728,7 +738,8 @@ export function createApp(deps: AppDeps): Hono {
     return respond<'GET /api/repos/:id/-/runs/:slug/decisions'>(c, { decisions: records })
   })
 
-  // SSE: ref movement → one "change" event; clients revalidate their queries.
+  // SSE: ref movement → one "change" event naming what moved (a
+  // `ChangeEvent`); clients revalidate the queries that read it.
   app.get('/api/events', (c) => {
     const subscribe = deps.subscribe
     if (!subscribe) return fail(c, 501, { error: 'events unavailable' })
@@ -736,9 +747,9 @@ export function createApp(deps: AppDeps): Hono {
       new ReadableStream({
         start(controller) {
           const encoder = new TextEncoder()
-          const send = (event: string) => {
+          const send = (event: string, data: unknown = {}) => {
             try {
-              controller.enqueue(encoder.encode(`event: ${event}\ndata: {}\n\n`))
+              controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
             } catch {
               /* stream closed */
             }

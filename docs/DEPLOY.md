@@ -179,6 +179,14 @@ Without webhooks the instance polls origin every `FETCH_INTERVAL` seconds.
 With them, a push appears in the UI immediately, and a PR review approving a
 run's G2 is recorded into `state.yaml` minutes-to-seconds after it happens.
 
+Each delivery syncs only the repository it names: the id derived from the
+payload's clone URL is matched, without regard to case, against the ids the
+instance serves ([MULTI-REPO.md](MULTI-REPO.md) §8.4). A delivery for a
+repository the instance does not serve answers `200` and syncs nothing. A
+repository whose id is not the one its origin gives (a `local/` id, or an
+`id:` stated in the config that differs) is never matched and relies on the
+poll; the server names each such repository once at startup.
+
 1. Set the secret: generate a long random string, then
    `fly secrets set GITHUB_WEBHOOK_SECRET=...` (and `GITHUB_TOKEN=...` if you
    want review sync — add **Pull requests: Read** to the fine-grained PAT).

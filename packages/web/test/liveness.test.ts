@@ -3,7 +3,7 @@
 // the words for a deferral's limit.
 import { describe, expect, it } from 'vitest'
 import type { EngineHealthEntry } from '../src/api.ts'
-import { DEFERRAL_LIMIT_WORDS, driftOf, livenessOf } from '../src/liveness.ts'
+import { DEFERRAL_LIMIT_WORDS, driftOf, livenessOf, sharedStanding } from '../src/liveness.ts'
 
 const entry = (over: Partial<EngineHealthEntry> = {}): EngineHealthEntry => ({ at: '2026-09-27T10:00:00Z', inFlight: 0, pushRejections: {}, stale: false, ...over })
 const FRESH = entry()
@@ -34,6 +34,22 @@ describe('livenessOf, the table in §9.5', () => {
     expect(livenessOf(null, STALE)).toBe('silent')
     expect(livenessOf(null, FRESH)).toBe('unknown')
     expect(livenessOf(null, ABSENT)).toBe('unknown')
+  })
+})
+
+describe('sharedStanding: a fact every repository shares is said once', () => {
+  it('returns the pair when every readable repository has one mode and one engine state', () => {
+    expect(sharedStanding([{ mode: 'decide', entry: null }, { mode: 'decide', entry: STALE }])).toEqual({ mode: 'decide', liveness: 'none' })
+    expect(sharedStanding([{ mode: 'dispatch', entry: FRESH }, { mode: 'dispatch', entry: entry({ at: '2026-09-27T09:00:00Z' }) }])).toEqual({ mode: 'dispatch', liveness: 'live' })
+  })
+  it('is null when modes or states differ, or any engine is outside', () => {
+    expect(sharedStanding([{ mode: 'decide', entry: null }, { mode: 'view', entry: null }])).toBeNull()
+    expect(sharedStanding([{ mode: 'dispatch', entry: FRESH }, { mode: 'dispatch', entry: null }])).toBeNull()
+    expect(sharedStanding([{ mode: 'decide', entry: FRESH }, { mode: 'decide', entry: FRESH }])).toBeNull()
+  })
+  it('leaves unreadable repositories out, and is null when none is left', () => {
+    expect(sharedStanding([{ mode: 'decide', entry: null }, { mode: 'view', unreadable: 'gone', entry: null }])).toEqual({ mode: 'decide', liveness: 'none' })
+    expect(sharedStanding([{ unreadable: 'gone', entry: null }])).toBeNull()
   })
 })
 

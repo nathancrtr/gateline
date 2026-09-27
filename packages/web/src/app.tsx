@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Outlet } from 'react-router-dom'
 import { type EngineHealthEntry, formatAge } from './api.ts'
-import { hasFacts, RepositoryFacts, useEngineHealth } from './components/liveness.tsx'
+import { hasFacts, RepositoryFacts, SetFacts, useEngineHealth, useSharedStanding } from './components/liveness.tsx'
 import { useServedRepositories } from './components/repository.tsx'
 import { InboxBadge, ScopeControl, ScopedNavLink, type ScopeState, useScope } from './components/scope.tsx'
 import { pauseVoice } from './drift.ts'
@@ -210,44 +210,61 @@ function EngineDeferralChip({ several }: { several: boolean }) {
 }
 
 /**
- * The one repository's standing facts, at the rail's foot, when the set has
- * one and there is no scope control to carry them (#499): its mode, and its
- * engine where that is a plain fact. The foot is where the rail's own
- * standing text already sits, below everything a reader acts on.
+ * Standing facts at the rail's foot (#499), where the rail's own standing
+ * text already sits, below everything a reader acts on:
+ * - with one repository, its mode and engine, since there is no scope
+ *   control to carry them;
+ * - with several that could be read and share one mode and one engine state,
+ *   that pair once, for the set (`SetFacts`), and no entry repeats it;
+ * - with several that differ, nothing: each entry says its own.
  */
 function RailFootFacts({ state }: { state: ScopeState }) {
   const health = useEngineHealth()
+  const shared = useSharedStanding(state.set)
   const repository = state.set[0]
-  if (state.several || state.set.length !== 1 || !repository) return null
-  return <RepositoryFacts repository={repository} entry={health.data?.engines[repository.id]} now={health.data?.now} className="mb-3" />
+  if (!repository) return null
+  if (state.set.length === 1 && !state.several)
+    return <RepositoryFacts repository={repository} entry={health.data?.engines[repository.id]} now={health.data?.now} className="mb-3" />
+  return shared ? <SetFacts shared={shared} className="mb-3" /> : null
 }
 
 /**
  * Below 768px the rail is a top bar with room for navigation only, so the
- * standing facts it carries at the side sink to the foot of the page: each
- * repository's name when the set has several, and its facts. Alarms stay at
- * the top of the page, where the banner is.
+ * standing facts it carries at the side sink to the foot of the page, under
+ * the same rule as the rail: one repository's facts; a shared pair said once
+ * for the set, with only the repositories that could not be read named
+ * beneath it; or, when they differ, each repository's name and its facts.
+ * Alarms stay at the top of the page, where the banner is.
  */
 function PageFootFacts({ state }: { state: ScopeState }) {
   const health = useEngineHealth()
+  const shared = useSharedStanding(state.set)
   const several = state.several && state.set.length > 1
-  const rows = state.set.map((r) => ({ r, facts: <RepositoryFacts repository={r} entry={health.data?.engines[r.id]} now={health.data?.now} /> }))
   if (!state.set.some((r) => hasFacts(r, health.data?.engines[r.id]))) return null
+  const perRepository = (rows: typeof state.set) => (
+    <ul className="flex flex-col gap-2">
+      {rows.map((r) => (
+        <li key={r.id}>
+          <p className="font-ui text-[12.5px] text-ink" title={r.id}>
+            {r.name}
+          </p>
+          <RepositoryFacts repository={r} entry={health.data?.engines[r.id]} now={health.data?.now} />
+        </li>
+      ))}
+    </ul>
+  )
+  const unread = state.set.filter((r) => r.unreadable !== undefined)
   return (
     <footer className="mt-10 border-t border-line pt-3 md:hidden" data-page-foot-facts>
-      {several ? (
-        <ul className="flex flex-col gap-2">
-          {rows.map(({ r, facts }) => (
-            <li key={r.id}>
-              <p className="font-ui text-[12.5px] text-ink" title={r.id}>
-                {r.name}
-              </p>
-              {facts}
-            </li>
-          ))}
-        </ul>
+      {!several ? (
+        <RepositoryFacts repository={state.set[0]!} entry={health.data?.engines[state.set[0]!.id]} now={health.data?.now} />
+      ) : shared ? (
+        <>
+          <SetFacts shared={shared} />
+          {unread.length > 0 && <div className="mt-2">{perRepository(unread)}</div>}
+        </>
       ) : (
-        rows[0]!.facts
+        perRepository(state.set)
       )}
     </footer>
   )

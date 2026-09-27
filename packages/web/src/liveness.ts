@@ -47,6 +47,38 @@ export function livenessOf(mode: RepositoryMode | null | undefined, entry: Engin
   return heartbeat === 'stale' ? 'silent' : 'unknown'
 }
 
+/** One repository as the say-it-once rule compares it: its mode, whether it was read, its heartbeat. */
+export interface Standing {
+  mode?: RepositoryMode | null
+  unreadable?: string
+  entry: EngineHealthEntry | null | undefined
+}
+
+/**
+ * The rail says a shared fact once (#499; the maintainer's rule). When every
+ * repository that could be read has the same mode and the same engine state,
+ * that pair is returned, and the rail states it once, for the set, at its
+ * foot, with nothing under any entry. When they differ, null, and each entry
+ * states its own. There is no middle: never "most are X" with exceptions.
+ *
+ * - The engine state is the table's outcome (`livenessOf`), not the
+ *   heartbeat's age: two live engines seen at different times share a state.
+ * - An `outside` engine's last-seen time belongs to its repository, so a set
+ *   with any `outside` repository differs.
+ * - A repository that could not be read is left out of the comparison; it
+ *   keeps its own mark under its entry either way. With none left, null.
+ */
+export function sharedStanding(set: readonly Standing[]): { mode: RepositoryMode | null; liveness: Liveness } | null {
+  const read = set.filter((r) => r.unreadable === undefined)
+  if (read.length === 0) return null
+  const first = { mode: read[0]!.mode ?? null, liveness: livenessOf(read[0]!.mode, read[0]!.entry) }
+  if (first.liveness === 'outside') return null
+  for (const r of read.slice(1)) {
+    if ((r.mode ?? null) !== first.mode || livenessOf(r.mode, r.entry) !== first.liveness) return null
+  }
+  return first
+}
+
 /**
  * The drift between the running code and the code checkout (#141), shown
  * once (§9.5). Every engine writes it into its own repository's heartbeat,

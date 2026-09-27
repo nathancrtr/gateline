@@ -311,9 +311,82 @@ describe('liveness by mode (§9.5)', () => {
   }
 
   it('dispatch, fresh: nothing but the mode', () => {
-    const html = renderApp(withModes('dispatch', 'dispatch'), '/', { [WEBSITE]: fresh(), [BILLING]: fresh() })
+    const html = renderApp(withModes('dispatch', 'decide'), '/', { [WEBSITE]: fresh(), [BILLING]: null })
     expect(banner(html)).toBeUndefined()
     expect(facts(html, WEBSITE)).toBe('Mode dispatch.')
+  })
+
+  describe('a fact every repository shares is said once', () => {
+    /** The rail foot's set-wide line, or null. */
+    const foot = (html: string) => {
+      const m = /data-set-facts[^>]*>([\s\S]*?)<\/p>/.exec(rail(html))
+      return m ? text(m[1]!) : null
+    }
+    /** The page foot (below 768px), as text. */
+    const pageFoot = (html: string) => text(/<footer[^>]*data-page-foot-facts[^>]*>([\s\S]*?)<\/footer>/.exec(html)?.[1] ?? '')
+
+    it('two repositories sharing mode and engine state: once at the foot, nothing under the entries', () => {
+      const html = renderApp(withModes('decide', 'decide'), '/', { [WEBSITE]: null, [BILLING]: stale })
+      expect(foot(html)).toBe('All repositories: mode decide. No engine in this deployment.')
+      expect(facts(html, WEBSITE)).toBe('')
+      expect(facts(html, BILLING)).toBe('')
+      expect(rail(html)).not.toContain('data-repository-facts')
+      expect(pageFoot(html)).toBe('All repositories: mode decide. No engine in this deployment.')
+    })
+
+    it('two live engines seen at different times share a state', () => {
+      const html = renderApp(withModes('dispatch', 'dispatch'), '/', { [WEBSITE]: fresh(), [BILLING]: fresh({ at: '2026-09-27T11:40:00Z' }) })
+      expect(foot(html)).toBe('All repositories: mode dispatch.')
+      expect(rail(html)).not.toContain('data-repository-facts')
+    })
+
+    it('two silent dispatch engines: said once, with the banner unchanged', () => {
+      const html = renderApp(withModes('dispatch', 'dispatch'), '/', { [WEBSITE]: null, [BILLING]: stale })
+      expect(foot(html)).toBe('All repositories: mode dispatch. No recent heartbeat from their engines.')
+      expect(banner(html)).toBeDefined()
+    })
+
+    it('differing modes: each entry says its own, and the foot says nothing', () => {
+      const html = renderApp(withModes('decide', 'view'), '/', { [WEBSITE]: null, [BILLING]: null })
+      expect(foot(html)).toBeNull()
+      expect(facts(html, WEBSITE)).toBe('Mode decide. No engine in this deployment.')
+      expect(facts(html, BILLING)).toBe('Mode view. No engine in this deployment.')
+      expect(pageFoot(html)).toBe('billingMode view. No engine in this deployment.websiteMode decide. No engine in this deployment.')
+    })
+
+    it('differing engine states: each entry says its own', () => {
+      const html = renderApp(withModes('dispatch', 'dispatch'), '/', { [WEBSITE]: fresh(), [BILLING]: null })
+      expect(foot(html)).toBeNull()
+      expect(facts(html, WEBSITE)).toBe('Mode dispatch.')
+      expect(facts(html, BILLING)).toBe('Mode dispatch. No recent heartbeat from its engine.')
+    })
+
+    it('one engine outside this deployment: the set differs, whatever the rest share', () => {
+      const html = renderApp(withModes('decide', 'decide'), '/', { [WEBSITE]: fresh(), [BILLING]: fresh() })
+      expect(foot(html)).toBeNull()
+      expect(facts(html, WEBSITE)).toBe('Mode decide. An engine outside this deployment, last seen 2m ago.')
+      expect(facts(html, BILLING)).toBe('Mode decide. An engine outside this deployment, last seen 2m ago.')
+    })
+
+    it('one unreadable plus two sharing: the pair once, and the unreadable one keeps its mark', () => {
+      const three: Served = {
+        ...unreadable,
+        health: {
+          ...unreadable.health,
+          repositories: [
+            { id: WEBSITE, name: 'website', mode: 'decide' },
+            { id: BILLING, name: 'billing', mode: 'decide' },
+            { id: 'local/ledger', name: 'ledger', mode: 'decide' },
+          ],
+        },
+      }
+      const html = renderApp(three, '/', { [WEBSITE]: null, [BILLING]: null, 'local/ledger': null })
+      expect(foot(html)).toBe('All repositories: mode decide. No engine in this deployment.')
+      expect(facts(html, WEBSITE)).toBe('')
+      expect(facts(html, BILLING)).toBe('')
+      expect(facts(html, 'local/ledger')).toBe('Could not be read.')
+      expect(pageFoot(html)).toBe('All repositories: mode decide. No engine in this deployment.ledgerCould not be read.')
+    })
   })
 
   it('dispatch, stale or absent: the outage banner, naming each repository', () => {

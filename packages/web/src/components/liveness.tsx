@@ -14,6 +14,11 @@
 // already sits. Below 768px the rail is a top bar with no room for it, and the
 // facts sink to the foot of the page (`PageFootFacts`).
 //
+// A fact every repository shares is said once (`sharedStanding`): when all
+// that could be read have one mode and one engine state, the rail's foot
+// states it for the set (`SetFacts`) and no entry repeats it. When they
+// differ, each entry states its own and the foot says nothing about either.
+//
 // Text only, in the cockpit's voice, composed here from the mode and the
 // heartbeat. No colour: nothing here is wrong, and colour in Gatehouse
 // carries state (GATEHOUSE-DESIGN.md round 5). The one exception is a
@@ -22,7 +27,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { api, type EngineHealthEntry, formatAge, type RepositoryMode } from '../api.ts'
-import { livenessOf } from '../liveness.ts'
+import { type Liveness, livenessOf, sharedStanding } from '../liveness.ts'
 import type { Repository } from '../scope.ts'
 import { Name } from './vocabulary.tsx'
 
@@ -45,6 +50,51 @@ export function engineFact(mode: RepositoryMode | null | undefined, entry: Engin
     case 'unknown':
       return null
   }
+}
+
+/**
+ * Whether the set's readable repositories share mode and engine state, from
+ * the one heartbeat query. Null when they differ, or while it is unknown.
+ */
+export function useSharedStanding(set: readonly Pick<Repository, 'id' | 'mode' | 'unreadable'>[]) {
+  const health = useEngineHealth()
+  return sharedStanding(set.map((r) => ({ mode: r.mode, unreadable: r.unreadable, entry: health.data?.engines[r.id] })))
+}
+
+/** The engine's fact for a whole set that shares one state, or null when there is none to state. */
+function setEngineFact(mode: RepositoryMode | null, liveness: Liveness): string | null {
+  switch (liveness) {
+    case 'none':
+      return 'No engine in this deployment.'
+    case 'silent':
+      return mode === 'dispatch' ? 'No recent heartbeat from their engines.' : null
+    case 'outside':
+    case 'live':
+    case 'unknown':
+      return null
+  }
+}
+
+/**
+ * The facts every repository shares, said once for the set, at the rail's
+ * foot: "All repositories: mode decide. No engine in this deployment."
+ * Nothing when there is nothing to say (no mode stated, no engine fact).
+ */
+export function SetFacts({ shared, className = '' }: { shared: { mode: RepositoryMode | null; liveness: Liveness }; className?: string }) {
+  const engine = setEngineFact(shared.mode, shared.liveness)
+  if (shared.mode === null && engine === null) return null
+  return (
+    <p className={`font-ui text-[11.5px] leading-[1.45] text-muted ${className}`} data-set-facts={shared.mode ?? ''}>
+      All repositories:{' '}
+      {shared.mode !== null ? (
+        <>
+          mode <Name size="md">{shared.mode}</Name>.
+        </>
+      ) : null}
+      {shared.mode !== null && engine !== null && ' '}
+      {engine}
+    </p>
+  )
 }
 
 /** Whether `RepositoryFacts` has anything to say for this repository. */

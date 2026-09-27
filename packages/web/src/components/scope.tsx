@@ -33,7 +33,7 @@ import {
   scopedHref,
   scopeId,
 } from '../scope.ts'
-import { RepositoryFacts, useEngineHealth } from './liveness.tsx'
+import { RepositoryFacts, useEngineHealth, useSharedStanding } from './liveness.tsx'
 import { Address, Count } from './vocabulary.tsx'
 
 export interface ScopeState {
@@ -131,12 +131,16 @@ function entryHref(pathname: string, params: URLSearchParams, repository: string
  * its mode, and its engine where that is a plain fact (`RepositoryFacts`).
  * They sit outside the link, so a reader moving through the links hears each
  * place by its name and count alone. The strip leaves them out; at phone
- * width they are at the foot of the page.
+ * width they are at the foot of the page. When every repository that could
+ * be read shares its mode and engine state, no entry states them: the rail's
+ * foot says them once for the set. A repository that could not be read keeps
+ * its own mark either way.
  */
 export function ScopeControl({ state, strip = false }: { state: ScopeState; strip?: boolean }) {
   const { pathname } = useLocation()
   const [params] = useSearchParams()
   const health = useEngineHealth()
+  const shared = useSharedStanding(state.set)
   if (!state.several || state.set.length < 2) return null
   const current = scopeId(state.scope)
   const partial = state.unreadable.length > 0
@@ -189,7 +193,7 @@ export function ScopeControl({ state, strip = false }: { state: ScopeState; stri
                   </span>
                 )}
               </Link>
-              {!strip && e.repository && (
+              {!strip && e.repository && (shared === null || e.repository.unreadable !== undefined) && (
                 <RepositoryFacts repository={e.repository} entry={health.data?.engines[e.repository.id]} now={health.data?.now} className="pb-1" />
               )}
             </li>

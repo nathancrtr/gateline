@@ -7,8 +7,11 @@
 // way the validator finds them; each part withholds itself rather than
 // reporting an absent section as an empty one; and nothing is computed across
 // the two artifacts.
+import { readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { buildG0Packet, type G0Packet, type Quotation, type RunRef } from '../src/index.ts'
+import { buildG0Packet, buildLexicon, type G0Packet, type Quotation, type RunRef } from '../src/index.ts'
 import { dropFixture, type FixtureContext, makeFixture } from './fixture.helper.ts'
 
 let ctx: FixtureContext
@@ -215,6 +218,12 @@ describe('buildG0Packet — the roster and the withheld parts', () => {
     expect(buildG0Packet({ spec, brief: null }).requirementsWithheld).toBeNull()
   })
 
+  it('a spec whose items all parse withholds no criteria', () => {
+    const p = buildG0Packet({ spec: '# S\n\n### R1 — one\n**Acceptance criteria:**\n- [ ] AC1.1 — One.\n- [x] AC1.2 — Two.\n', brief: null })
+    expect(p.criterionNearMisses).toEqual([])
+    expect(p.criteriaWithheld).toBeNull()
+  })
+
   it('a spec with no Out of scope says so, never a silent absence', () => {
     const p = buildG0Packet({ spec: '# S\n\n### R1 — one\n\n## Assumptions\n- a\n', brief: null })
     expect(p.outOfScope).toBeNull()
@@ -251,8 +260,110 @@ describe('buildG0Packet — the roster and the withheld parts', () => {
         'problem',
         'requirements',
         'requirementsWithheld',
+        'criterionNearMisses',
+        'criteriaWithheld',
         'spec',
       ].sort(),
     )
+  })
+})
+
+describe('buildG0Packet — a criterion that nearly matches the grammar (#482)', () => {
+  const CRITERIA = 'a criterion list item'
+  const TOKEN = 'AC<n>.<m> — <criterion>'
+  const wrap = (items: string) => `# S\n\n## Requirements\n\n### R1 — one\n**Acceptance criteria:**\n${items}\n\n## Assumptions\n- a\n`
+
+  it('reports each near miss with its line and its words as written, and admits only the grammar’s criterion', () => {
+    const spec = wrap('- [ ] AC1.1 — Plain criterion.\n- [ ] AC1.2 (MUST) — Qualified criterion.\n- [ ] AC1.3 - Hyphen instead of a dash.')
+    const p = buildG0Packet({ spec, brief: null })
+    expect(buildLexicon({ spec }).entries.filter((e) => e.kind === 'criterion').map((e) => e.id)).toEqual(['AC1.1'])
+    expect(p.criterionNearMisses).toEqual([
+      { text: '- [ ] AC1.2 (MUST) — Qualified criterion.', at: { path: 'spec.md', line: 8 } },
+      { text: '- [ ] AC1.3 - Hyphen instead of a dash.', at: { path: 'spec.md', line: 9 } },
+    ])
+    for (const q of p.criterionNearMisses) expectVerbatim(spec, q)
+    expect(p.criteriaWithheld).toMatchObject({ grammar: CRITERIA, token: TOKEN, lookedIn: { path: 'spec.md' } })
+    // The requirement roster is a separate question, and it is whole.
+    expect(p.requirementsWithheld).toBeNull()
+  })
+
+  it('a checked box, or no box at all, is a near miss all the same; a wrapped item is quoted through its last line', () => {
+    const spec = wrap('- [x] AC1.2 (MUST) — Checked and qualified,\n  wrapped onto a second line.\n- AC1.3: no box, a colon.')
+    const p = buildG0Packet({ spec, brief: null })
+    expect(p.criterionNearMisses).toEqual([
+      { text: '- [x] AC1.2 (MUST) — Checked and qualified,\n  wrapped onto a second line.', at: { path: 'spec.md', line: 7 } },
+      { text: '- AC1.3: no box, a colon.', at: { path: 'spec.md', line: 9 } },
+    ])
+  })
+
+  it('an id in running prose, or later in an item, is a citation, not a near miss', () => {
+    const spec = wrap('- [ ] AC1.1 — One.\n\nAC1.2 (MUST) — a sentence that opens with an id is prose.\nThe check follows AC1.1 (see above).\n- [ ] Covers AC1.3 (MUST) as well.')
+    const p = buildG0Packet({ spec, brief: null })
+    expect(p.criterionNearMisses).toEqual([])
+    expect(p.criteriaWithheld).toBeNull()
+  })
+
+  it('a criterion-shaped item inside a fence is an example, not a near miss', () => {
+    const p = buildG0Packet({ spec: wrap('- [ ] AC1.1 — One.\n\n```markdown\n- [ ] AC1.2 (MUST) — an example of the wrong shape.\n```'), brief: null })
+    expect(p.criterionNearMisses).toEqual([])
+    expect(p.criteriaWithheld).toBeNull()
+  })
+
+  it('a criterion-shaped item inside an HTML comment is the template’s instruction, not a near miss', () => {
+    const spec = wrap('<!-- Write each criterion as:\n- [ ] AC1.2 (MUST) — never like this.\n-->\n- [ ] AC1.1 — One.')
+    const p = buildG0Packet({ spec, brief: null })
+    expect(p.criterionNearMisses).toEqual([])
+    expect(p.criteriaWithheld).toBeNull()
+  })
+
+  it('the spec contract’s own template: its commented example is neither a near miss nor a criterion', () => {
+    const repoRoot = resolve(fileURLToPath(import.meta.url), '../../../..')
+    const template = readFileSync(join(repoRoot, 'contracts/spec.md'), 'utf8')
+    // The worked example the template writes inside a comment, with no list marker.
+    expect(template).toMatch(/^ +AC1\.1 — /m)
+    const p = buildG0Packet({ spec: template, brief: null })
+    expect(p.criterionNearMisses).toEqual([])
+    expect(p.criteriaWithheld).toBeNull()
+    const criteria = buildLexicon({ spec: template }).entries.filter((e) => e.kind === 'criterion')
+    expect(criteria.map((e) => e.id)).toEqual(['AC1.1', 'AC2.1'])
+    for (const c of criteria) expect(c.definition).toMatch(/^- \[ \] AC\d+\.\d+ — /)
+  })
+
+  it('a spec written with qualified criteria throughout names every one (an excerpt of run/fleetview-intake’s spec)', () => {
+    // No test reads a run branch with `git show`, so this is an excerpt of
+    // `runs/fleetview-intake/spec.md` on `run/fleetview-intake`, lines 38–58,
+    // verbatim. The whole spec writes all 26 of its criteria this way; this
+    // excerpt holds four.
+    const excerpt = `### R2 — A structured, field-level fallback exists alongside free text
+Run creation is a repeatable, well-known shape (source ref, title, constraints)
+even when the trigger is prose; free text must not be the *only* way in. (ux
+REC3/A5; CLI parity via REC4/P5.)
+**Acceptance criteria:**
+- [ ] AC2.1 (MUST) — The web candidate shows a discoverable path to fill the
+  same underlying fields individually, without going through free text.
+- [ ] AC2.2 (MUST) — The CLI create command accepts flags equivalent to every
+  field the structured web fallback exposes, for fully non-interactive use.
+
+### R3 — First-paint fields are minimal; budget is defaulted, not blank
+On first paint, no more than ~5-6 required-looking fields are visible without
+scrolling or expanding a section (ux REC2/A2). This tensions with tech REC6,
+which lists a budget ceiling among the "minimal optional bindings" at intake —
+**resolved**: budget is not a required blank field on first paint, but appears
+pre-filled with an inherited default, editable in exactly one interaction.
+**Acceptance criteria:**
+- [ ] AC3.1 (MUST) — Count of required-looking, un-collapsed fields on first
+  paint ≤ 6.
+- [ ] AC3.2 (MUST) — The budget/cost-ceiling control shows a pre-filled default
+  value and requires one interaction (not typing from blank) to override.
+`
+    const p = buildG0Packet({ spec: excerpt, brief: null })
+    expect(buildLexicon({ spec: excerpt }).entries.filter((e) => e.kind === 'criterion')).toEqual([])
+    expect(p.requirements.map((r) => r.id)).toEqual(['R2', 'R3'])
+    expect(p.criterionNearMisses.map((q) => q.at.line)).toEqual([6, 8, 18, 20])
+    for (const q of p.criterionNearMisses) expectVerbatim(excerpt, q)
+    expect(p.criterionNearMisses[3]!.text).toBe(
+      '- [ ] AC3.2 (MUST) — The budget/cost-ceiling control shows a pre-filled default\n  value and requires one interaction (not typing from blank) to override.',
+    )
+    expect(p.criteriaWithheld).toMatchObject({ grammar: CRITERIA, token: TOKEN })
   })
 })

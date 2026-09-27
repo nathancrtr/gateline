@@ -32,9 +32,9 @@
 //
 // Contracts are forkable, so each part withholds itself on its own when the
 // shape it reads is absent — a spec with no Assumptions section, a roster
-// with a heading the grammar does not parse, a brief with no Problem — naming
-// the grammar it looked for and the artifact it looked in. The rest renders
-// what it can.
+// with a heading the grammar does not parse, a criterion item it does not
+// parse (#482), a brief with no Problem — naming the grammar it looked for and
+// the artifact it looked in. The rest renders what it can.
 //
 // The same packet serves two other cards. The patch profile's G1 absorbs the
 // G0 question (brief and work item are approved together), so its card shows
@@ -121,6 +121,19 @@ export interface G0Packet {
    * would be silently short, so it says so instead.
    */
   requirementsWithheld: WithheldReason | null
+  /**
+   * Every list item that begins with a criterion id the grammar does not
+   * parse (`- [ ] AC1.2 (MUST) — …`), quoted whole from its line, in the
+   * spec's order (#482). Never admitted as a criterion: the contract fixes
+   * the grammar, and this names the breach. Empty when there is none.
+   */
+  criterionNearMisses: Quotation[]
+  /**
+   * Why the spec's criteria withhold themselves, or null: an item names a
+   * criterion the lexicon cannot read, so every view that reads criteria
+   * would be silently short.
+   */
+  criteriaWithheld: WithheldReason | null
   /** Why the spec's Out of scope withholds itself — the section is missing — or null. */
   outOfScopeWithheld: WithheldReason | null
   /** Why the brief's Problem and Constraints withhold — the first missing, or no brief at all — or null. */
@@ -138,6 +151,15 @@ const TOP_ITEM = /^ ?(?:[-*+]|\d+[.)])(?:\s|$)/
 const INDENTED = /^(?: {2,}|\t)/
 /** A heading that names a requirement, whatever else it says — the grammar's near misses included. */
 const R_LIKE = /^ {0,3}#{1,6}\s*R\d+\b/
+/**
+ * A list item that begins with a criterion id, checkbox or not, whatever
+ * follows it — the grammar's near misses included (#482). Only the item's
+ * first word counts: an id in a sentence is a citation, not a criterion.
+ */
+const AC_LIKE = /^\s*(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s*)?AC\d+\.\d+\b/
+/** A list item's marker, at any depth, and a heading: either one ends the item before it. */
+const LIST_ITEM = /^\s*(?:[-*+]|\d+[.)])\s/
+const HEADING = /^ {0,3}#{1,6}\s/
 
 interface Body {
   /** The section's body lines, raw, without the heading. */
@@ -296,6 +318,30 @@ function assumptionPassages(body: Body, path: string): AssumptionPassage[] {
 }
 
 /**
+ * The list items that name a criterion the lexicon did not read (#482):
+ * `- [ ] AC1.2 (MUST) — …`, `- AC1.3 - …`. Each is quoted whole — the item
+ * through its wrapped lines, ending where the lexicon ends a criterion (a
+ * blank line, a heading, the next item) — so the reader sees the shape as
+ * written. Fences and the template's HTML comments hold examples, not
+ * criteria: a criterion-shaped line in either is never a near miss.
+ */
+function criterionNearMisses(spec: string, parsed: Set<number>): Quotation[] {
+  const lines = spec.split('\n')
+  const comments = commentLines(lines)
+  const fences = new FenceTracker()
+  const inFence = lines.map((line) => fences.feed(line))
+  const out: Quotation[] = []
+  for (let i = 0; i < lines.length; i++) {
+    if (inFence[i] || comments.has(i) || parsed.has(i + 1) || !AC_LIKE.test(lines[i]!)) continue
+    let end = i + 1
+    while (end < lines.length && lines[end]!.trim() !== '' && !comments.has(end) && (inFence[end] || (!HEADING.test(lines[end]!) && !LIST_ITEM.test(lines[end]!))))
+      end++
+    out.push({ text: lines.slice(i, end).join('\n'), at: { path: SPEC, line: i + 1 } })
+  }
+  return out
+}
+
+/**
  * Compose G0's packet from the spec and the intent brief, each read on its
  * own. `audit` is each artifact's audit-time sections as its validation read
  * them from the contract's `AUDIENCE:` line (`Validation.audit`); a section
@@ -316,6 +362,8 @@ export function buildG0Packet(input: {
   let outOfScope: QuotedSection | null = null
   let assumptionsWithheld: WithheldReason | null = null
   let requirementsWithheld: WithheldReason | null = null
+  let criterionNearMissList: Quotation[] = []
+  let criteriaWithheld: WithheldReason | null = null
   let outOfScopeWithheld: WithheldReason | null = null
   if (spec === null) {
     assumptionsWithheld = withheldIn({ grammar: 'a spec' }, null)
@@ -328,8 +376,9 @@ export function buildG0Packet(input: {
 
     // The roster is the lexicon's parse of the requirement grammar — one
     // reading of `### R<n> — <short name>` in the codebase, not two.
-    requirements = buildLexicon({ spec })
-      .entries.filter((e) => e.kind === 'requirement')
+    const lexicon = buildLexicon({ spec })
+    requirements = lexicon.entries
+      .filter((e) => e.kind === 'requirement')
       .map((e) => ({ id: e.id, name: e.shortName, at: { path: SPEC, line: e.line } }))
     // A heading that names a requirement but misses the grammar (`### R3 -
     // three`) is a requirement the roster would drop without a word. The
@@ -339,6 +388,17 @@ export function buildG0Packet(input: {
     const nearMiss = spec.split('\n').some((line, i) => !fences.feed(line) && R_LIKE.test(line) && !parsed.has(i + 1))
     if (requirements.length === 0 || nearMiss) {
       requirementsWithheld = withheldIn({ grammar: 'a requirement heading', token: '### R<n> — <short name>' }, SPEC)
+    }
+
+    // The same protection for criteria (#482). An item that names a criterion
+    // but misses `AC<n>.<m> — ` (`AC1.2 (MUST) — …`) is dropped by the
+    // lexicon, and with it from every view that reads criteria — the evidence
+    // rollup, the hover cards. Validation does not bounce it either, so the
+    // packet names each one where it stands. A spec with no criteria at all
+    // is not this: nothing was dropped.
+    criterionNearMissList = criterionNearMisses(spec, new Set(lexicon.entries.filter((e) => e.kind === 'criterion').map((e) => e.line)))
+    if (criterionNearMissList.length > 0) {
+      criteriaWithheld = withheldIn({ grammar: 'a criterion list item', token: 'AC<n>.<m> — <criterion>' }, SPEC)
     }
 
     outOfScope = quoted(spec, 'Out of scope', SPEC, specAudit)
@@ -375,6 +435,8 @@ export function buildG0Packet(input: {
     briefOutOfScope,
     assumptionsWithheld,
     requirementsWithheld,
+    criterionNearMisses: criterionNearMissList,
+    criteriaWithheld,
     outOfScopeWithheld,
     briefWithheld,
     briefOutOfScopeWithheld,

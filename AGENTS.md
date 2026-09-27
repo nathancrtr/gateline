@@ -44,6 +44,10 @@ Then, by area:
 * [`docs/TOPOLOGY.md`](docs/TOPOLOGY.md) — control-plane topology: one authority per
   deployment, origin as the linearization point, and how to trial unmerged changes
   without disturbing the blessed checkout
+* [`docs/MULTI-REPO.md`](docs/MULTI-REPO.md) — one deployment serving several
+  repositories: repository identity, registration and modes, one engine per
+  repository under shared limits, and how Gatehouse scopes and groups runs.
+  Decided and not yet built; the invariants below describe what is built
 * [`docs/DEPLOY.md`](docs/DEPLOY.md) — hosting the frontend (and, opt-in, the
   orchestrator) as a single-user instance; read its security model first
 

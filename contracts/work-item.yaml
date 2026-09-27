@@ -31,5 +31,19 @@ status: pending           # pending | in-progress | in-review | review-approved 
                           #  duplicating it here caused drift in the wordfreq run)
 
 notes: |
-  # Append-only log: Implementer deviations/discoveries, finding rebuttals,
-  # anything the Reviewer or a future reader needs.
+  # Append-only log. Notes record what the diff and the plan cannot show: a
+  # departure from the plan and why, something discovered that the plan
+  # didn't know, how a finding was fixed, why a finding is not accepted, or
+  # a claim the Reviewer should check. They never list files touched or
+  # describe the change — the diff already shows both — and narration of
+  # the work (false starts, what was tried first) stays out unless it
+  # changes what the Reviewer should check.
+  # Each round of entries opens with a marker line, "round N:". Each entry
+  # after it opens with one label, lowercase, then its plain sentence:
+  # deviation:, discovery:, fixed F<n>:, rebuttal F<n>:, or claim: (F<n>
+  # names the finding). Round 2+ needs one fixed or rebuttal entry per
+  # finding — the entry that tells the Orchestrator you've responded. Test
+  # results appear once per round, as the command and its result, for the
+  # suites the task touched, standing alone with no label — never restated
+  # as they drift. Claim only what you checked.
+  # BUDGET: target ~150 words per round; never exceed 300.

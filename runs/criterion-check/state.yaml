@@ -134,6 +134,30 @@ budget:
           tokens_in: 6,
           tokens_out: 2321,
           cost_usd: 2.04946825
+        },
+      {
+          at: 2026-09-27T04:17:21.578Z,
+          role: implementer,
+          task: 02-cli-footnotes-and-fixture,
+          round: 1,
+          adapter: claude-code,
+          model: claude-opus-5-5,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:26814,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
+        },
+      {
+          at: 2026-09-27T04:17:21.578Z,
+          role: implementer,
+          task: 03-g2-card-check,
+          round: 1,
+          adapter: claude-code,
+          model: claude-opus-5-5,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:26814,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:
@@ -158,8 +182,8 @@ gates:
 tasks:
   [
     { id: 01-lexicon-promise-check, status: review-approved, review_rounds: 3 },
-    { id: 02-cli-footnotes-and-fixture, status: pending, review_rounds: 0 },
-    { id: 03-g2-card-check, status: pending, review_rounds: 0 },
+    { id: 02-cli-footnotes-and-fixture, status: dispatched, review_rounds: 0 },
+    { id: 03-g2-card-check, status: dispatched, review_rounds: 0 },
     { id: 04-hover-card-and-cited-list, status: pending, review_rounds: 0 },
     { id: 05-record-reader-check, status: review-approved, review_rounds: 1 },
     { id: 06-e2e-criterion-check, status: pending, review_rounds: 0 }

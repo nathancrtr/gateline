@@ -406,6 +406,15 @@ describe('fault isolation: one engine failing leaves the others running', () => 
     const alpha = set.engines[0]!.engine
     const handle = await set.start()
     expect(alpha.inFlight()).toBe(1)
+    // The fault as it is recorded. The completion pass that follows writes
+    // nothing, completes, and clears it by design, so a look afterwards races.
+    const recorded: { where: string; reason: string }[] = []
+    const noteFault = alpha.noteFault.bind(alpha)
+    alpha.noteFault = (where, e, context) => {
+      const fault = noteFault(where, e, context)
+      recorded.push({ where: fault.where, reason: fault.reason })
+      return fault
+    }
     // From here every state write in alpha fails: the job's closing commit throws.
     alpha.source.writeState = (async () => {
       throw new Error('object store corrupt')
@@ -418,7 +427,7 @@ describe('fault isolation: one engine failing leaves the others running', () => 
     await vi.waitFor(() => expect(lines).toContain(
       '[alpha] a dispatch settlement failed (toy: analyst): object store corrupt — engine marked failed in its health file (1 in a row); a ledger entry it could not close is aged by the stale sweep',
     ), { timeout: 10_000, interval: 50 })
-    expect(alpha.faultState()).toMatchObject({ reason: 'object store corrupt' })
+    expect(recorded).toEqual([{ where: 'settlement', reason: 'object store corrupt' }])
     // beta is untouched; once its own dispatch settles, nothing is reserved:
     // alpha's slot came back although its close threw.
     await vi.waitFor(async () => expect((await ledgerOf(b.dir)).map((e) => e.cost_usd)).toEqual([1.25]), { timeout: 20_000, interval: 50 })

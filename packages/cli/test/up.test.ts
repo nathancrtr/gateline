@@ -167,6 +167,9 @@ describe('one repository, as on main', () => {
     const outcome = running(run.outcome)
     await outcome.orchestrators.started
     await settled(toy.dir)
+    // The closing commit lands before the job leaves the engine: signal once it has.
+    await vi.waitFor(() => expect(outcome.orchestrators.inFlightDetail()).toEqual([]), { timeout: 20_000, interval: 20 })
+    await vi.waitFor(() => expect(run.lines).toContain('out: [toy] toy: metered analyst $1.25 ok'), { timeout: 20_000, interval: 20 })
     run.signals[0]!()
     await vi.waitFor(() => expect(run.exits).toEqual([0]), { timeout: 20_000, interval: 50 })
     rmSync(elsewhere, { recursive: true, force: true })
@@ -230,6 +233,19 @@ describe('several repositories', () => {
       'out: repository local/beta (beta): dispatch, engine; local-only (no origin remote); no spend ceiling of its own',
       'out: engine watching <alpha> (heartbeat 180s, local-only (no origin remote)) — ^C to stop',
       'out: engine watching <beta> (heartbeat 180s, local-only (no origin remote)) — ^C to stop',
+    ])
+  })
+
+  it('--repo with a config file present says the file, and its limits, are not read', { timeout: 60_000 }, async () => {
+    const toy = toyRepo(parent, 'toy')
+    writeConfig('limits:\n  spend_limit_usd: 5\n')
+    const run = await up({ repo: [toy.dir], heartbeat: 600 }, { configPath, dispatchers: { 'local/toy': promptSpec(toy.clock) } })
+    running(run.outcome)
+    expect(run.lines.slice(0, 4)).toEqual([
+      `err: warning: --repo given, so ${configPath} is not read: its repositories, limits: and engine: do not apply to this run`,
+      'out: up: 1 repository from --repo; an engine in it',
+      'out: limits: at most 2 dispatches at once across every repository (default)',
+      'out: limits: no machine spend limit (default)',
     ])
   })
 

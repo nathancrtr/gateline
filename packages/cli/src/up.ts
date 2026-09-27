@@ -3,9 +3,11 @@
 // #502). The command in main.ts parses flags and hands this module the real
 // process; tests hand it a fake dispatcher, a throwaway code checkout and a
 // recording `exit`, so the whole startup runs with nothing dispatched.
+import { existsSync } from 'node:fs'
 import { hostname } from 'node:os'
 import {
   ConfigError,
+  defaultConfigPath,
   displayNameOf,
   type LoadedConfig,
   LocalOnlyPushConflictError,
@@ -208,6 +210,11 @@ export async function runUp(flags: UpFlags, deps: UpDeps): Promise<UpOutcome> {
     throw e
   }
   for (const w of loaded.warnings) deps.error(`warning: ${w}`)
+  // --repo replaces the config file whole, its limits with its list: said,
+  // because a machine limit an operator wrote there does not hold this time.
+  const configFile = deps.configPath ?? defaultConfigPath()
+  if (repoOverrides.length && existsSync(configFile))
+    deps.error(`warning: --repo given, so ${configFile} is not read: its repositories, limits: and engine: do not apply to this run`)
   const { sources, configPath } = loaded
   if (sources.length === 0)
     return refuse('`up` has no repository to serve — run inside a repository, pass --repo <path>, or list repositories in the config file (`gateline repo add`)')
@@ -346,16 +353,32 @@ export async function runUp(flags: UpFlags, deps: UpDeps): Promise<UpOutcome> {
     deps.log(`${head}, engine; ${markers.get(source.id)}; ${ceilingWords}${prefix}`)
   }
 
-  // Assembled before the server starts, so a repository that cannot be
-  // assembled (a manifest missing at its default-branch tip, two entries
-  // naming one repository) is refused with nothing listening.
+  // One drain for the process, whatever asks for it: a supersede and the
+  // operator's ^C ladder share one idempotent promise, so neither drains
+  // twice, and the process exits once. It waits for the engines to be
+  // running, so a supersede can never arrive before there is a drain to run.
   let exited = false
   const exitOnce = (code: number) => {
     if (exited) return
     exited = true
     deps.exit(code)
   }
-  let stop: (code: number) => Promise<void> = async () => {}
+  const live: { engines: Promise<OrchestratorsHandle | null>; server: { close(): void } | null } = { engines: Promise.resolve(null), server: null }
+  let drained: Promise<void> | null = null
+  const drain = () =>
+    (drained ??= (async () => {
+      await (await live.engines)?.stop()
+      live.server?.close()
+    })())
+  const stop = async (code: number) => {
+    deps.log('draining in-flight dispatches…')
+    await drain()
+    exitOnce(code)
+  }
+
+  // Assembled before the server starts, so a repository that cannot be
+  // assembled (a manifest missing at its default-branch tip, two entries
+  // naming one repository) is refused with nothing listening.
   let set: Awaited<ReturnType<typeof assembleOrchestrators>>
   try {
     set = await assembleOrchestrators({
@@ -384,26 +407,16 @@ export async function runUp(flags: UpFlags, deps: UpDeps): Promise<UpOutcome> {
 
   const { startServer } = await import('@gateline/server/main')
   const server = await startServer({ port: flags.port, host: flags.host, open: flags.open, resolved: { sources, configPath } })
+  live.server = server
 
+  const starting = set.start()
+  live.engines = starting.catch(() => null)
   let orchestrators: OrchestratorsHandle
   try {
-    orchestrators = await set.start()
+    orchestrators = await starting
   } catch (e) {
     server.close()
     return refuse((e as Error).message)
-  }
-  // A supersede and the operator's ^C ladder end in the same drain: one
-  // idempotent promise, so neither drains twice, and the process exits once.
-  let drained: Promise<void> | null = null
-  const drain = () =>
-    (drained ??= (async () => {
-      await orchestrators.stop()
-      server.close()
-    })())
-  stop = async (code: number) => {
-    deps.log('draining in-flight dispatches…')
-    await drain()
-    exitOnce(code)
   }
   // Installed as soon as the engines are running: `start()` returns once
   // every engine has seeded, before the startup passes finish (#502).

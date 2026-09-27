@@ -21,16 +21,16 @@ import type {
   HealthResponse,
   InboxItem,
   InboxResponse,
+  MetricsResponse,
   RunDetailResponse,
   RunsResponse,
-  MetricsResponse,
   StagingConfigResponse,
 } from '../src/api.ts'
 import { App } from '../src/app.tsx'
 import { VIEW_MODE_LINE } from '../src/components/repository.tsx'
 import { InboxPage } from '../src/pages/inbox.tsx'
-import { NewRunPage } from '../src/pages/new-run.tsx'
 import { MetricsPage } from '../src/pages/metrics.tsx'
+import { NewRunPage } from '../src/pages/new-run.tsx'
 import { PortfolioPage } from '../src/pages/portfolio.tsx'
 import { NeedsYouCard } from '../src/pages/run/decide-card.tsx'
 

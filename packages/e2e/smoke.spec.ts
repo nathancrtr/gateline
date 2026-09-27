@@ -312,9 +312,12 @@ test('a run names its repository: the header states it, rows leave it off in a o
   const cell = page.getByRole('link', { name: 'g2-pending', exact: true })
   await expect(cell).toHaveAttribute('href', `/repos/${DEMO_ID}/-/runs/g2-pending`)
   await expect(page.locator('table [data-repository-name]')).toHaveCount(0)
+  await expect(page.locator('table th', { hasText: 'repository' })).toHaveCount(0)
   await expect(page.getByRole('table')).not.toContainText(DEMO_ID)
   await goto(page, '/metrics')
-  await expect(page.locator('table [data-run-name]', { hasText: /^g2-pending$/ })).toHaveAttribute('title', `${DEMO_ID}/g2-pending`)
+  await expect(page.locator(`table td[title="${DEMO_ID}/g2-pending"]`)).toHaveText('g2-pending')
+  await expect(page.locator('table [data-repository-name]')).toHaveCount(0)
+  await expect(page.locator('table th', { hasText: 'repository' })).toHaveCount(0)
 
   // The run page names it whatever the set: above the run's name, linking to
   // the Portfolio with the repository as the scope #498 will honour.
@@ -328,21 +331,22 @@ test('a run names its repository: the header states it, rows leave it off in a o
   expect(above!.y + above!.height).toBeLessThanOrEqual(heading!.y)
   await expect(page).toHaveTitle('g2-pending · demo — Gatehouse')
 
-  // A copy of the name carries the full id, as a reader would make it:
-  // dragging across the text, which selects inside its text node.
-  const copied = await page.evaluate(() => {
-    const text = document.querySelector('[data-run-repository] a')!.firstChild!
+  // A copy gives what is on screen (#497 review): the name as shown, never
+  // the id behind it. Copied the way a reader copies — a selection and the
+  // keyboard — and read back from the real clipboard, so a listener that
+  // rewrote the copy would be caught here.
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'], { origin: ORIGIN })
+  const visible = await page.evaluate(() => {
     const range = document.createRange()
-    range.setStart(text, 0)
-    range.setEnd(text, text.textContent!.length)
+    range.selectNodeContents(document.querySelector('[data-run-repository] a')!)
     const selection = document.getSelection()!
     selection.removeAllRanges()
     selection.addRange(range)
-    const data = new DataTransfer()
-    document.dispatchEvent(new ClipboardEvent('copy', { clipboardData: data, bubbles: true, cancelable: true }))
-    return data.getData('text/plain')
+    return selection.toString()
   })
-  expect(copied).toBe(DEMO_ID)
+  expect(visible).toBe('demo')
+  await page.keyboard.press('ControlOrMeta+c')
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(visible)
 
   await repository.click()
   await expect(page).toHaveURL(/\/portfolio\?repo=local%2Fdemo$/)

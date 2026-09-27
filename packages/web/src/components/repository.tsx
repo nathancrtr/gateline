@@ -4,26 +4,31 @@
 // add-export`. Interfaces show the repository by its display name instead,
 // the config `name` or else the id's last segment, which core puts on every
 // view-model record beside the id (`sourceName`); web never derives it from
-// the id. Decision D7: the name is text, in the same position on every row,
-// card and page, with no colour and no per-repository mark, because colour in
-// Gatehouse carries run state.
+// the id. Decision D7: the name is text, and the repository precedes the slug
+// wherever a run is named, with no colour and no per-repository mark, because
+// colour in Gatehouse carries run state.
+//
+// The structure follows the surface. An inbox row is a sentence, so the
+// repository stands inline before the slug (`RunName`). The Portfolio and the
+// Metrics budget table are registers, and a register aligns: there the
+// repository is a column of its own to the left of the run (`RepositoryName`
+// in a cell), so slugs start at one x down the column.
 //
 // Which vocabulary kind each part is (docs/SEAM.md §5): the display name
 // names a thing the reader meets on other rows, so it is a Name in the
-// table's sense, set as the qualifier of the run's name it precedes — the
-// same face and size, muted, regular weight. It is not rendered through
-// `Name`, which is ink (it would outrank the slug) and refuses a trailing
-// `.ext`, which a config name such as `gateline.dev` may carry. The full id
-// is an Address: it contains slashes, it locates the repository, and it is
-// what an operator pastes. An address never stands alone, so it is never
-// printed in place of the display name; it follows it, on hover and in
-// anything copied.
+// table's sense, set in the muted ink at regular weight as the run name's
+// qualifier. It is not rendered through `Name`, which is ink (it would
+// outrank the slug) and refuses a trailing `.ext`, which a config name such
+// as `gateline.dev` may carry. The full id is an Address: it contains
+// slashes, it locates the repository, and it is what an operator pastes. An
+// address never stands alone, so it is never printed in place of the display
+// name; it follows it, on hover. A copy gives what is on screen.
 
 import { useQuery } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { api } from '../api.ts'
 
-/** The run's full name, `<repository id>/<slug>` (§6.2): what a tooltip shows and a copy carries. */
+/** The run's full name, `<repository id>/<slug>` (§6.2): what a run name's tooltip shows. */
 export const fullRunName = (source: string, slug: string): string => `${source}/${slug}`
 
 /**
@@ -55,19 +60,19 @@ export function useNamesRepository(): { ready: boolean; show: boolean } {
 }
 
 /**
- * A run's name on a row: `billing / add-export`, or `add-export` alone when
- * the set has one repository. The repository takes the face and size of the
- * run name it qualifies (`className`), in the muted ink at regular weight;
- * the slug keeps the row's own style.
+ * A run's name in a sentence — an inbox row: `billing / add-export`, or
+ * `add-export` alone when the set has one repository. The repository takes
+ * the face and size of the run name it qualifies (`className`), in the muted
+ * ink at regular weight; the slug keeps the row's own style.
  *
- * Inline text on one line, so the name reads and copies as one run of words: a flex layout would make each part a block, and a browser copies
- * blocks with line breaks between them. A display name longer than 20
- * characters is cut there with an ellipsis, so the slug after it stays in
- * view; past that the row's own overflow rule applies, as it did to the
- * `source/slug` this replaces. The whole name stays in the markup, so a
- * screen reader reads it with the row, and the full name
- * (`github.com/acme/billing/add-export`) is the tooltip and what a copy of
- * the name puts on the clipboard.
+ * Inline text on one line, so the name reads and copies as one run of words:
+ * a flex layout would make each part a block, and a browser copies blocks
+ * with line breaks between them. A display name longer than 20 characters is
+ * cut there with an ellipsis, so the slug after it stays in view; past that
+ * the row's own overflow rule applies, as it did to the `source/slug` this
+ * replaces. The whole name stays in the markup, so a screen reader reads it
+ * with the row, and the full name (`github.com/acme/billing/add-export`) is
+ * the tooltip.
  */
 export function RunName({
   source,
@@ -92,15 +97,13 @@ export function RunName({
    * The row gives the name a line of its own width and truncates it there
    * (the inbox). The repository's cap then also yields to that width, less
    * the separator's three characters, so on a phone-width line the name and
-   * its ` / ` are cut inside the line rather than past it. Off in a table, where a percentage would size the
-   * column for the whole name and then leave the cut name in a gap.
+   * its ` / ` are cut inside the line rather than past it.
    */
   clipped?: boolean
 }) {
-  const full = fullRunName(source, slug)
   const cap = clipped ? 'max-w-[min(20ch,calc(100%-3ch))]' : 'max-w-[20ch]'
   return (
-    <span className={`whitespace-nowrap ${className ?? ''}`} title={full} data-run-name data-full-name={full}>
+    <span className={`whitespace-nowrap ${className ?? ''}`} title={fullRunName(source, slug)} data-run-name>
       {showRepository && (
         <>
           <span className={`inline-block ${cap} truncate align-bottom font-normal text-muted`} data-repository-name>
@@ -118,69 +121,34 @@ export function RunName({
 }
 
 /**
- * The copy rule (§6.2: "anything copied to the clipboard uses the full
- * name"): in the selected text, each name the selection wholly holds is
- * replaced by the full name it stands for, in document order. A name the
- * selection only cuts through is left as selected — the reader chose those
- * characters. Returns null when nothing is replaced, and the copy is then the
- * browser's own.
+ * Where a register's repository column shows. From 1280px up the Portfolio
+ * has its full width and the column fits beside the others; below that the
+ * table already scrolls sideways in its pane, and a column to the left of
+ * the run would push the slug — the column the page exists for — out of
+ * view. So below 1280px the column is not drawn and the name folds under the
+ * slug as a subline (`REPOSITORY_FOLD`), the way the profile already sits
+ * under it.
  */
-export function substituteFullNames(selected: string, names: { shown: string; full: string }[]): string | null {
-  let out = ''
-  let from = 0
-  let replaced = false
-  for (const { shown, full } of names) {
-    if (!shown) continue
-    const at = selected.indexOf(shown, from)
-    if (at < 0) continue
-    out += selected.slice(from, at) + full
-    from = at + shown.length
-    replaced = true
-  }
-  return replaced ? out + selected.slice(from) : null
-}
+export const REPOSITORY_COLUMN = 'max-xl:hidden'
+/** The subline a register's repository folds into below 1280px: the column's counterpart. */
+export const REPOSITORY_FOLD = 'xl:hidden'
 
 /**
- * Whether a selected range holds all of an element's text. Asked of the text
- * rather than of the nodes: a reader who drags across a name selects inside
- * its text nodes, and `Selection.containsNode` would call that partial.
+ * A repository's display name in a register: its own column, or the subline
+ * it folds into. Cut at 20 characters with an ellipsis; the full id is the
+ * tooltip. Face and size come from the register (`className`); the ink is
+ * always the muted one.
  */
-function holdsAllOf(range: Range, el: Element): boolean {
-  if (!range.intersectsNode(el)) return false
-  const whole = document.createRange()
-  whole.selectNodeContents(el)
-  const part = whole.cloneRange()
-  if (range.compareBoundaryPoints(Range.START_TO_START, whole) > 0) part.setStart(range.startContainer, range.startOffset)
-  if (range.compareBoundaryPoints(Range.END_TO_END, whole) < 0) part.setEnd(range.endContainer, range.endOffset)
-  const text = whole.toString()
-  return text !== '' && part.toString() === text
+export function RepositoryName({ source, sourceName, className }: { source: string; sourceName: string | undefined; className?: string }) {
+  return (
+    <span className={`block max-w-[20ch] truncate font-normal text-muted ${className ?? ''}`} title={source} data-repository-name>
+      {shownName(source, sourceName)}
+    </span>
+  )
 }
 
-/**
- * Installs the copy rule once for the app. A `copy` event is dispatched to
- * the focused element or the body, never to the text that was selected, so
- * the rule listens on the document and finds the names by their
- * `data-full-name` hook.
- */
-export function useFullNamesOnCopy(): void {
-  useEffect(() => {
-    const onCopy = (e: ClipboardEvent) => {
-      const selection = document.getSelection()
-      if (!selection || selection.isCollapsed || !e.clipboardData) return
-      const ranges = Array.from({ length: selection.rangeCount }, (_, i) => selection.getRangeAt(i))
-      const names = [...document.querySelectorAll<HTMLElement>('[data-full-name]')]
-        .filter((el) => ranges.some((r) => holdsAllOf(r, el)))
-        .map((el) => ({ shown: el.textContent ?? '', full: el.dataset.fullName ?? '' }))
-      if (names.length === 0) return
-      const text = substituteFullNames(selection.toString(), names)
-      if (text === null) return
-      e.clipboardData.setData('text/plain', text)
-      e.preventDefault()
-    }
-    document.addEventListener('copy', onCopy)
-    return () => document.removeEventListener('copy', onCopy)
-  }, [])
-}
+/** The run link's accessible name in a register: the repository, then the run — "billing, add-export". */
+export const runLinkLabel = (source: string, sourceName: string | undefined, slug: string): string => `${shownName(source, sourceName)}, ${slug}`
 
 /** The browser tab's title on a run page: the run, then its repository, so two tabs can be told apart. */
 export const runPageTitle = (slug: string, repository: string): string => `${slug} · ${repository} — Gatehouse`

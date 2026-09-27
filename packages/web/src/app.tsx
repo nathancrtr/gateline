@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { NavLink, Outlet } from 'react-router-dom'
 import { api, type EngineHealthEntry, formatAge } from './api.ts'
-import { useFullNamesOnCopy } from './components/repository.tsx'
 import { pauseVoice } from './drift.ts'
 import { useLiveInvalidation } from './use-live.ts'
 
@@ -154,8 +153,6 @@ function EngineDeferralChip() {
 
 export function App() {
   useLiveInvalidation()
-  // A copied run or repository name carries its full id (#497).
-  useFullNamesOnCopy()
   const inbox = useQuery({ queryKey: ['inbox'], queryFn: api.inbox })
   const needs = inbox.data?.items.length
 

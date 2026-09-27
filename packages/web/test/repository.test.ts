@@ -1,11 +1,12 @@
 // A run's repository, named (#497; docs/MULTI-REPO.md §6.2, §9.2).
 //
-// What is pinned: every row that names a run — inbox, portfolio, the metrics
-// budget table — reads `billing / add-export` when the set has several
-// repositories and the slug alone when it has one; the run page's header
-// names the repository whatever the set, and links to the Portfolio; the full
-// id is the tooltip and what a copy carries; the browser tab names the run
-// and its repository.
+// What is pinned: with several repositories an inbox row reads `billing /
+// add-export`, and the two registers — the Portfolio and the Metrics budget
+// table — give the repository a column of its own, left of the run; with one
+// repository every row shows the slug alone and the registers have no such
+// column. The run page's header names the repository whatever the set, and
+// links to the Portfolio; the full id is the tooltip; the browser tab names
+// the run and its repository.
 //
 // The rows are rendered from what the server actually sends, over the demo
 // fixture, and the pages from a query cache seeded with those responses —
@@ -20,7 +21,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { HealthResponse, InboxResponse, MetricsResponse, RunDetailResponse, RunsResponse } from '../src/api.ts'
-import { fullRunName, runPageTitle, substituteFullNames, useNamesRepository } from '../src/components/repository.tsx'
+import { runPageTitle, useNamesRepository } from '../src/components/repository.tsx'
 import { InboxPage, InboxRow } from '../src/pages/inbox.tsx'
 import { MetricsPage } from '../src/pages/metrics.tsx'
 import { PortfolioPage } from '../src/pages/portfolio.tsx'
@@ -86,13 +87,25 @@ function renderWith(served: Served, node: ReactNode, route = '/'): string {
 const decode = (s: string) => s.replace(/&#x27;/g, "'").replace(/&amp;/g, '&').replace(/&quot;/g, '"')
 
 /** Every run name on the page, as a reader sees it and with its tooltip. */
-function runNames(html: string): { text: string; title: string; full: string }[] {
+function runNames(html: string): { text: string; title: string }[] {
   return [...html.matchAll(/<span([^>]*data-run-name[^>]*)>((?:<span[^>]*>[^<]*<\/span>)*[^<]*)<\/span>/g)].map((m) => ({
     text: decode(m[2]!.replace(/<[^>]+>/g, '')),
     title: decode(/ title="([^"]*)"/.exec(m[1]!)?.[1] ?? ''),
-    full: decode(/ data-full-name="([^"]*)"/.exec(m[1]!)?.[1] ?? ''),
   }))
 }
+
+/** A register's header cells and body rows, each cell as its markup. */
+function register(html: string): { heads: string[]; rows: string[][] } {
+  const table = /<table[^>]*>([\s\S]*?)<\/table>/.exec(html)![1]!
+  const thead = /<thead>([\s\S]*?)<\/thead>/.exec(table)![1]!
+  const tbody = /<tbody>([\s\S]*?)<\/tbody>/.exec(table)![1]!
+  const heads = [...thead.matchAll(/<th[^>]*>([\s\S]*?)<\/th>/g)].map((m) => decode(m[1]!.replace(/<[^>]+>/g, '')))
+  const rows = [...tbody.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)].map((r) =>
+    [...r[1]!.matchAll(/<td([^>]*)>([\s\S]*?)<\/td>/g)].map((c) => `<td${c[1]}>${c[2]}`),
+  )
+  return { heads, rows }
+}
+const textOf = (markup: string) => decode(markup.replace(/<[^>]+>/g, ''))
 
 describe('the set’s size, read from /api/health', () => {
   function Probe() {
@@ -125,14 +138,14 @@ describe('inbox rows', () => {
     runNames(renderWith(served, createElement('ul', null, createElement(InboxRow, { item: item(served, source, slug), now: served.inbox.now, selected: false, showRepository }))))
 
   it('reads `billing / g1-pending` with several repositories, the configured name for the other', () => {
-    expect(row(several, BILLING, 'g1-pending', true)).toEqual([{ text: 'billing / g1-pending', title: `${BILLING}/g1-pending`, full: `${BILLING}/g1-pending` }])
+    expect(row(several, BILLING, 'g1-pending', true)).toEqual([{ text: 'billing / g1-pending', title: `${BILLING}/g1-pending` }])
     expect(row(several, WEBSITE, 'g1-pending', true)).toEqual([
-      { text: 'marketing-site / g1-pending', title: `${WEBSITE}/g1-pending`, full: `${WEBSITE}/g1-pending` },
+      { text: 'marketing-site / g1-pending', title: `${WEBSITE}/g1-pending` },
     ])
   })
 
   it('reads the slug alone with one, the full name still on hover', () => {
-    expect(row(one, BILLING, 'g1-pending', false)).toEqual([{ text: 'g1-pending', title: `${BILLING}/g1-pending`, full: `${BILLING}/g1-pending` }])
+    expect(row(one, BILLING, 'g1-pending', false)).toEqual([{ text: 'g1-pending', title: `${BILLING}/g1-pending` }])
   })
 
   it('the page decides from the set: every row named with several, none with one', () => {
@@ -144,7 +157,7 @@ describe('inbox rows', () => {
     const single = runNames(renderWith(one, createElement(InboxPage)))
     expect(single.length).toBe(one.inbox.items.length)
     for (const n of single) expect(n.text).toMatch(/^[a-z0-9-]+$/)
-    expect(single.map((n) => n.full)).toContain(`${BILLING}/g1-pending`)
+    expect(single.map((n) => n.title)).toContain(`${BILLING}/g1-pending`)
   })
 
   it('never prints the id as text where it names the repository', () => {
@@ -155,43 +168,80 @@ describe('inbox rows', () => {
   })
 })
 
-describe('portfolio rows', () => {
-  it('lead with `billing / g1-pending`, and the subline keeps only the profile', () => {
-    const html = renderWith(several, createElement(PortfolioPage), '/portfolio')
-    const names = runNames(html)
-    expect(names.length).toBe(several.runs.runs.length)
-    expect(names).toContainEqual({ text: 'billing / g1-pending', title: `${BILLING}/g1-pending`, full: `${BILLING}/g1-pending` })
-    expect(names).toContainEqual({ text: 'marketing-site / g1-pending', title: `${WEBSITE}/g1-pending`, full: `${WEBSITE}/g1-pending` })
-    // The id used to sit in the subline beside the profile; neither the id
-    // nor the display name is there now.
-    expect(html.replace(/<[^>]+>/g, ' ')).not.toContain(BILLING)
-    expect(html).not.toMatch(/(billing|marketing-site) · (full|standard|patch)/)
+describe('the Portfolio, a register', () => {
+  const portfolio = (served: Served) => register(renderWith(served, createElement(PortfolioPage), '/portfolio'))
+  /** The row for one run, found by the href its link carries. */
+  const rowOf = (rows: string[][], source: string, slug: string) => {
+    const row = rows.find((cells) => cells.some((c) => c.includes(`href="/repos/${source}/-/runs/${slug}"`)))
+    expect(row, `${source} ${slug}`).toBeDefined()
+    return row!
+  }
+
+  it('gives the repository its own column, left of the run, with several repositories', () => {
+    const { heads, rows } = portfolio(several)
+    expect(heads).toEqual(['Needs you', 'repository', 'run', 'phase', 'gates', 'tasks', 'rounds', 'budget', 'updated'])
+    expect(rows.length).toBe(several.runs.runs.length)
+    for (const [source, name] of [
+      [BILLING, 'billing'],
+      [WEBSITE, 'marketing-site'],
+    ] as const) {
+      const row = rowOf(rows, source, 'g1-pending')
+      expect(textOf(row[1]!)).toBe(name)
+      expect(row[1]).toContain(`title="${source}"`)
+    }
   })
 
-  it('the name is inside the run link, so the link says which repository', () => {
-    const html = renderWith(several, createElement(PortfolioPage), '/portfolio')
-    expect(html).toMatch(/<a[^>]*href="\/repos\/github\.com\/acme\/billing\/-\/runs\/g1-pending"[^>]*><span[^>]*data-run-name/)
+  it('keeps the run cell to the slug, with the repository in the link’s accessible name', () => {
+    const { rows } = portfolio(several)
+    const run = rowOf(rows, BILLING, 'g1-pending')[2]!
+    const link = /<a([^>]*)>([^<]*)<\/a>/.exec(run)!
+    expect(link[2]).toBe('g1-pending')
+    expect(decode(link[1]!)).toContain('aria-label="billing, g1-pending"')
+    expect(decode(link[1]!)).toContain(`title="${BILLING}/g1-pending"`)
+    // No row prints the repository inline before its slug any more.
+    for (const cells of rows) expect(textOf(cells[2]!)).not.toMatch(/ \/ /)
   })
 
-  it('read the slug alone with one repository', () => {
-    const names = runNames(renderWith(one, createElement(PortfolioPage), '/portfolio'))
-    expect(names.length).toBe(one.runs.runs.length)
-    expect(names).toContainEqual({ text: 'g1-pending', title: `${BILLING}/g1-pending`, full: `${BILLING}/g1-pending` })
-    for (const n of names) expect(n.text).not.toContain(' / ')
+  it('folds the name under the slug below 1280px, out of the reading order, above the profile', () => {
+    const { rows } = portfolio(several)
+    const run = rowOf(rows, WEBSITE, 'g1-pending')
+    expect(run[1]).toMatch(/^<td class="[^"]*max-xl:hidden/)
+    expect(run[2]).toMatch(
+      /<div class="xl:hidden" aria-hidden="true" data-repository-fold="true"><span[^>]*>marketing-site<\/span><\/div><div class="mt-\[2px\] font-ui text-\[11\.5px\] text-muted">full<\/div>/,
+    )
+  })
+
+  it('is the table it always was with one repository: no column, no name, no label', () => {
+    const { heads, rows } = portfolio(one)
+    expect(heads).toEqual(['Needs you', 'run', 'phase', 'gates', 'tasks', 'rounds', 'budget', 'updated'])
+    const html = renderWith(one, createElement(PortfolioPage), '/portfolio')
+    expect(html).not.toContain('data-repository-name')
+    expect(html).not.toContain('aria-label="billing')
+    expect(textOf(rowOf(rows, BILLING, 'g1-pending')[1]!)).toMatch(/^g1-pending/)
   })
 })
 
-describe('the metrics budget table', () => {
-  it('follows the rows: named with several repositories, the slug alone with one', () => {
-    const many = runNames(renderWith(several, createElement(MetricsPage), '/metrics'))
-    expect(many.length).toBe(several.metrics.runs.length)
-    expect(many.map((n) => n.text)).toContain('billing / g1-pending')
-    expect(many.map((n) => n.text)).toContain('marketing-site / g1-pending')
+describe('the Metrics budget table, a register too', () => {
+  const budget = (served: Served) => {
+    const html = renderWith(served, createElement(MetricsPage), '/metrics')
+    // The budget table is the page's last table.
+    const tables = [...html.matchAll(/<table[\s\S]*?<\/table>/g)].map((m) => m[0])
+    return register(tables.at(-1)!)
+  }
 
-    const single = runNames(renderWith(one, createElement(MetricsPage), '/metrics'))
-    expect(single.length).toBe(one.metrics.runs.length)
-    expect(single.map((n) => n.text)).toContain('g1-pending')
-    for (const n of single) expect(n.text).not.toContain(' / ')
+  it('gives the repository its own column with several repositories', () => {
+    const { heads, rows } = budget(several)
+    expect(heads).toEqual(['repository', 'run', 'limit', 'recorded spend', 'metering'])
+    expect(rows.length).toBe(several.metrics.runs.length)
+    const names = rows.map((cells) => [textOf(cells[0]!), /^<td[^>]*>([^<]*)/.exec(cells[1]!)![1]])
+    expect(names).toContainEqual(['billing', 'g1-pending'])
+    expect(names).toContainEqual(['marketing-site', 'g1-pending'])
+  })
+
+  it('shows the slug alone, and no column, with one', () => {
+    const { heads, rows } = budget(one)
+    expect(heads).toEqual(['run', 'limit', 'recorded spend', 'metering'])
+    expect(rows.map((cells) => textOf(cells[0]!))).toContain('g1-pending')
   })
 })
 
@@ -205,7 +255,6 @@ describe('the run header', () => {
     expect(decode(line!.replace(/<[^>]+>/g, ''))).toBe('billing')
     expect(line).toContain(`href="/portfolio?repo=github.com%2Facme%2Fbilling"`)
     expect(line).toContain(`title="${BILLING}"`)
-    expect(line).toContain(`data-full-name="${BILLING}"`)
     // Above the name: the line comes before the heading in the header.
     const html = header(several)
     expect(html.indexOf('data-run-repository')).toBeLessThan(html.indexOf('<h1'))
@@ -223,26 +272,5 @@ describe('the run header', () => {
 describe('the browser tab', () => {
   it('names the run, then its repository', () => {
     expect(runPageTitle('add-export', 'billing')).toBe('add-export · billing — Gatehouse')
-  })
-})
-
-describe('the copy rule', () => {
-  it('a name the selection wholly holds is copied as its full name', () => {
-    expect(substituteFullNames('billing / add-export', [{ shown: 'billing / add-export', full: fullRunName(BILLING, 'add-export') }])).toBe(
-      'github.com/acme/billing/add-export',
-    )
-    expect(substituteFullNames('add-export', [{ shown: 'add-export', full: `${BILLING}/add-export` }])).toBe(`${BILLING}/add-export`)
-  })
-
-  it('keeps the rest of the selection, and replaces several names in order', () => {
-    const names = [
-      { shown: 'billing / a', full: `${BILLING}/a` },
-      { shown: 'marketing-site / a', full: `${WEBSITE}/a` },
-    ]
-    expect(substituteFullNames('G1 billing / a 3d\nG2 marketing-site / a 1h', names)).toBe(`G1 ${BILLING}/a 3d\nG2 ${WEBSITE}/a 1h`)
-  })
-
-  it('leaves the copy alone when no whole name is in it', () => {
-    expect(substituteFullNames('add-exp', [{ shown: 'add-export', full: `${BILLING}/add-export` }])).toBeNull()
   })
 })

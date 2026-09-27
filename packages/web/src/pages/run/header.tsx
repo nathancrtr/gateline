@@ -328,8 +328,7 @@ export const repositoryPortfolioHref = (source: string): string => `/portfolio?$
  * the one fact that says where the run lives.
  *
  * The display name, in the code face at the size of the inbox row's run
- * name, and a link, so it takes the signal blue. The full id is the tooltip
- * and what a copy of the name carries.
+ * name, and a link, so it takes the signal blue. The full id is the tooltip.
  */
 export function RunRepository({ summary }: { summary: RunSummary }) {
   return (
@@ -337,7 +336,6 @@ export function RunRepository({ summary }: { summary: RunSummary }) {
       <Link
         to={repositoryPortfolioHref(summary.source)}
         title={summary.source}
-        data-full-name={summary.source}
         className="text-accent underline underline-offset-2 hover:text-accent-hover"
       >
         {shownName(summary.source, summary.sourceName)}

@@ -11,6 +11,7 @@ import type { ContractTemplates } from '../record/validate.ts'
 import { type FrameworkRoots, memoizedFrameworkRoots } from './framework-roots.ts'
 import { type CommitInfo, Git } from './git.ts'
 import type { Identity, RunRef, RunSource, StageOutcome, StateCommit, StateDocMutation, WriteResult } from './source.ts'
+import { type ViewRefs, viewRefsOf } from './view-refs.ts'
 
 const RUN_BRANCH_PREFIX = 'run/'
 const ZERO_OID = '0'.repeat(40)
@@ -229,6 +230,10 @@ export class LocalGitSource implements RunSource {
       result.push(runRef)
     }
     return result.sort((a, b) => a.slug.localeCompare(b.slug))
+  }
+
+  async viewRefs(): Promise<ViewRefs> {
+    return viewRefsOf(await this.git.namedRefs(), () => this.git.headBranch())
   }
 
   async readState(ref: RunRef) {

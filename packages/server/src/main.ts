@@ -8,7 +8,8 @@ import { fileURLToPath } from 'node:url'
 import { loadSources } from '@gateline/core'
 import { serve } from '@hono/node-server'
 import { createApp } from './app.ts'
-import { GenerationCache } from './cache.ts'
+import { ViewCache } from './cache.ts'
+import { RefPrints } from './prints.ts'
 import { buildRunnerApi, type RunnerCallback } from './runner-api.ts'
 import { watchRepoRefs } from './watch.ts'
 import { buildWebhook } from './webhook.ts'
@@ -59,6 +60,9 @@ const MIME: Record<string, string> = {
   '.json': 'application/json',
 }
 
+/** How often the refs are read again with no watcher event to prompt it. */
+const RECHECK_MS = 30_000
+
 export async function startServer(opts: ServeOptions = {}): Promise<{ url: string; close: () => void }> {
   let repoOverrides = opts.repoOverrides
   if (opts.demo) {
@@ -77,23 +81,32 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
     `sources: ${sources.map((s) => s.id).join(', ')}${configPath ? ` (from ${configPath})` : ''}`,
   )
 
-  const cache = new GenerationCache()
+  const cache = new ViewCache()
+  const prints = new RefPrints(sources)
   const clients = new Set<(event: string) => void>()
+  // A change is announced when a ref that views read has moved, and only
+  // then (#461). The watcher and the timer both just ask the question; the
+  // timer is what covers a write the watcher missed.
+  const announce = async () => {
+    try {
+      if (await prints.changed()) for (const send of clients) send('change')
+    } catch (e) {
+      console.warn(`warning: reading refs failed: ${(e as Error).message}`)
+    }
+  }
+  await announce()
   const unwatchers: (() => void)[] = []
   for (const source of sources) {
     const dir = (source as { dir?: string }).dir
     if (!dir) continue
-    unwatchers.push(
-      await watchRepoRefs(dir, () => {
-        cache.bump()
-        for (const send of clients) send('change')
-      }),
-    )
+    unwatchers.push(await watchRepoRefs(dir, () => void announce(), 300, () => prints.markDirty()))
   }
+  const recheck = setInterval(() => void announce(), RECHECK_MS)
+  recheck.unref()
 
   // Periodic remote sync: a source configured with fetch_interval polls its
-  // origin so runs pushed elsewhere show up here; each fetch moves refs, and
-  // the ref watcher above turns that into an SSE change signal.
+  // origin so runs pushed elsewhere show up here; a fetch that moves a run's refs
+  // becomes an SSE change signal through the ref watcher above.
   const syncTimers: NodeJS.Timeout[] = []
   for (const source of sources) {
     const s = source as { id: string; fetchIntervalSeconds?: number; syncFromRemote?: () => Promise<void>; localOnly?: boolean }
@@ -149,6 +162,7 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
   const app = createApp({
     sources,
     cache,
+    prints,
     subscribe: (send) => {
       clients.add(send)
       return () => clients.delete(send)
@@ -196,6 +210,7 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
     url,
     close: () => {
       for (const t of syncTimers) clearInterval(t)
+      clearInterval(recheck)
       for (const u of unwatchers) u()
       server.close()
     },

@@ -70,7 +70,7 @@ proposed, not live.
   in Interface contracts and is cited, not restated. Rejected names what
   disqualified the alternative in your own words — never this contract's
   placeholder phrasing echoed back — and Consequences leads with the consequence
-  that matters most to the G1 approver and says so.
+  that matters most to the G1 approver.
 - An instruction to an Implementer or Reviewer belongs in Interface contracts or
   the task files, never in Approach or a decision record — those argue to the G1
   approver alone — and nothing meant for the approver lives only in an HTML

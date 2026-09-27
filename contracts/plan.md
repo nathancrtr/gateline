@@ -11,31 +11,31 @@
      READABILITY (normative — human-facing sections: Approach; each ADR's
      Choice, Rejected, and Consequences lines; and Risks). The G1 approver
      reads these as prose; a breach is bounced like a grammar deviation,
-     with the rule cited. (a) The opening sentence names an actor and says
-     what happens, in plain words — never a code span, path, literal
-     setting, or compressed abstraction standing in for the mechanism it
-     names. A coined term, or an exact setting cited from Interface
-     contracts, may follow once the happening is stated. (b) One idea per
-     paragraph: at most 4 sentences and 120 words each. (c) Three or more
-     parallel items (components, cases, call sites) become a bulleted list
-     under a lead-in sentence — never a semicolon chain. (d) One claim per
-     sentence; never join clauses with a semicolon. (e) Name before cite:
-     give any id or file a noun phrase on first use ("the ordering rule
-     (R5)"), at most one parenthetical file:line cite per sentence, full
-     path at first mention only — short name after. The same order governs
-     citing another run's decision: say what it decided, then name it
-     ("<run> ADR-<n>") — a bare cite with nothing stated is a breach.
-     (f) A Consequences line leads with the consequence that matters most
-     to the approver and says it is the one that matters most; further,
-     unrelated consequences are a list per (c), not more sentences on equal
-     footing. (g) A Rejected line gives the alternative and what
-     disqualified it, in the writer's own words — reusing this contract's
-     own placeholder phrasing is a breach, not a paraphrase. (h) An
-     instruction to another agent — an Implementer, a Reviewer — belongs in
-     Interface contracts or the task files, never in Approach or a decision
-     record, which argue to the G1 approver alone. (i) Nothing addressed to
-     the approver lives only in an HTML comment; what the approver needs to
-     read is written into the body. -->
+     with the rule cited. (a) The opening sentence states the takeaway in
+     plain words, naming the actor and what happens — no code spans, paths,
+     literal settings, or parenthetical cites, and no compressed
+     abstraction standing in for the mechanism. A coined term, or an exact
+     setting cited from Interface contracts, may follow once the happening
+     is stated. (b) One idea per paragraph: at most 4 sentences and 120
+     words each. (c) Three or more parallel items (components, cases, call
+     sites) become a bulleted list under a lead-in sentence — never a
+     semicolon chain. (d) One claim per sentence; never join clauses with a
+     semicolon. (e) Name before cite: give any id or file a noun phrase on
+     first use ("the ordering rule (R5)"), at most one parenthetical
+     file:line cite per sentence, full path at first mention only — short
+     name after. The same order governs citing another run's decision: say
+     what it decided, then name it ("<run> ADR-<n>") — a bare cite with
+     nothing stated is a breach. (f) A Consequences line leads with the
+     consequence that matters most to the approver; further, unrelated
+     consequences are a list per (c), not more sentences on equal footing.
+     (g) A Rejected line gives the alternative and what disqualified it, in
+     the writer's own words — reusing this contract's own placeholder
+     phrasing is a breach. (h) An instruction to another agent — an
+     Implementer, a Reviewer — belongs in Interface contracts or the task
+     files, never in Approach or a decision record, which argue to the G1
+     approver alone. (i) Nothing addressed to the approver lives only in an
+     HTML comment; what the approver needs to read is written into the
+     body. -->
 
 ## Approach
 <!-- The shape of the solution and how it fits the existing codebase.
@@ -55,8 +55,8 @@
 
 ### ADR-1: <decision>
 - **Choice:** <what we're doing>
-- **Rejected:** <the strongest alternative>. <What disqualified it, here.>
-- **Consequences:** <the consequence that matters most, named as such, then any others>
+- **Rejected:** <the strongest alternative>. <What disqualified it.>
+- **Consequences:** <the consequence that matters most to the approver first, then any others>
 
 ## Requirement → task mapping
 <!-- Every spec requirement number maps to ≥1 task. Uncovered requirement = malformed plan. -->

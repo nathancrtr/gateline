@@ -48,3 +48,9 @@ depends_on: []
 status: pending
 
 notes: |
+  round 1:
+  deviation: the inline run ends at any block a tight item holds (code block, blockquote, table), not only a nested list, so a check never swallows a block into its span.
+  discovery: the dupefind spec has no line starting `Check:`, so no scope mutant alone can change its render; AC5.2 therefore also compares against the pre-change pipeline (`ReactMarkdown` with `rawAsText` only), which is what kills a mutant acting on every kind alike.
+  claim: AC8.5 — with markdown.tsx reverted to pre-change, `npx vitest run web/test/reader-check.test.ts` fails the four AC5.1 tests and passes the rest.
+  claim: AC8.6 — AC5.3 plan test killed by dropping the `sourceKind` gate; spec test killed by acting on any list item, and on any paragraph; lower-case test killed by a case-insensitive label and by matching the label on the first line; AC5.2 killed by splitting at any line break outside criteria; all pass once restored.
+  `npx vitest run web/test`: 33 files, 537 tests passed. `npm test`: 1750 passed, 2 skipped. `npm run typecheck`, `npm run lint`: clean.

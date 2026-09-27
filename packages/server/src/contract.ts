@@ -370,8 +370,18 @@ export interface DiffResponse {
  * `GET /api/metrics` serves core's `Metrics` verbatim. Aliased rather than
  * restated: the previous hand-written client copy dropped `readyAt` and
  * `notes` from each decision and nothing noticed.
+ *
+ * `perRepository` and `rateMinDecisions` (#499) are optional on the wire,
+ * though this server always sends them: a server built before #499 sends
+ * only the pooled `perGate`, and a client reads their absence as "no
+ * breakdown", showing the total alone. Additive, so not a version bump. The
+ * rate rule changed with them: `approvalRate` is null below five decisions,
+ * where before it was null only at none, so an older client shows such a row
+ * as having no decisions. The type is unchanged.
  */
-export type MetricsResponse = Omit<Metrics, 'unreadable'> & Unreadable
+export type MetricsResponse = Omit<Metrics, 'unreadable' | 'perRepository' | 'rateMinDecisions'> &
+  Unreadable &
+  Partial<Pick<Metrics, 'perRepository' | 'rateMinDecisions'>>
 
 /**
  * One thing a `change` event on `GET /api/events` says moved (#496).

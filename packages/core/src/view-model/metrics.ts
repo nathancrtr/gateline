@@ -1,6 +1,12 @@
 // Metrics (I8): computed from state.yaml git history plus the burden field —
 // no scribe, no store (rule R1). Latency is readiness-commit → decision-commit;
 // approval rate carries the >90% over-triggering flag from FRONTEND.md §4.4.
+//
+// Gate figures come twice (docs/MULTI-REPO.md §9.4, decision P11, #499): per
+// repository, and pooled across the set as a total. A pooled rate hides a
+// repository whose gate over-triggers and can flag one that does not, so the
+// flag is judged per repository, and the total carries it only when one
+// repository is all it pools.
 import { describeArtifact } from '../record/artifact.ts'
 import { type Burden, GATE_IDS, type GateId, gateUndecided, ROUND_CAP } from '../record/schema.ts'
 import { displayNameOf, type RunRef, type RunSource, type StateCommit } from '../sources/source.ts'
@@ -24,11 +30,25 @@ export interface GateDecisionRecord {
   notes: string | null
 }
 
+/**
+ * The fewest decisions a rate is computed from (FRONTEND.md §4 principle 4:
+ * the heuristic needs a sample, not two lucky approvals). Below it a row has
+ * its counts and no rate, so no 0% or 100% is ever read off two decisions.
+ */
+export const RATE_MIN_DECISIONS = 5
+
 export interface GateMetrics {
   gate: GateId
   decisions: number
   approvals: number
+  /** Approvals over decisions; null below `RATE_MIN_DECISIONS` decisions, including none. */
   approvalRate: number | null
+  /**
+   * Sustained approval above 90% over a rated sample. Judged per repository:
+   * on the pooled total (`Metrics.perGate`) it is false whenever the total
+   * pools several repositories, and equals the one repository's flag when it
+   * pools one.
+   */
   overTriggering: boolean
   burdenMix: Record<Burden, number>
   burdenUnrecorded: number
@@ -45,9 +65,28 @@ export interface RunMetricsSummary {
   budget: { limit: number | null; spent: number | null; everUpdated: boolean }
 }
 
+/** One repository's gate figures: the same figures as the total, from its decisions alone. */
+export interface RepositoryGateMetrics {
+  /** The repository's id (docs/MULTI-REPO.md §6): what URLs, logs and copies carry. */
+  source: string
+  /** The repository's display name (§6.2, #497): presentation only, from `displayNameOf`. */
+  sourceName: string
+  /** One entry per gate, in `GATE_IDS` order, as in `Metrics.perGate`. */
+  perGate: GateMetrics[]
+}
+
 export interface Metrics {
   decisions: GateDecisionRecord[]
+  /** The total: every readable repository's decisions pooled, one entry per gate. */
   perGate: GateMetrics[]
+  /**
+   * The same figures per repository (#499), one entry per readable
+   * repository in the order they are listed, including a repository with no
+   * decisions. A repository in `unreadable` has no entry.
+   */
+  perRepository: RepositoryGateMetrics[]
+  /** The fewest decisions a rate is computed from (`RATE_MIN_DECISIONS`). */
+  rateMinDecisions: number
   runs: RunMetricsSummary[]
   /** The review-round cap the `rounds` counts are read against (record `ROUND_CAP`). */
   roundCap: number
@@ -150,29 +189,42 @@ export async function computeMetrics(sources: RunSource[]): Promise<Metrics> {
   const decisions = read.flatMap(({ value }) => value.decisions)
   const runs = read.flatMap(({ value }) => value.runs)
 
-  const perGate: GateMetrics[] = GATE_IDS.map((gate) => {
-    const ofGate = decisions.filter((d) => d.gate === gate)
-    const approvals = ofGate.filter((d) => d.approved).length
-    const latencies = ofGate.map((d) => d.latencySeconds).filter((v): v is number => v !== null).sort((a, b) => a - b)
-    const burdenMix: Record<Burden, number> = { confirmation: 0, 'light-correction': 0, 'heavy-correction': 0 }
-    let burdenUnrecorded = 0
-    for (const d of ofGate) {
-      if (d.burden) burdenMix[d.burden]++
-      else burdenUnrecorded++
-    }
-    const rate = ofGate.length ? approvals / ofGate.length : null
-    return {
-      gate,
-      decisions: ofGate.length,
-      approvals,
-      approvalRate: rate,
-      // The heuristic needs a sample, not two lucky approvals.
-      overTriggering: rate !== null && ofGate.length >= 5 && rate > 0.9,
-      burdenMix,
-      burdenUnrecorded,
-      medianLatencySeconds: latencies.length ? latencies[Math.floor(latencies.length / 2)]! : null,
-    }
-  })
+  // Bucketed from the one walk above: each repository's decisions are the
+  // ones its own read returned, so no history is read twice.
+  const perRepository: RepositoryGateMetrics[] = read.map(({ source, value }) => ({
+    source: source.id,
+    sourceName: displayNameOf(source),
+    perGate: GATE_IDS.map((gate) => gateMetrics(gate, value.decisions, true)),
+  }))
+  // The total is judged only when it is one repository's figure under
+  // another name; a pooled rate is never flagged (MULTI-REPO.md §9.4).
+  const judgeTotal = perRepository.length <= 1
+  const perGate = GATE_IDS.map((gate) => gateMetrics(gate, decisions, judgeTotal))
 
-  return { decisions, perGate, runs, roundCap: ROUND_CAP, unreadable }
+  return { decisions, perGate, perRepository, rateMinDecisions: RATE_MIN_DECISIONS, runs, roundCap: ROUND_CAP, unreadable }
+}
+
+/** One gate's figures over `decisions`; `judge` says whether the over-triggering flag may be raised. */
+function gateMetrics(gate: GateId, decisions: GateDecisionRecord[], judge: boolean): GateMetrics {
+  const ofGate = decisions.filter((d) => d.gate === gate)
+  const approvals = ofGate.filter((d) => d.approved).length
+  const latencies = ofGate.map((d) => d.latencySeconds).filter((v): v is number => v !== null).sort((a, b) => a - b)
+  const burdenMix: Record<Burden, number> = { confirmation: 0, 'light-correction': 0, 'heavy-correction': 0 }
+  let burdenUnrecorded = 0
+  for (const d of ofGate) {
+    if (d.burden) burdenMix[d.burden]++
+    else burdenUnrecorded++
+  }
+  // The heuristic needs a sample, not two lucky approvals: below it there is no rate to read.
+  const rate = ofGate.length >= RATE_MIN_DECISIONS ? approvals / ofGate.length : null
+  return {
+    gate,
+    decisions: ofGate.length,
+    approvals,
+    approvalRate: rate,
+    overTriggering: judge && rate !== null && rate > 0.9,
+    burdenMix,
+    burdenUnrecorded,
+    medianLatencySeconds: latencies.length ? latencies[Math.floor(latencies.length / 2)]! : null,
+  }
 }

@@ -74,6 +74,18 @@ budget:
           tokens_in: null,
           tokens_out: null,
           cost_usd: null
+        },
+      {
+          at: 2026-09-27T02:49:28.491Z,
+          role: reviewer,
+          task: 05-record-reader-check,
+          round: 1,
+          adapter: claude-code,
+          model: claude-fable-5-1,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:26814,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:

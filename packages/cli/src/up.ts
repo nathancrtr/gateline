@@ -10,9 +10,9 @@ import {
   type LoadedConfig,
   LocalOnlyPushConflictError,
   loadSources,
-  ROLE_TIMEOUT_MS,
   RepositoryIdError,
   type RepositorySettings,
+  ROLE_TIMEOUT_MS,
   repoToplevel,
   SUPERSEDE_EXIT_CODE,
 } from '@gateline/core'

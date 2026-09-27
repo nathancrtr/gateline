@@ -251,3 +251,71 @@ describe('push by mode (R2, TOPOLOGY.md §3.6)', () => {
     }
   })
 })
+
+describe('engine.name and engine.budget_enforcement (#502)', () => {
+  it('parses both, as written: the orchestrator checks the name', async () => {
+    const path = await config(`engine:\n  name: "my laptop"\n  budget_enforcement: false\nrepositories:\n  - path: ${billing}\n    mode: dispatch\n`)
+    expect((await loadSources({ configPath: path })).engine).toEqual({ name: 'my laptop', budgetEnforcement: false })
+  })
+
+  it('refuses a budget_enforcement that is not a boolean', async () => {
+    const path = await config(`engine:\n  budget_enforcement: "no"\nrepositories:\n  - path: ${billing}\n    mode: dispatch\n`)
+    expect(await refusal(path)).toBe(`config at ${path}: engine.budget_enforcement: Invalid input: expected boolean, received string`)
+  })
+})
+
+describe('how each repository is served, named for `up` (#502)', () => {
+  const settings = async (opts: Parameters<typeof loadSources>[0]) => (await loadSources(opts)).repositorySettings
+  const entry = (path: string, mode: string, extra = '') => `  - path: ${path}\n    mode: ${mode}\n${extra}`
+
+  it.each([
+    ['dispatch', '', { push: true, localOnly: false, pushBecause: 'origin auto-detected' }],
+    ['decide', '', { push: false, localOnly: false, pushBecause: 'view and decide entries push only with push: true' }],
+    ['dispatch', '    push: false\n', { push: false, localOnly: false, pushBecause: 'push: false' }],
+    ['decide', '    push: true\n', { push: true, localOnly: false, pushBecause: 'push: true' }],
+    ['dispatch', '    local_only: true\n', { push: false, localOnly: true, pushBecause: 'local_only: true' }],
+    ['dispatch', '    local_only: false\n', { push: true, localOnly: false, pushBecause: 'origin auto-detected' }],
+  ])('a %s entry with an origin and %j', async (mode, extra, expected) => {
+    const path = await config(`repositories:\n${entry(billing, mode, extra)}`)
+    expect(await settings({ configPath: path })).toEqual({ 'github.com/acme/billing': expected })
+  })
+
+  it('a config entry with no origin', async () => {
+    const path = await config(`repositories:\n${entry(website, 'dispatch')}`)
+    expect(await settings({ configPath: path })).toEqual({ 'local/website': { push: false, localOnly: true, pushBecause: 'no origin remote' } })
+  })
+
+  it('carries a gateline_prefix through', async () => {
+    const prefixed = join(base, 'prefixed')
+    await mkdir(join(prefixed, '.framework'), { recursive: true })
+    git(prefixed, 'init', '-q', '-b', 'main')
+    await writeFile(join(prefixed, '.framework', 'framework-lock.json'), '{}\n')
+    git(prefixed, 'add', '-A')
+    git(prefixed, '-c', 'user.name=Seed', '-c', 'user.email=seed@example.test', 'commit', '-q', '-m', 'seed')
+    const top = await realpath(prefixed)
+    const path = await config(`repositories:\n${entry(top, 'dispatch', '    gateline_prefix: .framework\n')}`)
+    expect(await settings({ configPath: path })).toEqual({
+      'local/prefixed': { push: false, localOnly: true, pushBecause: 'no origin remote', frameworkPrefix: '.framework' },
+    })
+  })
+
+  it.each([
+    [{}, { push: true, localOnly: false, pushBecause: 'origin auto-detected' }],
+    [{ push: true }, { push: true, localOnly: false, pushBecause: '--push' }],
+    [{ push: false }, { push: false, localOnly: true, pushBecause: '--no-push' }],
+    [{ localOnly: true }, { push: false, localOnly: true, pushBecause: '--local-only' }],
+  ])('a repository given by --repo, with %j', async (flags, expected) => {
+    expect(await settings({ repoOverrides: [billing], ...noConfig, engine: true, ...flags })).toEqual({ 'github.com/acme/billing': expected })
+  })
+
+  it('the working directory, with no origin', async () => {
+    expect(await settings({ cwd: website, ...noConfig, engine: true })).toEqual({
+      'local/website': { push: false, localOnly: true, pushBecause: 'no origin remote' },
+    })
+  })
+
+  it('a source reports its clone as its working directory', async () => {
+    const { sources } = await loadSources({ repoOverrides: [billing], ...noConfig })
+    expect(sources[0]!.workingDirectory?.()).toBe(billing)
+  })
+})

@@ -260,6 +260,59 @@ Two readings of the brief, teed up for G0:
     const html = await over('# S\n\n### R1 — one\n\n## Assumptions\n<!-- If none, say "none". -->\n\n## Out of scope\nx\n')
     expect(words(html)).toContain('The spec’s Assumptions section is empty.')
   })
+
+  describe('a criterion that nearly matches the grammar (#482)', () => {
+    const NEAR = `# Specification: x
+
+## Requirements
+
+### R1 — one
+**Acceptance criteria:**
+- [ ] AC1.1 — Plain criterion.
+- [ ] AC1.2 (MUST) — Qualified criterion.
+- [ ] AC1.3 - Hyphen instead of a dash.
+
+### R2 — two
+**Acceptance criteria:**
+- [ ] AC2.1 — Plain criterion.
+
+## Assumptions
+- none
+
+## Out of scope
+x
+`
+    const SENTENCE =
+      'Criteria withheld — looked for a criterion list item AC<n>.<m> — <criterion> in the spec. The items that miss it follow. Open the spec'
+
+    it('says what it looked for in the words the roster uses, the token in the code face, one link to the spec', async () => {
+      const html = await over(NEAR)
+      expect(withheld(html)).toEqual([SENTENCE])
+      const p = /<p [^>]*data-withheld="criteria"[^>]*>([\s\S]*?)<\/p>/.exec(html)!
+      expect(p[0]).toContain('data-withheld-view')
+      expect(p[1]).toContain('<span class="font-mono">AC&lt;n&gt;.&lt;m&gt; — &lt;criterion&gt;</span>')
+      expect([...p[1]!.matchAll(/<a [^>]*href="([^"]*)"/g)].map((m) => m[1])).toEqual([`/runs/${SRC}/g0-pending?tab=record&amp;artifact=spec.md`])
+      expect(text(outsideAddresses(html))).not.toMatch(FILENAME)
+    })
+
+    it('stands under the roster it belongs to — the roster itself whole and counted — with the items folded under their count', async () => {
+      const html = await over(NEAR)
+      const roster = html.slice(html.indexOf('data-g0-requirements'), html.indexOf('data-g0-brief'))
+      expect(text(roster)).toContain('2 requirements')
+      const order = ['data-requirement="R2"', 'data-g0-criteria', 'data-withheld="criteria"', 'data-g0-fold="criteria"'].map((h) => roster.indexOf(h))
+      expect(order.every((i) => i >= 0)).toBe(true)
+      expect([...order].sort((a, b) => a - b)).toEqual(order)
+      const fold = /<div[^>]*data-g0-fold="criteria"[^>]*>([\s\S]*?)<\/div>/.exec(roster)!
+      expect(fold[0]).toContain('data-open="false"')
+      expect(text(fold[1]!)).toBe('▸ Items that miss the grammar 2')
+    })
+
+    it('a spec whose criteria all parse shows no criterion warning', async () => {
+      const html = await over(NEAR.replace('AC1.2 (MUST) —', 'AC1.2 —').replace('AC1.3 -', 'AC1.3 —'))
+      expect(html).not.toContain('data-g0-criteria')
+      expect(withheld(html)).toEqual([])
+    })
+  })
 })
 
 describe('the staged card', () => {

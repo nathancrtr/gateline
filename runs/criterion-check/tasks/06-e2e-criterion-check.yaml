@@ -71,3 +71,9 @@ depends_on: [02-cli-footnotes-and-fixture, 03-g2-card-check, 04-hover-card-and-c
 status: pending
 
 notes: |
+  round 1:
+  deviation: each view's check test also asserts the check's computed display is `block` (the plan's DOM-hook table). At 320px the fixture's promise happens to end its line, so an inline check passed the geometry alone.
+  claim: AC8.5. Against main's packages/web/src with this branch's fixture, `npx playwright test e2e/criterion-check.spec.ts` failed 10 of 17. Every checked-criterion, ADR-2, AC6 and AC8.1 test failed; the premise and six plain-shape tests passed and wrote all twelve screenshots. Those failures were missing hooks, so layout was killed by mutants instead. An inline check failed placement in all three views. Dropping the space before the check failed AC3.2 and AC4.2. A nowrap check failed containment at 320px in all three views. A reader check without its final period failed the ADR-2 test.
+  claim: AC8.6. Cutting the unchecked cited-ids entry to 30 characters failed AC6.2, which passed once restored. Nowrap on each plain criterion failed its 320px control.
+  discovery: no plain-shape control overflows at 320px, so no layout was broken before this run.
+  `npm run build && npx playwright test`: 83 passed. `npm test`: 1817 passed, 2 skipped. `npm run lint`, `npm run typecheck`: exit 0.

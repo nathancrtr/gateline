@@ -37,7 +37,7 @@ Rules, all in task 01:
 - A criterion's lines are its first line after the `AC<n>.<m> — ` marker, then each continuation line trimmed.
 - The check starts at the first continuation line whose trimmed text begins `Check:`, case-sensitive. It runs to the end of the item.
 - `promise` and `check` each join their lines with one space and trim the result.
-- With a check, `body === promise + ' ' + check`. Without one, `promise === body` and the `check` key is absent, never `null` or `''`.
+- With a check, `body` and `promise + ' ' + check` are equal once whitespace is collapsed in both. Collapsing turns each run of whitespace into one space and removes whitespace from both ends. Without a check, `promise === body` and the `check` key is absent, never `null` or `''`.
 - Requirement and decision entries carry neither key.
 - `body`, `definition`, `line` and every other field are computed exactly as today.
 
@@ -142,6 +142,15 @@ Each task's notes carry one `claim:` entry per new test file. A test of new beha
 - **Choice:** The browser test saves the twelve screenshots into its output folder for the verifier to attach. The two unchanged-look criteria (AC3.3, AC4.3) are settled by the verifier comparing a capture from the pre-change commit.
 - **Rejected:** Committed baseline images that the test suite compares on every run. The repository's layout test suite already decided against baselines, because they need pinned rendering to hold across machines and fail on every deliberate change.
 - **Consequences:** Nothing in CI guards the unchanged look after this run. The static markup tests guard the unchanged structure instead.
+
+### ADR-7 (amendment, 2026-09-26): The full text matches the promise and check in words, and may differ in spacing
+- **Context:** The reviewer of the lexicon task escalated a rule in this plan that two of its other rules make false for two unusual criteria, recorded as finding F4 in that task's review report.
+- **Choice:** The plan now promises that a criterion's full text holds the same words in the same order as its promise followed by its check, and the two may differ in spacing alone. The human who resolved the escalation chose this wording. The exact rule is the fourth under "Lexicon entry" in Interface contracts.
+- **Rejected:** Rebuilding the full text from the promise and the check, so that the old rule holds exactly. It would change what existing views print for a criterion whose first line ends in spaces, which the unchanged-reading requirement (R2) forbids. Leaving the rule as written was also turned down, because the plan would go on stating something the code does not do.
+- **Consequences:** No shipped behaviour changes, and the code the lexicon task has already produced satisfies the amended rule. Two further effects follow:
+  - Collapsing whitespace is defined here to include removing it from both ends. The resolution note did not spell that out, and one of the two unusual criteria needs it.
+  - The two unusual criteria are a first line ending in spaces and an empty first line, each followed directly by a check. No spec in the repository has either shape.
+- **Superseded:** See Context. Interface contracts, "Lexicon entry", the fourth rule: "With a check, `body === promise + ' ' + check`. Without one, `promise === body` and the `check` key is absent, never `null` or `''`."
 
 ## Requirement → task mapping
 

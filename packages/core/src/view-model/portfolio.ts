@@ -353,6 +353,57 @@ export async function buildPortfolio(sources: RunSource[], readers: PortfolioRea
   return { runs, inbox, unreadable }
 }
 
+// --- Collapsing (docs/MULTI-REPO.md §9.3, decision P10, provisional) ---------
+
+/** The one inbox kind that collapses. Gate decisions, escalations and every other kind never do. */
+export const COLLAPSED_KIND = 'malformed' as const
+/** A repository's items of that kind collapse when there are more than this many. */
+export const COLLAPSE_ABOVE = 3
+
+/**
+ * One repository whose `malformed` items an interface shows as one row
+ * (§9.3). Facts only: which repository, how many, and since when. The row's
+ * sentence is the interface's to compose (docs/SEAM.md §2), and the items
+ * themselves stay in the inbox list, in their places, so a surface can open
+ * the row to them and nothing is dropped.
+ */
+export interface InboxCollapse {
+  /** The repository's id (§6). */
+  source: string
+  /** Its display name (§6.2): presentation only, as its items carry it. */
+  sourceName: string
+  kind: typeof COLLAPSED_KIND
+  /** How many items the row stands for: always more than `COLLAPSE_ABOVE`. */
+  count: number
+  /** The oldest of their `since` values, which is where the row sits in an oldest-first list; null when none has one. */
+  since: number | null
+}
+
+/**
+ * The repositories whose `malformed` items collapse: each one contributing
+ * more than `COLLAPSE_ABOVE` of them. Pure, over the inbox list as it is.
+ * Ordered as their rows would sit in an oldest-first inbox, by `since`
+ * (unknown last), then by id. A repository's count is the same whatever the
+ * scope or grouping, since both select whole repositories, so one list
+ * serves every view of the inbox.
+ */
+export function inboxCollapses(items: readonly InboxItem[]): InboxCollapse[] {
+  const bySource = new Map<string, InboxCollapse>()
+  for (const item of items) {
+    if (item.kind !== COLLAPSED_KIND) continue
+    const seen = bySource.get(item.source)
+    if (!seen) {
+      bySource.set(item.source, { source: item.source, sourceName: item.sourceName, kind: COLLAPSED_KIND, count: 1, since: item.since })
+      continue
+    }
+    seen.count += 1
+    if (item.since !== null && (seen.since === null || item.since < seen.since)) seen.since = item.since
+  }
+  return [...bySource.values()]
+    .filter((c) => c.count > COLLAPSE_ABOVE)
+    .sort((a, b) => (a.since ?? Infinity) - (b.since ?? Infinity) || (a.source < b.source ? -1 : a.source > b.source ? 1 : 0))
+}
+
 export function stateOf(state: RunState | null): RunState | null {
   return state
 }

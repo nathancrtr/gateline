@@ -26,12 +26,14 @@ import {
   type Disposition,
   deriveReadiness,
   describeArtifact,
+  displayNameOf,
   engineHealthStale,
   extractSections,
   type FieldView,
   type GateId,
   hostBranchUrl,
   ID_PATTERN,
+  inboxCollapses,
   missingSections,
   type Phase,
   PROFILES,
@@ -44,6 +46,7 @@ import {
   type RunRef,
   type RunScaffold,
   type RunSource,
+  readDeferrals,
   readLedger,
   runStateView,
   ScaffoldError,
@@ -224,15 +227,27 @@ export function createApp(deps: AppDeps): Hono {
     return fromTemplate.length ? fromTemplate : BUILTIN_SECTIONS['intent-brief.md']!
   }
 
+  // The set, and each repository's display name and mode (#499): what the
+  // interface needs to name a repository that has nothing on the page, and
+  // to read its heartbeat against its mode (MULTI-REPO.md §9.5).
   app.get('/api/health', (c) =>
-    respond<'GET /api/health'>(c, { ok: true, apiVersion: API_VERSION, sources: deps.sources.map((s) => s.id) }),
+    respond<'GET /api/health'>(c, {
+      ok: true,
+      apiVersion: API_VERSION,
+      sources: deps.sources.map((s) => s.id),
+      repositories: deps.sources.map((s) => ({ id: s.id, name: displayNameOf(s), mode: s.mode ?? null })),
+    }),
   )
 
-  // Engine liveness per source (#100): null = no co-located engine has ever
-  // reported on this deployment (a viewer-only install — not an outage);
-  // stale = one was configured here and has gone silent, which the UI
-  // renders as an outage banner instead of "waiting on gate".
+  // Engine liveness per source (#100): null = no heartbeat has ever been
+  // written in that repository; otherwise the heartbeat and whether it is
+  // stale. Whether either is an outage is the repository's mode's to say
+  // (MULTI-REPO.md §9.5, #499), and the interface reads the mode from
+  // /api/health: only a `dispatch` repository expects an engine.
   //
+  // The heartbeat is passed on field by field, never whole: an engine newer
+  // than this server may write fields the contract does not name, and they
+  // stay off the wire until the contract names them.
   // A source that cannot see a local engine (no `engineHealth`, as a driver
   // with no clone would be) is left out of the map, which reads as none.
   app.get('/api/engine-health', async (c) => {
@@ -252,7 +267,7 @@ export function createApp(deps: AppDeps): Hono {
             codeReason: health.codeReason,
             codeCause: health.codeCause,
             codeUpgradeBlocked: health.codeUpgradeBlocked,
-            deferrals: health.deferrals ?? [],
+            deferrals: readDeferrals(health.deferrals),
           }
         : null
     }
@@ -263,7 +278,9 @@ export function createApp(deps: AppDeps): Hono {
   // (MULTI-REPO.md §10); the response is a 200 even when that is every one.
   app.get('/api/inbox', async (c) => {
     const { inbox, unreadable } = await portfolio()
-    return respond<'GET /api/inbox'>(c, { items: inbox, unreadable, now: Math.floor(Date.now() / 1000) })
+    // Which repositories' unreadable runs show as one row (§9.3): the rule
+    // is core's, and the items all stay in `items`.
+    return respond<'GET /api/inbox'>(c, { items: inbox, collapsed: inboxCollapses(inbox), unreadable, now: Math.floor(Date.now() / 1000) })
   })
 
   app.get('/api/runs', async (c) => {
@@ -278,7 +295,14 @@ export function createApp(deps: AppDeps): Hono {
     const sources = await Promise.all(
       deps.sources.map(async (s) => {
         const [identity, briefTemplate] = await Promise.all([s.identity(), s.templates.read('intent-brief.md')])
-        return { id: s.id, identity, briefSections: requiredBriefSections(briefTemplate), briefTemplate }
+        return {
+          id: s.id,
+          name: displayNameOf(s),
+          mode: s.mode ?? null,
+          identity,
+          briefSections: requiredBriefSections(briefTemplate),
+          briefTemplate,
+        }
       }),
     )
     return respond<'GET /api/staging'>(c, { sources, slugPattern: SLUG_PATTERN })

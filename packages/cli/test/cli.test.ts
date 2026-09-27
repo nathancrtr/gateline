@@ -700,6 +700,86 @@ describe('show — artifacts with lexicon footnotes (#164)', () => {
     expect(acLine).toBe('  AC2.1  "malformed input exits non-zero with a one-line diagnosis"')
   })
 
+  // The shared fixture's ids are all five characters and its promises short,
+  // so the id column and the 110-character cut need a run of their own.
+  describe('a run citing ids of two widths and promises past the cut', () => {
+    let scratch: string
+    const footnotes = async (refs: string) => {
+      const { stdout } = await runIn(scratch, ['show', 'widths', 'plan.md', '--refs', refs])
+      return stdout.split('\n---\n')[1]!.split('\n')
+    }
+    const lineOf = (lines: string[], id: string) => lines.findIndex((l) => l.trimStart().startsWith(`${id} `))
+
+    beforeAll(() => {
+      scratch = makeScratchRepo()
+      const dir = join(scratch, 'runs', 'widths')
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(join(dir, 'state.yaml'), 'run: widths\nbranch: run/widths\nphase: plan\npaused_reason: null\n')
+      writeFileSync(
+        join(dir, 'spec.md'),
+        [
+          '# Specification: widths',
+          '',
+          '## Requirements',
+          '',
+          '### R1 — Footnote layout',
+          '**Acceptance criteria:**',
+          '- [ ] AC1.1 — a short promise',
+          '  Check: a short check.',
+          '- [ ] AC1.2 — a checked promise that runs well past the one hundred and ten characters the default footnote keeps before it cuts the line',
+          '  Check: its check.',
+          '- [ ] AC1.3 — a promise without a check that runs well past the one hundred and ten characters the default footnote keeps before cutting',
+          '- [ ] AC1.4 —',
+          '  Check: a check under an empty first line.',
+          '',
+          '### R10 — A two-digit requirement',
+          '**Acceptance criteria:**',
+          '- [ ] AC10.1 — the longest cited id sets the column width',
+          '',
+        ].join('\n'),
+      )
+      writeFileSync(join(dir, 'plan.md'), '# Technical Plan: widths\n\n## Approach\n\nCites AC1.1, AC10.1, AC1.2, AC1.3 and AC1.4.\n')
+      execFileSync('git', ['-C', scratch, 'add', '-A'])
+      execFileSync('git', ['-C', scratch, 'commit', '-q', '-m', 'widths run'], {
+        env: { ...process.env, GIT_AUTHOR_NAME: 'Seed', GIT_AUTHOR_EMAIL: 'seed@example.test', GIT_COMMITTER_NAME: 'Seed', GIT_COMMITTER_EMAIL: 'seed@example.test' },
+      })
+    })
+    afterAll(() => rm(scratch, { recursive: true, force: true }))
+
+    it('indents the check under its promise by the widest cited id, not its own (AC7.2)', async () => {
+      const lines = await footnotes('full')
+      const at = lineOf(lines, 'AC1.1')
+      expect(lines[at]).toBe('  AC1.1   "a short promise')
+      // `width` is AC10.1's six characters; the check sits under the promise's first letter.
+      expect(lines[at + 1]).toBe(`${' '.repeat(6 + 5)}Check: a short check."`)
+      expect(lines[at + 1]!.indexOf('C')).toBe(lines[at]!.indexOf('"') + 1)
+    })
+
+    it('cuts a checked promise at 110 characters in the default mode (AC7.1)', async () => {
+      const lines = await footnotes('first-line')
+      expect(lines[lineOf(lines, 'AC1.2')]).toBe(
+        '  AC1.2   "a checked promise that runs well past the one hundred and ten characters the default footnote keeps before it…"',
+      )
+    })
+
+    // Literals captured from the pre-change code.
+    it('cuts a long promise without a check in the default mode only (AC7.3, AC7.4)', async () => {
+      const first = await footnotes('first-line')
+      expect(first[lineOf(first, 'AC1.3')]).toBe(
+        '  AC1.3   "a promise without a check that runs well past the one hundred and ten characters the default footnote keeps b…"',
+      )
+      const full = await footnotes('full')
+      expect(full[lineOf(full, 'AC1.3')]).toBe(
+        '  AC1.3   "a promise without a check that runs well past the one hundred and ten characters the default footnote keeps before cutting"',
+      )
+    })
+
+    it('quotes nothing for a checked criterion with an empty first line in the default mode', async () => {
+      const lines = await footnotes('first-line')
+      expect(lines[lineOf(lines, 'AC1.4')]!.trimEnd()).toBe('  AC1.4')
+    })
+  })
+
   it('--refs off suppresses the footnote block', async () => {
     const { stdout } = await run(['show', 'g2-pending', 'verification-report.md', '--refs', 'off'])
     expect(stdout).not.toContain('\n---\nReferences')

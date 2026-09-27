@@ -66,3 +66,9 @@ notes: |
   claim: the AC7.3/AC7.4 literals were captured from HEAD's CLI on a generated fixture repo before any edit. Both modes printed the same AC2.1 line.
   discovery: the fixture line broke no test outside this surface. Playwright e2e was not run; its demo-spec pins in smoke.spec.ts are containment checks.
   `npm test` in packages/: 123 files passed, 2 skipped; 1786 tests passed. `npx vitest run cli/test/cli.test.ts`: 52 passed. `npm run typecheck` and `npm run lint`: exit 0.
+  round 2:
+  fixed F1: a scratch run citing AC10.1 beside AC1.1 pins the full-mode check at 11 spaces, under the promise's first letter; mutant `id.length + 5` fails it.
+  fixed F2: the same run's AC1.2, a checked promise past 110 characters, pins the default cut and ellipsis; mutant dropping the cut from the checked branch fails it.
+  fixed F3: its AC1.3, a promise without a check past 110 characters, pins a cut line by default and the whole line in full mode; mutants dropping the default cut and adding a full-mode cut each fail it. Both literals were captured from the pre-change main.ts, where this test passes.
+  fixed F4: an empty promise with a check now quotes nothing by default, as an empty body already does; the plan names no output for this shape. Mutant restoring the `""` quote fails the new AC1.4 test. Full mode is unchanged.
+  `npm test` in packages/: 125 files passed, 2 skipped; 1810 tests passed. `npm run typecheck` and `npm run lint`: exit 0.

@@ -92,7 +92,21 @@ from a site value, and says which step and why.
 | `--color-*-soft` | the state colour at 10–12% | wash weight; the diff view's add and delete rows |
 | `--radius-*` | `0` | the site allows 3px at most; the cockpit's marks are rectangular |
 | `--shadow-*`, `--static-ring`, `--glow` | `none` | nothing floats |
-| `--measure` | `640px` | one reading length, spent everywhere; never expressed in `ch` |
+| `--measure` | `640px` | one reading length, spent everywhere; never expressed in `ch`. Kept at this value for packets by #516 (2026-09-26); see below |
+
+**The measure and the packet (#516, decided 2026-09-26, not yet built).**
+`--measure` stays 640px. A width in pixels is a line length at one type size
+only. At the Record reader's 16px, 640px holds a median of about 87
+characters of spec prose (79 to 93, over 24 full lines of the
+`criterion-check` spec, measured in Chromium). Packets set the same words at
+12.5px today, where the same width would hold about 111, and the grid sizes
+their columns without this token. Once packet text is 16px, one width gives
+one line length on the reader and the packet, so the token can stay in
+pixels. The epic's sketch (#517, a static G0 packet built from the
+`criterion-check` run's text) sets the record's text column at 600px, inside
+the measure, with the hung labels and the margin outside it. A reviewer of
+the sketch who was told nothing about the product listed body size, line
+height and line length among the things to leave alone.
 
 **Values retired with this round**: the hue-60 paper `#F3F3EE` / `#ECECE4`
 / `#E4E4DC`, the slate ink `#2C343C` / `#1C2424`, the dusty red `#A46C6C` /
@@ -122,6 +136,33 @@ one line (a label followed by a path), the label is UI and the path is code.
 Retired with this round: Newsreader (the serif reading face), Inter and
 JetBrains Mono.
 
+**Size: the record and the cockpit (#516, decided 2026-09-27, not yet
+built).** Today the components use 15 type sizes, ten of them between 10 and
+14.5px, and a packet sets the record's words at 12.5px, smaller than the
+cockpit's own instructions beside them. The decided rule separates the two
+voices by face and size. **Text in the reading face at 16px is the record.
+Text in the UI face at 13px is the cockpit.** The record's own labels
+(`ASSUMPTION:`, `Resolved as:`) are the record, so they are set at 16px in
+ink, hung in one column, with the author's bold kept. A first sketch set them
+at 13px in muted grey, and a reviewer read them as the cockpit's field labels.
+
+The scale drops to five sizes (#520). The rule fixes two of them. The epic
+does not name the other three, and the sketch uses five others, so the scale
+is not settled here. The sketch's sizes:
+
+| size | face | job in the sketch |
+|---|---|---|
+| 20px | UI, bold | the run's name and the gate's question |
+| 16px on 26px | reading | the record, its labels and headings included (fixed by the rule) |
+| 15px | reading; UI | tables in the record; the navigation |
+| 14px | UI, bold or medium; code, medium | a section head and the buttons; a Name and the gate's stamp |
+| 13px on 20px | UI | the cockpit: captions, counts, hints, the position readout (fixed by the rule) |
+| 12px | code | an Address |
+| 11.5px | UI, medium | the "to confirm" mark in the margin |
+
+Fenced code in the record is 13px in the code face. #520 fixes the five and
+says where the others go.
+
 ## Layout grammar
 
 A ruled page. Rows are separated by the hairline, a section opens on a rule
@@ -130,6 +171,17 @@ record (the decide packets keep their frame, in the inset). One surface: the
 rack and the page share the ground with a rule between them, under the ink
 band. History and Portfolio are registers — one row per event or run,
 narrow fixed columns, entries in the order they happened.
+
+**Packets are ruled, not boxed (#516, decided 2026-09-26, not yet built).**
+Today a packet sits in a frame on the inset, and each quoted passage in it
+has its own hairline box. On a packet the record is about nineteen words in
+twenty, so the box marks nearly every passage and distinguishes none. The
+decided packet has no frame and no boxes. A section opens on the ink rule
+under its head, items are separated by the hairline, and the packet ends on
+an ink rule. The record's text runs in one column with one text edge, its
+labels hung to the left, and each item's line number in a margin to the left
+of those. Cards outside packets, where a quotation is the exception, keep the
+box (`docs/SEAM.md` §5).
 
 ## Shape and weight
 
@@ -198,6 +250,8 @@ the ink.
   words and stay).
 - Ambient motion: the skeleton is a static block; nothing sweeps.
 - A vertical rule that mimics a writing pad.
+- A global element, such as the navigation, that changes by surface to solve
+  one surface's layout (settled decision 13, 2026-09-27).
 
 ## Settled decisions
 
@@ -236,6 +290,25 @@ the ink.
    decision the signal blue, which amends the blue ban (see *Banned*),
    leaves a bounced packet dotted as the machine's turn, and keeps the yellow
    on the spine's one cell.
+
+Decisions 9 to 13 come from epic #516, which sets a decision packet as an
+annotated edition, with the record's words as the body text and everything
+else at the edge. They are decided and not yet built, and the code still does what
+the sections above say it does today. The full list, with the decisions about
+the record's labels, addresses and the brief, is in `docs/SEAM.md` §13.
+
+9. **The record is 16px in the reading face; the cockpit is 13px in the UI
+   face** (2026-09-27). See *Type*.
+10. **Packets are ruled, not boxed** (2026-09-26). See *Layout grammar*.
+11. **The measure stays 640px** (2026-09-26). It is the right width once
+    packet text is 16px. See *Tokens*.
+12. **The Decide surface may be wider than today's page cap, and the run
+    header is condensed** (2026-09-26), so the intent brief can sit in a
+    pinned pane beside the packet's column.
+13. **Navigation is unchanged, and the same on every surface** (2026-09-27).
+    A sketch had turned the navigation into a top strip on the Decide
+    surface, only to give the brief's pane 200px. That was rejected, and
+    the rule it leaves is under *Banned*.
 
 ## Contrast
 

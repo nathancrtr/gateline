@@ -13,6 +13,13 @@ what, and a design pass on the representation vocabulary and the layering —
 and one cheap factual check. The maintainer confirmed all six decisions in §8
 on 2026-09-26; the order of work in §9 follows from them.
 
+**Amended 2026-09-27 for decision packets (epic #516): decided and not yet
+built.** Three rules change on a packet: the Address class in §4, and the
+Quoted passage and the Fold in §5. Each changed row still says what Gatehouse
+does today, with the decided change beside it. §13 lists the epic's decisions
+with their dates, and §11 says what the reviews behind them did and did not
+test.
+
 ## 1. The problem, and its cause
 
 Gatehouse is a pure view over the record. That is what makes it trustworthy:
@@ -97,7 +104,9 @@ The representation follows the task, not taste. Four readers, four questions:
 
 Two things fall out that the "bytes versus view" framing hides. **The address
 is the record reader's need, not the approver's.** So "address on demand,
-never hidden" follows from whose task it serves. And **the same field is
+never hidden" follows from whose task it serves. (Epic #516 reverses "on
+demand" for packets, where each item's address will sit in the margin, always
+visible. That is decided and not yet built; see §13.) And **the same field is
 substance for one reader and a pointer for another.** An engine-originated
 escalation's `reason` is the whole packet; a role-originated one's is a
 pointer to a report. Kind is a property of the field *and* the reader's task.
@@ -109,7 +118,7 @@ one rendering rule:
 
 | Class | Elements | Rule |
 |---|---|---|
-| **Address** — a location you navigate to or paste | `runs/<slug>/<path>`; an oid; `run/<slug>`; a host URL; `file:line` in a finding's Where; `host:pid` | Always reachable; code face, muted; on demand on decision surfaces, in the open on the reader header and in History's raw mode |
+| **Address** — a location you navigate to or paste | `runs/<slug>/<path>`; an oid; `run/<slug>`; a host URL; `file:line` in a finding's Where; `host:pid` | Always reachable; code face, muted; on demand on decision surfaces, in the open on the reader header and in History's raw mode. *Decided for packets and not yet built (#516):* always visible in the packet's margin, one per item, as a line number under the artifact the section head names once |
 | **Identifier** — the record's vocabulary | task ids; `R<n>`, `AC<n>.<m>`, `ADR-<n>`, `F<n>`, `E<k>`; `G0–G3`; phase and profile names; verdict, status, severity, burden and disposition words; ledger verbs | Verbatim, never translated (an English gloss of `request-changes` is a paraphrase of a grammar token); resolved in place where the lexicon can; one typeface everywhere |
 | **Container** — a name for where substance lives | `spec.md`, `review-04.md`, `tasks/06-x.yaml`; the contract's filename; a YAML key; an H2 heading, except where the heading is grammar (`## Escalation` is a token the parser reads) | Named by kind in the UI face; the filename shown where the bytes are opened |
 | **Substance** — the words being decided on | Paragraphs, table rows, list items, finding bodies, evidence blocks; a work item's `title:`, `scope:`, `notes:`; the engine's reason line when engine-originated; gate `notes:`; closure `reason:`; the resolver's disposition note | Verbatim, attributed to its speaker, rendered as the markup it was written in, at the surface's scale |
@@ -130,9 +139,9 @@ tells them apart by typeface, weight, colour and position, never by a legend.
 | **Name** | record | Naming a thing the reader will meet elsewhere on the page | Be paraphrased, reformatted, or set in the Address treatment | Code face, ink, semibold when leading a row; dotted underline when resolvable in place; never contains a slash or an extension |
 | **Kind label** | framework | Captioning, grouping, attributing ("Verification states …") | Be minted per run; replace a record word that exists; be a filename | UI face, sentence case, ink |
 | **Quoted word** | record | Stating a state the record states: a verdict, a status, a severity, a burden, `yes`/`no` | Be a synonym, a computed rollup, nested in another chip, tinted outside the gate-state quartet | The impression: bordered code face, texture per state; colour only where the quartet applies |
-| **Quoted passage** | record | Putting the record's words on a card at card scale: a section body, a field value, a finding, an option, a step | Be truncated (fold instead); be rendered as `<pre>` when it is markdown; be reflowed into the view's own sentence; be attributed by filename | Reading face at card scale, inside a hairline box on the surface — the one boxed thing on the page — under a Kind or a Name |
+| **Quoted passage** | record | Putting the record's words on a card at card scale: a section body, a field value, a finding, an option, a step | Be truncated (fold instead); be rendered as `<pre>` when it is markdown; be reflowed into the view's own sentence; be attributed by filename | Reading face at card scale, inside a hairline box on the surface — the one boxed thing on the page — under a Kind or a Name. *Decided for packets and not yet built (#516):* on a packet the record is the body text, in the reading face at reading size, in the text column, under a Kind label, with no box; cards outside packets keep the box |
 | **Count** | framework | Sizing what is on the table; a ratio only where the record states the cap (`rounds 3/3`) | Become a percentage, a meter, a grade; take colour | UI face, tabular figures, adjoining its caption |
-| **Fold** | framework | An audit-time section, or resolved history, reduced to heading and count | Hide a decide-time section; default-closed over what the gate asks about | One implementation: `▸`, the heading in the artifact's face, the count beside it, opens in place verbatim |
+| **Fold** | framework | An audit-time section, or resolved history, reduced to heading and count | Hide a decide-time section; default-closed over what the gate asks about. One recorded exception, decided and not yet built (#516): on the G0 packet, each requirement's criteria sit under it, closed by default (§13) | One implementation: `▸`, the heading in the artifact's face, the count beside it, opens in place verbatim |
 | **Link-out** | framework | A page the host owns: the branch, the PR | Be the only route; be shown when no target resolves | Link blue, `↗`, new tab; `↗` is reserved for this |
 | **Withheld view** | framework | A packet half cannot be composed from the record's shape (the fork fallback) | Read as a fault; be silent; cite an issue number; link by filename | Caution field; a UI-face sentence naming the grammar looked for, the token in code face; one link, "Open the <kind>" |
 | **Diagnostic** | machine | The machine's word is the fact: a YAML error with its caret, a commit subject, an engine verb | Be flowed as prose; be titled as the record's word about the run; lead a table cell | `<pre>` or code face, ink, under a UI-face label naming what produced it |
@@ -321,6 +330,40 @@ artifact history is one commit there, which the run branches still keep. That
 belongs to #248: the record reader's verification target is the decision
 commit, and a squash merge moves it off the default branch.
 
+**What the reviews behind #516 tested, and what they did not.** The packet
+decisions in §13 rest on two rounds of review of a static sketch, built from
+the real text of the `criterion-check` run. The review record lands with the
+sketch under #517.
+
+- Round one: three reviewers, briefed as a reading researcher, an interface
+  designer and an art director, each read today's G0 packet and reached the
+  same direction without seeing each other's work.
+- Round two: two adversarial reviewers drove the first sketch in a browser
+  and cited captures. One was told nothing about the product; the other was
+  told the verbatim rule, the four voices and the maintainer's decisions.
+- The revised sketch was checked at 18 widths from 320 to 1920 pixels with
+  no overflow, and every quoted passage was compared with its source with no
+  differences.
+
+What they did not test:
+
+- **Any person.** Every reviewer was a model agent, and no reader other than
+  the maintainer has used Gatehouse. None of the three observations above
+  has run.
+- **The four voices without the box.** Whether a reader can tell the record
+  from the cockpit once the record is unboxed body text is untested. The G0
+  think-aloud above would test it.
+- **Brief first or assumptions first**, for a reader who did not write the
+  brief.
+- **Any browser but Chromium.** Line breaks differ in Safari and Firefox.
+- **Print**, beyond folds opening for it.
+- **The stress cases**: a long label, a long path or inline code, an address
+  in an artifact other than the spec, a table or heading in the brief, and an
+  empty section. The sample text happened to avoid them; #522 lists them for
+  the build.
+- **The planted paraphrase.** "Always visible" was decided for packets
+  without it.
+
 ## 12. Definition of done
 
 **A decision card is done when the approver can:** read the gate's question
@@ -342,6 +385,56 @@ resolved; verify any word on any surface against `git show <oid>:runs/<slug>/
 plainly that the view is the tip and the packet has moved; and never be misled
 about authorship, with human, role, engine and cockpit words in four
 distinguishable registers.
+
+## 13. Decision packets as an annotated edition (#516)
+
+**Status: decided on 2026-09-26 and 2026-09-27, not yet built.** Epic #516
+carries the work. Until its web issues land, a packet sets the record's words
+at 12.5px in a hairline box per passage, shows each address on hover, and
+sizes its columns by the grid.
+
+On a packet the record is about nineteen words in twenty. The box of §5 marks
+a quotation as the exception, so on a packet it lands on nearly everything and
+distinguishes nothing. The decided direction sets the packet as an annotated
+edition, a primary text with the editor's notes kept apart from it, as in an
+annotated statute. The record's words are the body text, and everything else
+sits at the edge.
+
+One rule carries the four voices there. **Text in the reading face at 16px is
+the record. Text in the UI face at 13px is the cockpit.** The type scale and
+the layout it implies are in `packages/web/DESIGN.md`.
+
+| Decision | Date |
+|---|---|
+| Tooling may read "G0 to confirm", an assumption's four labels, and `verified` or `derived`. This is a contract change (#518). | 2026-09-26 |
+| The record's own labels are set at reading size, in ink, hung in one column, with the author's bold kept. | 2026-09-27 |
+| Items that open with "G0 to confirm" are grouped first and marked from the margin. The phrase stays in plain weight, because semibold cannot be told apart from bold the author wrote. | 2026-09-27 |
+| Addresses are always visible, one per item, in the margin. This reverses "on demand on decision surfaces" (§4). | 2026-09-26 |
+| An address is the line number. The artifact is named once, in the section head. | 2026-09-27 |
+| No colour inside the record's text. | 2026-09-26 |
+| No item numbers in the margin. "Assumption 3" would be an id the record does not contain. A counter in the pinned bar that holds the gate's question says where the reader is. | 2026-09-26 |
+| The intent brief is a pane pinned beside the column, with its title and an index fixed above its text. | 2026-09-26 |
+| Each requirement's criteria sit under it on the packet, closed by default. This is the one exception to the Fold rule in §5. | 2026-09-27 |
+| The Decide surface may be wider than today's page cap, and the run header is condensed. | 2026-09-26 |
+| Navigation is unchanged, and the same on every surface. | 2026-09-27 |
+| Print is deferred. Folds open for print, and nothing more is specified yet. | 2026-09-26 |
+
+**Rejected on 2026-09-27: navigation that changes by surface.** A sketch
+turned the navigation into a top strip on the Decide surface, to give the
+brief's pane 200px, and had no reason beyond that. The navigation stays the
+same on every surface. The pane's room comes from the wider Decide surface
+instead.
+
+**What stays.** The verbatim rule and the four voices. Assumptions leading the
+packet. The requirement roster. The phase spine. Folding decided by each
+contract's `AUDIENCE:` line. No radius and no shadow. Colour reserved for gate
+state. The four typefaces and the palette.
+
+**What the verbatim rule costs here.** A reviewer asked for curly quotation
+marks and consistent capital letters. Both would alter the record's bytes, so
+they stay as written, and a new reader will sometimes blame the page for the
+source's habits. The packet is also longer. Eight assumptions and a roster run
+about three screens.
 
 ## Appendix: the inventory of 2026-09-25
 

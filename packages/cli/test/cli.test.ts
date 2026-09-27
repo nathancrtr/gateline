@@ -103,16 +103,18 @@ describe('gateline CLI', () => {
     expect(stdout).toMatch(/need a human/)
   })
 
-  // #494: the id is long (github.com/acme/billing), so the listing prints the
-  // display name, and --source takes either the full id or that name.
-  it('--source takes the repository id, in any case, or its display name', async () => {
-    for (const name of ['local/demo', 'LOCAL/Demo', 'demo']) {
-      const { stdout } = await run(['show', 'g1-pending', '--source', name])
-      expect(stdout.split('\n'), name).toContain('plan.md')
-    }
-    const { code, stderr } = await run(['show', 'g1-pending', '--source', 'github.com/acme/billing'], true)
+  // #494, #497: the id is long (github.com/acme/billing), so the listing
+  // prints the display name, and --repository (with --source as its alias)
+  // takes either the full id or that name, in any case.
+  it('--repository and its alias --source take the repository id, in any case, or its display name', async () => {
+    for (const flag of ['--repository', '--source'])
+      for (const name of ['local/demo', 'LOCAL/Demo', 'demo', 'DEMO']) {
+        const { stdout } = await run(['show', 'g1-pending', flag, name])
+        expect(stdout.split('\n'), `${flag} ${name}`).toContain('plan.md')
+      }
+    const { code, stderr } = await run(['show', 'g1-pending', '--repository', 'github.com/acme/billing'], true)
     expect(code).toBe(1)
-    expect(stderr).toContain('run "g1-pending" not found in source github.com/acme/billing')
+    expect(stderr).toContain('run "g1-pending" not found in repository github.com/acme/billing')
   })
 
   it('refuses two --repo paths that resolve to one id, naming both', async () => {

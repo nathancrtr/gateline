@@ -33,6 +33,9 @@ jobs:
           cd /tmp/seed
           git config user.name "CI Seed" && git config user.email ci@example.test
           echo smoke > README.md
+          # The root layout, so the seed carries the framework and the server
+          # accepts it (docs/MULTI-REPO.md §7.2).
+          for d in roles contracts registry; do mkdir "$d" && echo "$d" > "$d/README"; done
           git add . && git commit -qm init
           # The container runs as root; the runner's uid owning the repo would
           # trip git's dubious-ownership check during the in-container clone.

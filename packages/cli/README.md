@@ -36,16 +36,27 @@ gateline pause <slug> [--reason …]
 gateline resume <slug> [--phase …]       phase derived from the gate ledger if omitted
                                          [--cost-limit N] (required from a budget-exhausted pause)
 gateline sync [--live]                   copy approved PR reviews into undecided G2 entries
+gateline repo add <path> --mode <mode>   list a repository: view | decide | dispatch
+                                         [--name …] [--gateline-prefix …]
+gateline repo remove <id or name>        drop a repository from the list
+gateline repo list                       id, origin, display name, mode, framework ref
 gateline ui [--demo] [--port N]          serve the web app (no engine)
 gateline up [--spend-limit-usd N]        web app + the v1 orchestrator over one clone
                                          [--spend-window H] (the limit is per rolling window, default 24h)
 ```
 
-Global: `--repo <path>` (repeatable) overrides source discovery;
-`--source <id>` disambiguates a slug that exists in more than one source. It
-takes the repository's full id (`github.com/acme/billing`, `local/sandbox`) or
-its display name (`billing`), which is also what `status` and `inbox` print
-before each slug.
+Global: `--repo <path>` (repeatable) names repositories by path in place of
+the config file. `--repository <id or name>` picks the repository on any
+command that takes a slug, and on `new` and `sync`; it is needed when a slug
+exists in more than one. It takes the repository's full id
+(`github.com/acme/billing`, `local/sandbox`) or its display name (`billing`),
+in any case, and the display name is what `status` and `inbox` print before
+each slug. `--source` is its older spelling and still works.
+
+Every next step `inbox` prints can be pasted and run: with several
+repositories it carries `--repository <display name>`, as in
+`gateline arm add-export --repository billing`; with one it stays bare. A
+repository in `view` mode gets no commands, only a line saying so.
 
 ## Common workflows
 
@@ -77,10 +88,23 @@ an engine watching the repo never sees an approved-but-undecided window.
 review, `gateline sync` plans the copy of approved reviews into undecided G2
 entries and `sync --live` records them (uses the `gh` CLI's login).
 
-**Many repos.** List sources in `~/.config/gateline/config.yaml` (see the
-[frontend README](../README.md)), or point at one ad hoc with
-`--repo <path>`. Hosts integrated under a prefix are discovered via their
-`.gateline/framework-lock.json` — no per-host configuration.
+**Many repos.** `gateline repo add ~/repos/billing --mode decide` lists a
+repository in `~/.config/gateline/config.yaml`; `repo list` prints what is
+listed and `repo remove billing` drops it. Every entry states a mode: `view`
+reads only, `decide` also records decisions, and `dispatch` also lets `up` run
+an engine. A decision in a `view` repository is refused with
+`refused (view-mode): …` and exit code 1. `repo add` refuses a repository
+whose default branch does not carry the framework, and one already listed;
+a listed repository that stops passing is left out with a warning while the
+others load.
+The file format, and the migration for a file written before modes existed,
+is in the [frontend README](../README.md). To point at one repository ad hoc,
+use `--repo <path>`. A host integrated with a custom `gateline init --prefix`
+is added with `--gateline-prefix <dir>`.
+
+`gateline init` ends by printing the `gateline repo add` command for the host.
+It is an offer: nothing is written to your config, and the check it runs
+reads the default branch, so run it after the scaffold PR merges.
 
 **Headless / no browser.** Everything above is already browser-free. The
 engine, too — `up` serves Gatehouse alongside it, but the orchestrator has
@@ -95,7 +119,8 @@ gateline-orchestrator shadow <slug>    # replay a finished run, derived vs actua
 
 `--dry-run` is the safe preview; a live `tick`/`watch` dispatches real,
 metered agents. `up` runs exactly one engine over one clone — pass a single
-`--repo` (the server may still aggregate more via config).
+`--repo`, and its Gatehouse serves that repository alone. `gateline ui` serves
+the config file's list, with no engine.
 
 ## Pitfalls
 

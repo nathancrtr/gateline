@@ -144,7 +144,7 @@ describe('syncFromRemote under local-only (AC2.4)', () => {
 describe('fetch_interval config plumbing', () => {
   it('reaches the source as fetchIntervalSeconds', async () => {
     const configPath = join(scratch, 'config.yaml')
-    await writeFile(configPath, `sources:\n  - name: clone\n    path: ${cloneDir}\n    push: false\n    fetch_interval: 45\n`)
+    await writeFile(configPath, `repositories:\n  - name: clone\n    path: ${cloneDir}\n    mode: decide\n    push: false\n    fetch_interval: 45\n`)
     const { sources } = await loadSources({ configPath })
     expect((sources[0] as LocalGitSource).fetchIntervalSeconds).toBe(45)
   })

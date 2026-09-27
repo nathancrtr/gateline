@@ -54,12 +54,18 @@ if git symbolic-ref -q HEAD >/dev/null; then
   git switch --detach --quiet
 fi
 
+# The server's one repository, in `decide` mode (docs/MULTI-REPO.md §7.3): it
+# records decisions, and the engine below is the standalone binary, which is
+# given --repo and reads no config. `push` stays explicit so PUSH_DECISIONS
+# alone decides whether decisions are pushed. SOURCE_NAME is the display name;
+# the id comes from REPO_URL (docs/DEPLOY.md, configuration reference).
 CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/gateline"
 mkdir -p "$CONF_DIR"
 cat > "$CONF_DIR/config.yaml" <<EOF
-sources:
+repositories:
   - name: $SOURCE_NAME
     path: $REPO_DIR
+    mode: decide
     push: $PUSH_DECISIONS
     fetch_interval: $FETCH_INTERVAL
 EOF

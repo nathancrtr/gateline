@@ -304,12 +304,15 @@ existing reader of framework roots does. It passes in either of two cases.
    repository "no lock".
 
 Anything else is refused with a message. The message names `gateline init`, and
-names `gateline_prefix` when a lock is found under another directory.
+names `gateline_prefix` when a lock is found under another directory. A refused
+config entry is left out of the set with that message as a warning, and the
+other repositories load (§10); startup stops only when none can be served.
 
 Three limits of the check are stated here so that it is not over-read.
 
-- The second case checks shape, and nothing like it is built today. Today a
-  repository with no lock is assumed to carry the framework at its root.
+- The second case checks shape only: three directories at the root, whatever
+  they hold. Before #495 a repository with no lock was assumed to carry the
+  framework at its root, and `--repo` and the working directory still are.
 - A host whose `init` change is not yet merged to its default branch is
   refused. That is intended.
 - The check catches a mistyped path or an unrelated repository. It would not
@@ -853,7 +856,8 @@ passing. Where a step depends on another, it says so.
 2. **Registration and modes.** `gateline repo add|remove|list`, the framework
    check, the required `mode`, the push default, enforcement in the server and
    the CLI, the offer at the end of `init`. Fixtures gain the root layout or a
-   lock.
+   lock. Done by #495, together with the CLI half of step 4 (`--repository`,
+   and next steps that name the repository).
 3. **Faults and freshness.** The fault boundary, change events that name the
    repository, concurrent reads. After PRs #462 and #463.
 4. **Naming in the interface.** The run header, row placement, the page title,

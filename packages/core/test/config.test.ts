@@ -28,7 +28,7 @@ beforeAll(async () => {
   // unexercised — a config entry naming a subdirectory.
   subdirConfigDir = await mkdtemp(join(tmpdir(), 'gateline-493-cfg-'))
   subdirConfigPath = join(subdirConfigDir, 'config.yaml')
-  await writeFile(subdirConfigPath, `sources:\n  - name: via-subdir\n    path: ${subdir}\n`)
+  await writeFile(subdirConfigPath, `repositories:\n  - name: via-subdir\n    path: ${subdir}\n    mode: decide\n`)
 })
 
 afterAll(async () => {
@@ -163,7 +163,7 @@ describe('local-only mode resolution', () => {
 
   it("config push:false with an origin stays localOnly=false (ADR-2's poller case)", async () => {
     const bare = addOrigin(fx.repo.dir)
-    const configPath = await writeConfig(`sources:\n  - name: poller\n    path: ${fx.repo.dir}\n    push: false\n`)
+    const configPath = await writeConfig(`repositories:\n  - name: poller\n    path: ${fx.repo.dir}\n    mode: decide\n    push: false\n`)
 
     const { sources } = await loadSources({ configPath })
     const source = sources[0] as LocalGitSource
@@ -177,19 +177,19 @@ describe('local-only mode resolution', () => {
   })
 
   it('a remoteless config entry auto-detects local-only', async () => {
-    const configPath = await writeConfig(`sources:\n  - name: remoteless\n    path: ${fx.repo.dir}\n`)
+    const configPath = await writeConfig(`repositories:\n  - name: remoteless\n    path: ${fx.repo.dir}\n    mode: decide\n`)
 
     const { sources } = await loadSources({ configPath })
     expect((sources[0] as LocalGitSource).localOnly).toBe(true)
   })
 
-  it('AC1.3: a config entry with an origin and no push key stays push:false (existing default)', async () => {
+  it('AC1.3: a decide entry with an origin and no push key stays push:false (existing default)', async () => {
     // Unlike the CLI tier, a config entry with no explicit `push` key does not
     // auto-detect on origin existence — it keeps the pre-diff default of
     // push:false (plan table rule 3, config-tier branch). Only `localOnly`
     // itself auto-detects from origin existence (here: false, since one exists).
     const bare = addOrigin(fx.repo.dir)
-    const configPath = await writeConfig(`sources:\n  - name: quiet\n    path: ${fx.repo.dir}\n`)
+    const configPath = await writeConfig(`repositories:\n  - name: quiet\n    path: ${fx.repo.dir}\n    mode: decide\n`)
 
     const { sources } = await loadSources({ configPath })
     const source = sources[0] as LocalGitSource
@@ -203,7 +203,7 @@ describe('local-only mode resolution', () => {
   })
 
   it('AC4.1: config local_only:true + push:true throws LocalOnlyPushConflictError', async () => {
-    const configPath = await writeConfig(`sources:\n  - name: conflict\n    path: ${fx.repo.dir}\n    local_only: true\n    push: true\n`)
+    const configPath = await writeConfig(`repositories:\n  - name: conflict\n    path: ${fx.repo.dir}\n    mode: decide\n    local_only: true\n    push: true\n`)
 
     await expect(loadSources({ configPath })).rejects.toThrow(LocalOnlyPushConflictError)
   })
@@ -228,7 +228,7 @@ describe('local-only mode resolution', () => {
   })
 
   it('a source resolving local-only with fetch_interval set warns that the interval is inert', async () => {
-    const configPath = await writeConfig(`sources:\n  - name: inert-poller\n    path: ${fx.repo.dir}\n    local_only: true\n    fetch_interval: 30\n`)
+    const configPath = await writeConfig(`repositories:\n  - name: inert-poller\n    path: ${fx.repo.dir}\n    mode: decide\n    local_only: true\n    fetch_interval: 30\n`)
 
     const { warnings } = await loadSources({ configPath })
     expect(warnings).toContain('source local/inert-poller: fetch_interval ignored — local-only')

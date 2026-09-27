@@ -197,6 +197,13 @@ describe('loadSources names the set (§6)', () => {
     const dir = join(base, rel)
     await mkdir(dir, { recursive: true })
     git(dir, 'init', '-q', '-b', 'main')
+    // The root layout, so a config entry passes the framework check (§7.2).
+    for (const tree of ['roles', 'contracts', 'registry']) {
+      await mkdir(join(dir, tree))
+      await writeFile(join(dir, tree, 'README'), `${tree}\n`)
+    }
+    git(dir, 'add', '-A')
+    git(dir, '-c', 'user.name=Seed', '-c', 'user.email=seed@example.test', 'commit', '-q', '-m', 'seed')
     if (origin) git(dir, 'remote', 'add', 'origin', origin)
     return realpath(dir)
   }
@@ -229,7 +236,7 @@ describe('loadSources names the set (§6)', () => {
   it('reads a config name as the display name when there is an origin, and as the local name when there is not', async () => {
     const withOrigin = await repo('c/one', 'https://github.com/acme/billing')
     const without = await repo('c/two')
-    const path = await config(`sources:\n  - name: bills\n    path: ${withOrigin}\n  - name: notes\n    path: ${without}\n`)
+    const path = await config(`sources:\n  - name: bills\n    path: ${withOrigin}\n    mode: decide\n  - name: notes\n    path: ${without}\n    mode: view\n`)
     const { sources } = await loadSources({ configPath: path })
     expect(sources.map((s) => [s.id, displayNameOf(s)])).toEqual([
       ['github.com/acme/billing', 'bills'],
@@ -239,7 +246,7 @@ describe('loadSources names the set (§6)', () => {
 
   it('takes an id: stated outright over the origin', async () => {
     const dir = await repo('d/aliased', 'work-gh:acme/billing.git')
-    const path = await config(`sources:\n  - path: ${dir}\n    id: github.com/acme/billing\n`)
+    const path = await config(`repositories:\n  - path: ${dir}\n    mode: decide\n    id: github.com/acme/billing\n`)
     const { sources } = await loadSources({ configPath: path })
     expect(sources[0]!.id).toBe('github.com/acme/billing')
     expect(displayNameOf(sources[0]!)).toBe('billing')
@@ -247,7 +254,7 @@ describe('loadSources names the set (§6)', () => {
 
   it('refuses an id: that breaks the rules, at startup', async () => {
     const dir = await repo('d2/x')
-    const path = await config(`sources:\n  - path: ${dir}\n    id: github.com/acme/-\n`)
+    const path = await config(`repositories:\n  - path: ${dir}\n    mode: decide\n    id: github.com/acme/-\n`)
     await expect(loadSources({ configPath: path })).rejects.toThrow(RepositoryIdError)
   })
 
@@ -258,7 +265,7 @@ describe('loadSources names the set (§6)', () => {
 
   it('lists the old names and former_ids a link may carry', async () => {
     const dir = await repo('e/billing-checkout', 'git@github.com:acme/billing.git')
-    const path = await config(`sources:\n  - name: bills\n    path: ${dir}\n    former_ids: [github.com/acme/old-billing]\n`)
+    const path = await config(`repositories:\n  - name: bills\n    path: ${dir}\n    mode: decide\n    former_ids: [github.com/acme/old-billing]\n`)
     const { sources } = await loadSources({ configPath: path })
     expect([...(sources[0]!.formerIds ?? [])].sort()).toEqual(
       ['bills', 'bills-2', 'billing-checkout', 'billing-checkout-2', 'github.com/acme/old-billing'].sort(),
@@ -268,7 +275,7 @@ describe('loadSources names the set (§6)', () => {
   it('refuses two entries with one id, naming both paths', async () => {
     const first = await repo('f/billing', 'git@github.com:acme/billing.git')
     const second = await repo('f/billing-again', 'https://github.com/acme/billing')
-    const path = await config(`sources:\n  - path: ${first}\n  - name: other\n    path: ${second}\n`)
+    const path = await config(`repositories:\n  - path: ${first}\n    mode: decide\n  - name: other\n    path: ${second}\n    mode: decide\n`)
     const err = await loadSources({ configPath: path }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(RepositoryIdError)
     expect((err as Error).message).toContain('two repositories resolve to the id github.com/acme/billing')
@@ -279,8 +286,14 @@ describe('loadSources names the set (§6)', () => {
   it('refuses two ids that differ only in case', async () => {
     const first = await repo('g/one', 'git@github.com:Acme/Billing.git')
     const second = await repo('g/two', 'git@github.com:acme/billing.git')
-    const path = await config(`sources:\n  - name: a\n    path: ${first}\n  - name: b\n    path: ${second}\n`)
+    const path = await config(`repositories:\n  - name: a\n    path: ${first}\n    mode: decide\n  - name: b\n    path: ${second}\n    mode: decide\n`)
     await expect(loadSources({ configPath: path })).rejects.toThrow(/resolve to the id github\.com\/Acme\/Billing/)
+  })
+
+  it('refuses one repository listed twice under two names, which would otherwise get two local ids', async () => {
+    const dir = await repo('h0/twice')
+    const path = await config(`repositories:\n  - name: one\n    path: ${dir}\n    mode: decide\n  - name: two\n    path: ${dir}\n    mode: view\n`)
+    await expect(loadSources({ configPath: path })).rejects.toThrow(`${dir} is listed twice, as local/one and local/two. List each repository once`)
   })
 
   it('refuses two local repositories of the same name, where #494 retired the -2 suffix', async () => {
@@ -295,10 +308,10 @@ describe('loadSources names the set (§6)', () => {
   it('refuses two repositories with one display name, asking for a name', async () => {
     const first = await repo('i/one', 'git@github.com:acme/billing.git')
     const second = await repo('i/two', 'git@gitlab.com:other/billing.git')
-    const path = await config(`sources:\n  - path: ${first}\n  - path: ${second}\n`)
+    const path = await config(`repositories:\n  - path: ${first}\n    mode: decide\n  - path: ${second}\n    mode: decide\n`)
     await expect(loadSources({ configPath: path })).rejects.toThrow(/two repositories have the display name "billing".*Give one of them a `name`/)
     // …and a name settles it.
-    const named = await config(`sources:\n  - path: ${first}\n  - name: other-billing\n    path: ${second}\n`)
+    const named = await config(`repositories:\n  - path: ${first}\n    mode: decide\n  - name: other-billing\n    path: ${second}\n    mode: decide\n`)
     const { sources } = await loadSources({ configPath: named })
     expect(sources.map(displayNameOf)).toEqual(['billing', 'other-billing'])
   })

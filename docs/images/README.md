@@ -22,12 +22,12 @@ than on a timer — a bare headless screenshot races the SPA:
 cd packages && node web/scripts/capture-readme.mjs http://127.0.0.1:4312 /tmp/shots
 ```
 
-The script discovers the source id from `GET /api/health` at capture time;
-pass it as a third argument if the server has multiple sources and you need
-a specific one:
+The script discovers the repository id from `GET /api/health` at capture
+time; pass it as a third argument if the server has multiple repositories and
+you need a specific one:
 
 ```sh
-cd packages && node web/scripts/capture-readme.mjs http://127.0.0.1:4312 /tmp/shots gateline
+cd packages && node web/scripts/capture-readme.mjs http://127.0.0.1:4312 /tmp/shots github.com/nathancrtr/gateline
 ```
 
 Scale each frame to 1280 wide; `run-escalation-detail.png` is

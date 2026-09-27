@@ -12,6 +12,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ApiError, api, PROFILE_GATES, type Profile, type StageOutcomeView, type StagingSourceConfig } from '../api.ts'
 import { Imp } from '../components/chips.tsx'
+import { runPath } from '../run-path.ts'
 import { PageStatus } from './inbox.tsx'
 
 const PROFILES: Profile[] = ['patch', 'standard', 'full']
@@ -168,7 +169,7 @@ export function NewRunPage() {
         // stay put and render the warning below with a manual link, rather
         // than silently carrying the operator to a page that implies full
         // replication.
-        if (!result.pushFailed) navigate(`/runs/${source.id}/${result.slug}`)
+        if (!result.pushFailed) navigate(runPath(source.id, result.slug))
       }
     },
     onError: (e) => {
@@ -231,7 +232,7 @@ export function NewRunPage() {
                 The commit is local only — the remote never received run/{outcome.slug}. Nothing has dispatched and
                 nothing is spent; retry the push from the server, then continue.
               </p>
-              <Link to={`/runs/${source.id}/${outcome.slug}`} className="mt-2 inline-block font-semibold text-bad hover:underline">
+              <Link to={runPath(source.id, outcome.slug)} className="mt-2 inline-block font-semibold text-bad hover:underline">
                 Continue to {outcome.slug}
               </Link>
             </Flash>
@@ -241,7 +242,7 @@ export function NewRunPage() {
             <Flash tone="info">
               <p className="font-semibold">Already staged — this exact request was recorded before.</p>
               <p className="mt-1 text-muted">No second commit was made; there is nothing to redo. This is not an error.</p>
-              <Link to={`/runs/${source.id}/${outcome.slug}`} className="mt-2 inline-block font-semibold text-ink hover:underline">
+              <Link to={runPath(source.id, outcome.slug)} className="mt-2 inline-block font-semibold text-ink hover:underline">
                 Open {outcome.slug}
               </Link>
             </Flash>
@@ -251,7 +252,7 @@ export function NewRunPage() {
             <Flash tone="bad">
               <p className="font-semibold">Refused — slug taken.</p>
               <p className="mt-1 text-muted">{outcome.message}</p>
-              <Link to={`/runs/${source.id}/${slug}`} className="mt-2 inline-block font-semibold text-bad hover:underline">
+              <Link to={runPath(source.id, slug)} className="mt-2 inline-block font-semibold text-bad hover:underline">
                 Open the existing {slug}
               </Link>
             </Flash>

@@ -8,6 +8,7 @@ import { AgeBadge, KeyHints, KindChip } from '../components/chips.tsx'
 import { Count, isName, Name, QuotedWord } from '../components/vocabulary.tsx'
 import { gateCardState } from '../gate-state.ts'
 import { usd } from '../money.ts'
+import { runPath } from '../run-path.ts'
 import { type KeyHint, useKeys } from '../use-keys.ts'
 
 const STALE_SECONDS = 3 * 86_400 // aging turns urgent at 3 days
@@ -31,7 +32,7 @@ export function itemHref(item: InboxItem): string {
   else if (item.kind === 'paused') params.set('decide', 'paused')
   else if (item.kind === 'staged') params.set('decide', 'staged')
   const q = params.toString()
-  return `/runs/${item.source}/${item.slug}${q ? `?${q}` : ''}`
+  return runPath(item.source, item.slug, q)
 }
 
 /**

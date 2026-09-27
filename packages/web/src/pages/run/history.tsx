@@ -11,6 +11,7 @@ import { artifactHref, Fold, isName, KindLabel, Name, QuotedPassage, QuotedWord 
 import { decideTargetIndex } from '../../landing.ts'
 import { collapseEngineSpans } from '../../ledger-spans.ts'
 import { usd } from '../../money.ts'
+import { runPath } from '../../run-path.ts'
 import { PageStatus } from '../inbox.tsx'
 import { burdenPillNeeded } from './decide-card.tsx'
 
@@ -57,7 +58,7 @@ export function ledgerLink(
 ): { label: string; to: string } | null {
   if (!t) return null
   if (t.decide && decideTargetIndex(t.decide, [...ctx.items]) >= 0) {
-    return { label: 'open the card', to: `/runs/${ctx.src}/${ctx.slug}?decide=${t.decide}` }
+    return { label: 'open the card', to: runPath(ctx.src, ctx.slug, `decide=${t.decide}`) }
   }
   const ref = t.artifact ? ctx.artifacts.find((a) => a.path === t.artifact!.path) : undefined
   if (ref) return { label: `open the ${ref.contractName ?? 'artifact'}`, to: artifactHref(ctx.src, ctx.slug, ref.path) }

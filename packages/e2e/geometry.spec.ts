@@ -33,7 +33,7 @@ import type { ChildProcess } from 'node:child_process'
 import { rmSync } from 'node:fs'
 import { generateFixtureRepo } from '@gateline/fixtures'
 import { type Browser, expect, type Page, test } from '@playwright/test'
-import { spawnDemoServer } from './demo-server.ts'
+import { DEMO_ID, spawnDemoServer } from './demo-server.ts'
 
 // The page is built with `browser.newPage()` rather than taken from the `page`
 // fixture — one context for the whole file — so it carries no `baseURL` and
@@ -164,28 +164,28 @@ const STATES: SweepState[] = [
   { name: 'metrics', path: () => '/metrics', ready: 'h1' },
   { name: 'new run', path: () => '/portfolio/new', ready: 'h1' },
 
-  { name: 'g0-pending · decide', path: (s) => `/runs/${s}/g0-pending?decide=G0`, ready: '[data-needs-card]' },
-  { name: 'g0-pending · history', path: (s) => `/runs/${s}/g0-pending?tab=history`, ready: '[data-spine]' },
+  { name: 'g0-pending · decide', path: (s) => `/repos/${s}/-/runs/g0-pending?decide=G0`, ready: '[data-needs-card]' },
+  { name: 'g0-pending · history', path: (s) => `/repos/${s}/-/runs/g0-pending?tab=history`, ready: '[data-spine]' },
 
-  { name: 'g1-pending · decide', path: (s) => `/runs/${s}/g1-pending?decide=G1`, ready: '[data-g1-packet]' },
+  { name: 'g1-pending · decide', path: (s) => `/repos/${s}/-/runs/g1-pending?decide=G1`, ready: '[data-g1-packet]' },
 
-  { name: 'g2-pending · decide', path: (s) => `/runs/${s}/g2-pending?decide=G2`, ready: '[data-needs-card]' },
-  { name: 'g2-pending · history', path: (s) => `/runs/${s}/g2-pending?tab=history`, ready: '[data-spine]' },
+  { name: 'g2-pending · decide', path: (s) => `/repos/${s}/-/runs/g2-pending?decide=G2`, ready: '[data-needs-card]' },
+  { name: 'g2-pending · history', path: (s) => `/repos/${s}/-/runs/g2-pending?tab=history`, ready: '[data-spine]' },
 
-  { name: 'g3-pending · decide', path: (s) => `/runs/${s}/g3-pending?decide=G3`, ready: '[data-needs-card]' },
+  { name: 'g3-pending · decide', path: (s) => `/repos/${s}/-/runs/g3-pending?decide=G3`, ready: '[data-needs-card]' },
 
-  { name: 'escalated', path: (s) => `/runs/${s}/escalated`, ready: '[data-spine]' },
-  { name: 'round-cap', path: (s) => `/runs/${s}/round-cap`, ready: '[data-spine]' },
-  { name: 'paused-budget', path: (s) => `/runs/${s}/paused-budget`, ready: '[data-spine]' },
-  { name: 'closed-delivered', path: (s) => `/runs/${s}/closed-delivered`, ready: '[data-spine]' },
-  { name: 'done-merged', path: (s) => `/runs/${s}/done-merged`, ready: '[data-spine]' },
-  { name: 'patch-g1-pending', path: (s) => `/runs/${s}/patch-g1-pending?decide=G1`, ready: '[data-spine]' },
-  { name: 'patch-g2-pending', path: (s) => `/runs/${s}/patch-g2-pending`, ready: '[data-spine]' },
-  { name: 'forked-contract', path: (s) => `/runs/${s}/forked-contract`, ready: '[data-spine]' },
-  { name: 'malformed-spec · bounce', path: (s) => `/runs/${s}/malformed-spec?decide=G0`, ready: '[data-needs-card]' },
-  { name: 'staged · arm', path: (s) => `/runs/${s}/staged?decide=staged`, ready: '[data-staged-brief]' },
-  { name: 'malformed-release · bounce', path: (s) => `/runs/${s}/malformed-release?decide=G3`, ready: '[data-needs-card]' },
-  { name: 'bad-state', path: (s) => `/runs/${s}/bad-state`, ready: 'main' },
+  { name: 'escalated', path: (s) => `/repos/${s}/-/runs/escalated`, ready: '[data-spine]' },
+  { name: 'round-cap', path: (s) => `/repos/${s}/-/runs/round-cap`, ready: '[data-spine]' },
+  { name: 'paused-budget', path: (s) => `/repos/${s}/-/runs/paused-budget`, ready: '[data-spine]' },
+  { name: 'closed-delivered', path: (s) => `/repos/${s}/-/runs/closed-delivered`, ready: '[data-spine]' },
+  { name: 'done-merged', path: (s) => `/repos/${s}/-/runs/done-merged`, ready: '[data-spine]' },
+  { name: 'patch-g1-pending', path: (s) => `/repos/${s}/-/runs/patch-g1-pending?decide=G1`, ready: '[data-spine]' },
+  { name: 'patch-g2-pending', path: (s) => `/repos/${s}/-/runs/patch-g2-pending`, ready: '[data-spine]' },
+  { name: 'forked-contract', path: (s) => `/repos/${s}/-/runs/forked-contract`, ready: '[data-spine]' },
+  { name: 'malformed-spec · bounce', path: (s) => `/repos/${s}/-/runs/malformed-spec?decide=G0`, ready: '[data-needs-card]' },
+  { name: 'staged · arm', path: (s) => `/repos/${s}/-/runs/staged?decide=staged`, ready: '[data-staged-brief]' },
+  { name: 'malformed-release · bounce', path: (s) => `/repos/${s}/-/runs/malformed-release?decide=G3`, ready: '[data-needs-card]' },
+  { name: 'bad-state', path: (s) => `/repos/${s}/-/runs/bad-state`, ready: 'main' },
 
   // The record's reader, artifact by artifact: what the pane does with its
   // width is a property of what is in it, and a markdown table, a fenced
@@ -204,13 +204,13 @@ const STATES: SweepState[] = [
   ...recordStates('g2-pending', ['spec.md', 'state.yaml', 'tasks/01-core.yaml']),
   ...recordStates('g1-pending', ['tasks/02-errors.yaml']),
   ...recordStates('malformed-spec', ['spec.md']),
-  { name: 'g2-pending · diff', path: (s) => `/runs/${s}/g2-pending?tab=diff`, ready: 'main' },
+  { name: 'g2-pending · diff', path: (s) => `/repos/${s}/-/runs/g2-pending?tab=diff`, ready: 'main' },
 ]
 
 function recordStates(slug: string, artifacts: string[], broken?: KnownBroken[]): SweepState[] {
   return artifacts.map((artifact) => ({
     name: `${slug} · record · ${artifact}`,
-    path: (s: string) => `/runs/${s}/${slug}?tab=record&artifact=${encodeURIComponent(artifact)}`,
+    path: (s: string) => `/repos/${s}/-/runs/${slug}?tab=record&artifact=${encodeURIComponent(artifact)}`,
     ready: 'article',
     broken,
   }))
@@ -246,25 +246,24 @@ interface Measurement {
 }
 
 let fixtureDir: string
+let fixtureRoot: string
 let server: ChildProcess
 let page: Page
 const measurements: Measurement[] = []
 const phone: Measurement[] = []
 const narrowHeader: { state: string; headerOnly: number; viewport: number; spineCrop: number }[] = []
 
-const sourceId = () => fixtureDir.replace(/\/+$/, '').split('/').pop()!
-
 test.beforeAll(async ({ browser }: { browser: Browser }) => {
   // ~25 states × 4 widths, one navigation each: well past the per-test default.
   test.setTimeout(300_000)
-  fixtureDir = generateFixtureRepo().dir
+  ;({ dir: fixtureDir, root: fixtureRoot } = generateFixtureRepo())
   ;({ server, origin: ORIGIN } = await spawnDemoServer(fixtureDir))
 
   page = await browser.newPage({ viewport: { width: WIDTHS[WIDTHS.length - 1], height: 900 } })
   for (const state of STATES) {
     for (const width of WIDTHS) {
       await page.setViewportSize({ width, height: 900 })
-      await page.goto(ORIGIN + state.path(sourceId()))
+      await page.goto(ORIGIN + state.path(DEMO_ID))
       await expect(page.locator(state.ready).first()).toBeVisible()
       await settle(page)
       measurements.push({ state: state.name, width, ...(await measure(page)) })
@@ -273,7 +272,7 @@ test.beforeAll(async ({ browser }: { browser: Browser }) => {
   for (const width of [PHONE, NARROW_PHONE]) {
     await page.setViewportSize({ width, height: 844 })
     for (const slug of PHONE_RUNS) {
-      await page.goto(`${ORIGIN}/runs/${sourceId()}/${slug}`)
+      await page.goto(`${ORIGIN}/repos/${DEMO_ID}/-/runs/${slug}`)
       await expect(page.locator(slug === 'bad-state' ? 'main h1' : '[data-spine]').first()).toBeVisible()
       await settle(page)
       phone.push({ state: slug, width, ...(await measure(page)) })
@@ -314,7 +313,7 @@ async function measureHeaderAlone(p: Page): Promise<{ headerOnly: number; viewpo
 test.afterAll(async () => {
   await page?.close()
   server?.kill()
-  if (fixtureDir) rmSync(fixtureDir, { recursive: true, force: true })
+  if (fixtureRoot) rmSync(fixtureRoot, { recursive: true, force: true })
 })
 
 /**

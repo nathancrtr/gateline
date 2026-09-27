@@ -6,6 +6,7 @@ import type { RunScaffold } from '../record/scaffold.ts'
 import type { Identity, RunState, StateDocMutation, StateParseResult } from '../record/schema.ts'
 import type { ContractTemplates } from '../record/validate.ts'
 import type { CommitInfo } from './git.ts'
+import { lastIdSegment } from './repository-id.ts'
 import type { ViewRefs } from './view-refs.ts'
 
 export interface RunRef {
@@ -71,7 +72,26 @@ export interface WriteResult {
 }
 
 export interface RunSource {
+  /**
+   * The repository's id (docs/MULTI-REPO.md §6): `<host>/<owner>/<name>` from
+   * its origin, or `local/<name>` when it has none. What URLs, cache keys and
+   * logs carry. Two ids that differ only in case name the same repository;
+   * compare them with `sameRepositoryId`.
+   */
   readonly id: string
+  /**
+   * The short name an interface shows. Presentation only: never in a URL, a
+   * cache key or a commit. Optional so a driver or a test double need not say;
+   * read it through `displayNameOf`, which falls back to the id's last segment.
+   */
+  readonly displayName?: string
+  /**
+   * Names this repository was reached by before its current id, so a link
+   * made under one still resolves (§6.3, §6.4): the config's `former_ids:`,
+   * and the ids a deployment used before #494 — the config `name`, the
+   * directory's basename, and either with a `-2` suffix. Absent means none.
+   */
+  readonly formerIds?: readonly string[]
   /** Contract templates of this repo, for R3 validation. */
   readonly templates: ContractTemplates
   listRuns(): Promise<RunRef[]>
@@ -125,8 +145,10 @@ export interface RunSource {
    */
   behindOrigin?(ref: RunRef): Promise<number | null>
   /**
-   * This source's `remote.origin.url`, verbatim, for deriving a link out to
-   * the git host (#267 — `view-model/host-link.ts` decides what it means).
+   * This source's origin URL as git resolves it (`git remote get-url origin`,
+   * which applies `insteadOf` rewrites — the same string the id is derived
+   * from), for deriving a link out to the git host (#267 —
+   * `view-model/host-link.ts` decides what it means).
    * Null means there is nothing to link to and the caller keeps its local
    * view: no remote configured, or a local-only source, which has no origin
    * by definition (FRONTEND.md §4.1 — degrade to the local view, never to a
@@ -150,4 +172,9 @@ export interface RunSource {
    * staged it, whoever is holding the write path.
    */
   stageRun(scaffold: RunScaffold, who: Identity): Promise<StageOutcome>
+}
+
+/** The name an interface shows for a source: its own display name, or else its id's last segment (§6.2). */
+export function displayNameOf(source: Pick<RunSource, 'id' | 'displayName'>): string {
+  return source.displayName ?? lastIdSegment(source.id)
 }

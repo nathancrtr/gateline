@@ -21,7 +21,7 @@ import type { RunDetailResponse } from '../src/api.ts'
 import { G0Packet, StagedBrief } from '../src/components/g0.tsx'
 import { NeedsYouCard } from '../src/pages/run/decide-card.tsx'
 
-const SRC = 'fixture'
+const SRC = 'local/demo'
 
 let fixture: FixtureRepo
 let app: ReturnType<typeof createApp>
@@ -34,7 +34,7 @@ async function get<T>(path: string): Promise<T> {
 
 /** A client seeded with the run's own payloads, so every query the card makes is answered. */
 async function seeded(slug: string): Promise<{ client: QueryClient; detail: RunDetailResponse }> {
-  const base = `/api/runs/${SRC}/${slug}`
+  const base = `/api/repos/${SRC}/-/runs/${slug}`
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } } })
   const detail = await get<RunDetailResponse>(base)
   client.setQueryData(['run', SRC, slug], detail)
@@ -86,7 +86,7 @@ beforeAll(async () => {
   fixture = generateFixtureRepo()
   app = createApp({ sources: [new LocalGitSource(SRC, fixture.dir)] })
 }, 120_000)
-afterAll(() => rm(fixture.dir, { recursive: true, force: true }))
+afterAll(() => rm(fixture.root, { recursive: true, force: true }))
 
 describe('the G0 packet over g0-pending', () => {
   it('leads with the Assumptions, each quoted whole, its line an Address linked into the reader', async () => {
@@ -104,7 +104,7 @@ describe('the G0 packet over g0-pending', () => {
     // The address says where, and the link opens the spec in the reader on that line (#441).
     const link = new RegExp(`<a([^>]*)>spec\\.md:${assumption[1]}</a>`).exec(assumption[2]!)
     expect(link?.[1]).toContain('data-address')
-    expect(link?.[1]).toContain(`href="/runs/${SRC}/g0-pending?tab=record&amp;artifact=spec.md&amp;anchor=L${assumption[1]}"`)
+    expect(link?.[1]).toContain(`href="/repos/${SRC}/-/runs/g0-pending?tab=record&amp;artifact=spec.md&amp;anchor=L${assumption[1]}"`)
     // Quoted as a passage: the hairline box, the record's markdown rendered.
     expect(assumption[0]).toMatch(/border-line bg-surface/)
     expect(assumption[2]).toContain('<strong>ASSUMPTION:</strong>')
@@ -291,7 +291,7 @@ x
       const p = /<p [^>]*data-withheld="criteria"[^>]*>([\s\S]*?)<\/p>/.exec(html)!
       expect(p[0]).toContain('data-withheld-view')
       expect(p[1]).toContain('<span class="font-mono">AC&lt;n&gt;.&lt;m&gt; — &lt;criterion&gt;</span>')
-      expect([...p[1]!.matchAll(/<a [^>]*href="([^"]*)"/g)].map((m) => m[1])).toEqual([`/runs/${SRC}/g0-pending?tab=record&amp;artifact=spec.md`])
+      expect([...p[1]!.matchAll(/<a [^>]*href="([^"]*)"/g)].map((m) => m[1])).toEqual([`/repos/${SRC}/-/runs/g0-pending?tab=record&amp;artifact=spec.md`])
       expect(text(outsideAddresses(html))).not.toMatch(FILENAME)
     })
 

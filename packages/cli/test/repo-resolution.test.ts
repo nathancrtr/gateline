@@ -26,7 +26,7 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  await rm(fixture.dir, { recursive: true, force: true })
+  await rm(fixture.root, { recursive: true, force: true })
   await rm(nonGitDir, { recursive: true, force: true })
 })
 

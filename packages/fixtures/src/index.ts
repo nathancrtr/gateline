@@ -16,7 +16,13 @@ export interface FixtureRun {
 }
 
 export interface FixtureRepo {
+  /** The repository. With no `dir` passed, its basename is fixed (`demo` by default). */
   dir: string
+  /**
+   * What to remove when done: the temp directory the repository was made in,
+   * or `dir` itself when the caller chose the directory.
+   */
+  root: string
   runs: FixtureRun[]
   /** Epoch seconds the fixture treats as "now" (newest commit time). */
   now: number
@@ -662,10 +668,35 @@ export interface FixtureLayoutOpts {
   layout?: 'root' | 'prefixed'
   /** Metadata prefix directory when `layout: 'prefixed'`. Defaults to `.gateline`. */
   prefix?: string
+  /**
+   * The repository directory's name when no `dir` is given, so its id is
+   * fixed (#494): a repository with no origin is `local/<directory name>`,
+   * and a random temp name made the demo's id — and every URL into it —
+   * different on each start. Defaults to `demo`, giving `local/demo`.
+   */
+  name?: string
 }
 
+/** The default fixture's directory name, and so its id's name: `local/demo`. */
+export const FIXTURE_NAME = 'demo'
+
+/**
+ * Generate the fixture repository. With no `dir`, it is created as
+ * `<a fresh temp directory>/<name>` — the temp parent keeps concurrent
+ * fixtures apart, and the fixed basename keeps the id stable. `FixtureRepo.root`
+ * is that parent, the directory to remove afterwards.
+ */
 export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts = {}): FixtureRepo {
-  const root = dir ?? mkdtempSync(join(tmpdir(), 'gateline-fixture-'))
+  let root: string
+  let parent: string
+  if (dir) {
+    root = dir
+    parent = dir
+  } else {
+    parent = mkdtempSync(join(tmpdir(), 'gateline-fixture-'))
+    root = join(parent, layoutOpts.name ?? FIXTURE_NAME)
+    mkdirSync(root)
+  }
   const repo = new Repo(root)
   const now = Math.floor(Date.now() / 1000)
   const prefix = layoutOpts.prefix ?? '.gateline'
@@ -1196,5 +1227,5 @@ export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts 
   }
 
   repo.git(['checkout', '-q', 'main'])
-  return { dir: root, runs, now }
+  return { dir: root, root: parent, runs, now }
 }

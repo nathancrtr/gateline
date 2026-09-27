@@ -33,5 +33,5 @@ export async function dropDir(dir: string): Promise<void> {
 }
 
 export async function dropFixture(ctx: FixtureContext): Promise<void> {
-  await dropDir(ctx.repo.dir)
+  await dropDir(ctx.repo.root)
 }

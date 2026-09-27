@@ -61,8 +61,8 @@ function classesOf(html: string, attr: string): string[] {
 
 describe('artifactHref — the one link into the Record reader', () => {
   it('encodes the path and appends an anchor only when given', () => {
-    expect(artifactHref('local', 'a-run', 'tasks/01-x.yaml')).toBe('/runs/local/a-run?tab=record&artifact=tasks%2F01-x.yaml')
-    expect(artifactHref('local', 'a-run', 'spec.md', 'def-R2')).toBe('/runs/local/a-run?tab=record&artifact=spec.md&anchor=def-R2')
+    expect(artifactHref('github.com/acme/billing', 'a-run', 'tasks/01-x.yaml')).toBe('/repos/github.com/acme/billing/-/runs/a-run?tab=record&artifact=tasks%2F01-x.yaml')
+    expect(artifactHref('github.com/acme/billing', 'a-run', 'spec.md', 'def-R2')).toBe('/repos/github.com/acme/billing/-/runs/a-run?tab=record&artifact=spec.md&anchor=def-R2')
   })
 })
 
@@ -76,9 +76,9 @@ describe('Address — code face, muted; link blue only as a link', () => {
   })
 
   it('as a link: an in-app route in link blue, underlined, and never ↗', () => {
-    const html = render(el(Address, { to: artifactHref('local', 'a-run', 'plan.md') }, 'plan.md'))
+    const html = render(el(Address, { to: artifactHref('github.com/acme/billing', 'a-run', 'plan.md') }, 'plan.md'))
     expect(html).toMatch(/^<a /)
-    expect(html).toContain('href="/runs/local/a-run?tab=record&amp;artifact=plan.md"')
+    expect(html).toContain('href="/repos/github.com/acme/billing/-/runs/a-run?tab=record&amp;artifact=plan.md"')
     expect(classesOf(html, 'data-address')).toEqual(expect.arrayContaining(['font-mono', 'text-accent', 'underline']))
     expect(html).not.toContain('target=')
     expect(html).not.toContain('↗')
@@ -275,9 +275,9 @@ describe('Withheld — a caution field naming the grammar, one link', () => {
   })
 
   it('links once, to the artifact looked in, named by its kind — never by filename', () => {
-    const html = render(el(Withheld, { view: 'Coverage', reason: { grammar: 'a section headed', token: '## X', lookedIn: plan }, src: 'local', slug: 'a-run' }))
+    const html = render(el(Withheld, { view: 'Coverage', reason: { grammar: 'a section headed', token: '## X', lookedIn: plan }, src: 'local/demo', slug: 'a-run' }))
     expect(html.match(/<a /g)).toHaveLength(1)
-    expect(html).toMatch(/<a [^>]*href="\/runs\/local\/a-run\?tab=record&amp;artifact=plan\.md"[^>]*>Open the plan<\/a>/)
+    expect(html).toMatch(/<a [^>]*href="\/repos\/local\/demo\/-\/runs\/a-run\?tab=record&amp;artifact=plan\.md"[^>]*>Open the plan<\/a>/)
     expect(textOf(html)).not.toContain('plan.md')
   })
 

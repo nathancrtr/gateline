@@ -63,10 +63,10 @@ Everything else.
 
 beforeAll(() => {
   fixture = generateFixtureRepo()
-  source = new LocalGitSource('fixture', fixture.dir)
+  source = new LocalGitSource('local/demo', fixture.dir)
   app = createApp({ sources: [source] })
 })
-afterAll(() => rm(fixture.dir, { recursive: true, force: true }))
+afterAll(() => rm(fixture.root, { recursive: true, force: true }))
 
 describe('the wire contract (#317)', () => {
   it('serves the API version on /api/health, so a stale client can say so', async () => {
@@ -81,7 +81,7 @@ describe('the wire contract (#317)', () => {
 
   it('reports every failure in one shape', async () => {
     // ApiErrorBody: `error` always present and a string, at every status.
-    for (const path of ['/api/runs/nope/nope', '/api/runs/nope/nope/lexicon', '/api/runs/nope/nope/g0', '/api/runs/nope/nope/g1']) {
+    for (const path of ['/api/repos/local/nope/-/runs/nope', '/api/repos/local/demo/-/runs/nope/lexicon', '/api/repos/local/nope/-/runs/nope/g0', '/api/repos/local/demo/-/runs/nope/g1']) {
       const { status, body } = await get(path)
       expect(status).toBe(404)
       expect(typeof body.error).toBe('string')
@@ -118,8 +118,8 @@ describe('read routes', () => {
     expect(done.needsHuman).toBe(0)
   })
 
-  it('GET /api/runs/:src/:slug returns state, readiness, artifacts, history', async () => {
-    const { status, body } = await get('/api/runs/fixture/g2-pending')
+  it('GET /api/repos/:id/-/runs/:slug returns state, readiness, artifacts, history', async () => {
+    const { status, body } = await get('/api/repos/local/demo/-/runs/g2-pending')
     expect(status).toBe(200)
     expect(body.summary.phase).toBe('implement')
     expect(body.items[0]).toMatchObject({ kind: 'gate', gate: 'G2', reviewable: true })
@@ -128,8 +128,8 @@ describe('read routes', () => {
     expect(body.stateRaw).toContain('# a gate entry is written ONLY by the named human')
   })
 
-  it('GET /api/runs/:src/:slug carries a ref per artifact, and names each review by its task (#415)', async () => {
-    const { body } = await get('/api/runs/fixture/g2-pending')
+  it('GET /api/repos/:id/-/runs/:slug carries a ref per artifact, and names each review by its task (#415)', async () => {
+    const { body } = await get('/api/repos/local/demo/-/runs/g2-pending')
     // Additive (SEAM §8.5): the paths keep their shape, the refs sit beside them in the same order.
     expect(body.artifactRefs.map((r: { path: string }) => r.path)).toEqual(body.artifacts)
     const verification = body.artifactRefs.find((r: { path: string }) => r.path === 'verification-report.md')
@@ -146,18 +146,18 @@ describe('read routes', () => {
   })
 
   it('404s an unknown run', async () => {
-    expect((await get('/api/runs/fixture/nope')).status).toBe(404)
+    expect((await get('/api/repos/local/demo/-/runs/nope')).status).toBe(404)
   })
 
   it('GET artifact returns content plus its validation', async () => {
-    const { status, body } = await get('/api/runs/fixture/malformed-spec/artifact?path=spec.md')
+    const { status, body } = await get('/api/repos/local/demo/-/runs/malformed-spec/artifact?path=spec.md')
     expect(status).toBe(200)
     expect(body.validation.ok).toBe(false)
     expect(body.validation.missing).toContain('Requirements')
   })
 
   it('GET lexicon returns verbatim definitions plus the id grammar as data', async () => {
-    const { status, body } = await get('/api/runs/fixture/g2-pending/lexicon')
+    const { status, body } = await get('/api/repos/local/demo/-/runs/g2-pending/lexicon')
     expect(status).toBe(200)
     const r1 = body.entries.find((e: { id: string }) => e.id === 'R1')
     expect(r1).toMatchObject({ kind: 'requirement', shortName: 'Core behavior', artifact: 'spec.md' })
@@ -169,7 +169,7 @@ describe('read routes', () => {
   })
 
   it('GET evidence returns presence per criterion with verbatim report quotes', async () => {
-    const { status, body } = await get('/api/runs/fixture/g2-pending/evidence')
+    const { status, body } = await get('/api/repos/local/demo/-/runs/g2-pending/evidence')
     expect(status).toBe(200)
     expect(body.hasVerification).toBe(true)
     const ac11 = body.criteria.find((c: { id: string }) => c.id === 'AC1.1')
@@ -182,7 +182,7 @@ describe('read routes', () => {
   })
 
   it('GET g1 returns coverage against the plan’s mapping and the surface overlaps (#255)', async () => {
-    const { status, body } = await get('/api/runs/fixture/g1-pending/g1')
+    const { status, body } = await get('/api/repos/local/demo/-/runs/g1-pending/g1')
     expect(status).toBe(200)
     expect(body.mappingWithheld).toBeNull()
     expect(body.tasksWithheld).toBeNull()
@@ -197,14 +197,14 @@ describe('read routes', () => {
   })
 
   it('GET g1 withholds both halves on a run with no plan and no tasks (#255)', async () => {
-    const { body } = await get('/api/runs/fixture/g0-pending/g1')
+    const { body } = await get('/api/repos/local/demo/-/runs/g0-pending/g1')
     expect(body.mappingWithheld).toEqual({ grammar: 'a plan', lookedIn: null })
     expect(body.tasksWithheld).toEqual({ grammar: 'a work item', lookedIn: null })
     expect(body.overlaps).toEqual([])
   })
 
   it('GET g0 returns the Assumptions, the roster and the brief’s sections, each with its line (#440)', async () => {
-    const { status, body } = await get('/api/runs/fixture/g0-pending/g0')
+    const { status, body } = await get('/api/repos/local/demo/-/runs/g0-pending/g0')
     expect(status).toBe(200)
     expect(body.assumptionsWithheld).toBeNull()
     expect(body.assumptions).toHaveLength(1)
@@ -218,28 +218,28 @@ describe('read routes', () => {
   })
 
   it('GET g0 withholds the Assumptions on a spec without the section, and serves a staged run’s brief with no spec (#440)', async () => {
-    const malformed = await get('/api/runs/fixture/malformed-spec/g0')
+    const malformed = await get('/api/repos/local/demo/-/runs/malformed-spec/g0')
     expect(malformed.body.assumptionsWithheld).toMatchObject({ grammar: 'a section headed', token: '## Assumptions', lookedIn: { path: 'spec.md' } })
-    const staged = await get('/api/runs/fixture/staged/g0')
+    const staged = await get('/api/repos/local/demo/-/runs/staged/g0')
     expect(staged.body.spec).toBeNull()
     expect(staged.body.briefWithheld).toBeNull()
     expect(staged.body.problem.body.text).toContain('changelog linter')
   })
 
   it('GET diff returns parsed hunks for a branch run and merged flag for done', async () => {
-    const branch = await get('/api/runs/fixture/g2-pending/diff')
+    const branch = await get('/api/repos/local/demo/-/runs/g2-pending/diff')
     expect(branch.status).toBe(200)
     const paths = branch.body.files.map((f: { newPath: string }) => f.newPath)
     expect(paths).toContain('src/core.py')
     expect(paths.every((p: string) => !p.startsWith('runs/'))).toBe(true)
 
-    const merged = await get('/api/runs/fixture/done-merged/diff')
+    const merged = await get('/api/repos/local/demo/-/runs/done-merged/diff')
     expect(merged.body.merged).toBe(true)
     expect(merged.body.files).toHaveLength(0)
   })
 
   it('GET diff labels each changed file with the work item that declared it (#270)', async () => {
-    const { body } = await get('/api/runs/fixture/g2-pending/diff')
+    const { body } = await get('/api/repos/local/demo/-/runs/g2-pending/diff')
     expect(body.surface.withheld).toBeNull()
     expect(body.surface.items.map((i: { id: string }) => i.id)).toEqual(['01-core', '02-errors'])
     // Positional against `files`, which stays the whole diff — the labelling
@@ -257,7 +257,7 @@ describe('read routes', () => {
   })
 
   it('GET diff withholds the labelling for a run with no task set, keeping the diff (#270)', async () => {
-    const { body } = await get('/api/runs/fixture/g0-pending/diff')
+    const { body } = await get('/api/repos/local/demo/-/runs/g0-pending/diff')
     expect(body.surface.withheld).toEqual({ grammar: 'a work item', lookedIn: null })
     expect(body.surface.items).toEqual([])
     expect(body.surface.declaredBy).toHaveLength(body.files.length)
@@ -268,7 +268,7 @@ describe('read routes', () => {
     expect(status).toBe(200)
     expect(body.sources).toHaveLength(1)
     const src = body.sources[0]
-    expect(src.id).toBe('fixture')
+    expect(src.id).toBe('local/demo')
     expect(src.identity).toEqual({ name: 'Fixture Operator', email: 'operator@example.test' })
     expect(src.briefSections).toEqual(['Problem', 'Motivation', 'Constraints', 'Out of scope'])
     expect(typeof src.briefTemplate).toBe('string')
@@ -288,7 +288,7 @@ describe('the write route (R2/R3)', () => {
 
   it('rejects approve on a bounced packet (R3 backstop)', async () => {
     const { status, body } = await post({
-      source: 'fixture',
+      source: 'local/demo',
       slug: 'malformed-spec',
       action: 'approve',
       gate: 'G0',
@@ -299,14 +299,14 @@ describe('the write route (R2/R3)', () => {
   })
 
   it('rejects approve without burden', async () => {
-    const { status, body } = await post({ source: 'fixture', slug: 'g0-pending', action: 'approve', gate: 'G0' })
+    const { status, body } = await post({ source: 'local/demo', slug: 'g0-pending', action: 'approve', gate: 'G0' })
     expect(status).toBe(400)
     expect(body.error).toMatch(/burden/)
   })
 
   it('approves G0 and the change is visible on subsequent reads', async () => {
     const { status, body } = await post({
-      source: 'fixture',
+      source: 'local/demo',
       slug: 'g0-pending',
       action: 'approve',
       gate: 'G0',
@@ -317,7 +317,7 @@ describe('the write route (R2/R3)', () => {
     expect(body.ok).toBe(true)
     expect(body.commit).toMatch(/^[0-9a-f]{40}$/)
 
-    const after = await get('/api/runs/fixture/g0-pending')
+    const after = await get('/api/repos/local/demo/-/runs/g0-pending')
     expect(after.body.state.gates.G0.approved).toBe(true)
     expect(after.body.state.phase).toBe('plan')
     // Inbox no longer offers G0 for this run.
@@ -327,7 +327,7 @@ describe('the write route (R2/R3)', () => {
 
   it('surfaces decision-legality errors as 400s', async () => {
     const { status, body } = await post({
-      source: 'fixture',
+      source: 'local/demo',
       slug: 'g0-pending',
       action: 'approve',
       gate: 'G0',
@@ -455,7 +455,7 @@ Everything else.
       costLimitUsd: null,
       intake: { source: null, ref: null, url: null, clientKey: null },
     })
-    const { status } = await postJson('/api/decisions', { source: 'fixture', slug, action: 'arm' })
+    const { status } = await postJson('/api/decisions', { source: 'local/demo', slug, action: 'arm' })
     expect(status).toBe(200)
     const subject = git(['log', '-1', '--format=%s', `run/${slug}`]).trim()
     expect(subject).toBe(`state(${slug}): armed by Fixture Operator`)
@@ -471,21 +471,21 @@ Everything else.
       costLimitUsd: null,
       intake: { source: null, ref: null, url: null, clientKey: null },
     })
-    const { status, body } = await postJson('/api/decisions', { source: 'fixture', slug, action: 'arm' })
+    const { status, body } = await postJson('/api/decisions', { source: 'local/demo', slug, action: 'arm' })
     expect(status).toBe(422)
     expect(body.error).toMatch(/tasks\/01-stage-patch-stub\.yaml is not a dispatchable work item/)
     expect(git(['log', '-1', '--format=%s', `run/${slug}`]).trim()).toMatch(/^state\(stage-patch-stub\): staged by/)
   })
 
   it("refuses arm on a non-staged run with planDecision's DecisionError message (AC5.2)", async () => {
-    const { status, body } = await postJson('/api/decisions', { source: 'fixture', slug: 'g0-pending', action: 'arm' })
+    const { status, body } = await postJson('/api/decisions', { source: 'local/demo', slug: 'g0-pending', action: 'arm' })
     expect(status).toBe(400)
     expect(body.error).toMatch(/not staged/)
   })
 
   it('closes a run over the existing decision path — no new route (#200)', async () => {
     const { status, body } = await postJson('/api/decisions', {
-      source: 'fixture',
+      source: 'local/demo',
       slug: 'paused-budget',
       action: 'close',
       closure: 'superseded',
@@ -498,13 +498,13 @@ Everything else.
   })
 
   it('refuses a closure with no disposition — the body field is required, not defaulted (#200)', async () => {
-    const { status, body } = await postJson('/api/decisions', { source: 'fixture', slug: 'g0-pending', action: 'close', notes: 'just close it' })
+    const { status, body } = await postJson('/api/decisions', { source: 'local/demo', slug: 'g0-pending', action: 'close', notes: 'just close it' })
     expect(status).toBe(400)
     expect(body.error).toMatch(/requires a disposition/)
   })
 
   it('reopens a closed run over the same path (#200)', async () => {
-    const { status } = await postJson('/api/decisions', { source: 'fixture', slug: 'closed-delivered', action: 'reopen' })
+    const { status } = await postJson('/api/decisions', { source: 'local/demo', slug: 'closed-delivered', action: 'reopen' })
     expect(status).toBe(200)
     const subject = git(['log', '-1', '--format=%s', 'run/closed-delivered']).trim()
     expect(subject).toMatch(/^state\(closed-delivered\): reopened to \S+ by Fixture Operator \(was closed as already-delivered\)$/)
@@ -556,7 +556,7 @@ describe('POST /api/runs with more than one source configured (AC1.3)', () => {
   let multiApp: Hono
 
   beforeAll(() => {
-    multiApp = createApp({ sources: [new LocalGitSource('fixture', fixture.dir), new LocalGitSource('fixture-2', fixture.dir)] })
+    multiApp = createApp({ sources: [new LocalGitSource('local/demo', fixture.dir), new LocalGitSource('local/other', fixture.dir)] })
   })
 
   const postJsonTo = async (app: Hono, path: string, payload: object) => {
@@ -585,7 +585,7 @@ describe('POST /api/runs with more than one source configured (AC1.3)', () => {
 
   it('proceeds without asking once a source is named', async () => {
     const { status, body } = await postJsonTo(multiApp, '/api/runs', {
-      source: 'fixture-2',
+      source: 'local/other',
       slug: 'stage-named-source',
       title: 'named source test',
       profile: 'standard',
@@ -601,7 +601,7 @@ describe('POST /api/runs with more than one source configured (AC1.3)', () => {
 describe('GET /api/engine-health (#141 drift passthrough)', () => {
   it('passes commit/codeHead/codeState through undefined-safe (pre-#141 files have none)', async () => {
     const before = await get('/api/engine-health')
-    expect(before.body.engines.fixture).toBeNull()
+    expect(before.body.engines['local/demo']).toBeNull()
 
     await writeEngineHealth(fixture.dir, {
       at: new Date().toISOString(),
@@ -611,10 +611,10 @@ describe('GET /api/engine-health (#141 drift passthrough)', () => {
       pushRejections: {},
     })
     const noDrift = await get('/api/engine-health')
-    expect(noDrift.body.engines.fixture.commit).toBeUndefined()
-    expect(noDrift.body.engines.fixture.codeHead).toBeUndefined()
-    expect(noDrift.body.engines.fixture.codeState).toBeUndefined()
-    expect(noDrift.body.engines.fixture.codeReason).toBeUndefined()
+    expect(noDrift.body.engines['local/demo'].commit).toBeUndefined()
+    expect(noDrift.body.engines['local/demo'].codeHead).toBeUndefined()
+    expect(noDrift.body.engines['local/demo'].codeState).toBeUndefined()
+    expect(noDrift.body.engines['local/demo'].codeReason).toBeUndefined()
 
     await writeEngineHealth(fixture.dir, {
       at: new Date().toISOString(),
@@ -627,12 +627,12 @@ describe('GET /api/engine-health (#141 drift passthrough)', () => {
       codeState: 'superseded-pending',
     })
     const drift = await get('/api/engine-health')
-    expect(drift.body.engines.fixture).toMatchObject({
+    expect(drift.body.engines['local/demo']).toMatchObject({
       commit: 'a'.repeat(40),
       codeHead: 'b'.repeat(40),
       codeState: 'superseded-pending',
     })
-    expect(drift.body.engines.fixture.codeReason).toBeUndefined()
+    expect(drift.body.engines['local/demo'].codeReason).toBeUndefined()
 
     // A paused heartbeat carries the monitor's cause verbatim (#185).
     await writeEngineHealth(fixture.dir, {
@@ -648,16 +648,16 @@ describe('GET /api/engine-health (#141 drift passthrough)', () => {
       codeCause: 'off-default-branch',
     })
     const paused = await get('/api/engine-health')
-    expect(paused.body.engines.fixture).toMatchObject({
+    expect(paused.body.engines['local/demo']).toMatchObject({
       codeState: 'paused',
       codeReason: "checkout is on branch 'run/toy', not the default branch (main)",
       codeCause: 'off-default-branch',
     })
-    expect(paused.body.engines.fixture.codeUpgradeBlocked).toBeUndefined()
+    expect(paused.body.engines['local/demo'].codeUpgradeBlocked).toBeUndefined()
   })
 })
 
-describe('GET /api/runs/:src/:slug branchUrl — the link out to the host (#267)', () => {
+describe('GET /api/repos/:id/-/runs/:slug branchUrl — the link out to the host (#267)', () => {
   // The origin is stubbed onto a source rather than configured on the fixture
   // repo: a real `remote.origin.url` would also flip a zero-config source into
   // push mode (view-model/config.ts's pushWhenOriginExists), which is a
@@ -669,7 +669,7 @@ describe('GET /api/runs/:src/:slug branchUrl — the link out to the host (#267)
     })
 
   const detailFrom = async (src: LocalGitSource, slug: string) => {
-    const res = await createApp({ sources: [src] }).request(`/api/runs/fixture/${slug}`)
+    const res = await createApp({ sources: [src] }).request(`/api/repos/local/demo/-/runs/${slug}`)
     return (await res.json()) as any
   }
 

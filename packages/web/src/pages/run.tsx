@@ -10,13 +10,14 @@
 // path had to change.
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, type InboxItem } from '../api.ts'
 import { KeyHints } from '../components/chips.tsx'
 import { CloseRunPanel, ClosureRecordBlock } from '../components/close-run.tsx'
 import { LexiconProvider, useRunLexicon } from '../components/lexicon.tsx'
 import { decideTargetIndex, resolveSurface, type Surface } from '../landing.ts'
 import { orderArtifacts } from '../record-rail.ts'
+import { parseRunPath } from '../run-path.ts'
 import { type KeyHint, useKeys } from '../use-keys.ts'
 import { PageStatus } from './inbox.tsx'
 import { burdenPillNeeded, cardInstruction, DecidedCard, NeedsYouCard } from './run/decide-card.tsx'
@@ -38,6 +39,7 @@ const cardKey = (item: InboxItem, i: number) => `${item.kind}-${item.gate ?? ite
 
 /** A committed decision's confirmation, kept past the card it was given on (#506). */
 interface Confirmed {
+  /** The repository id (#494) of the run the decision was made on. */
   src: string | undefined
   slug: string | undefined
   key: string
@@ -45,8 +47,21 @@ interface Confirmed {
   text: string
 }
 
+/**
+ * The repository id and slug this page is for. The route is
+ * `/repos/<id>/-/runs/<slug>` (#494), parsed from the raw pathname; the
+ * pre-#494 `/runs/:src/:slug` route still renders here, so an old link the
+ * server could not match lands on this page's not-found state as it always did.
+ */
+function useRunParams(): { src: string | undefined; slug: string | undefined } {
+  const legacy = useParams<{ src: string; slug: string }>()
+  const { pathname } = useLocation()
+  const parsed = parseRunPath(pathname)
+  return parsed ? { src: parsed.id, slug: parsed.slug } : { src: legacy.src, slug: legacy.slug }
+}
+
 export function RunPage() {
-  const { src, slug } = useParams<{ src: string; slug: string }>()
+  const { src, slug } = useRunParams()
   const [params, setParams] = useSearchParams()
 
   const navigate = useNavigate()
@@ -64,7 +79,11 @@ export function RunPage() {
   // still exists, the card's own panel is showing it.
   const [confirmed, setConfirmed] = useState<Confirmed | null>(null)
   const liveKeys = (data?.items ?? []).map(cardKey)
-  const standing = confirmed && confirmed.src === src && confirmed.slug === slug && !liveKeys.includes(confirmed.key) ? confirmed : null
+  // Matched on the run's full identity: the repository id and the slug (#494).
+  // Ids that differ only in case name one repository, so the id compares
+  // without case.
+  const sameRun = confirmed !== null && confirmed.src?.toLowerCase() === src?.toLowerCase() && confirmed.slug === slug
+  const standing = confirmed && sameRun && !liveKeys.includes(confirmed.key) ? confirmed : null
 
   // Which surface the URL asks for and which it gets. Pure, so it runs before
   // the loading guards below; until the run loads nothing is pending, which is

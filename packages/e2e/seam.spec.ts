@@ -168,6 +168,7 @@ interface Hit {
 }
 
 let fixtureDir: string
+let fixtureRoot: string
 let server: ChildProcess
 let page: Page
 const surfaces: Surface[] = []
@@ -175,7 +176,7 @@ const hits: Hit[] = []
 
 test.beforeAll(async ({ browser }: { browser: Browser }) => {
   test.setTimeout(600_000)
-  fixtureDir = generateFixtureRepo().dir
+  ;({ dir: fixtureDir, root: fixtureRoot } = generateFixtureRepo())
   ;({ server, origin: ORIGIN } = await spawnDemoServer(fixtureDir))
 
   surfaces.push(...(await enumerate()))
@@ -198,7 +199,7 @@ test.afterAll(async () => {
   if (process.env.SEAM_DUMP) writeFileSync(process.env.SEAM_DUMP, JSON.stringify({ surfaces, hits }, null, 1))
   await page?.close()
   server?.kill()
-  if (fixtureDir) rmSync(fixtureDir, { recursive: true, force: true })
+  if (fixtureRoot) rmSync(fixtureRoot, { recursive: true, force: true })
 })
 
 async function getJson<T>(path: string): Promise<T> {
@@ -230,8 +231,8 @@ async function enumerate(): Promise<Surface[]> {
   ]
   const { runs } = await getJson<{ runs: { source: string; slug: string }[] }>('/api/runs')
   for (const { source, slug } of runs) {
-    const base = `/runs/${source}/${slug}`
-    const detail = await getJson<{ items: WireItem[]; artifactRefs: { path: string }[] }>(`/api/runs/${source}/${slug}`)
+    const base = `/repos/${source}/-/runs/${slug}`
+    const detail = await getJson<{ items: WireItem[]; artifactRefs: { path: string }[] }>(`/api${base}`)
     // Every `?decide=` target the run's items name — and the bare decide
     // surface for a run whose items have none (a round cap, a malformed
     // state), whose cards render there all the same.

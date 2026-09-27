@@ -1,7 +1,8 @@
 // GitHub REST touchpoints for hosted deployments: a PrProvider that needs no
 // gh CLI (sync.ts's GhCliProvider assumes an operator's logged-in gh), and
-// the remote-URL parsing that scopes it to one repository. Auth is the same
-// fine-grained token the deploy recipe already holds — no GitHub App yet.
+// the reading of a remote URL that scopes it to one repository. Auth is the
+// same fine-grained token the deploy recipe already holds — no GitHub App yet.
+import { parseOriginUrl } from './repository-id.ts'
 import type { PrApproval, PrProvider } from './sync.ts'
 
 export interface GitHubRepo {
@@ -9,14 +10,17 @@ export interface GitHubRepo {
   repo: string
 }
 
-/** owner/repo from a GitHub remote URL (https, ssh, or scp-like), else null. */
+/**
+ * owner/repo when a remote URL points at github.com, else null. The URL is
+ * read by `parseOriginUrl`, the one parser of origin URLs (#494), so every
+ * form it accepts — https, ssh with or without a port, scp-like — is accepted
+ * here too. Only github.com itself answers: a GitHub Enterprise host cannot be
+ * told apart from any other git host by its URL.
+ */
 export function parseGitHubRemote(url: string): GitHubRepo | null {
-  const match =
-    /^(?:https:\/\/(?:[^@/]+@)?github\.com\/|git@github\.com:|ssh:\/\/git@github\.com\/)([^/]+)\/([^/]+?)(?:\.git)?\/?$/.exec(
-      url.trim(),
-    )
-  if (!match) return null
-  return { owner: match[1]!, repo: match[2]! }
+  const parsed = parseOriginUrl(url)
+  if (parsed?.host !== 'github.com' || parsed.path.length !== 2) return null
+  return { owner: parsed.path[0]!, repo: parsed.path[1]! }
 }
 
 type FetchLike = (url: string, init?: { headers?: Record<string, string> }) => Promise<{

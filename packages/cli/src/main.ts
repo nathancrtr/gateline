@@ -22,6 +22,7 @@ import {
   type DecisionInput,
   DISPOSITIONS,
   type Disposition,
+  displayNameOf,
   ensureDraftPr,
   extractSections,
   formatDuration,
@@ -37,6 +38,7 @@ import {
   type Profile,
   planDecision,
   planRunScaffold,
+  RepositoryIdError,
   type RunRef,
   type RunScaffold,
   type RunSource,
@@ -46,6 +48,7 @@ import {
   ScaffoldError,
   SLUG_PATTERN,
   SUPERSEDE_EXIT_CODE,
+  sameRepositoryId,
   scanIds,
   validateArtifact,
   workItemIncomplete,
@@ -74,7 +77,7 @@ async function resolveSources(): Promise<Resolved> {
   try {
     ;({ sources, warnings } = await loadSources({ repoOverrides: opts.repo.length ? opts.repo : undefined }))
   } catch (e) {
-    if (e instanceof LocalOnlyPushConflictError) {
+    if (e instanceof LocalOnlyPushConflictError || e instanceof RepositoryIdError) {
       console.error(e.message)
       process.exit(1)
     }
@@ -88,10 +91,28 @@ async function resolveSources(): Promise<Resolved> {
   return { sources }
 }
 
+/**
+ * Whether `--source <value>` names this source (#494): its full repository id
+ * (compared without case, as ids are) or its display name.
+ */
+function namesSource(source: RunSource, value: string): boolean {
+  return sameRepositoryId(source.id, value) || displayNameOf(source).toLowerCase() === value.toLowerCase()
+}
+
+/**
+ * How a run is printed: its repository's display name, then the slug — the
+ * layout `source/slug` has always had, now with the short name where the
+ * source id used to be, since the id is `github.com/acme/billing` long.
+ */
+function runLabel(sources: readonly RunSource[], sourceId: string, slug: string): string {
+  const source = sources.find((s) => s.id === sourceId)
+  return `${source ? displayNameOf(source) : sourceId}/${slug}`
+}
+
 async function findRun(sources: RunSource[], slug: string, sourceId?: string) {
   const matches: { source: RunSource; ref: Awaited<ReturnType<RunSource['listRuns']>>[number] }[] = []
   for (const source of sources) {
-    if (sourceId && source.id !== sourceId) continue
+    if (sourceId && !namesSource(source, sourceId)) continue
     for (const ref of await source.listRuns()) {
       if (ref.slug === slug) matches.push({ source, ref })
     }
@@ -125,7 +146,7 @@ program
     const { runs, inbox } = await buildPortfolio(sources)
     if (runs.length === 0) return console.log('no runs found')
     const rows = runs.map((r) => ({
-      run: `${r.source}/${r.slug}`,
+      run: runLabel(sources, r.source, r.slug),
       // A closed run reads as its disposition, never bare "closed": the whole
       // point of the phase is that it says why (#200).
       phase: r.phase + (r.closure ? ` (${r.closure.as})` : r.pausedReason ? ` (${r.pausedReason})` : ''),
@@ -145,7 +166,7 @@ program
     const { sources } = await resolveSources()
     const { inbox } = await buildPortfolio(sources)
     if (inbox.length === 0) return console.log('inbox zero — nothing needs a human')
-    for (const item of inbox) printItem(item)
+    for (const item of inbox) printItem(item, runLabel(sources, item.source, item.slug))
   })
 
 /**
@@ -157,14 +178,14 @@ program
  * every surface, and this printed only that, so an escalation's reason and a
  * paused run's way out were unreachable from here.
  */
-function printItem(item: InboxItem): void {
+function printItem(item: InboxItem, label: string): void {
   const kind = item.kind === 'gate' ? item.gate : item.kind
   const pad = ' '.repeat(17)
   // A multi-line value (an engine line with a diagnostic, a hold reason)
   // keeps its continuation lines under its first, not at the left margin.
   const more = (label: string, text: string) =>
     console.log(`${pad}${label.padEnd(9)} ${text.trimEnd().split('\n').join(`\n${pad}${' '.repeat(10)}`)}`)
-  console.log(`${(kind ?? '').padEnd(10)} ${age(item.since).padStart(4)}  ${item.source}/${item.slug}  ${headline(item)}`)
+  console.log(`${(kind ?? '').padEnd(10)} ${age(item.since).padStart(4)}  ${label}  ${headline(item)}`)
   switch (item.kind) {
     case 'gate':
       for (const b of item.bouncedBy ?? []) {
@@ -268,7 +289,7 @@ program
   .description('print a run artifact, with cited R/AC/ADR definitions as footnotes (omit the artifact to list them)')
   .argument('<slug>', 'run slug')
   .argument('[artifact]', 'run-relative artifact path, e.g. plan.md or tasks/01-core.yaml')
-  .option('--source <id>', 'source id when the slug is ambiguous')
+  .option('--source <id>', 'repository id or name when the slug is ambiguous')
   .option('--refs <mode>', 'footnotes: first-line | full | off', 'first-line')
   .action(async (slug: string, artifact: string | undefined, flags: { source?: string; refs: string }) => {
     if (!['first-line', 'full', 'off'].includes(flags.refs)) {
@@ -418,7 +439,7 @@ program
   .description('approve a gate (records name, timestamp, notes, burden; advances the phase)')
   .argument('<slug>', 'run slug')
   .argument('<gate>', 'G0 | G1 | G2 | G3')
-  .option('--source <id>', 'source id when the slug is ambiguous')
+  .option('--source <id>', 'repository id or name when the slug is ambiguous')
   .option('--burden <category>', BURDENS.join(' | '))
   .option('--notes <text>', 'approval notes')
   .addOption(hiddenAlias('--note'))
@@ -659,7 +680,7 @@ export async function stageNewRun(flags: NewFlags): Promise<number> {
   }
 
   const { sources } = await resolveSources()
-  const candidates = flags.source ? sources.filter((s) => s.id === flags.source) : sources
+  const candidates = flags.source ? sources.filter((s) => namesSource(s, flags.source!)) : sources
   if (candidates.length === 0) {
     console.error(flags.source ? `no source "${flags.source}" configured` : 'no run source configured')
     return 1
@@ -810,7 +831,7 @@ program
   .option('--task-file <path>', 'patch profile: path to the human-authored work item, staged as tasks/01-<slug>.yaml')
   .option('--budget <usd>', 'cost ceiling in USD', '50')
   .option('--key <key>', 'idempotency / replay client key (optional)')
-  .option('--source <id>', 'source id when several are configured')
+  .option('--source <id>', 'repository id or name when several are configured')
   .action(async (flags: NewFlags) => {
     process.exit(await stageNewRun(flags))
   })
@@ -854,7 +875,7 @@ program
   .command('arm')
   .description("arm a staged run — starts it at the profile's first undecided-gate phase")
   .argument('<slug>', 'run slug')
-  .option('--source <id>', 'source id when the slug is ambiguous')
+  .option('--source <id>', 'repository id or name when the slug is ambiguous')
   .action(async (slug: string, flags: { source?: string }) => {
     process.exit(await armRun(slug, flags))
   })
@@ -864,7 +885,7 @@ program
 program
   .command('sync')
   .description('copy PR-review approvals into state.yaml G2 entries (dry-run unless --live)')
-  .option('--source <id>', 'only this source')
+  .option('--source <id>', 'only this repository (id or name)')
   .option('--live', 'apply the plan (default: print it)')
   .action(async (flags: { source?: string; live?: boolean }) => {
     const { planSyncForSource, applySync, GhCliProvider } = await import('@gateline/core')
@@ -877,7 +898,7 @@ program
     let anyConsidered = false
     let allLocalOnly = true
     for (const source of sources) {
-      if (flags.source && source.id !== flags.source) continue
+      if (flags.source && !namesSource(source, flags.source)) continue
       const dir = (source as { dir?: string }).dir
       if (!dir) continue
       anyConsidered = true
@@ -891,11 +912,11 @@ program
       any = true
       if (!flags.live) {
         for (const p of plan)
-          console.log(`would record: ${p.source}/${p.slug} ${p.gate} approved by ${p.approval.reviewer} (PR #${p.approval.number}, ${p.approval.submittedAt})`)
+          console.log(`would record: ${runLabel(sources, p.source, p.slug)} ${p.gate} approved by ${p.approval.reviewer} (PR #${p.approval.number}, ${p.approval.submittedAt})`)
       } else {
         for (const r of await applySync(source, plan)) {
-          if (r.ok) console.log(`recorded: ${r.source}/${r.slug} ${r.gate} ← PR #${r.approval.number} → ${r.commit!.slice(0, 10)}`)
-          else console.error(`failed: ${r.source}/${r.slug} — ${r.error}`)
+          if (r.ok) console.log(`recorded: ${runLabel(sources, r.source, r.slug)} ${r.gate} ← PR #${r.approval.number} → ${r.commit!.slice(0, 10)}`)
+          else console.error(`failed: ${runLabel(sources, r.source, r.slug)} — ${r.error}`)
         }
       }
     }
@@ -1039,7 +1060,7 @@ program
           localOnly: flags.localOnly || undefined,
         }))
       } catch (e) {
-        if (e instanceof LocalOnlyPushConflictError) {
+        if (e instanceof LocalOnlyPushConflictError || e instanceof RepositoryIdError) {
           console.error(e.message)
           process.exit(1)
         }
@@ -1297,13 +1318,23 @@ program
   .action(async (flags: { port: string; host: string; demo?: boolean; open?: boolean }) => {
     const { startServer } = await import('@gateline/server/main')
     const opts = program.opts<{ repo: string[] }>()
-    await startServer({
-      port: Number(flags.port),
-      host: flags.host,
-      demo: flags.demo,
-      open: flags.open !== false,
-      repoOverrides: opts.repo.length ? opts.repo : undefined,
-    })
+    try {
+      await startServer({
+        port: Number(flags.port),
+        host: flags.host,
+        demo: flags.demo,
+        open: flags.open !== false,
+        repoOverrides: opts.repo.length ? opts.repo : undefined,
+      })
+    } catch (e) {
+      // Two repositories with one id, or an id that cannot be used (#494): a
+      // startup error the operator fixes in the config, not a stack trace.
+      if (e instanceof RepositoryIdError) {
+        console.error(e.message)
+        process.exit(1)
+      }
+      throw e
+    }
   })
 
 // --- helpers ------------------------------------------------------------------

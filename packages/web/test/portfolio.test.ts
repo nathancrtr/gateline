@@ -65,7 +65,7 @@ describe('the needs-you chip takes the texture of what is waiting (#452)', () =>
 // The same chips over the demo fixtures, through the route the portfolio
 // reads, so the mark is asked about what the page will actually be handed.
 describe('the demo portfolio, row by row (#452)', () => {
-  const SRC = 'fixture'
+  const SRC = 'local/demo'
   let fixture: FixtureRepo
   let runs: RunSummary[]
   beforeAll(async () => {
@@ -75,7 +75,7 @@ describe('the demo portfolio, row by row (#452)', () => {
     expect(res.status).toBe(200)
     runs = ((await res.json()) as RunsResponse).runs
   }, 120_000)
-  afterAll(() => rm(fixture.dir, { recursive: true, force: true }))
+  afterAll(() => rm(fixture.root, { recursive: true, force: true }))
 
   const chip = (slug: string) => {
     const row = runs.find((r) => r.slug === slug)

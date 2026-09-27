@@ -10,29 +10,26 @@ import { type ChildProcess, execFileSync } from 'node:child_process'
 import { rmSync } from 'node:fs'
 import { generateFixtureRepo } from '@gateline/fixtures'
 import { expect, type Page, test } from '@playwright/test'
-import { spawnDemoServer } from './demo-server.ts'
+import { DEMO_ID, spawnDemoServer } from './demo-server.ts'
 
 let fixtureDir: string
+let fixtureRoot: string
 let server: ChildProcess
 let ORIGIN: string
 
 const git = (args: string[]) => execFileSync('git', ['-C', fixtureDir, ...args], { encoding: 'utf8' })
 
-function sourceId(): string {
-  return fixtureDir.replace(/\/+$/, '').split('/').pop()!
-}
-
 /** Navigates against this file's own server — never one another suite started. */
 const goto = (page: Page, path: string) => page.goto(ORIGIN + path)
 
 test.beforeAll(async () => {
-  fixtureDir = generateFixtureRepo().dir
+  ;({ dir: fixtureDir, root: fixtureRoot } = generateFixtureRepo())
   ;({ server, origin: ORIGIN } = await spawnDemoServer(fixtureDir))
 })
 
 test.afterAll(() => {
   server?.kill()
-  if (fixtureDir) rmSync(fixtureDir, { recursive: true, force: true })
+  if (fixtureRoot) rmSync(fixtureRoot, { recursive: true, force: true })
 })
 
 test('close: a paused run is ended from its own page with a typed disposition, and leaves the inbox', async ({ page }) => {
@@ -45,7 +42,7 @@ test('close: a paused run is ended from its own page with a typed disposition, a
   await goto(page, '/')
   await expect(inboxRow).toHaveCount(1)
 
-  await goto(page, `/runs/${sourceId()}/paused-budget`)
+  await goto(page, `/repos/${DEMO_ID}/-/runs/paused-budget`)
   await page.locator('[data-decide="close"]').click()
 
   // Both halves are required: the confirm stays disabled until a disposition
@@ -85,12 +82,12 @@ test('close: a paused run is ended from its own page with a typed disposition, a
 })
 
 test('close is not offered on a done run — a finished run is already its own record', async ({ page }) => {
-  await goto(page, `/runs/${sourceId()}/done-merged`)
+  await goto(page, `/repos/${DEMO_ID}/-/runs/done-merged`)
   await expect(page.locator('[data-decide="close"]')).toHaveCount(0)
 })
 
 test('reopen: a closure is a decision, not a deletion — undoing it is another commit', async ({ page }) => {
-  await goto(page, `/runs/${sourceId()}/closed-delivered`)
+  await goto(page, `/repos/${DEMO_ID}/-/runs/closed-delivered`)
 
   const record = page.locator('[data-closure-record]')
   await expect(record).toContainText('already-delivered')

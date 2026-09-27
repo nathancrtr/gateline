@@ -10,6 +10,13 @@
 // start.
 import { type ChildProcess, spawn } from 'node:child_process'
 
+/**
+ * The demo fixture's repository id (#494). The fixture has no origin and is
+ * generated in a directory with a fixed name, so its id is `local/demo` on
+ * every run — no spec derives it from a temporary directory's name.
+ */
+export const DEMO_ID = 'local/demo'
+
 export interface DemoServer {
   server: ChildProcess
   origin: string

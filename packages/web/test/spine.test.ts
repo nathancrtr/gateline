@@ -250,17 +250,17 @@ describe('a gate is on the table only when the inbox holds a gate item for it (#
 // The same rule over the demo fixtures, through the real server route the run
 // page reads, so the spine is asked what the header will actually be handed.
 describe('the demo fixtures put the yellow only where the inbox has a gate up (#420)', () => {
-  const SRC = 'fixture'
+  const SRC = 'local/demo'
   let fixture: FixtureRepo
   let app: ReturnType<typeof createApp>
   beforeAll(async () => {
     fixture = generateFixtureRepo()
     app = createApp({ sources: [new LocalGitSource(SRC, fixture.dir)] })
   }, 120_000)
-  afterAll(() => rm(fixture.dir, { recursive: true, force: true }))
+  afterAll(() => rm(fixture.root, { recursive: true, force: true }))
 
   const detail = async (slug: string): Promise<RunDetailResponse> => {
-    const res = await app.request(`/api/runs/${SRC}/${slug}`)
+    const res = await app.request(`/api/repos/${SRC}/-/runs/${slug}`)
     expect(res.status).toBe(200)
     return (await res.json()) as RunDetailResponse
   }

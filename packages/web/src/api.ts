@@ -45,6 +45,7 @@ import type {
   StagingConfigResponse,
 } from '@gateline/server/contract'
 import { API_VERSION } from '@gateline/server/contract'
+import { runApiPath } from './run-path.ts'
 
 /**
  * The wire vocabulary, re-exported so the rest of web imports one module —
@@ -251,19 +252,19 @@ export const api = {
       return { outcome: 'refused', reason: body.reason, message: body.message, missing: body.missing, status: res.status }
     throw new ApiError(body.error ?? `${res.status} ${res.statusText}`, res.status)
   },
-  run: (src: string, slug: string) => getJson<RunDetailResponse>(`/api/runs/${src}/${slug}`),
+  run: (src: string, slug: string) => getJson<RunDetailResponse>(runApiPath(src, slug)),
   artifact: (src: string, slug: string, path: string) =>
-    getJson<ArtifactResponse>(`/api/runs/${src}/${slug}/artifact?path=${encodeURIComponent(path)}`),
-  lexicon: (src: string, slug: string) => getJson<LexiconResponse>(`/api/runs/${src}/${slug}/lexicon`),
-  evidence: (src: string, slug: string) => getJson<EvidenceRollup>(`/api/runs/${src}/${slug}/evidence`),
-  g0: (src: string, slug: string) => getJson<G0Packet>(`/api/runs/${src}/${slug}/g0`),
-  g1: (src: string, slug: string) => getJson<G1Packet>(`/api/runs/${src}/${slug}/g1`),
-  g3: (src: string, slug: string) => getJson<ReleasePacket>(`/api/runs/${src}/${slug}/g3`),
+    getJson<ArtifactResponse>(`${runApiPath(src, slug)}/artifact?path=${encodeURIComponent(path)}`),
+  lexicon: (src: string, slug: string) => getJson<LexiconResponse>(`${runApiPath(src, slug)}/lexicon`),
+  evidence: (src: string, slug: string) => getJson<EvidenceRollup>(`${runApiPath(src, slug)}/evidence`),
+  g0: (src: string, slug: string) => getJson<G0Packet>(`${runApiPath(src, slug)}/g0`),
+  g1: (src: string, slug: string) => getJson<G1Packet>(`${runApiPath(src, slug)}/g1`),
+  g3: (src: string, slug: string) => getJson<ReleasePacket>(`${runApiPath(src, slug)}/g3`),
   escalation: (src: string, slug: string, index: number) =>
-    getJson<EscalationPacket>(`/api/runs/${src}/${slug}/escalation/${index}`),
-  reviews: (src: string, slug: string) => getJson<ReviewsResponse>(`/api/runs/${src}/${slug}/reviews`),
-  decisions: (src: string, slug: string) => getJson<DecisionsResponse>(`/api/runs/${src}/${slug}/decisions`),
-  diff: (src: string, slug: string) => getJson<DiffResponse>(`/api/runs/${src}/${slug}/diff`),
+    getJson<EscalationPacket>(`${runApiPath(src, slug)}/escalation/${index}`),
+  reviews: (src: string, slug: string) => getJson<ReviewsResponse>(`${runApiPath(src, slug)}/reviews`),
+  decisions: (src: string, slug: string) => getJson<DecisionsResponse>(`${runApiPath(src, slug)}/decisions`),
+  diff: (src: string, slug: string) => getJson<DiffResponse>(`${runApiPath(src, slug)}/diff`),
   metrics: () => getJson<MetricsResponse>('/api/metrics'),
   decide: async (req: DecisionRequest): Promise<DecisionResponse> => {
     const res = await fetch('/api/decisions', {

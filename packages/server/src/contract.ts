@@ -108,8 +108,13 @@ import type {
  *
  * 2 (#424): every packet's withheld reason is a `WithheldReason` — the grammar
  * looked for and the artifact looked in — where it was a sentence string.
+ *
+ * 3 (#494): per-run routes moved from `/api/runs/<source>/<slug>` to
+ * `/api/repos/<repository id>/-/runs/<slug>`, and a source's id is now its
+ * repository id (`github.com/acme/billing`, `local/demo`). The old routes do
+ * not exist; old web links redirect, old API paths do not.
  */
-export const API_VERSION = 2
+export const API_VERSION = 3
 
 /** Core types that cross the wire. Re-exported so a client imports one module. */
 export type {
@@ -205,6 +210,7 @@ export interface HealthResponse {
   ok: true
   /** @see API_VERSION */
   apiVersion: number
+  /** Each served repository's id. */
   sources: string[]
 }
 
@@ -453,6 +459,12 @@ export interface RunnerReportResponse {
  * renamed or removed breaks every reference to it at compile time. Error
  * responses are `ApiErrorBody` at every route and are not restated per entry.
  * `GET /api/events` is Server-Sent Events, not JSON, so it has no entry.
+ *
+ * `:id` is a repository id and spans segments (`github.com/acme/billing`, or
+ * deeper for a nested GitLab group); the route registers it as `:id{.+}`, and
+ * the `-` segment after it is where it ends, since no id segment may be `-`
+ * (docs/MULTI-REPO.md §6.4). Each segment of the id and the slug travel
+ * percent-encoded.
  */
 export interface ApiRoutes {
   'GET /api/health': { response: HealthResponse }
@@ -461,17 +473,17 @@ export interface ApiRoutes {
   'GET /api/runs': { response: RunsResponse }
   'GET /api/staging': { response: StagingConfigResponse }
   'POST /api/runs': { request: StageRequest; response: StageResponse }
-  'GET /api/runs/:src/:slug': { response: RunDetailResponse }
-  'GET /api/runs/:src/:slug/artifact': { response: ArtifactResponse }
-  'GET /api/runs/:src/:slug/lexicon': { response: LexiconResponse }
-  'GET /api/runs/:src/:slug/reviews': { response: ReviewsResponse }
-  'GET /api/runs/:src/:slug/evidence': { response: EvidenceRollup }
-  'GET /api/runs/:src/:slug/g0': { response: G0Packet }
-  'GET /api/runs/:src/:slug/g1': { response: G1Packet }
-  'GET /api/runs/:src/:slug/g3': { response: ReleasePacket }
-  'GET /api/runs/:src/:slug/escalation/:index': { response: EscalationPacket }
-  'GET /api/runs/:src/:slug/diff': { response: DiffResponse }
-  'GET /api/runs/:src/:slug/decisions': { response: DecisionsResponse }
+  'GET /api/repos/:id/-/runs/:slug': { response: RunDetailResponse }
+  'GET /api/repos/:id/-/runs/:slug/artifact': { response: ArtifactResponse }
+  'GET /api/repos/:id/-/runs/:slug/lexicon': { response: LexiconResponse }
+  'GET /api/repos/:id/-/runs/:slug/reviews': { response: ReviewsResponse }
+  'GET /api/repos/:id/-/runs/:slug/evidence': { response: EvidenceRollup }
+  'GET /api/repos/:id/-/runs/:slug/g0': { response: G0Packet }
+  'GET /api/repos/:id/-/runs/:slug/g1': { response: G1Packet }
+  'GET /api/repos/:id/-/runs/:slug/g3': { response: ReleasePacket }
+  'GET /api/repos/:id/-/runs/:slug/escalation/:index': { response: EscalationPacket }
+  'GET /api/repos/:id/-/runs/:slug/diff': { response: DiffResponse }
+  'GET /api/repos/:id/-/runs/:slug/decisions': { response: DecisionsResponse }
   'GET /api/metrics': { response: MetricsResponse }
   'POST /api/decisions': { request: DecisionRequest; response: DecisionResponse }
   'POST /api/webhooks/github': { response: WebhookResponse }

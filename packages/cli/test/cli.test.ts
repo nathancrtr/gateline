@@ -2,7 +2,7 @@
 // real binary the way an operator would run it.
 import { execFile, execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { createConnection } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -91,16 +91,42 @@ status: pending
 
 notes: ""
 `
-afterAll(() => rm(fixture.dir, { recursive: true, force: true }))
+afterAll(() => rm(fixture.root, { recursive: true, force: true }))
 
 describe('gateline CLI', () => {
   it('status renders the portfolio with gate glyphs', async () => {
     const { stdout } = await run(['status'])
     expect(stdout).toMatch(/RUN\s+PHASE\s+GATES/)
-    // Source id derives from the repo directory basename, so match on the slug.
-    expect(stdout).toContain('/done-merged')
-    expect(stdout).toMatch(/done-merged\s+done\s+✓ ✓ ✓ ✓/)
+    // The fixture has no origin and a fixed directory name, so its id is
+    // local/demo and its display name — what the listing prints — is demo.
+    expect(stdout).toMatch(/^demo\/done-merged\s+done\s+✓ ✓ ✓ ✓/m)
     expect(stdout).toMatch(/need a human/)
+  })
+
+  // #494: the id is long (github.com/acme/billing), so the listing prints the
+  // display name, and --source takes either the full id or that name.
+  it('--source takes the repository id, in any case, or its display name', async () => {
+    for (const name of ['local/demo', 'LOCAL/Demo', 'demo']) {
+      const { stdout } = await run(['show', 'g1-pending', '--source', name])
+      expect(stdout.split('\n'), name).toContain('plan.md')
+    }
+    const { code, stderr } = await run(['show', 'g1-pending', '--source', 'github.com/acme/billing'], true)
+    expect(code).toBe(1)
+    expect(stderr).toContain('run "g1-pending" not found in source github.com/acme/billing')
+  })
+
+  it('refuses two --repo paths that resolve to one id, naming both', async () => {
+    const other = await mkdtemp(join(tmpdir(), 'gateline-494-cli-'))
+    try {
+      const twin = join(other, 'demo')
+      execFileSync('git', ['init', '-q', '-b', 'main', twin])
+      const { code, stderr } = await runIn(fixture.dir, ['--repo', twin, 'status'], { expectFail: true })
+      expect(code).toBe(1)
+      expect(stderr).toContain('two repositories resolve to the id local/demo')
+      expect(stderr).toContain(await realpath(twin))
+    } finally {
+      await rm(other, { recursive: true, force: true })
+    }
   })
 
   it('inbox lists items oldest-first with bounce warnings', async () => {
@@ -683,7 +709,7 @@ describe('decision verbs accept every spelling of the note (#264)', () => {
   beforeAll(() => {
     own = generateFixtureRepo()
   })
-  afterAll(() => rm(own.dir, { recursive: true, force: true }))
+  afterAll(() => rm(own.root, { recursive: true, force: true }))
 
   it('approve takes --note as --notes', async () => {
     await runIn(own.dir, ['approve', 'g0-pending', 'G0', '--burden', 'confirmation', '--note', 'via the alias'])

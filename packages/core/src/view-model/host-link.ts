@@ -14,8 +14,11 @@
 // parsing (#214) and the ledger (#268). The caller supplies the origin URL it
 // read; this decides what, if anything, it means.
 //
-// **Never guess.** Which remotes resolve is `parseGitHubRemote`'s answer, and it
-// recognizes github.com and nothing else — deliberately, because a GitHub
+// **Never guess.** Which remotes resolve is `parseGitHubRemote`'s answer. It
+// reads the URL with `parseOriginUrl`, the same parser that derives a
+// repository's id (#494), and then recognizes github.com and nothing else.
+// Identity and links are separate questions: every host gives an id, and only
+// github.com gives a link — deliberately, because a GitHub
 // Enterprise host is real GitHub with a real branch page whose URL is
 // indistinguishable from GitLab's or Gitea's: `git@git.example.com:owner/repo.git`
 // is the same string under all three, and `/tree/<branch>` is not. Guessing

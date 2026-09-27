@@ -1,6 +1,6 @@
 // Run-lexicon rendering (#163): R/AC/ADR ids in artifact views resolve where
 // they stand. Grammar and definitions arrive as DATA from
-// GET /api/runs/:src/:slug/lexicon — a value import from core would pull the
+// GET /api/repos/:id/-/runs/:slug/lexicon — a value import from core would pull the
 // node runtime into the browser bundle (see api.ts). Definition text renders
 // verbatim, never paraphrased or generated: the hover card is a lens on the
 // exact bytes under approval, so no gloss can misinform a decision the

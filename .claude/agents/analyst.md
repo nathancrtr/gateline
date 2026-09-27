@@ -39,11 +39,12 @@ with at least one testable acceptance criterion.
   and the promise decides when a match is ambiguous.
 - Keep each criterion one list item: every line after the first indented two spaces,
   with no blank line or nested list inside it. Tooling drops whatever follows either.
-- Never resolve an ambiguity silently: record it as one `**ASSUMPTION:**` list item
-  stating the ambiguity, then lines labelled `Resolved as:`, `Because:` and `Basis:`
-  (verified or derived), indented two spaces, every line but the last ending in `\`.
-  An entry asking the G0 approver to confirm something opens `G0 to confirm:` and
-  comes first.
+- Never resolve an ambiguity silently. Record it in the assumption grammar of
+  `contracts/spec.md`, which tooling reads: one `**ASSUMPTION:**` list item stating the
+  ambiguity, then lines beginning `Resolved as:`, `Because:` and `Basis:`, in that
+  order, indented two spaces, every line but the last ending in `\`. `Basis:` opens
+  with `verified` or `derived`. An entry asking the G0 approver to confirm something
+  opens `G0 to confirm:` directly after the marker, and those entries come first.
 - The READABILITY rules in `contracts/spec.md` cover requirements and assumptions as
   well as Context. A requirement's short name states its point as a claim, not a
   label. Explain a term coined in the brief or the run at first use.

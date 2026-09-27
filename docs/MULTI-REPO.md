@@ -9,10 +9,11 @@ document it amends). The companion issues are #33 (the view across many
 repositories as a rebuildable projection) and #34 (budget caps shared across
 repositories), both under the scaling epic #27.
 
-**Status (2026-09-27): decided, and built through step 8.** The maintainer
+**Status (2026-09-27): decided and built.** The maintainer
 confirmed twenty-three decisions in §11 on 2026-09-26, and four more while the
-work was built. One further decision was taken in review and awaits him. Steps 0 to 8 of §14 have merged. Step 9, several engines under
-`up`, is in progress under #502. §17 lists what remains open.
+work was built. One further decision was taken in review and awaits him. All ten
+steps of §14 have merged; the last, step 9, runs one engine per `dispatch`
+repository under `up` (#502). §17 lists what remains open.
 
 **Prerequisite reading:** [TOPOLOGY.md](TOPOLOGY.md) §3,
 [FRONTEND.md](FRONTEND.md) §4–§5, [ORCHESTRATOR.md](ORCHESTRATOR.md) §4 and §6,
@@ -37,10 +38,10 @@ list of repositories since the first frontend build:
 - The CLI prints `source/slug` and refuses an ambiguous slug until `--source`
   is given.
 
-The writing side takes one repository, by design:
+The writing side took one repository, by design, until #502:
 
-- `gateline up` exits if it is given a second `--repo`, and starts its server
-  over that single repository, so the config file is never read under `up`.
+- `gateline up` exited if it was given a second `--repo`, and started its server
+  over that single repository, so the config file was never read under `up`.
 - The standalone `gateline-orchestrator` takes one `--repo` and never calls
   `loadSources`.
 - The hosted recipe takes one `REPO_URL`.
@@ -156,7 +157,7 @@ to fleet scale (decision D1).
 | Stage | What it is | State |
 |---|---|---|
 | 0 | Several repositories can be read. Nothing is designed around them. | Today |
-| 1 | Operator scale. §6 to §10 of this document. | Built, except several engines under `up` (§14 step 9) |
+| 1 | Operator scale. §6 to §10 of this document. | Built |
 | 2 | Fleet scale. Sketched in §13 to the level of interfaces. | Parked on #33's trigger |
 
 Stage 1 can be held indefinitely because it adds no infrastructure. There is no
@@ -178,8 +179,10 @@ stage 1 work.
    the pages changing. The server reaches a repository's directory through
    methods on the source, each optional so that a source with no local clone
    can leave it out, and a test fails if a cast to reach the directory
-   returns (#496). The CLI still casts in two places, for `arm` and `sync`,
-   which need a working directory to hand to `gh`.
+   returns (#496). The CLI reaches a clone the same way: `arm` and `sync`,
+   which hand a working directory to `gh`, and `up`, which starts an engine
+   there, ask the source for `workingDirectory()`, and a test fails if a cast
+   returns to the CLI (#502).
 4. **Admission to dispatch passes through one interface.** The governor is that
    interface. At stage 1 it is a function call inside one process. At stage 2
    it is where #34's coordinator attaches.
@@ -375,7 +378,8 @@ Decided: the ceiling. What each party owns:
 | Which repositories, and each one's mode | Operator | Config file |
 | Concurrent dispatches, spend limit and window | Operator | Config file, or flags to `up` |
 | Which adapters may run, role timeout, heartbeat, budget enforcement | Operator | Config file, or flags to `up` |
-| Push and local-only | Operator | Config file, or flags to `up` |
+| The engine name that stands in for the hostname | Operator | Config file, or `--engine-name` to `up` |
+| Push and local-only | Operator | Config file; flags to `up` for a repository with no config entry |
 | Sweep schedules | Host | `orchestrator.yaml`, default-branch tip |
 | Model bindings, prices and per-role cost estimates | Host | `registry/models.yaml`, default-branch tip |
 | The command an adapter runs | Host | The adapter's `manifest.json`, default-branch tip |
@@ -417,6 +421,8 @@ limits:
 engine:
   adapters: [claude-code]        # defaults for every dispatch repository
   role_timeout_seconds: 1800
+  name: workstation-1            # in place of the hostname; unique per repository across machines
+  budget_enforcement: true       # false meters spend and enforces no spend limit
 repositories:
   - path: ~/repos/billing
     name: billing                # display name, optional
@@ -428,7 +434,9 @@ repositories:
     gateline_prefix: .framework  # only for a host integrated with --prefix
 ```
 
-Flags to `up` override `limits:` and `engine:`. The `sources:` key is read as
+Flags to `up` override `limits:` and `engine:`, and `up` prints at startup each
+value it took and where it came from. `--repo` replaces the file whole, its
+`limits:` and `engine:` with its list. The `sources:` key is read as
 an alias of `repositories:`. An existing file needs a `mode` added to each
 entry, and the refusal message says so.
 
@@ -437,9 +445,9 @@ entry, and the refusal message says so.
 **Decision D3.** One `gateline up` runs one engine instance per repository in
 `dispatch` mode, inside one supervised process, under one governor.
 
-TOPOLOGY.md §3.1 reads "one authority per deployment", meaning one supervised
-unit over one clone. This design restates it as **one authority per
-repository, and one process per machine**. Each repository still has exactly
+TOPOLOGY.md §3.1 read "one authority per deployment", meaning one supervised
+unit over one clone. This design restated it, and #502 made the restatement
+true: **one authority per repository, and one process per machine**. Each repository still has exactly
 one engine. The machine has one process to supervise, one liveness signal and
 one place where limits are enforced.
 
@@ -596,7 +604,7 @@ org-level audit. Several repositories do not change the argument.
 - **The standalone `gateline-orchestrator`** stays single-repository. It
   remains the way to run an engine with no server. It has a governor of its
   own, not shared with `up`, so running it beside `up` on one machine doubles
-  the limits, and its help text and the runbook say so.
+  the limits, and its help text, `up`'s and the runbook say so.
 - **The hosted recipe** runs the engine binary and the server as two
   processes. An in-process governor does not apply to it. It stays
   single-repository until it has its own design pass (§17).
@@ -940,7 +948,8 @@ passing. Where a step depends on another, it says so.
 9. **Several engines.** `up` reads the list and runs one engine per `dispatch`
    repository. Slug-keyed state moves onto the instance, the engine takes the
    repository id, each engine gets a fault boundary, and shutdown drains all
-   of them. Depends on steps 2, 7 and 8.
+   of them. Depends on steps 2, 7 and 8. Done by #502: the orchestrator
+   package in #538, and `up` serving the set in PR_NUMBER.
 
 Steps 0 to 6 need no engine change and can be used with `ui` alone. After
 step 7 nothing about admission has changed. Step 8 is the first that does.

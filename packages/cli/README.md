@@ -42,8 +42,10 @@ gateline repo remove <id or name>        drop a repository from the list
 gateline repo list                       id, origin, display name, mode, framework ref
 gateline ui [--demo[=single]] [--port N] serve the web app (no engine); the demo
                                          is two generated repositories, or one
-gateline up [--spend-limit-usd N]        web app + the v1 orchestrator over one clone
-                                         [--spend-window H] (the limit is per rolling window, default 24h)
+gateline up [--repo …]…                  web app over the set + one v1 engine per dispatch repository,
+                                         in one process [--spend-limit-usd N] [--spend-window H]
+                                         [--max-concurrent-dispatches N] [--engine-name …]
+                                         (flags override the config's limits: and engine:)
 ```
 
 Global: `--repo <path>` (repeatable) names repositories by path in place of
@@ -127,9 +129,56 @@ gateline-orchestrator shadow <slug>    # replay a finished run, derived vs actua
 ```
 
 `--dry-run` is the safe preview; a live `tick`/`watch` dispatches real,
-metered agents. `up` runs exactly one engine over one clone — pass a single
-`--repo`, and its Gatehouse serves that repository alone. `gateline ui` serves
-the config file's list, with no engine.
+metered agents. The standalone binary serves one repository with limits of its
+own: do not run it beside `up` on the same machine, or every limit counts twice.
+`gateline ui` serves the set with no engine.
+
+**Several repositories under `up`.** `up` serves the same set the other
+commands read — every `--repo` given, else the config file's list, else the
+working directory — and runs one engine for each repository in `dispatch`
+mode, in one process, under one set of limits. A repository given by `--repo`
+or the working directory is `dispatch`; a config entry states its own mode, and
+`view` and `decide` repositories are served with no engine. With one
+repository and no config file, `up` behaves as it always has, with the startup
+summary below printed first.
+
+Before anything starts, `up` prints what will be allowed to spend money, with
+where each value came from (a flag, the config, or the default):
+
+```
+up: 2 repositories from /home/op/.config/gateline/config.yaml; an engine in each
+limits: at most 2 dispatches at once across every repository (config limits.max_concurrent_dispatches)
+limits: machine spend limit $40 per 24 h across every dispatch repository (config limits.spend_limit_usd; window: default)
+limits: budget enforcement on (default)
+engine name: workstation-1 (config engine.name)
+engine: adapters claude-code (config engine.adapters); role timeout 1800 s (default); heartbeat 180 s (default)
+repository github.com/acme/billing (billing): dispatch, engine; pushing to origin (origin auto-detected); spend ceiling $25 per 24 h (config limits.spend_limit_usd)
+repository github.com/acme/website (website): dispatch, engine; local-only (local_only: true); no spend ceiling of its own
+```
+
+The config keys are `limits:` (`max_concurrent_dispatches`, `spend_limit_usd`,
+`spend_window_hours`), a repository's own `limits.spend_limit_usd` beneath the
+machine's, and `engine:` (`adapters`, `role_timeout_seconds`,
+`heartbeat_seconds`, `name`, `budget_enforcement`); the
+[packages README](../README.md) has the file. Flags override them. `--push`,
+`--no-push` and `--local-only` reach only a repository with no config entry, and
+`up` warns when they reach none. `--repo` replaces the config file whole, its
+limits included, and `up` warns when it is not reading one that exists.
+
+`--engine-name` (or `engine.name`) replaces the hostname in the engine id each
+ledger entry records. Give each machine that runs an engine against the same
+repository its own name: an engine reads an entry carrying its own name, whose
+process is not running on this machine, as one it left behind when it died, and
+dispatches that work again, so two machines sharing a name would each re-run
+the other's live work.
+
+`up` refuses to start, exits 1 and starts nothing, when the config file breaks
+a rule, two entries name one repository or one id, `--local-only` meets
+`--push`, an engine name or a numeric flag is unusable, a `dispatch`
+repository cannot be assembled (an adapter manifest missing at its
+default-branch tip, say), or no repository in the set is in `dispatch` mode —
+then `gateline ui` is the command that serves it. A listed repository that
+fails the framework check is left out with a warning, and the others start.
 
 ## Pitfalls
 

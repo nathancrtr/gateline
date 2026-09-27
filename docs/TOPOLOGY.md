@@ -71,14 +71,20 @@ when a writer doesn't.
 
 ## 3. Proposal
 
-### 3.1 One authority per deployment
+### 3.1 One engine per repository, one process per machine
 
-Server + engine ship and run as one supervised unit over one clone, one sync loop,
-one push path — hosted (the entrypoint already co-locates them; make
-`ORCH_ENABLED=1` the blessed default once §3.3 lands) and locally (a single
-`up`-style command for consumers). The ad-hoc pattern this replaces — a second
+Server and engine ship and run as one supervised unit — hosted (the entrypoint
+already co-locates them; make `ORCH_ENABLED=1` the blessed default once §3.3
+lands) and locally (`gateline up`). Locally that unit is one process per machine:
+`up` serves every repository in its set and runs one engine for each repository in
+`dispatch` mode, each over its own clone with its own sync loop and push path, all
+under one set of limits ([MULTI-REPO.md](MULTI-REPO.md) §8). Each repository still
+has exactly one engine, and the machine has one process to supervise. The hosted
+recipe serves one repository. The ad-hoc pattern this replaces — a second
 clone with its own fetch loop and `watch --push` — is retired in favor of that
-single `up` authority (#104). There is no startup guard that refuses `--push`
+single `up` authority (#104); so is the standalone `gateline-orchestrator` run
+beside `up` on one machine, which keeps limits of its own and so counts every
+limit twice. There is no startup guard that refuses `--push`
 without a sync provider — "sync provider" is not a first-class object anywhere
 in the `up`/engine startup path, and building one would be the new
 remote-abstraction layer this proposal doesn't need. What a deployment's
@@ -165,9 +171,11 @@ with a fetch loop that happens to fail quietly. It is a named, first-class
 mode: **local-only**. `gateline up` and per-source config resolve through the
 one `push`/local-only precedence table implemented once in `resolveMode`
 (`packages/core/src/view-model/config.ts`, called from
-`loadSources`). The standalone `gateline-orchestrator` binary never calls
-`loadSources` — it has its own repo (no config file, no multi-source list) —
-so `assembleOrchestrator` (`packages/orchestrator/src/start.ts`)
+`loadSources`). `up` calls `loadSources` once for its whole set, and the same
+result builds the server's sources and each engine's push and local-only, so the
+two cannot disagree about a repository. The standalone `gateline-orchestrator`
+binary never calls `loadSources` — it serves one repository (no config file, no
+multi-source list) — so `assembleOrchestrator` (`packages/orchestrator/src/start.ts`)
 repeats the same conflict check and auto-detect logic against its own
 `--push`/`--local-only` flags. Two call sites, one precedence table: the
 tiers below hold for both.
@@ -224,12 +232,20 @@ config source into local-only.
 - `gateline sync` never throws, including on a repo with no `origin` remote at
   all; it prints the literal `local-only: nothing to sync` and exits 0.
 
-**Naming the mode.** `gateline up`'s startup log states
-which resolution path fired: `local-only (--local-only)`, `local-only
-(--no-push)`, or `local-only (no origin remote)` on one side; `pushing to
-origin (--push)` or `pushing to origin (origin auto-detected)` on the other.
-The log line alone answers "will this run touch origin?" without reading
-code.
+**Naming the mode.** `gateline up`'s startup log states, for each repository
+it runs an engine in, which resolution path fired: `local-only (--local-only)`,
+`local-only (--no-push)`, or `local-only (no origin remote)` on one side;
+`pushing to origin (--push)` or `pushing to origin (origin auto-detected)` on
+the other. A config entry is named by its own setting: `local-only (local_only:
+true)`, `pushing to origin (push: true)`, or `not pushing to origin (push:
+false)` for the read-only poller below. The log line alone answers "will this
+run touch origin?" without reading code.
+
+**The command line's tier under `up`.** `--push`, `--no-push` and
+`--local-only` reach only a repository with no config entry: one given by
+`--repo`, or the working directory. When the set comes from the config file,
+`up` says at startup that the flag reaches no listed repository, and refuses
+`--local-only --push` as the contradiction it is.
 
 **Out of scope: the hosted deployment.** The `deploy/` hosted entrypoint
 (`PUSH_DECISIONS`, the GitHub webhook) legitimately requires a remote — it

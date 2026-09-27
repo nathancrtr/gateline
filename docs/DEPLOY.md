@@ -18,6 +18,9 @@ This recipe clones from `REPO_URL` and legitimately requires a remote (push
 decisions, the GitHub webhook); it is out of scope for the **local-only**
 topology described in [TOPOLOGY.md](TOPOLOGY.md) §3.6.
 
+The recipe serves one repository; several are served by `gateline up` on a
+machine you own ([MULTI-REPO.md](MULTI-REPO.md) §8.5).
+
 ## Security model — read this first
 
 Gatehouse has **no authentication of its own**. Anyone who can reach the port

@@ -77,6 +77,7 @@ gateline repo add <path> --mode <mode>   list a repository [--name …] [--gatel
 gateline repo remove <id or name>        drop it from the list
 gateline repo list                       id, origin, display name, mode, framework ref
 gateline ui [--demo[=single]] [--port N] serve the web app
+gateline up [--repo …]…                  the web app over the set, and one engine per dispatch repository
 gateline render [repo] [--check]         re-render the adapter agent files
 gateline self-update                     pull + rebuild the checkout this CLI runs from
 ```
@@ -107,6 +108,8 @@ engine:                           # defaults for every dispatch repository
   adapters: [claude-code]
   role_timeout_seconds: 1800
   heartbeat_seconds: 180
+  name: workstation-1             # stands in for the hostname in engine ids; see below
+  budget_enforcement: true        # false: meter spend, enforce no spend limit
 repositories:
   - path: ~/repos/billing         # id from its origin: github.com/acme/billing
     mode: dispatch                # view | decide | dispatch — required
@@ -157,9 +160,27 @@ repository, or an entry whose path is not a git repository, is left out of
 the set with a warning and the others load; startup stops only when no listed
 repository can be served. `repo add` refuses such a repository outright.
 
-**Limits and engine defaults** are parsed and checked (a repository's
-`spend_limit_usd` above the machine's is an error) and not yet used: `up`
-still takes its limits from its flags until it serves the list (#501, #502).
+**Limits and engine defaults** are what `gateline up` runs under (#502). `up`
+serves every repository in the file and runs one engine for each `dispatch`
+repository, in one process, under the one set of `limits:`. A flag to `up`
+(`--max-concurrent-dispatches`, `--spend-limit-usd`, `--spend-window`,
+`--no-budget-enforcement`, `--adapter`, `--role-timeout`, `--heartbeat`,
+`--engine-name`) overrides the matching key. A repository's own
+`limits.spend_limit_usd` is its ceiling beneath the machine's; one above the
+machine's is refused when the file is read. `up` prints, before anything
+starts, every limit it took and where from, and each repository's mode, push or
+local-only, and ceiling. `--repo` replaces the file whole, its limits with its
+list, and `up` warns when a file it is not reading exists.
+
+`engine.name` (or `--engine-name`) replaces this machine's hostname in every
+engine id written to a ledger. It must be unique among the machines that run an
+engine against the same repository: an engine reads an entry carrying its own
+name, whose process is not running on this machine, as one it left behind when
+it died, and dispatches that work again. Letters, digits, `.`, `_` and `-`.
+
+Do not run the standalone `gateline-orchestrator` beside `up` on one machine.
+It serves one repository with limits of its own, so the two together count every
+limit twice.
 
 Each repository has an id (docs/MULTI-REPO.md §6). With an origin, it is
 `<host>/<owner>/<name>`, derived from `git remote get-url origin`; without

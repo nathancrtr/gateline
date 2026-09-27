@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync,
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { engineHealthPath } from '@gateline/core'
-import type { GovernorPort, OrchestratorsHandle } from '@gateline/orchestrator'
+import type { Governor, GovernorPort, OrchestratorsHandle } from '@gateline/orchestrator'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { UpRunning } from '../src/up.ts'
 import { fakeGhOnPath, git, heldSpec, nothingListening, promptSpec, REFUSAL_PORT, stopAll, type Toy, toyRepo, up, withBareOrigin } from './up.helper.ts'
@@ -75,6 +75,22 @@ const healthExists = async (dir: string) => existsSync(await engineHealthPath(di
 async function served(outcome: UpRunning): Promise<{ id: string; name: string; mode: string | null }[]> {
   const res = await fetch(`${outcome.server.url}/api/health`)
   return ((await res.json()) as { repositories: { id: string; name: string; mode: string | null }[] }).repositories
+}
+
+/**
+ * Wait until nothing holds a slot: the closing commit lands before the job
+ * leaves its engine and gives its slot back, so a probe right after `settled`
+ * could find the slot still taken.
+ */
+async function quiet(outcome: UpRunning): Promise<void> {
+  await vi.waitFor(
+    () => {
+      expect(outcome.orchestrators.inFlightDetail()).toEqual([])
+      const snapshot = (outcome.orchestrators.governor as Governor).snapshot()
+      expect([snapshot.occupied, snapshot.offers]).toEqual([0, {}])
+    },
+    { timeout: 20_000, interval: 20 },
+  )
 }
 
 /** Ask the governor for what it would grant, and give back whatever it granted. */
@@ -416,6 +432,7 @@ describe('limits: the config, flags over it, and each repository’s ceiling (P3
     const outcome = running(run.outcome)
     await outcome.orchestrators.started
     await settled(billing.dir)
+    await quiet(outcome)
     expect(run.lines.slice(1, 4)).toEqual([
       'out: limits: at most 3 dispatches at once across every repository (config limits.max_concurrent_dispatches)',
       'out: limits: machine spend limit $40 per 12 h across every dispatch repository (config limits.spend_limit_usd; window: config limits.spend_window_hours)',
@@ -438,6 +455,7 @@ describe('limits: the config, flags over it, and each repository’s ceiling (P3
     const outcome = running(run.outcome)
     await outcome.orchestrators.started
     await settled(billing.dir)
+    await quiet(outcome)
     expect(run.lines.slice(1, 3)).toEqual([
       "out: limits: at most 1 dispatch at once across every repository (--max-concurrent-dispatches, over the config's limits.max_concurrent_dispatches: 3)",
       "out: limits: machine spend limit $10 per 6 h across every dispatch repository (--spend-limit-usd, over the config's limits.spend_limit_usd: 40; window: --spend-window, over the config's limits.spend_window_hours: 12)",
@@ -469,6 +487,7 @@ describe('limits: the config, flags over it, and each repository’s ceiling (P3
     await outcome.orchestrators.started
     await settled(billing.dir)
     await settled(website.dir)
+    await quiet(outcome)
     expect(run.lines.filter((l) => l.startsWith('out: repository '))).toEqual([
       'out: repository local/billing (billing): dispatch, engine; local-only (no origin remote); spend ceiling $25 per 12 h (config limits.spend_limit_usd)',
       'out: repository local/website (website): dispatch, engine; local-only (no origin remote); no spend ceiling of its own',
@@ -497,6 +516,7 @@ describe('limits: the config, flags over it, and each repository’s ceiling (P3
     const outcome = running(run.outcome)
     await outcome.orchestrators.started
     await settled(billing.dir)
+    await quiet(outcome)
     expect(run.lines.slice(2, 4)).toEqual([
       'out: limits: machine spend limit $10 per 12 h across every dispatch repository (config limits.spend_limit_usd; window: config limits.spend_window_hours) — not enforced',
       'out: limits: budget enforcement OFF (config engine.budget_enforcement) — spend is metered, and no spend limit, ceiling or per-run cap holds a dispatch back; the concurrency limit still does',
@@ -514,6 +534,7 @@ describe('limits: the config, flags over it, and each repository’s ceiling (P3
     const outcome = running(run.outcome)
     await outcome.orchestrators.started
     await settled(billing.dir)
+    await quiet(outcome)
     expect(run.lines[3]).toBe(
       "out: limits: budget enforcement OFF (--no-budget-enforcement, over the config's engine.budget_enforcement: true) — spend is metered, and no spend limit, ceiling or per-run cap holds a dispatch back; the concurrency limit still does",
     )

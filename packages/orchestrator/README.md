@@ -96,8 +96,8 @@ spend twice `--spend-limit-usd` per window.
 **Several repositories in one process (#502).** The package can run one engine
 per repository under one governor: `startOrchestrators({ repositories, limits,
 engineDefaults, … })` in `start.ts`, where each entry carries the repository's
-top directory and its id. `startOrchestrator`, which `gateline up` calls today,
-is the same path with a list of one. Every engine seeds the governor and reports
+top directory and its id; `gateline up` calls it with every repository in
+`dispatch` mode. `startOrchestrator` is the same path with a list of one. Every engine seeds the governor and reports
 its spend before any loop starts, each within a minute; the loops then start
 together, and the handle is returned without waiting for their first passes
 (`handle.started` waits for them). There is one code-tree monitor, one supersede
@@ -116,8 +116,8 @@ on ledger entries and sweep markers. The name must be unique among the machines
 that run an engine against the same repository: the stale sweep takes an entry
 carrying its own name, whose pid is not running on this machine, for its own dead
 entry and dispatches that work again after five minutes, so two machines sharing
-a name would each re-dispatch the other's live work. `gateline up` does not pass
-several repositories yet.
+a name would each re-dispatch the other's live work. `gateline up` takes the
+same name from `--engine-name` or the config's `engine.name`.
 
 Driving a live toy run end-to-end (the M2 exit criterion):
 

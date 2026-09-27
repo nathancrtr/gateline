@@ -151,7 +151,7 @@ limits: at most 2 dispatches at once across every repository (config limits.max_
 limits: machine spend limit $40 per 24 h across every dispatch repository (config limits.spend_limit_usd; window: default)
 limits: budget enforcement on (default)
 engine name: workstation-1 (config engine.name)
-engine: adapters claude-code (config engine.adapters); role timeout 1800 s (default); heartbeat 180 s (default)
+engine: adapters claude-code (default); role timeout 1800 s (default); heartbeat 180 s (default)
 repository github.com/acme/billing (billing): dispatch, engine; pushing to origin (origin auto-detected); spend ceiling $25 per 24 h (config limits.spend_limit_usd)
 repository github.com/acme/website (website): dispatch, engine; local-only (local_only: true); no spend ceiling of its own
 ```

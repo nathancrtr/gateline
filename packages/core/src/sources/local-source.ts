@@ -8,6 +8,7 @@ import { parseDocument } from 'yaml'
 import { type RunScaffold, readIntake } from '../record/scaffold.ts'
 import { parseRunState, type RunState, STAGED_REASON } from '../record/schema.ts'
 import type { ContractTemplates } from '../record/validate.ts'
+import { type EngineHealth, readEngineHealth } from './engine-health.ts'
 import { type FrameworkRoots, memoizedFrameworkRoots } from './framework-roots.ts'
 import { type CommitInfo, Git } from './git.ts'
 import { lastIdSegment } from './repository-id.ts'
@@ -23,6 +24,7 @@ import {
   type WriteResult,
 } from './source.ts'
 import { type ViewRefs, viewRefsOf } from './view-refs.ts'
+import { watchRepoRefs } from './watch-refs.ts'
 
 export interface LocalGitSourceOptions {
   push?: boolean
@@ -285,6 +287,20 @@ export class LocalGitSource implements RunSource {
 
   async viewRefs(): Promise<ViewRefs> {
     return viewRefsOf(await this.git.namedRefs(), () => this.git.headBranch())
+  }
+
+  /** Watches this clone's ref storage (`watch-refs.ts`); the default debounce is 300 ms. */
+  watchRefs(onChange: () => void, options: { debounceMs?: number; onTouch?: () => void } = {}): Promise<() => void> {
+    return watchRepoRefs(this.dir, onChange, options.debounceMs ?? 300, options.onTouch)
+  }
+
+  /** The heartbeat an engine on this machine keeps under this clone's git directory (#100). */
+  engineHealth(): Promise<EngineHealth | null> {
+    return readEngineHealth(this.dir)
+  }
+
+  branchTip(branch: string): Promise<string | null> {
+    return this.git.revParse(branch)
   }
 
   async readState(ref: RunRef) {

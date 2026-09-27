@@ -228,10 +228,27 @@ function emptyLedger(): RunSummary['gates'] {
   return { G0: { ...c }, G1: { ...c }, G2: { ...c }, G3: { ...c } }
 }
 
+/**
+ * A repository that could not be read (docs/MULTI-REPO.md §10). Its rows are
+ * left out and it is named here instead, so one repository that cannot be
+ * read does not take the others with it. Different from an unreadable run,
+ * which is a row and an inbox item of kind `malformed`.
+ */
+export interface UnreadableRepository {
+  /** The repository's id (§6). */
+  source: string
+  /** Its display name (§6.2): presentation only, from `displayNameOf`. */
+  sourceName: string
+  /** What went wrong, on one line. */
+  error: string
+}
+
 export interface Portfolio {
   runs: RunSummary[]
   /** All items needing a human, oldest first — the inbox ordering. */
   inbox: InboxItem[]
+  /** Repositories left out because reading them failed, in the order they are listed. */
+  unreadable: UnreadableRepository[]
 }
 
 /**
@@ -240,6 +257,16 @@ export interface Portfolio {
  * that a large portfolio does not start hundreds together.
  */
 const SUMMARIZE_AT_ONCE = 8
+
+/**
+ * How many repositories are read at once (§10). Each one summarizes up to
+ * `SUMMARIZE_AT_ONCE` runs at a time, so this multiplies: 4 × 8 keeps at
+ * most 32 summaries in flight, four times what one repository costs. The
+ * set is a handful at operator scale (§3), so 4 lets two to four
+ * repositories load side by side, and a longer list waits its turn rather
+ * than starting hundreds of git processes together.
+ */
+export const REPOSITORIES_AT_ONCE = 4
 
 /** `fn` over `items`, at most `limit` running at a time, results in the order of `items`. */
 export async function mapBounded<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -255,6 +282,43 @@ export async function mapBounded<T, R>(items: T[], limit: number, fn: (item: T) 
   return results
 }
 
+/** An error as one line: its message's first non-blank line, trimmed and bounded. */
+export function oneLineError(e: unknown): string {
+  const text = e instanceof Error ? e.message : String(e)
+  const first = text
+    .split('\n')
+    .map((l) => l.trim())
+    .find((l) => l !== '')
+  if (!first) return 'reading it failed, with no message'
+  return first.length > 300 ? `${first.slice(0, 299)}…` : first
+}
+
+/**
+ * `read` once per repository, `REPOSITORIES_AT_ONCE` at a time, with a fault
+ * boundary between them: a repository whose read throws is named in
+ * `unreadable` and the rest are returned. Both lists keep the order of
+ * `sources`, whatever order the reads finish in.
+ */
+export async function readEachRepository<R>(
+  sources: RunSource[],
+  read: (source: RunSource) => Promise<R>,
+): Promise<{ read: { source: RunSource; value: R }[]; unreadable: UnreadableRepository[] }> {
+  const outcomes = await mapBounded(sources, REPOSITORIES_AT_ONCE, async (source) => {
+    try {
+      return { source, ok: true as const, value: await read(source) }
+    } catch (e) {
+      return { source, ok: false as const, error: oneLineError(e) }
+    }
+  })
+  const out: { source: RunSource; value: R }[] = []
+  const unreadable: UnreadableRepository[] = []
+  for (const o of outcomes) {
+    if (o.ok) out.push({ source: o.source, value: o.value })
+    else unreadable.push({ source: o.source.id, sourceName: displayNameOf(o.source), error: o.error })
+  }
+  return { read: out, unreadable }
+}
+
 /**
  * How a portfolio gets its parts. A caller holding a cache passes its own
  * readers, so a run whose refs have not moved is not summarized again (#461).
@@ -267,11 +331,18 @@ export interface PortfolioReaders {
 export async function buildPortfolio(sources: RunSource[], readers: PortfolioReaders = {}): Promise<Portfolio> {
   const listRuns = readers.listRuns ?? ((source: RunSource) => source.listRuns())
   const summarize = readers.summarize ?? summarizeRun
+  // The whole of a repository's reading is inside its boundary: a failure
+  // listing its runs or summarizing one of them leaves the repository out,
+  // since a run that cannot be summarized is a git failure, not a record one.
+  // A record that cannot be parsed does not throw; it is a `malformed` row.
+  const { read, unreadable } = await readEachRepository(sources, async (source) => {
+    const refs = await listRuns(source)
+    return mapBounded(refs, SUMMARIZE_AT_ONCE, (ref) => summarize(source, ref))
+  })
   const runs: RunSummary[] = []
   const inbox: InboxItem[] = []
-  for (const source of sources) {
-    const refs = await listRuns(source)
-    for (const { summary, items } of await mapBounded(refs, SUMMARIZE_AT_ONCE, (ref) => summarize(source, ref))) {
+  for (const { value } of read) {
+    for (const { summary, items } of value) {
       runs.push(summary)
       inbox.push(...items)
     }
@@ -279,7 +350,7 @@ export async function buildPortfolio(sources: RunSource[], readers: PortfolioRea
   // Oldest first; unknown ages sink to the end rather than jumping the queue.
   inbox.sort((a, b) => (a.since ?? Infinity) - (b.since ?? Infinity))
   runs.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
-  return { runs, inbox }
+  return { runs, inbox, unreadable }
 }
 
 export function stateOf(state: RunState | null): RunState | null {

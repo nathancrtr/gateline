@@ -5,6 +5,7 @@
 import type { RunScaffold } from '../record/scaffold.ts'
 import type { Identity, RunState, StateDocMutation, StateParseResult } from '../record/schema.ts'
 import type { ContractTemplates } from '../record/validate.ts'
+import type { EngineHealth } from './engine-health.ts'
 import type { CommitInfo } from './git.ts'
 import { lastIdSegment } from './repository-id.ts'
 import type { ViewRefs } from './view-refs.ts'
@@ -193,6 +194,46 @@ export interface RunSource {
    * staged it, whoever is holding the write path.
    */
   stageRun(scaffold: RunScaffold, who: Identity): Promise<StageOutcome>
+
+  // --- What a server needs from a repository beyond its records ---------------
+  //
+  // Each is optional, because a driver with no local clone (a later
+  // `GitHubSource`, docs/MULTI-REPO.md §5 rule 3) could not provide it, and a
+  // caller handles its absence without reaching past this interface.
+
+  /**
+   * Seconds between fetches from origin, when the operator configured this
+   * repository to poll (`fetch_interval`). Absent means it does not poll.
+   */
+  readonly fetchIntervalSeconds?: number
+  /** True when this repository is served local-only: nothing is fetched from or pushed to origin. */
+  readonly localOnly?: boolean
+  /**
+   * Bring what origin has into this repository's view of it, so runs pushed
+   * elsewhere show up. Absent means the driver reads origin directly and has
+   * nothing to bring in.
+   */
+  syncFromRemote?(): Promise<void>
+  /**
+   * Watch where this repository's refs are stored. `onTouch` fires at once on
+   * every write there, `onChange` once the writes have settled. Neither means
+   * a ref moved (an index refresh writes there too); both mean the refs are
+   * worth reading again. Resolves to a function that stops watching. Absent
+   * means there is nothing local to watch, and the caller relies on its timer.
+   */
+  watchRefs?(onChange: () => void, options?: { debounceMs?: number; onTouch?: () => void }): Promise<() => void>
+  /**
+   * The heartbeat of an engine running on this machine beside the server
+   * (#100), or null when none has ever written one here. Absent means this
+   * driver cannot see a local engine, and the caller reports none.
+   */
+  engineHealth?(): Promise<EngineHealth | null>
+  /**
+   * The commit a branch points at now, or null when it names none. What the
+   * remote runner's intents are pinned to (runner-api.ts). Absent means the
+   * driver cannot resolve names.
+   */
+  branchTip?(branch: string): Promise<string | null>
 }
 
 /** The name an interface shows for a source: its own display name, or else its id's last segment (§6.2). */

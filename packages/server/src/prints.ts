@@ -3,9 +3,18 @@
 // a source's print differs from the last one announced. Both are answers
 // about refs, so neither depends on the file watcher noticing anything: the
 // watcher only says "look again", and so does the clock.
-import { type RunRef, type RunSource, runPrint, type ViewRefs } from '@gateline/core'
+import { mapBounded, REPOSITORIES_AT_ONCE, type RunRef, type RunSource, runPrint, type ViewRefs } from '@gateline/core'
+import type { RefChange } from './contract.ts'
 
 const MAX_AGE_MS = 30_000
+
+/**
+ * Past this many runs moving in one repository at once — a fetch that
+ * brought a batch of branches — the event says the repository changed rather
+ * than listing each run. The client refreshes about the same set of views
+ * either way, and the event stays small.
+ */
+export const RUNS_PER_CHANGE = 16
 
 export class RefPrints {
   private readonly sources: RunSource[]
@@ -15,7 +24,7 @@ export class RefPrints {
   private wanted = 1
   private satisfied = 0
   private reading: Promise<void> | null = null
-  private announced: string | null = null
+  private announced: Map<string, ViewRefs | null> | null = null
 
   constructor(sources: RunSource[]) {
     this.sources = sources
@@ -50,15 +59,39 @@ export class RefPrints {
   }
 
   /**
-   * Read the refs now, and say whether any view's refs differ from the last
-   * time this was asked. The first call sets the baseline and reports no change.
+   * Read the refs now, and say what moved since the last time this was asked
+   * (#496): per repository, the runs whose refs moved, or the repository as a
+   * whole (slug null) when its default branch moved, when it could not say
+   * what its refs were one time and could the other, or when more than
+   * `RUNS_PER_CHANGE` runs moved together. Ordered as the sources are, then by
+   * slug. The first call sets the baseline and reports nothing.
+   *
+   * A repository that cannot say what its refs are, now or before, is judged
+   * on its own: it no longer hides a change in every other repository, as a
+   * single print across all of them did.
    */
-  async changed(): Promise<boolean> {
+  async changes(): Promise<RefChange[]> {
     this.markDirty()
-    const now = (await this.everything()) ?? ''
+    const now = await this.current()
     const before = this.announced
     this.announced = now
-    return before !== null && before !== now
+    if (before === null) return []
+    const out: RefChange[] = []
+    for (const source of this.sources) {
+      const was = before.get(source.id) ?? null
+      const is = now.get(source.id) ?? null
+      if (was === null && is === null) continue
+      if (was === null || is === null || was.shared !== is.shared) {
+        out.push({ source: source.id, slug: null })
+        continue
+      }
+      if (was.all === is.all) continue
+      const slugs = [...new Set([...was.runs.keys(), ...is.runs.keys()])]
+      const moved = slugs.filter((slug) => was.runs.get(slug) !== is.runs.get(slug)).sort()
+      if (moved.length > RUNS_PER_CHANGE) out.push({ source: source.id, slug: null })
+      else for (const slug of moved) out.push({ source: source.id, slug })
+    }
+    return out
   }
 
   private async current(): Promise<Map<string, ViewRefs | null>> {
@@ -73,14 +106,16 @@ export class RefPrints {
 
   private async read(): Promise<void> {
     const wanted = this.wanted
-    const next = new Map<string, ViewRefs | null>()
-    for (const source of this.sources) {
-      // A source that cannot be read here fails the same way in the
-      // derivation, which is where the error belongs; its entries fall back
-      // to expiry meanwhile.
-      next.set(source.id, source.viewRefs ? await source.viewRefs().catch(() => null) : null)
-    }
-    this.refs = next
+    // A source that cannot be read here fails the same way in the
+    // derivation, which is where the error belongs; its entries fall back to
+    // expiry meanwhile. Read side by side under the same bound as the
+    // portfolio, and the map keeps the sources' order.
+    const read = await mapBounded(
+      this.sources,
+      REPOSITORIES_AT_ONCE,
+      async (source) => [source.id, source.viewRefs ? await source.viewRefs().catch(() => null) : null] as const,
+    )
+    this.refs = new Map(read)
     this.readAt = Date.now()
     this.satisfied = wanted
   }

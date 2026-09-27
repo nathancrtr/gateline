@@ -1,8 +1,12 @@
-// Freshness: watch each repo's ref storage (refs/ + packed-refs) and emit a
-// debounced change signal. Agents commit → refs move → clients revalidate.
+// Freshness for a local clone: watch where its refs are stored (refs/ and
+// packed-refs) and say, debounced, that they are worth reading again. Agents
+// commit, refs move, and the server asks which views that touched.
+//
+// Moved here from the server (#496) so the server reaches a repository's
+// directory only through `RunSource.watchRefs` (docs/MULTI-REPO.md §5 rule 3).
 import { type FSWatcher, watch } from 'node:fs'
 import { join } from 'node:path'
-import { Git } from '@gateline/core'
+import { Git } from './git.ts'
 
 export type Unwatch = () => void
 

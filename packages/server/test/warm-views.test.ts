@@ -77,7 +77,7 @@ beforeEach(async () => {
   runs = (await load('/api/runs')).runs.map((r) => r.slug).sort()
   await load(`/api/repos/local/demo/-/runs/${a}`)
   await load(`/api/repos/local/demo/-/runs/${b}`)
-  await prints.changed()
+  await prints.changes()
   derived()
 })
 
@@ -91,7 +91,7 @@ describe('what counts as a change', () => {
     writeFileSync(join(fixture.dir, 'README.md'), '# fixture\n\nedited, uncommitted\n')
     git(['status', '--short'])
     git(['add', 'README.md'])
-    expect(await prints.changed()).toBe(false)
+    expect(await prints.changes()).toEqual([])
     await load('/api/runs')
     await load(`/api/repos/local/demo/-/runs/${a}`)
     expect(derived()).toEqual([])
@@ -99,23 +99,23 @@ describe('what counts as a change', () => {
 
   it('a commit on a branch no view reads is not one', async () => {
     commitOn('web/unrelated', 'notes.md', 'unrelated work\n', true)
-    expect(await prints.changed()).toBe(false)
+    expect(await prints.changes()).toEqual([])
     await load('/api/runs')
     await load(`/api/repos/local/demo/-/runs/${a}`)
     expect(derived()).toEqual([])
   })
 
-  it('a commit on a run branch is one', async () => {
+  it('a commit on a run branch is one, naming the repository and the run', async () => {
     commitOn(`run/${a}`, `runs/${a}/note.md`, 'a note\n')
-    expect(await prints.changed()).toBe(true)
-    expect(await prints.changed()).toBe(false)
+    expect(await prints.changes()).toEqual([{ source: 'local/demo', slug: a }])
+    expect(await prints.changes()).toEqual([])
   })
 
   it('a commit on the default branch is one', async () => {
     commitOn('web/to-merge', 'notes.md', 'merged work\n', true)
     git(['update-ref', 'refs/heads/main', 'refs/heads/web/to-merge'])
     git(['reset', '-q', '--hard', 'main'])
-    expect(await prints.changed()).toBe(true)
+    expect(await prints.changes()).toEqual([{ source: 'local/demo', slug: null }])
   })
 })
 

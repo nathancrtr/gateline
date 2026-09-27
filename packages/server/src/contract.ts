@@ -88,6 +88,7 @@ import type {
   SurfaceItemRef,
   SurfaceOverlap,
   SurfaceScopedDiff,
+  UnreadableRepository,
   Validation,
   Verdict,
   WaitingOn,
@@ -175,6 +176,7 @@ export type {
   SurfaceItemRef,
   SurfaceOverlap,
   SurfaceScopedDiff,
+  UnreadableRepository,
   Validation,
   Verdict,
   WaitingOn,
@@ -248,12 +250,25 @@ export interface EngineHealthResponse {
   now: number
 }
 
-export interface InboxResponse {
+/**
+ * The repositories a cross-repository view left out because reading them
+ * failed (docs/MULTI-REPO.md §10, #496), each with its id, display name and a
+ * one-line error. Every other repository's rows are in the response. Empty
+ * when all were read; when none could be, the rows are empty and this names
+ * every one, and the status is still 200.
+ *
+ * Optional on the wire, though this server always sends it: a server built
+ * before #496 omits it, and a client reads its absence as "nothing was left
+ * out". Additive, so not a version bump.
+ */
+type Unreadable = { unreadable?: UnreadableRepository[] }
+
+export interface InboxResponse extends Unreadable {
   items: InboxItem[]
   now: number
 }
 
-export interface RunsResponse {
+export interface RunsResponse extends Unreadable {
   runs: RunSummary[]
   now: number
 }
@@ -356,7 +371,34 @@ export interface DiffResponse {
  * restated: the previous hand-written client copy dropped `readyAt` and
  * `notes` from each decision and nothing noticed.
  */
-export type MetricsResponse = Metrics
+export type MetricsResponse = Omit<Metrics, 'unreadable'> & Unreadable
+
+/**
+ * One thing a `change` event on `GET /api/events` says moved (#496).
+ *
+ * `source` is a repository id. `slug` names the run whose refs moved (its run
+ * branch, locally or on a remote), or is null when the change is to the
+ * repository as a whole: its default branch moved, which every run's views
+ * read (diffs, contract templates, whether a run has landed), or a run's refs
+ * could not be told apart this time. A client refreshes a named run's views
+ * for a run change, and every view of the repository for a null one. Views
+ * across repositories (inbox, runs, metrics) are refreshed for any change.
+ */
+export interface RefChange {
+  source: string
+  slug: string | null
+}
+
+/**
+ * The data of one `change` event: everything the server saw move since the
+ * last event, coalesced. A repository appears either once with a null slug or
+ * once per run that moved, never both, and the list is ordered as the
+ * repositories are served, then by slug. Before #496 the data was `{}`; a
+ * client that cannot read this shape refreshes everything.
+ */
+export interface ChangeEvent {
+  changes: RefChange[]
+}
 
 export interface StagingSourceConfig {
   id: string
@@ -458,7 +500,8 @@ export interface RunnerReportResponse {
  * Keys are `METHOD /path` with Hono's parameter syntax, so a route that is
  * renamed or removed breaks every reference to it at compile time. Error
  * responses are `ApiErrorBody` at every route and are not restated per entry.
- * `GET /api/events` is Server-Sent Events, not JSON, so it has no entry.
+ * `GET /api/events` is Server-Sent Events, not JSON, so it has no entry; its
+ * `change` event's data is a `ChangeEvent`.
  *
  * `:id` is a repository id and spans segments (`github.com/acme/billing`, or
  * deeper for a nested GitLab group); the route registers it as `:id{.+}`, and

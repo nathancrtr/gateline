@@ -4,9 +4,10 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { LocalGitSource, type RunSource } from '@gateline/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createApp } from '../src/app.ts'
-import { buildRunnerApi, type DispatchOutcome, type PendingIntent, type RunnerCallback } from '../src/runner-api.ts'
+import { buildRunnerApi, type DispatchOutcome, type PendingIntent, type RunnerCallback, runnerRepositoryOf } from '../src/runner-api.ts'
 
 const TOKEN = 'runner-secret'
 
@@ -117,6 +118,24 @@ describe('runner-agent API', () => {
     expect(intents).toHaveLength(1)
     expect(intents[0]!.key).toBe(INTENT.key)
     expect(intents[0]!.baseOid).toBeUndefined()
+  })
+
+  // #496: the server's entry point reaches the repository through a source
+  // (`branchTip`, `originUrl`), never its directory.
+  it('pins intents and names the clone URL through the first source that can resolve a branch', async () => {
+    const repo = makeRepo(INTENT.branch)
+    execFileSync('git', ['-C', repo.dir, 'remote', 'add', 'origin', 'https://github.com/acme/billing.git'], { env: { ...process.env, ...GIT_ENV } })
+    // A source with no clone comes first and is passed over: it offers no `branchTip`.
+    const remoteOnly = { id: 'github.com/acme/elsewhere' } as unknown as RunSource
+    const repository = runnerRepositoryOf([remoteOnly, new LocalGitSource('github.com/acme/billing', repo.dir)])
+    const runnerApi = buildRunnerApi({ token: TOKEN, callback: makeCallback(), repository, log: () => {} })!
+    expect((await runnerApi.listIntents())[0]!.baseOid).toBe(repo.oid)
+    expect(await runnerApi.repoUrl()).toBe('https://github.com/acme/billing.git')
+  })
+
+  it('has no repository when no source can resolve a branch', () => {
+    expect(runnerRepositoryOf([{ id: 'github.com/acme/elsewhere' } as unknown as RunSource])).toBeUndefined()
+    expect(runnerRepositoryOf([])).toBeUndefined()
   })
 
   it('leaves intents unaugmented (no git call) when repoDir is not configured', async () => {

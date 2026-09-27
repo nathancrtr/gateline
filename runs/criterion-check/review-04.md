@@ -61,3 +61,43 @@ Both requirements this task claims were checked by reading the diff and by runni
 The three code files changed are exactly the task's declared surface. The commit also appends the round-1 notes to the task's own work item, which is where implementer notes live.
 
 Housekeeping: my broken copies were two temporary files beside the component and its test, removed after the run; the working tree holds this report and nothing else. My browser measurements used hand-built markup matching the component's output and the browser's default fonts, since the web fonts are served by the build.
+
+# Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** commit 6ceb000 (`git diff 20be864 6ceb000`), a change to the task's test file and its notes only
+**Summary:** The hover card and the cited-ids list still behave as the spec asks, and the tests now catch each break the first round named. What remains is two minor gaps, neither a defect in shipped behaviour. Approving accepts that a job worktree still cannot build the web app until someone reinstalls, which the browser task will meet.
+
+## Verify round
+- **F1 — resolved** — The test file now compiles the stylesheet and reads the modifier's rule. My broken copies each failed: the rule deleted failed 2 tests, the modifier cutting at six lines failed 1, the modifier moved before the base rule failed 1.
+- **F2 — resolved** — A third fixture criterion carries markdown in both halves and its inner markup is compared. The promise printed as plain text failed 1 test, and the check printed as plain text failed 1.
+- **F3 — resolved** — The checked criterion's halves each run past 110 characters, and the quotation is searched for cutting classes and inline styles. All three round-1 broken copies now fail 2 tests each. Cuts the search does not name are the new finding F5.
+- **F4 — stands** — Nothing changed, and the React plugin's folder is still empty in this worktree. The implementer's rebuttal is right that the fix lies in the orchestrator, which this run may not edit (R9). It blocks nothing here. The browser task must reinstall before its build, and the seeding fix needs an issue outside this run.
+
+### F5 — minor — The stylesheet and cut checks miss any cut they do not name
+- **Where:** `packages/web/test/lexicon-check.test.ts:109`, `:230-235`
+- **Failure scenario:** The code is correct today; five broken copies passed all 20 tests, among them a later rule restoring the six-line cut and a bracketed clamp class on the check.
+
+## Coverage
+
+The round-2 change was checked by reading it and by running it: the task's tests, twenty-three deliberately broken copies of the component and stylesheet, the pre-change code, the web suite, the whole suite, typecheck and lint.
+
+| Requirement | Where | Mechanism checked | Status |
+|-------------|-------|-------------------|--------|
+| ADR-3 | `lexicon-check.test.ts:205-240` | compiled modifier rule unsets the clamp, shows overflow, and follows the base rule; four stylesheet breaks each fail | ✓ F1 |
+| ADR-3 | `lexicon-check.test.ts:230-235` | a second overflow declaration, a later overriding rule, and a clamp on the check's own selector each pass | partial: F5 |
+| R4 | `lexicon-check.test.ts:186-203` | promise and check inner markup compared against rendered markdown | ✓ F2 |
+| R4 | `lexicon-check.test.ts:109`, `:181-183` | named cutting classes and any inline style inside the quotation fail; text cut at 110 characters fails | ✓ F3 |
+| R4 | `lexicon-check.test.ts:109` | a bracketed clamp class and a no-wrap class on the check pass | partial: F5 |
+| round-1 breaks | `lexicon-check.test.ts` | dropped modifier, no separating space, list quoting full text, unchecked path gaining the modifier or the check branch each still fail | ✓ |
+| new tests fail before the change | `lexicon-check.test.ts` | pre-change component and stylesheet fail 11 of 20, every new-behaviour test included | ✓ AC8.5 claim |
+| stylesheet compile | `lexicon-check.test.ts:209-218` | uses the web package's declared styling dependency; adds no package | ✓ |
+| suites | `packages/` | web suite 35 files and 564 tests pass; whole suite 125 files pass, 2 skipped; typecheck and lint exit 0 | ✓ |
+| web build | `packages/node_modules/@vitejs` | folder still empty, so the build would fail to load the React plugin; not run | n/a: F4 |
+
+## Boundary check
+
+The round-2 commit changes the task's test file, which is on the declared surface, and appends the round-2 notes to the task's own work item. No production file changed this round.
+
+Housekeeping: my broken copies were three temporary files beside the component, the stylesheet and the test, removed after each run; the working tree holds this report's change and nothing else. The implementer's one whole-suite timeout did not recur in my run.

@@ -189,7 +189,7 @@ export async function loadSources(opts: {
         warnings.push(`source ${id}: fetch_interval ignored — local-only`)
       }
       sources.push(
-        new LocalGitSource(id, path, {
+        new LocalGitSource(id, top, {
           push,
           localOnly,
           fetchIntervalSeconds: entry.fetch_interval,

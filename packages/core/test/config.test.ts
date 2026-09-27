@@ -13,6 +13,8 @@ import { dropFixture, type FixtureContext, makeFixture } from './fixture.helper.
 let ctx: FixtureContext
 let toplevel: string
 let subdir: string
+let subdirConfigPath: string
+let subdirConfigDir: string
 // A config path that never exists, so loadSources exercises the cwd fallback
 // instead of reading the developer's real ~/.config/gateline/config.yaml.
 const noConfig = { configPath: '/nonexistent/gateline-83/config.yaml' }
@@ -22,10 +24,16 @@ beforeAll(async () => {
   toplevel = await realpath(ctx.repo.dir)
   subdir = join(ctx.repo.dir, 'subdir-83')
   await mkdir(subdir, { recursive: true })
+  // #493: the config-file path was the one acceptance path #83 left
+  // unexercised — a config entry naming a subdirectory.
+  subdirConfigDir = await mkdtemp(join(tmpdir(), 'gateline-493-cfg-'))
+  subdirConfigPath = join(subdirConfigDir, 'config.yaml')
+  await writeFile(subdirConfigPath, `sources:\n  - name: via-subdir\n    path: ${subdir}\n`)
 })
 
 afterAll(async () => {
   await dropFixture(ctx)
+  await rm(subdirConfigDir, { recursive: true, force: true })
 })
 
 describe('loadSources roots sources at the repo toplevel (#83)', () => {
@@ -42,6 +50,15 @@ describe('loadSources roots sources at the repo toplevel (#83)', () => {
     expect((sources[0] as LocalGitSource).dir).toBe(toplevel)
   })
 
+  // #493: loadSources computed `top` for a config entry but built the source
+  // from the raw `path` — the one acceptance path #83's fix and regression
+  // test never covered.
+  it('a config entry pointing at a subdirectory resolves to the toplevel', async () => {
+    const { sources } = await loadSources({ configPath: subdirConfigPath })
+    expect(sources).toHaveLength(1)
+    expect((sources[0] as LocalGitSource).dir).toBe(toplevel)
+  })
+
   it('inbox derived from a subdirectory launch matches the repo root', async () => {
     const { sources } = await loadSources({ cwd: subdir, ...noConfig })
     const fromSub = await buildPortfolio(sources)
@@ -50,6 +67,18 @@ describe('loadSources roots sources at the repo toplevel (#83)', () => {
     expect(fromSub.inbox.length).toBeGreaterThan(0) // parity must not hold vacuously
     expect(fromSub.inbox.map(key)).toEqual(fromRoot.inbox.map(key))
     // The symptom that shipped: runs render while the inbox is empty.
+    expect(fromSub.runs.length).toBe(fromRoot.runs.length)
+  })
+
+  it('portfolio derived from a config-file subdirectory entry matches the repo root', async () => {
+    const { sources } = await loadSources({ configPath: subdirConfigPath })
+    const fromSub = await buildPortfolio(sources)
+    const fromRoot = await buildPortfolio([ctx.source])
+    const key = (i: { kind: string; slug: string; gate: string | null }) => `${i.kind}:${i.slug}:${i.gate}`
+    expect(fromSub.inbox.length).toBeGreaterThan(0) // parity must not hold vacuously
+    expect(fromSub.inbox.map(key)).toEqual(fromRoot.inbox.map(key))
+    // Runs that exist only on the default branch must not be silently
+    // omitted (the second half of the symptom, distinct from the inbox).
     expect(fromSub.runs.length).toBe(fromRoot.runs.length)
   })
 })

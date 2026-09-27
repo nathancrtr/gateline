@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { CodeTreeMonitor, Git, LocalGitSource, resolveCodeRepo, SUPERSEDE_EXIT_CODE } from '@gateline/core/sources'
+import { CodeTreeMonitor, Git, LocalGitSource, repoToplevel, resolveCodeRepo, SUPERSEDE_EXIT_CODE } from '@gateline/core/sources'
 // gateline-orchestrator — the v1 orchestrator's CLI.
 //   tick --dry-run   derive and print each run's next action; write nothing
 //   tick             one live reconcile pass: dispatch, wait, meter, exit
@@ -67,8 +67,28 @@ interface Opened {
   frameworkPrefix?: string
 }
 
+/**
+ * Resolves `--repo` (default: cwd) to its work-tree toplevel — the same
+ * normalization `loadSources` already applies to `--repo` and config entries
+ * (#493, the engine-side half of #83). The engine reads by pathspec
+ * (`ls-tree`/`log -- <path>`), which resolves relative to the cwd's prefix
+ * inside a work tree, unlike `show(ref:path)` — a subdirectory would list no
+ * artifacts and miss default-branch runs, with no warning.
+ */
+export async function resolveOrchestratorRepoDir(raw: string): Promise<{ ok: true; dir: string } | { ok: false; error: string }> {
+  const dir = await repoToplevel(raw)
+  if (dir === null) return { ok: false, error: `${raw} is not a git repository — gateline-orchestrator needs one (pass --repo)` }
+  return { ok: true, dir }
+}
+
 async function open(): Promise<Opened> {
-  const { repo: dir, gatelinePrefix } = program.opts<{ repo: string; gatelinePrefix?: string }>()
+  const { repo: rawDir, gatelinePrefix } = program.opts<{ repo: string; gatelinePrefix?: string }>()
+  const resolved = await resolveOrchestratorRepoDir(rawDir)
+  if (!resolved.ok) {
+    console.error(resolved.error)
+    process.exit(1)
+  }
+  const dir = resolved.dir
   const git = new Git(dir)
   return {
     dir,

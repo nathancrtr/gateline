@@ -58,3 +58,9 @@ depends_on: [01-lexicon-promise-check]
 status: pending
 
 notes: |
+  round 1:
+  claim: AC8.5. Against the pre-change lexicon.tsx, `npx vitest run web/test/lexicon-check.test.ts` gave 7 failed, 6 passed. All checked-criterion assertions failed, for both the hover card and the cited-ids list. Other checked-path mutants were each killed: no separating space failed 1, check not `block` failed 1, list quoting `body` failed 2.
+  claim: AC8.6. Each break of an unchecked path failed and then passed once restored. Hover quoting `definition` failed 2. Hover gaining the clamp modifier failed 2. Hover routing every criterion through the check branch failed 3. List quoting `definition` failed 1.
+  claim: the clamp modifier is `lex-card-def-full` (`@apply line-clamp-none`), placed after `.lex-card-def`. Compiling styles.css with @tailwindcss/node gives `overflow: visible; display: block; -webkit-line-clamp: unset`. Deleting the rule fails no static test, because whether the clamp cuts is a browser fact for task 06.
+  discovery: `npm run build -w @gateline/web` could not load `@vitejs/plugin-react`, because this worktree's install has an empty `node_modules/@vitejs`. The build is not one of this task's checks, and it was not reinstalled.
+  `npx vitest run web/test`: 35 files, 557 passed. `npm run typecheck` and `npm run lint` exited 0. `npm test`: 125 files passed, 2 skipped; 1806 passed, 2 skipped.

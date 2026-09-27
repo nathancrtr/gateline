@@ -218,11 +218,23 @@ export function LexRef({ children }: { children?: ReactNode }) {
             supersedes {defs.length - 1} earlier definition{defs.length > 2 ? 's' : ''}
           </span>
         )}
-        {entry?.body && (
-          <span className="lex-card-def">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.body}</ReactMarkdown>
-          </span>
-        )}
+        {/* A criterion's check (the spec's `Check:` line) starts a line of its
+            own under the promise, and the six-line clamp lifts so the end of
+            the check is never cut (plan ADR-3). The space keeps the quote's
+            text the spec's words when the block is not laid out. */}
+        {entry?.body &&
+          (entry.check !== undefined ? (
+            <span className="lex-card-def lex-card-def-full" data-criterion-quote>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.promise}</ReactMarkdown>{' '}
+              <span className="block" data-criterion-check>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.check}</ReactMarkdown>
+              </span>
+            </span>
+          ) : (
+            <span className="lex-card-def" data-criterion-quote={entry.kind === 'criterion' ? true : undefined}>
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.body}</ReactMarkdown>
+            </span>
+          ))}
         {/* Where the definition lives (#435): a UI word, and the line as the
             Address it is, which is also the link. It was once the address set
             as a link label, `spec.md:13 — jump to definition ↗`, spending the
@@ -342,7 +354,9 @@ export function CitedObjects({ content, path }: { content: string; path: string 
                   <Name lead size="sm" className="shrink-0">
                     {id}
                   </Name>
-                  <span className="min-w-0 truncate text-muted">{entry.shortName || entry.body.replace(/\s+/g, ' ')}</span>
+                  {/* A checked criterion quotes its promise alone; its check
+                      stays one click away, at the definition (R6). */}
+                  <span className="min-w-0 truncate text-muted">{entry.shortName || (entry.check !== undefined ? (entry.promise ?? entry.body) : entry.body).replace(/\s+/g, ' ')}</span>
                   <Address className="ml-auto shrink-0" to={artifactHref(lex.src, lex.slug, entry.artifact, anchorFor(id))}>
                     {`${entry.artifact}:${entry.line}`}
                   </Address>

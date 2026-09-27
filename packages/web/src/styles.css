@@ -475,6 +475,11 @@ article:has([data-landed]:focus-within) > .landing-mark {
 .lex-card-def {
   @apply line-clamp-6 bg-inset px-2.5 py-1.5 text-[12px] leading-[1.55];
 }
+/* A criterion with a check is quoted whole (criterion-check ADR-3): at a
+   phone width the six-line cut would remove the end of its check. */
+.lex-card-def-full {
+  @apply line-clamp-none;
+}
 .lex-card-def p {
   @apply my-1;
 }

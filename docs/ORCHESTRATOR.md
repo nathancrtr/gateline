@@ -90,7 +90,7 @@ Why engine-first, beyond cost:
 ### 4.1 Triggers
 
 All triggers funnel into the same tick; no trigger carries information (the state
-does). Four sources:
+does). Five sources:
 
 1. **Ref watcher** — `.git/refs` + `packed-refs`, debounced (the same mechanism the
    frontend server uses for SSE freshness). Human decisions, agent artifact commits,
@@ -98,7 +98,12 @@ does). Four sources:
 2. **Dispatch completion** — a launched job exits.
 3. **Heartbeat** — cron-style, default every few minutes: catches missed events, ages
    stale dispatches (§4.4), re-checks liveness.
-4. **Manual** — `tick` on demand, and `tick --dry-run` (shadow mode, §10).
+4. **Governor wake** — a slot this engine was refused may be free (§6, #501). The
+   governor calls the loop's own trigger; it never calls into the engine mid-tick.
+5. **Manual** — `tick` on demand, and `tick --dry-run` (shadow mode, §10).
+
+Ticks never overlap. A trigger that lands while a pass runs joins the one pass
+waiting behind it, and resolves when a pass that began after it has finished.
 
 ### 4.2 The tick
 
@@ -143,7 +148,7 @@ implementation time (one test per row, like the frontend's); its shape:
 | Dispatch refused before spawn (#154, #155) | A refusal is not a failure: the ledger entry closes at `$0` with `refused: true`, counts toward no retry, and raises no escalation. The run branch held by a checkout the orchestrator does not own is caught earlier still — probed before the intent commit (rule `CH`) and deferred like the resource cap, nothing written, re-derived once the checkout is released; the heartbeat carries the condition, remedy first |
 | The same refusal twice in a row (#347, rule `RF`) | Defer. A refusal costs nothing and counts toward nothing, which is right for a one-off and unbounded for a condition that stands: the next tick derives the same dispatch, and the ledger and the branch grow by one entry and one commit per tick. So after two consecutive refusals of the same (role, task, round), with no success or real failure closed after them, the dispatch is held back like the resource cap — nothing written, the heartbeat carrying the condition and the last refusal's words. Deferred because every pre-spawn refusal is a fact about the host, never about the run: no edit a human could make to `state.yaml` would clear it, so escalating would ask for a decision that changes none of the inputs the rule reads (the #96/#97 dead loop). It clears itself two ways — a dispatch that lands anything but a refusal resets the count, and one probe dispatch goes through per window, since nothing in the record will ever say the host is well again |
 | Budget pre-flight fails (§6) | Pause `budget-exhausted`; escalate. The pause is a *condition* recomputed from the ledger and the limit, so the only resume that sticks is one that raises `cost_limit_usd` in the same commit — the frontend, the CLI and the decision planner all require it from this reason (#96). A standing condition that re-fires with the same words after its escalation was resolved re-pauses without appending a second escalation (#96) |
-| Host window exceeded (§6, rule `HB`) | Defer, like the resource cap: nothing is written, the run re-derives once the window has rolled, and the heartbeat carries the held-back runs for Gatehouse's engine chip (#97) |
+| Host window exceeded (§6, rule `HB`) | Defer, like the resource cap: nothing is written, the run re-derives once the window has rolled, and the heartbeat carries the held-back runs for Gatehouse's engine chip (#97). Since #501 the governor makes this call, for the machine's window and for a repository's own ceiling |
 
 Every "after" in that table means **branch order**, not a clock (issue #346). The
 commit where a human's resolution landed, against the commit that landed the
@@ -412,6 +417,16 @@ failed, or awaiting review — so sweeps never pile up on an unmerged predecesso
 role's estimate exceeding its schedule's cap is a config defect that skips with a
 warning (pause-don't-degrade, applied to schedules).
 
+A due sweep is then admitted like any run dispatch (#501). It reserves a slot from the
+governor (§6) before its seed commit, so it counts toward `--max-concurrent-dispatches`
+and its estimate counts toward the spend window until its marker is metered. A refusal
+defers the sweep under rule `MC` or `HB`: nothing is written, the heartbeat carries it
+beside the runs, and the schedule derives the same sweep on a later tick.
+`orchestrator.yaml` is read once at startup, at the same default-branch commit as the
+registry and the adapter manifests; the heartbeat reports a later change on the
+default branch, and a restart applies it. The facts about sweeps themselves (which are
+open, when the last merged one ran) are still read live from the default branch.
+
 ### 4.7 Invariants of the loop
 
 The tick is a state machine: the record is the state, the rules and the human
@@ -588,7 +603,8 @@ autonomy multiplies the cost of a missing meter. The design:
 - **The host ceiling is a rolling-window rate** (#97). `--spend-limit-usd`
   bounds what the deployment spends per rolling window (`--spend-window`,
   default 24 hours): closed ledger entries opened inside the window at their
-  real cost, plus every open entry at its estimate, across every active run.
+  real cost, plus every open entry at its estimate, across every active run,
+  plus sweep costs and reservations not yet committed (the governor, below).
   A lifetime sum was the first shape, and it ratcheted: ledgers only grow and
   a run leaves the sum only when its branch lands, so a static cap was reached
   once and never left — the host was bricked by its own history, and the
@@ -614,6 +630,160 @@ autonomy multiplies the cost of a missing meter. The design:
   concrete ask than maintaining a total, and the shape v1 automates. The
   frontend already renders budget fields "honestly, including never-updated"; a
   populated ledger upgrades that view with zero frontend changes.
+
+### 6.1 The governor: admission by reservation (#501)
+
+One object per process, the governor (`governor.ts`), owns the concurrency cap
+(`--max-concurrent-dispatches`, rule `MC`) and the spend window
+(`--spend-limit-usd` with `--spend-window`, rule `HB`). Before #501 each was a
+count an engine took of its own work at launch, and a scheduled sweep passed
+neither. Several engines cannot share a limit that way (MULTI-REPO.md §8.2), so
+admission is now a reservation, made by every engine and every sweep scheduler
+the process runs. `gateline up` still runs one engine; the governor is built so
+that several can share it.
+
+The governor is a guard applied after derivation, like the engine's other guards.
+Derivation stays a pure function of committed state, and the governor writes
+nothing to any repository. It keeps everything in process memory.
+
+1. **Reserve.** Once derivation and the guards before it (LR, CH, RF) have let a
+   dispatch through, the engine asks for one slot per intent. It names the
+   repository (a plain string key), the dispatch and the role's estimated cost.
+   In one synchronous step, with no await between the check and the grant, the
+   governor checks the cap, then the machine's spend window, then the
+   repository's own ceiling if one is set. It grants a prefix of the request
+   (partial grants under the cap are legal, as they were) or refuses. A refusal
+   names the limit that refused and carries the numbers, and the engine defers
+   the run under `MC` or `HB` with the same words as before. RB, the missing
+   per-run cap, keeps its old place between the two: a cap refusal wins over RB,
+   and RB wins over a spend refusal.
+2. **Commit.** The engine commits (and, when pushing, pushes) the intent and
+   launches the role, exactly as §4.4 and TOPOLOGY.md §3.2 describe. At launch
+   the reservation is handed to the job and becomes a running job.
+3. **Release.** The job releases its slot when it settles: after the closing
+   commit, whether the dispatch succeeded, failed or was refused before spawn.
+   Every path that reserved without launching releases too, because the reserved
+   section is one `try`/`finally` and only the launch takes a reservation out of
+   it: a lost compare-and-swap on the intent commit, a rejected push, the
+   terminal-run guard (I6), RB, and any exception between the grant and the
+   launch. Release is idempotent. A job releases with the cost its closing commit
+   computed, which the spend window keeps counting until the next report (below).
+4. **Wake.** A release wakes every repository refused since it was last woken,
+   through that engine's own trigger (§4.1). The free slots are offered one each,
+   in round-robin order, to the repositories that were refused a slot; an offered
+   slot is held for that repository until its woken tick ends, so a neighbour
+   ticking on its own schedule cannot take it first. A repository its own ceiling
+   would refuse is skipped and does not hold the turn. A woken repository that
+   leaves its offer unused gives the slot back, which counts as a release.
+   Two exceptions keep the wake from spinning. A reservation released without
+   being committed (its grant launched nothing) does not wake its own repository,
+   which would retry the same failed grant at once; that repository waits for the
+   next release or its heartbeat, as it did before #501. And no repository is woken
+   more than once a second: a wake that comes sooner is sent when the second is up,
+   which bounds two repositories whose grants keep failing from waking each other
+   in a loop.
+
+**Order.** Between repositories the turn goes round-robin, in registration order,
+starting after the repository most recently granted a slot. Within a repository
+the engine takes runs oldest-waiting first: by the committer date of the run
+branch's tip, the commit that put the run in its present state. A deferral writes
+nothing, so a run held back keeps its place; a dispatch commits an intent, so the
+run that just went moves to the back. This replaced alphabetical order by slug.
+It compares tips of different branches, which share no history, so branch order
+(I9) cannot answer it and a committed timestamp is the only evidence there is. Clock
+skew between writers can reorder runs a few seconds apart. It never changes whether
+a run may go.
+
+**The spend projection** is the sum, across every repository registered with the
+governor, of closed ledger entries opened inside the window, estimates for ledger
+entries still open, and estimates for reservations the governor holds. Closed
+sweep markers count at their recorded cost when they opened inside the window,
+whether merged or not; an open marker counts at its estimate while it opened
+inside the window, because nothing closes the marker of a sweep whose process died.
+Reading ledgers is per repository and asynchronous, so the two halves are kept
+apart: each engine reads its own repository's ledgers at the start of every tick
+(after the stale sweep) and reports them, and the governor keeps the last report
+per repository. It applies the window itself, at the moment it decides, so a report
+does not go stale by the window rolling.
+
+Each dispatch is counted once. A report names every ledger entry and sweep marker
+by its key (run, role, task and round, or the sweep's slug) and by the `at` its
+intent commit wrote. The reservation learns that `at` when the intent commit lands,
+so the governor can recognise the dispatch however the report, the reservation and
+the settlement overlap. The key alone would not do, because a retry reuses it.
+
+A report is read at the start of a tick, before that tick's intent commits, so a
+dispatch that launches and settles before the next report would appear in neither.
+The governor closes that gap itself. When a committed reservation is released, it
+keeps the dispatch's cost and counts it until a report replaces it. The cost is the
+one the close computed: the real cost the harness reported or the registry prices,
+the estimate for a dispatch launched and lost, $0 for a refusal. It is kept even when
+the close could not write it. The estimate stands in only when the close threw
+before computing a cost. Which report replaces the settlement is fixed by order, not
+by clock: the governor takes a sequence number when a report starts gathering and
+when a dispatch settles, and a report clears only the settlements that came before
+it started.
+
+A report that started after a settlement shows it one of two ways. Normally the
+closing commit landed before the release, and the report shows the entry closed at
+its real cost. On four paths the close returns without writing: the state could not
+be read, the entry was already closed, a write failed for a reason other than a
+moved ref, or the compare-and-swap was lost five times (and `closeSweep` likewise).
+Then the entry stays open in the ledger, counts at its estimate from that report on,
+and is aged out by the stale sweep like any lost dispatch.
+
+A settlement during the gathering stays counted until a later report. If the
+gathering read its entry closed, the key and `at` match it and it is counted once;
+if it read the entry still open, the open entry is not counted beside the
+settlement. A report that finishes gathering after a newer one was applied is
+ignored. A report whose sweep markers could not be read keeps the previous report's
+sweep entries and the sweep settlements the governor holds, rather than dropping
+them for a tick. A settlement leaves the window like a closed entry, by when it
+settled, whether or not its repository reports again.
+
+What is left errs toward counting too much. A ledger change nobody in this process
+made (a hand edit, a second writer) goes unseen until that repository's next report,
+and every engine ticks at least once per heartbeat. A repository that never reports
+again (a stopped engine, a report that fails every time) keeps its last report and
+its settlements. Its closed entries and settlements leave the sum as the window
+rolls past them. Entries its last report showed open keep counting at their
+estimate, as open ledger entries always have, until the repository is removed
+(an `unregister` is left to #502). Uncommitted
+reservations, the term several engines ticking at once would otherwise miss, are
+never stale: the governor holds them.
+
+**After a restart** the governor holds nothing. Roles are launched as detached
+processes and can outlive the engine that launched them, so before it grants
+anything the governor is seeded from each repository's open ledger entries and open
+sweep markers. Each holds a slot until the ledger shows it closed or its timeout has
+passed since its `at` (the role timeout; the sweep timeout for a sweep). "Closed"
+is the engine's own notion from §4.4, unchanged: the stale sweep ages an entry whose
+engine process is gone after `staleMs`, the next report shows it closed, and the
+slot is free. The timeout is the backstop §4.4 already relies on. A sweep's hold
+clears only by its timeout (the scheduler's configured sweep timeout, 30 minutes by
+default), since nothing closes a lost sweep's marker; with a cap of 1, a crashed
+sweep therefore blocks every dispatch for up to that long. A new dispatch for the
+same key as a hold takes over its slot, because derivation only asks for a key it
+reads as not in flight; the hold is removed only if that request is granted. Until
+every registered repository has seeded, the governor grants nothing.
+
+**Modes.** `--max-concurrent-dispatches 0` is uncapped. `--no-budget-enforcement`
+keeps metering and reporting, turns off both spend checks (the machine's window and
+every repository's ceiling), and keeps the cap, which is a resource limit rather
+than a budget. That is the behaviour the flag had before #501.
+
+**Entry points.** `assembleOrchestrator` and `startOrchestrator` build a governor
+from the flags unless they are handed one, so the standalone `gateline-orchestrator`
+and a one-repository `gateline up` each have their own. Running the standalone
+binary beside `up` on one machine therefore still doubles the limits. A scheduler
+must be given its governor. An engine built without one builds its own from its
+config and logs one line naming the limits it took, so a forgotten argument does
+not pass silently. A request that names one key twice is refused with an error
+naming the key. The interface
+is small on purpose (`register`, `seed`, `report`, `reserve`, `subscribe`, and the
+reservation's `commit` and `release`), because it is where a coordinator shared
+between installs would attach (#34). A repository's own ceiling can be set in the
+engine and governor config; reading it from a config file is #495's.
 
 ## 7. Humans: gates, escalations, and the frontend contract
 
@@ -729,7 +899,7 @@ Extends DESIGN.md §9 for the autonomous mode:
 | Orchestrator races a human decision | CAS refusal → re-tick; both writers already treat refusal as the designed outcome |
 | Runaway spend | Every model invocation flows through the metered seam; pre-flight cap; pause-don't-degrade. Resume from the budget pause carries a higher limit or is refused (#96); the host ceiling is a per-window rate that defers the dispatch (#97) |
 | Run branch held by a human's checkout (#154) | The workspace preflight refuses to dispatch into a checkout the orchestrator does not manage — an agent there would race the human's edits. Deterministic and environmental, so it is neither the role's failure nor a retry's business: rule `CH` probes for it before the intent commit and defers (written nowhere, re-derived once released), and the rare refusal that slips past the probe closes its ledger entry at `$0`, `refused`, counting toward nothing (#155). Counting toward nothing also means nothing stops it repeating, so any pre-spawn refusal that stands — this one, a broken framework root, a dispatcher that will not spawn — is bounded by rule `RF` after two in a row: deferred like `CH`, re-probed once a window, never escalated, since no edit to the run's record could clear a condition of the host (#347) |
-| Runaway *resource* use on the host | Dispatch concurrency cap across all runs (default 2; `--max-concurrent-dispatches`, `0` disables). Each dispatch carries an agent process, a cold dependency install, and a full suite run, so concurrency is what exhausts the machine. Unlike a budget ceiling this never escalates: no human decision unblocks it and it clears itself as jobs finish, so a capped dispatch is deferred (rule `MC`), written nowhere, and re-derived on a later tick |
+| Runaway *resource* use on the host | Dispatch concurrency cap across every run dispatch and scheduled sweep in the process, held by the governor (§6.1; default 2; `--max-concurrent-dispatches`, `0` disables). Each dispatch carries an agent process, a cold dependency install, and a full suite run, so concurrency is what exhausts the machine. Unlike a budget ceiling this never escalates: no human decision unblocks it and it clears itself as jobs finish, so a capped dispatch is deferred (rule `MC`), written nowhere, and re-derived on a later tick |
 | A run continuing past its own merge (slug reuse, #213) | A slug is used once. `runs/<slug>/` on the default branch means the run has shipped, so its record there is the durable one: the source classifies an identical record as historical — by ancestry for a merge commit, by record identity for a squash or rebase merge, which leaves no ancestry to find — and the engine refuses to dispatch or advance a branch that kept committing after its merge (rule `LR`), pausing it `slug-landed` for a human. Neither a ceiling to raise nor a condition that clears itself: the remaining work needs a fresh slug. Staging refuses the slug outright |
 | Agent returns without producing (#343) | A dispatch that closes `ok` and commits nothing is invisible to derivation, which re-derives the same dispatch on the next tick. Rule DL bounds it the way `BOUNCE_CAP` bounds a malformed artifact: `LANDING_CAP` closed-ok dispatches for the same (role, task) with the expected artifact untouched since escalate and pause, naming the role and what it did not land. A task-scoped role's record is read whole — work item plus reviews — so a round that landed code and no response note still counts as having produced something. The artifact moving, or a human resolving that escalation, resets the count |
 | Hung or stuck dispatch job | Per-role wall-clock timeout (default 30 min; `--role-timeout`) → kill the harness's whole process group, re-dispatch once, then escalate. The group kill matters: a surviving child would keep spending and hold the stdio pipes open, delaying the closing commit |

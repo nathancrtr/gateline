@@ -454,12 +454,13 @@ reaped. Both move onto the engine instance.
 
 The governor owns what is about the machine or the bill.
 
-Admission today is a count taken when a dispatch launches. An engine compares
-its own jobs in flight with the cap, and a dispatch that does not fit is not
-started and is derived again on a later tick. There is no queue. A freed slot
-wakes only the engine that freed it, and the others find out on their next
-heartbeat, three minutes later by default. Several engines cannot share a
-limit on that basis, so the governor works by reservation.
+Before #501, admission was a count taken when a dispatch launched. An engine
+compared its own jobs in flight with the cap, and a dispatch that did not fit
+was not started and was derived again on a later tick. There was no queue. A
+freed slot woke only the engine that freed it, and the others found out on
+their next heartbeat, three minutes later by default. Several engines cannot
+share a limit on that basis, so the governor works by reservation. It is built
+(#501) and described in ORCHESTRATOR.md §6.1.
 
 1. **Reserve.** Before an engine commits a dispatch intent, it asks the
    governor for a slot and states the role's estimated cost. The governor
@@ -471,8 +472,8 @@ limit on that basis, so the governor works by reservation.
    releases on every path that reserves without launching: a lost
    compare-and-swap, a rejected push, the guard that refuses to move a finished
    run, and any later guard that defers.
-4. **Wake.** A release wakes every engine that was refused since the last
-   release, in the order P4 sets.
+4. **Wake.** A release wakes every engine that was refused since it was last
+   woken, and offers the free slots in the order P4 sets.
 
 The spend window is the sum of three things across every `dispatch`
 repository: closed ledger entries inside the window, estimates for ledger
@@ -480,9 +481,9 @@ entries still open, and estimates for reservations not yet committed to a
 ledger. The third term is what several engines ticking at once would otherwise
 miss.
 
-Historian sweeps pass through the governor as well. Today each engine's
-scheduler starts a sweep with no concurrency or spend check, and a sweep's
-cost is recorded in `sweep.yaml` where the window never reads it. A sweep
+Historian sweeps pass through the governor as well. Before #501 each engine's
+scheduler started a sweep with no concurrency or spend check, and a sweep's
+cost was recorded in `sweep.yaml` where the window never read it. A sweep
 takes a slot like any dispatch, and the window reads sweep costs.
 
 **After a restart** the governor holds nothing in memory. Roles are launched
@@ -588,9 +589,9 @@ org-level audit. Several repositories do not change the argument.
 ### 8.5 The other entry points
 
 - **The standalone `gateline-orchestrator`** stays single-repository. It
-  remains the way to run an engine with no server. It has no governor, so
-  running it beside `up` on one machine doubles the limits, and its help text
-  and the runbook say so.
+  remains the way to run an engine with no server. It has a governor of its
+  own, not shared with `up`, so running it beside `up` on one machine doubles
+  the limits, and its help text and the runbook say so.
 - **The hosted recipe** runs the engine binary and the server as two
   processes. An in-process governor does not apply to it. It stays
   single-repository until it has its own design pass (§17).
@@ -875,6 +876,7 @@ passing. Where a step depends on another, it says so.
    a reservation, and the order of dispatch changes. With one engine it is
    tested for the same admissions as before. Fairness, waking and recovery
    after a restart are tested with two engine instances in the test suite.
+   Done by #501.
 9. **Several engines.** `up` reads the list and runs one engine per `dispatch`
    repository. Slug-keyed state moves onto the instance, the engine takes the
    repository id, each engine gets a fault boundary, and shutdown drains all

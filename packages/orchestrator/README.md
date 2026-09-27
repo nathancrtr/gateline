@@ -71,6 +71,21 @@ on branch `run/historian-<date>` (a `sweep.yaml` marker as its one-entry
 ledger, no `state.yaml`), the role is dispatched through the same seam, and
 the branch waits for a human to review the docs-delta and merge. No
 `orchestrator.yaml`, no sweeps — the feature is entirely opt-in per repo.
+`orchestrator.yaml` is read once at startup, at the same default-branch commit
+as the registry and the adapter manifests.
+
+**Limits (the governor, #501).** One governor per process owns
+`--max-concurrent-dispatches` and `--spend-limit-usd` / `--spend-window`. Run
+dispatches and sweeps both reserve a slot from it before their intent commit,
+so a sweep counts toward the cap, and is deferred (written nowhere, derived
+again later) when the cap or the spend window refuses it. Recorded sweep costs
+count toward the spend window. Runs are taken oldest-waiting first: the run
+whose branch tip is oldest. After a restart, open ledger entries hold their
+slots until they close or the role timeout passes, and a sweep that was running
+when the process died holds its slot until the sweep timeout (30 minutes) passes;
+with a cap of 1 that blocks dispatch for that long. The standalone binary has a
+governor of its own, so running it beside `gateline up` on one machine doubles
+the limits. See docs/ORCHESTRATOR.md §6.
 
 Driving a live toy run end-to-end (the M2 exit criterion):
 
@@ -96,10 +111,11 @@ so picking up a merged fix never has to cost in-flight metered work:
 3. Third `^C` exits immediately; open ledger entries are aged out by the next
    orchestrator's heartbeat (§4.4 crash recovery).
 
-The heartbeat also warns when an adapter manifest changes on the default branch
-after load. Manifests are read once at startup, from the default branch, so a
-merged fix needs a restart to apply. Edits in the working tree or on another
-branch are not read, and the heartbeat does not report them.
+The heartbeat also warns when an adapter manifest or `orchestrator.yaml`
+changes on the default branch after load. Both are read once at startup, from
+the default branch, so a merged fix needs a restart to apply. Edits in the
+working tree or on another branch are not read, and the heartbeat does not
+report them.
 
 ## Trigger packaging
 
@@ -147,8 +163,9 @@ has earned trust (design §10).
 | `seam.ts` + `manifest.ts` | `dispatch()` driven entirely by adapters' `headless` manifest sections; a new runner costs one manifest. |
 | `router.ts` | Dispatch-time P5: `avoid_vendor_of` routes reviewer/verifier to an adapter on a different vendor than the implementer; refuses when two adapters both violate the pin; advisory when one single-vendor adapter makes it unsatisfiable. |
 | `workspace.ts` | Run checkouts as disposable worktrees; per-task isolation for parallel implementers with serial fold-back. A fold classifies its own failure (`conflict \| dirty \| contention \| infra`): only a content conflict is a plan defect and escalates, the rest retry. Before the rebase it harvest-commits whatever is uncommitted inside the task's file-contact surface (#184), then discards the tracked dirt outside it and names both that and the untracked files the worktree removal will drop. A failed fold keeps its task branch for inspection. |
-| `triggers.ts` | Ref watcher, heartbeat, dispatch-completion, manual — all funnel into one non-overlapping tick loop. |
-| `schedule.ts` | Scheduled roles (S0–S4 + SB, one test per row): `orchestrator.yaml` schedules → due sweeps seeded as marker-only mini-runs by commit-then-launch, metered through the same seam. |
+| `governor.ts` | Admission (#501): the process's one owner of the concurrency cap and the spend window. Engines and schedulers reserve before committing an intent and release on every path; a release wakes the repositories it refused, round-robin. Holds nothing on disk; seeded from open ledger entries at startup. |
+| `triggers.ts` | Ref watcher, heartbeat, dispatch-completion, the governor's wake, manual — all funnel into one non-overlapping tick loop. |
+| `schedule.ts` | Scheduled roles (S0–S4 + SB, one test per row): `orchestrator.yaml` schedules → due sweeps, admitted by the governor, seeded as marker-only mini-runs by commit-then-launch, metered through the same seam. |
 | `shadow.ts` | M1: replay history, derived vs actual, disagreements dispositioned (see `shadow-wordfreq.md`). |
 
 Crash recovery: job handles are never committed (host ephemera). A `dispatched`

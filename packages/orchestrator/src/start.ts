@@ -5,6 +5,7 @@
 import type { Identity } from '@gateline/core/record'
 import { CodeTreeMonitor, type CodeTreeStatus, Git, LocalOnlyPushConflictError, resolveCodeRepo } from '@gateline/core/sources'
 import { Engine, type InFlightJob } from './engine.ts'
+import { Governor, type GovernorPort } from './governor.ts'
 import { type HeadlessManifest, type HostTip, headlessManifestPathAt, loadHeadlessManifestAt, resolveHostTip } from './manifest.ts'
 import { loadRegistry } from './registry.ts'
 import { RoutingDispatcher } from './router.ts'
@@ -77,8 +78,21 @@ export interface OrchestratorOptions {
    * not map to marginal cost. Metering stays unconditional.
    */
   budgetEnforcement?: boolean
-  /** Most dispatches running at once across all runs; 0 disables (#227). */
+  /** Most dispatches — runs and sweeps — running at once in this process; 0 disables (#227, #501). */
   maxConcurrentDispatches?: number
+  /**
+   * The governor that admits this engine's dispatches and its sweeps (#501).
+   * Absent, one is built from `maxConcurrentDispatches`, `spendLimitUsd`,
+   * `spendWindowHours` and `budgetEnforcement` — so the standalone binary and
+   * a one-repository `up` each get a governor of their own. An embedding that
+   * runs several engines builds one governor and passes it to each; those
+   * four options are then the governor's business and are ignored here.
+   */
+  governor?: GovernorPort
+  /** This repository's key with the governor; defaults to `repoDir` (#501). */
+  repository?: string
+  /** This repository's own spend ceiling per window, beneath the machine's (MULTI-REPO.md §7.4). */
+  repositorySpendLimitUsd?: number | null
   /** Wall clock per dispatched role before its process group is killed (default 30 min). */
   roleTimeoutSeconds?: number
   heartbeatSeconds?: number
@@ -116,6 +130,8 @@ export async function assembleOrchestrator(
   hostTip: HostTip
   /** The adapter manifests the engine will execute, in `opts.adapters` order. */
   manifests: HeadlessManifest[]
+  /** What admits the engine's dispatches and the scheduler's sweeps (#501). */
+  governor: GovernorPort
 }> {
   const log = opts.log ?? (() => {})
   const git = new Git(opts.repoDir)
@@ -131,7 +147,7 @@ export async function assembleOrchestrator(
   // the registry and the adapter manifests below, role capabilities in the
   // engine (handed the same tip). That commit is the local default-branch ref,
   // with no fetch, so a local-only repository reads exactly what it has.
-  // Sweep schedules are read by the scheduler at the default branch each tick.
+  // The scheduler reads `orchestrator.yaml` at the same commit (#501).
   const tip = await resolveHostTip(git)
   if (tip.fallback) {
     log(
@@ -154,6 +170,10 @@ export async function assembleOrchestrator(
   // manifest whose blob at the default branch changed after load, once per
   // change — the heartbeat surfaces it. Edits in the working tree or on another
   // branch change nothing the engine runs, so they are not reported.
+  // Sweep schedules are read at the same commit now (#501), so an edit to
+  // `orchestrator.yaml` merged after startup is the same trap; report it the
+  // same way.
+  const schedules = { loadedOid: await git.objectId(tip.commit, 'orchestrator.yaml') }
   const manifestStaleProbe = async (): Promise<string[]> => {
     const messages: string[] = []
     const now = await resolveHostTip(git)
@@ -165,6 +185,13 @@ export async function assembleOrchestrator(
           `adapter manifest "${w.adapter}" changed on ${now.name} after load — manifests are read once at startup, from the default branch; restart to apply (${w.path})`,
         )
       }
+    }
+    const scheduleOid = await git.objectId(now.commit, 'orchestrator.yaml')
+    if (scheduleOid !== schedules.loadedOid) {
+      schedules.loadedOid = scheduleOid
+      messages.push(
+        `orchestrator.yaml changed on ${now.name} after load — sweep schedules are read once at startup, from the default branch; restart to apply`,
+      )
     }
     return messages
   }
@@ -206,21 +233,39 @@ export async function assembleOrchestrator(
         (overridden ? `; ignoring ${overridden}` : ''),
     )
   }
+  // One governor owns the cap and the spend window for the process (#501):
+  // the engine's run dispatches and the scheduler's sweeps are admitted by it
+  // alike. Built here from the flags unless the caller brought its own.
+  const governor =
+    opts.governor ??
+    new Governor({
+      maxConcurrentDispatches: opts.maxConcurrentDispatches,
+      spendLimitUsd: opts.spendLimitUsd ?? null,
+      spendWindowMs: opts.spendWindowHours !== undefined ? opts.spendWindowHours * 3_600_000 : undefined,
+      budgetEnforcement: opts.budgetEnforcement,
+      log,
+    })
+  const repository = opts.repository ?? opts.repoDir
+  // One sweep timeout for both: the scheduler kills a sweep at it, and the
+  // engine's restart seed holds an open sweep's slot for exactly as long.
+  // Nothing sets it yet, so both take the scheduler's default.
+  const sweepTimeoutMs: number | undefined = undefined
   const engine = new Engine({
     ...common,
     hostTip: tip,
     dispatcher: remote ?? localDispatcher,
-    spendLimitUsd: opts.spendLimitUsd ?? null,
-    spendWindowMs: opts.spendWindowHours !== undefined ? opts.spendWindowHours * 3_600_000 : undefined,
+    governor,
+    repository,
+    repositorySpendLimitUsd: opts.repositorySpendLimitUsd,
     requireBudget: opts.requireBudget,
     budgetEnforcement: opts.budgetEnforcement,
     roleTimeoutMs: opts.roleTimeoutSeconds !== undefined ? opts.roleTimeoutSeconds * 1000 : undefined,
-    maxConcurrentDispatches: opts.maxConcurrentDispatches,
+    sweepTimeoutMs,
   })
   // Scheduler stays on `common` — i.e. always the local dispatcher, never remote.
-  const scheduler = new Scheduler(common)
+  const scheduler = new Scheduler({ ...common, governor, repository, hostTip: tip, sweepTimeoutMs })
   const runnerCallback = remote ? makeRunnerCallback(engine, remote) : undefined
-  return { engine, scheduler, manifestStaleProbe, runnerCallback, hostTip: tip, manifests: adapters.map((a) => a.manifest) }
+  return { engine, scheduler, manifestStaleProbe, runnerCallback, hostTip: tip, manifests: adapters.map((a) => a.manifest), governor }
 }
 
 export interface OrchestratorHandle {
@@ -242,6 +287,11 @@ export interface OrchestratorHandle {
 /** Resident orchestrator over an existing clone, in-process. */
 export async function startOrchestrator(opts: OrchestratorOptions): Promise<OrchestratorHandle> {
   const { engine, scheduler, manifestStaleProbe, runnerCallback } = await assembleOrchestrator(opts)
+  // The governor grants nothing until the repository's open dispatches are
+  // counted (#501). The first tick would seed it too; doing it here keeps
+  // "before granting anything" true of the process, not just of the tick. A
+  // failure is not fatal: the first tick tries again.
+  await engine.seedGovernor().catch((e) => opts.log?.(`governor seed failed: ${(e as Error).message} — retried on the first tick`))
   // Self-supersede (#141): the code tree is *this module's own* checkout —
   // resolved from our own import.meta.url, not from opts.repoDir (the run
   // source, which may live in a different checkout under a host-repo setup).

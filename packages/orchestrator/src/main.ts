@@ -56,7 +56,7 @@ program
   .option('--role-timeout <seconds>', 'wall clock per dispatched role before its process group is killed (default 1800)', parseFloat)
   .option(
     '--max-concurrent-dispatches <n>',
-    'most dispatches running at once across all runs; 0 disables the cap (default 2, #227)',
+    'most dispatches (run roles and scheduled sweeps) running at once in this process; 0 disables the cap (default 2, #227)',
     parseFloat,
   )
 
@@ -216,6 +216,9 @@ program
     // The open-sweep and same-day guards read remote-tracking refs (#273), so
     // a forced sweep owns its freshness the way a one-shot tick does.
     await engine.syncFromRemote()
+    // A forced sweep is still admitted by the governor (#501): count what is
+    // already open, and report this repository's spend, before it asks.
+    await engine.refreshGovernor()
     const outcomes = await scheduler.tick({ force: role })
     const mine = outcomes.filter((s) => s.role === role)
     if (mine.length === 0) {

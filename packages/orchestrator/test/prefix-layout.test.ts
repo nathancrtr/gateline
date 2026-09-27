@@ -9,6 +9,7 @@ import { join } from 'node:path'
 import { Git } from '@gateline/core'
 import { describe, expect, it } from 'vitest'
 import { Engine } from '../src/engine.ts'
+import { Governor } from '../src/governor.ts'
 import { loadHeadlessManifest, loadHeadlessManifestAt } from '../src/manifest.ts'
 import { loadRegistry } from '../src/registry.ts'
 import { Scheduler, sweepSlug } from '../src/schedule.ts'
@@ -125,7 +126,7 @@ describe('Scheduler against a prefixed host (#95)', () => {
       agentCommit(req.cwd, clock, { [`.gateline/runs/${sweepSlug('historian', new Date())}/docs-delta.md`]: '# Docs Delta: sweep\n' }, 'docs delta')
       return { costUsd: 0.42 }
     })
-    const scheduler = new Scheduler({ repoDir: dir, identity: BOT, dispatcher, registry })
+    const scheduler = new Scheduler({ repoDir: dir, identity: BOT, dispatcher, registry, governor: new Governor() })
 
     const [outcome] = await scheduler.tick()
     expect(outcome).toMatchObject({ role: 'historian', kind: 'dispatched', rule: 'S4' })

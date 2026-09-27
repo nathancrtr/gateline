@@ -132,3 +132,54 @@ The round-2 changes were checked by reading the diff, running the full test suit
 The round-2 commit stays inside the declared surface: the lexicon module, the new test file, and appended notes in the task's own file.
 
 Housekeeping: I overwrote the lexicon module for each broken copy and edited the spec contract's example once, for F6. Both were restored from byte copies. `git diff` is empty and `git status` shows only this report.
+
+# Round 3
+
+**Verdict:** approve
+**Round:** 3 of 3
+**Diff reviewed:** the plan amendment in commit 7354c47, against the round-2 review commit b92035a; no implementer commit landed since round 2, so the code under review is still commit 88e9206
+**Summary:** The code is unchanged since round 2 and still correct, and the amended plan now describes what it does. Two minor gaps remain in what the tests would catch, both for inputs no spec in the repository has. Approving accepts those two gaps.
+
+## Verify round
+
+- **F1 — resolved** — Unchanged since round 2, when a broken copy of the lexicon failed the new test. The test file is byte-identical to the round-2 commit.
+- **F2 — resolved** — Unchanged since round 2. This round a broken copy that kept only the first line of a check failed the two-labelled-lines test and the contract-example test.
+- **F3 — resolved** — Unchanged since round 2. The narrower gap it left is the seventh finding, F7, below.
+- **F4 — resolved** — The plan's fourth Lexicon entry rule now compares the two texts with whitespace collapsed and both ends trimmed. I ran the unchanged code on both unusual inputs and on a third with tabs and doubled spaces. The amended rule held for each, and for all 226 criteria in the eleven run specs.
+- **F5 — resolved** — Unchanged since round 2.
+- **F6 — resolved** — Unchanged since round 2.
+- **F7 — stands** — Nothing changed. A broken copy that accepts letters between the label's word and its colon still passes all 47 lexicon tests. It is minor, breaks no requirement today, and does not block approval.
+
+### F8 — minor — No test notices the full text being rebuilt from the promise and the check
+- **Where:** `packages/core/test/lexicon-check.test.ts:40-45`
+- **Failure scenario:** The code is correct today. No test would notice if the full text were rebuilt from the two parts, which would change what existing views print for a criterion whose first line ends in spaces. The plan's amendment, its seventh decision (ADR-7), rejects exactly that version. I broke the lexicon to return promise, one space, check as the full text whenever a check exists. All 699 tests in the core suite passed. With that copy, `First line.  ` followed by `Check: run it.` gives a full text with one space before the label, where today it has three. No spec in the repository has this shape.
+- **Requirement:** the plan's Lexicon entry rules, sixth rule (full text computed as today); the unchanged-reading requirement (R2); the can-fail criterion for guard tests (AC8.6), which the implementer's empty-join claim does satisfy as written
+- **Fix:** add a test with a first line ending in two spaces followed by a check line, asserting the full text keeps three spaces before the label.
+
+## Coverage
+
+The amended plan rule was checked by running the unchanged code against it, and the tests were rerun with typecheck, lint, and four deliberately broken copies of the lexicon; two failed a test and two passed.
+
+| Requirement | Where | Mechanism checked | Status |
+|-------------|-------|-------------------|--------|
+| fourth plan rule, amended | `plan.md:40` | two unusual inputs and a tab-spaced one: texts equal once whitespace is collapsed | ✓ F4 |
+| fourth plan rule, amended | `runs/*/spec.md` | 226 criteria, 30 with a check: the rule holds for every one | ✓ |
+| fourth plan rule, no check | `runs/*/spec.md` | 196 criteria without a check: promise equals full text exactly | ✓ AC2.2 |
+| amendment's claim | `plan.md:146-153` | ADR-7 says the existing code satisfies the amended rule; confirmed by execution | ✓ |
+| code since round 2 | `packages/`, `contracts/`, `roles/` | diff from commit 88e9206 to the branch tip is empty | ✓ |
+| task file | `tasks/01-lexicon-promise-check.yaml` | scope, surface and acceptance list unchanged by the amendment | ✓ |
+| R1 | `lexicon.ts:163` | broken copy keeping one check line fails two tests | ✓ AC1.4 |
+| R1 | `lexicon.ts:153` | broken copy joining the promise without spaces fails eight or more tests | ✓ AC1.3 |
+| R1 | `lexicon.ts:152` | broken copy allowing letters before the colon passes every test | partial: F7 |
+| R2 | `lexicon.ts:159` | broken copy rebuilding the full text passes every test | partial: F8 |
+| lexicon test files | `packages/core/test` | 47 of 47 tests pass in the two lexicon files | ✓ |
+| core test suite | `packages/core/test` | 40 of 41 files pass; the readiness file timed out in setup under load | partial |
+| core test suite | `core/test/readiness.test.ts` | rerun alone, 72 of 72 pass; a later full run passed 41 files, 699 tests | ✓ |
+| typecheck and lint | `packages/` | both exit 0 | ✓ |
+| full test suite | `packages/` | not rerun: no code changed since round 2's passing run | n/a |
+
+## Boundary check
+
+Nothing inside the task's surface changed this round. The only changes since round 2 are the Architect's plan amendment and the orchestrator's state commits, neither of which is implementer work.
+
+Housekeeping: I overwrote the lexicon module for each broken copy and restored it from a byte copy each time. My first attempt at the F8 copy did not apply its edit, so I discarded that run and repeated it with the edit confirmed in the diff. `git status` shows only this report.

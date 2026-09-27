@@ -546,12 +546,24 @@ component that *consumes* adapters through their manifests (amendment list, §8)
   in place and restoring them — were found doing so in the same shared checkout,
   each able to see, run against, or restore the other's mutant. Each job now
   works on a private branch (`--task/<task>` for an implementer, `--job/<role>-…`
-  for everyone else) in a private worktree, both off the run tip; the
+  for everyone else) in a private worktree, both cut from the intent commit that
+  dispatched it; the
   orchestrator folds results back into the run branch serially — mechanical while
   the surfaces are disjoint, which the Architect guarantees for implementers and
   the role artifact lists guarantee for the rest; an actual conflict escalates as
   a plan defect. The run branch itself is checked out only for a sweep, so a
   dispatch never holds it and every state write goes through plumbing and CAS.
+
+  Two things keep the jobs of one tick in that tick (#547). First, each is cut
+  from the intent commit, never from wherever the run branch stands when its
+  `git worktree add` runs: otherwise a job that finished and folded before its
+  sibling's worktree existed would be in that sibling's tree, and what the
+  sibling saw would depend on timing. Second, the engine runs its git worktree
+  commands for a repository one at a time. Git does not lock its records under
+  `.git/worktrees/` against two such commands at once. An add that reads a
+  sibling's record while that sibling's add is still writing it fails, and a
+  job whose cut fails is refused before spawn and dispatched again a tick
+  later, after its sibling has folded.
 - **Source isolation and dependency isolation are separate concerns** (#229). The
   worktree exists so two implementers never see each other's half-written code.
   It is not a reason for each to own a private install of third-party packages:

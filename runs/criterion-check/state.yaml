@@ -1,7 +1,7 @@
 run: criterion-check
 branch: run/criterion-check
-phase: implement # staged — not yet armed; `gateline arm criterion-check` starts the run
-paused_reason: null
+phase: paused # staged — not yet armed; `gateline arm criterion-check` starts the run
+paused_reason: escalation
 profile: standard # patch | standard | full
 intake:
   # source-agnostic staging provenance; free-form path: nulls + client_key
@@ -164,5 +164,13 @@ escalations:
         resolution: "Amend the fourth Lexicon entry rule: the full text equals promise,
           space, check after whitespace is collapsed.",
         disposition: re-plan
+      },
+    {
+        at: 2026-09-27T03:47:00.766Z,
+        from_role: orchestrator,
+        reason: "task 01-lexicon-promise-check: architect amendment landed for the
+          re-plan disposition — acknowledge to proceed (see plan.md's dated
+          ADR)",
+        resolved: false
       }
   ]

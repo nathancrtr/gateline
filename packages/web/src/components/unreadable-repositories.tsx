@@ -40,7 +40,7 @@ export function UnreadableRepositoriesNotice({ unreadable, scope, rows }: { unre
               </span>
               <Address className="break-all">{u.source}</Address>
             </span>
-            <span className="mt-0.5 block break-all">
+            <span className="mt-0.5 block [overflow-wrap:anywhere]">
               <Diagnostic producer="Reading it failed with" inline>
                 {u.error}
               </Diagnostic>

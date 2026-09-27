@@ -15,7 +15,9 @@
 //      on it in the Record reader.
 //   2. Requirements — the roster: each `R<n>` as a resolvable Name and its
 //      short name as the heading says it. A heading the grammar cannot parse
-//      withholds the roster's completeness, and its count with it.
+//      withholds the roster's completeness, and its count with it. A list
+//      item that names a criterion the grammar cannot parse says so beneath
+//      the roster, each such item folded there in its own words (#482).
 //   3. The brief's Problem and Constraints, quoted beside the spec half and
 //      captioned by kind, so the spec's choices are read against what was
 //      asked.
@@ -128,8 +130,8 @@ export function G0Packet({ src, slug, mode = 'gate', children }: { src: string; 
 }
 
 /** The fork fallback for a part of this packet, composed from its structured reason (#424). */
-function PartWithheld({ view, reason, src, slug, hook }: { view: string; reason: WithheldReason; src: string; slug: string; hook: string }) {
-  return <Withheld view={view} reason={reason} src={src} slug={slug} className="mt-1.5" data-withheld={hook} />
+function PartWithheld({ view, reason, src, slug, hook, after }: { view: string; reason: WithheldReason; src: string; slug: string; hook: string; after?: string }) {
+  return <Withheld view={view} reason={reason} src={src} slug={slug} after={after} className="mt-1.5" data-withheld={hook} />
 }
 
 /**
@@ -241,6 +243,31 @@ function Roster({ packet, src, slug }: { packet: G0PacketData; src: string; slug
           ))}
         </ul>
       )}
+      <CriterionNearMisses packet={packet} src={src} slug={slug} />
+    </div>
+  )
+}
+
+/**
+ * The criteria the grammar does not read (#482), under the roster they belong
+ * to. Said the way the roster says a heading it cannot parse — the grammar
+ * looked for, in the spec — and then each item in the spec's own words, at
+ * its line: a spec that writes `AC1.2 (MUST) — …` throughout otherwise shows
+ * no criteria anywhere downstream, and nothing says why. The items fold, with
+ * their count: the sentence is what G0 reads, and one spec can hold dozens.
+ */
+function CriterionNearMisses({ packet, src, slug }: { packet: G0PacketData; src: string; slug: string }) {
+  if (!packet.criteriaWithheld) return null
+  return (
+    <div data-g0-criteria>
+      <PartWithheld view="Criteria" reason={packet.criteriaWithheld} src={src} slug={slug} hook="criteria" after="The items that miss it follow." />
+      <Fold heading="Items that miss the grammar" count={packet.criterionNearMisses.length} className="mt-1" data-g0-fold="criteria">
+        <ul className="flex flex-col gap-1">
+          {packet.criterionNearMisses.map((q) => (
+            <Passage key={q.at.line} quote={q} item src={src} slug={slug} data-criterion-near-miss={q.at.line} />
+          ))}
+        </ul>
+      </Fold>
     </div>
   )
 }

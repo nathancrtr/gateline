@@ -10,8 +10,8 @@ repositories as a rebuildable projection) and #34 (budget caps shared across
 repositories), both under the scaling epic #27.
 
 **Status (2026-09-27): decided, and built through step 8.** The maintainer
-confirmed twenty-three decisions in §11 on 2026-09-26, and five more while the
-work was built. Steps 0 to 8 of §14 have merged. Step 9, several engines under
+confirmed twenty-three decisions in §11 on 2026-09-26, and four more while the
+work was built. One further decision was taken in review and awaits him. Steps 0 to 8 of §14 have merged. Step 9, several engines under
 `up`, is in progress under #502. §17 lists what remains open.
 
 **Prerequisite reading:** [TOPOLOGY.md](TOPOLOGY.md) §3,
@@ -840,6 +840,11 @@ Confirmed by the maintainer on 2026-09-27, while the work was built:
 | B2 | A selection copied from a page gives what is on the screen. | §6.2 |
 | B3 | The collapse is kept. It was compared with a two-group inbox on a flooded set. P10 is no longer provisional. | §9.3 |
 | B4 | A mode and engine state shared by every repository is stated once. | §9.5 |
+
+Taken in review of #514 and not yet confirmed by the maintainer:
+
+| # | Decision | Section |
+|---|---|---|
 | B5 | A repository that fails the framework check is left out of the set with a warning. An error in the config file itself stops startup. | §7.2 |
 
 ## 12. Prior art

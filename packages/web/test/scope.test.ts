@@ -17,7 +17,6 @@ import {
   resolveScope,
   scopedHref,
   scopeTitle,
-  unnamed,
 } from '../src/scope.ts'
 
 const BILLING = 'github.com/acme/billing'
@@ -54,9 +53,26 @@ describe('the set', () => {
     expect(repositoriesOf([WEBSITE, TOOLS, BILLING], [...rows, ...portfolio], rows)).toEqual(set)
   })
 
-  it('says which repositories no row has named yet', () => {
-    expect(unnamed([WEBSITE, TOOLS, BILLING], rows)).toEqual([TOOLS])
-    expect(unnamed([WEBSITE, BILLING], rows)).toEqual([])
+  it('takes names and modes from the served list (#499), so a repository with no rows is named', () => {
+    const served = [
+      { id: WEBSITE, name: 'marketing-site', mode: 'decide' as const },
+      { id: TOOLS, name: 'tools', mode: 'view' as const },
+      { id: BILLING, name: 'billing', mode: null },
+    ]
+    expect(repositoriesOf(served, rows, rows)).toStrictEqual([
+      { id: BILLING, name: 'billing', waiting: 2, mode: null },
+      { id: WEBSITE, name: 'marketing-site', waiting: 2, mode: 'decide' },
+      { id: TOOLS, name: 'tools', waiting: 0, mode: 'view' },
+    ])
+  })
+
+  it('marks a repository that could not be read, and counts nothing for it', () => {
+    const unreadable = [{ source: 'Local/Tools', sourceName: 'tools', error: 'fatal: not a git repository' }]
+    expect(repositoriesOf([WEBSITE, TOOLS, BILLING], rows, rows, unreadable)).toStrictEqual([
+      { id: BILLING, name: 'billing', waiting: 2 },
+      { id: TOOLS, name: TOOLS, waiting: 0, unreadable: 'fatal: not a git repository' },
+      { id: WEBSITE, name: 'marketing-site', waiting: 2 },
+    ])
   })
 
   it('orders by display name without case, then by id', () => {
@@ -150,6 +166,9 @@ describe('links, the badge and the title', () => {
     expect(badgeText(30, 0)).toBe('0 of 30')
     expect(badgeText(0, null)).toBe(null)
     expect(badgeText(0, 0)).toBe(null)
+    // A repository that could not be read (#499): nothing is known to wait there, so the badge says 0 rather than disappearing.
+    expect(badgeText(0, null, true)).toBe('0')
+    expect(badgeText(0, 0, true)).toBe('0 of 0')
   })
 
   it('names the scope in the page title, and leaves the title alone without one', () => {

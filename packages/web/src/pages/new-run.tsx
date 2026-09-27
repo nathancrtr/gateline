@@ -12,8 +12,21 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ApiError, api, PROFILE_GATES, type Profile, type StageOutcomeView, type StagingSourceConfig } from '../api.ts'
 import { Imp } from '../components/chips.tsx'
+import { Address } from '../components/vocabulary.tsx'
 import { runPath } from '../run-path.ts'
 import { PageStatus } from './inbox.tsx'
+
+/**
+ * Why a repository is missing from the picker (#499): it is in `view` mode,
+ * so the server writes nothing to it. Names each by display name.
+ */
+export function withheldLine(withheld: readonly Pick<StagingSourceConfig, 'id' | 'name'>[]): string {
+  const names = withheld.map((s) => s.name || s.id)
+  const list = names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
+  return names.length === 1
+    ? `Not offered: ${list}, which is in view mode here, so nothing is written to it.`
+    : `Not offered: ${list}, which are in view mode here, so nothing is written to them.`
+}
 
 const PROFILES: Profile[] = ['patch', 'standard', 'full']
 // Fallback only until GET /api/staging responds; core's own SLUG_PATTERN (not
@@ -71,10 +84,18 @@ export function NewRunPage() {
   const [outcome, setOutcome] = useState<Outcome | null>(null)
   const errSummaryRef = useRef<HTMLDivElement>(null)
 
-  const sources = config.data?.sources ?? []
+  // A `view` repository is not offered (#499): the server refuses to stage
+  // into it with a 403, and an option that can only be refused is not a
+  // choice. It is named under the picker instead, with the reason, so a
+  // reader looking for it learns why it is missing rather than whether they
+  // misremembered. Left out rather than disabled because a disabled option
+  // cannot carry its reason: a native select shows none of it.
+  const all = config.data?.sources ?? []
+  const sources = all.filter((s) => s.mode !== 'view')
+  const withheld = all.filter((s) => s.mode === 'view')
   const source: StagingSourceConfig | null = sources.find((s) => s.id === sourceId) ?? sources[0] ?? null
 
-  // Default the picker to the first configured source once config loads.
+  // Default the picker to the first repository it offers once config loads.
   // biome-ignore lint/correctness/useExhaustiveDependencies: deliberately narrower than the full capture set — this only needs to notice the count changing (config loaded), not re-run when sourceId (which it sets) or the array reference changes.
   useEffect(() => {
     if (sourceId === null && sources[0]) setSourceId(sources[0].id)
@@ -192,6 +213,8 @@ export function NewRunPage() {
 
   if (config.isLoading) return <PageStatus text="Reading staging configuration…" />
   if (config.error) return <PageStatus text={`Could not load staging configuration: ${(config.error as Error).message}`} bad />
+  if (!source && withheld.length > 0)
+    return <PageStatus text={`${withheldLine(withheld)} No repository here accepts a staged run.`} bad />
   if (!source) return <PageStatus text="No sources are configured — nothing to stage a run against." bad />
 
   let submitHint: string
@@ -317,10 +340,13 @@ export function NewRunPage() {
           )}
 
           {sources.length > 1 && (
-            <div className="mb-[22px]">
+            <div className="mb-[22px]" data-repository-picker>
               <label htmlFor="source" className="block text-[12px] text-muted mb-[5px]">
                 Repository
               </label>
+              {/* Each option is the repository's display name (#499), its
+                  full id the option's title; the chosen one's id follows
+                  the picker as its Address (docs/SEAM.md §2). */}
               <select
                 id="source"
                 value={source.id}
@@ -328,16 +354,24 @@ export function NewRunPage() {
                 className="input-well w-full px-3 py-[8px] text-[14px]"
               >
                 {sources.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.id}
+                  <option key={s.id} value={s.id} title={s.id}>
+                    {s.name || s.id}
                   </option>
                 ))}
               </select>
+              <p className="mt-1 break-all" data-repository-picker-id>
+                <Address>{source.id}</Address>
+              </p>
               <p className="mt-1 text-[11.5px] text-muted">
-                Multiple sources are configured, so Gatehouse asks which repo carries the record. It selects among Gatehouse's own
-                sources — never an external system.
+                Several repositories are served here, so Gatehouse asks which one carries the record. It chooses among the
+                repositories this deployment serves, never an external system.
               </p>
             </div>
+          )}
+          {withheld.length > 0 && (
+            <p className="mb-[22px] text-[11.5px] text-muted" data-repository-withheld>
+              {withheldLine(withheld)}
+            </p>
           )}
 
           <div className="mb-[22px]">

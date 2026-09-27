@@ -26,7 +26,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import { api } from '../api.ts'
+import { api, type RepositoryMode } from '../api.ts'
 
 /** The run's full name, `<repository id>/<slug>` (§6.2): what a run name's tooltip shows. */
 export const fullRunName = (source: string, slug: string): string => `${source}/${slug}`
@@ -57,6 +57,46 @@ export function useNamesRepository(): { ready: boolean; show: boolean } {
   const { data, isError } = useQuery({ queryKey: ['health'], queryFn: api.health, staleTime: Number.POSITIVE_INFINITY })
   if (data) return { ready: true, show: data.sources.length !== 1 }
   return { ready: isError, show: true }
+}
+
+/**
+ * The served repositories as `/api/health` lists them (#499): each one's id,
+ * display name and mode, looked up by id without case. `nameOf` falls back to
+ * the id, which is never ambiguous, for a repository the list does not name
+ * (a server built before #499). Shares the `['health']` query the rail and
+ * the scope already read.
+ */
+export function useServedRepositories(): {
+  ready: boolean
+  /** The served ids, in the order they are served; empty until the list loads. */
+  ids: string[]
+  nameOf: (id: string) => string
+  modeOf: (id: string) => RepositoryMode | null
+} {
+  const { data, isError } = useQuery({ queryKey: ['health'], queryFn: api.health, staleTime: Number.POSITIVE_INFINITY })
+  const find = (id: string) => data?.repositories?.find((r) => r.id.toLowerCase() === id.toLowerCase())
+  return {
+    ready: data !== undefined || isError,
+    ids: data?.sources ?? [],
+    nameOf: (id) => find(id)?.name || id,
+    modeOf: (id) => find(id)?.mode ?? null,
+  }
+}
+
+/**
+ * The line a run in a `view` repository shows where the decision controls
+ * would be (#499; MULTI-REPO.md §7.3). The server refuses every decision
+ * there, so none is offered; the words are the CLI's (`gateline inbox`,
+ * #514), so the two interfaces say the same thing.
+ */
+export const VIEW_MODE_LINE = 'This deployment records no decisions in this repository.'
+
+export function ViewModeLine({ className = '' }: { className?: string }) {
+  return (
+    <p className={`font-ui text-[13px] text-muted ${className}`} data-view-mode-line>
+      {VIEW_MODE_LINE}
+    </p>
+  )
 }
 
 /**

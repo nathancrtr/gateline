@@ -42,6 +42,7 @@ import type {
   CoverageRow,
   CriterionEvidence,
   DecisionAction,
+  DeferralLimit,
   DiffFile,
   Disposition,
   EscalationFact,
@@ -60,6 +61,7 @@ import type {
   GateId,
   GateMetrics,
   HandEdit,
+  InboxCollapse,
   LedgerEntry,
   LedgerQuote,
   LedgerTarget,
@@ -75,6 +77,7 @@ import type {
   QuotedSection,
   ReleasePacket,
   ReleaseStep,
+  RepositoryMode,
   ReviewFinding,
   ReviewReport,
   RoundCapFact,
@@ -132,6 +135,7 @@ export type {
   CoverageRow,
   CriterionEvidence,
   DecisionAction,
+  DeferralLimit,
   DiffFile,
   Disposition,
   EscalationFact,
@@ -150,6 +154,7 @@ export type {
   GateId,
   GateMetrics,
   HandEdit,
+  InboxCollapse,
   LedgerEntry,
   LedgerQuote,
   LedgerTarget,
@@ -164,6 +169,7 @@ export type {
   QuotedSection,
   ReleasePacket,
   ReleaseStep,
+  RepositoryMode,
   ReviewFinding,
   ReviewReport,
   RoundCapFact,
@@ -214,6 +220,30 @@ export interface HealthResponse {
   apiVersion: number
   /** Each served repository's id. */
   sources: string[]
+  /**
+   * Each served repository as an interface names it and what this deployment
+   * may do in it (#499), in the order of `sources`. Optional on the wire,
+   * though this server always sends it: a server built before #499 omits
+   * it, and a client then names a repository by its id and assumes no mode.
+   * Additive, so not a version bump.
+   */
+  repositories?: ServedRepository[]
+}
+
+/** One served repository, on `/api/health`. */
+export interface ServedRepository {
+  /** The repository id (docs/MULTI-REPO.md §6). */
+  id: string
+  /** The display name (§6.2): presentation only. */
+  name: string
+  /**
+   * The mode this process gives it (§7.3): what the server enforces, so a
+   * `dispatch` entry served by `ui` reads `decide`. Null when the source
+   * states none, which the server treats as unrestricted and which the
+   * liveness table reads as it read every repository before modes: a
+   * heartbeat's presence is the expectation of an engine.
+   */
+  mode: RepositoryMode | null
 }
 
 export interface EngineHealthEntry {
@@ -242,10 +272,23 @@ export interface EngineDeferral {
   reason: string
   /** ISO timestamp of the first pass that deferred this run for this rule. */
   since: string
+  /**
+   * The governor limit that held it (#513), when the governor did. Absent
+   * from older engines. A value outside `DeferralLimit` is a newer engine's,
+   * passed on as written. Additive, so not a version bump.
+   */
+  limit?: DeferralLimit | (string & {})
+  /** The repository the deferral belongs to, as the governor keys it (#513). Additive. */
+  repository?: string
 }
 
 export interface EngineHealthResponse {
-  /** Per source id; null = no co-located engine has ever reported here (viewer-only install, not an outage). */
+  /**
+   * Per source id; null = no heartbeat has been written in that repository.
+   * Whether that is an outage depends on the repository's mode, on
+   * `/api/health` (docs/MULTI-REPO.md §9.5): it is one only where an engine
+   * is expected, in a `dispatch` repository.
+   */
   engines: Record<string, EngineHealthEntry | null>
   now: number
 }
@@ -264,7 +307,17 @@ export interface EngineHealthResponse {
 type Unreadable = { unreadable?: UnreadableRepository[] }
 
 export interface InboxResponse extends Unreadable {
+  /** Every item, oldest first. Collapsing never removes one from this list. */
   items: InboxItem[]
+  /**
+   * The repositories whose `malformed` items a client shows as one row
+   * (docs/MULTI-REPO.md §9.3, #499): core's `inboxCollapses` over `items`.
+   * The rule is core's; the row's sentence is the client's. Optional on the
+   * wire, though this server always sends it: a client reads its absence (a
+   * server built before #499) as nothing collapsing. Additive, so not a
+   * version bump.
+   */
+  collapsed?: InboxCollapse[]
   now: number
 }
 
@@ -413,6 +466,15 @@ export interface ChangeEvent {
 
 export interface StagingSourceConfig {
   id: string
+  /**
+   * The display name (§6.2) and the mode (§7.3), so the form can name the
+   * repository and leave out one it cannot stage into (#499): a `view`
+   * repository refuses the write with a 403. Optional on the wire, though
+   * this server always sends both; an older server's entries are named by
+   * id and offered as before. Additive, so not a version bump.
+   */
+  name?: string
+  mode?: RepositoryMode | null
   identity: { name: string; email: string } | null
   briefSections: string[]
   briefTemplate: string | null

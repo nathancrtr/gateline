@@ -16,6 +16,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { ApiError, api, CLOSURE_MEANINGS, CLOSURES, type Closure, type ClosureRecord } from '../api.ts'
+import { ViewModeLine } from './repository.tsx'
 
 /** What a closure is *not*: closing never touches the branch or the artifacts. */
 const KEEPS_THE_RECORD = 'The branch, the run directory, and every artifact stay exactly where they are — closing decides the run, it does not delete it.'
@@ -70,10 +71,13 @@ export function ClosureRecordBlock({
   source,
   slug,
   closure,
+  readOnly = false,
 }: {
   source: string
   slug: string
   closure: ClosureRecord | null
+  /** The repository is in `view` mode here (#499): reopening is refused, so it is not offered. */
+  readOnly?: boolean
 }) {
   const queryClient = useQueryClient()
   const [confirming, setConfirming] = useState(false)
@@ -115,7 +119,9 @@ export function ClosureRecordBlock({
       <p className="mt-2 font-ui text-[11.5px] text-faint">{view.provenance}</p>
       {flash && <p className="mt-2 text-xs font-semibold text-bad">{flash}</p>}
       <div className="mt-3">
-        {confirming ? (
+        {readOnly ? (
+          <ViewModeLine className="text-xs" />
+        ) : confirming ? (
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-muted">Reopening returns the run to the phase its gate ledger derives, and the engine can dispatch it again.</span>
             <button

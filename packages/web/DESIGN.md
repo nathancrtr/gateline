@@ -9,8 +9,9 @@ in [`docs/GATEHOUSE-DESIGN.md`](../../docs/GATEHOUSE-DESIGN.md); this file
 holds the provenance. The tokens themselves live in
 [`src/styles.css`](src/styles.css), and
 [`test/contrast.test.ts`](test/contrast.test.ts) recomputes the contrast
-table below from that file on every run — a value edited there without
-re-running the numbers fails the suite.
+table below from that file on every run, and checks this file's tables
+against it — a value edited there without re-running the numbers fails the
+suite.
 
 ---
 
@@ -311,8 +312,10 @@ the record's labels, addresses and the brief, is in `docs/SEAM.md` §13.
 
 ## Contrast
 
-Recomputed by `test/contrast.test.ts` from `src/styles.css`; the suite fails
-on a floor breach. Floors: 4.5 text, 3.0 large text and meaningful non-text.
+Recomputed by `test/contrast.test.ts` from `src/styles.css`. The suite fails
+on a floor breach, and when this table or a colour in *Tokens* differs from
+what the CSS gives. Floors: 4.5 text, 3.0 large text and
+meaningful non-text.
 
 | pair | ratio | floor |
 |---|---|---|

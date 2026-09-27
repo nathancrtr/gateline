@@ -1,6 +1,11 @@
 // The contrast table, recomputed from the token file (packages/web/DESIGN.md
 // publishes the same table; this is what keeps it honest).
 //
+// The last block reads DESIGN.md itself. Its Contrast table must list exactly
+// the pairs below, each with the ratio and floor computed here, and each colour
+// its Tokens table states must be the value in `src/styles.css`. Without that,
+// the published table could drift from the CSS while every floor still held.
+//
 // Every pair below is a real use in the app — text token on the surface it is
 // set on, a mark against the surface it separates itself from — and every
 // floor is WCAG's: 4.5 for text, 3.0 for large text and meaningful non-text.
@@ -14,6 +19,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
 const css = readFileSync(fileURLToPath(new URL('../src/styles.css', import.meta.url)), 'utf8')
+const design = readFileSync(fileURLToPath(new URL('../DESIGN.md', import.meta.url)), 'utf8')
 
 /** `--color-<name>: #rrggbb;` inside the @theme block, by name. */
 export function token(name: string): string {
@@ -123,5 +129,81 @@ describe('the contrast table', () => {
     expect(rows.length).toBeGreaterThan(0)
     // eslint-disable-next-line no-console
     console.log(rows.join('\n'))
+  })
+})
+
+/** The table rows (header and separator dropped) of DESIGN.md's `## <heading>` section. */
+function tableRows(heading: string): string[][] {
+  const start = design.indexOf(`\n## ${heading}\n`)
+  if (start < 0) throw new Error(`no "## ${heading}" section in DESIGN.md`)
+  const end = design.indexOf('\n## ', start + 1)
+  const body = design.slice(start, end < 0 ? undefined : end)
+  const rows = body
+    .split('\n')
+    .filter((l) => l.startsWith('|'))
+    .map((l) =>
+      l
+        .slice(1, -1)
+        .split('|')
+        .map((c) => c.trim()),
+    )
+  return rows.slice(2)
+}
+
+/** A colour as `r,g,b,a`, from `#rrggbb` or `rgba(r, g, b, a)`; null for anything else. */
+function colour(value: string): string | null {
+  const hex = /^#([0-9a-f]{6})$/i.exec(value)
+  if (hex) return [1, 3, 5].map((i) => parseInt(value.slice(i, i + 2), 16)).concat(1).join(',')
+  const rgba = /^rgba\(([^)]*)\)$/.exec(value)
+  if (rgba) return rgba[1]!.split(',').map((n) => Number(n.trim())).join(',')
+  return null
+}
+
+/** Every `--color-*` token in styles.css whose name matches `pattern` (`*` is a wildcard), with its raw value. */
+function cssColours(pattern: string): [name: string, value: string][] {
+  const re = new RegExp(`^${pattern.replace(/[-]/g, '\\-').replace('*', '[a-z-]+')}$`)
+  return [...css.matchAll(/(--color-[a-z-]+):\s*([^;]+);/g)].filter((m) => re.test(m[1]!)).map((m) => [m[1]!, m[2]!.trim()])
+}
+
+describe("DESIGN.md's tables agree with styles.css", () => {
+  const published = tableRows('Contrast').map(([pair, ratio, floor]) => {
+    const m = /^(\S+) (on|vs) (\S+)(?: \((non-text|decorative)\))?$/.exec(pair!)
+    if (!m) throw new Error(`DESIGN.md contrast row not understood: "${pair}"`)
+    return { a: m[1]!, b: m[3]!, kind: m[4] ?? 'text', ratio: ratio!, floor: floor! }
+  })
+  const computed = [
+    ...TEXT_PAIRS.map(([a, b, f]) => ({ a, b, kind: 'text', floor: f.toFixed(1) })),
+    ...MARK_PAIRS.map(([a, b, f]) => ({ a, b, kind: 'non-text', floor: f.toFixed(1) })),
+    ...DECORATIVE_PAIRS.map(([a, b]) => ({ a, b, kind: 'decorative', floor: '—' })),
+  ]
+  const key = (r: { a: string; b: string; kind: string }) => `${r.a} ${r.kind === 'text' ? 'on' : 'vs'} ${r.b} (${r.kind})`
+
+  it('lists every pair this file checks, and no other', () => {
+    expect(published.map(key)).toEqual(computed.map(key))
+  })
+
+  it.each(computed.map((r) => [key(r), r] as const))('publishes the computed ratio and floor for %s', (k, r) => {
+    const row = published.find((p) => key(p) === k)
+    expect(row, `no row for ${k} in DESIGN.md`).toBeDefined()
+    // The table rounds to two decimals and drops trailing zeros, as `contrast` does.
+    const ratio = contrast(token(r.a), token(r.b))
+    expect(Number(row!.ratio), `DESIGN.md says ${row!.ratio}, styles.css computes ${ratio}`).toBe(ratio)
+    expect(row!.floor, `DESIGN.md's floor for ${k}`).toBe(r.floor)
+  })
+
+  it('states each token colour as styles.css sets it', () => {
+    let checked = 0
+    for (const [cell, value] of tableRows('Tokens')) {
+      const name = /^`(--color-[a-z*-]+)`$/.exec(cell!)?.[1]
+      const stated = colour(/^`(.*)`$/.exec(value!)?.[1] ?? '')
+      if (!name || !stated) continue // a prose value, or a token that is not a colour
+      const matches = cssColours(name)
+      expect(matches.length, `${name} is in DESIGN.md but not in styles.css`).toBeGreaterThan(0)
+      for (const [cssName, cssValue] of matches) {
+        expect(colour(cssValue), `${cssName}: DESIGN.md says ${value}, styles.css says ${cssValue}`).toBe(stated)
+        checked++
+      }
+    }
+    expect(checked).toBeGreaterThan(25)
   })
 })

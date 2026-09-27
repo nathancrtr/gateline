@@ -180,7 +180,9 @@ function GateTable({ form, rateMinDecisions }: { form: GateTableForm; rateMinDec
           This server sends gate figures for all repositories together, so none can be shown for one repository until it is updated.
         </p>
       ) : (
-        <div className="mt-3 overflow-x-auto">
+        // `relative` holds the screen-reader-only labels (absolutely placed)
+        // inside the scrolling box, so off-screen columns never widen the page.
+        <div className="relative mt-3 overflow-x-auto">
           <table className="w-full min-w-[660px] border-separate border-spacing-0 text-sm">
             <thead>
               <tr>
@@ -206,8 +208,8 @@ function GateTable({ form, rateMinDecisions }: { form: GateTableForm; rateMinDec
                 <tbody key={total.gate} data-gate-group={total.gate}>
                   <GateRow figures={total} place={repositories.length ? 'first' : 'alone'} showFlag={false} total>
                     <span className="whitespace-nowrap">
-                      <span className="font-mono text-xs font-semibold">{total.gate}</span>
-                      <span className="ml-2 font-ui text-[11.5px] text-muted">all repositories</span>
+                      <span className="font-mono text-xs font-semibold">{total.gate}</span>{' '}
+                      <span className="ml-1 font-ui text-[11.5px] text-muted">all repositories</span>
                     </span>
                   </GateRow>
                   {repositories.map((r, i) => (
@@ -303,7 +305,7 @@ function RateCell({ figures: g, showFlag }: { figures: GateMetrics; showFlag: bo
       <span className="inline-flex flex-wrap items-baseline gap-x-2 font-ui text-xs" data-gate-too-few>
         <span className="tabular-nums">
           {g.approvals} of {g.decisions} approved
-        </span>
+        </span>{' '}
         <span className="text-muted">too few to rate</span>
       </span>
     )
@@ -326,7 +328,7 @@ function BurdenCounts({ mix, unrecorded }: { mix: Record<string, number>; unreco
         <span key={s.label} className="inline-flex items-center gap-1.5" title={`${s.label}: ${s.n}`}>
           <span className={`h-[11px] w-[11px] border border-ink ${s.texture}`} aria-hidden="true" />
           <span className="sr-only">{s.label}: </span>
-          {s.n}
+          {s.n}{' '}
         </span>
       ))}
     </span>
@@ -342,7 +344,7 @@ function ApprovalMeter({ rate, overTriggering }: { rate: number; overTriggering:
         <span className={`block h-full ${overTriggering ? 'bg-mark' : 'bg-ink'}`} style={{ width: `${pct}%` }} />
         <span className="absolute -inset-y-1 left-[90%] w-0.5 bg-mark" title="90% over-triggering threshold" />
       </span>
-      <span className="font-ui text-xs tabular-nums">{pct}%</span>
+      <span className="font-ui text-xs tabular-nums">{pct}%</span>{' '}
       {overTriggering && (
         <Imp tone="mark" title="sustained >90% approval — consider moving this gate down the tier ladder">
           over-triggering?

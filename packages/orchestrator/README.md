@@ -101,15 +101,23 @@ is the same path with a list of one. Every engine seeds the governor and reports
 its spend before any loop starts, each within a minute; the loops then start
 together, and the handle is returned without waiting for their first passes
 (`handle.started` waits for them). There is one code-tree monitor, one supersede
-and one drain for the process, and a stopping engine admits nothing more. Each
+and one drain for the process. A stopping engine admits nothing more, and waits
+for its running pass at most 30 seconds before draining without it. A
+repository whose startup seed fails is left out of the machine's spend window
+until it seeds; with a spend limit set this is logged as a WARNING and listed
+under `uncounted` in the health file. Each
 engine's log lines start with `[<display name>]`. A tick or a closing commit that
 throws marks that engine failed in its own health file (`failed`) and leaves the
 others running; after two failed passes in a row it retries on the heartbeat
 only. A failed pass is cleared by the next pass that completes; a failed closing
 commit stands until the ledger entry it left open is closed or aged out.
 `--engine-name <name>` replaces this machine's hostname in the engine id written
-on ledger entries and sweep markers. `gateline up` does not pass several
-repositories yet.
+on ledger entries and sweep markers. The name must be unique among the machines
+that run an engine against the same repository: the stale sweep takes an entry
+carrying its own name, whose pid is not running on this machine, for its own dead
+entry and dispatches that work again after five minutes, so two machines sharing
+a name would each re-dispatch the other's live work. `gateline up` does not pass
+several repositories yet.
 
 Driving a live toy run end-to-end (the M2 exit criterion):
 

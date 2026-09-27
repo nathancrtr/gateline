@@ -7,6 +7,7 @@
 // path (docs/MULTI-REPO.md §8): `startOrchestrators`. `startOrchestrator`
 // serves one repository through the same path, as a list of one.
 import { realpath } from 'node:fs/promises'
+import { resolve } from 'node:path'
 import type { Identity } from '@gateline/core/record'
 import {
   CodeTreeMonitor,
@@ -26,14 +27,14 @@ import {
   resolveCodeRepo,
 } from '@gateline/core/sources'
 import { Engine, type InFlightJob } from './engine.ts'
-import { Governor, type GovernorPort } from './governor.ts'
+import { describeWindow, Governor, type GovernorPort } from './governor.ts'
 import { type HeadlessManifest, type HostTip, headlessManifestPathAt, loadHeadlessManifestAt, resolveHostTip } from './manifest.ts'
 import { loadRegistry } from './registry.ts'
 import { RoutingDispatcher } from './router.ts'
 import { type PendingIntent, RemoteDispatcher } from './runner-dispatcher.ts'
 import { Scheduler } from './schedule.ts'
 import { type Dispatcher, type DispatchOutcome, HeadlessDispatcher } from './seam.ts'
-import { type RunLoop, runLoop, SharedCodeTree } from './triggers.ts'
+import { describeMs, type RunLoop, runLoop, SharedCodeTree } from './triggers.ts'
 
 /**
  * The zero-argument shape @gateline/server's own `RunnerCallback` expects
@@ -151,6 +152,8 @@ export interface OrchestratorOptions {
   engineName?: string
   /** This repository's own spend ceiling per window, beneath the machine's (MULTI-REPO.md §7.4). */
   repositorySpendLimitUsd?: number | null
+  /** How long `stop()` waits for the running pass before draining without it (default 30 s; #502). */
+  stopWaitMs?: number
   /** Wall clock per dispatched role before its process group is killed (default 30 min). */
   roleTimeoutSeconds?: number
   heartbeatSeconds?: number
@@ -427,6 +430,10 @@ export interface OrchestratorsOptions {
    * and unregistered until it seeds, and the others start without it.
    */
   startupTimeoutMs?: number
+  /** How long each loop's `stop()` waits for its running pass (default `STOP_WAIT_MS`, 30 s). */
+  stopWaitMs?: number
+  /** After how long a startup still waiting on seeds names them (default `STARTUP_WAIT_NOTICE_MS`, 5 s). */
+  startupNoticeMs?: number
 }
 
 /**
@@ -441,6 +448,9 @@ export interface OrchestratorsOptions {
  * operator is still watching the terminal.
  */
 export const STARTUP_SEED_TIMEOUT_MS = 60_000
+
+/** After this long, a startup still waiting on seeds names the repositories it is waiting for, once (#502). */
+export const STARTUP_WAIT_NOTICE_MS = 5_000
 
 /** One repository's engine, assembled and not yet started. */
 export interface AssembledEngine {
@@ -497,6 +507,18 @@ export class DuplicateRepositoryError extends Error {
   }
 }
 
+/**
+ * The real path of an origin that is a directory on this machine — a plain or
+ * relative path, or a `file://` URL — or null when it is not one (#502).
+ */
+async function originDirectory(repoDir: string, url: string): Promise<string | null> {
+  let path: string
+  if (url.startsWith('file://')) path = decodeURIComponent(url.slice('file://'.length))
+  else if (/^[A-Za-z][A-Za-z0-9+.-]*:\/\//.test(url)) return null
+  else path = url
+  return realpath(resolve(repoDir, path)).catch(() => resolve(repoDir, path))
+}
+
 async function gitCommonDir(dir: string): Promise<string | null> {
   try {
     return await realpath((await new Git(dir).run(['rev-parse', '--path-format=absolute', '--git-common-dir'])).trim())
@@ -515,7 +537,7 @@ async function gitCommonDir(dir: string): Promise<string | null> {
  * the engine and the server name the repository the same way.
  */
 async function refuseDuplicates(repositories: RepositoryEngineConfig[]): Promise<void> {
-  const seen: { entry: RepositoryEngineConfig; top: string; common: string | null; originId: string | null }[] = []
+  const seen: { entry: RepositoryEngineConfig; top: string; common: string | null; originId: string | null; originPath: string | null }[] = []
   const label = (e: RepositoryEngineConfig) => `${e.displayName ?? e.repositoryId} (${e.repositoryId} at ${e.repoDir})`
   for (const entry of repositories) {
     if (!entry.repositoryId) throw new RepositoryIdError(`repository at ${entry.repoDir} has no id — the caller must supply one`)
@@ -523,7 +545,11 @@ async function refuseDuplicates(repositories: RepositoryEngineConfig[]): Promise
     if (problem) throw new RepositoryIdError(`repository at ${entry.repoDir}: its id ${problem}`)
     const top = await realpath((await repoToplevel(entry.repoDir)) ?? entry.repoDir).catch(() => entry.repoDir)
     const common = await gitCommonDir(entry.repoDir)
-    const originId = idFromOrigin(await new Git(entry.repoDir).remoteUrl('origin'))
+    const originUrl = await new Git(entry.repoDir).remoteUrl('origin')
+    const originId = idFromOrigin(originUrl)
+    // An origin that is a directory on this machine names no host, so it has no
+    // id; two clones of it are compared by the directory's real path.
+    const originPath = originId === null && originUrl !== null ? await originDirectory(entry.repoDir, originUrl) : null
     for (const prior of seen) {
       const both = `${label(prior.entry)} and ${label(entry)}`
       if (prior.top === top) throw new DuplicateRepositoryError(`${both} are the same repository: both resolve to ${top} — one engine per repository`)
@@ -533,8 +559,10 @@ async function refuseDuplicates(repositories: RepositoryEngineConfig[]): Promise
         throw new DuplicateRepositoryError(`${both} share one git directory (${common}): they are checkouts of one clone, whose runs are one set of branches — one engine per repository`)
       if (originId !== null && prior.originId !== null && repositoryIdKey(prior.originId) === repositoryIdKey(originId))
         throw new DuplicateRepositoryError(`${both} are clones of one origin (${originId}), whose runs are one set of branches there — one engine per repository`)
+      if (originPath !== null && prior.originPath === originPath)
+        throw new DuplicateRepositoryError(`${both} are clones of one origin (${originPath}), whose runs are one set of branches there — one engine per repository`)
     }
-    seen.push({ entry, top, common, originId })
+    seen.push({ entry, top, common, originId, originPath })
   }
 }
 
@@ -624,26 +652,41 @@ async function startAssembled(engines: AssembledEngine[], governor: GovernorPort
   // it holds no other repository back. Its first tick seeds it again, and
   // re-registers it — with its own ceiling — in the same step.
   const timeoutMs = opts.startupTimeoutMs ?? STARTUP_SEED_TIMEOUT_MS
+  // The wait is said out loud (#502): each repository's seed beginning and
+  // ending, and, once, which ones are still being waited for.
+  const pending = new Set(engines.map((e) => e.displayName))
+  const waiting = setTimeout(() => {
+    if (pending.size > 0) opts.log?.(`startup is waiting for the seed of: ${[...pending].join(', ')} (each is given up on after ${describeMs(timeoutMs)})`)
+  }, opts.startupNoticeMs ?? STARTUP_WAIT_NOTICE_MS)
+  ;(waiting as { unref?: () => void }).unref?.()
   await Promise.all(
     engines.map(async (e) => {
       let timer: ReturnType<typeof setTimeout> | undefined
       const timedOut = new Promise<never>((_, reject) => {
-        timer = setTimeout(
-          () => reject(new Error(`the startup seed and report did not finish within ${Math.round(timeoutMs / 1000)} s`)),
-          timeoutMs,
-        )
+        timer = setTimeout(() => reject(new Error(`the startup seed and report did not finish within ${describeMs(timeoutMs)}`)), timeoutMs)
       })
+      const began = Date.now()
+      e.log('startup seed: counting open dispatches and spend in the window')
       try {
         await Promise.race([e.engine.seedGovernor(), timedOut])
+        e.log(`startup seed: done in ${describeMs(Date.now() - began)}`)
       } catch (err) {
         e.engine.noteFault('seed', err)
         if (engines.length > 1) e.log('it leaves the governor until it seeds, so no other repository waits for it')
-        governor.unregister(e.repositoryId)
+        // It never reported, so the machine window does not know what it spent (#502).
+        governor.unregister(e.repositoryId, { uncounted: true })
+        if (governor.uncounted().includes(e.repositoryId))
+          e.log(
+            `WARNING: its spend in the last ${describeWindow(governor.spendWindowMs)} is NOT counted against the machine's spend limit until it seeds — ` +
+              'the other repositories may overspend the window by up to what it spent in it',
+          )
       } finally {
         clearTimeout(timer)
+        pending.delete(e.displayName)
       }
     }),
   )
+  clearTimeout(waiting)
   // One code-tree monitor for the process (MULTI-REPO.md §8.3 P5): the code
   // tree is *this module's own* checkout — resolved from our own
   // import.meta.url, not from any repository (a run source may live in a
@@ -675,6 +718,7 @@ async function startAssembled(engines: AssembledEngine[], governor: GovernorPort
           codeMonitor: shared ? shared.view(e.repositoryId) : codeMonitor,
           onSupersede,
           awaitStartup: false,
+          stopWaitMs: opts.stopWaitMs,
         }),
       ),
     )
@@ -783,6 +827,7 @@ export async function startOrchestrator(opts: OrchestratorOptions): Promise<Orch
     log: opts.log,
     onSupersede: opts.onSupersede,
     engineName: opts.engineName,
+    stopWaitMs: opts.stopWaitMs,
   })
   return {
     engine: handle.engines[0]!.engine,

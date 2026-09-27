@@ -15,6 +15,8 @@
 // to (#34). Nothing here knows what an engine, a run or a tick is; a
 // reservation is a repository, a key and an estimate.
 
+import { repositoryIdKey } from '@gateline/core/sources'
+
 /** Which limit refused a reservation. */
 export type GovernorLimit =
   /** The concurrency cap: every slot is taken (or the governor is still being seeded). */
@@ -229,11 +231,19 @@ export interface GovernorPort {
    * counting against the machine's window until the window rolls past it:
    * the money was spent whether or not its engine still runs.
    */
-  unregister(repository: string): void
+  unregister(repository: string, opts?: { uncounted?: boolean }): void
   /** The registered repositories that have not yet seeded — the ones the seed gate is waiting on. */
   unseeded(): string[]
   /** Whether the repository is registered now (not unregistered, not unknown). */
   registered(repository: string): boolean
+  /**
+   * The repositories the machine's spend window is not counting (#502): each
+   * was unregistered after its startup seed failed or timed out, before it
+   * ever reported, so what it spent in the window is unknown to the governor
+   * until it seeds. Empty unless a machine spend limit is enforced, since only
+   * then is anything decided on that sum.
+   */
+  uncounted(): string[]
   /** The repository's open entries at startup. Marks it seeded; additive. */
   seed(repository: string, entries: SeedEntry[]): void
   /**
@@ -308,6 +318,8 @@ export function refusalReason(r: GovernorRefusal, what: string, rederives: strin
 }
 
 interface RepoState {
+  /** The repository as it was first registered, for what the governor says; its key is lowercased (#502). */
+  label: string
   spendLimitUsd: number | null
   /** How refusal words name this repository (#502); absent, its key. */
   displayName: string | null
@@ -367,6 +379,8 @@ class Slot implements Reservation {
   private state: 'granted' | 'committed' | 'released' = 'granted'
   private readonly onRelease: (slot: Slot, wasCommitted: boolean, costUsd: number | null) => void
   readonly repository: string
+  /** The governor's key for the repository: `repositoryIdKey` of it (#502). */
+  readonly repoKey: string
   readonly key: string
   readonly estimateUsd: number
   readonly kind: 'dispatch' | 'sweep'
@@ -376,12 +390,14 @@ class Slot implements Reservation {
   constructor(
     onRelease: (slot: Slot, wasCommitted: boolean, costUsd: number | null) => void,
     repository: string,
+    repoKey: string,
     key: string,
     estimateUsd: number,
     kind: 'dispatch' | 'sweep',
   ) {
     this.onRelease = onRelease
     this.repository = repository
+    this.repoKey = repoKey
     this.key = key
     this.estimateUsd = estimateUsd
     this.kind = kind
@@ -442,7 +458,9 @@ export class Governor implements GovernorPort {
    * late can bring its repository back — without its ceiling — by the side door
    * that makes an unknown repository known.
    */
-  private readonly tombstones = new Map<string, string | null>()
+  private readonly tombstones = new Map<string, { label: string; displayName: string | null }>()
+  /** Tombstoned repositories whose spend the window does not count — see `uncounted` (#502). */
+  private readonly uncountedKeys = new Set<string>()
 
   constructor(cfg: GovernorConfig = {}) {
     this.cfg = cfg
@@ -455,6 +473,21 @@ export class Governor implements GovernorPort {
     return (this.cfg.now?.() ?? new Date()).getTime()
   }
 
+  /**
+   * The governor's key for a repository (#502): lowercased, as core's
+   * `repositoryIdKey` compares ids, so two spellings of one id are one
+   * repository here as they are to the duplicate check. The first spelling
+   * registered is kept for what the governor says.
+   */
+  private key(repository: string): string {
+    return repositoryIdKey(repository)
+  }
+
+  /** The label a refusal carries for a key: the spelling it was registered under. */
+  private labelOf(key: string): string {
+    return this.repos.get(key)?.label ?? this.tombstones.get(key)?.label ?? key
+  }
+
   private cap(): number {
     return this.limits.maxConcurrentDispatches ?? DEFAULT_MAX_CONCURRENT_DISPATCHES
   }
@@ -463,8 +496,10 @@ export class Governor implements GovernorPort {
     return this.limits.budgetEnforcement !== false
   }
 
-  register(repository: string, opts: { spendLimitUsd?: number | null; displayName?: string } = {}): void {
+  register(label: string, opts: { spendLimitUsd?: number | null; displayName?: string } = {}): void {
+    const repository = this.key(label)
     this.tombstones.delete(repository)
+    this.uncountedKeys.delete(repository)
     const known = this.repos.get(repository)
     if (known) {
       if (opts.spendLimitUsd !== undefined) known.spendLimitUsd = opts.spendLimitUsd
@@ -472,6 +507,7 @@ export class Governor implements GovernorPort {
       return
     }
     this.repos.set(repository, {
+      label,
       spendLimitUsd: opts.spendLimitUsd ?? null,
       displayName: opts.displayName ?? null,
       seeded: false,
@@ -503,8 +539,13 @@ export class Governor implements GovernorPort {
    * with it. If the repository registers again, its first report replaces
    * what it left behind, since that report reads the same ledgers.
    */
-  unregister(repository: string): void {
-    this.tombstones.set(repository, this.repos.get(repository)?.displayName ?? this.tombstones.get(repository) ?? null)
+  unregister(label: string, opts: { uncounted?: boolean } = {}): void {
+    const repository = this.key(label)
+    this.tombstones.set(repository, {
+      label: this.repos.get(repository)?.label ?? this.tombstones.get(repository)?.label ?? label,
+      displayName: this.repos.get(repository)?.displayName ?? this.tombstones.get(repository)?.displayName ?? null,
+    })
+    if (opts.uncounted) this.uncountedKeys.add(repository)
     const repo = this.repos.get(repository)
     if (!repo) return
     const now = this.now()
@@ -517,7 +558,7 @@ export class Governor implements GovernorPort {
     for (const amountUsd of open.values()) this.retired.push({ repository, amountUsd, atMs: now })
 
     for (const slot of [...this.live]) {
-      if (slot.repository !== repository) continue
+      if (slot.repoKey !== repository) continue
       this.live.delete(slot)
       slot.revoke()
     }
@@ -544,32 +585,40 @@ export class Governor implements GovernorPort {
   }
 
   /** How messages name a repository: its display name, or its key. */
-  private displayOf(repository: string): string {
-    return this.repos.get(repository)?.displayName ?? this.tombstones.get(repository) ?? repository
+  private displayOf(label: string): string {
+    const repository = this.key(label)
+    return this.repos.get(repository)?.displayName ?? this.tombstones.get(repository)?.displayName ?? this.labelOf(repository)
   }
 
   unseeded(): string[] {
-    return [...this.repos].filter(([, r]) => !r.seeded).map(([name]) => name)
+    return [...this.repos.values()].filter((r) => !r.seeded).map((r) => r.label)
   }
 
   registered(repository: string): boolean {
-    return this.repos.has(repository)
+    return this.repos.has(this.key(repository))
+  }
+
+  uncounted(): string[] {
+    if (!this.enforcing() || this.limits.spendLimitUsd == null) return []
+    return [...this.uncountedKeys].map((k) => this.labelOf(k))
   }
 
   /** Display names for the given repository keys, for a refusal's words; undefined when none has one. */
   private namesFor(keys: (string | undefined)[]): Record<string, string> | undefined {
     const names: Record<string, string> = {}
     for (const key of keys) {
-      const displayName = key === undefined ? null : (this.repos.get(key)?.displayName ?? this.tombstones.get(key) ?? null)
+      const k = key === undefined ? undefined : this.key(key)
+      const displayName = k === undefined ? null : (this.repos.get(k)?.displayName ?? this.tombstones.get(k)?.displayName ?? null)
       if (key !== undefined && displayName !== null) names[key] = displayName
     }
     return Object.keys(names).length > 0 ? names : undefined
   }
 
-  seed(repository: string, entries: SeedEntry[]): void {
+  seed(label: string, entries: SeedEntry[]): void {
+    const repository = this.key(label)
     // An unregistered repository comes back only by an explicit `register` (#502).
     if (this.tombstones.has(repository)) return
-    this.register(repository)
+    this.register(label)
     const now = this.now()
     for (const e of entries) {
       const at = e.at ? Date.parse(e.at) : Number.NaN
@@ -585,7 +634,8 @@ export class Governor implements GovernorPort {
     if (!wasSeeded) this.freed()
   }
 
-  async report(repository: string, gather: () => SpendReport | Promise<SpendReport>): Promise<void> {
+  async report(label: string, gather: () => SpendReport | Promise<SpendReport>): Promise<void> {
+    const repository = this.key(label)
     // A stopped engine's late pass reports nothing (#502): the repository was
     // unregistered and comes back only by an explicit `register`. Its gather is
     // not run either.
@@ -593,7 +643,7 @@ export class Governor implements GovernorPort {
       this.cfg.log?.(`governor: ignoring a report for ${this.displayOf(repository)}, which has left the governor (its engine stopped)`)
       return
     }
-    this.register(repository)
+    this.register(label)
     // A settlement released before this point had its closing commit written
     // first, or its close gave up without writing. Either way the ledger
     // `gather` reads from here on accounts for it: as closed, or as still
@@ -638,7 +688,8 @@ export class Governor implements GovernorPort {
     if (this.expire() || freed) this.freed()
   }
 
-  subscribe(repository: string, wake: () => Promise<void>): () => void {
+  subscribe(label: string, wake: () => Promise<void>): () => void {
+    const repository = this.key(label)
     let set = this.subscribers.get(repository)
     if (!set) {
       set = new Set()
@@ -657,22 +708,24 @@ export class Governor implements GovernorPort {
    * same instant cannot both be told yes.
    */
   reserve(request: ReservationRequest): ReserveResult {
-    const { repository, intents } = request
+    const { intents } = request
+    const label = request.repository
+    const repository = this.key(label)
     // Two dispatches under one key would be two jobs the governor could only
     // tell apart by object: counted once in the spend sum, and one of them
     // never matched to its ledger entry. The engine keys by run, role, task
     // and round, so this is a caller's bug; say which key.
     const seen = new Set<string>()
     for (const intent of intents) {
-      if (seen.has(intent.key)) throw new Error(`governor: one request names the key "${intent.key}" twice for ${repository} — each dispatch needs its own key`)
+      if (seen.has(intent.key)) throw new Error(`governor: one request names the key "${intent.key}" twice for ${label} — each dispatch needs its own key`)
       seen.add(intent.key)
     }
     // Unregistered and not registered again (#502): refused, whatever it asks.
     // Before this, an unknown repository was made known and seeded here, so a
     // stopped engine's straggling pass came back with no ceiling at all.
     if (this.tombstones.has(repository)) {
-      const base = { repository, occupied: this.occupied(), cap: this.cap(), requested: intents.length, granted: 0 }
-      const names = this.namesFor([repository])
+      const base = { repository: label, occupied: this.occupied(), cap: this.cap(), requested: intents.length, granted: 0 }
+      const names = this.namesFor([label])
       return { granted: [], refusal: { ...base, limit: 'unregistered', ...(names ? { names } : {}) } }
     }
     if (!this.repos.has(repository)) {
@@ -681,24 +734,24 @@ export class Governor implements GovernorPort {
       // an embedding that sweeps without an engine). Known from now on, and
       // seeded. Every engine registers at construction, so no engine's
       // repository arrives here.
-      this.register(repository)
+      this.register(label)
       this.repos.get(repository)!.seeded = true
     }
     if (this.expire()) this.freed()
 
     const cap = this.cap()
     const occupied = this.occupied()
-    const base = { repository, occupied, cap, requested: intents.length, granted: 0 }
+    const base = { repository: label, occupied, cap, requested: intents.length, granted: 0 }
     const askedUsd = intents.reduce((sum, i) => sum + i.estimateUsd, 0)
-    const unseeded = [...this.repos].filter(([, r]) => !r.seeded).map(([name]) => name)
-    if (unseeded.length > 0) return this.refuse({ ...base, limit: 'concurrency', unseeded }, askedUsd)
+    const unseeded = this.unseeded()
+    if (unseeded.length > 0) return this.refuse({ ...base, limit: 'concurrency', unseeded }, askedUsd, repository)
 
     let othersOffered = 0
     let heldFor: string | undefined
     for (const [name, offer] of this.offers) {
       if (name === repository) continue
       othersOffered += offer.slots
-      heldFor ??= name
+      heldFor ??= this.labelOf(name)
     }
     // A dispatch whose key matches a startup hold takes over that hold's slot
     // rather than needing a new one: derivation only asks for a key it reads
@@ -719,7 +772,7 @@ export class Governor implements GovernorPort {
     }
     if (n === 0) {
       const turn = cap > 0 && cap - occupied > 0 && othersOffered > 0
-      return this.refuse(turn ? { ...base, limit: 'turn', heldFor } : { ...base, limit: 'concurrency' }, askedUsd)
+      return this.refuse(turn ? { ...base, limit: 'turn', heldFor } : { ...base, limit: 'concurrency' }, askedUsd, repository)
     }
 
     const take = intents.slice(0, n)
@@ -733,6 +786,7 @@ export class Governor implements GovernorPort {
           return this.refuse(
             { ...base, limit: 'spend', projectedUsd: closed + open, closedUsd: closed, requestedUsd, limitUsd: this.limits.spendLimitUsd, windowMs },
             requestedUsd,
+            repository,
           )
       }
       const ceiling = this.repos.get(repository)!.spendLimitUsd
@@ -742,13 +796,14 @@ export class Governor implements GovernorPort {
           return this.refuse(
             { ...base, limit: 'repository-spend', projectedUsd: closed + open, closedUsd: closed, requestedUsd, limitUsd: ceiling, windowMs },
             requestedUsd,
+            repository,
           )
       }
     }
 
     for (const key of superseded) this.holds.delete(holdKey(repository, key))
     const granted = take.map((i) => {
-      const slot = new Slot(this.released, repository, i.key, i.estimateUsd, i.kind ?? 'dispatch')
+      const slot = new Slot(this.released, label, repository, i.key, i.estimateUsd, i.kind ?? 'dispatch')
       this.live.add(slot)
       return slot
     })
@@ -762,7 +817,7 @@ export class Governor implements GovernorPort {
     // The rest of the request did not fit under the cap: this repository is
     // waiting as surely as one refused outright.
     this.waiters.set(repository, { limit: 'concurrency', requestedUsd: intents.slice(n).reduce((sum, i) => sum + i.estimateUsd, 0) })
-    const names = this.namesFor([repository])
+    const names = this.namesFor([label])
     return { granted, refusal: { ...base, granted: n, limit: 'concurrency', ...(names ? { names } : {}) } }
   }
 
@@ -782,7 +837,7 @@ export class Governor implements GovernorPort {
   private readonly released = (slot: Slot, wasCommitted: boolean, costUsd: number | null): void => {
     if (!this.live.delete(slot)) return
     if (wasCommitted) {
-      const repo = this.repos.get(slot.repository)
+      const repo = this.repos.get(slot.repoKey)
       if (repo) {
         this.pruneSettled(repo)
         repo.settled.push({
@@ -795,7 +850,7 @@ export class Governor implements GovernorPort {
         })
       }
       this.freed()
-    } else this.freed(slot.repository)
+    } else this.freed(slot.repoKey)
   }
 
   /** Slots occupied: live reservations plus startup holds still standing. */
@@ -826,13 +881,14 @@ export class Governor implements GovernorPort {
       uncommittedUsd: uncommitted.reduce((sum, s) => sum + s.estimateUsd, 0),
       holds: this.holds.size,
       settled: [...this.repos.values()].reduce((n, r) => n + r.settled.length, 0),
-      offers: Object.fromEntries([...this.offers].map(([k, o]) => [k, o.slots])),
-      waiters: [...this.waiters.keys()],
+      offers: Object.fromEntries([...this.offers].map(([k, o]) => [this.labelOf(k), o.slots])),
+      waiters: [...this.waiters.keys()].map((k) => this.labelOf(k)),
     }
   }
 
   /** Spend in the window across every registered repository: closed cost and open or reserved estimates. */
-  machineSpend(requester?: string, superseded?: ReadonlySet<string>): { closed: number; open: number } {
+  machineSpend(requesterLabel?: string, superseded?: ReadonlySet<string>): { closed: number; open: number } {
+    const requester = requesterLabel === undefined ? undefined : this.key(requesterLabel)
     let closed = 0
     let open = 0
     for (const name of this.repos.keys()) {
@@ -867,8 +923,8 @@ export class Governor implements GovernorPort {
    * request is about to take over, so their estimate is not counted beside
    * the request's own.
    */
-  repoSpend(repository: string, superseded?: ReadonlySet<string>): { closed: number; open: number } {
-    const items = this.spendItems(repository, superseded)
+  repoSpend(label: string, superseded?: ReadonlySet<string>): { closed: number; open: number } {
+    const items = this.spendItems(this.key(label), superseded)
     let closed = 0
     for (const c of items.closed) closed += c.amountUsd
     let open = 0
@@ -917,7 +973,7 @@ export class Governor implements GovernorPort {
     for (const hold of this.holds.values())
       if (hold.repository === repository && !superseded?.has(hold.key)) byKey.set(hold.key, hold.estimateUsd)
     for (const slot of this.live) {
-      if (slot.repository !== repository) continue
+      if (slot.repoKey !== repository) continue
       // Its close has landed and the report read it, but the job has not
       // released yet: the closed entry already carries it.
       if (slot.committed && inReport(slot.key, slot.ledgerAt)) {
@@ -945,8 +1001,8 @@ export class Governor implements GovernorPort {
     return new Promise((resolve) => this.idleWaiters.push(resolve))
   }
 
-  private refuse(refusal: GovernorRefusal, requestedUsd: number): ReserveResult {
-    this.waiters.set(refusal.repository, { limit: refusal.limit, requestedUsd })
+  private refuse(refusal: GovernorRefusal, requestedUsd: number, repository: string): ReserveResult {
+    this.waiters.set(repository, { limit: refusal.limit, requestedUsd })
     const names = this.namesFor([refusal.repository, refusal.heldFor, ...(refusal.unseeded ?? [])])
     return { granted: [], refusal: names ? { ...refusal, names } : refusal }
   }

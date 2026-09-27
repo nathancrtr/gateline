@@ -61,7 +61,7 @@ program
   )
   .option(
     '--engine-name <name>',
-    'the name written in place of this machine\'s hostname in the engine id on ledger entries and sweep markers (letters, digits, ".", "_", "-"; default: the hostname)',
+    'the name written in place of this machine\'s hostname in the engine id on ledger entries and sweep markers (letters, digits, ".", "_", "-"; default: the hostname). It must be unique among the machines that run an engine against the same repository: an entry whose name is this engine\'s and whose pid is not running here is taken for this machine\'s own dead entry and dispatched again after 5 minutes',
   )
   // MULTI-REPO.md §8.5 (#502): the one place an operator reading --help learns this.
   .addHelpText(

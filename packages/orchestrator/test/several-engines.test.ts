@@ -3,7 +3,7 @@
 // dispatch anywhere, and every expected value is written out here, never
 // computed by the code under test.
 import { execFileSync, spawn } from 'node:child_process'
-import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { hostname, tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -725,16 +725,17 @@ describe('the list of one is the old behaviour', () => {
     expect(typeof written.at).toBe('string')
     expect({ ...written, at: '<at>' }).toEqual({ at: '<at>', pid: process.pid, heartbeatMs: 600000, inFlight: 1, pushRejections: {}, deferrals: [] })
     expect(Object.keys(written)).toEqual(['at', 'pid', 'heartbeatMs', 'inFlight', 'pushRejections', 'deferrals'])
-    // The one visible change: every line names the repository, here by its directory's name.
+    // The visible changes: every line names the repository, here by its
+    // directory's name, and the startup seed says when it begins and ends.
     const name = dir.split('/').at(-1)!
     expect(lines.every((l) => l.startsWith(`[${name}] `))).toBe(true)
+    const own = lines.map((l) => l.slice(name.length + 3))
+    expect(own.slice(0, 2).map((l) => l.replace(/done in \d+ ms$|done in [\d.]+ s$/, 'done in <t>'))).toEqual([
+      'startup seed: counting open dispatches and spend in the window',
+      'startup seed: done in <t>',
+    ])
     expect(
-      lines.map((l) =>
-        l
-          .slice(name.length + 3)
-          .replaceAll(dir, '<repo>')
-          .replace(/looked in \S*\/gateline-orchestrator\/[0-9a-f]{12}\//, 'looked in <tmp>/gateline-orchestrator/<hash>/'),
-      ),
+      own.slice(2).map((l) => l.replaceAll(dir, '<repo>').replace(/looked in \S*\/gateline-orchestrator\/[0-9a-f]{12}\//, 'looked in <tmp>/gateline-orchestrator/<hash>/')),
     ).toEqual(MAIN_LINES)
     expect(handle.engine.source.id).toBe(`local/${name}`)
   })
@@ -1180,7 +1181,7 @@ describe("one repository's slow startup holds up no other (review of #538, E2)",
       return listRuns()
     }) as typeof listRuns
     const handle = await set.start()
-    expect(lines).toContain('[alpha] governor seed failed: the startup seed and report did not finish within 0 s — engine marked failed; its health file says so from its next write (1 in a row); retried on the first tick')
+    expect(lines).toContain('[alpha] governor seed failed: the startup seed and report did not finish within 400 ms — engine marked failed; its health file says so from its next write (1 in a row); retried on the first tick')
     expect(lines).toContain('[alpha] it leaves the governor until it seeds, so no other repository waits for it')
     await vi.waitFor(async () => expect((await ledgerOf(b.dir)).map((e) => e.cost_usd)).toEqual([1.25]), { timeout: 20_000, interval: 50 })
     // The hung read ends; alpha's seed completes, it rejoins the governor, and its startup pass dispatches.
@@ -1457,5 +1458,407 @@ describe('shutdown and per-repository configuration (review of #538, E4 and E5)'
     ])
     await handle.stop()
     expect((await ledgerOf(a.dir)).length + (await ledgerOf(b.dir)).length).toBe(0)
+  })
+})
+
+describe('stop() waits for the running pass only up to a bound (second review of #538, X1)', () => {
+  it('two engines: alpha’s pass never returns; stop() resolves within the bound, says so, and beta still drains', { timeout: 60_000 }, async () => {
+    const a = toyRepo()
+    const b = toyRepo()
+    const lines: string[] = []
+    const set = await assembleOrchestrators({
+      repositories: [entry(a.dir, 'alpha', { dispatcher: promptSpec(a.clock) }), entry(b.dir, 'beta', { dispatcher: promptSpec(b.clock) })],
+      limits: { maxConcurrentDispatches: 2 },
+      heartbeatSeconds: HEARTBEAT_SECONDS,
+      codeRepo: null,
+      stopWaitMs: 1500,
+      log: (l) => lines.push(l),
+    })
+    const hang = deferred<void>()
+    set.engines[0]!.engine.syncFromRemote = async () => {
+      await hang.promise
+    }
+    const handle = await set.start()
+    await handle.engines[1]!.loop.started
+    const began = Date.now()
+    await handle.stop()
+    const took = Date.now() - began
+    expect(took).toBeGreaterThanOrEqual(1400)
+    expect(took).toBeLessThan(10_000)
+    expect(lines).toContain('[alpha] still waiting for the running pass before draining')
+    expect(lines).toContain(
+      '[alpha] the running pass did not finish within 1.5 s — stopping without it: it can admit nothing more, and a role it had already committed and not yet launched may start after this drain, close on its own, or be aged out by the stale sweep after a restart',
+    )
+    expect(lines.filter((l) => l.startsWith('[beta] ') && l.includes('running pass'))).toEqual([])
+    expect((await ledgerOf(b.dir)).map((e) => e.cost_usd)).toEqual([1.25])
+    expect(handle.governor.registered('local/beta')).toBe(false)
+    hang.resolve()
+  })
+
+  it('a list of one: stop() resolves within the bound although the pass never returns', { timeout: 60_000 }, async () => {
+    const a = toyRepo()
+    const lines: string[] = []
+    const set = await assembleOrchestrators({
+      repositories: [entry(a.dir, 'alpha', { dispatcher: promptSpec(a.clock) })],
+      heartbeatSeconds: HEARTBEAT_SECONDS,
+      codeRepo: null,
+      stopWaitMs: 800,
+      log: (l) => lines.push(l),
+    })
+    const hang = deferred<void>()
+    set.engines[0]!.engine.syncFromRemote = async () => {
+      await hang.promise
+    }
+    const handle = await set.start()
+    const began = Date.now()
+    await handle.stop()
+    expect(Date.now() - began).toBeLessThan(10_000)
+    expect(lines.filter((l) => l.startsWith('[alpha] the running pass did not finish within 800 ms'))).toHaveLength(1)
+    hang.resolve()
+  })
+
+  it('a supersede with one engine’s pass hung fires once, and the drain it starts ends within the bound', { timeout: 90_000 }, async () => {
+    const code = codeRepo()
+    const a = toyRepo()
+    const b = toyRepo()
+    let supersedes = 0
+    let stopped: Promise<void> | null = null
+    let handle: OrchestratorsHandle | null = null
+    const set = await assembleOrchestrators({
+      repositories: [entry(a.dir, 'alpha', { dispatcher: promptSpec(a.clock) }), entry(b.dir, 'beta', { dispatcher: promptSpec(b.clock) })],
+      limits: { maxConcurrentDispatches: 2 },
+      heartbeatSeconds: HEARTBEAT_SECONDS,
+      codeRepo: code.dir,
+      stopWaitMs: 1000,
+      log: () => {},
+      onSupersede: () => {
+        supersedes++
+        stopped = handle!.stop()
+      },
+    })
+    const hang = deferred<void>()
+    set.engines[0]!.engine.syncFromRemote = async () => {
+      await hang.promise
+    }
+    handle = await set.start()
+    await handle.engines[1]!.loop.started
+    code.commit('a framework fix lands')
+    await handle.engines[1]!.loop.trigger('heartbeat')
+    await handle.engines[1]!.loop.trigger('heartbeat')
+    expect(supersedes).toBe(1)
+    const began = Date.now()
+    await stopped!
+    expect(Date.now() - began).toBeLessThan(10_000)
+    expect(supersedes).toBe(1)
+    hang.resolve()
+  })
+
+  it('a tick awaiting a startup seed that hangs past the bound admits nothing when it finally resumes', { timeout: 60_000 }, async () => {
+    const a = toyRepo()
+    const da = promptSpec(a.clock)
+    const set = await assembleOrchestrators({
+      repositories: [entry(a.dir, 'alpha', { dispatcher: da })],
+      heartbeatSeconds: HEARTBEAT_SECONDS,
+      codeRepo: null,
+      startupTimeoutMs: 300,
+      stopWaitMs: 300,
+      log: () => {},
+    })
+    const alpha = set.engines[0]!.engine
+    const listRuns = alpha.source.listRuns.bind(alpha.source)
+    const hang = deferred<void>()
+    let first = true
+    alpha.source.listRuns = (async () => {
+      if (first) {
+        first = false
+        await hang.promise
+      }
+      return listRuns()
+    }) as typeof listRuns
+    const handle = await set.start() // the seed timed out; the startup pass now awaits the same seed
+    await handle.stop() // resolves at the bound, with that pass still waiting
+    expect(alpha.isStopping()).toBe(true)
+    hang.resolve() // the seed finishes, and the pass resumes after the drain
+    await new Promise((r) => setTimeout(r, 1500))
+    expect(da.calls).toHaveLength(0)
+    expect(await ledgerOf(a.dir)).toEqual([])
+    expect(handle.governor.registered('local/alpha')).toBe(false)
+  })
+})
+
+describe('the stop flags, pinned (second review of #538, m6 m7 m8)', () => {
+  it('an engine stopped between its reservation and its intent commit commits and launches nothing', { timeout: 60_000 }, async () => {
+    const a = toyRepo()
+    const da = promptSpec(a.clock)
+    const set = await assembleOrchestrators({ repositories: [entry(a.dir, 'alpha', { dispatcher: da })], heartbeatSeconds: HEARTBEAT_SECONDS, codeRepo: null, log: () => {} })
+    const alpha = set.engines[0]!.engine
+    // `ensurePr` runs after the reservation and before the intent commit.
+    const reached = deferred<void>()
+    const gate = deferred<void>()
+    const inner = alpha as unknown as { ensurePr: (...args: unknown[]) => Promise<void> }
+    const ensurePr = inner.ensurePr.bind(alpha)
+    inner.ensurePr = async (...args) => {
+      reached.resolve()
+      await gate.promise
+      return ensurePr(...args)
+    }
+    const handle = await set.start()
+    await reached.promise
+    expect((handle.governor as Governor).snapshot().reservations).toBe(1) // reserved, not yet committed
+    const stopping = handle.stop()
+    gate.resolve()
+    await stopping
+    await new Promise((r) => setTimeout(r, 500))
+    expect(da.calls).toHaveLength(0)
+    expect(await ledgerOf(a.dir)).toEqual([])
+  })
+
+  it('an engine stopped before its reservation reserves nothing', { timeout: 60_000 }, async () => {
+    const a = toyRepo()
+    const da = promptSpec(a.clock)
+    const reserves: string[] = []
+    class SpyGovernor extends Governor {
+      override reserve(req: Parameters<Governor['reserve']>[0]) {
+        reserves.push(req.repository)
+        return super.reserve(req)
+      }
+    }
+    const set = await assembleOrchestrators({
+      repositories: [entry(a.dir, 'alpha', { dispatcher: da })],
+      governor: new SpyGovernor({ maxConcurrentDispatches: 2 }),
+      heartbeatSeconds: HEARTBEAT_SECONDS,
+      codeRepo: null,
+      log: () => {},
+    })
+    const alpha = set.engines[0]!.engine
+    const reached = deferred<void>()
+    const gate = deferred<void>()
+    const inner = alpha as unknown as { byWaitingSince: (refs: unknown[]) => Promise<unknown[]> }
+    const byWaitingSince = inner.byWaitingSince.bind(alpha)
+    inner.byWaitingSince = async (refs) => {
+      reached.resolve()
+      await gate.promise
+      return byWaitingSince(refs)
+    }
+    const handle = await set.start()
+    await reached.promise
+    const stopping = handle.stop()
+    gate.resolve()
+    await stopping
+    expect(reserves).toEqual([])
+    expect(da.calls).toHaveLength(0)
+  })
+
+  const SCHEDULE = 'schedules:\n  historian:\n    every: 7d\n    cost_limit_usd: 50\n'
+  function sweepSetup() {
+    const { dir, clock } = toyRepo()
+    agentCommit(dir, clock, { 'orchestrator.yaml': SCHEDULE }, 'schedules')
+    const reserves: string[] = []
+    class SpyGovernor extends Governor {
+      override reserve(req: Parameters<Governor['reserve']>[0]) {
+        reserves.push(req.repository)
+        return super.reserve(req)
+      }
+    }
+    const sweeper = new FakeDispatcher(() => ({}))
+    const scheduler = new Scheduler({ repoDir: dir, identity: BOT, dispatcher: sweeper, registry: TEST_REGISTRY, governor: new SpyGovernor(), repository: 'local/toy' })
+    return { dir, reserves, sweeper, scheduler, git: (scheduler as unknown as { git: Record<string, (...a: unknown[]) => Promise<unknown>> }).git }
+  }
+
+  it('a scheduler stopped before a sweep’s reservation reserves nothing', { timeout: 60_000 }, async () => {
+    const { dir, reserves, sweeper, scheduler, git: sg } = sweepSetup()
+    const reached = deferred<void>()
+    const gate = deferred<void>()
+    const lsTreeDirs = sg.lsTreeDirs!.bind(sg)
+    sg.lsTreeDirs = async (...args) => {
+      reached.resolve()
+      await gate.promise
+      return lsTreeDirs(...args)
+    }
+    const ticking = scheduler.tick()
+    await reached.promise
+    scheduler.beginStop()
+    gate.resolve()
+    expect((await ticking).map((o) => [o.kind, o.detail])).toEqual([['rest', 'scheduler stopping — nothing reserved']])
+    expect(reserves).toEqual([])
+    expect(sweeper.calls).toHaveLength(0)
+    expect(git(dir, ['branch', '--list', 'run/historian-*'])).toBe('')
+  })
+
+  it('a scheduler stopped between a sweep’s reservation and its ref update commits and launches nothing', { timeout: 60_000 }, async () => {
+    const { dir, reserves, sweeper, scheduler, git: sg } = sweepSetup()
+    const reached = deferred<void>()
+    const gate = deferred<void>()
+    const hashObject = sg.hashObject!.bind(sg)
+    sg.hashObject = async (...args) => {
+      reached.resolve()
+      await gate.promise
+      return hashObject(...args)
+    }
+    const ticking = scheduler.tick()
+    await reached.promise
+    scheduler.beginStop()
+    gate.resolve()
+    expect((await ticking).map((o) => [o.kind, o.detail])).toEqual([['rest', 'scheduler stopping — no sweep committed, nothing launched']])
+    expect(reserves).toEqual(['local/toy'])
+    expect((scheduler.governor as Governor).snapshot().occupied).toBe(0) // the reservation was released
+    expect(sweeper.calls).toHaveLength(0)
+    expect(git(dir, ['branch', '--list', 'run/historian-*'])).toBe('')
+  })
+})
+
+describe('the one known under-count of the machine window, said out loud (second review of #538, X2)', () => {
+  it('beta’s startup seed times out: alpha is granted without beta’s $1.25, and the log and every health file say so', { timeout: 90_000 }, async () => {
+    const a = toyRepo()
+    const b = toyRepo()
+    const earlier = await startOrchestrator({ repoDir: b.dir, dispatcher: promptSpec(b.clock), heartbeatSeconds: HEARTBEAT_SECONDS, codeRepo: null })
+    await earlier.started
+    await earlier.stop()
+    expect((await ledgerOf(b.dir)).map((e) => e.cost_usd)).toEqual([1.25])
+    const lines: string[] = []
+    const set = await assembleOrchestrators({
+      repositories: [entry(a.dir, 'alpha', { dispatcher: promptSpec(a.clock) }), entry(b.dir, 'beta', { dispatcher: promptSpec(b.clock) })],
+      limits: { maxConcurrentDispatches: 2, spendLimitUsd: 6 },
+      heartbeatSeconds: HEARTBEAT_SECONDS,
+      codeRepo: null,
+      startupTimeoutMs: 400,
+      log: (l) => lines.push(l),
+    })
+    const beta = set.engines[1]!.engine
+    const listRuns = beta.source.listRuns.bind(beta.source)
+    const hang = deferred<void>()
+    let first = true
+    beta.source.listRuns = (async () => {
+      if (first) {
+        first = false
+        await hang.promise
+      }
+      return listRuns()
+    }) as typeof listRuns
+    const handle = await set.start()
+    expect(lines).toContain(
+      '[beta] WARNING: its spend in the last 24 hours is NOT counted against the machine\'s spend limit until it seeds — the other repositories may overspend the window by up to what it spent in it',
+    )
+    await handle.engines[0]!.loop.started
+    // Deliberate: $5 asked against $6 with beta's $1.25 unknown — granted (with it, $6.25, deferred).
+    expect(handle.engines[0]!.engine.deferrals()).toEqual([])
+    expect((await health(a.dir)).uncounted).toEqual(['local/beta'])
+    expect(handle.governor.uncounted()).toEqual(['local/beta'])
+    await vi.waitFor(async () => expect((await ledgerOf(a.dir)).map((e) => e.cost_usd)).toEqual([1.25]), { timeout: 20_000, interval: 50 })
+    // beta seeds once its read ends, and is counted again.
+    hang.resolve()
+    await handle.started
+    expect(handle.governor.uncounted()).toEqual([])
+    await handle.stop()
+  })
+})
+
+describe('duplicate origins on the filesystem, and governor keys without case (second review of #538)', () => {
+  it('refuses two clones of one origin that is a directory, however each names it', { timeout: 60_000 }, async () => {
+    const a = toyRepo()
+    const b = toyRepo()
+    const bare = join(mkdtempSync(join(tmpdir(), 'gateline-origin-')), 'origin.git')
+    cleanups.push(bare)
+    git(a.dir, ['clone', '-q', '--bare', a.dir, bare])
+    git(a.dir, ['remote', 'add', 'origin', bare])
+    git(b.dir, ['remote', 'add', 'origin', `file://${bare}`])
+    await expect(startOrchestrators({ repositories: [entry(a.dir, 'alpha'), entry(b.dir, 'beta')], codeRepo: null })).rejects.toThrow(
+      new DuplicateRepositoryError(
+        `alpha (local/alpha at ${a.dir}) and beta (local/beta at ${b.dir}) are clones of one origin (${readRealpath(bare)}), whose runs are one set of branches there — one engine per repository`,
+      ),
+    )
+  })
+
+  it('treats two spellings of one id as one repository, keeping the first spelling for what it says', () => {
+    const gov = new Governor({ maxConcurrentDispatches: 2 })
+    gov.register('github.com/Acme/Billing', { spendLimitUsd: 4 })
+    gov.seed('github.com/acme/billing', [])
+    expect(gov.unseeded()).toEqual([])
+    expect(gov.reserve({ repository: 'GITHUB.COM/acme/billing', intents: [{ key: 'toy|analyst||', estimateUsd: 5 }] }).refusal).toMatchObject({
+      limit: 'repository-spend',
+      repository: 'GITHUB.COM/acme/billing',
+    })
+    gov.unregister('github.com/Acme/Billing')
+    const refused = gov.reserve({ repository: 'github.com/acme/billing', intents: [{ key: 'toy|analyst||', estimateUsd: 1 }] })
+    expect(refused.granted).toEqual([])
+    expect(refused.refusal).toMatchObject({ limit: 'unregistered' })
+    expect(refusalReason(refused.refusal!, '1 dispatch(es)', 'the run re-derives')).toBe(
+      '1 dispatch(es) not admitted — github.com/acme/billing has left the governor (its engine stopped); nothing is granted to it until it registers again',
+    )
+    expect(gov.registered('GitHub.com/ACME/billing')).toBe(false)
+  })
+})
+
+describe('the startup wait is said out loud (second review of #538)', () => {
+  it('logs each seed beginning and ending, and once which repositories the start is still waiting for', { timeout: 60_000 }, async () => {
+    const a = toyRepo()
+    const b = toyRepo()
+    const lines: string[] = []
+    const set = await assembleOrchestrators({
+      repositories: [entry(a.dir, 'alpha', { dispatcher: promptSpec(a.clock) }), entry(b.dir, 'beta', { dispatcher: promptSpec(b.clock) })],
+      heartbeatSeconds: HEARTBEAT_SECONDS,
+      codeRepo: null,
+      startupNoticeMs: 300,
+      startupTimeoutMs: 1500,
+      log: (l) => lines.push(l),
+    })
+    const beta = set.engines[1]!.engine
+    const listRuns = beta.source.listRuns.bind(beta.source)
+    const hang = deferred<void>()
+    let first = true
+    beta.source.listRuns = (async () => {
+      if (first) {
+        first = false
+        await hang.promise
+      }
+      return listRuns()
+    }) as typeof listRuns
+    const handle = await set.start()
+    expect(lines).toContain('[alpha] startup seed: counting open dispatches and spend in the window')
+    expect(lines).toContain('[beta] startup seed: counting open dispatches and spend in the window')
+    expect(lines.filter((l) => /^\[alpha\] startup seed: done in (\d+ ms|[\d.]+ s)$/.test(l))).toHaveLength(1)
+    expect(lines.filter((l) => l.startsWith('startup is waiting for the seed of: '))).toEqual(['startup is waiting for the seed of: beta (each is given up on after 1.5 s)'])
+    expect(lines).toContain('[beta] governor seed failed: the startup seed and report did not finish within 1.5 s — engine marked failed; its health file says so from its next write (1 in a row); retried on the first tick')
+    hang.resolve()
+    await handle.started
+    await handle.stop()
+  })
+
+  it('--engine-name’s help says the name must be unique', { timeout: 60_000 }, () => {
+    const main = join(import.meta.dirname, '..', 'src', 'main.ts')
+    const help = execFileSync(process.execPath, [main, '--help'], { encoding: 'utf8' }).replace(/\s+/g, ' ')
+    expect(help).toContain('It must be unique among the machines that run an engine against the same repository')
+  })
+})
+
+describe('the health file is never read half written (found by the 50-run loop)', () => {
+  it('a reader polling while passes rewrite it always reads whole JSON, and no temporary file is left behind', { timeout: 90_000 }, async () => {
+    const a = toyRepo()
+    const handle = await startAll({ repositories: [entry(a.dir, 'alpha', { dispatcher: promptSpec(a.clock) })], heartbeatSeconds: HEARTBEAT_SECONDS, codeRepo: null, log: () => {} })
+    const path = await engineHealthPath(a.dir)
+    const torn: string[] = []
+    let reads = 0
+    let polling = true
+    const poll = (async () => {
+      while (polling) {
+        const text = await readFile(path, 'utf8').catch(() => null)
+        if (text !== null) {
+          reads++
+          try {
+            JSON.parse(text)
+          } catch {
+            torn.push(text)
+          }
+        }
+        await new Promise((r) => setImmediate(r))
+      }
+    })()
+    for (let i = 0; i < 60; i++) await handle.engines[0]!.loop.trigger('refs')
+    polling = false
+    await poll
+    await handle.stop()
+    expect(reads).toBeGreaterThan(60)
+    expect(torn).toEqual([])
+    expect(readdirSync(join(path, '..')).filter((f) => f.endsWith('.tmp'))).toEqual([])
   })
 })

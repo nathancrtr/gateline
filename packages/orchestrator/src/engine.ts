@@ -658,15 +658,19 @@ export class Engine {
   /**
    * Additive fields for this engine's health file (#502), present only while
    * they say something, so a healthy engine's file is unchanged: `failed`
-   * (the newest standing fault) and `unseeded` (the repositories the
-   * governor's seed gate is still waiting on).
+   * (the newest standing fault), `unseeded` (the repositories the governor's
+   * seed gate is still waiting on) and `uncounted` (the repositories the
+   * machine's spend window is not counting, because their startup seed
+   * failed before they ever reported — the one known under-count).
    */
-  healthFields(): { failed?: EngineFault; unseeded?: string[] } {
+  healthFields(): { failed?: EngineFault; unseeded?: string[]; uncounted?: string[] } {
     const unseeded = this.governor.unseeded()
+    const uncounted = this.governor.uncounted()
     const failed = this.faultState()
     return {
       ...(failed ? { failed } : {}),
       ...(unseeded.length > 0 ? { unseeded } : {}),
+      ...(uncounted.length > 0 ? { uncounted } : {}),
     }
   }
 

@@ -338,6 +338,13 @@ so a restart under the same name still recognises its own entries, and an entry
 written under the OS hostname before a name was configured reads as another host's
 and waits out `roleTimeoutMs + staleMs`.
 
+The name must be unique among the machines that run an engine against the same
+repository. The stale sweep reads an entry whose host part is its own name, and
+whose pid is not running on this machine, as this machine's own dead entry, and
+ages it after `staleMs` (five minutes) instead of the role timeout plus `staleMs`.
+Two machines given one name would each read the other's live dispatches as dead
+and dispatch the same work again, paying for it twice.
+
 The record says nothing about the role's own process. A role is spawned detached, in
 a process group of its own whose id is its pid, and that id lives only in the
 dispatcher's memory, for the timeout kill and the operator's abort. It is known only
@@ -787,6 +794,18 @@ last report may list entries a previous process left open, and they keep countin
 their estimate until one of its passes completes and reports that the stale sweep
 has closed them. Until then the other repositories have that much less of the window.
 
+There is one known under-count, and it is said out loud. A repository whose
+startup seed fails or times out is unregistered before it has ever reported, so the
+governor does not know what it spent in the window: the machine's window leaves it
+out until it seeds. The others may then overspend the window by at most what that
+repository spent in it, and only until it rejoins, which its next pass attempts.
+This is deliberate (a maintainer may reverse it): refusing every spend-limited
+dispatch while one repository cannot be read would let one broken repository stop
+all the others. It is never silent. With a machine spend limit set, its engine logs
+`WARNING: its spend in the last <window> is NOT counted against the machine's spend
+limit until it seeds …`, and every engine's health file lists it under `uncounted`
+until it seeds.
+
 **Unregister (#502).** An engine that stops cleanly, after its drain, leaves the
 governor. Its slots are freed: live reservations are released (a later release of
 one does nothing), its startup holds and any slot offered to it are dropped, it
@@ -888,6 +907,8 @@ refused with more than one repository.
   module-level on purpose: ids must be unique across the process.
 - **Startup.** Every engine is assembled and registered in list order (the
   round-robin's order). Then every engine seeds and reports (§6.1), together, each
+  logging when its seed begins and when it is done, and the start logs once, after
+  five seconds, which repositories it is still waiting for. Each seed is
   bounded by a timeout of one minute (`startupTimeoutMs`): the seed is a few git
   reads per run, far under a second on a healthy repository, and core's git calls
   have no timeout of their own, so without one a stuck lock would hold every engine,
@@ -900,11 +921,29 @@ refused with more than one repository.
 - **Stopping.** `stop()` stops every loop at once. Each loop tells its engine and
   scheduler to admit nothing more — they check immediately before every
   reservation and again immediately before every intent commit — and then waits for
-  the pass that is running before draining the jobs already launched. Each engine
-  then unregisters. Before the review of #538 the drain began without waiting for
-  the running pass, which could launch a role after `stop()` returned, and past its
-  repository's ceiling once the repository had been unregistered. A loop whose
-  drain throws is logged with its repository; the others still drain.
+  the pass that is running, up to 30 seconds (`stopWaitMs`), before draining the
+  jobs already launched. Each engine then unregisters. Before the review of #538
+  the drain began without waiting for the running pass, which could launch a role
+  after `stop()` returned, and past its repository's ceiling once the repository
+  had been unregistered. The wait is bounded because a pass can hang (a git call
+  stuck on a lock, a remote that never answers), and an unbounded wait kept the
+  supersede from ever exiting `75` and the first `^C` from ever finishing. The
+  stop flags already keep the pass from admitting anything, so the wait only
+  protects a dispatch past its intent commit — its push and launch — which thirty
+  seconds covers even on a slow network. A loop still waiting after a second logs
+  `still waiting for the running pass before draining`; one that reaches the bound
+  logs that it is stopping without that pass, which can admit nothing more, and
+  that a role it had already committed may start after the drain, close on its
+  own, or be aged out after a restart. The drain keeps its own bounds: a launched
+  role is still killed at its role timeout, and a second `^C` still aborts. One
+  engine at its bound delays no other: they drain together. A loop whose drain
+  throws is logged with its repository; the others still drain.
+
+  A pass that was already running when stop began finishes its bookkeeping and
+  admits nothing. It may still age a stale ledger entry inside its report, ensure
+  a draft PR with `gh`, reap a finished run's task branches or sync from origin;
+  it reserves, commits and launches nothing. A role that settles during the drain
+  still has its closing commit written.
 - **Faults.** A tick that throws, and a job whose closing commit throws, are caught
   at a boundary around each (`triggers.ts`, and the job's settlement in `engine.ts`
   and `schedule.ts`). Before #502 a settlement's rejection reached the process
@@ -931,19 +970,29 @@ refused with more than one repository.
   confirmed fast-forward fires `onSupersede` once for the process; the handle's
   `stop()` drains every engine, and each then unregisters. `stagedShutdown` takes
   the handle, and its drain lines name each dispatch's repository.
-- **The health file.** Each engine writes its own, with two added fields, present
+- **The health file.** Each engine writes its own, with three added fields, present
   only while they say something: `failed` (`{ at, where, reason, failures }`, where
   `where` is `tick`, `settlement`, `sweep` or `seed`; `failures` counts the passes in
   a row that threw for the first two, and the entries left open by faults for the
-  last two; with both kinds standing it shows the newest) and `unseeded` (the ids of
-  repositories the governor's seed gate is waiting on: not yet seeded and reported).
-  A healthy engine's file is unchanged. The engine id does not appear in it.
+  last two; with both kinds standing it shows the newest), `unseeded` (the ids of
+  repositories the governor's seed gate is waiting on: not yet seeded and reported)
+  and `uncounted` (the ids of repositories the machine's spend window is not
+  counting, §6.1; only while a machine spend limit is enforced). A healthy engine's
+  file is unchanged. The engine id does not appear in it. Repository ids are
+  compared without case throughout the governor, as core compares them, and each is
+  written as it was first registered.
 
 `gateline up` still serves one repository through `startOrchestrator`. What it
-observes from this: its log lines begin `[<display name>]`, its drain lines name the
-repository, its health file gains `failed` while its engine is failing, and
-`startOrchestrator` returns before the startup pass has finished, so `up` installs
-its signal handlers sooner.
+observes from this, against main:
+
+| | |
+|---|---|
+| Log lines | Every line begins `[<display name>]`; the startup seed logs when it begins and ends |
+| Startup | `startOrchestrator` returns before the startup pass has finished, so `up` installs its signal handlers sooner; the startup seed is bounded at 60 s |
+| `^C` during startup | Drains: the startup pass admits nothing more |
+| Stopping | Waits for the running pass, up to 30 s, then drains without it |
+| Faults | The first fault of a streak logs its stack; after two failed passes in a row the engine retries on the heartbeat only; the health file gains `failed` |
+| Ids | A directory whose name cannot make a repository id (and whose origin gives none) refuses to start |
 
 ## 7. Humans: gates, escalations, and the frontend contract
 

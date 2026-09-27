@@ -56,3 +56,48 @@ Every criterion this task claims was checked by reading the diff and by running 
 ## Boundary check
 
 The three code files changed are exactly the task's declared surface. The commit also appends the round-1 notes to the task's own work item, which is where implementer notes live. My deliberate breaks were restored with a checkout of the file, and the scratch repository lived outside the worktree and is deleted; the working tree holds this report and nothing else.
+
+# Round 2
+
+**Verdict:** approve
+**Round:** 2 of 3
+**Diff reviewed:** commit be1beea (`git diff 4d8e8e5 be1beea -- packages/`), the delta since the round-1 diff
+**Summary:** The four round-one findings are closed, and each new test fails when the code it guards is broken on purpose. One small finding remains: a new test carries the label of a new-behaviour criterion yet passes on the old code. Approving accepts that label, and a bare quotation mark in full mode for a criterion shape no spec has.
+
+## Verify round
+
+A mutant here is a copy of the terminal command's source that I broke on purpose. I ran each one against a scratch run holding the new tests' spec, and compared its footnotes with the literals the tests assert.
+
+- **F1 — resolved** — The new scratch run cites a six-character id beside the checked criterion and asserts the check line whole, at eleven spaces. The mutant that indents by the current id's length prints ten, so the test fails.
+- **F2 — resolved** — A checked promise past 110 characters is asserted as a literal ending in an ellipsis. The mutant without the cut in the checked branch prints the promise whole, so the test fails.
+- **F3 — resolved** — A long promise without a check is asserted cut by default and whole in full mode. Removing the default cut fails the first literal; adding a full-mode cut fails the second. The pre-change source prints both literals exactly.
+- **F4 — resolved** — An empty promise with a check now prints the id and no quotation by default. The mutant that restores the unconditional quotation prints an empty pair of marks, which the new test rejects.
+
+### F5 — minor — The long checked promise test is labelled AC7.1 but passes on the pre-change code
+- **Where:** `packages/cli/test/cli.test.ts:758-763`
+- **Failure scenario:** A verifier gathering failing output for new-behaviour tests by criterion label finds this one passing on the old commit, because the 110-character cut falls before the check's words.
+
+## Coverage
+
+The round-two delta was read in full and run: the terminal test file, the whole suite, typecheck, lint, five mutants and the pre-change source, all against a scratch run built outside the worktree.
+
+| Requirement | Where | Mechanism checked | Status |
+|-------------|-------|-------------------|--------|
+| R7 | `main.ts:318-319` | the delta changes the default mode for an empty promise only; full-mode expression is unchanged | ✓ |
+| R7 | scratch run | shipped source prints every literal the four new tests assert, in both modes | ✓ AC7.1, AC7.2 |
+| R7 | `main.ts:323-325` | lines for an entry without a check are untouched by the delta | ✓ AC7.3, AC7.4 |
+| F3 literals | `main.ts` at `4d8e8e5^` | pre-change source prints both literals for the long promise without a check | ✓ |
+| AC8.6 | `cli.test.ts:766-775` | two mutants of the path without a check each fail one literal | ✓ |
+| empty promise, full mode | `main.ts:319` | prints an opening quotation mark alone on the id's line; unchanged since round 1, no test asserts it | partial |
+| R9 | `be1beea` file list | two code files inside the surface, plus this task's own work item | ✓ AC9.1 |
+| R8, R9 | `fixtures/src/index.ts` | no change to the fixture generator in the delta | ✓ AC9.2, AC9.3 |
+| terminal test file | `cli/test/cli.test.ts` | 56 of 56 tests pass | ✓ |
+| suite | `packages/` | 124 of 125 files pass, 1738 tests; one file's setup hook timed out at machine load near 130 | partial |
+| suite, timed-out file | `core/test/readiness.test.ts` | run alone: 72 of 72 pass; the task's commits touch nothing under core | ✓ |
+| typecheck, lint | `packages/` | both exit 0 | ✓ |
+| mutants through the test runner | — | not run: mutant output was compared with the asserted literals by hand, leaving tracked files unedited | n/a |
+| browser tests | — | not run: owned by the browser task, 06 | n/a |
+
+## Boundary check
+
+The delta changes `packages/cli/src/main.ts` and `packages/cli/test/cli.test.ts`, both inside the declared surface, and appends round-two notes to the task's own work item. My mutants were untracked copies beside the source, deleted after use; the scratch run is deleted; the working tree holds this report's appended section and nothing else.

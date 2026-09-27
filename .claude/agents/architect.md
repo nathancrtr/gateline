@@ -31,20 +31,31 @@ then produce:
    `file_contact_surface` and acceptance tests traced to requirement numbers.
 
 **Amendment mode:** if dispatched with a post-G1 finding routed to you, amend
-`plan.md` only — record the decision as a new, dated ADR (context, choice, rejected
-alternatives, consequences), mark the amendment in the plan header, change nothing
-else, and report exactly what changed. The gate human acknowledges amendments at the
-next gate.
+`plan.md` only — record the decision as a new ADR with a heading qualifier that
+carries the date (`amendment, <date>`), opening with a `- **Context:**` bullet
+naming what prompted it (the finding or escalation, named before it is cited),
+then choice, rejected alternatives, consequences. Replace the text it
+supersedes wherever it stands in the body (Approach, Interface contracts,
+Risks, or an earlier record's lines) with the text now in force. Quote what you
+replaced, where it stood, and the reason (brief, or pointing back to Context)
+in a `- **Superseded:**` bullet on the new record — one bullet per passage you
+replaced, none if the amendment adds a decision without replacing any text —
+which is what makes the change auditable now that the old text leaves the
+body. If the superseded text belonged to an earlier decision record, that
+record keeps its own heading (its id still resolves) and its Choice line
+changes to state the decision now in force, or reads `Withdrawn.` Change
+nothing else, and report exactly what changed. The gate human acknowledges
+amendments at the next gate.
 
 If the routed finding names a surface or decomposition defect — the fix does not
 fit inside any remaining task's `file_contact_surface` — you may additionally widen
 `tasks/*.yaml` `file_contact_surface` alongside the dated ADR: check the widened
 surface against every other task's surface, and serialize any overlap via
 `depends_on`. Everything else in "change nothing else" still holds — no other
-task field, no `plan.md` section beyond the ADR and header, changes. A widened
-surface takes effect only once the gate human (or, in orchestrated runs, the
-acknowledging human) has acknowledged it; until then, treat the widening as
-proposed, not live.
+task field changes, and no `plan.md` text changes beyond the new record and the
+spots its Superseded bullets name. A widened surface takes effect only once the
+gate human (or, in orchestrated runs, the acknowledging human) has acknowledged
+it; until then, treat the widening as proposed, not live.
 
 ## Rules
 
@@ -68,6 +79,11 @@ proposed, not live.
   the task files, never in Approach or a decision record — those argue to the G1
   approver alone — and nothing meant for the approver lives only in an HTML
   comment, including an amendment's rationale.
+- The Decisions section opens with `**For G1 to decide:**`, naming by id each
+  record that changes existing behavior for a current user or operator, settles
+  something the spec left open, or departs from the spec — one line each, or
+  `none` — plus anything else asked of the approver, such as reconciling
+  requirement numbers.
 - Write only inside `runs/<slug>/`.
 
 ## Escalate instead of planning when
@@ -79,4 +95,5 @@ proposed, not live.
 ## Report back
 
 The task list with file-contact surfaces, which tasks can run in parallel, and the
-ADRs the G1 human must weigh in on.
+ADRs the G1 human must weigh in on — the same list as the plan's
+`**For G1 to decide:**` paragraph.

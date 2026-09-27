@@ -146,22 +146,28 @@ Text in the UI face at 13px is the cockpit.** The record's own labels
 ink, hung in one column, with the author's bold kept. A first sketch set them
 at 13px in muted grey, and a reviewer read them as the cockpit's field labels.
 
-The scale drops to five sizes (#520). The rule fixes two of them. The epic
-does not name the other three, and the sketch uses five others, so the scale
-is not settled here. The sketch's sizes:
+The scale is five sizes, and #520 builds it.
 
-| size | face | job in the sketch |
+| size | face | job |
 |---|---|---|
-| 20px | UI, bold | the run's name and the gate's question |
-| 16px on 26px | reading | the record, its labels and headings included (fixed by the rule) |
-| 15px | reading; UI | tables in the record; the navigation |
-| 14px | UI, bold or medium; code, medium | a section head and the buttons; a Name and the gate's stamp |
-| 13px on 20px | UI | the cockpit: captions, counts, hints, the position readout (fixed by the rule) |
-| 12px | code | an Address |
-| 11.5px | UI, medium | the "to confirm" mark in the margin |
+| 20px | UI, bold | run name, gate question, page titles |
+| 16px on 26px | reading | the record: text, its labels, headings, lists and tables |
+| 14px | UI or code | section heads, Names, buttons, the navigation (unchanged) |
+| 13px | UI or code | the cockpit: captions, counts, hints; fenced code in the record |
+| 12px | UI or code | addresses, badges, the "to confirm" mark |
 
-Fenced code in the record is 13px in the code face. #520 fixes the five and
-says where the others go.
+The wordmark is exempt. The epic's sketch (#517) set the record's tables at
+15px. They move to 16, so the record is 16px with no exception, and a table
+wider than its column scrolls in its own frame. The sketch's 11.5px "to
+confirm" mark moves to 12. The components' one-off 28, 22 and 18px sizes fold
+into 20.
+
+**Fenced code in the record does not wrap (#520, decided 2026-09-27, not yet
+built).** Each source line stays one line on screen, and a block wider than
+its column scrolls sideways inside its own frame. A piece wrapped under a
+hanging indent cannot be told from a real indented source line. The sketch's
+own example, a two-line criterion, showed this. #520 first proposed the
+hanging indent, and this replaces it.
 
 ## Layout grammar
 
@@ -290,7 +296,7 @@ the ink.
    leaves a bounced packet dotted as the machine's turn, and keeps the yellow
    on the spine's one cell.
 
-Decisions 9 to 13 come from epic #516, which sets a decision packet as an
+Decisions 9 to 14 come from epic #516, which sets a decision packet as an
 annotated edition, with the record's words as the body text and everything
 else at the edge. They are decided and not yet built, and the code still does what
 the sections above say it does today. The full list, with the decisions about
@@ -308,6 +314,8 @@ the record's labels, addresses and the brief, is in `docs/SEAM.md` §13.
     A sketch had turned the navigation into a top strip on the Decide
     surface, only to give the brief's pane 200px. That was rejected (see
     *Banned*).
+14. **The type scale is five sizes: 20, 16, 14, 13 and 12px**, with the
+    wordmark exempt (2026-09-27). See *Type*.
 
 ## Contrast
 

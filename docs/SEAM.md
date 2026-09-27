@@ -418,6 +418,9 @@ the layout it implies are in `packages/web/DESIGN.md`.
 | The Decide surface may be wider than today's page cap, and the run header is condensed. | 2026-09-26 |
 | Navigation is unchanged, and the same on every surface. | 2026-09-27 |
 | Print is deferred. Folds open for print, and nothing more is specified yet. | 2026-09-26 |
+| The type scale is five sizes: 20, 16, 14, 13 and 12px, with the wordmark exempt (see `packages/web/DESIGN.md`). | 2026-09-27 |
+| A fenced block in the record scrolls inside its frame and never wraps. | 2026-09-27 |
+| A spec whose assumptions break the grammar is shown whole with a notice, and is not bounced for now. Whether to bounce is decided later, from evidence (#534). | 2026-09-27 |
 
 **Rejected on 2026-09-27: navigation that changes by surface.** A sketch
 turned the navigation into a top strip on the Decide surface, to give the

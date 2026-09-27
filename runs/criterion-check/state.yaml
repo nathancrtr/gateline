@@ -12,7 +12,7 @@ intake:
   staged_by: "Nathan Carter"
 budget:
   cost_limit_usd: 100
-  cost_spent_usd: 9.55
+  cost_spent_usd: 11.96
   ledger:
     [
       {
@@ -59,9 +59,9 @@ budget:
           adapter: claude-code,
           model: claude-opus-5-5,
           engine: Carter-Nathan-MacBook Pro-L0295K7GD7:26814,
-          tokens_in: null,
-          tokens_out: null,
-          cost_usd: null
+          tokens_in: 8,
+          tokens_out: 1921,
+          cost_usd: 2.4131659
         },
       {
           at: 2026-09-27T02:44:32.169Z,
@@ -101,7 +101,7 @@ tasks:
     { id: 02-cli-footnotes-and-fixture, status: pending, review_rounds: 0 },
     { id: 03-g2-card-check, status: pending, review_rounds: 0 },
     { id: 04-hover-card-and-cited-list, status: pending, review_rounds: 0 },
-    { id: 05-record-reader-check, status: dispatched, review_rounds: 0 },
+    { id: 05-record-reader-check, status: in-review, review_rounds: 0 },
     { id: 06-e2e-criterion-check, status: pending, review_rounds: 0 }
   ]
 escalations: []

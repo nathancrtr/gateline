@@ -16,6 +16,7 @@ import { type ViewRefs, viewRefsOf } from './view-refs.ts'
 const RUN_BRANCH_PREFIX = 'run/'
 const ZERO_OID = '0'.repeat(40)
 const PARSED_STATES_MAX = 4096
+const DEFAULT_BRANCH_MEMO_MS = 1_000
 
 function deepFreeze<T>(value: T): T {
   if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return value
@@ -50,6 +51,7 @@ export class LocalGitSource implements RunSource {
    * (the orchestrator's Engine, #95) so the layout is probed once.
    */
   readonly frameworkRoots: () => Promise<FrameworkRoots>
+  private defaultName: { at: number; name: Promise<string> } | null = null
   private readonly parsedStates = new Map<string, Promise<RunState | null>>()
 
   /**
@@ -86,13 +88,30 @@ export class LocalGitSource implements RunSource {
     const git = this.git
     this.frameworkRoots = memoizedFrameworkRoots(git, options.frameworkPrefix)
     const roots = this.frameworkRoots
+    const defaultName = () => this.defaultBranch()
     this.templates = {
       async read(name: string): Promise<string | null> {
-        const defaultBranch = await git.defaultBranch()
+        const defaultBranch = await defaultName()
         const { contracts } = await roots()
         return git.show(defaultBranch, `${contracts}/${name}`)
       },
     }
+  }
+
+  /**
+   * The default branch's name, asked once and remembered briefly: one
+   * request asks it a dozen times, and a name — unlike the commit it points
+   * at, which is resolved fresh on every use — all but never changes.
+   */
+  private defaultBranch(): Promise<string> {
+    const now = Date.now()
+    if (this.defaultName && now - this.defaultName.at < DEFAULT_BRANCH_MEMO_MS) return this.defaultName.name
+    const name = this.git.defaultBranch()
+    this.defaultName = { at: now, name }
+    name.catch(() => {
+      this.defaultName = null
+    })
+    return name
   }
 
   private async runDir(slug: string): Promise<string> {
@@ -147,7 +166,7 @@ export class LocalGitSource implements RunSource {
   }
 
   async listRuns(): Promise<RunRef[]> {
-    const defaultBranch = await this.git.defaultBranch()
+    const defaultBranch = await this.defaultBranch()
     const { runs: runsRoot } = await this.frameworkRoots()
     const bySlug = new Map<string, RunRef>()
 
@@ -252,7 +271,7 @@ export class LocalGitSource implements RunSource {
   }
 
   async readDiff(ref: RunRef): Promise<string> {
-    const defaultBranch = await this.git.defaultBranch()
+    const defaultBranch = await this.defaultBranch()
     if (ref.kind === 'default') return '' // merged: the run's diff is history now
     // The reviewable change is the code; run artifacts render separately.
     const { runs: runsRoot } = await this.frameworkRoots()
@@ -583,7 +602,7 @@ export class LocalGitSource implements RunSource {
     const preScan = await this.scanForExisting(scaffold)
     if (preScan) return preScan
 
-    const defaultBranch = await this.git.defaultBranch()
+    const defaultBranch = await this.defaultBranch()
     const tip = await this.git.revParse(defaultBranch)
     if (!tip) return { outcome: 'refused', reason: 'conflict', message: `default branch ${defaultBranch} has no commits to stage against` }
 

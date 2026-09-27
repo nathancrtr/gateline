@@ -45,10 +45,32 @@ export interface WorktreeInfo {
 export class Git {
   readonly dir: string
   private readonly blobs: CatFileBatch
+  private readonly names: CatFileBatch
 
   constructor(dir: string) {
     this.dir = dir
     this.blobs = new CatFileBatch(dir)
+    this.names = new CatFileBatch(dir, 'check')
+  }
+
+  /**
+   * What `spec` resolves to, asked of the shared name reader — or of
+   * `git rev-parse` when the reader cannot carry the name or cannot run.
+   * Null when it resolves to nothing.
+   */
+  private async resolve(spec: string): Promise<string | null> {
+    if (CatFileBatch.accepts(spec)) {
+      try {
+        return (await this.names.read(spec))?.oid ?? null
+      } catch {
+        /* fall through: rev-parse gives the same answer, or the same null */
+      }
+    }
+    try {
+      return (await this.run(['rev-parse', '--verify', '--quiet', spec])).trim() || null
+    } catch {
+      return null
+    }
   }
 
   run(args: string[], opts: { input?: string; env?: Record<string, string> } = {}): Promise<string> {
@@ -73,11 +95,7 @@ export class Git {
   }
 
   async revParse(rev: string): Promise<string | null> {
-    try {
-      return (await this.run(['rev-parse', '--verify', '--quiet', `${rev}^{commit}`])).trim() || null
-    } catch {
-      return null
-    }
+    return this.resolve(`${rev}^{commit}`)
   }
 
   /**
@@ -87,11 +105,7 @@ export class Git {
    * directories.
    */
   async objectId(rev: string, path: string): Promise<string | null> {
-    try {
-      return (await this.run(['rev-parse', '--verify', '--quiet', `${rev}:${path}`])).trim() || null
-    } catch {
-      return null
-    }
+    return this.resolve(`${rev}:${path}`)
   }
 
   async toplevel(): Promise<string> {

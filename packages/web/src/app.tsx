@@ -1,23 +1,23 @@
 import { useQuery } from '@tanstack/react-query'
-import { NavLink, Outlet } from 'react-router-dom'
+import { Outlet } from 'react-router-dom'
 import { api, type EngineHealthEntry, formatAge } from './api.ts'
+import { InboxBadge, ScopeControl, ScopedNavLink, type ScopeState, useScope } from './components/scope.tsx'
 import { pauseVoice } from './drift.ts'
 import { useLiveInvalidation } from './use-live.ts'
 
-/** One entry in the rack: the name, and the count where there is one. Plain
- *  type; the active entry is the one in the signal blue, as on the site. */
-function NavItem({ to, label, badge, end }: { to: string; label: string; badge?: number; end?: boolean }) {
+/**
+ * The rack's three surfaces. Plain type; the active entry is the one in the
+ * signal blue, as on the site. Each link carries the scope (#498), so moving
+ * between Inbox, Portfolio and Metrics keeps it; the Inbox's count is the
+ * whole set's, and under a scope reads `3 of 30`.
+ */
+function NavItems({ state }: { state: ScopeState }) {
   return (
-    <NavLink
-      to={to}
-      end={end}
-      className={({ isActive }) =>
-        `flex items-baseline justify-between gap-3 py-[3px] font-ui text-[14px] ${isActive ? 'font-semibold text-accent' : 'text-muted hover:text-ink'}`
-      }
-    >
-      <span>{label}</span>
-      {badge !== undefined && badge > 0 && <span className="font-ui text-[12px] tabular-nums">{badge}</span>}
-    </NavLink>
+    <>
+      <ScopedNavLink to="/" label="Inbox" state={state} end badge={<InboxBadge state={state} />} />
+      <ScopedNavLink to="/portfolio" label="Portfolio" state={state} />
+      <ScopedNavLink to="/metrics" label="Metrics" state={state} />
+    </>
   )
 }
 
@@ -153,13 +153,13 @@ function EngineDeferralChip() {
 
 export function App() {
   useLiveInvalidation()
-  const inbox = useQuery({ queryKey: ['inbox'], queryFn: api.inbox })
-  const needs = inbox.data?.items.length
+  const scope = useScope()
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-7xl">
-      {/* The rack: name, the three surfaces with their counts, and the one
-          line of voice. Same page as the content, a rule between. */}
+      {/* The rack: name, the scope (#498) when the set has several
+          repositories, the three surfaces with their counts, and the one line
+          of voice. Same page as the content, a rule between. */}
       <aside className="sticky top-0 flex h-dvh w-[200px] shrink-0 flex-col gap-[26px] border-r border-line py-[30px] pl-[26px] pr-[22px] max-md:hidden">
         <div>
           <div className="flex items-center gap-2">
@@ -168,10 +168,9 @@ export function App() {
           </div>
           <p className="mt-1.5 text-[12px] leading-[1.35] text-muted">pipeline decisions</p>
         </div>
+        <ScopeControl state={scope} />
         <nav className="flex flex-col gap-1">
-          <NavItem to="/" label="Inbox" badge={needs} end />
-          <NavItem to="/portfolio" label="Portfolio" />
-          <NavItem to="/metrics" label="Metrics" />
+          <NavItems state={scope} />
         </nav>
         <div className="mt-auto font-ui text-[10.5px] leading-[1.6] text-muted">
           The repo is the database.
@@ -180,18 +179,25 @@ export function App() {
         </div>
       </aside>
 
-      {/* Mobile top nav. It sits over the body's ink band, so it carries the band itself. */}
-      <div className="fixed inset-x-0 top-0 z-10 flex items-center gap-4 border-b border-t-[3px] border-line border-t-ink bg-ground px-4 py-2.5 md:hidden">
-        <span className="mr-2 flex items-center gap-1.5">
-          <Sigil size={14} />
-          <span className="wordmark text-[15px] leading-none text-ink">Gatehouse</span>
-        </span>
-        <NavItem to="/" label="Inbox" badge={needs} end />
-        <NavItem to="/portfolio" label="Portfolio" />
-        <NavItem to="/metrics" label="Metrics" />
+      {/* Mobile top nav. It sits over the body's ink band, so it carries the
+          band itself. With several repositories the scope is its second row,
+          as it is the rack's second block. */}
+      <div className="fixed inset-x-0 top-0 z-10 border-b border-t-[3px] border-line border-t-ink bg-ground px-4 md:hidden" data-top-bar>
+        <div className="flex items-center gap-4 py-2.5">
+          <span className="mr-2 flex items-center gap-1.5">
+            <Sigil size={14} />
+            <span className="wordmark text-[15px] leading-none text-ink">Gatehouse</span>
+          </span>
+          <NavItems state={scope} />
+        </div>
+        {scope.several && scope.set.length > 1 && (
+          <div className="border-t border-line py-1.5">
+            <ScopeControl state={scope} strip />
+          </div>
+        )}
       </div>
 
-      <main className="min-w-0 flex-1 px-8 py-[30px] max-md:px-4 max-md:pt-16">
+      <main className={`min-w-0 flex-1 px-8 py-[30px] max-md:px-4 ${scope.several && scope.set.length > 1 ? 'max-md:pt-[104px]' : 'max-md:pt-16'}`}>
         <EngineOutageBanner />
         <EngineDriftChip />
         <EngineDeferralChip />

@@ -40,10 +40,10 @@ export const fullRunName = (source: string, slug: string): string => `${source}/
 export const shownName = (source: string, sourceName: string | undefined): string => sourceName || source
 
 /**
- * Whether rows name their repository. Interfaces shorten in one case today
- * (§6.2): when the set has one repository, a row drops the name, so a
- * single-repository deployment looks as it did. The other case, a scope of
- * one repository, arrives with the scope control (#498).
+ * Whether the set has several repositories, so that rows can name theirs.
+ * Interfaces shorten in two cases (§6.2): when the set has one repository,
+ * which this answers, and when the scope is one repository, which
+ * `useScope` in `scope.tsx` adds on top of the same query (#498).
  *
  * The set's size is read from `/api/health`, which lists every repository the
  * server serves — the set as configured, whether or not each has runs.
@@ -79,6 +79,7 @@ export function RunName({
   sourceName,
   slug,
   showRepository,
+  announceRepository = false,
   className,
   clipped = false,
 }: {
@@ -86,6 +87,13 @@ export function RunName({
   sourceName: string | undefined
   slug: string
   showRepository: boolean
+  /**
+   * With `showRepository` off: keep the repository for a screen reader only.
+   * Under a group heading (#498) the heading names the repository on screen,
+   * but a reader moving through the page's links hears each link alone, and
+   * two groups can hold the same slug.
+   */
+  announceRepository?: boolean
   /**
    * The row's own style for its run name — face, size, weight, ink, and its
    * overflow rule — as the row set it before the repository was named. The
@@ -112,6 +120,7 @@ export function RunName({
           <span className="font-normal text-muted"> / </span>
         </>
       )}
+      {!showRepository && announceRepository && <span className="sr-only">{shownName(source, sourceName)} / </span>}
       {/* A text node, not an element: a clipped inline element still
           measures its full width, which the geometry sweep reads as text
           painting past the cell (#280). */}

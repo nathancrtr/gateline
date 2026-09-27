@@ -675,10 +675,146 @@ export interface FixtureLayoutOpts {
    * different on each start. Defaults to `demo`, giving `local/demo`.
    */
   name?: string
+  /**
+   * Which runs to generate. `full` (the default) is every state the cockpit
+   * renders, the set every existing consumer expects. `small` is the demo's
+   * second repository (#498): four runs in four different states, none of
+   * them a slug the full set uses, so two repositories served together are
+   * easy to tell apart and their counts differ.
+   */
+  runs?: 'full' | 'small'
 }
 
 /** The default fixture's directory name, and so its id's name: `local/demo`. */
 export const FIXTURE_NAME = 'demo'
+/** The demo's second repository's directory name (#498): `local/demo-small`. */
+export const SMALL_FIXTURE_NAME = 'demo-small'
+
+/** The slugs the small set generates, oldest decision first. */
+export const SMALL_FIXTURE_SLUGS = ['retry-policy', 'nightly-report', 'csv-export', 'docs-refresh'] as const
+
+/**
+ * The small set (#498): four runs in four different states — an unresolved
+ * escalation, a run paused on its budget, a spec waiting at G0, and a run
+ * finished and merged — so three decisions wait in it. It is `demo`'s
+ * neighbour in the two-repository demo.
+ */
+function seedSmallRuns(repo: Repo, runsRoot: string, now: number): FixtureRun[] {
+  const doneSlug = 'docs-refresh'
+  repo.write(`${runsRoot}/${doneSlug}/intent-brief.md`, brief('documentation refresh'))
+  repo.write(`${runsRoot}/${doneSlug}/spec.md`, spec('documentation refresh'))
+  repo.write(`${runsRoot}/${doneSlug}/plan.md`, plan('documentation refresh'))
+  repo.write(`${runsRoot}/${doneSlug}/tasks/01-core.yaml`, workItem('01-core', 'R1', 'done'))
+  repo.write(`${runsRoot}/${doneSlug}/review-01.md`, review('01-core', 1, 'approve'))
+  repo.write(`${runsRoot}/${doneSlug}/verification-report.md`, verification())
+  repo.write(
+    `${runsRoot}/${doneSlug}/state.yaml`,
+    stateYaml({
+      slug: doneSlug,
+      phase: 'done',
+      profile: 'standard',
+      gates: {
+        G0: { by: 'operator', at: '2026-06-22T10:00:00Z', burden: 'confirmation' },
+        G1: { by: 'operator', at: '2026-06-23T10:00:00Z', burden: 'confirmation' },
+        G2: { by: 'operator', at: '2026-06-25T10:00:00Z', burden: 'light-correction', notes: 'wording in the index page' },
+      },
+      tasks: [{ id: '01-core', status: 'done', rounds: 1 }],
+      budget: { limit: 12, spent: 4.2 },
+    }),
+  )
+  repo.commitAll(`state(${doneSlug}): run complete`, now - 12 * DAY)
+  const runs: FixtureRun[] = [{ slug: doneSlug, branch: null }]
+
+  const branchRuns: { slug: string; age: number; files: Record<string, string> }[] = [
+    {
+      slug: 'retry-policy',
+      age: 5,
+      files: {
+        'intent-brief.md': brief('retry policy'),
+        'spec.md': spec('retry policy'),
+        'plan.md': plan('retry policy'),
+        'tasks/01-core.yaml': workItem('01-core', 'R1', 'in-progress'),
+        'state.yaml': stateYaml({
+          slug: 'retry-policy',
+          phase: 'implement',
+          gates: {
+            G0: { by: 'operator', at: '2026-07-01T09:00:00Z', burden: 'confirmation' },
+            G1: { by: 'operator', at: '2026-07-02T09:00:00Z', burden: 'confirmation' },
+          },
+          tasks: [{ id: '01-core', status: 'in-progress', rounds: 1 }],
+          escalations: [
+            {
+              at: new Date((now - 5 * DAY) * 1000).toISOString(),
+              from: 'implementer',
+              reason: 'R1 asks for exponential backoff with no ceiling; the plan caps it at 30 seconds. Which one holds?',
+              resolved: false,
+            },
+          ],
+        }),
+      },
+    },
+    {
+      slug: 'nightly-report',
+      age: 3,
+      files: {
+        'intent-brief.md': brief('nightly report'),
+        'spec.md': spec('nightly report'),
+        'state.yaml': stateYaml({
+          slug: 'nightly-report',
+          phase: 'paused',
+          pausedReason: 'budget-exhausted',
+          gates: { G0: { by: 'operator', at: '2026-07-04T09:00:00Z', burden: 'confirmation' } },
+          budget: { limit: 6, spent: 6.3 },
+        }),
+      },
+    },
+    {
+      slug: 'csv-export',
+      age: 1,
+      files: {
+        'intent-brief.md': brief('CSV export'),
+        'spec.md': spec('CSV export'),
+        'state.yaml': stateYaml({ slug: 'csv-export', phase: 'spec', profile: 'standard', gates: {} }),
+      },
+    },
+  ]
+  for (const r of branchRuns) {
+    repo.git(['checkout', '-q', '-b', `run/${r.slug}`, 'main'])
+    for (const [path, content] of Object.entries(r.files)) repo.write(`${runsRoot}/${r.slug}/${path}`, content)
+    repo.commitAll(`state(${r.slug}): artifacts`, now - r.age * DAY)
+    runs.push({ slug: r.slug, branch: `run/${r.slug}` })
+  }
+  repo.git(['checkout', '-q', 'main'])
+  return runs
+}
+
+/** The demo's repositories, generated side by side in one temporary directory. */
+export interface DemoSet {
+  /** The temporary directory holding them: what to remove afterwards. */
+  root: string
+  /** `local/demo`, then (unless `single`) `local/demo-small`. */
+  repos: FixtureRepo[]
+}
+
+/**
+ * The repositories `gateline ui --demo` serves (#498): `demo`, every state
+ * the cockpit renders, and `demo-small`, four runs, in directories with those
+ * fixed names so their ids are `local/demo` and `local/demo-small` on every
+ * start. `single` generates `demo` alone, the one-repository form
+ * (`--demo=single`). `names` serves the same sets under other directory
+ * names, which is how a long display name is tried.
+ */
+export function generateDemoSet(opts: { single?: boolean; names?: { full?: string; small?: string } } = {}): DemoSet {
+  const root = mkdtempSync(join(tmpdir(), 'gateline-demo-'))
+  const make = (name: string, runs: 'full' | 'small') => {
+    const dir = join(root, name)
+    mkdirSync(dir)
+    return { ...generateFixtureRepo(dir, { runs }), root }
+  }
+  const repos = [make(opts.names?.full ?? FIXTURE_NAME, 'full')]
+  if (!opts.single) repos.push(make(opts.names?.small ?? SMALL_FIXTURE_NAME, 'small'))
+  return { root, repos }
+}
 
 /**
  * Generate the fixture repository. With no `dir`, it is created as
@@ -742,6 +878,11 @@ export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts 
     )
   }
   repo.commitAll('Seed contracts', now - 30 * DAY)
+
+  if (layoutOpts.runs === 'small') {
+    const runs = seedSmallRuns(repo, runsRoot, now)
+    return { dir: root, root: parent, runs, now }
+  }
 
   const doneSlug = 'done-merged'
   repo.write(`${runsRoot}/${doneSlug}/intent-brief.md`, brief('archived pipeline'))

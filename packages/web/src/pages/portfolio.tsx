@@ -5,10 +5,13 @@ import { type ReactNode, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { api, formatAge, type NeedFact, type RunSummary } from '../api.ts'
 import { BudgetMeter, GateLedger, Imp, type ImpTone, KIND_GLYPH, kindTone, PhaseChip } from '../components/chips.tsx'
-import { fullRunName, REPOSITORY_COLUMN, REPOSITORY_FOLD, RepositoryName, runLinkLabel, useNamesRepository } from '../components/repository.tsx'
+import { fullRunName, REPOSITORY_COLUMN, REPOSITORY_FOLD, RepositoryName, runLinkLabel, useDocumentTitle } from '../components/repository.tsx'
+import { GroupHeadingContent, GroupToggle, inScope, ScopeHeading, ScopeLine, UnknownScopeNotice, useScope } from '../components/scope.tsx'
 import { UnreadableState } from '../components/unreadable-state.tsx'
+import { Count } from '../components/vocabulary.tsx'
 import { gateCardState } from '../gate-state.ts'
 import { runPath } from '../run-path.ts'
+import { groupRows, scopeTitle } from '../scope.ts'
 import { EdgeFade, useScrollCue } from '../scroll-cue.tsx'
 import { PageStatus } from './inbox.tsx'
 
@@ -79,12 +82,14 @@ export { scrollCue } from '../scroll-cue.tsx'
  * the pane's background, and the hint line spells out in words what the fade
  * only implies.
  */
-function ScrollPane({ children, label }: { children: ReactNode; label: string }) {
+function ScrollPane({ children, label, tight = false }: { children: ReactNode; label: string; tight?: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   const cue = useScrollCue(ref)
   const clipped = cue.left || cue.right
   return (
-    <div className="mt-[22px]">
+    // `tight` when the grouping toggle's line sits above the pane: the gap is
+    // then the Inbox's, between its filter line and its list.
+    <div className={tight ? 'mt-[14px]' : 'mt-[22px]'}>
       <div className="relative">
         <div ref={ref} className="overflow-x-auto" {...(clipped ? { role: 'region', 'aria-label': label, tabIndex: 0 } : {})}>
           {children}
@@ -116,10 +121,11 @@ export function NeedsYou({ mark }: { mark: NeedsYouMark }) {
 
 export function PortfolioPage() {
   const { data, isLoading: runsLoading, error } = useQuery({ queryKey: ['runs'], queryFn: api.runs })
-  // The rows wait for the set's size too, so a row never gains or loses its
-  // repository after it first paints.
-  const names = useNamesRepository()
-  const isLoading = runsLoading || !names.ready
+  // The rows wait for the set, its names and the scope too (#498), so a row
+  // never gains or loses its repository after it first paints.
+  const scope = useScope()
+  const isLoading = runsLoading || !scope.ready
+  useDocumentTitle(scopeTitle('Portfolio', scope.scope))
 
   if (isLoading) {
     return (
@@ -141,11 +147,111 @@ export function PortfolioPage() {
     )
   }
   if (error) return <PageStatus text={`Could not load runs: ${(error as Error).message}`} bad />
-  const { runs, now } = data!
+  const now = data!.now
+  // The scope narrows the register (#498); the order stays the server's, most
+  // recently updated first, and grouping keeps it within each group.
+  const runs = inScope(data!.runs, scope.scope)
   const needs = runs.filter((r) => needsYouMark(r).kind !== 'quiet').length
+  const one = scope.scope.kind === 'one'
+  // The repository column is drawn on a joined, ungrouped register over
+  // several repositories. Under a scope the page heading names the one
+  // repository; grouped, each group's heading names its own (D7).
+  const showRepository = scope.several && !one && !scope.grouped
+  const groups = scope.grouped ? groupRows(runs, scope.set) : null
+  const columns = showRepository ? 9 : 8
+
+  const row = (run: RunSummary) => (
+    <tr key={`${run.source}/${run.slug}`} className="hover:bg-inset">
+      <td className={`${TD} w-[34px]`}>
+        {/* The wrapper is what the geometry sweep measures the
+            mark through (`td > div > span`), so it stays. */}
+        <div className="flex">
+          <NeedsYou mark={needsYouMark(run)} />
+        </div>
+      </td>
+      {showRepository && (
+        <td className={`${TD} ${REPOSITORY_COLUMN}`}>
+          <RepositoryName className="font-mono text-[13.5px]" source={run.source} sourceName={run.sourceName} />
+        </td>
+      )}
+      <td className={`${TD} min-w-[170px]`}>
+        <div className="min-w-0">
+          {/* With several repositories the link's accessible name says which
+              one — "billing, add-export" — whether the repository is in its
+              column, folded below, or in the group's heading. Under a scope
+              every link is in the one repository the page heading names. */}
+          <Link
+            to={runPath(run.source, run.slug)}
+            className="font-mono text-[13.5px] font-semibold text-ink hover:underline"
+            aria-label={scope.several && !one ? runLinkLabel(run.source, run.sourceName, run.slug) : undefined}
+            title={fullRunName(run.source, run.slug)}
+          >
+            {run.slug}
+          </Link>
+          {/* Below 1280px the column is not drawn, and the name folds under
+              the slug, above the profile. Hidden from the reading order: the
+              link has already said it. */}
+          {showRepository && (
+            <div className={REPOSITORY_FOLD} aria-hidden="true" data-repository-fold>
+              <RepositoryName className="mt-[2px] font-mono text-[11.5px]" source={run.source} sourceName={run.sourceName} />
+            </div>
+          )}
+          <div className="mt-[2px] font-ui text-[11.5px] text-muted">{run.profile}</div>
+          {/* Why the state could not be read, from core's fact (#435): the
+              parser's message as a Diagnostic under its producer, as the
+              decide card sets it, with `<pre>` keeping the caret under its
+              column; any other case in the cockpit's words with the file as
+              the Address. It was once a red row line, flowed, with the caret
+              collapsed onto the line before it. */}
+          {run.unreadable && (
+            <div className="mt-1.5 max-w-[46ch]">
+              <UnreadableState problem={run.unreadable} src={run.source} slug={run.slug} />
+            </div>
+          )}
+          {run.aheadOfOrigin != null && run.aheadOfOrigin > 0 && (run.behindOrigin ?? 0) > 0 ? (
+            <Imp
+              tone="mark"
+              className="mt-1"
+              title={`${run.ref} has diverged from origin: ${run.aheadOfOrigin} local-only commit(s), ${run.behindOrigin} on origin only — reconcile the branch (#99)`}
+            >
+              ↑{run.aheadOfOrigin}↓{run.behindOrigin}
+            </Imp>
+          ) : run.aheadOfOrigin != null && run.aheadOfOrigin > 0 ? (
+            <Imp className="mt-1" title={`${run.aheadOfOrigin} commit(s) on ${run.ref} not yet pushed — origin consumers see an older run`}>
+              ↑{run.aheadOfOrigin}
+            </Imp>
+          ) : null}
+        </div>
+      </td>
+      <td className={TD}>
+        <PhaseChip phase={run.phase} pausedReason={run.pausedReason} closure={run.closure} />
+      </td>
+      <td className={TD}>
+        <GateLedger gates={run.gates} profile={run.profile} />
+      </td>
+      <td className={NUM}>
+        {run.tasks.total ? (
+          <>
+            <span className="text-ink">{run.tasks.done}</span>
+            <span className="text-muted">/{run.tasks.total}</span>
+          </>
+        ) : (
+          <span className="text-muted">—</span>
+        )}
+      </td>
+      <td className={`${NUM} ${run.tasks.maxRounds >= run.tasks.roundCap ? 'font-semibold text-warn' : 'text-muted'}`}>
+        {run.tasks.total ? run.tasks.maxRounds : '—'}
+      </td>
+      <td className={TD}>
+        <BudgetMeter limit={run.budget.limit} spent={run.budget.spent} />
+      </td>
+      <td className={`${NUM} text-[12.5px] text-muted`}>{formatAge(run.updatedAt, now)}</td>
+    </tr>
+  )
 
   return (
     <div>
+      <ScopeHeading scope={scope.scope} />
       <div className="flex flex-wrap items-baseline gap-4">
         <h1 className="text-[20px] font-semibold leading-[1.25] text-ink">Portfolio</h1>
         <Link to="/portfolio/new" className="btn ml-auto self-center">
@@ -153,6 +259,15 @@ export function PortfolioPage() {
         </Link>
       </div>
       <p className="mt-1 text-[13px] text-muted">Each run's progress through its gates, recomputed from its branch.</p>
+      <ScopeLine scope={scope.scope} outside={null} path="/portfolio" />
+      <UnknownScopeNotice scope={scope.scope} />
+      {/* The grouping toggle, where the Inbox has it: at the end of the line
+          above the list. Absent when there is nothing to group. */}
+      {scope.several && scope.set.length > 1 && !one && (
+        <div className="mt-[22px] flex justify-end">
+          <GroupToggle state={scope} />
+        </div>
+      )}
 
       {runs.length === 0 ? (
         <div className="mt-[22px] border-t border-ink px-2 py-16 text-center">
@@ -163,7 +278,7 @@ export function PortfolioPage() {
               <rect x="3.5" y="8.6" width="17" height="2.2" fill="currentColor" />
             </svg>
           </span>
-          <h3 className="text-[20px] font-semibold text-ink">No runs staged yet.</h3>
+          <h3 className="text-[20px] font-semibold text-ink">{one ? 'No runs staged in this repository yet.' : 'No runs staged yet.'}</h3>
           <p className="mx-auto mt-1.5 mb-4 max-w-[48ch] text-[13.5px] text-muted">
             The pipeline is empty — no branches under <code className="font-mono">run/</code>. Stage the first run and the agents
             will begin at the spec gate.
@@ -173,7 +288,7 @@ export function PortfolioPage() {
           </Link>
         </div>
       ) : (
-        <ScrollPane label="Runs, by source">
+        <ScrollPane label="Runs, by source" tight={scope.several && scope.set.length > 1 && !one}>
           <table className="w-full min-w-[760px] border-separate border-spacing-0 text-[13.5px]">
             <thead>
               <tr>
@@ -183,9 +298,9 @@ export function PortfolioPage() {
                 {/* The repository is a column of the register (#497), left of
                     the run so it precedes the slug as it does on an inbox
                     row, and so slugs start at one x down the column. Drawn
-                    only when the set has several repositories: with one the
-                    table is as it always was. */}
-                {names.show && <th className={`${TH} ${REPOSITORY_COLUMN}`}>repository</th>}
+                    only on a joined, ungrouped register over several
+                    repositories: with one the table is as it always was. */}
+                {showRepository && <th className={`${TH} ${REPOSITORY_COLUMN}`}>repository</th>}
                 <th className={TH}>run</th>
                 <th className={TH}>phase</th>
                 <th className={TH}>gates</th>
@@ -195,96 +310,41 @@ export function PortfolioPage() {
                 <th className={`${TH} text-right`}>updated</th>
               </tr>
             </thead>
-            <tbody>
-              {runs.map((run) => (
-                <tr key={`${run.source}/${run.slug}`} className="hover:bg-inset">
-                  <td className={`${TD} w-[34px]`}>
-                    {/* The wrapper is what the geometry sweep measures the
-                        mark through (`td > div > span`), so it stays. */}
-                    <div className="flex">
-                      <NeedsYou mark={needsYouMark(run)} />
-                    </div>
-                  </td>
-                  {names.show && (
-                    <td className={`${TD} ${REPOSITORY_COLUMN}`}>
-                      <RepositoryName className="font-mono text-[13.5px]" source={run.source} sourceName={run.sourceName} />
-                    </td>
-                  )}
-                  <td className={`${TD} min-w-[170px]`}>
-                    <div className="min-w-0">
-                      {/* With several repositories the link's accessible name
-                          says which one — "billing, add-export" — whether the
-                          repository is in its column or folded below. */}
-                      <Link
-                        to={runPath(run.source, run.slug)}
-                        className="font-mono text-[13.5px] font-semibold text-ink hover:underline"
-                        aria-label={names.show ? runLinkLabel(run.source, run.sourceName, run.slug) : undefined}
-                        title={fullRunName(run.source, run.slug)}
-                      >
-                        {run.slug}
-                      </Link>
-                      {/* Below 1280px the column is not drawn, and the name
-                          folds under the slug, above the profile. Hidden from
-                          the reading order: the link has already said it. */}
-                      {names.show && (
-                        <div className={REPOSITORY_FOLD} aria-hidden="true" data-repository-fold>
-                          <RepositoryName className="mt-[2px] font-mono text-[11.5px]" source={run.source} sourceName={run.sourceName} />
-                        </div>
-                      )}
-                      <div className="mt-[2px] font-ui text-[11.5px] text-muted">{run.profile}</div>
-                      {/* Why the state could not be read, from core's fact
-                          (#435): the parser's message as a Diagnostic under
-                          its producer, as the decide card sets it, with `<pre>`
-                          keeping the caret under its column; any other case in
-                          the cockpit's words with the file as the Address. It
-                          was once a red row line, flowed, with the caret
-                          collapsed onto the line before it. */}
-                      {run.unreadable && (
-                        <div className="mt-1.5 max-w-[46ch]">
-                          <UnreadableState problem={run.unreadable} src={run.source} slug={run.slug} />
-                        </div>
-                      )}
-                      {run.aheadOfOrigin != null && run.aheadOfOrigin > 0 && (run.behindOrigin ?? 0) > 0 ? (
-                        <Imp
-                          tone="mark"
-                          className="mt-1"
-                          title={`${run.ref} has diverged from origin: ${run.aheadOfOrigin} local-only commit(s), ${run.behindOrigin} on origin only — reconcile the branch (#99)`}
-                        >
-                          ↑{run.aheadOfOrigin}↓{run.behindOrigin}
-                        </Imp>
-                      ) : run.aheadOfOrigin != null && run.aheadOfOrigin > 0 ? (
-                        <Imp className="mt-1" title={`${run.aheadOfOrigin} commit(s) on ${run.ref} not yet pushed — origin consumers see an older run`}>
-                          ↑{run.aheadOfOrigin}
-                        </Imp>
-                      ) : null}
-                    </div>
-                  </td>
-                  <td className={TD}>
-                    <PhaseChip phase={run.phase} pausedReason={run.pausedReason} closure={run.closure} />
-                  </td>
-                  <td className={TD}>
-                    <GateLedger gates={run.gates} profile={run.profile} />
-                  </td>
-                  <td className={NUM}>
-                    {run.tasks.total ? (
-                      <>
-                        <span className="text-ink">{run.tasks.done}</span>
-                        <span className="text-muted">/{run.tasks.total}</span>
-                      </>
-                    ) : (
-                      <span className="text-muted">—</span>
-                    )}
-                  </td>
-                  <td className={`${NUM} ${run.tasks.maxRounds >= run.tasks.roundCap ? 'font-semibold text-warn' : 'text-muted'}`}>
-                    {run.tasks.total ? run.tasks.maxRounds : '—'}
-                  </td>
-                  <td className={TD}>
-                    <BudgetMeter limit={run.budget.limit} spent={run.budget.spent} />
-                  </td>
-                  <td className={`${NUM} text-[12.5px] text-muted`}>{formatAge(run.updatedAt, now)}</td>
-                </tr>
-              ))}
-            </tbody>
+            {groups ? (
+              // Grouped (#498): one row group per repository of the set, in
+              // the order every page and the CLI list them, inside the one
+              // table so the columns stay aligned from group to group. The
+              // heading sits on the ink rule, as the column heads do, and
+              // names the repository, its id and its counts. A repository
+              // with no runs keeps its heading, and its count says so.
+              groups.map((g) => {
+                const waiting = g.rows.filter((r) => needsYouMark(r).kind !== 'quiet').length
+                return (
+                  <tbody key={g.repository.id} data-portfolio-group={g.repository.id}>
+                    <tr>
+                      <th colSpan={columns} scope="rowgroup" className="border-b border-ink pt-[18px] pr-2.5 pb-2 text-left font-normal">
+                        <GroupHeadingContent
+                          group={g}
+                          counts={
+                            <>
+                              <Count n={g.rows.length} one="run" many="runs" />
+                              {waiting > 0 && (
+                                <>
+                                  , <Count n={waiting} one="needs you" many="need you" />
+                                </>
+                              )}
+                            </>
+                          }
+                        />
+                      </th>
+                    </tr>
+                    {g.rows.map(row)}
+                  </tbody>
+                )
+              })
+            ) : (
+              <tbody>{runs.map(row)}</tbody>
+            )}
           </table>
           <div className="flex flex-wrap items-baseline justify-between gap-2 pt-2 text-[12px] text-muted">
             <span className="tabular-nums">

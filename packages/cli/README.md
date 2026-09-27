@@ -117,7 +117,8 @@ gateline-orchestrator shadow <slug>    # replay a finished run, derived vs actua
 
 `--dry-run` is the safe preview; a live `tick`/`watch` dispatches real,
 metered agents. `up` runs exactly one engine over one clone — pass a single
-`--repo` (the server may still aggregate more via config).
+`--repo`, and its Gatehouse serves that repository alone. `gateline ui` serves
+the config file's list, with no engine.
 
 ## Pitfalls
 

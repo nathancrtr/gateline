@@ -85,8 +85,10 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
   if (sources.length === 0) {
     throw new Error('no run sources — run inside a repository, pass --repo <path>, or create ~/.config/gateline/config.yaml')
   }
+  // Each repository with the mode this process gives it (MULTI-REPO.md §7.3),
+  // so the log says which ones accept decisions.
   console.log(
-    `sources: ${sources.map((s) => s.id).join(', ')}${configPath ? ` (from ${configPath})` : ''}`,
+    `sources: ${sources.map((s) => (s.mode ? `${s.id} (${s.mode})` : s.id)).join(', ')}${configPath ? ` (from ${configPath})` : ''}`,
   )
 
   const cache = new ViewCache()

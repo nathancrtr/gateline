@@ -9,8 +9,9 @@ import { rm } from 'node:fs/promises'
 import { LocalGitSource } from '@gateline/core'
 import { type FixtureRepo, generateFixtureRepo } from '@gateline/fixtures'
 import type { Hono } from 'hono'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createApp } from '../src/app.ts'
+import { startServer } from '../src/main.ts'
 import { buildRunnerApi } from '../src/runner-api.ts'
 
 let viewFixture: FixtureRepo
@@ -125,5 +126,23 @@ describe('every route that is not a GET', () => {
     })
     const unsafe = [...new Set(full.routes.filter((r) => r.method !== 'GET').map((r) => `${r.method} ${r.path}`))].sort()
     expect(unsafe).toEqual([...Object.keys(WRITES_TO_REPOSITORY), ...WRITES_NOTHING].sort())
+  })
+})
+
+describe('the startup log', () => {
+  it("prints each repository's mode beside its id", async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const at = async (engine: boolean) => {
+      log.mockClear()
+      const server = await startServer({ repoOverrides: [decideFixture.dir], port: 0, host: '127.0.0.1', push: false, engine })
+      server.close()
+      return log.mock.calls.map((c) => String(c[0])).find((l) => l.startsWith('sources: '))
+    }
+    try {
+      expect(await at(false)).toBe('sources: local/decided (decide)')
+      expect(await at(true)).toBe('sources: local/decided (dispatch)')
+    } finally {
+      log.mockRestore()
+    }
   })
 })

@@ -116,17 +116,39 @@ describe('checkFramework (§7.2)', () => {
     expect((await checkFramework(new Git(dir))).ok).toBe(false)
   })
 
-  it('applies to config entries: loadSources refuses a listed repository that fails it', async () => {
-    const dir = await repo('listed-unrelated', {})
+  const NOT_CARRIED = (dir: string) =>
+    `${dir} does not carry the framework: its default branch (main) has no .gateline/framework-lock.json, ` +
+    'and no roles/, contracts/ and registry/ at its root. Integrate it with ' +
+    '`gateline init <path> --provenance <redistribute|private>` and merge that change to main; the check reads main ' +
+    'as committed, so an unmerged integration does not count yet'
+
+  // §10: a repository that cannot be served is reported and left out; the
+  // rest of the set loads. One host's unmerged `init` must not empty the inbox.
+  it('applies to config entries: a listed repository that fails it is left out with a warning, and the rest load', async () => {
+    const unrelated = await repo('listed-unrelated', {})
+    const carried = await repo('listed-carried', { 'roles/README': 'r\n', 'contracts/README': 'c\n', 'registry/README': 'g\n' })
+    const missing = join(base, 'listed-missing')
+    const configPath = join(base, 'config-mixed.yaml')
+    await writeFile(
+      configPath,
+      `repositories:\n  - path: ${unrelated}\n    mode: decide\n  - path: ${carried}\n    mode: view\n  - name: gone\n    path: ${missing}\n    mode: decide\n`,
+    )
+    const { sources, warnings } = await loadSources({ configPath })
+    expect(sources.map((s) => [s.id, s.mode])).toEqual([['local/listed-carried', 'view']])
+    expect(warnings).toEqual([
+      `left out of the set: ${missing} is not a git repository. Correct its path in the config file, or drop the entry with \`gateline repo remove gone\``,
+      `left out of the set: ${NOT_CARRIED(unrelated)}`,
+    ])
+  })
+
+  it('stops startup when every listed repository is left out', async () => {
+    const dir = await repo('listed-alone', {})
     const configPath = join(base, 'config-unrelated.yaml')
     await writeFile(configPath, `repositories:\n  - path: ${dir}\n    mode: decide\n`)
     const err = await loadSources({ configPath }).catch((e: unknown) => e)
     expect(err).toBeInstanceOf(ConfigError)
     expect((err as Error).message).toBe(
-      `config at ${configPath}: ${dir} does not carry the framework: its default branch (main) has no .gateline/framework-lock.json, ` +
-        'and no roles/, contracts/ and registry/ at its root. Integrate it with ' +
-        '`gateline init <path> --provenance <redistribute|private>` and merge that change to main; the check reads main ' +
-        'as committed, so an unmerged integration does not count yet',
+      `config at ${configPath}: no listed repository can be served, so there is nothing to start:\n  - ${NOT_CARRIED(dir)}`,
     )
   })
 

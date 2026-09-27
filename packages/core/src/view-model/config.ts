@@ -31,11 +31,13 @@ import { LocalOnlyPushConflictError, REPOSITORY_MODES } from '../sources/source.
 export { LocalOnlyPushConflictError }
 
 /**
- * The config file cannot be used as written: it fails to parse, breaks a rule
- * of §7 (an entry with no `mode`, both `repositories:` and `sources:`, an
- * unknown key, a repository limit above the machine's), or lists a repository
- * that does not carry the framework. A startup error, like `RepositoryIdError`:
- * serving a guess at what the operator meant would be worse than refusing.
+ * The config file cannot be used as written: it fails to parse, or breaks a
+ * rule of §7 (an entry with no `mode`, both `repositories:` and `sources:`, an
+ * unknown key, a repository limit above the machine's), or none of the
+ * repositories it lists can be served. A startup error, like
+ * `RepositoryIdError`: serving a guess at what the operator meant would be
+ * worse than refusing. (One repository that cannot be served, among others
+ * that can, is a warning instead — see `loadSources`.)
  */
 export class ConfigError extends Error {
   constructor(message: string) {
@@ -415,9 +417,12 @@ function effectiveMode(declared: RepositoryMode, engine: boolean): RepositoryMod
  *
  * Each source is named by `nameRepository` (§6). Throws `RepositoryIdError`
  * when an id is unusable, or when two repositories share an id or a display
- * name; throws `ConfigError` when the config file breaks a rule of §7 or lists
- * a repository that does not carry the framework (§7.2). Both are startup
- * errors, since serving either reading of a clash would be a guess.
+ * name; throws `ConfigError` when the config file breaks a rule of §7. Both
+ * are startup errors, since serving either reading of a clash would be a
+ * guess. A listed repository whose content is the problem — its path is not
+ * a repository, or it fails the framework check (§7.2) — is left out with a
+ * warning and the rest load; only when every entry is left out is that a
+ * `ConfigError` too.
  *
  * The framework check applies to config entries only. A repository given by
  * `--repo` or the working directory is served as before, unchecked.
@@ -481,13 +486,22 @@ export async function loadSources(opts: {
   const configPath = opts.configPath ?? defaultConfigPath()
   const text = await readFileIfExists(configPath)
   if (text !== null) {
+    // Two kinds of problem, treated differently (§10). One in the file itself
+    // (parseConfigText, checkUnique) stops startup: the operator's list is
+    // wrong, and serving a guess at it would be worse. One in a repository's
+    // content — its path is not a repository, or it does not carry the
+    // framework — leaves that repository out with a warning, so one host
+    // whose `init` has not merged does not take the inbox away from the rest.
     const parsed = parseConfigText(text, configPath)
     const named: { n: Named; entry: RepositoryEntry }[] = []
+    const refused: string[] = []
     for (const entry of parsed.entries) {
       const path = expandPath(entry.path)
       const top = await repoToplevel(path)
       if (top === null) {
-        warnings.push(`source ${entry.name ?? entry.path}: ${path} is not a git repository, skipped`)
+        refused.push(
+          `${path} is not a git repository. Correct its path in the config file, or drop the entry with \`gateline repo remove ${entry.name ?? entry.path}\``,
+        )
         continue
       }
       named.push({ n: await nameRepository(top, entry), entry })
@@ -497,13 +511,20 @@ export async function loadSources(opts: {
       CONFIG_HINT,
     )
     // D6's second key (§7.2): a listed repository must carry the framework.
-    for (const { n, entry } of named) {
-      const check = await checkFramework(new Git(n.top), { prefix: entry.gateline_prefix, label: n.top })
-      if (!check.ok) throw new ConfigError(`config at ${configPath}: ${check.message}`)
+    const carrying: typeof named = []
+    for (const listed of named) {
+      const check = await checkFramework(new Git(listed.n.top), { prefix: listed.entry.gateline_prefix, label: listed.n.top })
+      if (check.ok) carrying.push(listed)
+      else refused.push(check.message)
     }
+    for (const why of refused) warnings.push(`left out of the set: ${why}`)
+    if (parsed.entries.length > 0 && carrying.length === 0)
+      throw new ConfigError(
+        `config at ${configPath}: no listed repository can be served, so there is nothing to start:\n${refused.map((r) => `  - ${r}`).join('\n')}`,
+      )
     const sources: RunSource[] = []
     const repositoryLimits: LoadedConfig['repositoryLimits'] = {}
-    for (const { n, entry } of named) {
+    for (const { n, entry } of carrying) {
       const { push, localOnly } = await resolveMode({
         source: n.id,
         explicitLocalOnly: entry.local_only,

@@ -159,6 +159,7 @@ describe('gateline repo add | list | remove', () => {
     const empty = join(box.cwd, '..', 'empty')
     await mkdir(empty)
     git(empty, 'init', '-q', '-b', 'main')
+    await mkdir(dirname(box.configPath), { recursive: true })
     await writeFile(box.configPath, `repositories:\n  - path: ${lockRepo}\n    mode: dispatch\n  - path: ${empty}\n    mode: view\n`)
     const r = await cli(box.xdg, box.cwd, ['repo', 'list'])
     expect(r.code).toBe(0)
@@ -167,6 +168,15 @@ describe('gateline repo add | list | remove', () => {
     )
     expect(r.stderr).toBe(
       `warning: ${await realpath(empty)} does not carry the framework: its default branch (main) has no commits. ` +
+        'Integrate it with `gateline init <path> --provenance <redistribute|private>`, merge that change to main, and add it again\n',
+    )
+
+    // The refused repository is left out of the set, and the other is served (§10).
+    const status = await cli(box.xdg, box.cwd, ['status'])
+    expect(status.code).toBe(0)
+    expect(status.stdout).toBe('no runs found\n')
+    expect(status.stderr).toBe(
+      `warning: left out of the set: ${await realpath(empty)} does not carry the framework: its default branch (main) has no commits. ` +
         'Integrate it with `gateline init <path> --provenance <redistribute|private>`, merge that change to main, and add it again\n',
     )
   })
@@ -231,6 +241,17 @@ describe('modes in the CLI (§7.3)', () => {
       expect([verb, r.code, r.stderr]).toEqual([verb, 1, REFUSAL])
     }
     expect(refs()).toBe(before)
+  })
+
+  it('suggests a repository the command can act on when a slug is ambiguous', async () => {
+    const arm = await cli(box.xdg, box.cwd, ['arm', 'staged'])
+    expect(arm.stderr).toBe(
+      'run "staged" exists in several repositories (watched: local/watched, decided: local/decided) — pass --repository, as in: --repository decided\n',
+    )
+    const show = await cli(box.xdg, box.cwd, ['show', 'staged'])
+    expect(show.stderr).toBe(
+      'run "staged" exists in several repositories (watched: local/watched, decided: local/decided) — pass --repository, as in: --repository watched\n',
+    )
   })
 
   it('records a decision in a decide repository', async () => {

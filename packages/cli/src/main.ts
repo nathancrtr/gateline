@@ -162,7 +162,12 @@ function runLabel(sources: readonly RunSource[], sourceId: string, slug: string)
   return `${source ? displayNameOf(source) : sourceId}/${slug}`
 }
 
-async function findRun(sources: RunSource[], slug: string, sourceId?: string) {
+/**
+ * The one run `slug` names, or exit 1 saying why not. `writes` is whether the
+ * command records something: its ambiguity hint then suggests a repository
+ * the command could act on, never a `view` one (MULTI-REPO.md §7.3).
+ */
+async function findRun(sources: RunSource[], slug: string, sourceId: string | undefined, writes: boolean) {
   const matches: { source: RunSource; ref: Awaited<ReturnType<RunSource['listRuns']>>[number] }[] = []
   for (const source of sources) {
     if (sourceId && !namesSource(source, sourceId)) continue
@@ -175,9 +180,10 @@ async function findRun(sources: RunSource[], slug: string, sourceId?: string) {
     process.exit(1)
   }
   if (matches.length > 1) {
+    const actable = matches.find((m) => !writes || m.source.mode !== 'view')
     console.error(
       `run "${slug}" exists in several repositories (${matches.map((m) => `${displayNameOf(m.source)}: ${m.source.id}`).join(', ')}) — ` +
-        `pass --repository, as in: --repository ${shellWord(displayNameOf(matches[0]!.source))}`,
+        `pass --repository${actable ? `, as in: --repository ${shellWord(displayNameOf(actable.source))}` : ''}`,
     )
     process.exit(1)
   }
@@ -363,7 +369,7 @@ program
       process.exit(1)
     }
     const { sources } = await resolveSources()
-    const { source, ref } = await findRun(sources, slug, chosenRepository(flags))
+    const { source, ref } = await findRun(sources, slug, chosenRepository(flags), false)
     if (!artifact) {
       const paths = await source.listArtifacts(ref)
       if (paths.length === 0) return console.log('no artifacts yet')
@@ -467,7 +473,7 @@ async function planAndWrite(source: RunSource, ref: RunRef, who: Identity, input
 
 async function decide(slug: string, flags: DecideFlags, input: Omit<DecisionInput, 'notes' | 'burden'> & { notes?: string; burden?: Burden }) {
   const { sources } = await resolveSources()
-  const { source, ref } = await findRun(sources, slug, chosenRepository(flags))
+  const { source, ref } = await findRun(sources, slug, chosenRepository(flags), true)
   const who = await source.identity()
   if (!who) {
     console.error('git user.name/user.email are unset — decisions must be attributable to a named human')
@@ -923,7 +929,7 @@ program
  */
 export async function armRun(slug: string, flags: RepositoryFlags): Promise<number> {
   const { sources } = await resolveSources()
-  const { source, ref } = await findRun(sources, slug, chosenRepository(flags))
+  const { source, ref } = await findRun(sources, slug, chosenRepository(flags), true)
   const who = await source.identity()
   if (!who) {
     console.error('git user.name/user.email are unset — decisions must be attributable to a named human')
@@ -1132,7 +1138,7 @@ program
       // The server may aggregate several sources; the engine takes the one
       // repo named (or the cwd) — a second engine belongs to a second `up`.
       if (opts.repo.length > 1) {
-        console.error('`up` runs one engine over one clone — pass a single --repo (the server may still aggregate more via config)')
+        console.error('`up` serves one repository with one engine — pass a single --repo (`ui` serves the config file\'s list)')
         process.exit(1)
       }
       const resolvedRepoDir = await resolveUpRepoDir(opts.repo[0] ?? process.cwd())

@@ -20,18 +20,18 @@
      causes are mixed, escalate wins: one spec-traced failure among
      implementation failures makes the verdict `escalate`, and a criterion
      that is unverifiable because the spec references something that does
-     not exist is a spec defect, not an environment gap.
-     LATER ROUNDS (normative): a re-verification appended to this report adds
-     its own verdict line; the last line is the verdict in force, and prose
-     in Gaps has no such power — an escalation that lives only in a sentence
-     never reaches the gate. It opens by stating in one sentence what changed
-     since the round before it, then re-runs what that change could affect.
-     The Results table is reissued in full — every in-scope criterion still
-     gets a row — but a criterion whose evidence did not change cites the
-     earlier round's evidence heading (`see E9`) rather than a new block that
-     only restates it. Its closing sections are the same `## Beyond the happy
-     path` and `## Gaps` headings this contract defines, never a bold
-     paragraph standing in for them.
+     not exist is a spec defect, not an environment gap. A re-verification
+     appended to this report adds its own verdict line; the last line is the
+     verdict in force. Prose in Gaps has no such power: an escalation that
+     lives only in a sentence never reaches the gate.
+     LATER ROUNDS (normative): A re-verification opens by stating in one
+     sentence what changed since the round before it, then re-runs what that
+     change could affect. The Results table is reissued in full — every
+     in-scope criterion still gets a row — but a criterion whose evidence did
+     not change cites the earlier round's evidence heading (`see E9`) rather
+     than a new block that only restates it. Its closing sections are the
+     same `## Beyond the happy path` and `## Gaps` headings this contract
+     defines, never a bold paragraph standing in for them.
      ESCALATION (normative — tooling parses the `REQUIRED WHEN:` line and the
      section's bold fields): the `## Escalation` section is required exactly
      when the verdict in force is `escalate`, and is what the human resolving
@@ -58,9 +58,10 @@
      never join clauses with a semicolon. (e) Name before cite: give any id
      or file a noun phrase on first use, at most one parenthetical file:line
      cite per sentence, full path at first mention only — short name after.
-     (f) An evidence block's prose opens with that first sentence before the
-     pasted command and output, not after; a passing criterion takes at most
-     one sentence more, a failed one as many as the failure needs. -->
+     (f) An evidence block opens with one plain sentence saying what the
+     evidence shows — no code spans, per (a) — before the pasted command and
+     output; a passing criterion takes at most one sentence more, a failed
+     one as many as the failure needs. -->
 
 **Verdict:** pass | fail | escalate
 **Change verified:** <branch/commit>

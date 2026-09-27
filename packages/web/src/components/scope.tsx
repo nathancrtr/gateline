@@ -143,7 +143,10 @@ export function ScopeControl({ state, strip = false }: { state: ScopeState; stri
                 data-scope-entry={e.id ?? ''}
                 className={`flex items-baseline justify-between gap-3 py-[3px] font-ui text-[14px] ${isCurrent ? 'font-semibold text-accent' : 'text-muted hover:text-ink'}`}
               >
-                <span className={strip ? '' : 'min-w-0 truncate'} data-scope-name>
+                {/* Cut with an ellipsis where it would crowd the count: at the
+                    rail's width, and at 20 characters in the strip, the cap a
+                    repository's name takes on rows. The title carries the id. */}
+                <span className={strip ? 'inline-block max-w-[20ch] truncate align-bottom' : 'min-w-0 truncate'} data-scope-name>
                   {e.name}
                 </span>
                 <span className="font-ui text-[12px] tabular-nums" data-scope-count={e.waiting}>

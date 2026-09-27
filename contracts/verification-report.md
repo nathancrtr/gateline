@@ -24,14 +24,28 @@
      appended to this report adds its own verdict line; the last line is the
      verdict in force. Prose in Gaps has no such power: an escalation that
      lives only in a sentence never reaches the gate.
+     SUMMARY (normative): the `**Summary:**` line states, in two to four
+     plain sentences and at most 90 words, what you verified, what you could
+     not verify and why, and what risk the approver takes by approving.
+     Written fresh in every round, describing the state as of that round —
+     never a diff from the round before.
+     NOT VERIFIED (normative): the `**Not verified:**` line lists, by id,
+     every criterion the Results table marks failed or unverifiable, each
+     with a few words on why — or the single word `none`. It must agree with
+     the Results table and with Gaps; a criterion named in one and not the
+     others is a deviation. A criterion verified only by a stand-in for the
+     real thing (a simulated condition, no live run possible) is listed here
+     with that stated.
      LATER ROUNDS (normative): A re-verification opens by stating in one
      sentence what changed since the round before it, then re-runs what that
-     change could affect. The Results table is reissued in full — every
-     in-scope criterion still gets a row — but a criterion whose evidence did
-     not change cites the earlier round's evidence heading (`see E9`) rather
-     than a new block that only restates it. Its closing sections are the
-     same `## Beyond the happy path` and `## Gaps` headings this contract
-     defines, never a bold paragraph standing in for them.
+     change could affect. It writes its own `**Summary:**` and
+     `**Not verified:**` lines, describing the state as of this round,
+     alongside its own verdict line. The Results table is reissued in full —
+     every in-scope criterion still gets a row — but a criterion whose
+     evidence did not change cites the earlier round's evidence heading
+     (`see E9`) rather than a new block that only restates it. Its closing
+     sections are the same `## Beyond the happy path` and `## Gaps` headings
+     this contract defines, never a bold paragraph standing in for them.
      ESCALATION (normative — tooling parses the `REQUIRED WHEN:` line and the
      section's bold fields): the `## Escalation` section is required exactly
      when the verdict in force is `escalate`, and is what the human resolving
@@ -48,10 +62,11 @@
      its concluding line/exit code suffices. Never paste entire suites or
      restate the spec — reference criteria by number.
      READABILITY (normative — human-facing sections: Beyond the happy path,
-     Gaps, and each evidence block's prose). The G2 approver reads these as
-     prose; a breach is bounced like a grammar deviation, with the rule
-     cited. (a) The first sentence states the takeaway in plain words — no
-     code spans, paths, or parenthetical cites. (b) One idea per paragraph:
+     Gaps, each evidence block's prose, and the `**Summary:**` line). The G2
+     approver reads these as prose; a breach is bounced like a grammar
+     deviation, with the rule cited. (a) The first sentence states the
+     takeaway in plain words — no code spans, paths, or parenthetical cites.
+     (b) One idea per paragraph:
      at most 4 sentences and 120 words each. (c) Three or more parallel items
      (probes, gaps, cases) become a bulleted list under a lead-in sentence —
      never a semicolon chain or a comma chain. (d) One claim per sentence;
@@ -66,6 +81,8 @@
 **Verdict:** pass | fail | escalate
 **Change verified:** <branch/commit>
 **Environment:** <where this ran: local, CI, staging + versions that matter; state independence from the implementer's own runs here, once>
+**Summary:** <two to four plain sentences, at most 90 words: what you verified, what you could not and why, what risk the approver takes by approving>
+**Not verified:** <each failed or unverifiable criterion, by id, with a few words on why — or `none`>
 
 ## Escalation
 <!-- Present exactly when Verdict is escalate; omit it otherwise (see
@@ -112,7 +129,9 @@ $ <command>
 <!-- Criteria you could not verify and why; tests you added; coverage still
      missing. Write "None" only when there is nothing to report, never as a
      lead-in to one that follows. Otherwise one bullet per gap, each naming
-     its criterion first; READABILITY rules govern. A defect in the engine,
-     the orchestrator, or a contract version belongs here only if it leaves a
-     criterion unverified — say that and nothing more, and raise anything
-     needing a human through Escalation, not a paragraph here. -->
+     its criterion first; READABILITY rules govern. This section elaborates
+     what Not verified lists above, and introduces nothing that line omits.
+     A defect in the engine, the orchestrator, or a contract version belongs
+     here only if it leaves a criterion unverified — say that and nothing
+     more, and raise anything needing a human through Escalation, not a
+     paragraph here. -->

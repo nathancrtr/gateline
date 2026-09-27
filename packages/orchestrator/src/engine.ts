@@ -6,11 +6,25 @@
 // (dispatched | bounced | advanced | escalated | paused | metered | harvested),
 // a bot identity, and — structurally — no code path that writes gates.*.
 import { hostname } from 'node:os'
-import { type Identity, ROLE_TIMEOUT_MS, TERMINAL_PHASES } from '@gateline/core/record'
+import { type Identity, ROLE_TIMEOUT_MS, type RunState, TERMINAL_PHASES } from '@gateline/core/record'
 import { ensureDraftPr, LocalGitSource, type RunRef, type WriteResult } from '@gateline/core/sources'
 import type { Document } from 'yaml'
 import { hasShell, loadRoleCapabilities } from './capabilities.ts'
 import { type Bookkeeping, DEFAULT_ESTIMATE_USD, type DerivedAction, type DispatchIntent, deriveAction } from './derive.ts'
+import {
+  DEFAULT_MAX_CONCURRENT_DISPATCHES,
+  DEFAULT_SPEND_WINDOW_MS,
+  describeWindow,
+  Governor,
+  type GovernorLimit,
+  type GovernorPort,
+  type GovernorRefusal,
+  type Reservation,
+  refusalReason,
+  refusalRule,
+  type SeedEntry,
+  type SpendReport,
+} from './governor.ts'
 import { harvestPathspecs } from './harvest.ts'
 import { type HostTip, resolveHostTip } from './manifest.ts'
 import {
@@ -27,6 +41,7 @@ import {
 } from './observe.ts'
 import { promptBody } from './prompts.ts'
 import { type Registry, resolveModel } from './registry.ts'
+import { DEFAULT_SWEEP_TIMEOUT_MS, readSweepMarkers, sweepKey } from './schedule.ts'
 import type { Dispatcher, DispatchOutcome } from './seam.ts'
 import { checkoutHeldReason, dispatchBranchName, ensureDispatchCheckout, foldHarvestBranch, foldTaskBranch, heldCheckout, isPlanDefect, reapTaskBranches, removeRunCheckout, type TaskCheckout } from './workspace.ts'
 
@@ -49,6 +64,12 @@ export interface EngineConfig {
   hostTip?: HostTip
   /** Dispatch wall clock per role before the job is killed (default 30 min). */
   roleTimeoutMs?: number
+  /**
+   * The sweep scheduler's timeout (its `sweepTimeoutMs`; default 30 min). A
+   * sweep found open after a restart holds its slot this long (#501), so it
+   * must be the value the scheduler kills sweeps at.
+   */
+  sweepTimeoutMs?: number
   /** Age at which an open ledger entry with no live job is declared lost (default 5 min). */
   staleMs?: number
   /**
@@ -86,6 +107,29 @@ export interface EngineConfig {
   /** Refuse dispatch on a run missing budget.cost_limit_usd (hosted mode): unattended dispatch needs a ceiling. */
   requireBudget?: boolean
   /**
+   * What admits this engine's dispatches (#501): the process's one owner of
+   * the concurrency cap and the spend window. `assembleOrchestrator` passes
+   * the one it built (or was handed), so several engines — and each engine's
+   * sweep scheduler — share it. Absent, the engine builds a governor of its
+   * own from `maxConcurrentDispatches`, `spendLimitUsd`, `spendWindowMs` and
+   * `budgetEnforcement`; present, those four fields are the governor's
+   * business and are ignored here.
+   */
+  governor?: GovernorPort
+  /**
+   * The repository's key with the governor: a plain string, the same one its
+   * scheduler uses. Defaults to `repoDir`. How a repository is named across
+   * interfaces is #494's to decide; the governor only needs the key to be
+   * stable for the life of the process.
+   */
+  repository?: string
+  /**
+   * This repository's own spend ceiling per window, beneath the machine's
+   * `spendLimitUsd` (MULTI-REPO.md §7.4). Registered with the governor at
+   * construction. Unset is no ceiling of its own.
+   */
+  repositorySpendLimitUsd?: number | null
+  /**
    * Master switch for budget *enforcement* (#109): false disables the DB, RB,
    * and HB pauses (spendLimitUsd/requireBudget become no-ops) for operators
    * whose harness bills flat-rate. Metering — the ledger, cost_spent_usd,
@@ -106,7 +150,8 @@ export interface EngineConfig {
    * Unlike a budget ceiling, hitting this is not an escalation: no human
    * decision unblocks it and it clears itself as jobs finish, so a capped
    * dispatch is simply not started and re-derives on a later tick. `0`
-   * (or negative) disables the cap.
+   * (or negative) disables the cap. Since #501 the governor enforces it,
+   * across every engine sharing that governor and their sweeps.
    */
   maxConcurrentDispatches?: number
   now?: () => Date
@@ -169,19 +214,6 @@ function pidAlive(pid: number): boolean {
   }
 }
 
-/** The host ceiling's rolling window (#97). */
-export const DEFAULT_SPEND_WINDOW_MS = 24 * 60 * 60 * 1000
-
-/**
- * Default resource ceiling (#227). Deliberately low: the blessed topology
- * runs the engine on the operator's own workstation, and a dispatch's real
- * footprint is an agent process plus a full dependency install plus the
- * project's whole test suite. Two keeps a run pipelined without letting a
- * quiet afternoon of ready work take the machine down. Raise it on a
- * dedicated host with `--max-concurrent-dispatches`.
- */
-const DEFAULT_MAX_CONCURRENT_DISPATCHES = 2
-
 /**
  * Run branch tip at the last draft-PR ensure, per slug (ADR-5, R8).
  *
@@ -228,22 +260,6 @@ const DEFERRAL_RULES = new Set(['MC', 'HB', 'CH', 'RF'])
  */
 const REFUSAL_DEFER_AFTER = 2
 const REFUSAL_PROBE_MS = 15 * 60 * 1000
-
-/** The host window's spend as `tick` measures it once per pass (#97). */
-interface HostProjection {
-  /** Closed cost inside the window plus open estimates, plus what this tick has granted so far. */
-  projected: number
-  /** The closed-ledger share, for the deferral's own words. */
-  closed: number
-  windowMs: number
-}
-
-function describeWindow(ms: number): string {
-  const hours = ms / 3_600_000
-  if (hours >= 48 && hours % 24 === 0) return `${hours / 24} days`
-  if (hours >= 1 && Number.isInteger(hours)) return `${hours} hour${hours === 1 ? '' : 's'}`
-  return `${Math.round(ms / 60_000)} min`
-}
 
 /**
  * The index of a resolved escalation carrying exactly this reason, when
@@ -354,6 +370,14 @@ export interface Deferral {
   reason: string
   /** ISO timestamp of the first tick that deferred this run for this rule. */
   since: string
+  /**
+   * Which governor limit refused it, when the governor did (#501) — MC and
+   * HB each now cover more than one limit. Additive and optional: the
+   * heartbeat's wire shape (`EngineDeferral`) does not carry it yet.
+   */
+  limit?: GovernorLimit
+  /** The repository the deferral belongs to, as the governor keys it. */
+  repository?: string
 }
 
 /** One in-flight dispatch, as reported to the operator during drain (#150). */
@@ -370,6 +394,10 @@ export class Engine {
   readonly source: LocalGitSource
   /** This process, as the ledger names it (#349) — see `EngineConfig.engineId`. */
   readonly engineId: string
+  /** This repository's key with the governor — see `EngineConfig.repository`. */
+  readonly repository: string
+  /** What admits this engine's dispatches (#501) — see `EngineConfig.governor`. */
+  readonly governor: GovernorPort
   private readonly cfg: EngineConfig
   /** In-flight jobs, keyed slug|role|task|round — host ephemera, never committed (§4.4). */
   private readonly jobs = new Map<string, Promise<void>>()
@@ -403,6 +431,27 @@ export class Engine {
       localOnly: cfg.localOnly,
       frameworkPrefix: cfg.frameworkPrefix,
     })
+    this.repository = cfg.repository ?? cfg.repoDir
+    if (cfg.governor) this.governor = cfg.governor
+    else {
+      // The stand-alone fallback. Said out loud, because an embedding that
+      // runs several engines (#502) and forgets to pass its governor would
+      // otherwise get one set of limits per engine without a word.
+      const limits = {
+        maxConcurrentDispatches: cfg.maxConcurrentDispatches ?? DEFAULT_MAX_CONCURRENT_DISPATCHES,
+        spendLimitUsd: cfg.spendLimitUsd ?? null,
+        spendWindowMs: cfg.spendWindowMs ?? DEFAULT_SPEND_WINDOW_MS,
+        budgetEnforcement: cfg.budgetEnforcement !== false,
+      }
+      this.log(
+        `engine for ${this.repository} built its own governor (none was passed): ` +
+          `cap ${limits.maxConcurrentDispatches <= 0 ? 'none' : limits.maxConcurrentDispatches}, ` +
+          `spend limit ${limits.spendLimitUsd == null ? 'none' : `$${limits.spendLimitUsd}`} per ${describeWindow(limits.spendWindowMs)}, ` +
+          `budget enforcement ${limits.budgetEnforcement ? 'on' : 'off'}`,
+      )
+      this.governor = new Governor({ ...limits, now: cfg.now, log: cfg.log })
+    }
+    this.governor.register(this.repository, cfg.repositorySpendLimitUsd !== undefined ? { spendLimitUsd: cfg.repositorySpendLimitUsd } : {})
   }
 
   private nowIso(): string {
@@ -428,7 +477,7 @@ export class Engine {
   private capsPromise: Promise<Map<string, Set<string>>> | null = null
   private capabilities(): Promise<Map<string, Set<string>>> {
     if (!this.capsPromise) {
-      this.capsPromise = (this.cfg.hostTip ? Promise.resolve(this.cfg.hostTip) : resolveHostTip(this.source.git))
+      this.capsPromise = this.hostTip()
         .then((tip) =>
           loadRoleCapabilities(this.source.git, tip.commit, {
             prefixHint: this.cfg.frameworkPrefix,
@@ -442,6 +491,18 @@ export class Engine {
         })
     }
     return this.capsPromise
+  }
+
+  /** The host tip `assembleOrchestrator` resolved, or this engine's own, resolved once (#500). */
+  private hostTipPromise: Promise<HostTip> | null = null
+  private hostTip(): Promise<HostTip> {
+    if (!this.hostTipPromise) {
+      this.hostTipPromise = this.cfg.hostTip ? Promise.resolve(this.cfg.hostTip) : resolveHostTip(this.source.git)
+      this.hostTipPromise.catch(() => {
+        this.hostTipPromise = null
+      })
+    }
+    return this.hostTipPromise
   }
 
   private withLock<T>(slug: string, fn: () => Promise<T>): Promise<T> {
@@ -590,16 +651,187 @@ export class Engine {
     while (this.jobs.size > 0) await Promise.allSettled([...this.jobs.values()])
   }
 
+  /**
+   * Be woken when the governor frees a slot this engine was refused (#501).
+   * `runLoop` subscribes with its own trigger, so a wake is an ordinary tick
+   * through the ordinary path — never a call into the engine mid-tick.
+   */
+  subscribeWake(wake: () => Promise<void>): () => void {
+    return this.governor.subscribe(this.repository, wake)
+  }
+
+  /**
+   * Tell the governor what this repository has open, once, before it grants
+   * anything (#501). Roles are launched detached and outlive the process that
+   * launched them, so after a restart the open ledger entries — and open
+   * sweep markers — are the only record of slots still occupied. Each counts
+   * until the ledger shows it closed or its timeout has passed since `at`.
+   *
+   * "Closed" is the engine's own notion, unchanged: `sweepStale` ages an
+   * entry whose engine process is gone after `staleMs`, and the next report
+   * shows it closed, which frees the slot. The governor invents no second
+   * notion of a lost dispatch; the timeout is only the backstop §4.4 already
+   * relies on — past it, no live job can still be behind the entry.
+   *
+   * Idempotent; `tick` calls it first. An embedding that runs several
+   * engines under one governor should await every engine's `seedGovernor`
+   * before starting any loop — until every registered repository has seeded,
+   * the governor grants nothing.
+   */
+  private seedPromise: Promise<void> | null = null
+  seedGovernor(): Promise<void> {
+    if (!this.seedPromise) {
+      this.seedPromise = this.readSeed().then((entries) => this.governor.seed(this.repository, entries))
+      this.seedPromise.catch(() => {
+        this.seedPromise = null
+      })
+    }
+    return this.seedPromise
+  }
+
+  private async readSeed(): Promise<SeedEntry[]> {
+    const entries: SeedEntry[] = []
+    const timeoutMs = this.cfg.roleTimeoutMs ?? DEFAULT_ROLE_TIMEOUT_MS
+    for (const ref of (await this.source.listRuns()).filter((r) => r.kind !== 'default')) {
+      const { state } = await this.source.readState(ref)
+      if (!state) continue
+      for (const e of parseLedger(state)) {
+        if (e.cost_usd !== null || e.failed) continue
+        entries.push({ key: jobKey(ref.slug, e.role, e.task, e.round), at: e.at, estimateUsd: this.estimateFor(e.role), timeoutMs, kind: 'dispatch' })
+      }
+    }
+    const now = (this.cfg.now?.() ?? new Date()).getTime()
+    const sweepTimeoutMs = this.cfg.sweepTimeoutMs ?? DEFAULT_SWEEP_TIMEOUT_MS
+    for (const m of await this.sweepMarkers(now - sweepTimeoutMs)) {
+      if (m.costUsd !== null) continue
+      entries.push({ key: sweepKey(m.slug), at: m.at, estimateUsd: this.estimateFor(m.role), timeoutMs: sweepTimeoutMs, kind: 'sweep' })
+    }
+    return entries
+  }
+
+  private estimateFor(role: string): number {
+    return this.estimates()[role] ?? DEFAULT_ESTIMATE_USD
+  }
+
+  /**
+   * Sweep markers for the seed and the spend report. A failure to read them
+   * (no resolvable default branch, a broken tree) costs the sweep terms and
+   * says so; it does not fail the tick, which never needed them before #501.
+   */
+  private async sweepMarkers(sinceMs: number) {
+    try {
+      const { runs } = await this.source.frameworkRoots()
+      return await readSweepMarkers(this.source.git, runs, (await this.hostTip()).ref, sinceMs)
+    } catch (e) {
+      this.log(`could not read sweep markers: ${(e as Error).message} — sweep costs and open sweeps are left out of the governor's figures this tick`)
+      return []
+    }
+  }
+
+  /**
+   * Seed if needed, then report this repository's ledgers to the governor —
+   * for a caller about to reserve without a tick first (the CLI's `sweep`).
+   */
+  async refreshGovernor(): Promise<void> {
+    await this.seedGovernor()
+    const refs = (await this.source.listRuns()).filter((r) => r.kind !== 'default')
+    await this.governor.report(this.repository, async () => {
+      const states = new Map<string, RunState | null>()
+      for (const ref of refs) states.set(ref.slug, (await this.source.readState(ref)).state)
+      return this.spendReport(refs, states)
+    })
+  }
+
+  /**
+   * This repository's spend, as the governor sums it (#501): every closed
+   * ledger entry and closed sweep marker with when it opened, and every open
+   * one at its estimate. The window is applied by the governor at the moment
+   * it decides, so a report does not go stale by the window rolling. The
+   * governor also keeps counting dispatches that settled after the ledgers
+   * were read, until the next report (ORCHESTRATOR.md §6.1). What a report
+   * can miss is a ledger change nobody in this process made, until this
+   * engine's next tick.
+   *
+   * Only active runs' ledgers, as before #501: a run whose branch has landed
+   * leaves the sum. Sweep markers count whether merged or not, because a
+   * sweep is merged soon after it runs and would otherwise never count.
+   *
+   * `states` must have been read inside the governor's `report` call, which
+   * is what ties the report to the settlements it can have seen.
+   */
+  private async spendReport(refs: RunRef[], states: Map<string, RunState | null>): Promise<SpendReport> {
+    const report: SpendReport = { closed: [], open: [] }
+    for (const ref of refs) {
+      const state = states.get(ref.slug)
+      if (!state) continue
+      for (const e of parseLedger(state)) {
+        if (e.cost_usd === null) {
+          if (!e.failed) report.open.push({ key: jobKey(ref.slug, e.role, e.task, e.round), at: e.at, estimateUsd: this.estimateFor(e.role), kind: 'dispatch' })
+          continue
+        }
+        report.closed.push({ at: e.at, costUsd: e.cost_usd })
+      }
+    }
+    const now = (this.cfg.now?.() ?? new Date()).getTime()
+    for (const m of await this.sweepMarkers(now - this.governor.spendWindowMs)) {
+      if (m.costUsd === null) report.open.push({ key: sweepKey(m.slug), at: m.at, estimateUsd: this.estimateFor(m.role), kind: 'sweep' })
+      else report.closed.push({ at: m.at, costUsd: m.costUsd })
+    }
+    return report
+  }
+
+  /**
+   * The order runs are taken in (#501, MULTI-REPO.md §8.2 P4): the run that
+   * has waited longest first. "Waiting since" is the committer date of the
+   * run branch's tip — the commit that put the run in its present state,
+   * which a restart cannot lose. A deferral writes nothing, so a run held
+   * back keeps its place; a dispatch commits an intent, so the run that just
+   * went moves to the back. Ties, and a tip with no date, fall back to the
+   * order `listRuns` gives, which is alphabetical by slug.
+   *
+   * This compares tips of different branches, which share no history, so
+   * branch order cannot answer it and a committed timestamp is the only
+   * evidence there is. Clock skew between the machines that wrote those
+   * commits can reorder runs a few seconds apart; it changes which goes
+   * first, never whether either may go.
+   */
+  private async byWaitingSince(refs: RunRef[]): Promise<RunRef[]> {
+    const dates = new Map<string, number>()
+    try {
+      const out = await this.source.git.run(['for-each-ref', '--format=%(committerdate:unix) %(refname)', 'refs/heads/run/', 'refs/remotes/'])
+      for (const line of out.split('\n')) {
+        const space = line.indexOf(' ')
+        if (space > 0) dates.set(line.slice(space + 1), Number(line.slice(0, space)))
+      }
+    } catch {
+      return refs
+    }
+    const when = (ref: RunRef) => {
+      const t = dates.get(ref.kind === 'remote' ? `refs/remotes/${ref.ref}` : `refs/heads/${ref.branch}`)
+      return t === undefined || Number.isNaN(t) ? Number.POSITIVE_INFINITY : t
+    }
+    return refs
+      .map((ref, i) => ({ ref, i, t: when(ref) }))
+      .sort((a, b) => (a.t === b.t ? a.i - b.i : a.t - b.t))
+      .map((x) => x.ref)
+  }
+
   /** One reconcile pass over every active run. Idempotent to re-run. */
   async tick(): Promise<TickOutcome[]> {
+    await this.seedGovernor()
     const outcomes: TickOutcome[] = []
     const refs = (await this.source.listRuns()).filter((r) => r.kind !== 'default') // merged runs are historical records
-    // The host ceiling is measured once per tick across every active run's
-    // ledger; dispatches granted within the tick add their estimates.
-    const host = this.enforcing() && this.cfg.spendLimitUsd != null ? await this.hostProjectedUsd(refs) : null
+    // Age lost dispatches first, then report what is left to the governor:
+    // the report is what the spend window sums for this repository, and what
+    // clears a startup hold whose entry has closed. The ledgers are read
+    // inside the governor's call, so it knows which settlements they include.
+    await this.governor.report(this.repository, async () => {
+      const states = new Map<string, RunState | null>()
+      for (const ref of refs) states.set(ref.slug, await this.sweepStale(ref))
+      return this.spendReport(refs, states)
+    })
     const deferred = new Map<string, Deferral>()
-    for (const ref of refs) {
-      await this.sweepStale(ref)
+    for (const ref of await this.byWaitingSince(refs)) {
       // Pin the tip: observe at this exact commit and CAS every write against
       // it, so nothing decided from a stale read can land (§4.4's guard,
       // stretched over the whole derive-then-write span). A hosted clone sees
@@ -631,55 +863,77 @@ export class Engine {
       // Same placement, and for the same reason: a dispatch this tick will
       // not start reserves neither a slot nor budget headroom.
       const unrefused = this.refusalGuard(ref, obs, free)
-      // Concurrency is checked before the budget guards, not after: a
-      // dispatch this tick will not start must not add its estimate to the
-      // host projection hostGuards accumulates across runs, or a deferral
-      // here would spend budget headroom nothing consumed.
-      const admitted = this.concurrencyGuard(ref, unrefused)
-      const final = this.hostGuards(obs, admitted, host)
-      if (final.kind === 'rest' && DEFERRAL_RULES.has(final.rule)) {
-        const prior = this.deferred.get(ref.slug)
-        deferred.set(ref.slug, {
-          slug: ref.slug,
-          rule: final.rule,
-          reason: final.why,
-          since: prior?.rule === final.rule ? prior.since : this.nowIso(),
-        })
+      // The reserved section (#501). Everything from the governor's grant to
+      // the launch sits inside this try, and whatever the launch did not take
+      // over is released in the finally: a lost CAS, a rejected push, the
+      // terminal-run guard, RB, an exception. `launch` removes a reservation
+      // from `pending` in the same synchronous step that hands it to the job,
+      // whose settlement releases it — so every reservation has exactly one
+      // owner, and one that is never launched cannot outlive this pass.
+      const pending = new Map<string, Reservation>()
+      try {
+        const { action: final, refusal } = this.admit(ref, obs, unrefused, pending)
+        if (final.kind === 'rest' && DEFERRAL_RULES.has(final.rule)) {
+          const prior = this.deferred.get(ref.slug)
+          deferred.set(ref.slug, {
+            slug: ref.slug,
+            rule: final.rule,
+            reason: final.why,
+            since: prior?.rule === final.rule ? prior.since : this.nowIso(),
+            ...(refusal ? { limit: refusal.limit, repository: refusal.repository } : {}),
+          })
+        }
+        outcomes.push(await this.execute(ref, tip, obs, final, pending))
+      } finally {
+        for (const reservation of pending.values()) reservation.release()
       }
-      outcomes.push(await this.execute(ref, tip, obs, final))
     }
     this.deferred = deferred
     return outcomes
   }
 
   /**
-   * Resource admission control (#227, rule MC). Budget guards bound what a
-   * tick may spend; this bounds what it may start. Counted across every
-   * active run — `inFlight()` includes jobs still running from earlier ticks
-   * — so the loop in `tick()` naturally stops granting once the host is
-   * saturated, and later runs in the same pass defer.
+   * Admission (#501): the governor replaces the engine's own count of its
+   * jobs (#227, rule MC) and its own spend projection (#97, rule HB). The
+   * rules and their words are unchanged — MC for a slot, HB for the spend
+   * window — and so is their order relative to RB, which is the one budget
+   * guard that stays here because it reads the run's own record:
    *
-   * Deferral, not escalation, is the whole point. A budget ceiling needs a
-   * human to raise it, so DB/RB/HB pause the run and escalate; a resource
-   * ceiling clears itself the moment a job finishes. So a capped dispatch is
-   * downgraded to `rest`: nothing is written, no intent commit claims the run
-   * is dispatched, and the stateless reconciler derives the same work again
-   * on a later tick. Partial grants are legal for the same reason — the
-   * ungranted intents are simply re-derived, since a task the engine never
-   * dispatched is still `pending` in committed state.
+   * 1. The cap refuses first (MC), ahead of RB, as it always has.
+   * 2. RB next: a run missing its budget cap escalates. If the governor had
+   *    granted, the grant is left in `pending` and released by the caller —
+   *    the "later guard" release path.
+   * 3. The spend window last (HB), including a repository's own ceiling.
+   *
+   * Deferral, not escalation, for MC and HB: both clear themselves — a job
+   * finishes, the window rolls — so a refused dispatch is downgraded to
+   * `rest`, nothing is written, and the same work is derived again later.
+   * Partial grants are legal under the cap for the same reason: a task the
+   * engine never dispatched is still `pending` in committed state.
    */
-  private concurrencyGuard(ref: RunRef, action: DerivedAction): DerivedAction {
-    if (action.kind !== 'dispatch') return action
-    const cap = this.cfg.maxConcurrentDispatches ?? DEFAULT_MAX_CONCURRENT_DISPATCHES
-    if (cap <= 0) return action // explicitly uncapped
-    const free = cap - this.inFlight()
-    if (free >= action.dispatches.length) return action
-
-    const deferred = action.dispatches.length - Math.max(free, 0)
-    const why = `${deferred} dispatch(es) deferred — ${this.inFlight()} in flight against --max-concurrent-dispatches ${cap}; re-derived when a slot frees`
+  private admit(
+    ref: RunRef,
+    obs: RunObservation,
+    action: DerivedAction,
+    pending: Map<string, Reservation>,
+  ): { action: DerivedAction; refusal: GovernorRefusal | null } {
+    if (action.kind !== 'dispatch') return { action, refusal: null }
+    const intents = action.dispatches.map((d) => ({ key: jobKey(ref.slug, d.role, d.task, d.round), estimateUsd: this.estimateFor(d.role) }))
+    const { granted, refusal } = this.governor.reserve({ repository: this.repository, intents })
+    for (const reservation of granted) pending.set(reservation.key, reservation)
+    const unbudgeted = this.budgetRequired(obs)
+    if (granted.length === 0) {
+      const why = refusalReason(refusal!, `${action.dispatches.length} dispatch(es)`, 'the run re-derives')
+      const rule = refusalRule(refusal!)
+      if (rule === 'HB' && unbudgeted) return { action: unbudgeted, refusal: null }
+      this.log(`${ref.slug}: ${why}`)
+      return { action: { kind: 'rest', rule, why }, refusal }
+    }
+    if (unbudgeted) return { action: unbudgeted, refusal: null }
+    if (granted.length === action.dispatches.length) return { action, refusal: null }
+    const why = refusalReason(refusal!, `${action.dispatches.length - granted.length} dispatch(es)`, 'the run re-derives')
     this.log(`${ref.slug}: ${why}`)
-    if (free <= 0) return { kind: 'rest', rule: 'MC', why }
-    return { ...action, dispatches: action.dispatches.slice(0, free), why: `${action.why} (${why})` }
+    return { action: { ...action, dispatches: action.dispatches.slice(0, granted.length), why: `${action.why} (${why})` }, refusal: null }
   }
 
   /**
@@ -766,39 +1020,21 @@ export class Engine {
   }
 
   /**
-   * Hosted-mode guards wrapping the per-run derivation (§6's DB, lifted to
-   * the host). A run with no budget ceiling (RB) is downgraded to an
-   * escalation: only a human can supply the missing number, so pause and
-   * ask. The host-wide window (HB) is the other kind of ceiling (#97): it
-   * measures a rolling window, so it clears itself as the window moves —
-   * and a condition that clears itself is deferred like the resource cap
-   * (MC), never escalated. Escalating it was the #96/#97 dead loop: a
-   * human's resolve-and-resume changed none of the inputs, the next tick
-   * re-derived the same refusal, and the remedy — a process flag on the
-   * host — was nowhere the run's own record could reach. Deferring writes
-   * nothing to the run; the heartbeat carries the condition instead
-   * (`deferrals`), at the level it actually lives.
+   * Hosted-mode guard (RB), §6's DB lifted to the host: a run with no budget
+   * ceiling is escalated, because only a human can supply the missing
+   * number. The host-wide window (HB) is the other kind of ceiling (#97) and
+   * now lives in the governor (#501): it measures a rolling window, so it
+   * clears itself as the window moves, and a condition that clears itself is
+   * deferred like the resource cap (MC), never escalated. Escalating it was
+   * the #96/#97 dead loop: a human's resolve-and-resume changed none of the
+   * inputs, and the remedy — a process flag on the host — was nowhere the
+   * run's own record could reach. Enforcement off (#109) disables both.
    */
-  private hostGuards(obs: RunObservation, action: DerivedAction, host: HostProjection | null): DerivedAction {
-    if (action.kind !== 'dispatch') return action
-    if (!this.enforcing()) return action // #109: enforcement off — meter, never pause
-    if (this.cfg.requireBudget && (obs.state?.budget?.cost_limit_usd ?? null) === null) {
-      const reason = 'no cost_limit_usd set — this orchestrator requires a per-run budget cap before dispatch (--require-budget)'
-      return { kind: 'escalate', rule: 'RB', reason, pause: 'budget-exhausted', why: reason }
-    }
-    if (host && this.cfg.spendLimitUsd != null) {
-      const add = action.dispatches.reduce((sum, d) => sum + (this.estimates()[d.role] ?? DEFAULT_ESTIMATE_USD), 0)
-      if (host.projected + add > this.cfg.spendLimitUsd) {
-        const why =
-          `projected host spend $${(host.projected + add).toFixed(2)} over the last ${describeWindow(host.windowMs)} ` +
-          `(ledger $${host.closed.toFixed(2)} in the window + $${(host.projected - host.closed + add).toFixed(2)} in flight and requested) ` +
-          `exceeds --spend-limit-usd $${this.cfg.spendLimitUsd} — deferred, not paused: the window rolls and the run re-derives`
-        this.log(`${obs.slug}: ${why}`)
-        return { kind: 'rest', rule: 'HB', why }
-      }
-      host.projected += add
-    }
-    return action
+  private budgetRequired(obs: RunObservation): DerivedAction | null {
+    if (!this.enforcing()) return null
+    if (!this.cfg.requireBudget || (obs.state?.budget?.cost_limit_usd ?? null) !== null) return null
+    const reason = 'no cost_limit_usd set — this orchestrator requires a per-run budget cap before dispatch (--require-budget)'
+    return { kind: 'escalate', rule: 'RB', reason, pause: 'budget-exhausted', why: reason }
   }
 
   /** The default branch, probed once per process — a deployment does not change it mid-flight. */
@@ -845,34 +1081,6 @@ export class Engine {
   }
 
   /**
-   * Spend inside the host window across the given runs (#97): closed ledger
-   * entries opened within the window at their real cost, plus every open
-   * entry at its estimate — in-flight work counts whenever it started. An
-   * entry with no readable `at` counts as inside the window: the ceiling
-   * exists to bound unattended spend, and a fact it cannot date is not a
-   * reason to spend more.
-   */
-  private async hostProjectedUsd(refs: RunRef[]): Promise<HostProjection> {
-    const windowMs = this.cfg.spendWindowMs ?? DEFAULT_SPEND_WINDOW_MS
-    const since = (this.cfg.now?.() ?? new Date()).getTime() - windowMs
-    let closed = 0
-    let open = 0
-    for (const ref of refs) {
-      const { state } = await this.source.readState(ref)
-      if (!state) continue
-      for (const entry of parseLedger(state)) {
-        if (entry.cost_usd === null) {
-          if (!entry.failed) open += this.estimates()[entry.role] ?? DEFAULT_ESTIMATE_USD
-          continue
-        }
-        const at = entry.at ? Date.parse(entry.at) : Number.NaN
-        if (Number.isNaN(at) || at >= since) closed += entry.cost_usd
-      }
-    }
-    return { projected: closed + open, closed, windowMs }
-  }
-
-  /**
    * Which stale window an open ledger entry falls under (#349).
    *
    * "No job for it in `this.jobs`" is only evidence of a lost dispatch when
@@ -912,10 +1120,14 @@ export class Engine {
    * waits out `roleTimeoutMs + staleMs` instead (#349): past the role timeout
    * no live job could still be behind it, whoever opened it, because that is
    * when its own engine kills it.
+   *
+   * Returns the run's state as it stands after the sweep — re-read only when
+   * the sweep closed something — for the governor's spend report.
    */
-  private async sweepStale(ref: RunRef): Promise<void> {
+  private async sweepStale(ref: RunRef): Promise<RunState | null> {
     const { state } = await this.source.readState(ref)
-    if (!state) return
+    if (!state) return null
+    let aged = false
     const staleMs = this.cfg.staleMs ?? DEFAULT_STALE_MS
     const graceMs = (this.cfg.roleTimeoutMs ?? DEFAULT_ROLE_TIMEOUT_MS) + staleMs
     const now = (this.cfg.now?.() ?? new Date()).getTime()
@@ -936,6 +1148,7 @@ export class Engine {
         continue
       }
       this.log(`${ref.slug}: aging stale dispatch ${what} — ${verdict.why}`)
+      aged = true
       await this.closeDispatch(ref, { role: entry.role, task: entry.task, round: entry.round }, {
         ok: false,
         costUsd: null,
@@ -944,6 +1157,7 @@ export class Engine {
         error: 'dispatch lost (orchestrator restart or crash) — aged out by the heartbeat',
       })
     }
+    return aged ? (await this.source.readState(ref)).state : state
   }
 
   /**
@@ -966,7 +1180,18 @@ export class Engine {
     this.log(`${ref.slug}: draft PR ensure — ${ensured.status}: ${ensured.note}`)
   }
 
-  private async execute(ref: RunRef, tip: string, obs: RunObservation, action: DerivedAction): Promise<TickOutcome> {
+  /**
+   * `pending` holds the governor's grants for this action's dispatches, keyed
+   * like a job. Only `launch` takes one out; anything left when this returns
+   * or throws is released by the caller (#501).
+   */
+  private async execute(
+    ref: RunRef,
+    tip: string,
+    obs: RunObservation,
+    action: DerivedAction,
+    pending: Map<string, Reservation>,
+  ): Promise<TickOutcome> {
     const base: TickOutcome = { slug: ref.slug, action, wrote: false, launched: 0, detail: action.why }
     const cas = { expectedTip: tip }
     await this.ensurePr(ref, tip)
@@ -1117,14 +1342,19 @@ export class Engine {
         if (result.pushFailed) this.notePushFailure(ref, result.pushFailed)
         else this.notePushAccepted(ref.branch)
 
-        for (const intent of action.dispatches) this.launch(ref, obs, intent, at)
+        for (const intent of action.dispatches) this.launch(ref, obs, intent, at, pending)
         return { ...base, wrote: true, launched: action.dispatches.length }
       }
     }
   }
 
-  private launch(ref: RunRef, obs: RunObservation, intent: DispatchIntent, openedAt: string): void {
+  private launch(ref: RunRef, obs: RunObservation, intent: DispatchIntent, openedAt: string, pending: Map<string, Reservation>): void {
     const key = jobKey(ref.slug, intent.role, intent.task, intent.round)
+    // The governor's grant for this dispatch (#501). `admit` granted one per
+    // dispatch it let through, so a missing one is a bug upstream; launching
+    // anyway keeps the intent commit honest, and the log says so.
+    const reservation = pending.get(key) ?? null
+    if (!reservation) this.log(`${ref.slug}: launching ${intent.role} with no governor reservation — its slot is not counted`)
     this.jobMeta.set(key, { slug: ref.slug, role: intent.role, task: intent.task, round: intent.round, startedAt: Date.now() })
     // A dispatcher with managesOwnWorkspace (the remote runner, run
     // "runner-agent" ADR-3) creates and harvests its own checkout — the
@@ -1137,6 +1367,8 @@ export class Engine {
     const isolate = !managesOwnWorkspace
     const resumeSession = priorSession(obs.ledger, intent, this.cfg.dispatcher.adapterFor?.(intent.role) ?? this.cfg.dispatcher.adapter)
     if (resumeSession) this.log(`${ref.slug}: ${intent.role}${intent.task ? `(${intent.task})` : ''} retrying — resuming harness session ${resumeSession}`)
+    // What the closing commit metered, for the governor (#501); null until it has.
+    let metered: number | null = null
     const job = (async () => {
       let outcome: DispatchOutcome
       // Whether the harness was ever asked to run (#155). Everything before
@@ -1218,11 +1450,17 @@ export class Engine {
         outcome = { ok: false, costUsd: refused ? 0 : null, tokensIn: null, tokensOut: null, error: (e as Error).message, refused }
         if (refused) this.log(`${ref.slug}: ${intent.role} dispatch refused before spawn — ${(e as Error).message}`)
       }
-      await this.closeDispatch(ref, intent, outcome, openedAt)
+      metered = await this.closeDispatch(ref, intent, outcome, openedAt)
     })()
     this.jobs.set(
       key,
       job.finally(async () => {
+        // Settlement gives the slot back first, before anything here can
+        // throw. The closing commit has landed (or given up), and the cost it
+        // metered goes with the release, so the governor counts this dispatch
+        // at what it really cost until the next report reads it back. If the
+        // close threw before metering, the governor falls back to the estimate.
+        reservation?.release(metered)
         this.jobs.delete(key)
         this.jobMeta.delete(key)
         // Last job out releases any run checkout still standing — a crashed
@@ -1236,6 +1474,13 @@ export class Engine {
         this.onSettled?.()
       }),
     )
+    // The hand-over, in the same synchronous step as the job's registration:
+    // from here the job's settlement owns the slot, and the tick's release of
+    // whatever is left in `pending` no longer touches it.
+    if (reservation) {
+      pending.delete(key)
+      reservation.commit()
+    }
   }
 
   /**
@@ -1244,13 +1489,17 @@ export class Engine {
    * §4.4); this commit closes the ledger entry with real usage, keeps
    * cost_spent_usd the derived sum, and flips an implementer's task to
    * in-review. Everything else re-derives next tick.
+   *
+   * Returns the cost it metered — real usage, a price from the registry, the
+   * estimate for a launched-and-lost dispatch, or $0 for a refusal — which
+   * the job hands to the governor when it releases its slot (#501).
    */
   private async closeDispatch(
     ref: RunRef,
     intent: { role: string; task: string | null; round: number | null },
     outcome: DispatchOutcome,
     openedAt?: string,
-  ): Promise<void> {
+  ): Promise<number> {
     const estimate = this.estimates()[intent.role] ?? DEFAULT_ESTIMATE_USD
     // Two failure timings, two honest costs (#155). Launched then lost —
     // crash, timeout, age-out — meters the static estimate, because tokens
@@ -1394,9 +1643,10 @@ export class Engine {
     }
 
     for (let attempt = 0; attempt < 5; attempt++) {
-      if ((await this.withLock(ref.slug, attemptOnce)) === 'done') return
+      if ((await this.withLock(ref.slug, attemptOnce)) === 'done') return cost
     }
     this.log(`${ref.slug}: closing commit lost CAS 5×; the heartbeat will age the open entry`)
+    return cost
   }
 
   /**

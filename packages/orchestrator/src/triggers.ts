@@ -1,7 +1,8 @@
 // Triggers (ORCHESTRATOR.md §4.1): all funnel into the same tick and none
 // carries information — the state does. Ref watcher (human decisions, agent
 // commits, other orchestrators), dispatch completion (Engine.onSettled),
-// heartbeat (missed events, stale aging), and manual (the CLI's `tick`).
+// heartbeat (missed events, stale aging), manual (the CLI's `tick`), and the
+// governor's wake (#501): a slot this engine was refused may be free.
 // The ref-watch mirrors the frontend server's freshness watcher.
 import { type FSWatcher, watch } from 'node:fs'
 import { join } from 'node:path'
@@ -25,6 +26,12 @@ export interface EngineLike {
   deferrals?(): Deferral[]
   drain(): Promise<void>
   onSettled: (() => void) | null
+  /**
+   * Be woken by the governor when a slot this engine was refused may be free
+   * (#501). The loop subscribes its own trigger, so a wake is one more tick
+   * through the one path — ticks still never overlap. Optional for test doubles.
+   */
+  subscribeWake?(wake: () => Promise<void>): () => void
 }
 
 export interface RunLoopConfig {
@@ -48,13 +55,19 @@ export interface RunLoopConfig {
 }
 
 /** The same trigger classes ORCHESTRATOR.md §4.1 describes — named so tests can fire one deterministically instead of racing real timers/watchers. */
-export type TriggerReason = 'startup' | 'heartbeat' | 'refs' | 'completion'
+export type TriggerReason = 'startup' | 'heartbeat' | 'refs' | 'completion' | 'wake'
 
 export interface RunLoop {
   stop(): Promise<void>
-  /** Test-only: run the same tick a real trigger of this kind would, awaited to completion. */
+  /**
+   * Run the same tick a real trigger of this kind would. The promise
+   * resolves once a pass that began after this call has finished — the
+   * running pass, if one is under way, does not count.
+   */
   trigger(why: TriggerReason): Promise<void>
 }
+
+const isBoundary = (why: TriggerReason) => why === 'heartbeat' || why === 'startup'
 
 const DEFAULT_HEARTBEAT_MS = 3 * 60 * 1000
 
@@ -71,8 +84,14 @@ function heartbeatCodeState(state: CodeTreeState): 'fresh' | 'superseded-pending
 /** Resident mode: keep reconciling until stopped. Ticks never overlap. */
 export async function runLoop(engine: EngineLike, repoDir: string, cfg: RunLoopConfig = {}): Promise<RunLoop> {
   let stopped = false
-  let ticking = false
-  let queued = false
+  // At most one pass runs and at most one waits behind it; every trigger that
+  // lands while a pass runs joins the waiting one (#501). The waiting pass
+  // takes the strongest reason it was asked for — a heartbeat or startup
+  // among them makes it a boundary pass (sync, drift check) — and each
+  // trigger's promise resolves when a pass that began after it has finished,
+  // which is what lets the governor wait on a wake it sent.
+  let running: Promise<void> | null = null
+  let queued: { why: TriggerReason; promise: Promise<void>; resolve: () => void } | null = null
 
   // Self-supersede (#141): the last boundary check's result governs every
   // tick's body — not just the boundary ticks that produced it — because a
@@ -84,13 +103,35 @@ export async function runLoop(engine: EngineLike, repoDir: string, cfg: RunLoopC
   let wasFresh = true
   let firedSupersede = false
 
-  const tick = async (why: TriggerReason) => {
-    if (stopped) return
-    if (ticking) {
-      queued = true
-      return
+  const start = (why: TriggerReason): Promise<void> => {
+    const pass = runPass(why).finally(() => {
+      running = null
+      const next = queued
+      queued = null
+      if (!next) return
+      if (stopped) next.resolve()
+      else start(next.why).then(next.resolve, next.resolve)
+    })
+    running = pass
+    return pass
+  }
+
+  const tick = (why: TriggerReason): Promise<void> => {
+    if (stopped) return Promise.resolve()
+    if (!running) return start(why)
+    if (queued) {
+      if (isBoundary(why) && !isBoundary(queued.why)) queued.why = why
+      return queued.promise
     }
-    ticking = true
+    let resolve: () => void = () => {}
+    const promise = new Promise<void>((r) => {
+      resolve = r
+    })
+    queued = { why, promise, resolve }
+    return promise
+  }
+
+  const runPass = async (why: TriggerReason) => {
     try {
       // Drift is checked at the same boundaries freshness is (heartbeat and
       // startup only) — never on refs/completion ticks, for the same
@@ -123,25 +164,20 @@ export async function runLoop(engine: EngineLike, repoDir: string, cfg: RunLoopC
             }
           }
         }
-        do {
-          queued = false
-          const outcomes = await engine.tick()
-          for (const o of outcomes) {
-            if (o.action.kind !== 'rest') cfg.log?.(`[${why}] ${o.slug}: ${o.action.kind} (${o.action.rule}) ${o.detail}`)
+        const outcomes = await engine.tick()
+        for (const o of outcomes) {
+          if (o.action.kind !== 'rest') cfg.log?.(`[${why}] ${o.slug}: ${o.action.kind} (${o.action.rule}) ${o.detail}`)
+        }
+        if (cfg.scheduler) {
+          for (const s of await cfg.scheduler.tick()) {
+            if (s.kind !== 'rest') cfg.log?.(`[${why}] sweep(${s.slug ?? s.role}): ${s.kind}${s.rule ? ` (${s.rule})` : ''} ${s.detail}`)
           }
-          if (cfg.scheduler) {
-            for (const s of await cfg.scheduler.tick()) {
-              if (s.kind !== 'rest') cfg.log?.(`[${why}] sweep(${s.slug ?? s.role}): ${s.kind}${s.rule ? ` (${s.rule})` : ''} ${s.detail}`)
-            }
-          }
-        } while (queued && !stopped)
+        }
       }
       // else: idle. Not dispatching on mixed code is the whole point of D2 —
       // the loop still counts as having ticked (the heartbeat below fires).
     } catch (e) {
       cfg.log?.(`tick failed: ${(e as Error).message}`)
-    } finally {
-      ticking = false
     }
     // Liveness heartbeat (#100): written after every pass, read by the
     // co-located frontend. Under the git common dir — machine-local, never
@@ -167,7 +203,9 @@ export async function runLoop(engine: EngineLike, repoDir: string, cfg: RunLoopC
         heartbeatMs: cfg.heartbeatMs ?? DEFAULT_HEARTBEAT_MS,
         inFlight: engine.inFlight(),
         pushRejections: Object.fromEntries(engine.pushHealth()),
-        deferrals: engine.deferrals?.() ?? [],
+        // Sweeps the governor held back sit beside the runs (#501): the chip
+        // names what is held and why, whatever it is.
+        deferrals: [...(engine.deferrals?.() ?? []), ...(cfg.scheduler?.deferrals() ?? [])],
         ...codeFields,
       })
     } catch (e) {
@@ -186,6 +224,9 @@ export async function runLoop(engine: EngineLike, repoDir: string, cfg: RunLoopC
 
   // Dispatch completion → tick (the closing commit just landed).
   engine.onSettled = () => void tick('completion')
+  // The governor's wake → tick (#501): another engine, a sweep, or this
+  // engine's own settlement freed a slot this engine was refused.
+  const unsubscribeWake = engine.subscribeWake?.(() => tick('wake'))
 
   // Ref watcher: refs/ + packed-refs, debounced, worktree-correct.
   const git = new Git(repoDir)
@@ -220,6 +261,7 @@ export async function runLoop(engine: EngineLike, repoDir: string, cfg: RunLoopC
       if (timer) clearTimeout(timer)
       for (const w of watchers) w.close()
       engine.onSettled = null
+      unsubscribeWake?.()
       await engine.drain()
       await cfg.scheduler?.drain()
     },

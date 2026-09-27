@@ -7,6 +7,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { Governor } from '../src/governor.ts'
 import {
   deriveSweep,
   parseEvery,
@@ -120,7 +121,7 @@ describe('Scheduler end-to-end', () => {
       agentCommit(req.cwd, clock, { [`runs/${sweepSlug('historian', new Date())}/docs-delta.md`]: DELTA }, 'docs delta')
       return { costUsd: 0.42 }
     })
-    const scheduler = new Scheduler({ repoDir: dir, identity: BOT, dispatcher, registry: REGISTRY })
+    const scheduler = new Scheduler({ repoDir: dir, identity: BOT, dispatcher, registry: REGISTRY, governor: new Governor() })
 
     const first = await scheduler.tick()
     expect(first).toMatchObject([{ role: 'historian', kind: 'dispatched', rule: 'S4' }])
@@ -161,7 +162,7 @@ describe('Scheduler end-to-end', () => {
     const { dir, clock } = makeToyRepo()
     seedConfig(dir, clock)
     const dispatcher = new FakeDispatcher(() => ({ ok: false, costUsd: null, tokensIn: null, tokensOut: null, error: 'harness exploded' }))
-    const scheduler = new Scheduler({ repoDir: dir, identity: BOT, dispatcher, registry: REGISTRY })
+    const scheduler = new Scheduler({ repoDir: dir, identity: BOT, dispatcher, registry: REGISTRY, governor: new Governor() })
 
     const [outcome] = await scheduler.tick()
     expect(outcome).toMatchObject({ kind: 'dispatched' })
@@ -181,7 +182,7 @@ describe('Scheduler end-to-end', () => {
       agentCommit(req.cwd, clock, { [`runs/${sweepSlug('historian', new Date())}/docs-delta.md`]: DELTA }, 'docs delta')
       return { costUsd: 0.1 }
     })
-    const scheduler = new Scheduler({ repoDir: dir, identity: BOT, dispatcher, registry: REGISTRY })
+    const scheduler = new Scheduler({ repoDir: dir, identity: BOT, dispatcher, registry: REGISTRY, governor: new Governor() })
 
     const [first] = await scheduler.tick()
     expect(first).toMatchObject({ kind: 'dispatched', rule: 'S4' })
@@ -212,7 +213,7 @@ describe('Scheduler end-to-end', () => {
   it('no orchestrator.yaml → no schedules, no dispatches', async () => {
     const { dir } = makeToyRepo()
     const dispatcher = new FakeDispatcher(() => ({}))
-    const scheduler = new Scheduler({ repoDir: dir, identity: BOT, dispatcher, registry: REGISTRY })
+    const scheduler = new Scheduler({ repoDir: dir, identity: BOT, dispatcher, registry: REGISTRY, governor: new Governor() })
     expect(await scheduler.tick()).toEqual([])
     expect(dispatcher.calls).toHaveLength(0)
   })

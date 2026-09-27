@@ -21,6 +21,11 @@
 //   SB  role estimate exceeds the schedule's cost cap   → skip + warn (a config defect, not a dispatch)
 //   S4  otherwise                                       → dispatch the sweep
 //
+// A due sweep is then admitted by the governor like any run dispatch (#501):
+// it takes a concurrency slot, its estimate counts against the spend window
+// until its marker is closed, and a refusal defers it (MC or HB) — nothing is
+// written, and the schedule derives the same sweep again on a later tick.
+//
 // A sweep is a mini-run: runs/<role>-<date>/ on branch run/<role>-<date>,
 // seeded with a sweep.yaml marker by commit-then-launch (branch creation from
 // ZERO_OID is the CAS duplicate-dispatch guard). It carries no state.yaml on
@@ -31,6 +36,10 @@ import type { Identity } from '@gateline/core/record'
 import { type FrameworkRoots, Git, memoizedFrameworkRoots } from '@gateline/core/sources'
 import { parse as parseYaml } from 'yaml'
 import { DEFAULT_ESTIMATE_USD } from './derive.ts'
+import type { Deferral } from './engine.ts'
+import type { GovernorPort, Reservation } from './governor.ts'
+import { refusalReason, refusalRule } from './governor.ts'
+import { type HostTip, resolveHostTip } from './manifest.ts'
 import { type Registry, resolveModel } from './registry.ts'
 import type { Dispatcher } from './seam.ts'
 import { ensureRunCheckout, removeRunCheckout } from './workspace.ts'
@@ -39,7 +48,75 @@ const ZERO_OID = '0'.repeat(40)
 
 /** The local branch and every remote-tracking copy of `run/<name>` (#273). */
 const sweepRefPatterns = (name: string) => [`refs/heads/run/${name}`, `refs/remotes/*/run/${name}`]
-const DEFAULT_SWEEP_TIMEOUT_MS = 30 * 60 * 1000
+/** How long a sweep may run before it is killed — also how long a sweep found open after a restart holds its slot (#501). */
+export const DEFAULT_SWEEP_TIMEOUT_MS = 30 * 60 * 1000
+
+/** A sweep's key with the governor: distinct from every run dispatch's `slug|role|task|round`. */
+export const sweepKey = (slug: string): string => `sweep:${slug}`
+
+/** One sweep marker (`sweep.yaml`), the sweep's one-entry ledger. */
+export interface SweepMarker {
+  slug: string
+  role: string
+  at: string | null
+  /** Null while the sweep is open: dispatched and not yet metered. */
+  costUsd: number | null
+}
+
+const SWEEP_SLUG = /^(.+)-(\d{4}-\d{2}-\d{2})$/
+
+/**
+ * Every sweep marker that could fall inside a window starting at `sinceMs`
+ * (#501): on sweep branches (local and remote-tracking) and merged to the
+ * default branch, one per slug. A slug carries the UTC date its sweep was
+ * dispatched on, so a marker from a day wholly before the window is not
+ * read at all. Where a slug has several copies, a metered one wins over an
+ * open one — the closing commit is the later fact — and otherwise the
+ * branch's copy, which is where the closing commit lands.
+ *
+ * `defaultRef` is read live, by name: a sweep merged after startup must count
+ * as merged. Only `orchestrator.yaml` is pinned to the startup commit.
+ */
+export async function readSweepMarkers(git: Git, runsRoot: string, defaultRef: string, sinceMs: number): Promise<SweepMarker[]> {
+  const floor = sinceMs - 24 * 60 * 60 * 1000
+  const recent = (slug: string) => {
+    const m = SWEEP_SLUG.exec(slug)
+    if (!m) return false
+    const day = Date.parse(`${m[2]}T00:00:00.000Z`)
+    return !Number.isNaN(day) && day >= floor
+  }
+  const bySlug = new Map<string, SweepMarker>()
+  const consider = (marker: SweepMarker) => {
+    const prior = bySlug.get(marker.slug)
+    if (!prior || (prior.costUsd === null && marker.costUsd !== null)) bySlug.set(marker.slug, marker)
+  }
+  const read = async (rev: string, slug: string) => {
+    const text = await git.show(rev, `${runsRoot}/${slug}/sweep.yaml`)
+    const marker = text === null ? null : parseMarker(slug, text)
+    if (marker) consider(marker)
+  }
+  for (const { ref } of await git.forEachRef(['refs/heads/run/*', 'refs/remotes/*/run/*'])) {
+    const slug = ref.slice(ref.indexOf('/run/') + '/run/'.length)
+    if (recent(slug)) await read(ref, slug)
+  }
+  if (await git.revParse(defaultRef)) {
+    for (const dir of await git.lsTreeDirs(defaultRef, runsRoot)) if (recent(dir)) await read(defaultRef, dir)
+  }
+  return [...bySlug.values()]
+}
+
+function parseMarker(slug: string, text: string): SweepMarker | null {
+  let raw: unknown
+  try {
+    raw = parseYaml(text)
+  } catch {
+    return null
+  }
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Record<string, unknown>
+  if (typeof r.role !== 'string') return null
+  return { slug, role: r.role, at: markerAt(text), costUsd: typeof r.cost_usd === 'number' ? r.cost_usd : null }
+}
 
 export interface ScheduleEntry {
   role: string
@@ -165,7 +242,8 @@ export function sweepPromptBody(slug: string, coveringSince: string | null, runs
 export interface SweepOutcome {
   role: string
   slug: string | null
-  kind: 'rest' | 'skip' | 'dispatched' | 'lost-cas' | 'error'
+  /** `deferred`: due, and refused by the governor (#501) — nothing written, derived again later. */
+  kind: 'rest' | 'skip' | 'deferred' | 'dispatched' | 'lost-cas' | 'error'
   rule: string | null
   detail: string
 }
@@ -184,6 +262,23 @@ export interface SchedulerConfig {
   sweepTimeoutMs?: number
   /** Push every sweep commit to origin (hosted mode). */
   push?: boolean
+  /**
+   * What admits a due sweep (#501): the governor its engine uses, so a sweep
+   * and a run dispatch compete for the same slots and the same window.
+   * Required: a scheduler with a governor of its own would ignore every
+   * limit the operator set.
+   */
+  governor: GovernorPort
+  /** The repository's key with the governor — the same one its engine uses. Defaults to `repoDir`. */
+  repository?: string
+  /**
+   * The commit `orchestrator.yaml` is read at (#500, #501): the one
+   * `assembleOrchestrator` resolved, so sweep schedules come from the same
+   * snapshot as the registry and adapter manifests. Absent, the scheduler
+   * resolves its own on first use. Facts about sweeps themselves — which are
+   * open, when the last merged one ran — are read live at that tip's ref.
+   */
+  hostTip?: HostTip
   now?: () => Date
   log?: (line: string) => void
 }
@@ -203,11 +298,33 @@ export class Scheduler {
   private readonly jobs = new Map<string, Promise<void>>()
   /** Fired each time a sweep job settles. */
   onSettled: (() => void) | null = null
+  readonly governor: GovernorPort
+  readonly repository: string
+  /** Sweeps the governor held back on the last pass, by role — carried on the heartbeat beside the engine's. */
+  private deferred = new Map<string, Deferral>()
 
   constructor(cfg: SchedulerConfig) {
     this.cfg = cfg
     this.git = new Git(cfg.repoDir)
     this.frameworkRoots = memoizedFrameworkRoots(this.git, cfg.frameworkPrefix)
+    this.governor = cfg.governor
+    this.repository = cfg.repository ?? cfg.repoDir
+  }
+
+  private hostTipPromise: Promise<HostTip> | null = null
+  private hostTip(): Promise<HostTip> {
+    if (!this.hostTipPromise) {
+      this.hostTipPromise = this.cfg.hostTip ? Promise.resolve(this.cfg.hostTip) : resolveHostTip(this.git)
+      this.hostTipPromise.catch(() => {
+        this.hostTipPromise = null
+      })
+    }
+    return this.hostTipPromise
+  }
+
+  /** What the last pass held back and why (#501). */
+  deferrals(): Deferral[] {
+    return [...this.deferred.values()]
   }
 
   private now(): Date {
@@ -228,20 +345,40 @@ export class Scheduler {
 
   /** One pass over every schedule. `force` bypasses S2 dueness for one role (the CLI's `sweep`). */
   async tick(opts: { force?: string } = {}): Promise<SweepOutcome[]> {
-    const defaultBranch = await this.git.defaultBranch()
-    const text = await this.git.show(defaultBranch, 'orchestrator.yaml')
-    if (text === null) return []
+    // The schedules are read at the host tip commit, once resolved (#500):
+    // the same snapshot as the registry and the adapter manifests. The
+    // default branch itself is named by its full ref, so a tag that shares
+    // its short name cannot stand in for it.
+    const tip = await this.hostTip()
+    const text = await this.git.show(tip.commit, 'orchestrator.yaml')
+    const deferred = new Map<string, Deferral>()
+    if (text === null) {
+      this.deferred = deferred
+      return []
+    }
     const { schedules, errors } = parseScheduleConfig(text)
     for (const e of errors) this.log(`orchestrator.yaml: ${e}`)
 
     const outcomes: SweepOutcome[] = []
     for (const entry of schedules) {
       try {
-        outcomes.push(await this.tickOne(entry, defaultBranch, opts.force === entry.role))
+        const outcome = await this.tickOne(entry, tip.ref, opts.force === entry.role)
+        if (outcome.kind === 'deferred' && outcome.slug) {
+          const prior = this.deferred.get(entry.role)
+          deferred.set(entry.role, {
+            slug: outcome.slug,
+            rule: outcome.rule ?? 'MC',
+            reason: outcome.detail,
+            since: prior?.rule === outcome.rule ? prior.since : this.now().toISOString(),
+            repository: this.repository,
+          })
+        }
+        outcomes.push(outcome)
       } catch (e) {
         outcomes.push({ role: entry.role, slug: null, kind: 'error', rule: null, detail: (e as Error).message })
       }
     }
+    this.deferred = deferred
     return outcomes
   }
 
@@ -270,18 +407,34 @@ export class Scheduler {
       if (candidate && (!lastSweptAt || candidate > lastSweptAt)) lastSweptAt = candidate
     }
 
+    const estimateUsd = this.cfg.registry?.estimates[entry.role] ?? DEFAULT_ESTIMATE_USD
     const decision = deriveSweep({
       now,
       entry,
       lastSweptAt: force ? null : lastSweptAt,
       openSweep,
       slugTaken: (await this.git.forEachRef(sweepRefPatterns(slug))).length > 0,
-      estimateUsd: this.cfg.registry?.estimates[entry.role] ?? DEFAULT_ESTIMATE_USD,
+      estimateUsd,
     })
     if (decision.kind !== 'dispatch')
       return { role: entry.role, slug: null, kind: decision.kind, rule: decision.rule, detail: decision.why }
 
-    return this.launch(entry, defaultBranch, slug, lastSweptAt, now)
+    // Admission (#501): a due sweep takes a slot like any dispatch. Until
+    // `launch` hands the reservation to the sweep's job, this frame owns it,
+    // and releases it on every other way out — a lost CAS, a missing default
+    // tip, an exception.
+    const { granted, refusal } = this.governor.reserve({ repository: this.repository, intents: [{ key: sweepKey(slug), estimateUsd }] })
+    const reservation = granted[0]
+    if (!reservation) {
+      const detail = refusalReason(refusal!, `${entry.role} sweep`, 'the sweep re-derives')
+      this.log(`sweep(${slug}): ${detail}`)
+      return { role: entry.role, slug, kind: 'deferred', rule: refusalRule(refusal!), detail }
+    }
+    try {
+      return await this.launch(entry, defaultBranch, slug, lastSweptAt, now, reservation)
+    } finally {
+      if (!reservation.committed) reservation.release()
+    }
   }
 
   /**
@@ -295,6 +448,7 @@ export class Scheduler {
     slug: string,
     coveringSince: string | null,
     now: Date,
+    reservation: Reservation,
   ): Promise<SweepOutcome> {
     const tip = await this.git.revParse(defaultBranch)
     if (!tip) return { role: entry.role, slug, kind: 'error', rule: 'S4', detail: `${defaultBranch} has no tip` }
@@ -334,6 +488,8 @@ export class Scheduler {
       return { role: entry.role, slug, kind: 'lost-cas', rule: 'S4', detail: 'sweep branch appeared mid-tick — another instance won; rest' }
     await this.pushBranch(branch)
 
+    // What the closing commit metered, handed to the governor on release (#501).
+    let metered: number | null = null
     const job = (async () => {
       let outcome: { ok: boolean; costUsd: number | null; tokensIn: number | null; tokensOut: number | null; error: string | null }
       try {
@@ -347,16 +503,21 @@ export class Scheduler {
       } catch (e) {
         outcome = { ok: false, costUsd: null, tokensIn: null, tokensOut: null, error: (e as Error).message }
       }
-      await this.closeSweep(entry, branch, slug, outcome)
+      metered = await this.closeSweep(entry, branch, slug, outcome)
     })()
     this.jobs.set(
       slug,
       job.finally(async () => {
+        // Settlement gives the slot back first (#501), after the closing
+        // commit has metered the marker, with what it metered.
+        reservation.release(metered)
         this.jobs.delete(slug)
         await removeRunCheckout(this.cfg.repoDir, branch)
         this.onSettled?.()
       }),
     )
+    // The hand-over: from here the job's settlement owns the slot.
+    reservation.commit()
     this.log(`sweep(${slug}): dispatched ${entry.role} on ${branch}`)
     return { role: entry.role, slug, kind: 'dispatched', rule: 'S4', detail: `covering since ${coveringSince ?? 'repo start'}` }
   }
@@ -377,15 +538,15 @@ export class Scheduler {
     branch: string,
     slug: string,
     outcome: { ok: boolean; costUsd: number | null; tokensIn: number | null; tokensOut: number | null; error: string | null },
-  ): Promise<void> {
+  ): Promise<number> {
     const estimate = this.cfg.registry?.estimates[entry.role] ?? DEFAULT_ESTIMATE_USD
     const cost = outcome.costUsd ?? estimate
     const { runs: runsRoot } = await this.frameworkRoots()
     for (let attempt = 0; attempt < 5; attempt++) {
       const tip = await this.git.revParse(`refs/heads/${branch}`)
-      if (!tip) return // branch deleted under us — a human pruned it; nothing to record
+      if (!tip) return cost // branch deleted under us — a human pruned it; nothing to record
       const current = await this.git.show(tip, `${runsRoot}/${slug}/sweep.yaml`)
-      if (current === null) return
+      if (current === null) return cost
       const closed = current
         .replace(/^tokens_in: .*$/m, `tokens_in: ${outcome.tokensIn ?? 'null'}`)
         .replace(/^tokens_out: .*$/m, `tokens_out: ${outcome.tokensOut ?? 'null'}`)
@@ -402,11 +563,12 @@ export class Scheduler {
       if (await this.git.updateRefCAS(`refs/heads/${branch}`, commit, tip)) {
         this.log(`sweep(${slug}): metered ${entry.role} $${cost.toFixed(2)} ${outcome.ok ? 'ok' : `FAILED (${outcome.error})`}`)
         await this.pushBranch(branch)
-        return
+        return cost
       }
       // The agent (or a human) committed mid-close: re-read the tip and retry.
     }
     this.log(`sweep(${slug}): closing commit lost CAS 5× — usage unrecorded; the marker stays open on the branch`)
+    return cost
   }
 }
 

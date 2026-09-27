@@ -58,6 +58,7 @@ const NO_REAL_TRIGGERS = { heartbeatMs: 10 * 60 * 1000, debounceMs: 10 * 60 * 10
 /** Minimal fake standing in for Engine — just the surface runLoop drives. */
 class FakeEngine implements EngineLike {
   onSettled: (() => void) | null = null
+  subscribeWake?: (wake: () => Promise<void>) => () => void
   tickCalls = 0
   syncCalls = 0
   async tick(): Promise<TickOutcome[]> {
@@ -199,6 +200,56 @@ describe('runLoop code-tree wiring (#141)', () => {
     expect(engine.tickCalls).toBe(1)
 
     await loop.stop()
+  })
+
+  it('triggers during a pass join one waiting pass, never overlap, and resolve only after a pass that began later (#501)', async () => {
+    const dir = makeRepo()
+    let inside = 0
+    let most = 0
+    let release: () => void = () => {}
+    const engine = new FakeEngine()
+    const tick = engine.tick.bind(engine)
+    let hold = false
+    engine.tick = async () => {
+      inside++
+      most = Math.max(most, inside)
+      try {
+        if (hold) await new Promise<void>((r) => (release = r))
+        return await tick()
+      } finally {
+        inside--
+      }
+    }
+    let unsubscribed = false
+    let wake: (() => Promise<void>) | null = null
+    engine.subscribeWake = (fn) => {
+      wake = fn
+      return () => {
+        unsubscribed = true
+      }
+    }
+    const loop = await runLoop(engine, dir, { ...NO_REAL_TRIGGERS, log: () => {} })
+    expect(engine.tickCalls).toBe(1)
+    expect(wake).not.toBeNull()
+
+    hold = true
+    const running = loop.trigger('refs') // pass 2 starts and blocks
+    await new Promise((r) => setTimeout(r, 20))
+    hold = false
+    let wokeDone = false
+    const woke = wake!().then(() => {
+      wokeDone = true
+    })
+    const completion = loop.trigger('completion')
+    await new Promise((r) => setTimeout(r, 20))
+    expect(wokeDone).toBe(false) // the running pass began before the wake: it does not count
+    release()
+    await Promise.all([running, woke, completion])
+    expect(engine.tickCalls).toBe(3) // the wake and the completion shared one pass
+    expect(most).toBe(1)
+
+    await loop.stop()
+    expect(unsubscribed).toBe(true)
   })
 
   it('behaves exactly as before #141 when no codeMonitor is supplied', async () => {

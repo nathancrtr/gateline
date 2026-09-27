@@ -47,3 +47,8 @@ depends_on: [01-lexicon-promise-check]
 status: pending
 
 notes: |
+  round 1:
+  discovery: the G2 packet withholds its criterion view when no verification report is present, so the test fixture has to carry a report with E1/E2 blocks. Without one, no criterion renders at all.
+  claim: AC8.5. Against the pre-change evidence.tsx, `npx vitest run web/test/g2-criterion-check.test.ts` gave 4 failed, 3 passed. All three checked-criterion assertions failed because no quote element existed. Other checked-path mutants were each killed: no split (hook kept) failed 2, no separating space failed 1, check not `block` failed 1.
+  claim: AC8.6. Breaking the unchecked path was caught both ways, then passed once restored: routing it through the check branch failed 2, and quoting `definition` instead of `body` failed 1.
+  `npx vitest run web/test`: 34 files, 544 passed. `npm run typecheck` and `npm run lint` exited 0. The first `npm test` run failed core/test/readiness.test.ts at file level with 0 failed tests. That file passed alone (72/72), and a second full run passed with exit 0: 124 files, 1789 passed, 2 skipped.

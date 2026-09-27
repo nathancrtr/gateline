@@ -337,7 +337,8 @@ function CriterionPacket({
   const lex = useLexicon()
   // The criterion verbatim from spec.md. Absent only when the record cites an
   // id the spec never defined — which is itself the fact worth showing.
-  const text = lex?.byId.get(c.id)?.at(-1)?.body ?? null
+  const entry = lex?.byId.get(c.id)?.at(-1)
+  const text = entry?.body ?? null
   const cited = c.evidence.length > 0 || c.result !== null
   const raised = c.findings.map((ref) => ({ ref, finding: findings.get(`${ref.artifact}#${ref.id}`) }))
   return (
@@ -350,7 +351,21 @@ function CriterionPacket({
           {c.id}
         </Name>
         {text ? (
-          <span className="min-w-0 flex-1 text-[12.5px] leading-[1.5] text-ink">{text}</span>
+          <span className="min-w-0 flex-1 text-[12.5px] leading-[1.5] text-ink" data-criterion-quote>
+            {/* A check (the spec's `Check:` line) starts a line of its own
+                under the promise, label as written. The space keeps the
+                quote's text the spec's words when the block is not laid out. */}
+            {entry?.check !== undefined ? (
+              <>
+                {`${entry.promise} `}
+                <span className="block" data-criterion-check>
+                  {entry.check}
+                </span>
+              </>
+            ) : (
+              text
+            )}
+          </span>
         ) : (
           <span className="min-w-0 flex-1 text-[12.5px] text-warn">cited by the record, defined in no spec</span>
         )}

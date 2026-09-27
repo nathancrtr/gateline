@@ -133,6 +133,42 @@ function overrun(inner: ElementHandle<Element>, container: ElementHandle<Element
   }, inner)
 }
 
+/**
+ * How far any text line of `inner` lies outside what an element between it
+ * and `container` lets show, in px; 0 or less is all shown. Text keeps its
+ * line boxes when an ancestor with a height cap and hidden overflow cuts it
+ * off, so the measures above would still find a clipped check in place. This
+ * walks from `inner` itself up to `container`, and on each axis an element
+ * does not leave visible, requires every line box inside its padding box.
+ */
+function clipped(inner: ElementHandle<Element>, container: ElementHandle<Element>) {
+  return container.evaluate((stop, el) => {
+    const lines: DOMRect[] = []
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      if (!(n as Text).data.trim()) continue
+      const range = document.createRange()
+      range.selectNodeContents(n)
+      for (const r of range.getClientRects()) if (r.width > 0 && r.height > 0) lines.push(r)
+    }
+    let worst = Number.NEGATIVE_INFINITY
+    for (let a: Element | null = el; a; a = a === stop ? null : a.parentElement) {
+      const style = getComputedStyle(a)
+      const clipsX = style.overflowX !== 'visible'
+      const clipsY = style.overflowY !== 'visible'
+      if (!clipsX && !clipsY) continue
+      const b = a.getBoundingClientRect()
+      const x0 = b.left + a.clientLeft
+      const y0 = b.top + a.clientTop
+      for (const r of lines) {
+        if (clipsX) worst = Math.max(worst, x0 - r.left, r.right - (x0 + a.clientWidth))
+        if (clipsY) worst = Math.max(worst, y0 - r.top, r.bottom - (y0 + a.clientHeight))
+      }
+    }
+    return worst
+  }, inner)
+}
+
 /** The Record reader's pane: the nearest ancestor that clips sideways (#281). */
 async function paneOf(el: ElementHandle<Element>): Promise<ElementHandle<Element>> {
   const pane = await el.evaluateHandle((node) => {
@@ -144,23 +180,31 @@ async function paneOf(el: ElementHandle<Element>): Promise<ElementHandle<Element
 }
 
 /**
- * Save `<name>.png`: the viewport around `focus`, spanning `container` plus a
- * margin on each side, so a word running past the container's edge is in the
- * picture rather than cut away with it. `settle` runs after the scroll that
- * brings `focus` into view, for a view the scroll can disturb.
+ * Save `<name>.png`: the page around `focus`, spanning `container` and the
+ * furthest line of `focus`'s text plus a margin on each side, so a word
+ * running past the container's edge, or past the viewport's, is in the picture
+ * rather than cut away with it. `settle` runs after the scroll that brings
+ * `focus` into view, for a view the scroll can disturb.
  */
 async function capture(page: Page, testInfo: TestInfo, name: string, container: ElementHandle<Element>, focus: ElementHandle<Element>, settle?: () => Promise<void>) {
   await focus.scrollIntoViewIfNeeded()
   await settle?.()
   const c = (await container.boundingBox())!
   const f = (await focus.boundingBox())!
-  const vp = page.viewportSize()!
+  const textRight = f.x + f.width + Math.max(0, await overrun(focus, focus))
+  // The clip is in page coordinates once the capture may reach past the viewport.
+  const page_ = await page.evaluate(() => ({
+    sx: window.scrollX,
+    sy: window.scrollY,
+    width: document.documentElement.scrollWidth,
+    height: document.documentElement.scrollHeight,
+  }))
   const pad = 12
-  const x = Math.max(0, Math.min(c.x, f.x) - pad)
-  const y = Math.max(0, f.y - pad)
-  const right = Math.min(vp.width, Math.max(c.x + c.width, f.x + f.width) + pad)
-  const bottom = Math.min(vp.height, f.y + f.height + pad)
-  await page.screenshot({ path: testInfo.outputPath(`${name}.png`), clip: { x, y, width: right - x, height: bottom - y } })
+  const x = Math.max(0, Math.min(c.x, f.x) - pad + page_.sx)
+  const y = Math.max(0, f.y - pad + page_.sy)
+  const right = Math.min(page_.width, Math.max(c.x + c.width, textRight) + pad + page_.sx)
+  const bottom = Math.min(page_.height, f.y + f.height + pad + page_.sy)
+  await page.screenshot({ path: testInfo.outputPath(`${name}.png`), fullPage: true, clip: { x, y, width: right - x, height: bottom - y } })
 }
 
 /** The shared assertions on a view's checked criterion: placement (AC3.1/4.1/5.1) and containment (AC8.4). */
@@ -175,6 +219,10 @@ async function expectCheckPlaced(holder: ElementHandle<Element>, check: ElementH
   // promise ends. A block is what makes the new line hold for any promise.
   expect(await check.evaluate((el) => getComputedStyle(el).display), `${where}: the check is laid out as a block`).toBe('block')
   expect(await overrun(check, container), `${where}: the check's last word stays inside its container`).toBeLessThanOrEqual(0.5)
+  // Placed is not shown: a check cut off by a height cap, or hidden, keeps
+  // every line box measured above.
+  expect(await check.evaluate((el) => el.checkVisibility({ opacityProperty: true, visibilityProperty: true })), `${where}: the check is visible`).toBe(true)
+  expect(await clipped(check, container), `${where}: no element between the check and its container cuts any of its lines off`).toBeLessThanOrEqual(0.5)
 }
 
 // ---------------------------------------------------------------------------

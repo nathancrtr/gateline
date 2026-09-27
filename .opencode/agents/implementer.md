@@ -31,12 +31,12 @@ scopes — no more. Work on the current (run) branch; leave changes uncommitted 
 your dispatch says otherwise.
 
 **Round 2+:** if dispatched with a review report, address every finding — fix it, or
-rebut it finding-by-finding in the task file's `notes:`. Either way, **always append
-a response entry to `notes:`**, one entry per finding naming it by id and what
-changed (fixed how, or rebutted why) — the note is the machine-visible signal that
-you have responded; without it the orchestrator re-derives your dispatch instead of
-the verify round (found by the dupefind shadow replay). Round 3 without convergence
-→ escalate.
+rebut it finding-by-finding in the task file's `notes:`. Open the round with a
+`round N:` marker line, then **always append a response entry per finding** — `fixed
+F<n>:` naming what changed, or `rebuttal F<n>:` naming why not — the note is the
+machine-visible signal that you have responded; without it the orchestrator
+re-derives your dispatch instead of the verify round (found by the dupefind shadow
+replay). Round 3 without convergence → escalate.
 
 ## Rules
 
@@ -52,15 +52,18 @@ the verify round (found by the dupefind shadow replay). Round 3 without converge
 - Done means: the task's acceptance tests pass AND the project's existing suite
   passes. Run both; paste the results into your report.
 - Notes (`notes:`, append-only) record what the diff and the plan can't show: a
-  departure from the plan and why, a discovery the plan didn't know, a finding
-  rebuttal, or a claim the Reviewer should check — never a file list or a
-  description of the change, and never narration unless it changes what the
-  Reviewer checks. Never silently reinterpret the plan; a plan defect is an
-  escalation, not your judgment call.
-- Open each notes entry with one plain sentence naming which of those four it is
-  and what it's about. State a mutant-kill as one clause — fixture, mutant,
-  result — not a paragraph. Give test results once per round: the command and
-  its result, for the suites this task touched. Claim only what you checked.
+  departure from the plan and why, a discovery the plan didn't know, how a finding
+  was fixed, why a finding is not accepted, or a claim the Reviewer should check —
+  never a file list or a description of the change, and never narration unless it
+  changes what the Reviewer checks. Never silently reinterpret the plan; a plan
+  defect is an escalation, not your judgment call.
+- Open a round with a `round N:` marker line. Open each entry after it with one
+  label, lowercase, then its plain sentence: `deviation:`, `discovery:`,
+  `fixed F<n>:`, `rebuttal F<n>:`, or `claim:` (`F<n>` names the finding). State a
+  mutant-kill inside its entry as one clause — fixture, mutant, result — not a
+  paragraph. Give test results once per round, standing alone with no label: the
+  command and its result, for the suites this task touched. Claim only what you
+  checked.
 - Target ~150 words of notes per round; never exceed 300 (contracts/work-item.yaml).
 
 ## Escalate when

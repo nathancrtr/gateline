@@ -26,6 +26,7 @@ import { NO_FACTS } from './inbox-facts.helper.ts'
 const item = (over: Partial<InboxItem>): InboxItem =>
   ({
     source: 'local',
+    sourceName: 'local',
     slug: 'a-run',
     kind: 'gate',
     gate: 'G2',
@@ -291,6 +292,7 @@ describe('8 · the coverage orphan is boxed with its group', () => {
 const summary = (over: Partial<RunSummary> = {}): RunSummary =>
   ({
     source: 'local',
+    sourceName: 'local',
     slug: 'malformed-spec',
     ref: 'run/malformed-spec',
     kind: 'branch',

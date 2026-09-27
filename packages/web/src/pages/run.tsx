@@ -15,6 +15,7 @@ import { api, type InboxItem } from '../api.ts'
 import { KeyHints } from '../components/chips.tsx'
 import { CloseRunPanel, ClosureRecordBlock } from '../components/close-run.tsx'
 import { LexiconProvider, useRunLexicon } from '../components/lexicon.tsx'
+import { runPageTitle, shownName, useDocumentTitle } from '../components/repository.tsx'
 import { decideTargetIndex, resolveSurface, type Surface } from '../landing.ts'
 import { orderArtifacts } from '../record-rail.ts'
 import { parseRunPath } from '../run-path.ts'
@@ -71,6 +72,9 @@ export function RunPage() {
     enabled: Boolean(src && slug),
   })
   const lexicon = useRunLexicon(src, slug)
+  // The tab names the run and its repository (#497), so two runs' tabs, or
+  // one slug in two repositories, can be told apart.
+  useDocumentTitle(data ? runPageTitle(data.summary.slug, shownName(data.summary.source, data.summary.sourceName)) : null)
 
   // The confirmation of the decision just made (#506). It stands in the Decide
   // surface once the refetch its own write triggers has removed the card, and

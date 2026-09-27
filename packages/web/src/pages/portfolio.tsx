@@ -5,6 +5,7 @@ import { type ReactNode, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { api, formatAge, type NeedFact, type RunSummary } from '../api.ts'
 import { BudgetMeter, GateLedger, Imp, type ImpTone, KIND_GLYPH, kindTone, PhaseChip } from '../components/chips.tsx'
+import { fullRunName, REPOSITORY_COLUMN, REPOSITORY_FOLD, RepositoryName, runLinkLabel, useNamesRepository } from '../components/repository.tsx'
 import { UnreadableState } from '../components/unreadable-state.tsx'
 import { gateCardState } from '../gate-state.ts'
 import { runPath } from '../run-path.ts'
@@ -114,7 +115,11 @@ export function NeedsYou({ mark }: { mark: NeedsYouMark }) {
 }
 
 export function PortfolioPage() {
-  const { data, isLoading, error } = useQuery({ queryKey: ['runs'], queryFn: api.runs })
+  const { data, isLoading: runsLoading, error } = useQuery({ queryKey: ['runs'], queryFn: api.runs })
+  // The rows wait for the set's size too, so a row never gains or loses its
+  // repository after it first paints.
+  const names = useNamesRepository()
+  const isLoading = runsLoading || !names.ready
 
   if (isLoading) {
     return (
@@ -175,6 +180,12 @@ export function PortfolioPage() {
                 <th className={TH}>
                   <span className="sr-only">Needs you</span>
                 </th>
+                {/* The repository is a column of the register (#497), left of
+                    the run so it precedes the slug as it does on an inbox
+                    row, and so slugs start at one x down the column. Drawn
+                    only when the set has several repositories: with one the
+                    table is as it always was. */}
+                {names.show && <th className={`${TH} ${REPOSITORY_COLUMN}`}>repository</th>}
                 <th className={TH}>run</th>
                 <th className={TH}>phase</th>
                 <th className={TH}>gates</th>
@@ -194,14 +205,33 @@ export function PortfolioPage() {
                       <NeedsYou mark={needsYouMark(run)} />
                     </div>
                   </td>
+                  {names.show && (
+                    <td className={`${TD} ${REPOSITORY_COLUMN}`}>
+                      <RepositoryName className="font-mono text-[13.5px]" source={run.source} sourceName={run.sourceName} />
+                    </td>
+                  )}
                   <td className={`${TD} min-w-[170px]`}>
                     <div className="min-w-0">
-                      <Link to={runPath(run.source, run.slug)} className="font-mono text-[13.5px] font-semibold text-ink hover:underline">
+                      {/* With several repositories the link's accessible name
+                          says which one — "billing, add-export" — whether the
+                          repository is in its column or folded below. */}
+                      <Link
+                        to={runPath(run.source, run.slug)}
+                        className="font-mono text-[13.5px] font-semibold text-ink hover:underline"
+                        aria-label={names.show ? runLinkLabel(run.source, run.sourceName, run.slug) : undefined}
+                        title={fullRunName(run.source, run.slug)}
+                      >
                         {run.slug}
                       </Link>
-                      <div className="mt-[2px] font-ui text-[11.5px] text-muted">
-                        {run.source} · {run.profile}
-                      </div>
+                      {/* Below 1280px the column is not drawn, and the name
+                          folds under the slug, above the profile. Hidden from
+                          the reading order: the link has already said it. */}
+                      {names.show && (
+                        <div className={REPOSITORY_FOLD} aria-hidden="true" data-repository-fold>
+                          <RepositoryName className="mt-[2px] font-mono text-[11.5px]" source={run.source} sourceName={run.sourceName} />
+                        </div>
+                      )}
+                      <div className="mt-[2px] font-ui text-[11.5px] text-muted">{run.profile}</div>
                       {/* Why the state could not be read, from core's fact
                           (#435): the parser's message as a Diagnostic under
                           its producer, as the decide card sets it, with `<pre>`

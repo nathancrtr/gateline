@@ -2,7 +2,7 @@
 // derivations over RunSource reads — nothing here is stored (rule R1).
 
 import { bestEffortEscalations, type ClosureRecord, type GateEntry, type Profile, ROUND_CAP, type RunState } from '../record/schema.ts'
-import type { RunRef, RunSource } from '../sources/source.ts'
+import { displayNameOf, type RunRef, type RunSource } from '../sources/source.ts'
 import { deriveReadiness, type InboxItem } from './readiness.ts'
 import { type StateProblem, stateProblem } from './state-problem.ts'
 
@@ -14,7 +14,15 @@ export interface GateLedgerCell {
 }
 
 export interface RunSummary {
+  /** The repository's id (docs/MULTI-REPO.md §6): what URLs, logs and copies carry. */
   source: string
+  /**
+   * The repository's display name (§6.2): the config `name`, else the id's
+   * last segment. Presentation only — what an interface shows where it names
+   * the repository (#497). Filled from `displayNameOf`, so web never derives
+   * it from the id.
+   */
+  sourceName: string
   slug: string
   ref: string
   kind: RunRef['kind']
@@ -156,6 +164,7 @@ export async function summarizeRun(
     return {
       summary: {
         source: ref.source,
+        sourceName: displayNameOf(source),
         slug: ref.slug,
         ref: ref.ref,
         kind: ref.kind,
@@ -181,6 +190,7 @@ export async function summarizeRun(
   return {
     summary: {
       source: ref.source,
+      sourceName: displayNameOf(source),
       slug: ref.slug,
       ref: ref.ref,
       kind: ref.kind,

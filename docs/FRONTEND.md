@@ -196,7 +196,7 @@ opposite to the intuition:
 
 - The History view is **already half a ledger** — it marks phase transitions from each
   commit's `state.yaml`. The decision data is already built and served, in
-  `collectRunDecisions` and `GET /api/runs/:src/:slug/decisions`, and History simply
+  `collectRunDecisions` and `GET /api/repos/:id/-/runs/:slug/decisions`, and History simply
   does not read it. Converting it is wiring.
 - The scoped diff was **further away than it looked**. `file_contact_surface` is
   written by `record/scaffold.ts` and required by `record/validate.ts`, and nothing

@@ -64,6 +64,7 @@ const ledger = (over: Partial<Ledger> = {}): Ledger => ({
 const item = (over: Partial<InboxItem>): InboxItem =>
   ({
     source: 'local',
+    sourceName: 'local',
     slug: 'a-run',
     kind: 'gate',
     gate: null,

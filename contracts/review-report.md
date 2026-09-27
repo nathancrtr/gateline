@@ -1,7 +1,8 @@
 # Review Report: <task id>
 
 <!-- Contract: produced by Reviewer; consumed by Implementer and gate G2.
-     All sections required. Findings ranked most-severe first.
+     All sections required. Findings ranked most-severe first, short-form
+     minor findings (FINDING SHAPE below) after every full-form one.
      BUDGET: one line + failure scenario per finding — no narrative. Reference
      the spec and diff (requirement numbers, file:line); never re-quote them.
      ESCALATE SCOPE: escalate covers a plan/decomposition defect even when the
@@ -24,10 +25,25 @@
      Options are a bulleted list, one route per item: what the escalating
      role would do, never what it has decided — the human picks.
      REQUIRED WHEN: Escalation=escalate
-     READABILITY (normative — human-facing sections: Findings, verify round,
-     Coverage; a breach is bounced like a malformed finding, with the rule
-     cited). Name before cite applies throughout: give any id or file a noun
-     phrase on first use. A testing term or a label coined this run — mutant,
+     SUMMARY (normative — every round): the `**Summary:**` line under Diff
+     reviewed is the bottom line, decide-time. Two or three plain sentences,
+     60 words or fewer: whether the change does what it should, what kind of
+     findings these are (defects in shipped behaviour, gaps in what the tests
+     would catch), and what the approver accepts by approving. Each round
+     writes its own, as of that round.
+     FINDING SHAPE (normative): the full form carries Where, Failure
+     scenario, Requirement, and optionally Fix — what the implementer should
+     do, omitted when the scenario makes it obvious; the approver may skip
+     it. A fix recipe goes there, never in the failure scenario. A minor
+     finding that violates no requirement takes the short form: its
+     `### F<n> — minor — <title>` heading, Where, and a one-sentence failure
+     scenario of 30 words or fewer — no Requirement bullet, Fix only if
+     needed. Blocking, major, and minor-with-a-requirement keep the full form.
+     READABILITY (normative — human-facing: the Summary line, Findings,
+     verify round, Coverage; a breach is bounced like a malformed finding,
+     with the rule cited). The Summary line takes no code spans, paths, or
+     parenthetical cites. Name before cite applies throughout: give any id
+     or file a noun phrase on first use. A testing term or a label coined this run — mutant,
      kill, survive, pin — is explained in plain words at first use, naming
      the actor and what changes rather than the term alone.
      (a) A finding's title (the `<one-line defect>` below) is one line, 20
@@ -41,7 +57,8 @@
      its own finding, not a longer disposition line.
      (e) Coverage opens with one plain-words sentence stating overall
      coverage — no code spans, paths, or parenthetical cites — 40 words or
-     fewer. (f) Then the Coverage table (shape below): one row per
+     fewer. It states coverage only; the bottom line is the Summary's.
+     (f) Then the Coverage table (shape below): one row per
      requirement or area checked. The table is the shape — a bullet list or
      a paragraph in its place is in breach. Cites live in the Where column,
      one location per row; the Mechanism column holds a clause, never a
@@ -72,6 +89,7 @@
 **Verdict:** approve | request-changes | escalate
 **Round:** <n of 3>
 **Diff reviewed:** <branch/commit>
+**Summary:** <two or three plain sentences, 60 words or fewer: does the change do what it should, what kind of findings are these, what does approving accept>
 
 ## Escalation
 <!-- Present exactly when Verdict is escalate; omit it otherwise (see
@@ -97,18 +115,23 @@ The options as I see them:
 ### F1 — <severity: blocking | major | minor> — <one-line defect, 20 words or fewer>
 - **Where:** `path/to/file.py:123`
 - **Failure scenario:** <one plain sentence: the consequence, and for whom —
-  then concrete inputs/state → wrong output or crash. If you can't construct
-  one, mark the finding PLAUSIBLE.>
+  then concrete inputs/state → wrong output or crash. No fix recipe. If you
+  can't construct one, mark the finding PLAUSIBLE.>
 - **Requirement:** <spec/plan reference this violates, if applicable>
+- **Fix:** <optional, for the implementer: what to change>
 
 <!-- Round ≥ 2 appends below round 1, never overwriting it — see VERIFY ROUND
-     above. Shape (fenced here so it reads as an example, not live headings): -->
+     above. Shape (fenced here so it reads as an example, not live headings;
+     F4 shows the short form, last): -->
 ```
 # Round 2
 
 **Verdict:** approve | request-changes | escalate
 **Round:** 2 of 3
 **Diff reviewed:** <delta since the round-1 diff>
+**Summary:** <as above, as of this round: e.g. "The fix closes the crash
+  on empty input. One new defect remains in the retry path, and approving
+  ships it.">
 
 ## Verify round
 - **F1 — resolved** — <60 words or fewer: what changed, why the
@@ -119,6 +142,10 @@ The options as I see them:
 - **Where:** `path/to/file.py:200`
 - **Failure scenario:** <as above>
 - **Requirement:** <as above>
+
+### F4 — minor — <a defect that violates no requirement>
+- **Where:** `path/to/file.py:40`
+- **Failure scenario:** <one sentence, 30 words or fewer>
 ```
 
 ## Coverage
@@ -132,7 +159,7 @@ The options as I see them:
      only what changed since the round you're checking (VERIFY ROUND above);
      earlier rounds' rows stand unrepeated. -->
 
-<one sentence: what was covered, what was not, and how — static reading, execution, both>
+<one sentence, coverage only: what was covered, what was not, and how — static reading, execution, both>
 
 | Requirement | Where | Mechanism checked | Status |
 |-------------|-------|-------------------|--------|

@@ -15,7 +15,7 @@ import { api, type InboxItem } from '../api.ts'
 import { KeyHints } from '../components/chips.tsx'
 import { CloseRunPanel, ClosureRecordBlock } from '../components/close-run.tsx'
 import { LexiconProvider, useRunLexicon } from '../components/lexicon.tsx'
-import { runPageTitle, shownName, useDocumentTitle } from '../components/repository.tsx'
+import { runPageTitle, shownName, useDocumentTitle, useServedRepositories, ViewModeLine } from '../components/repository.tsx'
 import { decideTargetIndex, resolveSurface, type Surface } from '../landing.ts'
 import { orderArtifacts } from '../record-rail.ts'
 import { parseRunPath } from '../run-path.ts'
@@ -72,6 +72,11 @@ export function RunPage() {
     enabled: Boolean(src && slug),
   })
   const lexicon = useRunLexicon(src, slug)
+  // A run in a `view` repository is read here and nothing is written to it
+  // (#499; MULTI-REPO.md §7.3). The mode is `/api/health`'s, the same list
+  // the rail reads, so the page offers no control the server would refuse.
+  const served = useServedRepositories()
+  const readOnly = src !== undefined && served.modeOf(src) === 'view'
   // The tab names the run and its repository (#497), so two runs' tabs, or
   // one slug in two repositories, can be told apart.
   useDocumentTitle(data ? runPageTitle(data.summary.slug, shownName(data.summary.source, data.summary.sourceName)) : null)
@@ -196,7 +201,7 @@ export function RunPage() {
   // Whether a decision card is showing them for us. `DecidePanel` renders the
   // hints for the primary card so they can vanish with the card's idle mode;
   // that only happens on the Decide surface, and only when a card is primary.
-  const primaryCardHints = route.surface === 'decide' && primaryIndex >= 0
+  const primaryCardHints = route.surface === 'decide' && primaryIndex >= 0 && !readOnly
 
   const board = summary.tasks.total > 0 && detail.state ? <TaskBoard state={detail.state} roundCap={summary.tasks.roundCap} /> : null
 
@@ -208,7 +213,7 @@ export function RunPage() {
         <div className="border-b border-line pb-7">
           {header}
           {stateErrorBlock}
-          {summary.phase === 'closed' && <ClosureRecordBlock source={src!} slug={slug!} closure={summary.closure} />}
+          {summary.phase === 'closed' && <ClosureRecordBlock source={src!} slug={slug!} closure={summary.closure} readOnly={readOnly} />}
           <RunMetadata summary={summary} board={board} />
         </div>
 
@@ -233,6 +238,7 @@ export function RunPage() {
                 sentHere={i === decideIndex}
                 pageHints={pageHints}
                 onCommitted={(text) => setConfirmed({ src, slug, key: cardKey(item, i), item, text })}
+                readOnly={readOnly}
               />
             ))}
           </section>
@@ -257,7 +263,15 @@ export function RunPage() {
             close-run affordance, because a hint belongs with what it is a hint
             about and not under the one destructive control on the page. */}
         {!primaryCardHints && <KeyHints hints={pageHints} className="mt-3.5 text-right" />}
-        <CloseRunPanel source={src!} slug={slug!} phase={summary.phase} />
+        {/* Closing is a decision too. In a `view` repository it is not
+            offered, and the line takes its place wherever no card on screen
+            already says it. */}
+        {readOnly ? (
+          !(route.surface === 'decide' && items.length > 0) &&
+          !['done', 'closed'].includes(summary.phase) && <ViewModeLine className="mt-7 text-right" />
+        ) : (
+          <CloseRunPanel source={src!} slug={slug!} phase={summary.phase} />
+        )}
       </div>
     </LexiconProvider>
   )

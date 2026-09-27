@@ -6,7 +6,9 @@
 // rows the API already returns: every row carries `source` (the repository
 // id) and `sourceName` (its display name). The API takes no `repo` parameter,
 // because the rail's Inbox badge needs the whole set's count whatever the
-// scope, and the data is small at operator scale.
+// scope, and the data is small at operator scale. The set itself, with each
+// repository's display name and mode, is `/api/health`'s (#499), so a
+// repository with nothing on the page is still named.
 //
 // The scope lives in the URL only, as `?repo=<repository id>` (decision P9):
 // nothing here reads or writes browser storage, so a fresh visit always shows
@@ -14,6 +16,8 @@
 //
 // Pure functions only. The pages and the rail call these; the markup lives in
 // `components/scope.tsx`.
+
+import type { RepositoryMode } from './api.ts'
 
 /** The query parameter the scope travels in. */
 export const SCOPE_PARAM = 'repo'
@@ -27,11 +31,22 @@ export const sameRepository = (a: string, b: string): boolean => a.toLowerCase()
 /** One repository of the set, as the scope control and a group heading show it. */
 export interface Repository {
   id: string
-  /** The display name, from the rows; the id when no row has named it. */
+  /** The display name: `/api/health`'s, else the rows'; the id when neither has named it. */
   name: string
-  /** Decisions waiting in it: its inbox entries. */
+  /** Decisions waiting in it: its inbox entries. Zero, and not a count, when `unreadable` is set. */
   waiting: number
+  /** What this deployment may do in it (§7.3), from `/api/health`; null or absent when not stated. */
+  mode?: RepositoryMode | null
+  /**
+   * Why it could not be read (§10), on one line, when it could not. Its
+   * count of waiting decisions is then unknown, and an interface shows none
+   * rather than `0`.
+   */
+  unreadable?: string
 }
+
+/** One served repository as `/api/health` lists it (#499), or its bare id from a server built before. */
+export type Served = string | { id: string; name?: string; mode?: RepositoryMode | null }
 
 /** What a row needs to be scoped and grouped: its repository id, and the name core gave it. */
 export interface Sourced {
@@ -59,16 +74,30 @@ export function compareRepositories(a: { id: string; name: string }, b: { id: st
 }
 
 /**
- * The set, in listing order. `ids` is what `/api/health` says is served —
- * the set as configured, whether or not each repository has runs. Display
- * names come from any rows that carry one (`named`); a repository no row
- * names is shown by its id, which is never ambiguous. `waiting` is the whole
- * inbox, unscoped, which each repository's count is taken from.
+ * The set, in listing order. `served` is what `/api/health` says is served —
+ * the set as configured, whether or not each repository has runs — with each
+ * repository's display name and mode (#499). A server built before #499
+ * sends bare ids; display names then come from any rows that carry one
+ * (`named`), and a repository no row names is shown by its id, which is
+ * never ambiguous. `waiting` is the whole inbox, unscoped, which each
+ * repository's count is taken from. `unreadable` names the repositories that
+ * could not be read (§10), whose count is unknown.
  */
-export function repositoriesOf(ids: readonly string[], named: readonly Sourced[], waiting: readonly Sourced[]): Repository[] {
+export function repositoriesOf(
+  served: readonly Served[],
+  named: readonly Sourced[],
+  waiting: readonly Sourced[],
+  unreadable: readonly { source: string; error: string }[] = [],
+): Repository[] {
   const set = new Map<string, Repository>()
-  for (const id of ids) if (!set.has(id.toLowerCase())) set.set(id.toLowerCase(), { id, name: id, waiting: 0 })
   const found = new Set<string>()
+  for (const entry of served) {
+    const { id, name, mode } = typeof entry === 'string' ? { id: entry, name: undefined, mode: undefined } : entry
+    const key = id.toLowerCase()
+    if (set.has(key)) continue
+    set.set(key, { id, name: name || id, waiting: 0, ...(mode !== undefined ? { mode } : {}) })
+    if (name) found.add(key)
+  }
   for (const row of named) {
     const key = row.source.toLowerCase()
     const repository = set.get(key)
@@ -81,13 +110,11 @@ export function repositoriesOf(ids: readonly string[], named: readonly Sourced[]
     const repository = set.get(row.source.toLowerCase())
     if (repository) repository.waiting += 1
   }
+  for (const u of unreadable) {
+    const repository = set.get(u.source.toLowerCase())
+    if (repository) repository.unreadable = u.error
+  }
   return [...set.values()].sort(compareRepositories)
-}
-
-/** The ids no row has named yet: the repositories whose display name is still unknown. */
-export function unnamed(ids: readonly string[], named: readonly Sourced[]): string[] {
-  const have = new Set(named.filter((r) => r.sourceName).map((r) => r.source.toLowerCase()))
-  return ids.filter((id) => !have.has(id.toLowerCase()))
 }
 
 /**
@@ -179,9 +206,16 @@ export function scopedHref(path: string, repository: string | null, keep?: URLSe
   return q ? `${path}?${q}` : path
 }
 
-/** The rail's Inbox badge: the whole set's count, and under a scope the scope's count first — `3 of 30`. */
-export function badgeText(total: number, scoped: number | null): string | null {
-  if (total === 0) return null
+/**
+ * The rail's Inbox badge: the whole set's count, and under a scope the
+ * scope's count first — `3 of 30`. Counts are of items, whatever the inbox
+ * collapses into one row (#499). With nothing waiting there is no badge,
+ * unless some repository could not be read (`partial`): then nothing is
+ * known to be waiting there, and the badge says `0` with the reason beside
+ * it rather than disappearing.
+ */
+export function badgeText(total: number, scoped: number | null, partial = false): string | null {
+  if (total === 0 && !partial) return null
   return scoped === null ? String(total) : `${scoped} of ${total}`
 }
 

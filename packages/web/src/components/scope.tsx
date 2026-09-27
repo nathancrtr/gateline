@@ -16,7 +16,7 @@
 import { useQuery } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { Link, NavLink, useLocation, useSearchParams } from 'react-router-dom'
-import { api } from '../api.ts'
+import { api, type UnreadableRepository } from '../api.ts'
 import {
   badgeText,
   GROUP_BY_REPOSITORY,
@@ -32,8 +32,8 @@ import {
   type Scope,
   scopedHref,
   scopeId,
-  unnamed,
 } from '../scope.ts'
+import { RepositoryFacts, useEngineHealth } from './liveness.tsx'
 import { Address, Count } from './vocabulary.tsx'
 
 export interface ScopeState {
@@ -46,18 +46,21 @@ export interface ScopeState {
   scope: Scope
   /** Whether this page is grouped by repository. */
   grouped: boolean
-  /** The whole inbox's count, unscoped. */
+  /** The whole inbox's count, unscoped: items, whatever collapses into one row (#499). */
   total: number
   /** The scope's count of waiting decisions, or null when the page shows the whole set. */
   scoped: number | null
+  /** The repositories that could not be read (§10), whose decisions no count includes. */
+  unreadable: UnreadableRepository[]
 }
 
 /**
  * The scope, read from the URL alone (decision P9) and resolved against the
- * set. The set is `/api/health`'s list; counts come from the inbox, which the
- * rail already fetches on every page; display names from the inbox's rows,
- * and from the portfolio's for a repository with nothing waiting — fetched
- * only when some repository still has no name.
+ * set. The set, with each repository's display name and mode, is
+ * `/api/health`'s (#499); counts come from the inbox, which the rail already
+ * fetches on every page, and so does the list of repositories that could not
+ * be read. A server built before #499 lists bare ids, and a repository with
+ * nothing waiting is then named by its id.
  */
 export function useScope(): ScopeState {
   const { pathname } = useLocation()
@@ -66,12 +69,10 @@ export function useScope(): ScopeState {
   const inbox = useQuery({ queryKey: ['inbox'], queryFn: api.inbox })
   const ids = health.data?.sources ?? []
   const items = inbox.data?.items ?? []
-  const missing = health.data && inbox.data ? unnamed(ids, items) : []
-  const runs = useQuery({ queryKey: ['runs'], queryFn: api.runs, enabled: ids.length > 1 && missing.length > 0 })
-  const named = runs.data ? [...items, ...runs.data.runs] : items
-  const set = repositoriesOf(ids, named, items)
+  const unreadable = inbox.data?.unreadable ?? []
+  const set = repositoriesOf(health.data?.repositories ?? ids, items, items, unreadable)
   const loaded = (q: { data?: unknown; isError: boolean }) => q.data !== undefined || q.isError
-  const ready = loaded(health) && loaded(inbox) && (ids.length < 2 || missing.length === 0 || loaded(runs))
+  const ready = loaded(health) && loaded(inbox)
   const several = health.data ? ids.length > 1 : true
   const scope = resolveScope(isScopedPage(pathname) ? params.get(SCOPE_PARAM) : null, set)
   return {
@@ -82,6 +83,7 @@ export function useScope(): ScopeState {
     grouped: grouped(params, scope, set),
     total: items.length,
     scoped: scope.kind === 'one' ? inScope(items, scope).length : null,
+    unreadable,
   }
 }
 
@@ -117,15 +119,38 @@ function entryHref(pathname: string, params: URLSearchParams, repository: string
  * `strip` is the narrow form (below 768px, where the rail becomes the top
  * bar): the same links in one row that scrolls sideways inside itself, so the
  * bar keeps a fixed height and the page never scrolls sideways.
+ *
+ * A repository that could not be read (§10) is still listed, since it is
+ * still served and its scope is still a place. It has no count, because its
+ * count is unknown and `0` would claim that nothing waits there; it says in
+ * words that it could not be read, and a screen reader hears "billing, could
+ * not be read". The "All repositories" count is what could be read, and its
+ * title says what it leaves out.
+ *
+ * Under each repository's link, the rail states its standing facts (#499):
+ * its mode, and its engine where that is a plain fact (`RepositoryFacts`).
+ * They sit outside the link, so a reader moving through the links hears each
+ * place by its name and count alone. The strip leaves them out; at phone
+ * width they are at the foot of the page.
  */
 export function ScopeControl({ state, strip = false }: { state: ScopeState; strip?: boolean }) {
   const { pathname } = useLocation()
   const [params] = useSearchParams()
+  const health = useEngineHealth()
   if (!state.several || state.set.length < 2) return null
   const current = scopeId(state.scope)
-  const entries: { id: string | null; name: string; waiting: number; title: string }[] = [
-    { id: null, name: 'All repositories', waiting: state.total, title: 'Every repository this deployment serves' },
-    ...state.set.map((r) => ({ id: r.id, name: r.name, waiting: r.waiting, title: r.id })),
+  const partial = state.unreadable.length > 0
+  const entries: { id: string | null; name: string; waiting: number | null; title: string; repository: Repository | null }[] = [
+    {
+      id: null,
+      name: 'All repositories',
+      waiting: state.total,
+      title: partial
+        ? `Every repository this deployment serves. The count leaves out ${unreadableNames(state.unreadable)}, which could not be read`
+        : 'Every repository this deployment serves',
+      repository: null,
+    },
+    ...state.set.map((r) => ({ id: r.id, name: r.name, waiting: r.unreadable === undefined ? r.waiting : null, title: r.id, repository: r })),
   ]
   const onScopedPage = isScopedPage(pathname)
   return (
@@ -135,7 +160,7 @@ export function ScopeControl({ state, strip = false }: { state: ScopeState; stri
         {entries.map((e) => {
           const isCurrent = onScopedPage && (e.id === null ? current === null : current !== null && current === e.id)
           return (
-            <li key={e.id ?? '*'} className={strip ? 'shrink-0' : ''}>
+            <li key={e.id ?? '*'} className={strip ? 'shrink-0' : ''} data-scope-item={e.id ?? ''}>
               <Link
                 to={entryHref(pathname, params, e.id)}
                 title={e.title}
@@ -149,17 +174,37 @@ export function ScopeControl({ state, strip = false }: { state: ScopeState; stri
                 <span className={strip ? 'inline-block max-w-[20ch] truncate align-bottom' : 'min-w-0 truncate'} data-scope-name>
                   {e.name}
                 </span>
-                <span className="font-ui text-[12px] tabular-nums" data-scope-count={e.waiting}>
-                  {e.waiting}
-                  <span className="sr-only"> waiting</span>
-                </span>
+                {e.waiting === null ? (
+                  // No count, since it is unknown. In the rail the words are
+                  // the facts line under the link, and here only a screen
+                  // reader hears them; the strip has no facts line and shows
+                  // them in the count's place.
+                  <span className={`font-ui text-[12px] text-warn ${strip ? '' : 'sr-only'}`} data-scope-count="unknown">
+                    {strip ? 'could not be read' : ', could not be read'}
+                  </span>
+                ) : (
+                  <span className="font-ui text-[12px] tabular-nums" data-scope-count={e.waiting}>
+                    {e.waiting}
+                    <span className="sr-only"> waiting</span>
+                  </span>
+                )}
               </Link>
+              {!strip && e.repository && (
+                <RepositoryFacts repository={e.repository} entry={health.data?.engines[e.repository.id]} now={health.data?.now} className="pb-1" />
+              )}
             </li>
           )
         })}
       </ul>
     </nav>
   )
+}
+
+/** The unreadable repositories' names as a phrase: "billing", "billing and ledger", "billing, ledger and infra". */
+export function unreadableNames(unreadable: readonly Pick<UnreadableRepository, 'sourceName' | 'source'>[]): string {
+  const names = unreadable.map((u) => u.sourceName || u.source)
+  if (names.length <= 1) return names.join('')
+  return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
 }
 
 /**
@@ -169,15 +214,22 @@ export function ScopeControl({ state, strip = false }: { state: ScopeState; stri
  * "3 waiting in demo-small, 30 in all repositories".
  */
 export function InboxBadge({ state }: { state: ScopeState }) {
-  const text = badgeText(state.total, state.scoped)
+  const partial = state.unreadable.length > 0
+  const text = badgeText(state.total, state.scoped, partial)
   if (text === null) return null
-  if (state.scope.kind !== 'one') return <span className="font-ui text-[12px] tabular-nums" data-inbox-badge>{text}</span>
+  if (state.scope.kind !== 'one' && !partial) return <span className="font-ui text-[12px] tabular-nums" data-inbox-badge>{text}</span>
+  // With a repository that could not be read, the number is what could be
+  // read. The badge keeps its size and says so in its title and to a screen
+  // reader: the number alone would claim to be the whole set's.
+  const left = partial ? `. Not counted: ${unreadableNames(state.unreadable)}, which could not be read` : ''
+  const heard =
+    state.scope.kind === 'one'
+      ? `${state.scoped} waiting in ${state.scope.repository.name}, ${state.total} in all repositories${left}`
+      : `${state.total} waiting${left}`
   return (
-    <span className="font-ui text-[12px] tabular-nums" data-inbox-badge>
+    <span className="font-ui text-[12px] tabular-nums" data-inbox-badge title={partial ? heard : undefined}>
       <span aria-hidden="true">{text}</span>
-      <span className="sr-only">
-        {state.scoped} waiting in {state.scope.repository.name}, {state.total} in all repositories
-      </span>
+      <span className="sr-only">{heard}</span>
     </span>
   )
 }

@@ -7,6 +7,7 @@ import { api, formatAge, type NeedFact, type RunSummary } from '../api.ts'
 import { BudgetMeter, GateLedger, Imp, type ImpTone, KIND_GLYPH, kindTone, PhaseChip } from '../components/chips.tsx'
 import { fullRunName, REPOSITORY_COLUMN, REPOSITORY_FOLD, RepositoryName, runLinkLabel, useDocumentTitle } from '../components/repository.tsx'
 import { GroupHeadingContent, GroupToggle, inScope, ScopeHeading, ScopeLine, UnknownScopeNotice, useScope } from '../components/scope.tsx'
+import { UnreadableRepositoriesNotice } from '../components/unreadable-repositories.tsx'
 import { UnreadableState } from '../components/unreadable-state.tsx'
 import { Count } from '../components/vocabulary.tsx'
 import { gateCardState } from '../gate-state.ts'
@@ -153,6 +154,7 @@ export function PortfolioPage() {
   const runs = inScope(data!.runs, scope.scope)
   const needs = runs.filter((r) => needsYouMark(r).kind !== 'quiet').length
   const one = scope.scope.kind === 'one'
+  const unreadableInView = (data!.unreadable ?? []).some((u) => scope.scope.kind !== 'one' || u.source.toLowerCase() === scope.scope.repository.id.toLowerCase())
   // The repository column is drawn on a joined, ungrouped register over
   // several repositories. Under a scope the page heading names the one
   // repository; grouped, each group's heading names its own (D7).
@@ -261,6 +263,7 @@ export function PortfolioPage() {
       <p className="mt-1 text-[13px] text-muted">Each run's progress through its gates, recomputed from its branch.</p>
       <ScopeLine scope={scope.scope} outside={null} path="/portfolio" />
       <UnknownScopeNotice scope={scope.scope} />
+      <UnreadableRepositoriesNotice unreadable={data!.unreadable} scope={scope.scope} rows="runs" />
       {/* The grouping toggle, where the Inbox has it: at the end of the line
           above the list. Absent when there is nothing to group. */}
       {scope.several && scope.set.length > 1 && !one && (
@@ -269,7 +272,13 @@ export function PortfolioPage() {
         </div>
       )}
 
-      {runs.length === 0 ? (
+      {runs.length === 0 && unreadableInView ? (
+        // Nothing was read, so nothing is known to be empty: the notice above
+        // says why, and the page claims no empty pipeline.
+        <p className="mt-[22px] border-t border-ink px-2 py-10 text-center text-[13.5px] text-muted" data-portfolio-unread>
+          {one ? 'This repository could not be read.' : 'No runs were found in the repositories that could be read.'}
+        </p>
+      ) : runs.length === 0 ? (
         <div className="mt-[22px] border-t border-ink px-2 py-16 text-center">
           <span className="gate-sigil mb-3 block" aria-hidden="true">
             <svg aria-hidden="true" viewBox="0 0 24 24" width="36" height="36">

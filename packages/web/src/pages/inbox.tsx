@@ -1,12 +1,14 @@
 // The default screen: everything that needs a human, everywhere, oldest first.
 
 import { useQuery } from '@tanstack/react-query'
-import { type ReactNode, useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { type ReactNode, useCallback, useMemo, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { api, formatAge, type InboxItem } from '../api.ts'
+import { expandedOf, type InboxEntry, type InboxStop, inboxEntries, inboxStops, isExpanded, toggleExpanded } from '../collapse.ts'
 import { AgeBadge, KeyHints, KindChip } from '../components/chips.tsx'
-import { RunName, useDocumentTitle } from '../components/repository.tsx'
+import { RunName, shownName, useDocumentTitle } from '../components/repository.tsx'
 import { GroupHeadingContent, GroupToggle, inScope, ScopeHeading, ScopeLine, UnknownScopeNotice, useScope } from '../components/scope.tsx'
+import { UnreadableRepositoriesNotice } from '../components/unreadable-repositories.tsx'
 import { Count, isName, Name, QuotedWord } from '../components/vocabulary.tsx'
 import { gateCardState } from '../gate-state.ts'
 import { usd } from '../money.ts'
@@ -321,6 +323,99 @@ export function InboxRow({
   )
 }
 
+/**
+ * One repository's unreadable runs, shown as one row (#499; docs/MULTI-REPO.md
+ * §9.3, decision P10, provisional). The row is a disclosure: a button whose
+ * `aria-expanded` says whether the rows it stands for are shown, and the rows
+ * themselves, ordinary inbox rows, revealed beneath it in place. Its state is
+ * the page's `?expand=` parameter, so an open row can be linked and survives
+ * a reload.
+ *
+ * The row says what it is in the cockpit's voice, composed here from core's
+ * facts (docs/SEAM.md §2): how many runs, in which repository, and — so the
+ * arithmetic of the page stays visible — that each is counted as an entry in
+ * the kind filters and the rail. It takes the place, the kind mark and the age
+ * of the oldest run it stands for.
+ *
+ * A screen reader hears the button as "24 runs in website have unreadable
+ * state. Counted as 24 entries in the filters and the rail. Show them,
+ * collapsed", and the revealed rows as a list named for them.
+ */
+export function CollapsedRow({
+  entry,
+  now,
+  open,
+  selected,
+  showRepository,
+  onToggle,
+  renderRow,
+}: {
+  entry: Extract<InboxEntry, { kind: 'collapsed' }>
+  now: number
+  open: boolean
+  selected: boolean
+  /** As on an item row: false under a one-repository scope and under a group heading, which name the repository already. */
+  showRepository: boolean
+  onToggle: () => void
+  renderRow: (item: InboxItem) => ReactNode
+}) {
+  const oldest = entry.items[0]!
+  const count = entry.items.length
+  const age = formatAge(oldest.since, now)
+  const urgent = oldest.since !== null && now - oldest.since > STALE_SECONDS
+  const stale = oldest.since !== null && now - oldest.since > STALE_DAYS
+  const name = shownName(entry.source, entry.sourceName)
+  const listId = `collapsed-${entry.source.replace(/[^A-Za-z0-9_-]/g, '-')}`
+  return (
+    <li className={open ? '' : 'border-b border-line'} data-inbox-collapsed={entry.source} data-collapsed-count={count}>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={open ? listId : undefined}
+        onClick={onToggle}
+        className={`grid w-full items-start text-left hover:bg-inset ${open ? 'border-b border-line' : ''} ${selected ? 'bg-accent-tint' : ''}`}
+        style={{ gridTemplateColumns: INBOX_COLUMNS }}
+        data-inbox-row
+        aria-current={selected ? 'true' : undefined}
+      >
+        <span className="flex items-start pt-[13px]">
+          <KindChip item={oldest} />
+        </span>
+        <span className="flex min-w-0 flex-col gap-[3px] py-[11px] pr-[14px]" data-inbox-text>
+          <span className="truncate text-[15px] font-semibold text-ink" data-inbox-title data-collapsed-title>
+            {count} runs{' '}
+            {showRepository ? (
+              <>
+                in{' '}
+                <span className="inline-block max-w-[20ch] truncate align-bottom font-normal text-muted" title={entry.source} data-repository-name>
+                  {name}
+                </span>{' '}
+              </>
+            ) : (
+              <span className="sr-only">in {name} </span>
+            )}
+            have unreadable state
+          </span>
+          <span className="text-[13.5px] text-muted" data-collapsed-line>
+            Counted as {count} entries in the filters and the rail.{' '}
+            <span className="text-accent underline underline-offset-2" data-collapsed-toggle>
+              {open ? 'Hide them' : 'Show them'}
+            </span>
+          </span>
+        </span>
+        <span className="flex items-start justify-end pt-[14px]" data-inbox-age>
+          <AgeBadge label={age} urgent={urgent} stale={stale} />
+        </span>
+      </button>
+      {open && (
+        <ul id={listId} aria-label={`${count} runs in ${name} with unreadable state`} data-collapsed-rows={entry.source}>
+          {entry.items.map(renderRow)}
+        </ul>
+      )}
+    </li>
+  )
+}
+
 interface KindFilter {
   label: string
   kind: KindFilterKey
@@ -335,8 +430,11 @@ export function InboxPage() {
   const isLoading = inboxLoading || !scope.ready
   useDocumentTitle(scopeTitle('Inbox', scope.scope))
   const navigate = useNavigate()
+  const [params, setParams] = useSearchParams()
   const [cursor, setCursor] = useState(0)
   const [filter, setFilter] = useState<KindFilterKey>(null)
+  const expanded = useMemo(() => expandedOf(params), [params])
+  const toggle = useCallback((source: string) => setParams(toggleExpanded(params, source)), [params, setParams])
   // The scope narrows the rows before anything else reads them: the kind
   // filters count what is in scope, and the cursor walks it.
   const scoped = useMemo(() => (data ? inScope(data.items, scope.scope) : undefined), [data, scope.scope])
@@ -351,19 +449,33 @@ export function InboxPage() {
     () => (filteredItems && scope.grouped ? groupRows(filteredItems, scope.set) : null),
     [filteredItems, scope.grouped, scope.set],
   )
-  const items = useMemo(() => (groups ? groups.flatMap((g) => g.rows) : (filteredItems ?? undefined)), [groups, filteredItems])
+  // One repository's unreadable runs show as one row (#499, §9.3): which
+  // repositories collapse is core's rule, sent as `collapsed`; the entries
+  // place each row where its oldest run sat, within each group when grouped.
+  // Every count on the page is taken from the items above, never from these.
+  const collapsed = data?.collapsed
+  const groupEntries = useMemo(() => (groups ? groups.map((g) => inboxEntries(g.rows, collapsed)) : null), [groups, collapsed])
+  const entries = useMemo(() => (filteredItems ? inboxEntries(filteredItems, collapsed) : []), [filteredItems, collapsed])
+  // Where the keyboard cursor can stop, in the order rows are drawn: a
+  // collapsed row is one stop, and an open one is followed by its rows.
+  const stops = useMemo(
+    () => (groupEntries ? groupEntries.flatMap((e) => inboxStops(e, expanded)) : inboxStops(entries, expanded)),
+    [groupEntries, entries, expanded],
+  )
   const keyHandlers = useMemo(
     () => ({
-      j: () => setCursor((c) => Math.min((items?.length ?? 1) - 1, c + 1)),
+      j: () => setCursor((c) => Math.min(stops.length - 1, c + 1)),
       k: () => setCursor((c) => Math.max(0, c - 1)),
       Enter: () => {
-        const item = items?.[cursor]
-        if (item) void navigate(itemHref(item))
+        const stop = stops[cursor]
+        if (stop?.kind === 'item') void navigate(itemHref(stop.item))
+        else if (stop?.kind === 'collapsed') toggle(stop.source)
       },
     }),
-    [items, cursor, navigate],
+    [stops, cursor, navigate, toggle],
   )
-  useKeys(keyHandlers, Boolean(items?.length))
+  useKeys(keyHandlers, stops.length > 0)
+  const selectedStop: InboxStop | undefined = stops[cursor]
 
   // Build filter tab counts from the scope's rows, before the kind filter
   const filters: KindFilter[] = useMemo(() => {
@@ -405,16 +517,32 @@ export function InboxPage() {
   // under a scope the page heading names it once, and under a group heading
   // the heading does (docs/MULTI-REPO.md §9.2, D7).
   const showRepository = scope.several && !one && !scope.grouped
+  const unreadableInView = (data!.unreadable ?? []).some((u) => scope.scope.kind !== 'one' || u.source.toLowerCase() === scope.scope.repository.id.toLowerCase())
   const row = (item: InboxItem, i: number) => (
     <InboxRow
       key={`${item.source}/${item.slug}/${item.kind}/${item.gate ?? item.escalationIndex ?? i}`}
       item={item}
       now={now}
-      selected={items?.[cursor] === item}
+      selected={selectedStop?.kind === 'item' && selectedStop.item === item}
       showRepository={showRepository}
       announceRepository={scope.grouped}
     />
   )
+  const entry = (e: InboxEntry, i: number) =>
+    e.kind === 'item' ? (
+      row(e.item, i)
+    ) : (
+      <CollapsedRow
+        key={`collapsed/${e.source}`}
+        entry={e}
+        now={now}
+        open={isExpanded(expanded, e.source)}
+        selected={selectedStop?.kind === 'collapsed' && selectedStop.source === e.source}
+        showRepository={showRepository}
+        onToggle={() => toggle(e.source)}
+        renderRow={(item) => row(item, 0)}
+      />
+    )
 
   return (
     <div className="mx-auto max-w-[1080px]">
@@ -425,6 +553,7 @@ export function InboxPage() {
       </p>
       <ScopeLine scope={scope.scope} outside={scope.scoped === null ? null : scope.total - scope.scoped} path="/" />
       <UnknownScopeNotice scope={scope.scope} />
+      <UnreadableRepositoriesNotice unreadable={data!.unreadable} scope={scope.scope} rows="decisions" />
 
       {/* Kind filters: plain type, the active one underlined. Wraps at narrow
           widths; the gaps carry it (#280). The grouping toggle ends the line,
@@ -458,7 +587,17 @@ export function InboxPage() {
               <rect x="3.5" y="8.6" width="17" height="2.2" fill="currentColor" />
             </svg>
           </span>
-          <h2 className="text-[20px] font-semibold text-ink">{one ? 'Nothing is waiting on you in this repository.' : 'Nothing is waiting on you.'}</h2>
+          <h2 className="text-[20px] font-semibold text-ink">
+            {/* With a repository that could not be read in view, "nothing is
+                waiting" is not known; the heading says only what is. */}
+            {unreadableInView
+              ? one
+                ? 'This repository could not be read.'
+                : 'Nothing is waiting on you in the repositories that could be read.'
+              : one
+                ? 'Nothing is waiting on you in this repository.'
+                : 'Nothing is waiting on you.'}
+          </h2>
           <p className="mx-auto mt-1.5 max-w-[46ch] text-[13.5px] text-muted">
             The agents are reading, writing and reviewing on their own. Open the portfolio to look in on a run.
           </p>
@@ -477,12 +616,12 @@ export function InboxPage() {
                 <span className="py-1.5">entry</span>
                 <span className="py-1.5 text-right">waiting</span>
               </div>
-              {groups.map((g) => (
+              {groups.map((g, gi) => (
                 <section key={g.repository.id} className="border-t border-ink" aria-label={g.repository.name} data-inbox-group={g.repository.id}>
                   <h2 className="py-2.5">
                     <GroupHeadingContent group={g} counts={<Count n={g.rows.length} one="entry" many="entries" />} />
                   </h2>
-                  {g.rows.length > 0 && <ul className="border-t border-line">{g.rows.map(row)}</ul>}
+                  {g.rows.length > 0 && <ul className="border-t border-line">{groupEntries![gi]!.map(entry)}</ul>}
                 </section>
               ))}
             </div>
@@ -493,7 +632,7 @@ export function InboxPage() {
                 <span className="py-1.5">entry</span>
                 <span className="py-1.5 text-right">waiting</span>
               </li>
-              {filteredItems!.map(row)}
+              {entries.map(entry)}
             </ul>
           )}
           <div className="flex items-baseline justify-between pt-2 text-[12px] text-muted">

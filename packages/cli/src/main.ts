@@ -19,6 +19,7 @@ import {
   CLOSURE_MEANINGS,
   CLOSURES,
   type Closure,
+  COLLAPSED_KIND,
   ConfigError,
   DEFAULT_FRAMEWORK_PREFIX,
   DecisionError,
@@ -31,7 +32,9 @@ import {
   formatDuration,
   type GateId,
   type Identity,
+  type InboxCollapse,
   type InboxItem,
+  inboxCollapses,
   LocalOnlyPushConflictError,
   listRepositories,
   loadSources,
@@ -301,13 +304,19 @@ program
   .description('everything that needs a human, oldest first; grouped by repository when there are several')
   .addOption(repositoryFlag('show one repository: its id or display name'))
   .addOption(sourceAlias())
-  .action(async (flags: RepositoryFlags) => {
+  .option('--all', 'list every unreadable run, even where one repository has more than three (they are otherwise one line)')
+  .action(async (flags: RepositoryFlags & { all?: boolean }) => {
     const { sources } = await resolveSources()
     const { shown, scoped } = readScope(sources, chosenRepository(flags))
     const { inbox } = await buildPortfolio(sources)
+    // One repository's unreadable runs print as one line (MULTI-REPO.md
+    // §9.3, #499): core decides which repositories, as it does for Gatehouse.
+    // Counts stay counts of items. `--all` lists every one.
+    const collapsed = flags.all ? [] : inboxCollapses(inbox)
+    const print = (items: InboxItem[]) => printItems(items, collapsed, sources)
     if (sources.length === 1) {
       if (inbox.length === 0) return console.log('inbox zero — nothing needs a human')
-      for (const item of inbox) printItem(item, runLabel(sources, item.source, item.slug), sources)
+      print(inbox)
       return
     }
     if (!scoped && inbox.length === 0) return console.log('inbox zero — nothing needs a human')
@@ -318,13 +327,40 @@ program
       const items = inbox.filter((item) => item.source === source.id)
       if (i > 0) console.log('')
       console.log(groupHeading(source, `${items.length} waiting`))
-      for (const item of items) printItem(item, runLabel(sources, item.source, item.slug), sources)
+      print(items)
     })
     if (scoped) {
       const others = inbox.length - inbox.filter((item) => item.source === shown[0]!.id).length
       if (others) console.log(`\n${others} more in other repositories — run \`gateline inbox\``)
     }
   })
+
+/**
+ * Items in order, each printed as `printItem` prints it, except that a
+ * repository named in `collapsed` has its unreadable runs printed as one line
+ * at the place of the oldest (#499; MULTI-REPO.md §9.3), with the command
+ * that lists them. Gate decisions, escalations and every other kind print as
+ * they always have. With nothing collapsed the output is `printItem` over
+ * every item, byte for byte.
+ */
+function printItems(items: InboxItem[], collapsed: readonly InboxCollapse[], sources: readonly RunSource[]): void {
+  const collapsing = new Map(collapsed.map((c) => [c.source, c]))
+  const printed = new Set<string>()
+  for (const item of items) {
+    const row = item.kind === COLLAPSED_KIND ? collapsing.get(item.source) : undefined
+    if (!row) {
+      printItem(item, runLabel(sources, item.source, item.slug), sources)
+      continue
+    }
+    if (printed.has(row.source)) continue
+    printed.add(row.source)
+    const source = sources.find((s) => s.id === row.source)
+    const name = source ? displayNameOf(source) : row.sourceName
+    const pad = ' '.repeat(17)
+    console.log(`${COLLAPSED_KIND.padEnd(10)} ${age(row.since).padStart(4)}  ${name}  ${row.count} runs have unreadable state`)
+    console.log(`${pad}${'list'.padEnd(9)} gateline inbox --all${repositoryArg(sources, row.source)}`)
+  }
+}
 
 /**
  * One inbox entry in the terminal, composed here from the item's facts (#433).

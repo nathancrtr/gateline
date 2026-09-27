@@ -24,6 +24,7 @@ import { G0Packet, StagedBrief } from '../../components/g0.tsx'
 import { G1Packet } from '../../components/g1.tsx'
 import { G3Packet } from '../../components/g3.tsx'
 import { CitedText } from '../../components/lexicon.tsx'
+import { ViewModeLine } from '../../components/repository.tsx'
 import { RoundCapPanel } from '../../components/rounds.tsx'
 import { UnreadableState } from '../../components/unreadable-state.tsx'
 import {
@@ -251,6 +252,7 @@ export function NeedsYouCard({
   sentHere,
   pageHints,
   onCommitted,
+  readOnly = false,
 }: {
   item: InboxItem
   now: number
@@ -259,6 +261,8 @@ export function NeedsYouCard({
   sentHere?: boolean
   pageHints?: readonly KeyHint[]
   onCommitted?: (text: string) => void
+  /** The run's repository is in `view` mode here (#499): no decision controls, and the line that says why. */
+  readOnly?: boolean
 }) {
   const urgent = item.since !== null && now - item.since > 3 * 86_400
   const ageLabel = `waiting ${formatAge(item.since, now)}`
@@ -387,15 +391,26 @@ export function NeedsYouCard({
         {item.kind === 'escalation' && item.escalationIndex !== null && (
           <EscalationPacket src={item.source} slug={item.slug} index={item.escalationIndex} refs={item.packetRefs} />
         )}
-        <DecidePanel
-          item={item}
-          profile={detail.summary.profile}
-          primary={primary}
-          sentHere={sentHere}
-          chips={chips}
-          pageHints={pageHints}
-          onCommitted={onCommitted}
-        />
+        {/* A run in a `view` repository is read here and nothing is written
+            to it (#499; MULTI-REPO.md §7.3): the server refuses every
+            decision, so the card offers none, and says so in the place the
+            controls would be. The packet above and its references stay. */}
+        {readOnly ? (
+          <div className="mt-3 border-t border-line pt-3" data-decide-panel data-view-mode>
+            {chips && <div className="mb-2.5 flex min-w-0 flex-wrap items-center gap-1.5">{chips}</div>}
+            <ViewModeLine />
+          </div>
+        ) : (
+          <DecidePanel
+            item={item}
+            profile={detail.summary.profile}
+            primary={primary}
+            sentHere={sentHere}
+            chips={chips}
+            pageHints={pageHints}
+            onCommitted={onCommitted}
+          />
+        )}
       </div>
     </section>
   )

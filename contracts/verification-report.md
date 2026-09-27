@@ -2,7 +2,9 @@
 
 <!-- Contract: produced by Verifier; consumed by gate G2.
      Every in-scope acceptance criterion gets a row and evidence.
-     Evidence = the command you ran and the output you observed.
+     Evidence = the command you ran and the output you observed. State your
+     independence from the implementer once, in the Environment line below,
+     and nowhere else in the report.
      GRAMMAR (normative — tooling parses these shapes): evidence-block
      headings exactly `### E<k> — AC<n>.<m>`; the Criterion column carries the
      bare `AC<n>.<m>` id; one overall `**Verdict:** pass | fail | escalate`
@@ -18,10 +20,18 @@
      causes are mixed, escalate wins: one spec-traced failure among
      implementation failures makes the verdict `escalate`, and a criterion
      that is unverifiable because the spec references something that does
-     not exist is a spec defect, not an environment gap. A re-verification
-     appended to this report adds its own verdict line; the last line is the
-     verdict in force. Prose in Gaps has no such power: an escalation that
-     lives only in a sentence never reaches the gate.
+     not exist is a spec defect, not an environment gap.
+     LATER ROUNDS (normative): a re-verification appended to this report adds
+     its own verdict line; the last line is the verdict in force, and prose
+     in Gaps has no such power — an escalation that lives only in a sentence
+     never reaches the gate. It opens by stating in one sentence what changed
+     since the round before it, then re-runs what that change could affect.
+     The Results table is reissued in full — every in-scope criterion still
+     gets a row — but a criterion whose evidence did not change cites the
+     earlier round's evidence heading (`see E9`) rather than a new block that
+     only restates it. Its closing sections are the same `## Beyond the happy
+     path` and `## Gaps` headings this contract defines, never a bold
+     paragraph standing in for them.
      ESCALATION (normative — tooling parses the `REQUIRED WHEN:` line and the
      section's bold fields): the `## Escalation` section is required exactly
      when the verdict in force is `escalate`, and is what the human resolving
@@ -38,20 +48,23 @@
      its concluding line/exit code suffices. Never paste entire suites or
      restate the spec — reference criteria by number.
      READABILITY (normative — human-facing sections: Beyond the happy path,
-     Gaps). The G2 approver reads these as prose; a breach is bounced like a
-     grammar deviation, with the rule cited. (a) The first sentence states the
-     takeaway in plain words — no code spans, paths, or parenthetical cites.
-     (b) One idea per paragraph: at most 4 sentences and 120 words each.
-     (c) Three or more parallel items (probes, gaps, cases) become a bulleted
-     list under a lead-in sentence — never a semicolon chain. (d) One claim
-     per sentence; never join clauses with a semicolon. (e) Name before cite:
-     give any id or file a noun phrase on first use, at most one parenthetical
-     file:line cite per sentence, full path at first mention only — short
-     name after. -->
+     Gaps, and each evidence block's prose). The G2 approver reads these as
+     prose; a breach is bounced like a grammar deviation, with the rule
+     cited. (a) The first sentence states the takeaway in plain words — no
+     code spans, paths, or parenthetical cites. (b) One idea per paragraph:
+     at most 4 sentences and 120 words each. (c) Three or more parallel items
+     (probes, gaps, cases) become a bulleted list under a lead-in sentence —
+     never a semicolon chain or a comma chain. (d) One claim per sentence;
+     never join clauses with a semicolon. (e) Name before cite: give any id
+     or file a noun phrase on first use, at most one parenthetical file:line
+     cite per sentence, full path at first mention only — short name after.
+     (f) An evidence block's prose opens with that first sentence before the
+     pasted command and output, not after; a passing criterion takes at most
+     one sentence more, a failed one as many as the failure needs. -->
 
 **Verdict:** pass | fail | escalate
 **Change verified:** <branch/commit>
-**Environment:** <where this ran: local, CI, staging + versions that matter>
+**Environment:** <where this ran: local, CI, staging + versions that matter; state independence from the implementer's own runs here, once>
 
 ## Escalation
 <!-- Present exactly when Verdict is escalate; omit it otherwise (see
@@ -78,11 +91,15 @@ The options as I see them:
 | AC1.1 | verified / failed / unverifiable | see E1 |
 
 ### E1 — AC1.1
+<one plain sentence: what this evidence shows>
 ```
 $ <command>
 <observed output>
 ```
-<!-- One evidence block per criterion. Failed runs are results too — paste them. -->
+<!-- One evidence block per criterion. Failed runs are results too — paste
+     them. The plain sentence comes before the command, not after
+     (READABILITY (f)). A later round cites an unchanged criterion's earlier
+     block instead of writing a new one (see LATER ROUNDS above). -->
 
 ## Beyond the happy path
 <!-- What you probed that the criteria didn't ask for (malformed input, empty
@@ -92,4 +109,9 @@ $ <command>
 
 ## Gaps
 <!-- Criteria you could not verify and why; tests you added; coverage still
-     missing. Human-facing: one bullet per gap; READABILITY rules govern. -->
+     missing. Write "None" only when there is nothing to report, never as a
+     lead-in to one that follows. Otherwise one bullet per gap, each naming
+     its criterion first; READABILITY rules govern. A defect in the engine,
+     the orchestrator, or a contract version belongs here only if it leaves a
+     criterion unverified — say that and nothing more, and raise anything
+     needing a human through Escalation, not a paragraph here. -->

@@ -5,7 +5,12 @@
      and every requirement has ≥1 testable acceptance criterion.
      GRAMMAR (normative — tooling parses these shapes): requirement headings
      exactly `### R<n> — <short name>`; criteria as list items whose text
-     begins `AC<n>.<m> — `. A deviation is a malformed artifact.
+     begins `AC<n>.<m> — `. An assumption is one list item. Its first line
+     begins `**ASSUMPTION:**`. Its continuation lines begin `Resolved as:`,
+     `Because:` and `Basis:`, in that order. `Basis:` opens with `verified`
+     or `derived`. An assumption that asks the G0 approver to confirm
+     something opens `G0 to confirm:` directly after the marker, and those
+     assumptions come first. A deviation is a malformed artifact.
      BUDGET: reference the intent brief, never restate it. Target: reviewable
      by the G0 human in ten minutes.
      READABILITY (normative — human-facing sections: Context, Requirements,
@@ -75,19 +80,17 @@
 
 ## Assumptions
 <!-- Each ambiguity in the brief, with the resolution you chose. The G0
-     reviewer vetoes these here, cheaply. If none, say "none". One list item
-     per assumption, shaped as below: labels in that order, indented two
-     spaces, every line but the last ending in `\` so each label renders on
-     its own line. `Basis:` says whether the choice rests on something
-     verified or derived, and how. For an external system's behavior — a
+     reviewer vetoes these here, cheaply. If none, say "none". Each entry
+     follows the assumption GRAMMAR above, shaped as below: continuation
+     lines indented two spaces, every line but the last ending in `\` so
+     each label renders on its own line. `Basis:` says how the choice was
+     verified or derived. For an external system's behavior — a
      platform's rendering rules, a library's runtime default, an API's
      documented contract — verified means checked against the live system,
      and documentation or reasoning is derived: a plausible-looking
      derivation is exactly what a confirmation-grade review waves through.
      When the brief admits two readings, name both and tee the choice up
-     for G0 — G0 can veto a stated choice, never a hidden one. A request to
-     the G0 approver opens its entry right after the marker ("**ASSUMPTION:**
-     G0 to confirm: …"), never mid-entry, and those entries come first. -->
+     for G0 — G0 can veto a stated choice, never a hidden one. -->
 - **ASSUMPTION:** <the ambiguity, in plain words>\
   Resolved as: <the choice>\
   Because: <the reason>\

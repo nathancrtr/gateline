@@ -7,8 +7,9 @@
 // set and reads `3 of 17` under a scope, the scoped page states the
 // repository once in its heading and leaves it off the rows, an unknown
 // `repo` shows everything and says so once, grouping heads each repository
-// with its name, id and counts, the Metrics gate table says it covers every
-// repository, and the rail's links carry the scope. The scope is read from
+// with its name, id and counts, the Metrics tables follow the scope (the
+// gate table's own cases are in metrics-by-repository.test.ts), and the
+// rail's links carry the scope. The scope is read from
 // the URL alone.
 //
 // The responses are what the server actually sends over the two demo
@@ -238,11 +239,19 @@ describe('a page under a one-repository scope', () => {
     expect(html).not.toContain('data-group-toggle')
   })
 
-  it('labels the Metrics gate table as covering every repository, and filters the budget table', () => {
+  it('keeps the Metrics gate table and the budget table to the scope', () => {
     const scoped = renderWith(two, createElement(MetricsPage), '/metrics?repo=local%2Fdemo-small')
-    expect(text(/<p[^>]*data-gate-scope[^>]*>([\s\S]*?)<\/p>/.exec(scoped)![1]!)).toBe(
-      'Counted across all repositories. Gate figures are not yet split by repository, so this table does not follow the scope.',
-    )
+    // demo-small's own decisions (#499): 3 at G0, 2 at G1, 1 at G2, all
+    // approved, each too few to rate; demo's 10 of 10 at G0 is not here.
+    const gates = [...scoped.matchAll(/<tr data-gate-row="(G\d)"[^>]*>([\s\S]*?)<\/tr>/g)].map((m) => [m[1], text(m[2]!.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim()])
+    expect(gates).toEqual([
+      ['G0', 'G0 3 3 of 3 approved too few to rate confirmation: 3 1m'],
+      ['G1', 'G1 2 2 of 2 approved too few to rate confirmation: 2 1m'],
+      ['G2', 'G2 1 1 of 1 approved too few to rate light correction: 1 1m'],
+      ['G3', 'G3 — no decisions — —'],
+    ])
+    expect(scoped).not.toContain('data-gate-scope')
+    expect(scoped).not.toContain('data-gate-group')
     const budget = /Budget honesty[\s\S]*?<tbody>([\s\S]*?)<\/tbody>/.exec(scoped)![1]!
     expect([...budget.matchAll(/title="([^"]*)"/g)].map((m) => m[1])).toEqual([
       'local/demo-small/csv-export',

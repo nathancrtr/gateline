@@ -67,6 +67,14 @@ describe('one repository that cannot be read', () => {
     expect(served.body.unreadable).toEqual([LEDGER])
     const reference = await get(alone(), '/api/metrics')
     expect({ ...served.body, unreadable: [] }).toEqual(reference.body)
+    // The per-repository gate figures (#499) cross the wire, one entry per
+    // readable repository, and none for the one that could not be read.
+    const breakdown = served.body.perRepository as { source: string; sourceName: string; perGate: { gate: string }[] }[]
+    expect(breakdown.map((r) => [r.source, r.sourceName, r.perGate.map((g) => g.gate)])).toEqual([
+      ['github.com/acme/billing', 'billing', ['G0', 'G1', 'G2', 'G3']],
+      ['gitlab.example.com/ops/infra', 'infra', ['G0', 'G1', 'G2', 'G3']],
+    ])
+    expect(served.body.rateMinDecisions).toBe(5)
   })
 })
 
@@ -98,6 +106,7 @@ describe('every repository unreadable', () => {
     expect(metrics.status).toBe(200)
     expect(metrics.body.decisions).toEqual([])
     expect(metrics.body.runs).toEqual([])
+    expect(metrics.body.perRepository).toEqual([])
     expect(metrics.body.unreadable).toEqual(ALL)
   })
 })

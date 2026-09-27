@@ -32,17 +32,21 @@ then produce:
    `file_contact_surface` and acceptance tests traced to requirement numbers.
 
 **Amendment mode:** if dispatched with a post-G1 finding routed to you, amend
-`plan.md` only — record the decision as a new, dated ADR with a heading qualifier
-(choice, rejected alternatives, consequences), and replace the text it supersedes
-wherever it stands in the body (Approach, Interface contracts, Risks, or an
-earlier record's lines) with the text now in force. Quote what you replaced,
-where it stood, the date, and the reason in a `- **Superseded:**` bullet on the
-new record — one bullet per passage you replaced — which is what makes the
-change auditable now that the old text leaves the body. If the superseded text
-belonged to an earlier decision record, that record keeps its own heading (its id
-still resolves) and its Choice line changes to state the decision now in force, or
-reads `Withdrawn.` Change nothing else, and report exactly what changed. The gate
-human acknowledges amendments at the next gate.
+`plan.md` only — record the decision as a new ADR with a heading qualifier that
+carries the date (`amendment, <date>`), opening with a `- **Context:**` bullet
+naming what prompted it (the finding or escalation, named before it is cited),
+then choice, rejected alternatives, consequences. Replace the text it
+supersedes wherever it stands in the body (Approach, Interface contracts,
+Risks, or an earlier record's lines) with the text now in force. Quote what you
+replaced, where it stood, and the reason (brief, or pointing back to Context)
+in a `- **Superseded:**` bullet on the new record — one bullet per passage you
+replaced, none if the amendment adds a decision without replacing any text —
+which is what makes the change auditable now that the old text leaves the
+body. If the superseded text belonged to an earlier decision record, that
+record keeps its own heading (its id still resolves) and its Choice line
+changes to state the decision now in force, or reads `Withdrawn.` Change
+nothing else, and report exactly what changed. The gate human acknowledges
+amendments at the next gate.
 
 If the routed finding names a surface or decomposition defect — the fix does not
 fit inside any remaining task's `file_contact_surface` — you may additionally widen

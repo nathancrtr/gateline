@@ -5,7 +5,7 @@
 import type { Identity } from '@gateline/core/record'
 import { CodeTreeMonitor, type CodeTreeStatus, Git, LocalOnlyPushConflictError, resolveCodeRepo } from '@gateline/core/sources'
 import { Engine, type InFlightJob } from './engine.ts'
-import { headlessManifestPathAt, loadHeadlessManifestAt } from './manifest.ts'
+import { type HeadlessManifest, type HostTip, headlessManifestPathAt, loadHeadlessManifestAt, resolveHostTip } from './manifest.ts'
 import { loadRegistry } from './registry.ts'
 import { RoutingDispatcher } from './router.ts'
 import { type PendingIntent, RemoteDispatcher } from './runner-dispatcher.ts'
@@ -112,6 +112,10 @@ export async function assembleOrchestrator(
   manifestStaleProbe: () => Promise<string[]>
   /** Present iff `opts.runner?.enabled` — see `RunnerCallback` above. */
   runnerCallback?: RunnerCallback
+  /** The commit the host's configuration was read at (#500). */
+  hostTip: HostTip
+  /** The adapter manifests the engine will execute, in `opts.adapters` order. */
+  manifests: HeadlessManifest[]
 }> {
   const log = opts.log ?? (() => {})
   const git = new Git(opts.repoDir)
@@ -123,35 +127,42 @@ export async function assembleOrchestrator(
   // uses (AC1.1) — only when neither `localOnly` nor `push` was explicit.
   const localOnly = opts.localOnly ?? (opts.push ? false : (await git.configGet('remote.origin.url')) === null)
   const push = localOnly ? false : opts.push
-  // Every host input the engine acts on is read at the default-branch tip
-  // (#500): the registry and the adapter manifests here, role capabilities in
-  // the engine, sweep schedules in the scheduler. The local ref, with no fetch,
-  // so a local-only repository reads exactly what it has.
-  const defaultBranch = await git.defaultBranch()
-  const registry = await loadRegistry(git, defaultBranch, opts.frameworkPrefix)
+  // The host's configuration is read at one commit, resolved once here (#500):
+  // the registry and the adapter manifests below, role capabilities in the
+  // engine (handed the same tip). That commit is the local default-branch ref,
+  // with no fetch, so a local-only repository reads exactly what it has.
+  // Sweep schedules are read by the scheduler at the default branch each tick.
+  const tip = await resolveHostTip(git)
+  if (tip.fallback) {
+    log(
+      `WARNING: no default branch could be determined for ${opts.repoDir} (no origin/HEAD, no main or master) — ` +
+        `host configuration (registry, adapter manifests, role capabilities) is being read from the checked-out branch "${tip.name}"`,
+    )
+  }
+  const registry = await loadRegistry(git, tip.commit, opts.frameworkPrefix)
   const watched: { adapter: string; path: string; loadedOid: string | null }[] = []
   const adapters = await Promise.all(
     (opts.adapters?.length ? opts.adapters : ['claude-code']).map(async (name) => {
-      const manifest = await loadHeadlessManifestAt(git, defaultBranch, name, opts.frameworkPrefix)
-      const path = await headlessManifestPathAt(git, defaultBranch, name, opts.frameworkPrefix)
-      watched.push({ adapter: name, path, loadedOid: await git.objectId(defaultBranch, path) })
+      const manifest = await loadHeadlessManifestAt(git, tip.commit, name, opts.frameworkPrefix, tip.name)
+      const path = await headlessManifestPathAt(git, tip.commit, name, opts.frameworkPrefix)
+      watched.push({ adapter: name, path, loadedOid: await git.objectId(tip.commit, path) })
       return { manifest, dispatcher: new HeadlessDispatcher(manifest) }
     }),
   )
   // Manifests are read once, at process start, as the registry is (the
   // 2026-07-16 trap: a fix that silently never applied). The probe reports a
-  // manifest whose blob at the default-branch tip changed after load, once per
+  // manifest whose blob at the default branch changed after load, once per
   // change — the heartbeat surfaces it. Edits in the working tree or on another
   // branch change nothing the engine runs, so they are not reported.
   const manifestStaleProbe = async (): Promise<string[]> => {
     const messages: string[] = []
-    const tip = await git.defaultBranch()
+    const now = await resolveHostTip(git)
     for (const w of watched) {
-      const oid = await git.objectId(tip, w.path)
+      const oid = await git.objectId(now.commit, w.path)
       if (oid !== w.loadedOid) {
         w.loadedOid = oid
         messages.push(
-          `adapter manifest "${w.adapter}" changed on ${tip} after load — manifests are read once at startup, from the default-branch tip; restart to apply (${w.path})`,
+          `adapter manifest "${w.adapter}" changed on ${now.name} after load — manifests are read once at startup, from the default branch; restart to apply (${w.path})`,
         )
       }
     }
@@ -197,6 +208,7 @@ export async function assembleOrchestrator(
   }
   const engine = new Engine({
     ...common,
+    hostTip: tip,
     dispatcher: remote ?? localDispatcher,
     spendLimitUsd: opts.spendLimitUsd ?? null,
     spendWindowMs: opts.spendWindowHours !== undefined ? opts.spendWindowHours * 3_600_000 : undefined,
@@ -208,7 +220,7 @@ export async function assembleOrchestrator(
   // Scheduler stays on `common` — i.e. always the local dispatcher, never remote.
   const scheduler = new Scheduler(common)
   const runnerCallback = remote ? makeRunnerCallback(engine, remote) : undefined
-  return { engine, scheduler, manifestStaleProbe, runnerCallback }
+  return { engine, scheduler, manifestStaleProbe, runnerCallback, hostTip: tip, manifests: adapters.map((a) => a.manifest) }
 }
 
 export interface OrchestratorHandle {

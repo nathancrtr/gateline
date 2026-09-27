@@ -1,6 +1,8 @@
-// #500: the assembled orchestrator loads its adapter manifests at the host's
-// default-branch tip, refuses to start on an adapter that is not merged there,
-// and its stale-manifest probe watches the tip rather than the file on disk.
+// #500: the assembled orchestrator resolves the host's default branch to one
+// commit at startup and reads the adapter manifests there, refuses to start
+// on an adapter that is not on that branch, warns when no default branch
+// could be determined, and its stale-manifest probe watches that branch
+// rather than the file on disk.
 import { afterEach, describe, expect, it } from 'vitest'
 import { assembleOrchestrator } from '../src/start.ts'
 import { type HostRepo, makeHostRepo, manifestJson } from './host-repo.helper.ts'
@@ -9,8 +11,8 @@ const repos: HostRepo[] = []
 afterEach(() => {
   for (const r of repos.splice(0)) r.remove()
 })
-function host(): HostRepo {
-  const r = makeHostRepo()
+function host(branch?: string): HostRepo {
+  const r = makeHostRepo(branch)
   repos.push(r)
   return r
 }
@@ -30,14 +32,50 @@ describe('assembleOrchestrator reads adapter manifests at the default-branch tip
     )
   })
 
-  it('starts on a local-only host whose manifest is merged, while another branch is checked out', async () => {
+  it('loads the default branch’s command on a local-only host while another branch is checked out', async () => {
     const repo = host()
     repo.commit({ [MANIFEST]: manifestJson('from-main') }, 'claude-code adapter')
     repo.checkout('feature', true)
     repo.commit({ [MANIFEST]: manifestJson('from-feature') }, 'feature: change the command')
+    repo.write({ [MANIFEST]: manifestJson('uncommitted') })
 
-    const { engine } = await assembleOrchestrator({ repoDir: repo.dir })
+    const { engine, manifests } = await assembleOrchestrator({ repoDir: repo.dir })
     expect(engine.source.localOnly).toBe(true)
+    expect(manifests.map((m) => m.command)).toEqual([['from-main', '{prompt}']])
+  })
+
+  it('reads the branch named main, not a tag named main', async () => {
+    const repo = host()
+    repo.commit({ [MANIFEST]: manifestJson('tagged-old') }, 'claude-code adapter')
+    repo.git(['tag', 'main'])
+    repo.commit({ [MANIFEST]: manifestJson('branch-new') }, 'change the command')
+
+    const { manifests, hostTip } = await assembleOrchestrator({ repoDir: repo.dir })
+    expect(hostTip.ref).toBe('refs/heads/main')
+    expect(hostTip.commit).toBe(repo.git(['rev-parse', 'refs/heads/main']).trim())
+    expect(manifests[0]!.command).toEqual(['branch-new', '{prompt}'])
+  })
+
+  it('warns once, naming the branch, when no default branch could be determined', async () => {
+    const repo = host('trunk')
+    repo.commit({ [MANIFEST]: manifestJson('from-trunk') }, 'claude-code adapter')
+
+    const lines: string[] = []
+    const { manifests } = await assembleOrchestrator({ repoDir: repo.dir, log: (l) => lines.push(l) })
+    expect(manifests[0]!.command).toEqual(['from-trunk', '{prompt}'])
+    expect(lines.filter((l) => l.startsWith('WARNING'))).toEqual([
+      `WARNING: no default branch could be determined for ${repo.dir} (no origin/HEAD, no main or master) — ` +
+        'host configuration (registry, adapter manifests, role capabilities) is being read from the checked-out branch "trunk"',
+    ])
+  })
+
+  it('does not warn when the default branch is main', async () => {
+    const repo = host()
+    repo.commit({ [MANIFEST]: manifestJson('from-main') }, 'claude-code adapter')
+
+    const lines: string[] = []
+    await assembleOrchestrator({ repoDir: repo.dir, log: (l) => lines.push(l) })
+    expect(lines.filter((l) => l.startsWith('WARNING'))).toEqual([])
   })
 
   it('reports a manifest change on the default branch, once, and never a working-tree or branch edit', async () => {
@@ -57,7 +95,7 @@ describe('assembleOrchestrator reads adapter manifests at the default-branch tip
     repo.checkout('main')
     repo.git(['merge', '-q', '--ff-only', 'feature'])
     expect(await manifestStaleProbe()).toEqual([
-      'adapter manifest "claude-code" changed on main after load — manifests are read once at startup, from the default-branch tip; ' +
+      'adapter manifest "claude-code" changed on main after load — manifests are read once at startup, from the default branch; ' +
         `restart to apply (${MANIFEST})`,
     ])
     expect(await manifestStaleProbe()).toEqual([])

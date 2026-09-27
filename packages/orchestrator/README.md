@@ -96,8 +96,10 @@ so picking up a merged fix never has to cost in-flight metered work:
 3. Third `^C` exits immediately; open ledger entries are aged out by the next
    orchestrator's heartbeat (§4.4 crash recovery).
 
-The heartbeat also warns when an adapter manifest changes on disk after load —
-manifests are read once at startup, so an on-disk fix needs a restart to apply.
+The heartbeat also warns when an adapter manifest changes on the default branch
+after load. Manifests are read once at startup, from the default branch, so a
+merged fix needs a restart to apply. Edits in the working tree or on another
+branch are not read, and the heartbeat does not report them.
 
 ## Trigger packaging
 

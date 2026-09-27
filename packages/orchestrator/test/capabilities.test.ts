@@ -13,6 +13,7 @@ import { Git } from '@gateline/core'
 import { afterEach, describe, expect, it } from 'vitest'
 import { hasShell, loadRoleCapabilities } from '../src/capabilities.ts'
 import { Engine } from '../src/engine.ts'
+import { resolveHostTip } from '../src/manifest.ts'
 import { removeRunCheckout } from '../src/workspace.ts'
 import { FakeDispatcher, makeToyRepo, TEST_REGISTRY } from './engine.helper.ts'
 import { type HostRepo, makeHostRepo, prefixedLock } from './host-repo.helper.ts'
@@ -52,9 +53,11 @@ function host(files: Record<string, string>): HostRepo {
   return r
 }
 
+/** Read at the resolved host tip, the way the engine does. */
 async function capsAtTip(repo: HostRepo, opts: Parameters<typeof loadRoleCapabilities>[2] = {}) {
   const git = new Git(repo.dir)
-  return loadRoleCapabilities(git, await git.defaultBranch(), opts)
+  const tip = await resolveHostTip(git)
+  return loadRoleCapabilities(git, tip.commit, { refName: tip.name, ...opts })
 }
 
 describe('loadRoleCapabilities', () => {
@@ -139,6 +142,28 @@ describe('loadRoleCapabilities reads the default-branch tip (#500)', () => {
     expect(lines).toEqual([
       'role spec roles/scout.md is in the working tree but not at main, the default-branch tip — ' +
         'its capabilities are not read until it is merged, and "scout" defaults shell-ful',
+    ])
+  })
+
+  it('reads a committed role spec with a non-ASCII name, and does not call it unmerged', async () => {
+    const repo = host({ 'roles/rôle.md': SHELL_LESS })
+
+    const lines: string[] = []
+    const caps = await capsAtTip(repo, { log: (line) => lines.push(line) })
+    expect(hasShell(caps, 'rôle')).toBe(false)
+    expect(lines).toEqual([])
+  })
+
+  it('names the file and the ref for a role spec that is malformed at the tip', async () => {
+    const repo = host({ 'roles/analyst.md': SHELL_LESS, 'roles/broken.md': 'no frontmatter here\n' })
+
+    const lines: string[] = []
+    const caps = await capsAtTip(repo, { log: (line) => lines.push(line) })
+    expect(hasShell(caps, 'analyst')).toBe(false)
+    expect(caps.has('broken')).toBe(false)
+    expect(lines).toEqual([
+      "role spec roles/broken.md at main could not be read (main:roles/broken.md: expected leading '---' frontmatter block) — " +
+        '"broken" defaults shell-ful',
     ])
   })
 })

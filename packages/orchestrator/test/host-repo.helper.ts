@@ -29,11 +29,11 @@ export interface HostRepo {
   remove(): void
 }
 
-/** An empty repository on `main`, with no origin (a local-only host). */
-export function makeHostRepo(): HostRepo {
+/** An empty repository on `branch` (default `main`), with no origin (a local-only host). */
+export function makeHostRepo(branch = 'main'): HostRepo {
   const dir = mkdtempSync(join(tmpdir(), 'gateline-host-'))
   const git = (args: string[]) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', env: ENV })
-  git(['init', '-q', '-b', 'main'])
+  git(['init', '-q', '-b', branch])
   const write = (files: Record<string, string>) => {
     for (const [path, content] of Object.entries(files)) {
       const full = join(dir, path)

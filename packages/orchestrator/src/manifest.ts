@@ -3,13 +3,13 @@
 // read the usage its harness reports. The seam is generic over this — a new
 // runner still costs one manifest, never orchestrator code.
 //
-// The engine reads a host's manifests through git at the default-branch tip
-// (#500), as it reads the registry. `headless.command` is the argv the engine
-// executes, so a branch that happens to be checked out must not be able to
-// change it before it is merged.
+// The engine reads a host's manifests through git at the local default-branch
+// ref (#500), as it reads the registry. `headless.command` is the argv the
+// engine executes, so a branch that happens to be checked out must not be able
+// to change it.
 import { stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { type Git, resolveFrameworkRoots, resolveFrameworkRootsFromDisk } from '@gateline/core/sources'
+import { DEFAULT_FRAMEWORK_PREFIX, type Git, resolveFrameworkRoots, resolveFrameworkRootsFromDisk } from '@gateline/core/sources'
 import { parseAdapterManifest, readAdapterManifest } from '@gateline/framework'
 
 // Re-exported so a working-tree-only consumer (runner-agent/src/agent.ts,
@@ -71,28 +71,101 @@ export async function headlessManifestPathAt(git: Git, rev: string, adapter: str
   return `${adaptersRoot}/${adapter}/manifest.json`
 }
 
+/** Where the engine reads a host's configuration: one commit, resolved once. */
+export interface HostTip {
+  /** What `git.defaultBranch()` answered (`main`, `origin/main`, or the fallback), for messages. */
+  name: string
+  /** The fully qualified ref `name` was resolved through (`refs/heads/main`, `refs/remotes/origin/main`, `HEAD`). */
+  ref: string
+  /** The commit every host input is read at. */
+  commit: string
+  /**
+   * True when no default branch could be determined (no `origin/HEAD`, no
+   * `main` or `master`), so `git.defaultBranch()` fell back to the checked-out
+   * branch and `name` is whatever happens to be checked out.
+   */
+  fallback: boolean
+}
+
+/**
+ * Resolve the host's default branch to a commit id, once. The name comes from
+ * `git.defaultBranch()`, the same local ref the registry read has always used
+ * (no fetch). It is resolved through its fully qualified ref, so a tag that
+ * shares the branch's name cannot stand in for it, and every input read at the
+ * returned commit comes from the same snapshot even if the branch moves
+ * between reads.
+ */
+export async function resolveHostTip(git: Git): Promise<HostTip> {
+  const name = await git.defaultBranch()
+  const candidates = name === 'HEAD' ? ['HEAD'] : [`refs/heads/${name}`, `refs/remotes/${name}`]
+  for (const ref of candidates) {
+    const commit = await git.revParse(ref)
+    if (commit) return { name, ref, commit, fallback: await reachedByFallback(git, name) }
+  }
+  throw new Error(`the default branch "${name}" of ${git.dir} does not resolve to a commit — there is no host configuration to read`)
+}
+
+/**
+ * `git.defaultBranch()` answers from `origin/HEAD` when that is set, and
+ * otherwise only ever names `main` or `master` (local or remote-tracking)
+ * before it falls back to the checked-out branch. So a name reached with no
+ * `origin/HEAD` that is none of those four came from the fallback.
+ */
+async function reachedByFallback(git: Git, name: string): Promise<boolean> {
+  const hasOriginHead = await git.run(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD']).then(
+    () => true,
+    () => false,
+  )
+  if (hasOriginHead) return false
+  return !['main', 'master', 'origin/main', 'origin/master'].includes(name)
+}
+
 /**
  * The engine's manifest read: the adapter's manifest as committed at `rev`,
- * which the caller passes as the default-branch tip (`git.defaultBranch()`,
- * a local ref, with no fetch). A manifest missing there is an error even when
- * the working tree has one, because falling back to the working tree would
- * let an unmerged adapter decide what the engine executes.
+ * which the engine passes as `resolveHostTip(git).commit`. `refName` names
+ * that commit in messages. A manifest missing there is an error even when the
+ * working tree has one, because falling back to the working tree would let an
+ * unmerged adapter decide what the engine executes.
  */
-export async function loadHeadlessManifestAt(git: Git, rev: string, adapter: string, prefixHint?: string): Promise<HeadlessManifest> {
+export async function loadHeadlessManifestAt(
+  git: Git,
+  rev: string,
+  adapter: string,
+  prefixHint?: string,
+  refName: string = rev,
+): Promise<HeadlessManifest> {
   const path = await headlessManifestPathAt(git, rev, adapter, prefixHint)
   const text = await git.show(rev, path)
   if (text === null) {
-    const inWorkingTree = await stat(join(git.dir, path)).then(
-      () => true,
-      () => false,
-    )
+    const notUsed = '; the working tree has one, which is not used until it is merged'
+    // A lock missing at the tip means the layout fell back to the root, so
+    // `path` is not where the operator expects the adapter. Name the lock
+    // instead when a prefix was given, or when the working tree has a lock
+    // the tip lacks (an integration that is not merged yet).
+    const lockPath = `${prefixHint ?? DEFAULT_FRAMEWORK_PREFIX}/framework-lock.json`
+    const lockAtTip = (await git.objectId(rev, lockPath)) !== null
+    const lockInWorkingTree = await existsOnDisk(join(git.dir, lockPath))
+    if (!lockAtTip && (prefixHint !== undefined || lockInWorkingTree)) {
+      throw new Error(
+        `adapter "${adapter}": no ${lockPath} at ${refName}, the default-branch tip, so the framework is not integrated there ` +
+          `and ${path} was looked for instead — the engine runs only an integration merged there` +
+          (lockInWorkingTree ? notUsed : ''),
+      )
+    }
     throw new Error(
-      `adapter "${adapter}": no ${path} at ${rev}, the default-branch tip — the engine runs only an adapter merged there` +
-        (inWorkingTree ? '; the working tree has one, which is not used until it is merged' : ''),
+      `adapter "${adapter}": no ${path} at ${refName}, the default-branch tip — the engine runs only an adapter merged there` +
+        ((await existsOnDisk(join(git.dir, path))) ? notUsed : ''),
     )
   }
-  const source = `${rev}:${path}`
+  const source = `${refName}:${path}`
   return toHeadlessManifest(parseAdapterManifest(text, source), adapter, source)
+}
+
+function existsOnDisk(path: string): Promise<boolean> {
+  return stat(path).then(
+    () => true,
+    () => false,
+  )
 }
 
 /**

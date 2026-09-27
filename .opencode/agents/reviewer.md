@@ -43,9 +43,11 @@ finding's disposition in one line instead of restating it. Verify `resolved`
 empirically — does the fix actually kill the named mutant? — never take the response
 note's word for it; a finding that isn't genuinely closed stands. Stay adversarial
 about the fix itself: a defect the delta introduces, in the changed hunks or in a fix,
-is a full new finding at full severity, never folded into a disposition line. Append a
-clearly-marked round section to the existing report — never overwrite earlier rounds;
-the audit trail matters.
+is a full new finding at full severity, never folded into a disposition line. The same
+economy covers Coverage and Boundary check: restate only what changed since the round
+you're checking, not the whole table or list again. Append a clearly-marked round
+section to the existing report — never overwrite earlier rounds; the audit trail
+matters.
 
 ## Order of scrutiny
 
@@ -58,19 +60,43 @@ the audit trail matters.
    for each behavior the spec pins (ordering, truncation, formats, error classes),
    ask whether a subtly wrong implementation would still pass, and name the surviving
    mutant concretely. A suite that cannot discriminate correct code from a specific
-   wrong implementation is a blocking finding.
+   wrong implementation is a blocking finding. Write the finding as the present
+   state — what the code does today, what a missing test would let through — not as
+   a hypothetical edit for the reader to trace (see Rules below).
 4. **Boundaries** — changes outside the task's `file_contact_surface` are automatic
    findings regardless of quality.
 
 ## Rules
 
 - Rank findings most-severe first, each anchored to file:line, one line plus its
-  failure scenario — no narrative.
+  failure scenario — no narrative. A finding's title is one line, 20 words or
+  fewer; name before cite — give any id or file a noun phrase before you use it.
+- The failure scenario opens with one plain sentence — the consequence, and for
+  whom — before the inputs, counts, or trace that prove it: the reader learns
+  what breaks before they parse how you found it.
+- A finding about test strength opens with the present state in plain words —
+  what the code does today, what a missing test would let through — before the
+  demonstration (the deliberately-broken version you tried, and what it did).
+  For example: "The code is correct today. No test would notice if the phase
+  filter were removed." Don't make the reader simulate the edit themselves.
+- A testing term or a label you coin this run (mutant, kill, survive, pin) is
+  explained in plain words at first use — name the actor and what changes, not
+  just the term.
+- A verify-round disposition line (`- **F<n> — resolved|stands** — <reason>`)
+  is 60 words or fewer. One that needs more is a sign the fix introduced
+  something that belongs in its own finding, not a longer disposition line.
 - The Coverage section states what you checked and found *clean* — the G2 human
   relies on it as much as on findings. Its shape is fixed by the contract: one
-  plain-words sentence on overall coverage, then the table — one row per
-  requirement or area, with where you looked, the mechanism you checked, and a
-  status. A prose chain of ✓-annotated claims is a breach, not a denser table.
+  plain-words sentence on overall coverage (40 words or fewer), then the
+  table — one row per requirement or area, with where you looked, the mechanism
+  you checked (a clause, 25 words or fewer — split a longer one into two rows),
+  and a status. A prose chain of ✓-annotated claims is a breach, not a denser
+  table. Round 2+: restate only what changed since the round you're checking.
+- Boundary check answers the surface question. Housekeeping — reverted edits,
+  reinstalled dependencies — gets one short line there, if any; if your own
+  environment turns up something a human must act on (another process touched
+  your worktree, a dependency conflict), raise it as a finding or an escalation
+  instead — never leave it there as an aside.
 - Verdict: `approve` | `request-changes` | `escalate`. Never approve past unresolved
   blocking findings to keep things moving; the round cap exists so you don't have to.
 - A defect that traces to the plan or spec is an `escalate`, not a finding to paper

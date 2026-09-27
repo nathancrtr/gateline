@@ -24,16 +24,29 @@
      Options are a bulleted list, one route per item: what the escalating
      role would do, never what it has decided — the human picks.
      REQUIRED WHEN: Escalation=escalate
-     READABILITY (normative — human-facing section: Coverage). The G2 approver
-     reads it to trust the review; a breach is bounced like a malformed
-     finding, with the rule cited. (a) Open with one plain-words sentence
-     stating overall coverage — no code spans, paths, or parenthetical cites.
-     (b) Then the Coverage table (shape below): one row per requirement or
-     area checked. The table is the shape — a bullet list or a paragraph in
-     its place is in breach. Cites live in the Where column, one location per
-     row; the Mechanism column says what was checked in a clause, never a
-     chain of clauses. (c) Name before cite: give any id or file a noun phrase
-     on first use in the opening sentence.
+     READABILITY (normative — human-facing sections: Findings, verify round,
+     Coverage; a breach is bounced like a malformed finding, with the rule
+     cited). Name before cite applies throughout: give any id or file a noun
+     phrase on first use. A testing term or a label coined this run — mutant,
+     kill, survive, pin — is explained in plain words at first use, naming
+     the actor and what changes rather than the term alone.
+     (a) A finding's title (the `<one-line defect>` below) is one line, 20
+     words or fewer. (b) Its failure scenario opens with one plain sentence —
+     the consequence, and for whom — before the inputs, counts, or trace that
+     prove it. (c) A finding about test strength opens with the present
+     state in plain words (what the code does today, what a missing test
+     would let through) before the demonstration that shows it. (d) A
+     verify-round disposition line (grammar below) is 60 words or fewer; one
+     that needs more is a sign the fix introduced something that belongs in
+     its own finding, not a longer disposition line.
+     (e) Coverage opens with one plain-words sentence stating overall
+     coverage — no code spans, paths, or parenthetical cites — 40 words or
+     fewer. (f) Then the Coverage table (shape below): one row per
+     requirement or area checked. The table is the shape — a bullet list or
+     a paragraph in its place is in breach. Cites live in the Where column,
+     one location per row; the Mechanism column holds a clause, never a
+     chain of clauses, 25 words or fewer — a cell that needs more becomes
+     two rows.
      AUDIENCE (normative — tooling parses the `AUDIENCE:` line): decide-time
      sections are what the G2 approver weighs at the gate; audit-time sections
      are evidence, read when trust is in question, and Gatehouse folds them to
@@ -44,13 +57,17 @@
      diff's changed hunks since the round you're checking, and the disposition
      of each prior finding. Disposition each prior finding in one compact line
      instead of restating it — grammar `- **F<n> — resolved|stands** —
-     <one-line reason>`; "stands" is the only word for a finding that is not
-     resolved; tooling reads exactly these two disposition words and no
-     others. A defect the delta introduces — in the changed hunks, or in a fix
-     itself — is a full new finding (`### F<n> — <severity> — <title>`, the
-     same fields as any other), never a third disposition word: a fix earns
-     the same scrutiny as new code, never less. See the example below
-     Findings. -->
+     <one-line reason, 60 words or fewer>`; "stands" is the only word for a
+     finding that is not resolved; tooling reads exactly these two
+     disposition words and no others. A defect the delta introduces — in the
+     changed hunks, or in a fix itself — is a full new finding (`### F<n> —
+     <severity> — <title>`, the same fields as any other), never a third
+     disposition word or an overlong disposition line: a fix earns the same
+     scrutiny as new code, never less. Coverage and Boundary check
+     follow the same economy: restate only what changed since the round
+     you're checking — new rows for newly-checked areas, a new line for new
+     housekeeping — and let earlier rounds' rows and lines stand unrepeated.
+     See the example below Findings. -->
 
 **Verdict:** approve | request-changes | escalate
 **Round:** <n of 3>
@@ -77,10 +94,11 @@ The options as I see them:
 
 ## Findings
 
-### F1 — <severity: blocking | major | minor> — <one-line defect>
+### F1 — <severity: blocking | major | minor> — <one-line defect, 20 words or fewer>
 - **Where:** `path/to/file.py:123`
-- **Failure scenario:** <concrete inputs/state → wrong output or crash.
-  If you can't construct one, mark the finding PLAUSIBLE.>
+- **Failure scenario:** <one plain sentence: the consequence, and for whom —
+  then concrete inputs/state → wrong output or crash. If you can't construct
+  one, mark the finding PLAUSIBLE.>
 - **Requirement:** <spec/plan reference this violates, if applicable>
 
 <!-- Round ≥ 2 appends below round 1, never overwriting it — see VERIFY ROUND
@@ -93,8 +111,9 @@ The options as I see them:
 **Diff reviewed:** <delta since the round-1 diff>
 
 ## Verify round
-- **F1 — resolved** — <one line: what changed, why the mutant now fails>
-- **F2 — stands** — <one line: why the fix doesn't close it>
+- **F1 — resolved** — <60 words or fewer: what changed, why the
+  deliberately-broken version of the code now fails>
+- **F2 — stands** — <60 words or fewer: why the fix doesn't close it>
 
 ### F3 — major — <a defect the delta itself introduced>
 - **Where:** `path/to/file.py:200`
@@ -109,7 +128,9 @@ The options as I see them:
      would carry at a fraction of the parse cost (the verification report's
      Results table is the precedent). Status is ✓, ✗, partial, or n/a,
      naming the criterion where one applies. Human-facing: READABILITY rules
-     govern the sentence; the table is the mandated shape. -->
+     govern the sentence and the table (word caps above). Round ≥ 2: restate
+     only what changed since the round you're checking (VERIFY ROUND above);
+     earlier rounds' rows stand unrepeated. -->
 
 <one sentence: what was covered, what was not, and how — static reading, execution, both>
 
@@ -120,4 +141,10 @@ The options as I see them:
 | concurrency | — | not assessed: no concurrent access in scope | n/a |
 
 ## Boundary check
-<!-- Did the diff stay inside the task's declared file_contact_surface? -->
+<!-- Did the diff stay inside the task's declared file_contact_surface?
+     Housekeeping — reverted edits, reinstalled dependencies — gets one
+     short line here, if any. Anything a human must act on (another process
+     touched the worktree, a hazard to the run) is a finding or an
+     escalation instead, never left here as an aside. Round ≥ 2: restate
+     only what changed since the round you're checking (VERIFY ROUND
+     above). -->

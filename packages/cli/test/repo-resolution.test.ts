@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { type FixtureRepo, generateFixtureRepo } from '@gateline/fixtures'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { resolveUpRepoDir } from '../src/main.ts'
+import { resolveUpRepoDir } from '../src/up.ts'
 
 let fixture: FixtureRepo
 let toplevel: string

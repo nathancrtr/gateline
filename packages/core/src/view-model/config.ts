@@ -108,6 +108,15 @@ const engineSchema = z
     role_timeout_seconds: z.number().positive().optional(),
     /** Engine heartbeat interval, in seconds (as `--heartbeat`). */
     heartbeat_seconds: z.number().positive().optional(),
+    /**
+     * What replaces this machine's hostname in every engine id `up` writes
+     * (as `--engine-name`, #502). It must differ from the name of every other
+     * machine that runs an engine against the same repository. Its spelling
+     * is checked by the orchestrator, which owns engine ids.
+     */
+    name: z.string().optional(),
+    /** Whether spend limits are enforced (as `--no-budget-enforcement` when false, #109). */
+    budget_enforcement: z.boolean().optional(),
   })
   .strict()
 
@@ -123,18 +132,43 @@ const configSchema = z
 
 export type RepositoryEntry = z.infer<typeof repositoryEntrySchema>
 
-/** The machine's limits (§7.4): parsed and checked here, and not yet consumed — the governor (#501, #502) takes them. */
+/** The machine's limits (§7.4): parsed and checked here; `gateline up` hands them to the governor, flags overriding (#502). */
 export interface OperatorLimits {
   maxConcurrentDispatches?: number
   spendLimitUsd?: number
   spendWindowHours?: number
 }
 
-/** Engine defaults for every `dispatch` repository (§7.4): parsed and checked here, not yet consumed (#502). */
+/** Engine defaults for every `dispatch` repository (§7.4): parsed and checked here; `gateline up` applies them, flags overriding (#502). */
 export interface EngineDefaults {
   adapters?: string[]
   roleTimeoutSeconds?: number
   heartbeatSeconds?: number
+  /** The config's `engine.name`, as written; the orchestrator checks its spelling. */
+  name?: string
+  budgetEnforcement?: boolean
+}
+
+/**
+ * How one repository in the set is served, as `loadSources` resolved it: what
+ * `gateline up` hands to that repository's engine, and names in its startup
+ * log (#502), so the CLI never re-derives it.
+ */
+export interface RepositorySettings {
+  /** Whether writes are pushed to origin (TOPOLOGY.md §3.6). False whenever `localOnly` is. */
+  push: boolean
+  /** Whether nothing is fetched from or pushed to origin. */
+  localOnly: boolean
+  /**
+   * Which rule of the precedence table decided `push` and `localOnly`, in the
+   * words the operator wrote or the fact that decided it: `--local-only`,
+   * `--no-push`, `--push`, `local_only: true`, `local_only: false`,
+   * `push: true`, `push: false`, `no origin remote`, `origin auto-detected`,
+   * or `view and decide entries push only with push: true`.
+   */
+  pushBecause: string
+  /** The entry's `gateline_prefix`, when it has one. */
+  frameworkPrefix?: string
 }
 
 export interface LoadedConfig {
@@ -148,6 +182,8 @@ export interface LoadedConfig {
   engine: EngineDefaults
   /** Each listed repository's own `limits:`, by source id; a repository with none is absent. */
   repositoryLimits: Record<string, { spendLimitUsd?: number }>
+  /** How each source in `sources` is served, by source id (every source has an entry). */
+  repositorySettings: Record<string, RepositorySettings>
 }
 
 export function defaultConfigPath(): string {
@@ -244,6 +280,8 @@ function parseConfigText(text: string, configPath: string): ParsedConfig {
   if (config.engine?.adapters !== undefined) engine.adapters = config.engine.adapters
   if (config.engine?.role_timeout_seconds !== undefined) engine.roleTimeoutSeconds = config.engine.role_timeout_seconds
   if (config.engine?.heartbeat_seconds !== undefined) engine.heartbeatSeconds = config.engine.heartbeat_seconds
+  if (config.engine?.name !== undefined) engine.name = config.engine.name
+  if (config.engine?.budget_enforcement !== undefined) engine.budgetEnforcement = config.engine.budget_enforcement
 
   // P3: the operator's limit is a ceiling. A repository may set a lower one,
   // never a higher; with no machine limit there is nothing to exceed.
@@ -383,22 +421,46 @@ async function resolveMode(args: {
   /** The config entry's declared mode; unused at the CLI tier. */
   mode?: RepositoryMode
   originExists: () => Promise<boolean>
-}): Promise<{ push: boolean; localOnly: boolean }> {
+}): Promise<{ push: boolean; localOnly: boolean; pushBecause: string }> {
   const { source, explicitLocalOnly, explicitPush, cliTier, mode, originExists } = args
   if (explicitLocalOnly === true && explicitPush === true) throw new LocalOnlyPushConflictError(source)
+  // The words for each explicit setting, as the operator wrote it.
+  const localOnlyWords = cliTier ? '--local-only' : `local_only: ${explicitLocalOnly}`
+  const pushWords = cliTier ? (explicitPush ? '--push' : '--no-push') : `push: ${explicitPush}`
 
   let localOnly: boolean
-  if (explicitLocalOnly !== undefined) localOnly = explicitLocalOnly
-  else if (explicitPush === true) localOnly = false
-  else if (explicitPush === false && cliTier) localOnly = true
-  else localOnly = !(await originExists())
+  let localOnlyBecause: string
+  if (explicitLocalOnly !== undefined) {
+    localOnly = explicitLocalOnly
+    localOnlyBecause = localOnlyWords
+  } else if (explicitPush === true) {
+    localOnly = false
+    localOnlyBecause = pushWords
+  } else if (explicitPush === false && cliTier) {
+    localOnly = true
+    localOnlyBecause = pushWords
+  } else {
+    localOnly = !(await originExists())
+    localOnlyBecause = localOnly ? 'no origin remote' : 'origin auto-detected'
+  }
 
   let push: boolean
-  if (localOnly) push = false
-  else if (explicitPush !== undefined) push = explicitPush
-  else push = cliTier || mode === 'dispatch' ? await originExists() : false
+  let pushBecause: string
+  if (localOnly) {
+    push = false
+    pushBecause = localOnlyBecause
+  } else if (explicitPush !== undefined) {
+    push = explicitPush
+    pushBecause = pushWords
+  } else if (cliTier || mode === 'dispatch') {
+    push = await originExists()
+    pushBecause = push ? 'origin auto-detected' : 'no origin remote'
+  } else {
+    push = false
+    pushBecause = 'view and decide entries push only with push: true'
+  }
 
-  return { push, localOnly }
+  return { push, localOnly, pushBecause }
 }
 
 /**
@@ -468,19 +530,21 @@ export async function loadSources(opts: {
     }
     checkUnique(named, CLI_HINT)
     const sources: RunSource[] = []
+    const repositorySettings: LoadedConfig['repositorySettings'] = {}
     for (const n of named) {
-      const { push, localOnly } = await resolveMode({
+      const { push, localOnly, pushBecause } = await resolveMode({
         source: n.id,
         explicitLocalOnly: opts.localOnly,
         explicitPush: opts.push,
         cliTier: true,
         originExists: memoizedOriginExists(n.top),
       })
+      repositorySettings[n.id] = { push, localOnly, pushBecause }
       sources.push(
         new LocalGitSource(n.id, n.top, { push, localOnly, displayName: n.displayName, formerIds: n.formerIds, mode: zeroConfigMode }),
       )
     }
-    return { sources, configPath: null, warnings, ...none }
+    return { sources, configPath: null, warnings, ...none, repositorySettings }
   }
 
   const configPath = opts.configPath ?? defaultConfigPath()
@@ -524,8 +588,9 @@ export async function loadSources(opts: {
       )
     const sources: RunSource[] = []
     const repositoryLimits: LoadedConfig['repositoryLimits'] = {}
+    const repositorySettings: LoadedConfig['repositorySettings'] = {}
     for (const { n, entry } of carrying) {
-      const { push, localOnly } = await resolveMode({
+      const { push, localOnly, pushBecause } = await resolveMode({
         source: n.id,
         explicitLocalOnly: entry.local_only,
         explicitPush: entry.push,
@@ -537,6 +602,7 @@ export async function loadSources(opts: {
         warnings.push(`source ${n.id}: fetch_interval ignored — local-only`)
       }
       if (entry.limits?.spend_limit_usd !== undefined) repositoryLimits[n.id] = { spendLimitUsd: entry.limits.spend_limit_usd }
+      repositorySettings[n.id] = { push, localOnly, pushBecause, ...(entry.gateline_prefix !== undefined ? { frameworkPrefix: entry.gateline_prefix } : {}) }
       sources.push(
         new LocalGitSource(n.id, n.top, {
           push,
@@ -553,7 +619,7 @@ export async function loadSources(opts: {
       warnings.push(`config at ${configPath} yielded no usable sources; falling back to current repo`)
       return fallbackToCwd(cwd, warnings, zeroConfigMode, opts.push, opts.localOnly)
     }
-    return { sources, configPath, warnings, limits: parsed.limits, engine: parsed.engine, repositoryLimits }
+    return { sources, configPath, warnings, limits: parsed.limits, engine: parsed.engine, repositoryLimits, repositorySettings }
   }
 
   return fallbackToCwd(cwd, warnings, zeroConfigMode, opts.push, opts.localOnly)
@@ -566,7 +632,7 @@ async function fallbackToCwd(
   push?: boolean,
   localOnly?: boolean,
 ): Promise<LoadedConfig> {
-  const none = { limits: {}, engine: {}, repositoryLimits: {} }
+  const none = { limits: {}, engine: {}, repositoryLimits: {}, repositorySettings: {} }
   const top = await repoToplevel(cwd)
   if (top !== null) {
     const n = await nameRepository(top)
@@ -590,6 +656,7 @@ async function fallbackToCwd(
       configPath: null,
       warnings,
       ...none,
+      repositorySettings: { [n.id]: resolved },
     }
   }
   warnings.push(`${cwd} is not a git repository and no config exists at ${defaultConfigPath()}`)

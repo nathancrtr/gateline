@@ -8,10 +8,11 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
-import { LocalGitSource } from '@gateline/core'
+import { LocalGitSource, loadSources } from '@gateline/core'
 import { type FixtureRepo, generateFixtureRepo } from '@gateline/fixtures'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { draftBriefMarkdown, type InteractiveNewIO, resolveUpMode, runInteractiveNew } from '../src/main.ts'
+import { draftBriefMarkdown, type InteractiveNewIO, runInteractiveNew } from '../src/main.ts'
+import { pushMarker } from '../src/up.ts'
 
 const exec = promisify(execFile)
 const cliPath = resolve(dirname(fileURLToPath(import.meta.url)), '../src/main.ts')
@@ -536,57 +537,55 @@ describe('gateline up — startup conflict (AC4.1)', () => {
   })
 })
 
-describe('resolveUpMode — the five startup markers (AC4.2, AC1.1, AC1.2)', () => {
-  it('explicit --push, resolved pushing → "pushing to origin (--push)"', () => {
-    expect(resolveUpMode({ pushExplicit: true, push: true, localOnly: false }, false)).toEqual({
-      enginePush: true,
-      localOnly: false,
-      marker: 'pushing to origin (--push)',
+describe('the five startup markers for a repository with no config entry (AC4.2, AC1.1, AC1.2)', () => {
+  // `up` names each engine's push and local-only with the rule `loadSources`
+  // recorded for it (`pushMarker`, #502), never re-deriving the precedence.
+  // For a repository given by --repo or the working directory these are the
+  // five markers `up` has always printed.
+  let withOrigin: string
+  let noOrigin: string
+  beforeAll(() => {
+    withOrigin = makeScratchRepo()
+    // Read from config only: nothing here fetches or pushes.
+    execFileSync('git', ['-C', withOrigin, 'remote', 'add', 'origin', 'git@github.com:acme/billing.git'])
+    noOrigin = makeScratchRepo()
+  })
+  const settingsFor = async (dir: string, flags: { push?: boolean; localOnly?: boolean }) => {
+    const loaded = await loadSources({
+      repoOverrides: [dir],
+      configPath: '/nonexistent/gateline-502/config.yaml',
+      push: flags.push,
+      localOnly: flags.localOnly,
+      engine: true,
     })
+    const settings = loaded.repositorySettings[loaded.sources[0]!.id]!
+    return { push: settings.push, localOnly: settings.localOnly, marker: pushMarker(settings) }
+  }
+
+  it('explicit --push, resolved pushing → "pushing to origin (--push)"', async () => {
+    expect(await settingsFor(noOrigin, { push: true })).toEqual({ push: true, localOnly: false, marker: 'pushing to origin (--push)' })
   })
 
-  it('no explicit flag, resolved pushing (origin exists) → "pushing to origin (origin auto-detected)"', () => {
-    expect(resolveUpMode({ pushExplicit: false, push: false, localOnly: false }, false)).toEqual({
-      enginePush: true,
-      localOnly: false,
-      marker: 'pushing to origin (origin auto-detected)',
-    })
+  it('no explicit flag, an origin → "pushing to origin (origin auto-detected)"', async () => {
+    expect(await settingsFor(withOrigin, {})).toEqual({ push: true, localOnly: false, marker: 'pushing to origin (origin auto-detected)' })
   })
 
-  it('explicit --local-only → "local-only (--local-only)"', () => {
-    expect(resolveUpMode({ pushExplicit: false, push: false, localOnly: true }, true)).toEqual({
-      enginePush: false,
-      localOnly: true,
-      marker: 'local-only (--local-only)',
-    })
+  it('explicit --local-only → "local-only (--local-only)"', async () => {
+    expect(await settingsFor(noOrigin, { localOnly: true })).toEqual({ push: false, localOnly: true, marker: 'local-only (--local-only)' })
   })
 
-  it('explicit --no-push (ADR-1 alias) → "local-only (--no-push)"', () => {
-    expect(resolveUpMode({ pushExplicit: true, push: false, localOnly: false }, true)).toEqual({
-      enginePush: false,
-      localOnly: true,
-      marker: 'local-only (--no-push)',
-    })
+  it('explicit --no-push (ADR-1 alias) → "local-only (--no-push)"', async () => {
+    expect(await settingsFor(withOrigin, { push: false })).toEqual({ push: false, localOnly: true, marker: 'local-only (--no-push)' })
   })
 
-  it('no explicit flag, resolved local-only (no origin remote) → "local-only (no origin remote)" (AC1.1)', () => {
-    expect(resolveUpMode({ pushExplicit: false, push: false, localOnly: false }, true)).toEqual({
-      enginePush: false,
-      localOnly: true,
-      marker: 'local-only (no origin remote)',
-    })
+  it('no explicit flag, no origin → "local-only (no origin remote)" (AC1.1)', async () => {
+    expect(await settingsFor(noOrigin, {})).toEqual({ push: false, localOnly: true, marker: 'local-only (no origin remote)' })
   })
 
-  it('explicit --local-only overrides an auto-detected origin exactly as --no-push does today (AC1.2)', () => {
-    // sourceLocalOnly=true stands in for loadSources already having forced
-    // local-only despite a live origin, because --local-only was explicit —
-    // resolveUpMode never re-derives that precedence, only names it.
-    const result = resolveUpMode({ pushExplicit: false, push: false, localOnly: true }, true)
-    expect(result.enginePush).toBe(false)
-    expect(result.marker).toBe('local-only (--local-only)')
+  it('explicit --local-only overrides an auto-detected origin exactly as --no-push does (AC1.2)', async () => {
+    expect(await settingsFor(withOrigin, { localOnly: true })).toEqual({ push: false, localOnly: true, marker: 'local-only (--local-only)' })
   })
 })
-
 describe('gateline new — interactive helpers (unit, no TTY)', () => {
   it('draftBriefMarkdown substitutes the title into the template H1, structure only', () => {
     const template = '# Intent Brief: <title>\n\n## Problem\n\n## Motivation\n\n## Constraints\n\n## Out of scope\n'

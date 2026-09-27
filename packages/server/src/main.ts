@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { dirname, extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { LOCAL_ID_PREFIX, loadSources } from '@gateline/core'
+import { LOCAL_ID_PREFIX, loadSources, type RunSource } from '@gateline/core'
 import { serve } from '@hono/node-server'
 import { createAnnouncer } from './announce.ts'
 import { createApp } from './app.ts'
@@ -61,6 +61,15 @@ export interface ServeOptions {
    * engine runs.
    */
   engine?: boolean
+  /**
+   * A set the caller has already resolved (#502): `gateline up` loads the set
+   * once, builds its engines from it, and hands the same sources here, so the
+   * server and the engines cannot disagree about which repositories are
+   * served or how. When given, `loadSources` is not called, the caller has
+   * printed its warnings, and `repoOverrides`, `demo`, `push`, `localOnly`
+   * and `engine` are not read.
+   */
+  resolved?: { sources: RunSource[]; configPath: string | null }
 }
 
 const MIME: Record<string, string> = {
@@ -77,7 +86,8 @@ const MIME: Record<string, string> = {
 /** How often the refs are read again with no watcher event to prompt it. */
 const RECHECK_MS = 30_000
 
-export async function startServer(opts: ServeOptions = {}): Promise<{ url: string; close: () => void }> {
+/** The set from the options: the demo, `--repo` paths, the config file or the working directory. */
+async function resolveSet(opts: ServeOptions): Promise<{ sources: RunSource[]; configPath: string | null }> {
   let repoOverrides = opts.repoOverrides
   if (opts.demo) {
     const { generateDemoSet } = await import('@gateline/fixtures')
@@ -85,9 +95,13 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
     for (const fixture of demo.repos) console.log(`demo repository generated at ${fixture.dir}`)
     repoOverrides = demo.repos.map((fixture) => fixture.dir)
   }
-
   const { sources, configPath, warnings } = await loadSources({ repoOverrides, push: opts.push, localOnly: opts.localOnly, engine: opts.engine })
   for (const w of warnings) console.warn(`warning: ${w}`)
+  return { sources, configPath }
+}
+
+export async function startServer(opts: ServeOptions = {}): Promise<{ url: string; close: () => void }> {
+  const { sources, configPath } = opts.resolved ?? (await resolveSet(opts))
   if (sources.length === 0) {
     throw new Error('no run sources — run inside a repository, pass --repo <path>, or create ~/.config/gateline/config.yaml')
   }

@@ -26,10 +26,20 @@ export interface StateCommit extends CommitInfo {
 
 export type { Identity, StateDocMutation }
 
-export type WriteFailure = 'ref-moved' | 'dirty-worktree' | 'stale-checkout' | 'no-branch' | 'no-identity' | 'error'
+/**
+ * What a deployment may do in one repository (docs/MULTI-REPO.md §7.3, P2):
+ * `view` reads only; `decide` also records human decisions; `dispatch` also
+ * lets an engine run. Order matters: each mode allows everything the one
+ * before it does.
+ */
+export const REPOSITORY_MODES = ['view', 'decide', 'dispatch'] as const
+export type RepositoryMode = (typeof REPOSITORY_MODES)[number]
 
-/** Why `stageRun` refused to mint a genesis commit (plan ADR-4). */
-export type StageRefusal = 'no-identity' | 'slug-taken' | 'conflict'
+/** `view-mode`: the source is in `view` mode and writes nothing (§7.3). */
+export type WriteFailure = 'ref-moved' | 'dirty-worktree' | 'stale-checkout' | 'no-branch' | 'no-identity' | 'view-mode' | 'error'
+
+/** Why `stageRun` refused to mint a genesis commit (plan ADR-4; `view-mode` per §7.3). */
+export type StageRefusal = 'no-identity' | 'slug-taken' | 'conflict' | 'view-mode'
 
 export type StageOutcome =
   | { outcome: 'created'; slug: string; branch: string; commit: string; pushFailed?: string }
@@ -92,6 +102,17 @@ export interface RunSource {
    * directory's basename, and either with a `-2` suffix. Absent means none.
    */
   readonly formerIds?: readonly string[]
+  /**
+   * What this deployment may do here (§7.3), as resolved for this process:
+   * a config entry's `mode`, except that a `dispatch` entry reads as
+   * `decide` where no engine runs (`ui`, the CLI); a repository given by
+   * `--repo` or the working directory is `dispatch` under `up` and `decide`
+   * otherwise. Optional so a driver or a test double need not say, and
+   * absent means no restriction — how the engine's own source is built.
+   * A `view` source refuses every write (`writeState`, `stageRun`), which
+   * is where the rule is enforced so that no caller can forget it.
+   */
+  readonly mode?: RepositoryMode
   /** Contract templates of this repo, for R3 validation. */
   readonly templates: ContractTemplates
   listRuns(): Promise<RunRef[]>
@@ -177,4 +198,20 @@ export interface RunSource {
 /** The name an interface shows for a source: its own display name, or else its id's last segment (§6.2). */
 export function displayNameOf(source: Pick<RunSource, 'id' | 'displayName'>): string {
   return source.displayName ?? lastIdSegment(source.id)
+}
+
+/**
+ * Why a write to this source is refused by its mode, or null when it is not
+ * (§7.3). Only `view` refuses; `decide` and `dispatch` both record human
+ * decisions. The message names the repository and its mode and says what to
+ * change. A source's write methods call this first; a surface may also call
+ * it early, before work the refusal would waste (an editor session, a call
+ * to GitHub), but the source's own check is the one that holds.
+ */
+export function viewModeRefusal(source: Pick<RunSource, 'id' | 'displayName' | 'mode'>): string | null {
+  if (source.mode !== 'view') return null
+  return (
+    `${displayNameOf(source)} (${source.id}) is in view mode: it is read here and nothing is written to it. ` +
+    'To record decisions in it, set `mode: decide` on its entry in the config file'
+  )
 }

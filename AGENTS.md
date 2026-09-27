@@ -47,7 +47,7 @@ Then, by area:
 * [`docs/MULTI-REPO.md`](docs/MULTI-REPO.md) — one deployment serving several
   repositories: repository identity, registration and modes, one engine per
   repository under shared limits, and how Gatehouse scopes and groups runs.
-  Decided and not yet built; the invariants below describe what is built
+  Decided, being built under #492; the invariants below describe what is built
 * [`docs/DEPLOY.md`](docs/DEPLOY.md) — hosting the frontend (and, opt-in, the
   orchestrator) as a single-user instance; read its security model first
 

@@ -57,8 +57,14 @@ image is reproducible and bumps are deliberate. On boot it:
    so no branch is checked out and every local branch can fast-forward.
 2. Configures git identity and, when `GIT_TOKEN` is set, a credential helper
    that reads the token from the environment (never written to disk).
-3. Writes `~/.config/gateline/config.yaml` pointing the server at the clone
-   with `push: true` and `fetch_interval` set.
+3. Writes `~/.config/gateline/config.yaml` listing the clone as the server's
+   one repository, in `decide` mode, with `push: $PUSH_DECISIONS` and
+   `fetch_interval` set. `decide` because the server only records decisions;
+   the engine (when `ORCH_ENABLED=1`) is the standalone binary, given
+   `--repo`, and reads no config. The repository must carry the framework on
+   its default branch (a lock, or `roles/`, `contracts/` and `registry/` at
+   its root), or the server refuses to start ([MULTI-REPO.md](MULTI-REPO.md)
+   §7.2).
 4. Starts cloudflared (when `TUNNEL_TOKEN` is set) and the server.
 
 At runtime the server polls `origin` every `FETCH_INTERVAL` seconds:
@@ -83,7 +89,7 @@ re-presents, without corrupting state.
 | `TUNNEL_TOKEN` | recommended | — | Cloudflare Tunnel token; when set, the server binds to loopback and cloudflared carries traffic. |
 | `FETCH_INTERVAL` | no | `60` | Seconds between `git fetch`es of origin. |
 | `PUSH_DECISIONS` | no | `true` | Push each decision commit back to origin. |
-| `SOURCE_NAME` | no | repo basename | Display name of the source in the UI. |
+| `SOURCE_NAME` | no | repo basename | Display name of the repository in the UI. Its id comes from `REPO_URL` (`github.com/acme/billing`); only a filesystem `REPO_URL` makes the id `local/<SOURCE_NAME>`, which then allows letters, digits, `.`, `_` and `-`. |
 | `PORT` | no | `4310` | Server port inside the container. |
 | `HOST` | no | `127.0.0.1` with tunnel, else `0.0.0.0` | Bind address; leave the default. |
 | `DATA_DIR` | no | `/data` | Volume mount point holding the clone. |

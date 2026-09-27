@@ -711,6 +711,14 @@ export function generateFixtureRepo(dir?: string, layoutOpts: FixtureLayoutOpts 
   // main: contracts + a merged, fully-done run (the wordfreq shape).
   for (const [name, content] of Object.entries(CONTRACTS)) repo.write(`${contractsRoot}/${name}`, content)
   repo.write('README.md', '# fixture\n\nGenerated demo repository for the gate frontend.\n')
+  if (!prefixed) {
+    // The root layout carries `roles/`, `contracts/` and `registry/` at the
+    // top, which is what the framework check (docs/MULTI-REPO.md §7.2) looks
+    // for in a repository with no lock. Neither placeholder is a file any
+    // reader parses: no role spec (`*.md`), no `models.yaml`.
+    repo.write('roles/README', 'Fixture: no role specs are generated for the demo.\n')
+    repo.write('registry/README', 'Fixture: no model registry is generated for the demo.\n')
+  }
   if (prefixed) {
     repo.write(
       `${prefix}/framework-lock.json`,

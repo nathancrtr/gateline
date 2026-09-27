@@ -449,9 +449,9 @@ Each engine keeps what is about its repository: the ref watcher, the tick, the
 write locks, the scheduler for sweeps, the worktrees (already keyed by a hash
 of the repository path), and the `engine-health.json` under its git directory.
 
-Two pieces of engine state are module-level today and keyed by slug alone: the
-memo of draft PRs already ensured, and the set of runs whose task branches were
-reaped. Both move onto the engine instance.
+Two pieces of engine state were module-level and keyed by slug alone: the memo
+of draft PRs already ensured, and the set of runs whose task branches were
+reaped. Both moved onto the engine instance (#502).
 
 ### 8.2 The governor
 
@@ -556,14 +556,13 @@ Decided: show the difference per repository, in `repo list` and in Gatehouse,
 and dispatch anyway. Whether a difference across a major version should ever
 refuse dispatch is left until releases are tagged (§17).
 
-**One engine's failure must not end the process.** Nothing in the packages
-handles a rejected promise that no code caught, and Node ends the process for
-one by default. A git failure while an engine closes a dispatch would be such
-a rejection. With several engines that would stop dispatch everywhere. Each
-engine's tick and each job's settlement gets a boundary that catches, logs
-with the repository id, and marks that engine failed in its health file. The
-other engines continue. Shutdown and supersede drain every engine, where today
-they take one handle.
+**One engine's failure must not end the process.** Node ends the process for a
+rejected promise that no code caught, and before #502 a git failure while an
+engine closed a dispatch was such a rejection. With several engines that would
+stop dispatch everywhere. Each engine's tick and each job's settlement now has
+a boundary that catches, logs with the repository, and marks that engine
+failed in its health file. The other engines continue. Shutdown and supersede
+drain every engine (ORCHESTRATOR.md §6.2).
 
 ### 8.4 Identity and credentials
 

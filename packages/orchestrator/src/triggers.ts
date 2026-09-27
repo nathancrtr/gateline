@@ -5,9 +5,10 @@
 // governor's wake (#501): a slot this engine was refused may be free.
 // The ref-watch mirrors the frontend server's freshness watcher.
 import { type FSWatcher, watch } from 'node:fs'
-import { join } from 'node:path'
-import { type CodeTreeMonitor, type CodeTreeState, type CodeTreeStatus, Git, writeEngineHealth } from '@gateline/core/sources'
-import type { Deferral, TickOutcome } from './engine.ts'
+import { mkdir, rename, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { type CodeTreeMonitor, type CodeTreeState, type CodeTreeStatus, type EngineHealth, engineHealthPath, Git } from '@gateline/core/sources'
+import type { Deferral, EngineFault, TickOutcome } from './engine.ts'
 import type { Scheduler } from './schedule.ts'
 
 /**
@@ -32,6 +33,92 @@ export interface EngineLike {
    * through the one path — ticks still never overlap. Optional for test doubles.
    */
   subscribeWake?(wake: () => Promise<void>): () => void
+  /**
+   * The fault boundary (#502): a pass that throws is recorded on the engine,
+   * which logs it with its repository and reports it in its health file; a
+   * pass that completes clears it. Optional for test doubles, whose failures
+   * are logged as `tick failed: …` as before.
+   */
+  noteFault?(where: 'tick', e: unknown): EngineFault
+  clearFault?(): void
+  /** Additive health-file fields (#502), merged after the standard ones; empty when there is nothing to say. */
+  healthFields?(): object
+  /** The loop is stopping (#502): admit nothing from now on. Optional for test doubles. */
+  beginStop?(): void
+}
+
+/**
+ * What the loop needs from a code-tree monitor: the real `CodeTreeMonitor`,
+ * or one engine's view of a monitor shared by several (`SharedCodeTree`).
+ */
+export interface CodeMonitorLike {
+  readonly startHead: string
+  check(): Promise<CodeTreeStatus>
+  /**
+   * The newest status anyone observed, when the monitor is shared (#502): a
+   * loop idles on another loop's non-fresh observation at once, rather than
+   * dispatching on mixed code until its own next boundary check.
+   */
+  latest?(): CodeTreeStatus | null
+}
+
+/**
+ * One code-tree monitor for a process running several engines (#502,
+ * MULTI-REPO.md §8.3 P5). Each engine's loop checks the tree at its own
+ * boundaries, as it always has, but the monitor's debounce counts
+ * *consecutive checks*, so several loops calling it independently would
+ * confirm a fast-forward sooner the more engines there were.
+ *
+ * So the checks are shared by generation. A loop that has not yet seen the
+ * current generation's result gets it without a new check; a loop that has
+ * seen it starts the next generation. With one loop every boundary checks,
+ * exactly as with the monitor itself. With several, the tree is checked about
+ * once per heartbeat whichever loop's heartbeat comes first, a fast-forward is
+ * confirmed after two such checks, and every loop reads the newest status
+ * (`latest`) before every pass, so a pause idles all of them at once.
+ */
+export class SharedCodeTree {
+  private readonly monitor: CodeMonitorLike
+  private generation = 0
+  private current: Promise<CodeTreeStatus> | null = null
+  private newest: CodeTreeStatus | null = null
+  private readonly seen = new Map<string, number>()
+
+  constructor(monitor: CodeMonitorLike) {
+    this.monitor = monitor
+  }
+
+  get startHead(): string {
+    return this.monitor.startHead
+  }
+
+  /** The view one loop is given, under a name unique among the loops. */
+  view(loop: string): CodeMonitorLike {
+    return {
+      startHead: this.monitor.startHead,
+      check: () => this.check(loop),
+      latest: () => this.newest,
+    }
+  }
+
+  private check(loop: string): Promise<CodeTreeStatus> {
+    if (this.current === null || this.seen.get(loop) === this.generation) {
+      this.generation++
+      const pass = this.monitor.check()
+      this.current = pass
+      pass.then(
+        (status) => {
+          if (this.current === pass) this.newest = status
+        },
+        () => {
+          // A failed check is the loop's to report ("tick failed"); the next check retries.
+          if (this.current === pass) this.current = null
+        },
+      )
+    }
+    this.seen.set(loop, this.generation)
+    return this.current
+  }
 }
 
 export interface RunLoopConfig {
@@ -46,12 +133,24 @@ export interface RunLoopConfig {
    * process with no code repo to watch (`resolveCodeRepo` returns null) —
    * the loop then behaves exactly as it did before #141.
    */
-  codeMonitor?: CodeTreeMonitor
+  codeMonitor?: CodeTreeMonitor | CodeMonitorLike
   /** Fired exactly once, after the heartbeat write, when the monitor confirms a clean fast-forward past startHead. */
   onSupersede?: (status: CodeTreeStatus) => void
   log?: (line: string) => void
   /** Advisory staleness check run on heartbeat ticks; returned lines are logged (#150). */
   staleProbe?: () => Promise<string[]>
+  /**
+   * Whether `runLoop` resolves only after its startup pass has finished
+   * (default true, as before #502). `startOrchestrators` passes false, so one
+   * repository's slow or hung first pass does not hold up the others, or the
+   * handle a caller needs to install its signal handlers.
+   */
+  awaitStartup?: boolean
+  /**
+   * How long `stop()` waits for the pass that is running before it drains
+   * without it (default `STOP_WAIT_MS`; #502). See `STOP_WAIT_MS`.
+   */
+  stopWaitMs?: number
 }
 
 /** The same trigger classes ORCHESTRATOR.md §4.1 describes — named so tests can fire one deterministically instead of racing real timers/watchers. */
@@ -65,11 +164,60 @@ export interface RunLoop {
    * running pass, if one is under way, does not count.
    */
   trigger(why: TriggerReason): Promise<void>
+  /** Resolves when the startup pass has finished (#502) — already, unless the loop was started with `awaitStartup: false`. */
+  readonly started: Promise<void>
 }
 
 const isBoundary = (why: TriggerReason) => why === 'heartbeat' || why === 'startup'
 
+/**
+ * After this many passes in a row have thrown, the loop runs only boundary
+ * passes (heartbeat, startup) until one completes (#502). A transient fault
+ * is retried on the next trigger of any kind; a persistent one is retried
+ * once per heartbeat, never in a loop of refs and wake triggers.
+ */
+export const FAULT_BACKOFF_AFTER = 2
+
+/**
+ * How long `stop()` waits for the running pass (#502): 30 seconds. The stop
+ * flags already keep that pass from reserving or committing anything new, so
+ * the wait only protects a dispatch that is already past its intent commit —
+ * its push and its launch, so that the drain sees the job. An intent commit is
+ * local plumbing, milliseconds; its push is one small ref update, a few
+ * seconds even on a slow link and rarely more than twenty. Thirty covers that
+ * with room, and holds a supersede — which drains before it exits 75 — for
+ * half a minute at most on a pass that never returns (a git call stuck on a
+ * lock, a remote that does not answer), not for ever. The drain after it keeps
+ * its own bounds: a launched role is still killed at its role timeout, and a
+ * second ^C still aborts.
+ */
+export const STOP_WAIT_MS = 30_000
+
 const DEFAULT_HEARTBEAT_MS = 3 * 60 * 1000
+
+let healthWrites = 0
+
+/**
+ * Write the engine's health file whole (#502): to a temporary file beside it,
+ * then renamed over it, so a reader never sees it half written. Core's
+ * `writeEngineHealth` truncates the file and then writes it, and a reader
+ * that lands between the two reads an empty file — core's own reader then
+ * reports no engine at all for that moment. The format is the same.
+ */
+async function writeHealthAtomically(repoDir: string, health: EngineHealth): Promise<void> {
+  const path = await engineHealthPath(repoDir)
+  await mkdir(dirname(path), { recursive: true })
+  const tmp = `${path}.${process.pid}.${healthWrites++}.tmp`
+  await writeFile(tmp, JSON.stringify(health, null, 2), 'utf8')
+  await rename(tmp, path)
+}
+
+/** A duration in the words the log uses: `400 ms`, `1.5 s`, `30 s`. */
+export function describeMs(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)} ms`
+  const s = ms / 1000
+  return `${Number.isInteger(s) ? s : s.toFixed(1)} s`
+}
 
 /**
  * A monitor's `supersede-confirmed` reads as `superseded-pending` on the
@@ -102,6 +250,15 @@ export async function runLoop(engine: EngineLike, repoDir: string, cfg: RunLoopC
   let lastStatus: CodeTreeStatus | null = null
   let wasFresh = true
   let firedSupersede = false
+  // A monitor shared by several loops (#502) is read for its newest status,
+  // which may be another loop's observation; the real monitor has only ours.
+  const codeStatus = (): CodeTreeStatus | null => {
+    const monitor = cfg.codeMonitor as CodeMonitorLike | undefined
+    return monitor?.latest ? (monitor.latest() ?? lastStatus) : lastStatus
+  }
+  // Passes that threw, in a row (#502): past FAULT_BACKOFF_AFTER only boundary passes run.
+  let failedPasses = 0
+  let backoffLogged = false
 
   const start = (why: TriggerReason): Promise<void> => {
     const pass = runPass(why).finally(() => {
@@ -147,8 +304,13 @@ export async function runLoop(engine: EngineLike, repoDir: string, cfg: RunLoopC
         wasFresh = status.state === 'fresh'
         lastStatus = status
       }
-      const fresh = !cfg.codeMonitor || (lastStatus?.state ?? 'fresh') === 'fresh'
-      if (fresh) {
+      const fresh = !cfg.codeMonitor || (codeStatus()?.state ?? 'fresh') === 'fresh'
+      const backingOff = failedPasses >= FAULT_BACKOFF_AFTER && !isBoundary(why)
+      if (backingOff && !backoffLogged) {
+        backoffLogged = true
+        cfg.log?.(`${failedPasses} passes in a row failed — until one completes, this engine retries on the heartbeat only`)
+      }
+      if (fresh && !backingOff) {
         // Freshness is the engine's own job in a standalone topology (#104):
         // sync on heartbeat and startup, where the trigger cause is known.
         // Never on refs/completion ticks — our own fetch writes FETCH_HEAD
@@ -173,31 +335,42 @@ export async function runLoop(engine: EngineLike, repoDir: string, cfg: RunLoopC
             if (s.kind !== 'rest') cfg.log?.(`[${why}] sweep(${s.slug ?? s.role}): ${s.kind}${s.rule ? ` (${s.rule})` : ''} ${s.detail}`)
           }
         }
+        // The pass completed: a standing fault is behind the engine (#502).
+        failedPasses = 0
+        backoffLogged = false
+        engine.clearFault?.()
       }
       // else: idle. Not dispatching on mixed code is the whole point of D2 —
       // the loop still counts as having ticked (the heartbeat below fires).
     } catch (e) {
-      cfg.log?.(`tick failed: ${(e as Error).message}`)
+      // The tick's fault boundary (#502): the engine records it, logs it with
+      // its repository and reports it in its health file. The loop carries on,
+      // so the next trigger retries — or the next heartbeat, once the faults
+      // repeat — and nothing reaches the process as an unhandled rejection.
+      failedPasses++
+      if (engine.noteFault) engine.noteFault('tick', e)
+      else cfg.log?.(`tick failed: ${(e as Error).message}`)
     }
     // Liveness heartbeat (#100): written after every pass, read by the
     // co-located frontend. Under the git common dir — machine-local, never
     // committed; its presence marks "an engine runs on this deployment".
     // Kept up while paused/pending too — that's how Gatehouse surfaces drift.
     try {
+      const status = codeStatus()
       const codeFields = cfg.codeMonitor
         ? {
             commit: cfg.codeMonitor.startHead,
-            codeHead: lastStatus?.codeHead ?? cfg.codeMonitor.startHead,
-            codeState: heartbeatCodeState(lastStatus?.state ?? 'fresh'),
+            codeHead: status?.codeHead ?? cfg.codeMonitor.startHead,
+            codeState: heartbeatCodeState(status?.state ?? 'fresh'),
             // No fallback, unlike codeHead: `reason` exists only on `paused`,
             // and JSON.stringify drops undefined keys — which is what makes
             // the field self-clearing once the tree recovers to fresh.
-            codeReason: lastStatus?.reason,
-            codeCause: lastStatus?.cause,
-            codeUpgradeBlocked: lastStatus?.upgradeBlocked,
+            codeReason: status?.reason,
+            codeCause: status?.cause,
+            codeUpgradeBlocked: status?.upgradeBlocked,
           }
         : {}
-      await writeEngineHealth(repoDir, {
+      const health: EngineHealth = {
         at: new Date().toISOString(),
         pid: process.pid,
         heartbeatMs: cfg.heartbeatMs ?? DEFAULT_HEARTBEAT_MS,
@@ -207,7 +380,11 @@ export async function runLoop(engine: EngineLike, repoDir: string, cfg: RunLoopC
         // names what is held and why, whatever it is.
         deferrals: [...(engine.deferrals?.() ?? []), ...(cfg.scheduler?.deferrals() ?? [])],
         ...codeFields,
-      })
+        // Additive fields the reader in core does not know yet (#502, #499):
+        // `failed` and `unseeded`, present only while they say something.
+        ...(engine.healthFields?.() ?? {}),
+      }
+      await writeHealthAtomically(repoDir, health)
     } catch (e) {
       cfg.log?.(`engine-health write failed: ${(e as Error).message}`)
     }
@@ -215,10 +392,11 @@ export async function runLoop(engine: EngineLike, repoDir: string, cfg: RunLoopC
     // heartbeat carrying the confirming check has been written. The callback
     // owner (gateline up, gateline-orchestrator watch) decides to drain and
     // exit; the loop itself keeps idling since state stays non-fresh.
-    if (!firedSupersede && lastStatus?.state === 'supersede-confirmed') {
+    const confirmed = codeStatus()
+    if (!firedSupersede && confirmed?.state === 'supersede-confirmed') {
       firedSupersede = true
-      cfg.log?.(`code tree moved ${lastStatus.startHead}..${lastStatus.codeHead}, superseding`)
-      cfg.onSupersede?.(lastStatus)
+      cfg.log?.(`code tree moved ${confirmed.startHead}..${confirmed.codeHead}, superseding`)
+      cfg.onSupersede?.(confirmed)
     }
   }
 
@@ -252,16 +430,50 @@ export async function runLoop(engine: EngineLike, repoDir: string, cfg: RunLoopC
 
   const heartbeat = setInterval(() => void tick('heartbeat'), cfg.heartbeatMs ?? DEFAULT_HEARTBEAT_MS)
 
-  await tick('startup')
+  const started = tick('startup')
+  if (cfg.awaitStartup !== false) await started
 
   return {
+    started,
     async stop() {
       stopped = true
+      // Admit nothing from here (#502): a pass already under way cannot
+      // reserve, commit or launch once it resumes.
+      engine.beginStop?.()
+      cfg.scheduler?.beginStop()
       clearInterval(heartbeat)
       if (timer) clearTimeout(timer)
       for (const w of watchers) w.close()
       engine.onSettled = null
       unsubscribeWake?.()
+      // Wait for the pass that is running (#502), up to a bound. The one queued
+      // behind it is resolved without running, since `stopped` is set. Before
+      // #502 the drain began at once, and a pass still running could launch a
+      // role after it returned. Waiting without a bound was the opposite
+      // mistake: a pass that never returns kept the drain, the supersede exit
+      // and the first ^C from ever finishing.
+      if (running) {
+        const bound = cfg.stopWaitMs ?? STOP_WAIT_MS
+        const passes = (async () => {
+          while (running) await running.catch(() => {})
+        })()
+        let noticed: ReturnType<typeof setTimeout> | undefined
+        let expired: ReturnType<typeof setTimeout> | undefined
+        const outcome = await Promise.race([
+          passes.then(() => 'done' as const),
+          new Promise<'late'>((resolve) => {
+            noticed = setTimeout(() => cfg.log?.('still waiting for the running pass before draining'), Math.min(1000, bound / 2))
+            expired = setTimeout(() => resolve('late'), bound)
+          }),
+        ])
+        clearTimeout(noticed)
+        clearTimeout(expired)
+        if (outcome === 'late')
+          cfg.log?.(
+            `the running pass did not finish within ${describeMs(bound)} — stopping without it: it can admit nothing more, ` +
+              'and a role it had already committed and not yet launched may start after this drain, close on its own, or be aged out by the stale sweep after a restart',
+          )
+      }
       await engine.drain()
       await cfg.scheduler?.drain()
     },

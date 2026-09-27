@@ -16,7 +16,8 @@
 import type { InFlightJob } from './engine.ts'
 
 export interface ShutdownTarget {
-  inFlight(): InFlightJob[]
+  /** In-flight dispatches; a job that names its repository (#502) is reported with it. */
+  inFlight(): (InFlightJob & { repository?: string })[]
   /** Stop watching and wait for in-flight dispatches to close. */
   drain(): Promise<void>
   /** SIGKILL live harness groups; closing commits still land. */
@@ -28,9 +29,9 @@ export interface ShutdownTarget {
   progressMs?: number
 }
 
-function describeJob(j: InFlightJob, now: number): string {
+function describeJob(j: InFlightJob & { repository?: string }, now: number): string {
   const mins = Math.max(0, Math.round((now - j.startedAt) / 60000))
-  return `  ${j.role}${j.task ? `(${j.task}${j.round ? ` r${j.round}` : ''})` : ''} on ${j.slug} — running ${mins}min`
+  return `  ${j.role}${j.task ? `(${j.task}${j.round ? ` r${j.round}` : ''})` : ''} on ${j.slug}${j.repository ? ` in ${j.repository}` : ''} — running ${mins}min`
 }
 
 /** Build the signal handler; install it for both SIGINT and SIGTERM. */

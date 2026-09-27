@@ -13,7 +13,7 @@ import { loadRegistry, type Registry } from './registry.ts'
 import type { Scheduler, SweepOutcome } from './schedule.ts'
 import { formatShadowStep, shadowReplay } from './shadow.ts'
 import { stagedShutdown } from './shutdown.ts'
-import { assembleOrchestrator, BOT_IDENTITY } from './start.ts'
+import { assembleOrchestrator, BOT_IDENTITY, defaultRepositoryId } from './start.ts'
 import { deriveAll } from './tick.ts'
 import { runLoop } from './triggers.ts'
 
@@ -59,6 +59,18 @@ program
     'most dispatches (run roles and scheduled sweeps) running at once in this process; 0 disables the cap (default 2, #227)',
     parseFloat,
   )
+  .option(
+    '--engine-name <name>',
+    'the name written in place of this machine\'s hostname in the engine id on ledger entries and sweep markers (letters, digits, ".", "_", "-"; default: the hostname). It must be unique among the machines that run an engine against the same repository: an entry whose name is this engine\'s and whose pid is not running here is taken for this machine\'s own dead entry and dispatched again after 5 minutes',
+  )
+  // MULTI-REPO.md §8.5 (#502): the one place an operator reading --help learns this.
+  .addHelpText(
+    'after',
+    '\nThis binary serves one repository, and its limits are held by a governor of its own that is not\n' +
+      'shared with `gateline up`. Do not run it beside `gateline up` on one machine: each process enforces\n' +
+      '--max-concurrent-dispatches and --spend-limit-usd separately, so together they can run twice the\n' +
+      'dispatches and spend twice the limit per window.',
+  )
 
 interface Opened {
   dir: string
@@ -92,7 +104,10 @@ async function open(): Promise<Opened> {
   const git = new Git(dir)
   return {
     dir,
-    source: new LocalGitSource('local', dir, { frameworkPrefix: gatelinePrefix }),
+    // Named by the repository's id, as the engine's own source is (#502). The
+    // read-only commands (dry-run, shadow) keep working on a repository whose
+    // id cannot be derived; the live ones refuse it, in assembleOrchestrator.
+    source: new LocalGitSource(await defaultRepositoryId(dir).catch(() => 'local'), dir, { frameworkPrefix: gatelinePrefix }),
     registry: await loadRegistry(git, await git.defaultBranch(), gatelinePrefix),
     frameworkPrefix: gatelinePrefix,
   }
@@ -110,6 +125,7 @@ async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler:
     budgetEnforcement?: boolean
     roleTimeout?: number
     maxConcurrentDispatches?: number
+    engineName?: string
   }>()
   return assembleOrchestrator({
     repoDir: opened.dir,
@@ -123,6 +139,7 @@ async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler:
     budgetEnforcement: hosted.budgetEnforcement,
     roleTimeoutSeconds: hosted.roleTimeout,
     maxConcurrentDispatches: hosted.maxConcurrentDispatches,
+    engineName: hosted.engineName,
     log: (line: string) => console.log(line),
   })
 }

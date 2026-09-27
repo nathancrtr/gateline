@@ -61,6 +61,12 @@ export interface SweepMarker {
   at: string | null
   /** Null while the sweep is open: dispatched and not yet metered. */
   costUsd: number | null
+  /**
+   * The engine process that opened the sweep (`<hostname>:<pid>#n`, as ledger
+   * entries name theirs), or null for a marker written before #502. The seed
+   * and the spend report read it to tell a dead sweep from a running one.
+   */
+  engine: string | null
 }
 
 const SWEEP_SLUG = /^(.+)-(\d{4}-\d{2}-\d{2})$/
@@ -115,7 +121,13 @@ function parseMarker(slug: string, text: string): SweepMarker | null {
   if (!raw || typeof raw !== 'object') return null
   const r = raw as Record<string, unknown>
   if (typeof r.role !== 'string') return null
-  return { slug, role: r.role, at: markerAt(text), costUsd: typeof r.cost_usd === 'number' ? r.cost_usd : null }
+  return {
+    slug,
+    role: r.role,
+    at: markerAt(text),
+    costUsd: typeof r.cost_usd === 'number' ? r.cost_usd : null,
+    engine: typeof r.engine === 'string' && r.engine !== '' ? r.engine : null,
+  }
 }
 
 export interface ScheduleEntry {
@@ -272,6 +284,18 @@ export interface SchedulerConfig {
   /** The repository's key with the governor — the same one its engine uses. Defaults to `repoDir`. */
   repository?: string
   /**
+   * The engine process this scheduler belongs to (#502): its engine's
+   * `engineId`, written into each sweep marker it opens as `engine:` so that a
+   * later seed can tell a sweep whose process died from one still running.
+   * Absent, markers carry no `engine:` line, as before #502.
+   */
+  engineId?: string
+  /**
+   * Told when a sweep job's settlement throws (#502), after it is caught and
+   * logged: `assembleOrchestrator` marks the repository's engine failed.
+   */
+  onFault?: (e: unknown, context: string, entry: { key: string; at: string | null }) => void
+  /**
    * The commit `orchestrator.yaml` is read at (#500, #501): the one
    * `assembleOrchestrator` resolved, so sweep schedules come from the same
    * snapshot as the registry and adapter manifests. Absent, the scheduler
@@ -302,6 +326,13 @@ export class Scheduler {
   readonly repository: string
   /** Sweeps the governor held back on the last pass, by role — carried on the heartbeat beside the engine's. */
   private deferred = new Map<string, Deferral>()
+  /** Set by `beginStop` (#502): no reservation, no seed commit, no launch from then on. */
+  private stopping = false
+
+  /** The loop is stopping (#502): admit no sweep from now on. Sweeps already launched run to their close. */
+  beginStop(): void {
+    this.stopping = true
+  }
 
   constructor(cfg: SchedulerConfig) {
     this.cfg = cfg
@@ -345,6 +376,7 @@ export class Scheduler {
 
   /** One pass over every schedule. `force` bypasses S2 dueness for one role (the CLI's `sweep`). */
   async tick(opts: { force?: string } = {}): Promise<SweepOutcome[]> {
+    if (this.stopping) return []
     // The schedules are read at the host tip commit, once resolved (#500):
     // the same snapshot as the registry and the adapter manifests. The
     // default branch itself is named by its full ref, so a tag that shares
@@ -423,6 +455,8 @@ export class Scheduler {
     // `launch` hands the reservation to the sweep's job, this frame owns it,
     // and releases it on every other way out — a lost CAS, a missing default
     // tip, an exception.
+    // Checked immediately before the reservation (#502).
+    if (this.stopping) return { role: entry.role, slug, kind: 'rest', rule: 'S4', detail: 'scheduler stopping — nothing reserved' }
     const { granted, refusal } = this.governor.reserve({ repository: this.repository, intents: [{ key: sweepKey(slug), estimateUsd, kind: 'sweep' }] })
     const reservation = granted[0]
     if (!reservation) {
@@ -469,6 +503,9 @@ export class Scheduler {
       `covering_since: ${coveringSince ?? 'null'}`,
       `adapter: ${this.cfg.dispatcher.adapterFor?.(entry.role) ?? this.cfg.dispatcher.adapter}`,
       `model: ${model ?? 'null'}`,
+      // Additive (#502): which engine process opened the sweep. No existing
+      // field changes, and a marker without this line reads as before.
+      ...(this.cfg.engineId ? [`engine: ${JSON.stringify(this.cfg.engineId)}`] : []),
       `cost_limit_usd: ${entry.costLimitUsd ?? 'null'}`,
       `tokens_in: null`,
       `tokens_out: null`,
@@ -484,6 +521,8 @@ export class Scheduler {
       `sweep(${slug}): dispatched ${entry.role} — covering since ${coveringSince ?? 'repo start'}`,
       this.cfg.identity,
     )
+    // Checked again immediately before the seed commit lands (#502); the caller releases the reservation.
+    if (this.stopping) return { role: entry.role, slug, kind: 'rest', rule: 'S4', detail: 'scheduler stopping — no sweep committed, nothing launched' }
     if (!(await this.git.updateRefCAS(`refs/heads/${branch}`, commit, ZERO_OID)))
       return { role: entry.role, slug, kind: 'lost-cas', rule: 'S4', detail: 'sweep branch appeared mid-tick — another instance won; rest' }
     await this.pushBranch(branch)
@@ -505,17 +544,32 @@ export class Scheduler {
       }
       metered = await this.closeSweep(entry, branch, slug, outcome)
     })()
-    this.jobs.set(
-      slug,
-      job.finally(async () => {
-        // Settlement gives the slot back first (#501), after the closing
-        // commit has metered the marker, with what it metered.
-        reservation.release(metered)
-        this.jobs.delete(slug)
-        await removeRunCheckout(this.cfg.repoDir, branch)
+    // The settlement's fault boundary (#502), as the engine's: a closing
+    // commit that throws is caught and logged here rather than left as a
+    // rejection nothing handles, which would end the process and every other
+    // repository's engine with it. The stored promise never rejects.
+    // Told to the engine when there is one, which logs it with the repository
+    // and marks itself failed; logged here otherwise.
+    const fault = (e: unknown) => {
+      if (this.cfg.onFault) this.cfg.onFault(e, `sweep ${slug}`, { key: sweepKey(slug), at: now.toISOString() })
+      else this.log(`sweep(${slug}): settlement failed: ${(e as Error)?.message ?? String(e)}`)
+    }
+    const settled = job
+      .then(() => undefined, fault)
+      .then(async () => {
+        try {
+          // Settlement gives the slot back first (#501), after the closing
+          // commit has metered the marker, with what it metered.
+          reservation.release(metered)
+          this.jobs.delete(slug)
+          await removeRunCheckout(this.cfg.repoDir, branch)
+        } catch (e) {
+          this.jobs.delete(slug)
+          fault(e)
+        }
         this.onSettled?.()
-      }),
-    )
+      })
+    this.jobs.set(slug, settled)
     // The hand-over: from here the job's settlement owns the slot. The
     // marker's `at` is what the governor recognises it by once it is metered.
     reservation.commit(now.toISOString())

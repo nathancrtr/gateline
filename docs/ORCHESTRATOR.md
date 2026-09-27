@@ -322,8 +322,41 @@ later reader can actually probe. What the sweep guarantees:
 
 Pid reuse is the acknowledged gap: a recycled pid reads as alive, and the entry waits
 out the whole role timeout. That is the safe direction — late recovery, never a double
-dispatch — and it costs nothing on the blessed topology, where there is one engine per
-machine.
+dispatch — and it costs nothing on the blessed topology, where there is one engine
+process per machine. That process may run one engine per repository (§6.2); they
+share its pid. The first engine built in the process has no suffix
+(`<hostname>:<pid>`), and each later one takes `#1`, `#2` and so on
+(`<hostname>:<pid>#1`), so each reads the others as alive and after a restart all of
+them read as gone.
+
+The host part is the OS hostname unless the engine is given a name (`engineName`,
+`--engine-name` on the standalone binary; #502), which then stands in for it on every
+ledger entry and sweep marker the engine writes. These files are committed, into
+repositories that may be public. The name is letters, digits, `.`, `_` and `-`. The
+stale sweep compares an entry's host part with the configured name when there is one,
+so a restart under the same name still recognises its own entries, and an entry
+written under the OS hostname before a name was configured reads as another host's
+and waits out `roleTimeoutMs + staleMs`.
+
+The name must be unique among the machines that run an engine against the same
+repository. The stale sweep reads an entry whose host part is its own name, and
+whose pid is not running on this machine, as this machine's own dead entry, and
+ages it after `staleMs` (five minutes) instead of the role timeout plus `staleMs`.
+Two machines given one name would each read the other's live dispatches as dead
+and dispatch the same work again, paying for it twice.
+
+The record says nothing about the role's own process. A role is spawned detached, in
+a process group of its own whose id is its pid, and that id lives only in the
+dispatcher's memory, for the timeout kill and the operator's abort. It is known only
+after the intent commit, so it could not go on the open ledger entry without a second
+commit, and a new ledger key is a change to `contracts/state.yaml`. So after a crash
+the stale sweep judges a dispatch lost by its engine's pid alone: a role that is
+still running when its engine died is re-dispatched after `staleMs`, and for as long
+as the old role lives the same work is paid for twice. Nothing kills the old role
+either, since its timeout was a timer in the dead process. Two things bound it in
+practice: the role's stdout and stderr are pipes to the dead engine, so it usually
+fails at its next write, and the re-dispatch removes the dispatch's worktree from
+under it.
 
 ### 4.5 Pause and resume
 
@@ -426,6 +459,12 @@ beside the runs, and the schedule derives the same sweep on a later tick.
 registry and the adapter manifests; the heartbeat reports a later change on the
 default branch, and a restart applies it. The facts about sweeps themselves (which are
 open, when the last merged one ran) are still read live from the default branch.
+
+Since #502 the marker also names the engine process that opened the sweep, as a ledger
+entry does: `engine: "<hostname>:<pid>"` (with `#n` after the first engine in the process,
+and the engine name in place of the hostname when one is set), a line added after `model:`. No existing
+field changes, and a marker without the line reads as before. No contract covers
+`sweep.yaml`.
 
 ### 4.7 Invariants of the loop
 
@@ -639,8 +678,8 @@ One object per process, the governor (`governor.ts`), owns the concurrency cap
 count an engine took of its own work at launch, and a scheduled sweep passed
 neither. Several engines cannot share a limit that way (MULTI-REPO.md §8.2), so
 admission is now a reservation, made by every engine and every sweep scheduler
-the process runs. `gateline up` still runs one engine; the governor is built so
-that several can share it.
+the process runs. Since #502 one process can run one engine per repository under
+this one governor (§6.2); `gateline up` still passes it a single repository.
 
 The governor is a guard applied after derivation, like the engine's other guards.
 Derivation stays a pure function of committed state, and the governor writes
@@ -744,13 +783,52 @@ settled, whether or not its repository reports again.
 What is left errs toward counting too much. A ledger change nobody in this process
 made (a hand edit, a second writer) goes unseen until that repository's next report,
 and every engine ticks at least once per heartbeat. A repository that never reports
-again (a stopped engine, a report that fails every time) keeps its last report and
-its settlements. Its closed entries and settlements leave the sum as the window
-rolls past them. Entries its last report showed open keep counting at their
-estimate, as open ledger entries always have, until the repository is removed
-(an `unregister` is left to #502). Uncommitted
-reservations, the term several engines ticking at once would otherwise miss, are
-never stale: the governor holds them.
+again (a report that fails every time) keeps its last report and its settlements.
+Its closed entries and settlements leave the sum as the window rolls past them.
+Entries its last report showed open keep counting at their estimate, as open ledger
+entries always have. Uncommitted reservations, the term several engines ticking at
+once would otherwise miss, are never stale: the governor holds them.
+
+This includes an engine marked failed (§6.2), which is a known over-count: its
+last report may list entries a previous process left open, and they keep counting at
+their estimate until one of its passes completes and reports that the stale sweep
+has closed them. Until then the other repositories have that much less of the window.
+
+There is one known under-count, and it is said out loud. A repository whose
+startup seed fails or times out is unregistered before it has ever reported, so the
+governor does not know what it spent in the window: the machine's window leaves it
+out until it seeds. The others may then overspend the window by at most what that
+repository spent in it, and only until it rejoins, which its next pass attempts.
+This is deliberate (a maintainer may reverse it): refusing every spend-limited
+dispatch while one repository cannot be read would let one broken repository stop
+all the others. It is never silent. With a machine spend limit set, its engine logs
+`WARNING: its spend in the last <window> is NOT counted against the machine's spend
+limit until it seeds …`, and every engine's health file lists it under `uncounted`
+until it seeds.
+
+**Unregister (#502).** An engine that stops cleanly, after its drain, leaves the
+governor. Its slots are freed: live reservations are released (a later release of
+one does nothing), its startup holds and any slot offered to it are dropped, it
+leaves the round-robin, the turn passing to the repository after it, and the seed
+gate stops waiting for it. Every repository refused meanwhile is woken. Its money is
+not freed. What it spent inside the window was real, and dropping it would let the
+others spend the machine's window twice over, so its closed entries and settlements
+stay in the machine's sum at what they cost and leave it as the window rolls past
+them. Its open entries, holds and live reservations stay at their estimate, dated
+when it unregistered, because a detached role may still be running. None of it
+counts toward the repository's own ceiling, which is gone with it; if the repository
+registers again, its first report replaces what it left, since it reads the same
+ledgers. An engine marked failed (§6.2) stays registered.
+
+An unregistered repository stays out until it is registered again on purpose. The
+governor keeps a record of it: `reserve` refuses it (limit `unregistered`, deferred
+under `MC`: "not admitted — <name> has left the governor (its engine stopped);
+nothing is granted to it until it registers again"), and `report` and `seed` are
+ignored, with a log line for the report. Before the review of #538 an unknown
+repository was made known and seeded by its first reservation, so a stopped
+engine's straggling pass came back with no ceiling at all. That convenience remains
+only for a repository that has never registered: a scheduler run with a governor and
+no engine. A report whose repository is unregistered while it gathers is dropped.
 
 **After a restart** the governor holds nothing. Roles are launched as detached
 processes and can outlive the engine that launched them, so before it grants
@@ -759,31 +837,162 @@ sweep markers. Each holds a slot until the ledger shows it closed or its timeout
 passed since its `at` (the role timeout; the sweep timeout for a sweep). "Closed"
 is the engine's own notion from §4.4, unchanged: the stale sweep ages an entry whose
 engine process is gone after `staleMs`, the next report shows it closed, and the
-slot is free. The timeout is the backstop §4.4 already relies on. A sweep's hold
-clears only by its timeout (the scheduler's configured sweep timeout, 30 minutes by
-default), since nothing closes a lost sweep's marker; with a cap of 1, a crashed
-sweep therefore blocks every dispatch for up to that long. A new dispatch for the
+slot is free. The timeout is the backstop §4.4 already relies on. Nothing closes a
+lost sweep's marker, so a sweep's hold clears by its timeout (the scheduler's
+configured sweep timeout, 30 minutes by default) unless its marker names an engine
+process that is gone from this machine (§4.6, #502). Then the seed takes no hold for
+it, and a hold taken while that process still ran clears on the next report, by the
+same pid check the ledger's stale sweep makes. Either way the open marker keeps
+counting toward spend at its estimate while it is inside the window. A marker
+written before #502 names no engine and still holds its slot until the timeout;
+with a cap of 1 such a crashed sweep blocks every dispatch for up to that long. A new dispatch for the
 same key as a hold takes over its slot, because derivation only asks for a key it
 reads as not in flight; the hold is removed only if that request is granted. Until
-every registered repository has seeded, the governor grants nothing.
+every registered repository has seeded, the governor grants nothing. Since #502 the
+seed also reports: an engine reads its ledgers once, then tells the governor, in one
+step, what it has open and what it has spent in the window, closed entries included,
+and only then is it seeded. So "seeded" means both, and in a process running several
+engines none of them reserves against a window that has not heard from the others.
 
 **Modes.** `--max-concurrent-dispatches 0` is uncapped. `--no-budget-enforcement`
 keeps metering and reporting, turns off both spend checks (the machine's window and
 every repository's ceiling), and keeps the cap, which is a resource limit rather
 than a budget. That is the behaviour the flag had before #501.
 
-**Entry points.** `assembleOrchestrator` and `startOrchestrator` build a governor
-from the flags unless they are handed one, so the standalone `gateline-orchestrator`
-and a one-repository `gateline up` each have their own. Running the standalone
-binary beside `up` on one machine therefore still doubles the limits. A scheduler
-must be given its governor. An engine built without one builds its own from its
-config and logs one line naming the limits it took, so a forgotten argument does
-not pass silently. A request that names one key twice is refused with an error
-naming the key. The interface
-is small on purpose (`register`, `seed`, `report`, `reserve`, `subscribe`, and the
-reservation's `commit` and `release`), because it is where a coordinator shared
-between installs would attach (#34). A repository's own ceiling can be set in the
-engine and governor config; reading it from a config file is #495's.
+**Entry points.** `startOrchestrators` builds one governor for every engine it
+runs, and `startOrchestrator` is that path with a list of one (§6.2).
+`assembleOrchestrator` builds a governor from the flags unless it is handed one, so
+the standalone `gateline-orchestrator` has its own, not shared with `gateline up`'s.
+Running the standalone binary beside `up` on one machine therefore doubles the
+limits, and its `--help` and the runbook say so. A scheduler must be given its
+governor. An engine built without one builds its own from its config and logs one
+line naming the limits it took, so a forgotten argument does not pass silently. A
+request that names one key twice is refused with an error naming the key. The
+interface is small on purpose (`register`, `unregister`, `registered`, `seed`,
+`report`, `reserve`, `subscribe`, `unseeded`, and the reservation's `commit` and `release`),
+because it is where a coordinator shared between installs would attach (#34). A
+repository's own ceiling and display name are registered by its engine; the refusal
+words name repositories by display name.
+
+### 6.2 Several engines in one process (#502)
+
+`startOrchestrators` (`start.ts`) runs one engine per repository, for a list of
+repositories, in one process (MULTI-REPO.md §8, decision D3). The caller hands over
+the list; the package reads no config file. Each entry carries the repository's top
+directory, its id (`github.com/acme/billing`, `local/billing`), an optional display
+name, an optional spend ceiling of its own, and the per-repository options
+`startOrchestrator` takes (push, local-only, adapters, framework prefix,
+`requireBudget`, role timeout). The machine's limits (`limits`) and the defaults for
+every engine (`engineDefaults`) are passed once. A list that names one repository
+twice is refused, with a message naming both entries: the same directory once
+resolved, the same id compared without case, two checkouts of one clone, or two
+clones of one origin (compared by the id the origin gives, whatever ids were
+passed). Each id must be one core accepts (`repositoryIdProblem`), so the engine
+and the server cannot name one repository differently. The remote runner (#507) is
+refused with more than one repository.
+
+- **Identity.** The id is the engine's source id, so the `RunRef.source` it reads
+  matches the server's id for the same repository, and its key with the governor.
+  `startOrchestrator` derives it from the origin when the caller gives none, as the
+  server does for a repository given by `--repo`. When the origin gives no usable
+  id, it falls back to `local/<directory name>`; when that name is not a valid local
+  name either (a directory called `my repo`), it refuses to start with core's
+  message rather than invent an id. Every line an engine, its scheduler and its loop
+  log starts with `[<display name>]`. The ledger's `engine:` keeps its meaning
+  (§4.4), and an engine name, when set, replaces its hostname.
+- **State on the instance.** Each engine keeps its jobs, write locks, deferrals, the
+  memo of draft PRs it has ensured and the set of runs whose task branches it has
+  reaped. The last two were module-level maps keyed by slug before #502, so two
+  repositories with a run of the same name shared them. The engine id counter stays
+  module-level on purpose: ids must be unique across the process.
+- **Startup.** Every engine is assembled and registered in list order (the
+  round-robin's order). Then every engine seeds and reports (§6.1), together, each
+  logging when its seed begins and when it is done, and the start logs once, after
+  five seconds, which repositories it is still waiting for. Each seed is
+  bounded by a timeout of one minute (`startupTimeoutMs`): the seed is a few git
+  reads per run, far under a second on a healthy repository, and core's git calls
+  have no timeout of their own, so without one a stuck lock would hold every engine,
+  and the caller's signal handlers, indefinitely. A seed that fails or times out
+  marks that engine failed and unregisters it, so it holds no other repository back;
+  its first tick seeds it again, registering it — with its own ceiling — in the same
+  step. Then the loops start together, and the handle is returned without waiting
+  for their startup passes (`handle.started` resolves when they have finished), so
+  one repository's slow first pass holds up neither the others nor the caller.
+- **Stopping.** `stop()` stops every loop at once. Each loop tells its engine and
+  scheduler to admit nothing more — they check immediately before every
+  reservation and again immediately before every intent commit — and then waits for
+  the pass that is running, up to 30 seconds (`stopWaitMs`), before draining the
+  jobs already launched. Each engine then unregisters. Before the review of #538
+  the drain began without waiting for the running pass, which could launch a role
+  after `stop()` returned, and past its repository's ceiling once the repository
+  had been unregistered. The wait is bounded because a pass can hang (a git call
+  stuck on a lock, a remote that never answers), and an unbounded wait kept the
+  supersede from ever exiting `75` and the first `^C` from ever finishing. The
+  stop flags already keep the pass from admitting anything, so the wait only
+  protects a dispatch past its intent commit — its push and launch — which thirty
+  seconds covers even on a slow network. A loop still waiting after a second logs
+  `still waiting for the running pass before draining`; one that reaches the bound
+  logs that it is stopping without that pass, which can admit nothing more, and
+  that a role it had already committed may start after the drain, close on its
+  own, or be aged out after a restart. The drain keeps its own bounds: a launched
+  role is still killed at its role timeout, and a second `^C` still aborts. One
+  engine at its bound delays no other: they drain together. A loop whose drain
+  throws is logged with its repository; the others still drain.
+
+  A pass that was already running when stop began finishes its bookkeeping and
+  admits nothing. It may still age a stale ledger entry inside its report, ensure
+  a draft PR with `gh`, reap a finished run's task branches or sync from origin;
+  it reserves, commits and launches nothing. A role that settles during the drain
+  still has its closing commit written.
+- **Faults.** A tick that throws, and a job whose closing commit throws, are caught
+  at a boundary around each (`triggers.ts`, and the job's settlement in `engine.ts`
+  and `schedule.ts`). Before #502 a settlement's rejection reached the process
+  unhandled, and Node ends the process for one; with several engines one
+  repository's git error would have stopped dispatch in all of them. The fault is
+  logged with the repository — with its stack on the first fault of a streak and
+  its message after that — the governor gets back what the failed step held (a
+  grant that was not launched, a job's slot), and the engine is marked failed in
+  its own health file from the loop's next write. A failed engine is not stopped.
+  It keeps its loop and its registration with the governor, because its running
+  jobs are real processes that hold real slots. Any trigger retries it until two
+  passes in a row have thrown; from then it retries on the heartbeat only, so a
+  persistent fault costs one attempt per heartbeat and never spins on refs or
+  wakes. What clears a fault depends on its kind. A `tick` or `seed` fault is
+  cleared by the first pass that completes. A `settlement` or `sweep` fault stands
+  until the ledger entry (or sweep marker) the failed close left open is closed or
+  aged out by the stale sweep — or, for a sweep, until the sweep timeout has passed
+  since it opened — whatever passes complete meanwhile. No process-wide
+  `unhandledRejection` handler is installed.
+- **One code tree.** The process has one code-tree monitor. The loops share its
+  checks by generation, so a fast-forward is still confirmed on two consecutive
+  checks however many engines there are, and each loop reads the newest status
+  before each pass, so a pause observed by one idles all of them at once. A
+  confirmed fast-forward fires `onSupersede` once for the process; the handle's
+  `stop()` drains every engine, and each then unregisters. `stagedShutdown` takes
+  the handle, and its drain lines name each dispatch's repository.
+- **The health file.** Each engine writes its own, with three added fields, present
+  only while they say something: `failed` (`{ at, where, reason, failures }`, where
+  `where` is `tick`, `settlement`, `sweep` or `seed`; `failures` counts the passes in
+  a row that threw for the first two, and the entries left open by faults for the
+  last two; with both kinds standing it shows the newest), `unseeded` (the ids of
+  repositories the governor's seed gate is waiting on: not yet seeded and reported)
+  and `uncounted` (the ids of repositories the machine's spend window is not
+  counting, §6.1; only while a machine spend limit is enforced). A healthy engine's
+  file is unchanged. The engine id does not appear in it. Repository ids are
+  compared without case throughout the governor, as core compares them, and each is
+  written as it was first registered.
+
+`gateline up` still serves one repository through `startOrchestrator`. What it
+observes from this, against main:
+
+| | |
+|---|---|
+| Log lines | Every line begins `[<display name>]`; the startup seed logs when it begins and ends |
+| Startup | `startOrchestrator` returns before the startup pass has finished, so `up` installs its signal handlers sooner; the startup seed is bounded at 60 s |
+| `^C` during startup | Drains: the startup pass admits nothing more |
+| Stopping | Waits for the running pass, up to 30 s, then drains without it |
+| Faults | The first fault of a streak logs its stack; after two failed passes in a row the engine retries on the heartbeat only; the health file gains `failed` |
+| Ids | A directory whose name cannot make a repository id (and whose origin gives none) refuses to start |
 
 ## 7. Humans: gates, escalations, and the frontend contract
 
@@ -907,6 +1116,8 @@ Extends DESIGN.md §9 for the autonomous mode:
 | Machine writes masquerade as human decisions | Distinct bot author identity; reserved decision grammar; no code path writes `gates.*` |
 | Vendor or model outage mid-run | Dispatch failure → one retry → escalate and pause. Falling back to a registry alternate is a human decision — a silent model swap would invalidate the P5 reasoning recorded for the run |
 | Orchestrator host dies | All state is in git; restart anywhere, probe, converge — the process table is the only unpersisted state and is treated as cache |
+| One repository's engine faults in a process running several (#502) | A boundary around each tick and each job's settlement catches it, logs it with the repository, returns what the failed step held to the governor, and marks that engine failed in its own health file; the other engines keep running. The failed engine retries on its next trigger, on the heartbeat only once two passes in a row have thrown, and a completed pass clears a failed pass, while a failed closing commit stands until the entry it left open is closed or aged out (§6.2) |
+| A role outlives its crashed engine | Not guarded: the record keeps the engine's pid, never the role's process group, so after `staleMs` the same work can be dispatched while the old role still runs, and it is paid for twice while that lasts (§4.4) |
 
 ## 12. Resolved questions (maintainer review, 2026-07-10)
 
@@ -941,7 +1152,9 @@ process (`gateline up`) reading and writing one clone, with the globally
 installed `gateline` binary `npm link`ed to that checkout's
 `packages/cli`. There is exactly one blessed tree per deployment, so
 "update the code" reduces to "advance that one checkout" — no fleet of
-processes to reconcile against each other.
+processes to reconcile against each other. A process running one engine per
+repository (§6.2) still has one code tree and one monitor: a fast-forward drains
+every engine, and the process exits `75` once (MULTI-REPO.md §8.3, P5).
 
 **What is monitored.** The *code tree*: the git checkout that owns the running
 module's own source, resolved from `import.meta.url` (`resolveCodeRepo` in

@@ -59,6 +59,10 @@ program
     'most dispatches (run roles and scheduled sweeps) running at once in this process; 0 disables the cap (default 2, #227)',
     parseFloat,
   )
+  .option(
+    '--engine-name <name>',
+    'the name written in place of this machine\'s hostname in the engine id on ledger entries and sweep markers (letters, digits, ".", "_", "-"; default: the hostname)',
+  )
   // MULTI-REPO.md §8.5 (#502): the one place an operator reading --help learns this.
   .addHelpText(
     'after',
@@ -100,8 +104,10 @@ async function open(): Promise<Opened> {
   const git = new Git(dir)
   return {
     dir,
-    // Named by the repository's id, as the engine's own source is (#502).
-    source: new LocalGitSource(await defaultRepositoryId(dir), dir, { frameworkPrefix: gatelinePrefix }),
+    // Named by the repository's id, as the engine's own source is (#502). The
+    // read-only commands (dry-run, shadow) keep working on a repository whose
+    // id cannot be derived; the live ones refuse it, in assembleOrchestrator.
+    source: new LocalGitSource(await defaultRepositoryId(dir).catch(() => 'local'), dir, { frameworkPrefix: gatelinePrefix }),
     registry: await loadRegistry(git, await git.defaultBranch(), gatelinePrefix),
     frameworkPrefix: gatelinePrefix,
   }
@@ -119,6 +125,7 @@ async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler:
     budgetEnforcement?: boolean
     roleTimeout?: number
     maxConcurrentDispatches?: number
+    engineName?: string
   }>()
   return assembleOrchestrator({
     repoDir: opened.dir,
@@ -132,6 +139,7 @@ async function buildEngine(opened: Opened): Promise<{ engine: Engine; scheduler:
     budgetEnforcement: hosted.budgetEnforcement,
     roleTimeoutSeconds: hosted.roleTimeout,
     maxConcurrentDispatches: hosted.maxConcurrentDispatches,
+    engineName: hosted.engineName,
     log: (line: string) => console.log(line),
   })
 }

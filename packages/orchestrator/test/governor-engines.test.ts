@@ -410,7 +410,7 @@ describe('two engines sharing one governor', () => {
     const outcomes = await ea.tick()
     expect(launched(outcomes)).toBe(0)
     expect(ea.deferrals()[0]).toMatchObject({ rule: 'MC', limit: 'concurrency' })
-    expect(ea.deferrals()[0]!.reason).toContain('until b has reported its open dispatches')
+    expect(ea.deferrals()[0]!.reason).toContain('until b has counted its open dispatches and reported its spend')
   })
 
   it("a reservation granted and not yet committed is visible to the other engine's spend check", async () => {

@@ -80,6 +80,15 @@ export interface EngineConfig {
    * engine whose pid a supervisor recycles.
    */
   engineId?: string
+  /**
+   * The name that stands in for the hostname in this engine's id (#502): the
+   * id is `<name>:<pid>` and is committed on every ledger entry and sweep
+   * marker the engine writes, into repositories that may be public. Letters,
+   * digits, `.`, `_` and `-`. The stale sweep treats an id with this host part
+   * as this machine's, so a restart under the same name recognises its own
+   * entries. Default: the OS hostname.
+   */
+  engineName?: string
   /** Push every orchestrator commit to origin (hosted mode): the machine is disposable, origin is not. */
   push?: boolean
   /**
@@ -184,11 +193,15 @@ const DEFAULT_STALE_MS = 5 * 60 * 1000
 /**
  * Engine identity (#349): `<hostname>:<pid>`, short enough to read in a diff of
  * `state.yaml` and specific enough to probe. The blessed topology is one engine
- * per machine (TOPOLOGY.md §3.1), so in production this is exactly that pair;
- * the `#n` suffix exists only so a *second* engine constructed inside one
- * process — a test, or a sibling engine for another repository (#502) — never
- * inherits the first one's entries and starts aging live jobs out from under
- * it.
+ * process per machine (TOPOLOGY.md §3.1), so in production the first engine is
+ * exactly that pair; the `#n` suffix, from `#1` on, exists only so a *second*
+ * engine constructed inside one process — a test, or a sibling engine for
+ * another repository (#502) — never inherits the first one's entries and
+ * starts aging live jobs out from under it. The first engine has no suffix.
+ *
+ * The host part is the OS hostname unless the engine is given an
+ * `engineName` (#502), which replaces it: these ids are committed into
+ * repositories that may be public.
  *
  * The counter is module-level on purpose, and is the one piece of mutable
  * module state the engine keeps (#502): ids must be unique across every
@@ -197,9 +210,20 @@ const DEFAULT_STALE_MS = 5 * 60 * 1000
  * others, and after a restart all of them probe as gone.
  */
 let engineSeq = 0
-function defaultEngineId(): string {
+function defaultEngineId(host: string): string {
   const n = engineSeq++
-  return `${hostname()}:${process.pid}${n === 0 ? '' : `#${n}`}`
+  return `${host}:${process.pid}${n === 0 ? '' : `#${n}`}`
+}
+
+/**
+ * Why `name` cannot stand in for the hostname in an engine id (#502), or null
+ * when it can: letters, digits, `.`, `_` and `-`, so the id still parses back
+ * into a host and a pid (no `:` or `#`) and reads as one word in a ledger.
+ */
+export function engineNameProblem(name: string): string | null {
+  if (name === '') return 'an engine name cannot be empty'
+  if (!/^[A-Za-z0-9._-]+$/.test(name)) return `engine name "${name}" may contain only letters, digits, ".", "_" and "-" (no ":", "#" or whitespace)`
+  return null
 }
 
 /** Split an engine id back into the machine and the process it names. */
@@ -229,14 +253,17 @@ function pidAlive(pid: number): boolean {
 
 /**
  * Is the process an engine id names gone from this machine (#349, #502)? True
- * only for an id on this host whose pid no longer runs. An id with no name, on
- * another host, or naming a live pid (any engine inside this very process
- * among them, whatever its `#n`) is not known to be gone.
+ * only for an id whose host part is this machine's — `host`, which is the
+ * engine's configured name when it has one and the OS hostname otherwise —
+ * and whose pid no longer runs. An id with no name, on another host, or naming
+ * a live pid (any engine inside this very process among them, whatever its
+ * `#n`) is not known to be gone. An entry written under the OS hostname before
+ * a name was configured reads as another host's, and ages by that rule.
  */
-export function engineGone(id: string | null): boolean {
+export function engineGone(id: string | null, host: string = hostname()): boolean {
   if (id === null) return false
   const named = parseEngineId(id)
-  return named !== null && named.host === hostname() && !pidAlive(named.pid)
+  return named !== null && named.host === host && !pidAlive(named.pid)
 }
 
 /**
@@ -247,9 +274,16 @@ export function engineGone(id: string | null): boolean {
 export type SweepMarkerReader = (git: Git, runsRoot: string, defaultRef: string, sinceMs: number) => Promise<SweepMarker[]>
 
 /**
- * An engine's fault (#502): the last pass or job settlement that threw, and
- * how many in a row have. Cleared by the next pass that completes. Written to
- * the engine's health file as `failed` while it stands.
+ * An engine's fault (#502), written to its health file as `failed` while it
+ * stands.
+ *
+ * Two kinds, cleared differently. A `tick` or `seed` fault is a pass that
+ * threw; the next pass that completes clears it, and `failures` counts the
+ * passes in a row that threw. A `settlement` or `sweep` fault is a job whose
+ * closing commit threw, leaving its ledger entry (or sweep marker) open; it
+ * stands until that entry is closed or aged out, whatever passes complete
+ * meanwhile, and `failures` counts the entries faults have left open. When
+ * both kinds stand, the health file shows the newest.
  */
 export interface EngineFault {
   /** ISO timestamp of the latest fault. */
@@ -258,8 +292,14 @@ export interface EngineFault {
   where: 'tick' | 'settlement' | 'sweep' | 'seed'
   /** The error's message. */
   reason: string
-  /** Faults since the last pass that completed, this one included. */
+  /** Passes in a row that threw (`tick`, `seed`), or entries left open by faults (`settlement`, `sweep`). */
   failures: number
+}
+
+/** The entry a settlement or sweep fault left open: its key, and the `at` its intent commit wrote. */
+export interface FaultEntry {
+  key: string
+  at: string | null
 }
 
 /** Rules that hold a dispatch back without writing anything — see `Deferral`. */
@@ -473,12 +513,32 @@ export class Engine {
    * the reap is idempotent and a done run cannot sprout new task branches.
    */
   private readonly reapedTaskBranches = new Set<string>()
-  /** The standing fault, if any (#502) — see `EngineFault`. */
+  /** The standing `tick` or `seed` fault, if any (#502) — see `EngineFault`. */
   private fault: EngineFault | null = null
+  /**
+   * Standing `settlement` and `sweep` faults (#502), by the entry each left
+   * open (`key` NUL `at`). Each stands until a report no longer shows its
+   * entry open — closed, or aged out by the stale sweep — or, for a sweep,
+   * until the sweep timeout has passed since the marker opened.
+   */
+  private readonly entryFaults = new Map<string, EngineFault & { entry: FaultEntry }>()
+  /**
+   * Set by `beginStop` (#502): from then on the engine admits nothing — no
+   * reservation, no intent commit, no launch — so a pass that was already
+   * running when its loop was stopped cannot dispatch after the drain.
+   */
+  private stopping = false
+  /** The host part of this engine's id: `engineName`, or the OS hostname (#502). */
+  readonly hostName: string
 
   constructor(cfg: EngineConfig) {
     this.cfg = cfg
-    this.engineId = cfg.engineId ?? defaultEngineId()
+    if (cfg.engineName !== undefined) {
+      const problem = engineNameProblem(cfg.engineName)
+      if (problem) throw new Error(problem)
+    }
+    this.hostName = cfg.engineName ?? hostname()
+    this.engineId = cfg.engineId ?? defaultEngineId(this.hostName)
     this.source = new LocalGitSource(cfg.repository ?? 'orchestrator', cfg.repoDir, {
       identity: cfg.identity,
       push: cfg.push,
@@ -518,47 +578,112 @@ export class Engine {
 
   /**
    * Record a fault caught at a boundary (#502) — a tick that threw, a job
-   * whose settlement threw, a failed startup seed — and log it. The engine is
-   * then "failed" in its health file until a pass completes. It is not
-   * stopped: every trigger still reaches it, except that after repeated tick
-   * faults the run loop retries on the heartbeat only.
+   * whose closing commit threw, a failed startup seed — and log it, with the
+   * stack on the first fault of a streak. The engine is then failed in its
+   * health file from the next write (the loop writes it after every pass). It
+   * is not stopped: every trigger still reaches it, except that after
+   * repeated tick faults the loop retries on the heartbeat only.
+   *
+   * `entry` is the ledger entry (or sweep marker) a settlement fault left
+   * open; the fault stands until that entry is closed or aged out.
    */
-  noteFault(where: EngineFault['where'], e: unknown, context?: string): EngineFault {
+  noteFault(where: EngineFault['where'], e: unknown, context?: string, entry?: FaultEntry): EngineFault {
     const reason = e instanceof Error ? e.message : String(e)
-    this.fault = { at: this.nowIso(), where, reason, failures: (this.fault?.failures ?? 0) + 1 }
+    const at = this.nowIso()
+    let fault: EngineFault
+    let first: boolean
+    if ((where === 'settlement' || where === 'sweep') && entry) {
+      const id = `${entry.key}\u0000${entry.at ?? ''}`
+      first = !this.entryFaults.has(id)
+      this.entryFaults.set(id, { at, where, reason, failures: 0, entry })
+      fault = { at, where, reason, failures: this.entryFaults.size }
+    } else {
+      first = this.fault === null
+      fault = { at, where, reason, failures: (this.fault?.failures ?? 0) + 1 }
+      this.fault = fault
+    }
     const what = { tick: 'tick failed', settlement: 'a dispatch settlement failed', sweep: 'a sweep settlement failed', seed: 'governor seed failed' }[where]
-    const then = {
-      tick: '',
-      settlement: '; a ledger entry it could not close is aged by the stale sweep',
-      sweep: '',
-      seed: '; retried on the first tick',
+    const until = {
+      tick: ` (${fault.failures} in a row)`,
+      seed: ` (${fault.failures} in a row); retried on the first tick`,
+      settlement: ' until the ledger entry it left open is closed or aged out by the stale sweep',
+      sweep: ' until the sweep marker it left open is closed or the sweep timeout passes',
     }[where]
-    this.log(`${what}${context ? ` (${context})` : ''}: ${reason} — engine marked failed in its health file (${this.fault.failures} in a row)${then}`)
-    return this.fault
+    this.log(`${what}${context ? ` (${context})` : ''}: ${reason} — engine marked failed; its health file says so from its next write${until}`)
+    // The stack once per streak: a programming error must be findable, and must
+    // not repeat a dozen lines of it on every heartbeat.
+    if (first && e instanceof Error && e.stack) this.log(`stack: ${e.stack}`)
+    return fault
   }
 
-  /** A pass completed: whatever failed before is behind it (#502). */
+  /**
+   * A pass completed (#502): a `tick` or `seed` fault is behind the engine. A
+   * settlement or sweep fault is not — it stands until its entry is closed or
+   * aged out (`settleEntryFaults`).
+   */
   clearFault(): void {
-    if (this.fault) this.log(`recovered after ${this.fault.failures} fault(s) — engine no longer marked failed`)
+    if (this.fault) this.log(`recovered after ${this.fault.failures} fault(s) — engine no longer marked failed for its passes`)
     this.fault = null
   }
 
+  /**
+   * Drop settlement and sweep faults whose entry a report no longer shows open
+   * (#502): `open` holds `key` NUL `at` for every open ledger entry and marker
+   * the report read. A sweep fault whose markers could not be read stands.
+   */
+  private settleEntryFaults(open: ReadonlySet<string>, sweepsRead: boolean): void {
+    if (this.entryFaults.size === 0) return
+    const now = (this.cfg.now?.() ?? new Date()).getTime()
+    const sweepTimeoutMs = this.cfg.sweepTimeoutMs ?? DEFAULT_SWEEP_TIMEOUT_MS
+    for (const [id, f] of this.entryFaults) {
+      if (f.where === 'sweep') {
+        const opened = f.entry.at ? Date.parse(f.entry.at) : Number.NaN
+        const timedOut = !Number.isNaN(opened) && now - opened >= sweepTimeoutMs
+        if (!timedOut && (!sweepsRead || open.has(id))) continue
+      } else if (open.has(id)) continue
+      this.entryFaults.delete(id)
+      this.log(`the entry a ${f.where} fault left open (${f.entry.key}) is closed or aged out — that fault no longer stands`)
+    }
+  }
+
+  /** The newest standing fault, of either kind, or null (#502). */
   faultState(): EngineFault | null {
-    return this.fault
+    let newest: EngineFault | null = this.fault
+    for (const f of this.entryFaults.values()) {
+      if (newest === null || f.at >= newest.at) newest = { at: f.at, where: f.where, reason: f.reason, failures: this.entryFaults.size }
+    }
+    return newest
   }
 
   /**
    * Additive fields for this engine's health file (#502), present only while
    * they say something, so a healthy engine's file is unchanged: `failed`
-   * (the standing fault) and `unseeded` (the repositories the governor's seed
-   * gate is still waiting on).
+   * (the newest standing fault) and `unseeded` (the repositories the
+   * governor's seed gate is still waiting on).
    */
   healthFields(): { failed?: EngineFault; unseeded?: string[] } {
     const unseeded = this.governor.unseeded()
+    const failed = this.faultState()
     return {
-      ...(this.fault ? { failed: { ...this.fault } } : {}),
+      ...(failed ? { failed } : {}),
       ...(unseeded.length > 0 ? { unseeded } : {}),
     }
+  }
+
+  /**
+   * The engine's loop is stopping (#502): admit nothing from now on. Checked
+   * immediately before every reservation and again immediately before every
+   * intent commit, so a pass that was running when `stop()` was called cannot
+   * reserve, commit or launch after it. Jobs already launched run to their
+   * closing commits.
+   */
+  beginStop(): void {
+    this.stopping = true
+  }
+
+  /** Whether `beginStop` has been called. */
+  isStopping(): boolean {
+    return this.stopping
   }
 
   /**
@@ -789,22 +914,43 @@ export class Engine {
    * notion of a lost dispatch; the timeout is only the backstop §4.4 already
    * relies on — past it, no live job can still be behind the entry.
    *
-   * Idempotent; `tick` calls it first. An embedding that runs several
-   * engines under one governor should await every engine's `seedGovernor`
-   * before starting any loop — until every registered repository has seeded,
-   * the governor grants nothing.
+   * The seed also REPORTS (#502): the governor is handed this repository's
+   * spend — closed entries in the window included — in the same step, and
+   * only then marked seeded. So "seeded" means the governor has both what the
+   * repository has open and what it has spent, and until every registered
+   * repository is seeded it grants nothing. Before #502 the closed spend
+   * arrived with the first tick's report, so in a process running several
+   * engines the first engine to tick reserved against a machine window that
+   * had not yet heard from the others.
+   *
+   * Everything is read first; the governor is then told in one step —
+   * register, report, seed — so a repository re-joining after a failed seed
+   * is unseeded for no longer than that step, and never while it reads. It
+   * rejoins with its own ceiling. The report's ledgers are read before the
+   * governor's report sequence number is taken, which is safe because an
+   * engine that has not seeded has launched nothing: its tick throws at the
+   * seed, before any reservation.
+   *
+   * Idempotent once it has succeeded; `tick` calls it first. `startOrchestrators`
+   * awaits every engine's seed before any loop starts.
    */
   private seedPromise: Promise<void> | null = null
   seedGovernor(): Promise<void> {
     if (!this.seedPromise) {
-      // Register again in the same step as the seed (#502): an embedding that
-      // unregistered this repository after a failed startup seed — so it would
-      // not hold the others back — has it rejoin already seeded, and with its
-      // own ceiling, never as an unseeded repository that blocks them again.
-      this.seedPromise = this.readSeed().then((entries) => {
+      this.seedPromise = (async () => {
+        const refs = (await this.source.listRuns()).filter((r) => r.kind !== 'default')
+        const states = new Map<string, RunState | null>()
+        for (const ref of refs) states.set(ref.slug, (await this.source.readState(ref)).state)
+        const entries = await this.seedEntries(refs, states)
+        const report = await this.spendReport(refs, states)
+        // A seed that finishes after the engine began stopping, or after the
+        // startup gave up on it and unregistered it while it stopped, must not
+        // bring the repository back.
+        if (this.stopping) return
         this.governor.register(this.repository, this.registration())
+        await this.governor.report(this.repository, () => report)
         this.governor.seed(this.repository, entries)
-      })
+      })()
       this.seedPromise.catch(() => {
         this.seedPromise = null
       })
@@ -812,11 +958,11 @@ export class Engine {
     return this.seedPromise
   }
 
-  private async readSeed(): Promise<SeedEntry[]> {
+  private async seedEntries(refs: RunRef[], states: Map<string, RunState | null>): Promise<SeedEntry[]> {
     const entries: SeedEntry[] = []
     const timeoutMs = this.cfg.roleTimeoutMs ?? DEFAULT_ROLE_TIMEOUT_MS
-    for (const ref of (await this.source.listRuns()).filter((r) => r.kind !== 'default')) {
-      const { state } = await this.source.readState(ref)
+    for (const ref of refs) {
+      const state = states.get(ref.slug)
       if (!state) continue
       for (const e of parseLedger(state)) {
         if (e.cost_usd !== null || e.failed) continue
@@ -831,7 +977,7 @@ export class Engine {
       // (#502): its marker stays open, since nothing closes it, and the spend
       // report keeps counting it at its estimate, but it holds no slot. The
       // same pid check the ledger's stale sweep makes (`staleVerdict`).
-      if (engineGone(m.engine)) {
+      if (engineGone(m.engine, this.hostName)) {
         this.log(`sweep ${m.slug}: its engine ${m.engine} is gone from this machine — the open marker holds no slot`)
         continue
       }
@@ -916,7 +1062,7 @@ export class Engine {
           estimateUsd: this.estimateFor(m.role),
           kind: 'sweep',
           // Its process is gone (#502): still counted, but its startup hold clears.
-          ...(engineGone(m.engine) ? { lost: true } : {}),
+          ...(engineGone(m.engine, this.hostName) ? { lost: true } : {}),
         })
       else report.closed.push({ key: sweepKey(m.slug), at: m.at, costUsd: m.costUsd, kind: 'sweep' })
     }
@@ -961,6 +1107,8 @@ export class Engine {
 
   /** One reconcile pass over every active run. Idempotent to re-run. */
   async tick(): Promise<TickOutcome[]> {
+    // A stopping engine starts no pass (#502); `stop()` waits for one already running.
+    if (this.stopping) return []
     await this.seedGovernor()
     const outcomes: TickOutcome[] = []
     const refs = (await this.source.listRuns()).filter((r) => r.kind !== 'default') // merged runs are historical records
@@ -968,13 +1116,22 @@ export class Engine {
     // the report is what the spend window sums for this repository, and what
     // clears a startup hold whose entry has closed. The ledgers are read
     // inside the governor's call, so it knows which settlements they include.
+    // What the report shows open also settles a standing settlement fault
+    // whose entry has since closed or aged out (#502).
+    let read = null as SpendReport | null
     await this.governor.report(this.repository, async () => {
       const states = new Map<string, RunState | null>()
       for (const ref of refs) states.set(ref.slug, await this.sweepStale(ref))
-      return this.spendReport(refs, states)
+      read = await this.spendReport(refs, states)
+      return read
     })
+    if (read !== null) {
+      const report: SpendReport = read
+      this.settleEntryFaults(new Set(report.open.map((e) => `${e.key}\u0000${e.at ?? ''}`)), report.sweepsRead !== false)
+    }
     const deferred = new Map<string, Deferral>()
     for (const ref of await this.byWaitingSince(refs)) {
+      if (this.stopping) break
       // Pin the tip: observe at this exact commit and CAS every write against
       // it, so nothing decided from a stale read can land (§4.4's guard,
       // stretched over the whole derive-then-write span). A hosted clone sees
@@ -1015,6 +1172,9 @@ export class Engine {
       // owner, and one that is never launched cannot outlive this pass.
       const pending = new Map<string, Reservation>()
       try {
+        // Checked immediately before the reservation (#502): stop() may have
+        // begun while this pass awaited git above.
+        if (this.stopping) break
         const { action: final, refusal } = this.admit(ref, obs, unrefused, pending)
         if (final.kind === 'rest' && DEFERRAL_RULES.has(final.rule)) {
           const prior = this.deferred.get(ref.slug)
@@ -1247,7 +1407,7 @@ export class Engine {
   private staleVerdict(engine: string | null): { prompt: boolean; why: string } {
     if (engine === null) return { prompt: true, why: 'entry names no engine, so this one claims it' }
     if (engine === this.engineId) return { prompt: true, why: `opened here (${engine}) with no live job — lost between commit and completion` }
-    if (engineGone(engine)) return { prompt: true, why: `opened by ${engine}, whose process is gone from this machine` }
+    if (engineGone(engine, this.hostName)) return { prompt: true, why: `opened by ${engine}, whose process is gone from this machine` }
     return { prompt: false, why: `opened by ${engine}, which may still be running it` }
   }
 
@@ -1434,8 +1594,12 @@ export class Engine {
         // observed tip — the duplicate-dispatch guard. Losing the CAS means
         // someone else acted on this state; rest and re-derive next tick.
         const at = this.nowIso()
-        const result = await this.withLock(ref.slug, () =>
-          this.source.writeState(
+        // Checked again immediately before the intent commit, inside the run's
+        // write lock (#502): an engine that began stopping since its
+        // reservation commits and launches nothing. The caller releases the
+        // reservation.
+        const result = await this.withLock(ref.slug, async () =>
+          this.stopping ? null : this.source.writeState(
             ref,
             (doc) => {
               for (const intent of action.dispatches) {
@@ -1463,6 +1627,10 @@ export class Engine {
             cas,
           ),
         )
+        if (result === null) {
+          const why = 'engine stopping — no intent committed, nothing launched'
+          return { ...base, action: { kind: 'rest', rule: action.rule, why }, detail: why }
+        }
         if (!result.ok) return { ...base, detail: writeDetail(result, 'intent commit lost CAS — re-derive next tick') }
         // Push-then-launch (#103): origin accepting the intent commit is what
         // arms the dispatch. A rejected push means another writer moved the
@@ -1607,7 +1775,7 @@ export class Engine {
       .then(
         () => undefined,
         (e) => {
-          this.noteFault('settlement', e, what)
+          this.noteFault('settlement', e, what, { key, at: openedAt })
         },
       )
       .then(async () => {
@@ -1631,7 +1799,7 @@ export class Engine {
         } catch (e) {
           this.jobs.delete(key)
           this.jobMeta.delete(key)
-          this.noteFault('settlement', e, what)
+          this.noteFault('settlement', e, what, { key, at: openedAt })
         }
         this.onSettled?.()
       })

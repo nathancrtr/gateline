@@ -12,10 +12,16 @@ import {
   CodeTreeMonitor,
   type CodeTreeStatus,
   deriveRepositoryId,
+  directoryBasename,
   Git,
+  idFromOrigin,
+  LOCAL_ID_PREFIX,
   LocalOnlyPushConflictError,
   lastIdSegment,
+  localNameProblem,
+  RepositoryIdError,
   repositoryIdKey,
+  repositoryIdProblem,
   repoToplevel,
   resolveCodeRepo,
 } from '@gateline/core/sources'
@@ -71,16 +77,22 @@ export const BOT_IDENTITY: Identity = {
  * origin the way the server names a repository given by `--repo` with no
  * config entry (`github.com/acme/billing`, or `local/<directory name>` with no
  * origin), so the engine's `RunRef.source` matches the server's id for the
- * same repository. A directory whose name cannot make a local id keeps its
- * path as the id: the governor only needs a key that is stable for the life of
- * the process, and the binary must not start refusing a repository it used to
- * serve.
+ * same repository.
+ *
+ * When the origin gives no usable id (a path segment that is `-`, say) the id
+ * is `local/<directory name>` if that name is a valid local name. Otherwise
+ * this throws `RepositoryIdError` with core's own words: an engine must never
+ * invent an id the server would refuse, because the two would then disagree
+ * about which repository a run belongs to.
  */
 export async function defaultRepositoryId(repoDir: string): Promise<string> {
+  const origin = await new Git(repoDir).remoteUrl('origin')
   try {
-    return deriveRepositoryId({ origin: await new Git(repoDir).remoteUrl('origin'), dir: repoDir }).id
-  } catch {
-    return repoDir
+    return deriveRepositoryId({ origin, dir: repoDir }).id
+  } catch (e) {
+    const name = directoryBasename(repoDir)
+    if (origin !== null && localNameProblem(name) === null) return `${LOCAL_ID_PREFIX}${name}`
+    throw e instanceof RepositoryIdError ? e : new RepositoryIdError(`repository at ${repoDir}: ${(e as Error).message}`)
   }
 }
 
@@ -131,6 +143,12 @@ export interface OrchestratorOptions {
   repository?: string
   /** How log lines and the governor's refusal words name the repository (#502). Default: the id's last segment. */
   displayName?: string
+  /**
+   * The name that replaces the hostname in the engine's id (#502), everywhere
+   * the engine writes it: ledger entries and sweep markers, which are
+   * committed. Letters, digits, `.`, `_` and `-`. Default: the OS hostname.
+   */
+  engineName?: string
   /** This repository's own spend ceiling per window, beneath the machine's (MULTI-REPO.md §7.4). */
   repositorySpendLimitUsd?: number | null
   /** Wall clock per dispatched role before its process group is killed (default 30 min). */
@@ -317,6 +335,7 @@ export async function assembleOrchestrator(
     governor,
     repository,
     displayName: opts.displayName,
+    engineName: opts.engineName,
     repositorySpendLimitUsd: opts.repositorySpendLimitUsd,
     requireBudget: opts.requireBudget,
     budgetEnforcement: opts.budgetEnforcement,
@@ -333,7 +352,7 @@ export async function assembleOrchestrator(
     hostTip: tip,
     sweepTimeoutMs,
     engineId: engine.engineId,
-    onFault: (e, context) => void engine.noteFault('sweep', e, context),
+    onFault: (e, context, entry) => void engine.noteFault('sweep', e, context, entry),
   })
   const runnerCallback = remote ? makeRunnerCallback(engine, remote) : undefined
   return { engine, scheduler, manifestStaleProbe, runnerCallback, hostTip: tip, manifests: adapters.map((a) => a.manifest), governor }
@@ -400,7 +419,28 @@ export interface OrchestratorsOptions {
   log?: (line: string) => void
   /** Fired once for the process, whichever engine's loop confirms the fast-forward first. */
   onSupersede?: (status: CodeTreeStatus) => void
+  /** See `OrchestratorOptions.engineName`: the host part of every engine's id in this process. */
+  engineName?: string
+  /**
+   * How long one repository's startup seed-and-report may take before it is
+   * given up on (default `STARTUP_SEED_TIMEOUT_MS`): it is then marked failed
+   * and unregistered until it seeds, and the others start without it.
+   */
+  startupTimeoutMs?: number
 }
+
+/**
+ * The default bound on one repository's startup seed-and-report (#502): one
+ * minute. The seed reads every active run's `state.yaml` and the recent sweep
+ * markers — a few git calls per run, well under a second for a repository
+ * with dozens of runs on a loaded laptop — and core's git calls have no
+ * timeout of their own, so a stuck lock or an unanswering remote would
+ * otherwise hold every engine, and the caller's signal handlers, for ever. A
+ * minute is long enough that a slow disk or a cold cache never trips it, and
+ * short enough that `gateline up` has its handlers installed while an
+ * operator is still watching the terminal.
+ */
+export const STARTUP_SEED_TIMEOUT_MS = 60_000
 
 /** One repository's engine, assembled and not yet started. */
 export interface AssembledEngine {
@@ -428,6 +468,13 @@ export interface RepositoryInFlightJob extends InFlightJob {
 export interface OrchestratorsHandle {
   engines: RunningEngine[]
   governor: GovernorPort
+  /**
+   * Resolves when every engine's startup pass has finished (#502). The handle
+   * is returned before that, so a caller can install its signal handlers
+   * while a slow repository is still on its first pass. A `stop()` called
+   * before then stops the passes from admitting anything.
+   */
+  started: Promise<void>
   /**
    * Drain every engine: each loop stops watching, each engine's in-flight
    * dispatches and sweeps run to their closing commits, and each engine then
@@ -461,16 +508,22 @@ async function gitCommonDir(dir: string): Promise<string | null> {
 /**
  * One engine per repository (#502, TOPOLOGY.md §3.1): refuse a list that names
  * one repository twice — the same directory once resolved, the same id without
- * regard to case, or two worktrees of one clone, whose runs are one set of
- * branches. Two engines over one set of runs is the forbidden topology.
+ * regard to case, two worktrees of one clone (whose runs are one set of
+ * branches), or two clones of one origin (whose runs are one set of branches
+ * on origin, whatever ids the caller gave them). Two engines over one set of
+ * runs is the forbidden topology. Each id must also be one core accepts, so
+ * the engine and the server name the repository the same way.
  */
 async function refuseDuplicates(repositories: RepositoryEngineConfig[]): Promise<void> {
-  const seen: { entry: RepositoryEngineConfig; top: string; common: string | null }[] = []
+  const seen: { entry: RepositoryEngineConfig; top: string; common: string | null; originId: string | null }[] = []
   const label = (e: RepositoryEngineConfig) => `${e.displayName ?? e.repositoryId} (${e.repositoryId} at ${e.repoDir})`
   for (const entry of repositories) {
-    if (!entry.repositoryId) throw new Error(`repository at ${entry.repoDir} has no id — the caller must supply one`)
+    if (!entry.repositoryId) throw new RepositoryIdError(`repository at ${entry.repoDir} has no id — the caller must supply one`)
+    const problem = repositoryIdProblem(entry.repositoryId)
+    if (problem) throw new RepositoryIdError(`repository at ${entry.repoDir}: its id ${problem}`)
     const top = await realpath((await repoToplevel(entry.repoDir)) ?? entry.repoDir).catch(() => entry.repoDir)
     const common = await gitCommonDir(entry.repoDir)
+    const originId = idFromOrigin(await new Git(entry.repoDir).remoteUrl('origin'))
     for (const prior of seen) {
       const both = `${label(prior.entry)} and ${label(entry)}`
       if (prior.top === top) throw new DuplicateRepositoryError(`${both} are the same repository: both resolve to ${top} — one engine per repository`)
@@ -478,8 +531,10 @@ async function refuseDuplicates(repositories: RepositoryEngineConfig[]): Promise
         throw new DuplicateRepositoryError(`${both} have the same id, compared without case — one engine per repository`)
       if (common !== null && prior.common === common)
         throw new DuplicateRepositoryError(`${both} share one git directory (${common}): they are checkouts of one clone, whose runs are one set of branches — one engine per repository`)
+      if (originId !== null && prior.originId !== null && repositoryIdKey(prior.originId) === repositoryIdKey(originId))
+        throw new DuplicateRepositoryError(`${both} are clones of one origin (${originId}), whose runs are one set of branches there — one engine per repository`)
     }
-    seen.push({ entry, top, common })
+    seen.push({ entry, top, common, originId })
   }
 }
 
@@ -533,6 +588,7 @@ export async function assembleOrchestrators(
       repositorySpendLimitUsd: entry.spendLimitUsd,
       runner: entry.runner,
       dispatcher: entry.dispatcher,
+      engineName: opts.engineName,
       log,
     })
     engines.push({
@@ -559,20 +615,35 @@ export async function assembleOrchestrators(
 }
 
 async function startAssembled(engines: AssembledEngine[], governor: GovernorPort, opts: OrchestratorsOptions): Promise<OrchestratorsHandle> {
-  // Every engine seeds before any loop starts (#501, #502): the governor
-  // grants nothing until every registered repository has counted its open
-  // dispatches, and a loop's first tick is what would ask. A seed that fails
-  // is not fatal: the engine is marked failed, and it leaves the governor so
-  // that it holds no other repository back. Its first tick seeds it again,
-  // re-registering it in the same step, so it never rejoins unseeded.
-  const seeds = await Promise.allSettled(engines.map((e) => e.engine.seedGovernor()))
-  seeds.forEach((result, i) => {
-    if (result.status === 'fulfilled') return
-    const e = engines[i]!
-    e.engine.noteFault('seed', result.reason)
-    if (engines.length > 1) e.log('it leaves the governor until it seeds, so no other repository waits for it')
-    governor.unregister(e.repositoryId)
-  })
+  // Every engine seeds AND reports before any loop starts (#501, #502): the
+  // governor grants nothing until every registered repository has counted its
+  // open dispatches and reported its spend, closed entries in the window
+  // included, and a loop's first tick is what would ask. The seeds run
+  // together, each bounded by the startup timeout. One that fails or times
+  // out is not fatal: the engine is marked failed and leaves the governor, so
+  // it holds no other repository back. Its first tick seeds it again, and
+  // re-registers it — with its own ceiling — in the same step.
+  const timeoutMs = opts.startupTimeoutMs ?? STARTUP_SEED_TIMEOUT_MS
+  await Promise.all(
+    engines.map(async (e) => {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const timedOut = new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`the startup seed and report did not finish within ${Math.round(timeoutMs / 1000)} s`)),
+          timeoutMs,
+        )
+      })
+      try {
+        await Promise.race([e.engine.seedGovernor(), timedOut])
+      } catch (err) {
+        e.engine.noteFault('seed', err)
+        if (engines.length > 1) e.log('it leaves the governor until it seeds, so no other repository waits for it')
+        governor.unregister(e.repositoryId)
+      } finally {
+        clearTimeout(timer)
+      }
+    }),
+  )
   // One code-tree monitor for the process (MULTI-REPO.md §8.3 P5): the code
   // tree is *this module's own* checkout — resolved from our own
   // import.meta.url, not from any repository (a run source may live in a
@@ -588,24 +659,30 @@ async function startAssembled(engines: AssembledEngine[], governor: GovernorPort
     superseded = true
     opts.onSupersede?.(status)
   }
-  const loops: RunLoop[] = []
+  // The loops start together and none waits for its startup pass (#502): a
+  // repository whose first pass is slow or hangs holds up neither the others
+  // nor the handle. Each pass has its own fault boundary (triggers.ts), which
+  // marks that engine failed. Round-robin order was fixed at registration.
+  let loops: RunLoop[]
   try {
-    for (const e of engines) {
-      loops.push(
-        await runLoop(e.engine, e.repoDir, {
+    loops = await Promise.all(
+      engines.map((e) =>
+        runLoop(e.engine, e.repoDir, {
           heartbeatMs: (opts.heartbeatSeconds ?? 180) * 1000,
           scheduler: e.scheduler,
           log: e.log,
           staleProbe: e.manifestStaleProbe,
           codeMonitor: shared ? shared.view(e.repositoryId) : codeMonitor,
           onSupersede,
+          awaitStartup: false,
         }),
-      )
-    }
+      ),
+    )
   } catch (err) {
-    // A loop that cannot start is a startup failure: stop what started, and
-    // leave nothing registered behind.
-    await Promise.allSettled(loops.map((l) => l.stop()))
+    // A loop that cannot even be set up (its repository's git directory
+    // cannot be read) is a startup failure, not a fault at run time: every
+    // engine stops admitting and leaves the governor.
+    for (const e of engines) e.engine.beginStop()
     for (const e of engines) governor.unregister(e.repositoryId)
     throw err
   }
@@ -614,6 +691,7 @@ async function startAssembled(engines: AssembledEngine[], governor: GovernorPort
   return {
     engines: running,
     governor,
+    started: Promise.all(running.map((e) => e.loop.started)).then(() => undefined),
     stop: () =>
       (stopping ??= Promise.allSettled(
         running.map(async (e) => {
@@ -621,7 +699,12 @@ async function startAssembled(engines: AssembledEngine[], governor: GovernorPort
           // Drained: leave the governor. Its spend in the window keeps counting.
           e.engine.unregister()
         }),
-      ).then(() => undefined)),
+      ).then((results) => {
+        results.forEach((r, i) => {
+          // A drain that threw is said, with the repository; the others still drained.
+          if (r.status === 'rejected') running[i]!.log(`stopping failed: ${(r.reason as Error)?.stack ?? String(r.reason)}`)
+        })
+      })),
     inFlightDetail: () => running.flatMap((e) => e.engine.inFlightDetail().map((job) => ({ ...job, repository: e.displayName }))),
     abortInFlight: () => running.reduce((n, e) => n + e.engine.abortInFlight(), 0),
     runnerCallback: running.length === 1 ? running[0]!.runnerCallback : undefined,
@@ -635,10 +718,12 @@ async function startAssembled(engines: AssembledEngine[], governor: GovernorPort
  * id already derived. Refuses a list that names one repository twice.
  *
  * Order of startup: every engine is assembled and registered with the
- * governor, then every engine seeds, then the loops start. A failure in one
- * engine at run time — a tick that throws, a closing commit that throws —
- * marks that engine failed in its own health file and leaves the others
- * running (triggers.ts, engine.ts).
+ * governor, then every engine seeds and reports (each bounded by
+ * `startupTimeoutMs`), then the loops start together. The handle is returned
+ * then, without waiting for the startup passes. A failure in one engine at
+ * run time — a tick that throws, a closing commit that throws — marks that
+ * engine failed in its own health file and leaves the others running
+ * (triggers.ts, engine.ts).
  */
 export async function startOrchestrators(opts: OrchestratorsOptions): Promise<OrchestratorsHandle> {
   return (await assembleOrchestrators(opts)).start()
@@ -646,6 +731,8 @@ export async function startOrchestrators(opts: OrchestratorsOptions): Promise<Or
 
 export interface OrchestratorHandle {
   engine: Engine
+  /** Resolves when the startup pass has finished; `startOrchestrator` resolves before it (#502). */
+  started: Promise<void>
   /** Drain in-flight dispatches and stop watching. */
   stop(): Promise<void>
   /** What is currently dispatched, for drain reporting (#150). */
@@ -695,9 +782,11 @@ export async function startOrchestrator(opts: OrchestratorOptions): Promise<Orch
     codeRepo: opts.codeRepo,
     log: opts.log,
     onSupersede: opts.onSupersede,
+    engineName: opts.engineName,
   })
   return {
     engine: handle.engines[0]!.engine,
+    started: handle.started,
     stop: () => handle.stop(),
     inFlightDetail: () => handle.inFlightDetail(),
     abortInFlight: () => handle.abortInFlight(),

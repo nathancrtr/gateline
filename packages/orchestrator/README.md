@@ -97,13 +97,19 @@ spend twice `--spend-limit-usd` per window.
 per repository under one governor: `startOrchestrators({ repositories, limits,
 engineDefaults, … })` in `start.ts`, where each entry carries the repository's
 top directory and its id. `startOrchestrator`, which `gateline up` calls today,
-is the same path with a list of one. Every engine seeds the governor before any
-loop starts; there is one code-tree monitor, one supersede and one drain for the
-process. Each engine's log lines start with `[<display name>]`. A tick or a
-closing commit that throws marks that engine failed in its own health file
-(`failed`) and leaves the others running; after two failed passes in a row it
-retries on the heartbeat only, and the first pass that completes clears it.
-`gateline up` does not pass several repositories yet.
+is the same path with a list of one. Every engine seeds the governor and reports
+its spend before any loop starts, each within a minute; the loops then start
+together, and the handle is returned without waiting for their first passes
+(`handle.started` waits for them). There is one code-tree monitor, one supersede
+and one drain for the process, and a stopping engine admits nothing more. Each
+engine's log lines start with `[<display name>]`. A tick or a closing commit that
+throws marks that engine failed in its own health file (`failed`) and leaves the
+others running; after two failed passes in a row it retries on the heartbeat
+only. A failed pass is cleared by the next pass that completes; a failed closing
+commit stands until the ledger entry it left open is closed or aged out.
+`--engine-name <name>` replaces this machine's hostname in the engine id written
+on ledger entries and sweep markers. `gateline up` does not pass several
+repositories yet.
 
 Driving a live toy run end-to-end (the M2 exit criterion):
 

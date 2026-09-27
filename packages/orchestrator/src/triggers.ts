@@ -42,6 +42,8 @@ export interface EngineLike {
   clearFault?(): void
   /** Additive health-file fields (#502), merged after the standard ones; empty when there is nothing to say. */
   healthFields?(): object
+  /** The loop is stopping (#502): admit nothing from now on. Optional for test doubles. */
+  beginStop?(): void
 }
 
 /**
@@ -136,6 +138,13 @@ export interface RunLoopConfig {
   log?: (line: string) => void
   /** Advisory staleness check run on heartbeat ticks; returned lines are logged (#150). */
   staleProbe?: () => Promise<string[]>
+  /**
+   * Whether `runLoop` resolves only after its startup pass has finished
+   * (default true, as before #502). `startOrchestrators` passes false, so one
+   * repository's slow or hung first pass does not hold up the others, or the
+   * handle a caller needs to install its signal handlers.
+   */
+  awaitStartup?: boolean
 }
 
 /** The same trigger classes ORCHESTRATOR.md §4.1 describes — named so tests can fire one deterministically instead of racing real timers/watchers. */
@@ -149,6 +158,8 @@ export interface RunLoop {
    * running pass, if one is under way, does not count.
    */
   trigger(why: TriggerReason): Promise<void>
+  /** Resolves when the startup pass has finished (#502) — already, unless the loop was started with `awaitStartup: false`. */
+  readonly started: Promise<void>
 }
 
 const isBoundary = (why: TriggerReason) => why === 'heartbeat' || why === 'startup'
@@ -374,16 +385,27 @@ export async function runLoop(engine: EngineLike, repoDir: string, cfg: RunLoopC
 
   const heartbeat = setInterval(() => void tick('heartbeat'), cfg.heartbeatMs ?? DEFAULT_HEARTBEAT_MS)
 
-  await tick('startup')
+  const started = tick('startup')
+  if (cfg.awaitStartup !== false) await started
 
   return {
+    started,
     async stop() {
       stopped = true
+      // Admit nothing from here (#502): a pass already under way cannot
+      // reserve, commit or launch once it resumes.
+      engine.beginStop?.()
+      cfg.scheduler?.beginStop()
       clearInterval(heartbeat)
       if (timer) clearTimeout(timer)
       for (const w of watchers) w.close()
       engine.onSettled = null
       unsubscribeWake?.()
+      // Wait for the pass that is running (#502). The one queued behind it is
+      // resolved without running, since `stopped` is set. Before #502 the drain
+      // began at once, and a pass still running could launch a role after it
+      // returned.
+      while (running) await running.catch(() => {})
       await engine.drain()
       await cfg.scheduler?.drain()
     },

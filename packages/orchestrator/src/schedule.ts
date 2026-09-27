@@ -294,7 +294,7 @@ export interface SchedulerConfig {
    * Told when a sweep job's settlement throws (#502), after it is caught and
    * logged: `assembleOrchestrator` marks the repository's engine failed.
    */
-  onFault?: (e: unknown, context: string) => void
+  onFault?: (e: unknown, context: string, entry: { key: string; at: string | null }) => void
   /**
    * The commit `orchestrator.yaml` is read at (#500, #501): the one
    * `assembleOrchestrator` resolved, so sweep schedules come from the same
@@ -326,6 +326,13 @@ export class Scheduler {
   readonly repository: string
   /** Sweeps the governor held back on the last pass, by role — carried on the heartbeat beside the engine's. */
   private deferred = new Map<string, Deferral>()
+  /** Set by `beginStop` (#502): no reservation, no seed commit, no launch from then on. */
+  private stopping = false
+
+  /** The loop is stopping (#502): admit no sweep from now on. Sweeps already launched run to their close. */
+  beginStop(): void {
+    this.stopping = true
+  }
 
   constructor(cfg: SchedulerConfig) {
     this.cfg = cfg
@@ -369,6 +376,7 @@ export class Scheduler {
 
   /** One pass over every schedule. `force` bypasses S2 dueness for one role (the CLI's `sweep`). */
   async tick(opts: { force?: string } = {}): Promise<SweepOutcome[]> {
+    if (this.stopping) return []
     // The schedules are read at the host tip commit, once resolved (#500):
     // the same snapshot as the registry and the adapter manifests. The
     // default branch itself is named by its full ref, so a tag that shares
@@ -447,6 +455,8 @@ export class Scheduler {
     // `launch` hands the reservation to the sweep's job, this frame owns it,
     // and releases it on every other way out — a lost CAS, a missing default
     // tip, an exception.
+    // Checked immediately before the reservation (#502).
+    if (this.stopping) return { role: entry.role, slug, kind: 'rest', rule: 'S4', detail: 'scheduler stopping — nothing reserved' }
     const { granted, refusal } = this.governor.reserve({ repository: this.repository, intents: [{ key: sweepKey(slug), estimateUsd, kind: 'sweep' }] })
     const reservation = granted[0]
     if (!reservation) {
@@ -511,6 +521,8 @@ export class Scheduler {
       `sweep(${slug}): dispatched ${entry.role} — covering since ${coveringSince ?? 'repo start'}`,
       this.cfg.identity,
     )
+    // Checked again immediately before the seed commit lands (#502); the caller releases the reservation.
+    if (this.stopping) return { role: entry.role, slug, kind: 'rest', rule: 'S4', detail: 'scheduler stopping — no sweep committed, nothing launched' }
     if (!(await this.git.updateRefCAS(`refs/heads/${branch}`, commit, ZERO_OID)))
       return { role: entry.role, slug, kind: 'lost-cas', rule: 'S4', detail: 'sweep branch appeared mid-tick — another instance won; rest' }
     await this.pushBranch(branch)
@@ -539,7 +551,7 @@ export class Scheduler {
     // Told to the engine when there is one, which logs it with the repository
     // and marks itself failed; logged here otherwise.
     const fault = (e: unknown) => {
-      if (this.cfg.onFault) this.cfg.onFault(e, `sweep ${slug}`)
+      if (this.cfg.onFault) this.cfg.onFault(e, `sweep ${slug}`, { key: sweepKey(slug), at: now.toISOString() })
       else this.log(`sweep(${slug}): settlement failed: ${(e as Error)?.message ?? String(e)}`)
     }
     const settled = job

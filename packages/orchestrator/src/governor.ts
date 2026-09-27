@@ -25,6 +25,13 @@ export type GovernorLimit =
   | 'spend'
   /** The repository's own spend ceiling. */
   | 'repository-spend'
+  /**
+   * The repository was unregistered — its engine stopped — and has not been
+   * registered again (#502). Nothing is granted to it: a stopped engine's
+   * straggling pass must not dispatch, least of all past the ceiling that
+   * left with its registration.
+   */
+  | 'unregistered'
 
 /** The numbers behind a refusal, for the deferral's own words. */
 export interface GovernorRefusal {
@@ -225,6 +232,8 @@ export interface GovernorPort {
   unregister(repository: string): void
   /** The registered repositories that have not yet seeded — the ones the seed gate is waiting on. */
   unseeded(): string[]
+  /** Whether the repository is registered now (not unregistered, not unknown). */
+  registered(repository: string): boolean
   /** The repository's open entries at startup. Marks it seeded; additive. */
   seed(repository: string, entries: SeedEntry[]): void
   /**
@@ -263,7 +272,7 @@ export function describeWindow(ms: number): string {
 
 /** The engine rule a refusal defers under: MC for a slot, HB for spend. The rules' meaning is unchanged. */
 export function refusalRule(r: GovernorRefusal): 'MC' | 'HB' {
-  return r.limit === 'concurrency' || r.limit === 'turn' ? 'MC' : 'HB'
+  return r.limit === 'concurrency' || r.limit === 'turn' || r.limit === 'unregistered' ? 'MC' : 'HB'
 }
 
 /**
@@ -279,7 +288,7 @@ export function refusalReason(r: GovernorRefusal, what: string, rederives: strin
   switch (r.limit) {
     case 'concurrency':
       if (r.unseeded?.length)
-        return `${what} deferred — the governor grants nothing until ${r.unseeded.map(name).join(', ')} has reported its open dispatches since startup; re-derived once it has`
+        return `${what} deferred — the governor grants nothing until ${r.unseeded.map(name).join(', ')} has counted its open dispatches and reported its spend since startup; re-derived once it has`
       return `${what} deferred — ${r.occupied} in flight against --max-concurrent-dispatches ${r.cap}; re-derived when a slot frees`
     case 'turn':
       return `${what} deferred — the free slot is held for ${name(r.heldFor)}'s turn (round-robin between repositories under --max-concurrent-dispatches ${r.cap}); re-derived when a slot frees`
@@ -293,6 +302,8 @@ export function refusalReason(r: GovernorRefusal, what: string, rederives: strin
         `projected spend for ${name(r.repository)} ${money(projected)} over the last ${describeWindow(r.windowMs ?? DEFAULT_SPEND_WINDOW_MS)} ${breakdown} ` +
         `exceeds that repository's own ceiling $${r.limitUsd} — deferred, not paused: the window rolls and ${rederives}`
       )
+    case 'unregistered':
+      return `${what} not admitted — ${name(r.repository)} has left the governor (its engine stopped); nothing is granted to it until it registers again`
   }
 }
 
@@ -425,6 +436,13 @@ export class Governor implements GovernorPort {
   private readonly wakeTimers = new Map<string, ReturnType<typeof setTimeout>>()
   /** What unregistered repositories spent inside the window (#502). */
   private retired: Retired[] = []
+  /**
+   * Repositories unregistered and not registered again (#502). `reserve` refuses
+   * them and `report` and `seed` ignore them, so nothing a stopped engine does
+   * late can bring its repository back — without its ceiling — by the side door
+   * that makes an unknown repository known.
+   */
+  private readonly tombstones = new Map<string, string | null>()
 
   constructor(cfg: GovernorConfig = {}) {
     this.cfg = cfg
@@ -446,6 +464,7 @@ export class Governor implements GovernorPort {
   }
 
   register(repository: string, opts: { spendLimitUsd?: number | null; displayName?: string } = {}): void {
+    this.tombstones.delete(repository)
     const known = this.repos.get(repository)
     if (known) {
       if (opts.spendLimitUsd !== undefined) known.spendLimitUsd = opts.spendLimitUsd
@@ -485,6 +504,7 @@ export class Governor implements GovernorPort {
    * what it left behind, since that report reads the same ledgers.
    */
   unregister(repository: string): void {
+    this.tombstones.set(repository, this.repos.get(repository)?.displayName ?? this.tombstones.get(repository) ?? null)
     const repo = this.repos.get(repository)
     if (!repo) return
     const now = this.now()
@@ -523,21 +543,32 @@ export class Governor implements GovernorPort {
     this.freed()
   }
 
+  /** How messages name a repository: its display name, or its key. */
+  private displayOf(repository: string): string {
+    return this.repos.get(repository)?.displayName ?? this.tombstones.get(repository) ?? repository
+  }
+
   unseeded(): string[] {
     return [...this.repos].filter(([, r]) => !r.seeded).map(([name]) => name)
+  }
+
+  registered(repository: string): boolean {
+    return this.repos.has(repository)
   }
 
   /** Display names for the given repository keys, for a refusal's words; undefined when none has one. */
   private namesFor(keys: (string | undefined)[]): Record<string, string> | undefined {
     const names: Record<string, string> = {}
     for (const key of keys) {
-      const displayName = key === undefined ? null : (this.repos.get(key)?.displayName ?? null)
+      const displayName = key === undefined ? null : (this.repos.get(key)?.displayName ?? this.tombstones.get(key) ?? null)
       if (key !== undefined && displayName !== null) names[key] = displayName
     }
     return Object.keys(names).length > 0 ? names : undefined
   }
 
   seed(repository: string, entries: SeedEntry[]): void {
+    // An unregistered repository comes back only by an explicit `register` (#502).
+    if (this.tombstones.has(repository)) return
     this.register(repository)
     const now = this.now()
     for (const e of entries) {
@@ -555,6 +586,13 @@ export class Governor implements GovernorPort {
   }
 
   async report(repository: string, gather: () => SpendReport | Promise<SpendReport>): Promise<void> {
+    // A stopped engine's late pass reports nothing (#502): the repository was
+    // unregistered and comes back only by an explicit `register`. Its gather is
+    // not run either.
+    if (this.tombstones.has(repository)) {
+      this.cfg.log?.(`governor: ignoring a report for ${this.displayOf(repository)}, which has left the governor (its engine stopped)`)
+      return
+    }
     this.register(repository)
     // A settlement released before this point had its closing commit written
     // first, or its close gave up without writing. Either way the ledger
@@ -564,7 +602,9 @@ export class Governor implements GovernorPort {
     // report shows closed are recognised by key and `at` and counted once.
     const asOf = this.seq++
     const gathered = await gather()
-    const repo = this.repos.get(repository)!
+    // Unregistered while it gathered (#502): the report belongs to nobody now.
+    const repo = this.repos.get(repository)
+    if (!repo || this.tombstones.has(repository)) return
     if (asOf < repo.reportSeq) return // a newer report was applied while this one was gathering
     // Sweep markers that could not be read this time are not evidence that
     // there are none: keep the last report's sweep entries and the sweep
@@ -627,9 +667,20 @@ export class Governor implements GovernorPort {
       if (seen.has(intent.key)) throw new Error(`governor: one request names the key "${intent.key}" twice for ${repository} — each dispatch needs its own key`)
       seen.add(intent.key)
     }
+    // Unregistered and not registered again (#502): refused, whatever it asks.
+    // Before this, an unknown repository was made known and seeded here, so a
+    // stopped engine's straggling pass came back with no ceiling at all.
+    if (this.tombstones.has(repository)) {
+      const base = { repository, occupied: this.occupied(), cap: this.cap(), requested: intents.length, granted: 0 }
+      const names = this.namesFor([repository])
+      return { granted: [], refusal: { ...base, limit: 'unregistered', ...(names ? { names } : {}) } }
+    }
     if (!this.repos.has(repository)) {
-      // A caller that never registered has nothing of its own to seed (a
-      // stand-alone scheduler): known from now on, and seeded.
+      // A caller that has NEVER registered has nothing of its own to seed: a
+      // scheduler built on its own with a governor and no engine (tests, and
+      // an embedding that sweeps without an engine). Known from now on, and
+      // seeded. Every engine registers at construction, so no engine's
+      // repository arrives here.
       this.register(repository)
       this.repos.get(repository)!.seeded = true
     }

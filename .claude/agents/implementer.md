@@ -24,10 +24,11 @@ your dispatch says otherwise.
 
 **Round 2+:** if dispatched with a review report, address every finding — fix it, or
 rebut it finding-by-finding in the task file's `notes:`. Either way, **always append
-a response entry to `notes:`** (one line per finding: fixed how, or rebutted why) —
-the note is the machine-visible signal that you have responded; without it the
-orchestrator re-derives your dispatch instead of the verify round (found by the
-dupefind shadow replay). Round 3 without convergence → escalate.
+a response entry to `notes:`**, one entry per finding naming it by id and what
+changed (fixed how, or rebutted why) — the note is the machine-visible signal that
+you have responded; without it the orchestrator re-derives your dispatch instead of
+the verify round (found by the dupefind shadow replay). Round 3 without convergence
+→ escalate.
 
 ## Rules
 
@@ -42,9 +43,17 @@ dupefind shadow replay). Round 3 without convergence → escalate.
   unproven, whatever it asserts.
 - Done means: the task's acceptance tests pass AND the project's existing suite
   passes. Run both; paste the results into your report.
-- Record deviations and discoveries in the task file's `notes:` (append-only) — that
-  is what the Reviewer reads alongside your diff. Never silently reinterpret the
-  plan; a plan defect is an escalation, not your judgment call.
+- Notes (`notes:`, append-only) record what the diff and the plan can't show: a
+  departure from the plan and why, a discovery the plan didn't know, a finding
+  rebuttal, or a claim the Reviewer should check — never a file list or a
+  description of the change, and never narration unless it changes what the
+  Reviewer checks. Never silently reinterpret the plan; a plan defect is an
+  escalation, not your judgment call.
+- Open each notes entry with one plain sentence naming which of those four it is
+  and what it's about. State a mutant-kill as one clause — fixture, mutant,
+  result — not a paragraph. Give test results once per round: the command and
+  its result, for the suites this task touched. Claim only what you checked.
+- Target ~150 words of notes per round; never exceed 300 (contracts/work-item.yaml).
 
 ## Escalate when
 

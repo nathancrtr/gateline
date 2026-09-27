@@ -1,0 +1,50 @@
+id: 05-record-reader-check
+title: The Record reader starts a spec criterion's check on a new line
+requirements: [R5]
+
+scope: |
+  Create `packages/web/src/components/criterion-check.ts` exporting
+  `criterionCheckRehype`, and register it in `Markdown`
+  (`packages/web/src/components/markdown.tsx`), exactly per plan.md
+  "Interface contracts — Record reader render step". The new module takes
+  type-only imports, so the browser bundle guard keeps passing.
+
+  The step acts only on a spec, only inside a criterion's list item, and
+  returns any item without a check line untouched. It reads the rendered
+  tree; it does not read the lexicon.
+
+  Tests go in the new file `packages/web/test/reader-check.test.ts`, as
+  static markup of `Markdown` with no `LexiconProvider`:
+  - AC5.1: a spec criterion with a check renders a `data-criterion-check`
+    span with class `block` whose text begins `Check:`; the promise text
+    stays outside it. Cover a wrapped check (three lines) and a check that
+    contains an inline code span.
+  - AC5.2: `runs/dupefind/spec.md`, read from disk, renders to the same
+    markup with `sourceKind="spec"` as with no `sourceKind`. With no lexicon
+    provided, the new step is the only difference between the two renders.
+  - AC5.3: a plan paragraph containing a line that starts `Check:`,
+    rendered with `sourceKind="plan"`, equals a literal expected string
+    captured from the pre-change code. Add the same for a spec paragraph
+    outside any criterion, and for a criterion whose first line contains
+    `Check:` and whose second line starts with lower-case `check:`.
+
+  Line placement in a browser belongs to task 06.
+
+file_contact_surface:
+  - packages/web/src/components/criterion-check.ts
+  - packages/web/src/components/markdown.tsx
+  - packages/web/test/reader-check.test.ts
+
+acceptance_tests:
+  - AC5.1
+  - AC5.2
+  - AC5.3
+  - "In packages/: `npx vitest run web/test`, `npm run typecheck` and `npm run lint` pass"
+  - "AC8.5: the AC5.1 tests fail against the pre-change markdown.tsx; recorded as a claim in notes"
+  - "AC8.6: the AC5.2 and AC5.3 tests fail when the step is deliberately made to act outside a spec criterion, then pass once restored; recorded as a claim in notes"
+
+depends_on: []
+
+status: pending
+
+notes: |

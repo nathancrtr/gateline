@@ -1,0 +1,60 @@
+id: 04-hover-card-and-cited-list
+title: The hover card shows the check on its own line, and the cited-ids list shows the promise alone
+requirements: [R4, R6]
+
+scope: |
+  Both changes live in `packages/web/src/components/lexicon.tsx`, which is
+  why they are one task.
+
+  1. Hover card (`LexRef`). For a criterion with a check, render `promise`
+     and then `check` inside `.lex-card-def`, each through the markdown
+     renderer the card uses today, the check inside an element carrying
+     `data-criterion-check` so it starts a new line. `.lex-card-def` gains
+     `data-criterion-quote` for criterion entries. Whitespace separates the
+     two renders so the wrapper's text content, whitespace collapsed, equals
+     `body` (plan.md "Interface contracts — DOM hooks").
+
+     Per plan.md ADR-3, the six-line clamp must not apply to an entry that
+     has a check. Do it with a modifier class in
+     `packages/web/src/styles.css` beside the existing `.lex-card-def` rules;
+     leave the existing rules as they are.
+
+     Every entry without a check — requirements, decisions, unchecked
+     criteria — renders from `body` through today's path, clamp included.
+
+  2. Cited-ids list (`CitedObjects`). A criterion's entry shows `promise`,
+     whitespace collapsed, in place of `body`. Requirements and decisions
+     are unchanged.
+
+  Tests go in the new file `packages/web/test/lexicon-check.test.ts`, as
+  static markup, with a `LexiconProvider` value built from `buildLexicon`
+  over a spec holding one checked and one unchecked criterion. Assert:
+  - hover card, checked: a `data-criterion-check` element holds the check;
+    the quote's collapsed text equals `body`; the clamp modifier is present
+  - hover card, unchecked: no `data-criterion-check`; no clamp modifier;
+    quote text equals `body`
+  - cited-ids list, checked: the entry's text lacks `Check:`
+  - cited-ids list, unchecked: the entry's text equals `body`
+
+  Do not change `cardPlacement`, `lexiconRehype`, `CitedText` or the walk.
+
+file_contact_surface:
+  - packages/web/src/components/lexicon.tsx
+  - packages/web/src/styles.css
+  - packages/web/test/lexicon-check.test.ts
+
+acceptance_tests:
+  - AC4.1
+  - AC4.2
+  - AC4.3
+  - AC6.1
+  - AC6.2
+  - "In packages/: `npx vitest run web/test`, `npm run typecheck` and `npm run lint` pass"
+  - "AC8.5: the checked-criterion assertions fail against the pre-change lexicon.tsx; recorded as a claim in notes"
+  - "AC8.6: the unchecked-criterion assertions fail when their path is deliberately broken, then pass once restored; recorded as a claim in notes"
+
+depends_on: [01-lexicon-promise-check]
+
+status: pending
+
+notes: |

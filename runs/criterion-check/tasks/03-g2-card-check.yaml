@@ -1,0 +1,49 @@
+id: 03-g2-card-check
+title: The G2 card shows a criterion's check on a line of its own
+requirements: [R3]
+
+scope: |
+  In `CriterionPacket` (`packages/web/src/components/evidence.tsx`), quote a
+  criterion with a check as its `promise` followed by its `check`, the check
+  in a block element so it starts a new line under the promise. Follow
+  plan.md "Interface contracts — DOM hooks": the existing quotation span
+  gains `data-criterion-quote`; the check element carries
+  `data-criterion-check`; whitespace separates the two so the wrapper's text
+  content, whitespace collapsed, equals the entry's `body`.
+
+  Both pieces stay plain text, as the card quotes today. Add no label, colour
+  or fold: the `Check:` label is already the first word of `check`.
+
+  A criterion without a check renders from `body` through today's path; its
+  only markup difference is the `data-criterion-quote` attribute.
+
+  Tests go in the new file `packages/web/test/g2-criterion-check.test.ts`,
+  as static markup (`renderToStaticMarkup`), following
+  `packages/web/test/packet.test.ts` for the providers and wrapping the
+  packet in `LexiconProvider` with a lexicon built by `buildLexicon` from a
+  spec that has one criterion with a check and one without. Assert:
+  - the checked criterion's markup has the promise, then a
+    `data-criterion-check` element whose text is exactly `check`
+  - the quote's text, tags stripped and whitespace collapsed, equals `body`
+  - the unchecked criterion has no `data-criterion-check` element and its
+    quote text equals `body`
+
+  Line placement and overflow are browser facts and belong to task 06.
+
+file_contact_surface:
+  - packages/web/src/components/evidence.tsx
+  - packages/web/test/g2-criterion-check.test.ts
+
+acceptance_tests:
+  - AC3.1
+  - AC3.2
+  - AC3.3
+  - "In packages/: `npx vitest run web/test`, `npm run typecheck` and `npm run lint` pass"
+  - "AC8.5: the checked-criterion assertions fail against the pre-change evidence.tsx; recorded as a claim in notes"
+  - "AC8.6: the unchecked-criterion assertions fail when its path is deliberately broken, then pass once restored; recorded as a claim in notes"
+
+depends_on: [01-lexicon-promise-check]
+
+status: pending
+
+notes: |

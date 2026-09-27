@@ -1,0 +1,51 @@
+id: 01-lexicon-promise-check
+title: The lexicon returns a criterion's promise and check beside its full text
+requirements: [R1, R2]
+
+scope: |
+  Add the optional `promise` and `check` fields to `LexiconEntry` and fill
+  them for criterion entries in `buildLexicon`, exactly per plan.md
+  "Interface contracts — Lexicon entry". `body` and every other field stay
+  computed as today. The module keeps zero imports.
+
+  Put every new test in the new file `packages/core/test/lexicon-check.test.ts`.
+  Do not edit `packages/core/test/lexicon.test.ts`: AC2.4 is evidenced by its
+  import test passing unmodified.
+
+  Test inputs:
+  - the brief's port example (two lines) for AC1.1, AC1.2, AC2.1
+  - the three-line example criterion in the comment of `contracts/spec.md`
+    (read the file; do not edit it) for AC1.4
+  - for AC2.2 and AC2.3, read from disk the specs of these runs, by explicit
+    list: creation-seam, dupefind, escalation-visibility-2, fleetview-design,
+    local-only-mode, mdtoc, runner-agent, web-staging, wordfreq,
+    writestate-kill-window. Assert each yields at least one criterion, so the
+    loop cannot pass on nothing.
+
+  Also assert that a requirement entry and a decision entry carry neither key,
+  and that a criterion without a check has no `check` key at all.
+
+file_contact_surface:
+  - packages/core/src/view-model/lexicon.ts
+  - packages/core/test/lexicon-check.test.ts
+
+acceptance_tests:
+  - AC1.1
+  - AC1.2
+  - AC1.3
+  - AC1.4
+  - AC1.5
+  - AC1.6
+  - AC2.1
+  - AC2.2
+  - AC2.3
+  - AC2.4
+  - "In packages/: `npx vitest run core/test` and `npm run typecheck` pass"
+  - "AC8.5: the new-behaviour tests (AC1.x) fail against the pre-change lexicon.ts; recorded as a claim in notes"
+  - "AC8.6: the AC2.1-AC2.3 tests fail when the `body` join is deliberately broken, then pass once restored; recorded as a claim in notes"
+
+depends_on: []
+
+status: pending
+
+notes: |

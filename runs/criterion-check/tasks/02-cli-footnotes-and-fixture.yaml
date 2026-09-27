@@ -1,0 +1,61 @@
+id: 02-cli-footnotes-and-fixture
+title: Terminal footnotes keep the check off the promise's line, and the demo spec gains one check
+requirements: [R7, R8, R9]
+
+scope: |
+  Two edits that must land together, because the fixture's new line changes
+  terminal output an existing CLI test pins (plan.md ADR-5).
+
+  1. Fixture. In `packages/fixtures/src/index.ts`, add the one line given in
+     plan.md "Interface contracts — Fixture" under the `AC1.1` item of the
+     `spec` template. Change no other line of the file.
+
+  2. Footnotes. In the `show` command of `packages/cli/src/main.ts`, follow
+     plan.md "Interface contracts — Terminal footnotes": default mode quotes a
+     checked criterion's `promise` alone; `--refs full` prints the check on
+     the next line, indented `width + 5`, inside one pair of quotation marks.
+     An entry without a check goes through today's expression untouched. Keep
+     the logic inline in the command, as it is now.
+
+  Tests go in the existing `show` describe block of
+  `packages/cli/test/cli.test.ts`, against the fixture run `g2-pending`
+  (its plan.md cites AC1.1, which now has a check; its verification report
+  cites AC2.1, which has none):
+  - AC7.1: `show g2-pending plan.md` — the AC1.1 footnote line lacks `Check:`.
+  - AC7.2: with `--refs full`, the line after the AC1.1 footnote, trimmed of
+    leading spaces, starts with `Check:`, and its indentation is `width + 5`.
+  - AC7.3 / AC7.4: the AC2.1 footnote line in each mode equals a literal
+    string captured from the pre-change code.
+
+  Run the whole suite, not only the CLI tests: the new fixture line shifts
+  spec line numbers in ten demo runs (plan.md Risks). If a test outside this
+  task's surface fails because of the fixture line, do not edit it — record a
+  `discovery:` note naming the test and stop for an amendment.
+
+  Byte-identity of the dupefind footnotes (the checks of AC7.3 and AC7.4) is
+  observed by the verifier across commits; nothing here may change output for
+  a criterion without a check.
+
+file_contact_surface:
+  - packages/fixtures/src/index.ts
+  - packages/cli/src/main.ts
+  - packages/cli/test/cli.test.ts
+
+acceptance_tests:
+  - AC7.1
+  - AC7.2
+  - AC7.3
+  - AC7.4
+  - AC8.1
+  - AC9.1
+  - AC9.2
+  - AC9.3
+  - "In packages/: `npm test`, `npm run typecheck` and `npm run lint` pass"
+  - "AC8.5: the AC7.1 and AC7.2 tests fail against the pre-change main.ts with the new fixture line in place; recorded as a claim in notes"
+  - "AC8.6: the AC7.3/AC7.4 tests fail when the no-check path is deliberately broken, then pass once restored; recorded as a claim in notes"
+
+depends_on: [01-lexicon-promise-check]
+
+status: pending
+
+notes: |

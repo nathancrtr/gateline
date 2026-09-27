@@ -23,6 +23,9 @@ then produce:
 
 1. `runs/<slug>/plan.md` per `contracts/plan.md` — approach, interface contracts,
    ADRs (each with the rejected alternative and why), requirement→task mapping, risks.
+   The contract's grammar and READABILITY rules are normative — they cover each
+   ADR's Choice, Rejected, and Consequences lines, and Risks — and a breach is
+   bounced.
 2. `runs/<slug>/tasks/NN-slug.yaml` per `contracts/work-item.yaml` — each task
    independently executable from only (task + plan + spec), with a declared
    `file_contact_surface` and acceptance tests traced to requirement numbers.
@@ -56,6 +59,15 @@ proposed, not live.
 - Interface signatures and schemas belong in the plan; function bodies do not.
 - Concision is a contract requirement: reference spec requirements by number, never
   re-quote them.
+- A Choice line states the decision in words; the exact setting or signature lives
+  in Interface contracts and is cited, not restated. Rejected names what
+  disqualified the alternative in your own words — never this contract's
+  placeholder phrasing echoed back — and Consequences leads with the consequence
+  that matters most to the G1 approver.
+- An instruction to an Implementer or Reviewer belongs in Interface contracts or
+  the task files, never in Approach or a decision record — those argue to the G1
+  approver alone — and nothing meant for the approver lives only in an HTML
+  comment, including an amendment's rationale.
 - Write only inside `runs/<slug>/`.
 
 ## Escalate instead of planning when

@@ -2,13 +2,23 @@
 // the centerpiece: approval rate against the >90% over-triggering heuristic
 // (FRONTEND.md §4.4), burden mix as an ordered sequential ramp, latency.
 // Charts are plain HTML; the table itself is the accessibility relief.
+//
+// Several repositories (#499; docs/MULTI-REPO.md §9.4, decision P11): the
+// gate is the unit of the table. With no scope, each gate is one row group:
+// its total across the set leads, and each repository's figures follow it,
+// indented and in the muted ink, with no hairline between them, so the eye
+// reads a gate and then its parts. The flag is drawn on repository rows and
+// never on a total that pools several. Under a scope, the table is the
+// scope's repository's own figures, one row per gate, as a one-repository
+// set shows it.
 import { useQuery } from '@tanstack/react-query'
-import { api, type MetricsResponse, type RunMetricsSummary } from '../api.ts'
+import type { ReactNode } from 'react'
+import { api, type GateMetrics, type MetricsResponse, type RunMetricsSummary } from '../api.ts'
 import { Imp } from '../components/chips.tsx'
 import { fullRunName, REPOSITORY_COLUMN, REPOSITORY_FOLD, RepositoryName, useDocumentTitle } from '../components/repository.tsx'
 import { inScope, ScopeHeading, ScopeLine, UnknownScopeNotice, useScope } from '../components/scope.tsx'
 import { usd } from '../money.ts'
-import { scopeTitle } from '../scope.ts'
+import { compareRepositories, type Scope, scopeTitle } from '../scope.ts'
 import { PageStatus } from './inbox.tsx'
 
 // Ordered burden ramp: one hue (the ink) at three textures — solid, hatched,
@@ -58,13 +68,14 @@ export function MetricsPage() {
   }
   if (error) return <PageStatus text={`Could not compute metrics: ${(error as Error).message}`} bad />
   const metrics = data!
-  const total = metrics.decisions.length
-  // The run-level sections follow the scope (#498): their rows are runs, and
-  // each run carries its repository. The gate table is computed on the
-  // server over every repository and cannot be split here, so under a scope
-  // it says it covers them all; per-repository gate figures are #499.
+  // Every section follows the scope (#498, #499). The run-level sections'
+  // rows are runs, each carrying its repository. The gate table takes the
+  // figures core computed for the scope's repository, or, with no scope over
+  // several repositories, each gate's total and each repository's figures.
   const runs = inScope(metrics.runs, scope.scope)
+  const decided = inScope(metrics.decisions, scope.scope).length
   const one = scope.scope.kind === 'one'
+  const form = gateTableForm(metrics, scope.scope, scope.several && scope.set.length > 1)
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-9">
@@ -76,13 +87,13 @@ export function MetricsPage() {
         <UnknownScopeNotice scope={scope.scope} />
       </header>
 
-      {total === 0 ? (
+      {decided === 0 ? (
         <div className="border-t border-ink px-4 py-[34px] text-center">
           <p className="text-[15px] font-semibold">No gate decisions recorded yet.</p>
           <p className="mt-1.5 text-xs text-muted">Decisions made through the app or CLI will appear here from their commits.</p>
         </div>
       ) : (
-        <GateTable metrics={metrics} allRepositories={one} />
+        <GateTable form={form} rateMinDecisions={metrics.rateMinDecisions} />
       )}
 
       <RoundsSection runs={runs} roundCap={metrics.roundCap} />
@@ -91,73 +102,234 @@ export function MetricsPage() {
   )
 }
 
+/** One repository's figures at one gate, named. */
+interface RepositoryRow {
+  source: string
+  sourceName: string
+  figures: GateMetrics
+}
+
 /**
- * Under a scope the table still counts every repository: the server computes
- * it from all of them, and its rows carry no repository to filter by. It says
- * so in the cockpit's words rather than sitting under a scoped heading as if
- * it followed the scope.
+ * What the gate table shows (docs/MULTI-REPO.md §9.4, decision P11).
+ * - `plain`: one row per gate. Either the whole set when it has one
+ *   repository, where the total is that repository's figure and carries its
+ *   flag, or the scope's repository's own figures.
+ * - `grouped`: no scope over several repositories. Each gate is a group:
+ *   the total, which carries no flag, then one row per repository.
+ * - `unsplit`: a scope, and a server built before #499 that sent no
+ *   per-repository figures, so none can be shown for the scope.
  */
-function GateTable({ metrics, allRepositories }: { metrics: MetricsResponse; allRepositories: boolean }) {
+export type GateTableForm =
+  | { kind: 'plain'; rows: GateMetrics[] }
+  | { kind: 'grouped'; groups: { total: GateMetrics; repositories: RepositoryRow[] }[] }
+  | { kind: 'unsplit' }
+
+export function gateTableForm(metrics: MetricsResponse, scope: Scope, several: boolean): GateTableForm {
+  const breakdown = metrics.perRepository
+  if (scope.kind === 'one') {
+    if (!breakdown) return { kind: 'unsplit' }
+    return { kind: 'plain', rows: inScope(breakdown, scope)[0]?.perGate ?? [] }
+  }
+  if (!several || !breakdown) return { kind: 'plain', rows: metrics.perGate }
+  // Listed as everywhere else: by display name without case, then by id.
+  const listed = [...breakdown].sort((a, b) => compareRepositories({ id: a.source, name: a.sourceName }, { id: b.source, name: b.sourceName }))
+  return {
+    kind: 'grouped',
+    groups: metrics.perGate.map((total) => ({
+      total,
+      repositories: listed.flatMap((r) => {
+        const figures = r.perGate.find((g) => g.gate === total.gate)
+        return figures ? [{ source: r.source, sourceName: r.sourceName, figures }] : []
+      }),
+    })),
+  }
+}
+
+/** A row's place in its gate's group. The rows of one group share one hairline, under the last. */
+type RowPlace = 'alone' | 'first' | 'inside' | 'last'
+
+function cellClass(place: RowPlace): string {
+  const top = place === 'alone' || place === 'first' ? 'pt-2.5' : 'pt-1'
+  const bottom = place === 'alone' || place === 'last' ? 'pb-2.5 border-b border-line' : 'pb-1'
+  return `pr-3 align-top ${top} ${bottom}`
+}
+
+function GateTable({ form, rateMinDecisions }: { form: GateTableForm; rateMinDecisions: number | undefined }) {
+  const grouped = form.kind === 'grouped'
+  const rows = form.kind === 'plain' ? form.rows : form.kind === 'grouped' ? form.groups.flatMap((g) => [g.total, ...g.repositories.map((r) => r.figures)]) : []
+  const tooFew = rateMinDecisions !== undefined && rows.some((g) => g.decisions > 0 && g.approvalRate === null)
   return (
     <section>
       <h2 className="mb-[3px] text-[15px] font-semibold">Gate decisions</h2>
-      {allRepositories && (
-        <p className="mb-[3px] max-w-[var(--measure)] font-ui text-[12px] text-ink" data-gate-scope>
-          Counted across all repositories. Gate figures are not yet split by repository, so this table does not follow the scope.
-        </p>
-      )}
-      <p className="mb-3 max-w-[var(--measure)] text-xs text-muted">
+      <p className="mb-[3px] max-w-[var(--measure)] text-xs text-muted">
         Sustained approval above 90% means the gate is over-triggering (or reviews have gone reflexive) — its scope should move down the tier ladder.
       </p>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[660px] border-separate border-spacing-0 text-sm">
-          <thead>
-            <tr>
-              <th className={TH}>gate</th>
-              <th className={`${TH} text-right`}>decisions</th>
-              <th className={TH}>approval rate</th>
-              <th className={TH}>burden mix</th>
-              <th className={`${TH} text-right`}>median latency</th>
-            </tr>
-          </thead>
-          <tbody>
-            {metrics.perGate.map((g) => (
-              <tr key={g.gate}>
-                <td className={`${TD} font-mono text-xs font-semibold`}>{g.gate}</td>
-                <td className={`${TD} text-right font-ui text-xs tabular-nums`}>{g.decisions || '—'}</td>
-                <td className={TD}>
-                  {g.approvalRate === null ? (
-                    <span className="text-xs text-muted">no decisions</span>
-                  ) : (
-                    <ApprovalMeter rate={g.approvalRate} overTriggering={g.overTriggering} />
-                  )}
-                </td>
-                <td className={TD}>
-                  <BurdenBar mix={g.burdenMix} unrecorded={g.burdenUnrecorded} total={g.decisions} />
-                </td>
-                <td className={`${TD} text-right font-ui text-xs tabular-nums text-muted`}>{formatLatency(g.medianLatencySeconds)}</td>
+      {grouped && (
+        <p className="mb-[3px] max-w-[var(--measure)] text-xs text-muted" data-gate-grouping>
+          Each gate shows its total across all repositories, then each repository’s own figures. Over-triggering is judged for each repository, because a
+          total that pools several can hide a gate that over-triggers in one of them.
+        </p>
+      )}
+      {tooFew && (
+        <p className="mb-[3px] max-w-[var(--measure)] text-xs text-muted" data-gate-sample>
+          A rate needs at least {rateMinDecisions} decisions. A row with fewer shows its counts only.
+        </p>
+      )}
+      {form.kind === 'unsplit' ? (
+        <p className="mt-3 max-w-[var(--measure)] font-ui text-[12.5px] text-ink" data-gate-unsplit>
+          This server sends gate figures for all repositories together, so none can be shown for one repository until it is updated.
+        </p>
+      ) : (
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full min-w-[660px] border-separate border-spacing-0 text-sm">
+            <thead>
+              <tr>
+                <th className={TH}>{grouped ? 'gate and repository' : 'gate'}</th>
+                <th className={`${TH} text-right`}>decisions</th>
+                <th className={TH}>approval rate</th>
+                <th className={TH}>burden mix</th>
+                <th className={`${TH} text-right`}>median latency</th>
               </tr>
+            </thead>
+            {form.kind === 'plain' ? (
+              <tbody>
+                {form.rows.map((g) => (
+                  <GateRow key={g.gate} figures={g} place="alone" showFlag>
+                    <span className="font-mono text-xs font-semibold">{g.gate}</span>
+                  </GateRow>
+                ))}
+              </tbody>
+            ) : (
+              form.groups.map(({ total, repositories }) => (
+                // One row group per gate: the total leads, and its
+                // repositories follow it, indented, in the muted ink.
+                <tbody key={total.gate} data-gate-group={total.gate}>
+                  <GateRow figures={total} place={repositories.length ? 'first' : 'alone'} showFlag={false} total>
+                    <span className="whitespace-nowrap">
+                      <span className="font-mono text-xs font-semibold">{total.gate}</span>
+                      <span className="ml-2 font-ui text-[11.5px] text-muted">all repositories</span>
+                    </span>
+                  </GateRow>
+                  {repositories.map((r, i) => (
+                    <GateRow
+                      key={r.source}
+                      figures={r.figures}
+                      place={i === repositories.length - 1 ? 'last' : 'inside'}
+                      showFlag
+                      repository={r.source}
+                    >
+                      <span className="block pl-4">
+                        <span className="sr-only">{total.gate}, </span>
+                        <RepositoryName className="font-mono text-xs" source={r.source} sourceName={r.sourceName} />
+                      </span>
+                    </GateRow>
+                  ))}
+                </tbody>
+              ))
+            )}
+          </table>
+          <div className="flex flex-wrap items-center gap-4 py-2.5 text-[11.5px] text-muted">
+            {BURDEN_LABELS.map(([key, label]) => (
+              <span key={key} className="inline-flex items-center gap-1.5">
+                <span className={`h-[11px] w-[11px] border border-ink ${BURDEN_TEXTURE[key]}`} />
+                {label}
+              </span>
             ))}
-          </tbody>
-        </table>
-        <div className="flex flex-wrap items-center gap-4 py-2.5 text-[11.5px] text-muted">
-          {BURDEN_LABELS.map(([key, label]) => (
-            <span key={key} className="inline-flex items-center gap-1.5">
-              <span className={`h-[11px] w-[11px] border border-ink ${BURDEN_TEXTURE[key]}`} />
-              {label}
+            <span className="inline-flex items-center gap-1.5">
+              <span className={`h-[11px] w-[11px] border border-ink ${UNRECORDED_TEXTURE}`} />
+              unrecorded (predates burden capture)
             </span>
-          ))}
-          <span className="inline-flex items-center gap-1.5">
-            <span className={`h-[11px] w-[11px] border border-ink ${UNRECORDED_TEXTURE}`} />
-            unrecorded (predates burden capture)
-          </span>
-          <span className="ml-auto inline-flex items-center gap-1.5">
-            <span className="h-[11px] w-[2px] bg-mark" />
-            90% threshold
-          </span>
+            <span className="ml-auto inline-flex items-center gap-1.5">
+              <span className="h-[11px] w-[2px] bg-mark" />
+              90% threshold
+            </span>
+          </div>
         </div>
-      </div>
+      )}
     </section>
+  )
+}
+
+/**
+ * One row of the gate table. `showFlag` is false on a total that pools
+ * several repositories: core leaves that total's flag down, and the table
+ * draws none there whatever it is sent.
+ */
+function GateRow({
+  figures: g,
+  place,
+  showFlag,
+  total = false,
+  repository,
+  children,
+}: {
+  figures: GateMetrics
+  place: RowPlace
+  showFlag: boolean
+  total?: boolean
+  repository?: string
+  children: ReactNode
+}) {
+  const td = cellClass(place)
+  return (
+    <tr data-gate-row={g.gate} data-gate-total={total || undefined} data-gate-repository={repository}>
+      <th scope="row" className={`${td} text-left font-normal`}>
+        {children}
+      </th>
+      <td className={`${td} text-right font-ui text-xs tabular-nums`}>{g.decisions || '—'}</td>
+      <td className={td}>
+        <RateCell figures={g} showFlag={showFlag} />
+      </td>
+      <td className={td}>
+        {g.decisions > 0 && g.approvalRate === null ? (
+          <BurdenCounts mix={g.burdenMix} unrecorded={g.burdenUnrecorded} />
+        ) : (
+          <BurdenBar mix={g.burdenMix} unrecorded={g.burdenUnrecorded} total={g.decisions} />
+        )}
+      </td>
+      <td className={`${td} text-right font-ui text-xs tabular-nums text-muted`}>{formatLatency(g.medianLatencySeconds)}</td>
+    </tr>
+  )
+}
+
+/**
+ * The approval rate, or, below the sample core rates from, the counts alone
+ * in the cockpit's words: three decisions never read as 100%.
+ */
+function RateCell({ figures: g, showFlag }: { figures: GateMetrics; showFlag: boolean }) {
+  if (g.decisions === 0) return <span className="text-xs text-muted">no decisions</span>
+  if (g.approvalRate === null) {
+    return (
+      <span className="inline-flex flex-wrap items-baseline gap-x-2 font-ui text-xs" data-gate-too-few>
+        <span className="tabular-nums">
+          {g.approvals} of {g.decisions} approved
+        </span>
+        <span className="text-muted">too few to rate</span>
+      </span>
+    )
+  }
+  return <ApprovalMeter rate={g.approvalRate} overTriggering={showFlag && g.overTriggering} />
+}
+
+/**
+ * The burden mix of a row too small to rate: counts beside the legend's
+ * textures, because a bar would draw proportions from two or three decisions.
+ */
+function BurdenCounts({ mix, unrecorded }: { mix: Record<string, number>; unrecorded: number }) {
+  const parts = [
+    ...BURDEN_LABELS.map(([key, label]) => ({ label, n: mix[key] ?? 0, texture: BURDEN_TEXTURE[key] })),
+    { label: 'unrecorded', n: unrecorded, texture: UNRECORDED_TEXTURE },
+  ].filter((s) => s.n > 0)
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1 font-ui text-xs tabular-nums" data-burden-counts>
+      {parts.map((s) => (
+        <span key={s.label} className="inline-flex items-center gap-1.5" title={`${s.label}: ${s.n}`}>
+          <span className={`h-[11px] w-[11px] border border-ink ${s.texture}`} aria-hidden="true" />
+          <span className="sr-only">{s.label}: </span>
+          {s.n}
+        </span>
+      ))}
+    </span>
   )
 }
 

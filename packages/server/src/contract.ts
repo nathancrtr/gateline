@@ -374,7 +374,8 @@ export interface DiffResponse {
  * `perRepository` and `rateMinDecisions` (#499) are optional on the wire,
  * though this server always sends them: a server built before #499 sends
  * only the pooled `perGate`, and a client reads their absence as "no
- * breakdown", showing the total alone. Additive, so not a version bump. The
+ * breakdown": Gatehouse then shows the total alone with no scope, and under
+ * a scope says it cannot split the figures. Additive, so not a version bump. The
  * rate rule changed with them: `approvalRate` is null below five decisions,
  * where before it was null only at none, so an older client shows such a row
  * as having no decisions. The type is unchanged.

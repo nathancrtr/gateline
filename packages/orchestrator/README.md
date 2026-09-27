@@ -81,11 +81,29 @@ so a sweep counts toward the cap, and is deferred (written nowhere, derived
 again later) when the cap or the spend window refuses it. Recorded sweep costs
 count toward the spend window. Runs are taken oldest-waiting first: the run
 whose branch tip is oldest. After a restart, open ledger entries hold their
-slots until they close or the role timeout passes, and a sweep that was running
-when the process died holds its slot until the sweep timeout (30 minutes) passes;
-with a cap of 1 that blocks dispatch for that long. The standalone binary has a
-governor of its own, so running it beside `gateline up` on one machine doubles
-the limits. See docs/ORCHESTRATOR.md §6.
+slots until they close or the role timeout passes. A sweep that was running
+when the process died holds its slot until the sweep timeout (30 minutes)
+passes, unless its marker names an engine process that is gone from this
+machine (markers written since #502 do), in which case it holds no slot. See
+docs/ORCHESTRATOR.md §6.
+
+**Do not run this binary beside `gateline up` on one machine.** The standalone
+`gateline-orchestrator` serves one repository and has a governor of its own,
+not shared with `up`'s. Two processes on one machine each enforce the limits
+separately, so together they can run twice `--max-concurrent-dispatches` and
+spend twice `--spend-limit-usd` per window.
+
+**Several repositories in one process (#502).** The package can run one engine
+per repository under one governor: `startOrchestrators({ repositories, limits,
+engineDefaults, … })` in `start.ts`, where each entry carries the repository's
+top directory and its id. `startOrchestrator`, which `gateline up` calls today,
+is the same path with a list of one. Every engine seeds the governor before any
+loop starts; there is one code-tree monitor, one supersede and one drain for the
+process. Each engine's log lines start with `[<display name>]`. A tick or a
+closing commit that throws marks that engine failed in its own health file
+(`failed`) and leaves the others running; after two failed passes in a row it
+retries on the heartbeat only, and the first pass that completes clears it.
+`gateline up` does not pass several repositories yet.
 
 Driving a live toy run end-to-end (the M2 exit criterion):
 
@@ -163,7 +181,8 @@ has earned trust (design §10).
 | `seam.ts` + `manifest.ts` | `dispatch()` driven entirely by adapters' `headless` manifest sections; a new runner costs one manifest. |
 | `router.ts` | Dispatch-time P5: `avoid_vendor_of` routes reviewer/verifier to an adapter on a different vendor than the implementer; refuses when two adapters both violate the pin; advisory when one single-vendor adapter makes it unsatisfiable. |
 | `workspace.ts` | Run checkouts as disposable worktrees; per-task isolation for parallel implementers with serial fold-back. A fold classifies its own failure (`conflict \| dirty \| contention \| infra`): only a content conflict is a plan defect and escalates, the rest retry. Before the rebase it harvest-commits whatever is uncommitted inside the task's file-contact surface (#184), then discards the tracked dirt outside it and names both that and the untracked files the worktree removal will drop. A failed fold keeps its task branch for inspection. |
-| `governor.ts` | Admission (#501): the process's one owner of the concurrency cap and the spend window. Engines and schedulers reserve before committing an intent and release on every path; a release wakes the repositories it refused, round-robin. Holds nothing on disk; seeded from open ledger entries at startup. |
+| `governor.ts` | Admission (#501): the process's one owner of the concurrency cap and the spend window. Engines and schedulers reserve before committing an intent and release on every path; a release wakes the repositories it refused, round-robin. Holds nothing on disk; seeded from open ledger entries at startup. A stopped engine unregisters: its slots are freed and its spend in the window keeps counting (#502). |
+| `start.ts` | Assembly: `assembleOrchestrator` builds one repository's engine and scheduler; `startOrchestrators` runs one engine per repository under one governor, code-tree monitor and drain (#502); `startOrchestrator` is a list of one. |
 | `triggers.ts` | Ref watcher, heartbeat, dispatch-completion, the governor's wake, manual — all funnel into one non-overlapping tick loop. |
 | `schedule.ts` | Scheduled roles (S0–S4 + SB, one test per row): `orchestrator.yaml` schedules → due sweeps, admitted by the governor, seeded as marker-only mini-runs by commit-then-launch, metered through the same seam. |
 | `shadow.ts` | M1: replay history, derived vs actual, disagreements dispositioned (see `shadow-wordfreq.md`). |

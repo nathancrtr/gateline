@@ -61,6 +61,12 @@ export interface SweepMarker {
   at: string | null
   /** Null while the sweep is open: dispatched and not yet metered. */
   costUsd: number | null
+  /**
+   * The engine process that opened the sweep (`<hostname>:<pid>#n`, as ledger
+   * entries name theirs), or null for a marker written before #502. The seed
+   * and the spend report read it to tell a dead sweep from a running one.
+   */
+  engine: string | null
 }
 
 const SWEEP_SLUG = /^(.+)-(\d{4}-\d{2}-\d{2})$/
@@ -115,7 +121,13 @@ function parseMarker(slug: string, text: string): SweepMarker | null {
   if (!raw || typeof raw !== 'object') return null
   const r = raw as Record<string, unknown>
   if (typeof r.role !== 'string') return null
-  return { slug, role: r.role, at: markerAt(text), costUsd: typeof r.cost_usd === 'number' ? r.cost_usd : null }
+  return {
+    slug,
+    role: r.role,
+    at: markerAt(text),
+    costUsd: typeof r.cost_usd === 'number' ? r.cost_usd : null,
+    engine: typeof r.engine === 'string' && r.engine !== '' ? r.engine : null,
+  }
 }
 
 export interface ScheduleEntry {
@@ -271,6 +283,18 @@ export interface SchedulerConfig {
   governor: GovernorPort
   /** The repository's key with the governor — the same one its engine uses. Defaults to `repoDir`. */
   repository?: string
+  /**
+   * The engine process this scheduler belongs to (#502): its engine's
+   * `engineId`, written into each sweep marker it opens as `engine:` so that a
+   * later seed can tell a sweep whose process died from one still running.
+   * Absent, markers carry no `engine:` line, as before #502.
+   */
+  engineId?: string
+  /**
+   * Told when a sweep job's settlement throws (#502), after it is caught and
+   * logged: `assembleOrchestrator` marks the repository's engine failed.
+   */
+  onFault?: (e: unknown, context: string) => void
   /**
    * The commit `orchestrator.yaml` is read at (#500, #501): the one
    * `assembleOrchestrator` resolved, so sweep schedules come from the same
@@ -469,6 +493,9 @@ export class Scheduler {
       `covering_since: ${coveringSince ?? 'null'}`,
       `adapter: ${this.cfg.dispatcher.adapterFor?.(entry.role) ?? this.cfg.dispatcher.adapter}`,
       `model: ${model ?? 'null'}`,
+      // Additive (#502): which engine process opened the sweep. No existing
+      // field changes, and a marker without this line reads as before.
+      ...(this.cfg.engineId ? [`engine: ${JSON.stringify(this.cfg.engineId)}`] : []),
       `cost_limit_usd: ${entry.costLimitUsd ?? 'null'}`,
       `tokens_in: null`,
       `tokens_out: null`,
@@ -505,17 +532,32 @@ export class Scheduler {
       }
       metered = await this.closeSweep(entry, branch, slug, outcome)
     })()
-    this.jobs.set(
-      slug,
-      job.finally(async () => {
-        // Settlement gives the slot back first (#501), after the closing
-        // commit has metered the marker, with what it metered.
-        reservation.release(metered)
-        this.jobs.delete(slug)
-        await removeRunCheckout(this.cfg.repoDir, branch)
+    // The settlement's fault boundary (#502), as the engine's: a closing
+    // commit that throws is caught and logged here rather than left as a
+    // rejection nothing handles, which would end the process and every other
+    // repository's engine with it. The stored promise never rejects.
+    // Told to the engine when there is one, which logs it with the repository
+    // and marks itself failed; logged here otherwise.
+    const fault = (e: unknown) => {
+      if (this.cfg.onFault) this.cfg.onFault(e, `sweep ${slug}`)
+      else this.log(`sweep(${slug}): settlement failed: ${(e as Error)?.message ?? String(e)}`)
+    }
+    const settled = job
+      .then(() => undefined, fault)
+      .then(async () => {
+        try {
+          // Settlement gives the slot back first (#501), after the closing
+          // commit has metered the marker, with what it metered.
+          reservation.release(metered)
+          this.jobs.delete(slug)
+          await removeRunCheckout(this.cfg.repoDir, branch)
+        } catch (e) {
+          this.jobs.delete(slug)
+          fault(e)
+        }
         this.onSettled?.()
-      }),
-    )
+      })
+    this.jobs.set(slug, settled)
     // The hand-over: from here the job's settlement owns the slot. The
     // marker's `at` is what the governor recognises it by once it is metered.
     reservation.commit(now.toISOString())

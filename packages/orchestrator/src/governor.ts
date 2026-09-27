@@ -10,8 +10,8 @@
 // startup from the ledgers (`seed`), and kept current by what each engine
 // reports from its own ledgers when it ticks (`report`).
 //
-// The interface is deliberately small — register, seed, report, reserve,
-// subscribe — because it is the seam a cross-install coordinator would attach
+// The interface is deliberately small — register, unregister, seed, report,
+// reserve, subscribe — because it is the seam a cross-install coordinator would attach
 // to (#34). Nothing here knows what an engine, a run or a tick is; a
 // reservation is a repository, a key and an estimate.
 
@@ -41,6 +41,12 @@ export interface GovernorRefusal {
   heldFor?: string
   /** For `concurrency`: the repositories that have not yet reported their open dispatches since startup. */
   unseeded?: string[]
+  /**
+   * Display names for the repositories this refusal names (`repository`,
+   * `heldFor`, `unseeded`), keyed by repository key (#502). The refusal's
+   * words use them; a key with no display name is written as itself.
+   */
+  names?: Record<string, string>
   /** Spend projection before this request: closed cost in the window plus open and reserved estimates. */
   projectedUsd?: number
   /** The closed share of `projectedUsd`. */
@@ -124,7 +130,19 @@ export interface SpendReport {
    * sweep marker counts only while it opened inside the window, because
    * nothing ever closes the marker of a sweep whose process died.
    */
-  open: { key: string; at: string | null; estimateUsd: number; kind: 'dispatch' | 'sweep' }[]
+  open: {
+    key: string
+    at: string | null
+    estimateUsd: number
+    kind: 'dispatch' | 'sweep'
+    /**
+     * The process that opened it is gone from this machine (#502): the entry
+     * still counts toward spend at its estimate, but it holds no slot, so a
+     * startup hold under this key is cleared. Used for sweep markers, which
+     * nothing closes when their process dies. Default false.
+     */
+    lost?: boolean
+  }[]
   /**
    * False when the sweep markers could not be read this time. The governor
    * then keeps the sweep entries of the previous report and the sweep
@@ -191,8 +209,22 @@ export interface GovernorConfig extends GovernorLimits {
 export interface GovernorPort {
   /** The window the spend limits measure over — engines read their ledgers back this far. */
   readonly spendWindowMs: number
-  /** Make a repository known: it enters the spend sum and the round-robin, and must `seed` before anything is granted. */
-  register(repository: string, opts?: { spendLimitUsd?: number | null }): void
+  /**
+   * Make a repository known: it enters the spend sum and the round-robin, and
+   * must `seed` before anything is granted. `displayName` is how the refusal
+   * words name it (#502); the key is used when there is none.
+   */
+  register(repository: string, opts?: { spendLimitUsd?: number | null; displayName?: string }): void
+  /**
+   * Forget a repository (#502), for an engine that has stopped. Its live
+   * reservations and startup holds are released, and it leaves the
+   * round-robin and the seed gate. What it spent inside the window keeps
+   * counting against the machine's window until the window rolls past it:
+   * the money was spent whether or not its engine still runs.
+   */
+  unregister(repository: string): void
+  /** The registered repositories that have not yet seeded — the ones the seed gate is waiting on. */
+  unseeded(): string[]
   /** The repository's open entries at startup. Marks it seeded; additive. */
   seed(repository: string, entries: SeedEntry[]): void
   /**
@@ -241,15 +273,16 @@ export function refusalRule(r: GovernorRefusal): 'MC' | 'HB' {
  */
 export function refusalReason(r: GovernorRefusal, what: string, rederives: string): string {
   const money = (n: number | undefined) => `$${(n ?? 0).toFixed(2)}`
+  const name = (key: string | undefined) => (key === undefined ? '' : (r.names?.[key] ?? key))
   const projected = (r.projectedUsd ?? 0) + (r.requestedUsd ?? 0)
   const breakdown = `(ledger ${money(r.closedUsd)} in the window + ${money(projected - (r.closedUsd ?? 0))} in flight and requested)`
   switch (r.limit) {
     case 'concurrency':
       if (r.unseeded?.length)
-        return `${what} deferred — the governor grants nothing until ${r.unseeded.join(', ')} has reported its open dispatches since startup; re-derived once it has`
+        return `${what} deferred — the governor grants nothing until ${r.unseeded.map(name).join(', ')} has reported its open dispatches since startup; re-derived once it has`
       return `${what} deferred — ${r.occupied} in flight against --max-concurrent-dispatches ${r.cap}; re-derived when a slot frees`
     case 'turn':
-      return `${what} deferred — the free slot is held for ${r.heldFor}'s turn (round-robin between repositories under --max-concurrent-dispatches ${r.cap}); re-derived when a slot frees`
+      return `${what} deferred — the free slot is held for ${name(r.heldFor)}'s turn (round-robin between repositories under --max-concurrent-dispatches ${r.cap}); re-derived when a slot frees`
     case 'spend':
       return (
         `projected host spend ${money(projected)} over the last ${describeWindow(r.windowMs ?? DEFAULT_SPEND_WINDOW_MS)} ${breakdown} ` +
@@ -257,7 +290,7 @@ export function refusalReason(r: GovernorRefusal, what: string, rederives: strin
       )
     case 'repository-spend':
       return (
-        `projected spend for ${r.repository} ${money(projected)} over the last ${describeWindow(r.windowMs ?? DEFAULT_SPEND_WINDOW_MS)} ${breakdown} ` +
+        `projected spend for ${name(r.repository)} ${money(projected)} over the last ${describeWindow(r.windowMs ?? DEFAULT_SPEND_WINDOW_MS)} ${breakdown} ` +
         `exceeds that repository's own ceiling $${r.limitUsd} — deferred, not paused: the window rolls and ${rederives}`
       )
   }
@@ -265,6 +298,8 @@ export function refusalReason(r: GovernorRefusal, what: string, rederives: strin
 
 interface RepoState {
   spendLimitUsd: number | null
+  /** How refusal words name this repository (#502); absent, its key. */
+  displayName: string | null
   seeded: boolean
   report: SpendReport | null
   /** The sequence number taken when the applied report began gathering. */
@@ -303,6 +338,18 @@ interface Hold {
 interface Offer {
   slots: number
   expiresAt: number
+}
+
+/**
+ * Spend an unregistered repository left behind (#502): a closed amount, and
+ * when it counts from. It stays in the machine's window until the window
+ * rolls past it, because the money was spent whether or not the engine that
+ * spent it still runs.
+ */
+interface Retired {
+  repository: string
+  amountUsd: number
+  atMs: number
 }
 
 class Slot implements Reservation {
@@ -348,6 +395,10 @@ class Slot implements Reservation {
     const known = typeof costUsd === 'number' && Number.isFinite(costUsd) && costUsd >= 0 ? costUsd : null
     this.onRelease(this, wasCommitted, known)
   }
+  /** Released by `unregister`, which has already accounted for it: a later `release()` does nothing. */
+  revoke(): void {
+    this.state = 'released'
+  }
 }
 
 export class Governor implements GovernorPort {
@@ -372,6 +423,8 @@ export class Governor implements GovernorPort {
   /** When each repository was last woken, and the timer holding back a wake that came too soon. */
   private readonly lastWake = new Map<string, number>()
   private readonly wakeTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  /** What unregistered repositories spent inside the window (#502). */
+  private retired: Retired[] = []
 
   constructor(cfg: GovernorConfig = {}) {
     this.cfg = cfg
@@ -392,13 +445,96 @@ export class Governor implements GovernorPort {
     return this.limits.budgetEnforcement !== false
   }
 
-  register(repository: string, opts: { spendLimitUsd?: number | null } = {}): void {
+  register(repository: string, opts: { spendLimitUsd?: number | null; displayName?: string } = {}): void {
     const known = this.repos.get(repository)
     if (known) {
       if (opts.spendLimitUsd !== undefined) known.spendLimitUsd = opts.spendLimitUsd
+      if (opts.displayName !== undefined) known.displayName = opts.displayName
       return
     }
-    this.repos.set(repository, { spendLimitUsd: opts.spendLimitUsd ?? null, seeded: false, report: null, reportSeq: -1, settled: [] })
+    this.repos.set(repository, {
+      spendLimitUsd: opts.spendLimitUsd ?? null,
+      displayName: opts.displayName ?? null,
+      seeded: false,
+      report: null,
+      reportSeq: -1,
+      settled: [],
+    })
+  }
+
+  /**
+   * Forget a repository whose engine has stopped (#502).
+   *
+   * Slots and the seed gate are freed. Its live reservations are released
+   * (a later `release()` of one does nothing), its startup holds and any slot
+   * offered to it are dropped, it leaves the round-robin — the turn passes to
+   * the repository after it — and the governor no longer waits for it to
+   * seed. Every repository refused meanwhile is woken.
+   *
+   * Money is not. What it spent inside the window was real, and dropping it
+   * would let the others spend the machine's window twice over. So its
+   * closed entries and settlements in the window stay in the machine's sum at
+   * what they cost, and leave it as the window rolls past them, exactly as
+   * they would have. Entries still open, holds and live reservations stay in
+   * the sum at their estimate, dated now: a detached role may still be
+   * running, and its cost is not known. An undated closed entry is dated now
+   * too, so it leaves the window one window from now rather than never.
+   *
+   * None of it counts toward the repository's own ceiling, which is gone
+   * with it. If the repository registers again, its first report replaces
+   * what it left behind, since that report reads the same ledgers.
+   */
+  unregister(repository: string): void {
+    const repo = this.repos.get(repository)
+    if (!repo) return
+    const now = this.now()
+    const since = now - this.spendWindowMs
+    const { closed, open } = this.spendItems(repository)
+    for (const c of closed) {
+      const atMs = c.atMs ?? now
+      if (atMs >= since) this.retired.push({ repository, amountUsd: c.amountUsd, atMs })
+    }
+    for (const amountUsd of open.values()) this.retired.push({ repository, amountUsd, atMs: now })
+
+    for (const slot of [...this.live]) {
+      if (slot.repository !== repository) continue
+      this.live.delete(slot)
+      slot.revoke()
+    }
+    for (const [k, hold] of this.holds) if (hold.repository === repository) this.holds.delete(k)
+    this.offers.delete(repository)
+    this.waiters.delete(repository)
+    this.subscribers.delete(repository)
+    this.lastWake.delete(repository)
+    const timer = this.wakeTimers.get(repository)
+    if (timer) {
+      clearTimeout(timer)
+      this.wakeTimers.delete(repository)
+      this.outstanding--
+    }
+    if (this.lastServed === repository) {
+      // The turn passes to the repository after it, as if it had just been served.
+      const ring = [...this.repos.keys()]
+      const i = ring.indexOf(repository)
+      this.lastServed = ring.length <= 1 ? null : ring[(i - 1 + ring.length) % ring.length]!
+    }
+    this.repos.delete(repository)
+    this.settleIdle()
+    this.freed()
+  }
+
+  unseeded(): string[] {
+    return [...this.repos].filter(([, r]) => !r.seeded).map(([name]) => name)
+  }
+
+  /** Display names for the given repository keys, for a refusal's words; undefined when none has one. */
+  private namesFor(keys: (string | undefined)[]): Record<string, string> | undefined {
+    const names: Record<string, string> = {}
+    for (const key of keys) {
+      const displayName = key === undefined ? null : (this.repos.get(key)?.displayName ?? null)
+      if (key !== undefined && displayName !== null) names[key] = displayName
+    }
+    return Object.keys(names).length > 0 ? names : undefined
   }
 
   seed(repository: string, entries: SeedEntry[]): void {
@@ -445,10 +581,16 @@ export class Governor implements GovernorPort {
     repo.report = report
     repo.reportSeq = asOf
     repo.settled = repo.settled.filter((s) => s.seq > asOf || (!sweepsRead && s.kind === 'sweep'))
+    // A report reads the same ledgers an earlier unregister froze (#502).
+    if (this.retired.some((r) => r.repository === repository)) this.retired = this.retired.filter((r) => r.repository !== repository)
     const open = new Set(report.open.map((e) => e.key))
+    // An entry whose process is gone holds no slot, whatever its kind (#502):
+    // a dead sweep's hold clears here rather than at the sweep timeout.
+    const lost = new Set(report.open.filter((e) => e.lost === true).map((e) => e.key))
     let freed = false
     for (const [k, hold] of this.holds) {
-      if (hold.repository === repository && hold.kind === 'dispatch' && !open.has(hold.key)) {
+      if (hold.repository !== repository) continue
+      if ((hold.kind === 'dispatch' && !open.has(hold.key)) || lost.has(hold.key)) {
         this.holds.delete(k)
         freed = true
       }
@@ -569,7 +711,8 @@ export class Governor implements GovernorPort {
     // The rest of the request did not fit under the cap: this repository is
     // waiting as surely as one refused outright.
     this.waiters.set(repository, { limit: 'concurrency', requestedUsd: intents.slice(n).reduce((sum, i) => sum + i.estimateUsd, 0) })
-    return { granted, refusal: { ...base, granted: n, limit: 'concurrency' } }
+    const names = this.namesFor([repository])
+    return { granted, refusal: { ...base, granted: n, limit: 'concurrency', ...(names ? { names } : {}) } }
   }
 
   /**
@@ -646,6 +789,9 @@ export class Governor implements GovernorPort {
       closed += s.closed
       open += s.open
     }
+    // What unregistered repositories spent inside the window (#502).
+    const since = this.now() - this.spendWindowMs
+    for (const r of this.retired) if (r.atMs >= since) closed += r.amountUsd
     return { closed, open }
   }
 
@@ -671,18 +817,36 @@ export class Governor implements GovernorPort {
    * the request's own.
    */
   repoSpend(repository: string, superseded?: ReadonlySet<string>): { closed: number; open: number } {
+    const items = this.spendItems(repository, superseded)
+    let closed = 0
+    for (const c of items.closed) closed += c.amountUsd
+    let open = 0
+    for (const v of items.open.values()) open += v
+    return { closed, open }
+  }
+
+  /**
+   * `repoSpend`'s terms, one by one: each closed amount in the window with
+   * when it counts from (null for a closed entry with no date), and each open
+   * estimate by key. `unregister` keeps the list; `repoSpend` sums it.
+   */
+  private spendItems(repository: string, superseded?: ReadonlySet<string>): { closed: { amountUsd: number; atMs: number | null }[]; open: Map<string, number> } {
     const since = this.now() - this.spendWindowMs
-    const inWindow = (at: string | null) => {
+    const parse = (at: string | null) => {
       const t = at ? Date.parse(at) : Number.NaN
-      return Number.isNaN(t) || t >= since
+      return Number.isNaN(t) ? null : t
+    }
+    const inWindow = (at: string | null) => {
+      const t = parse(at)
+      return t === null || t >= since
     }
     const state = this.repos.get(repository)
     const report = state?.report
-    let closed = 0
+    const closed: { amountUsd: number; atMs: number | null }[] = []
     const reportedClosed = new Set<string>()
     for (const e of report?.closed ?? []) {
       if (e.key !== undefined) reportedClosed.add(ledgerId(e.key, e.at))
-      if (inWindow(e.at)) closed += e.costUsd
+      if (inWindow(e.at)) closed.push({ amountUsd: e.costUsd, atMs: parse(e.at) })
     }
     const inReport = (key: string, at: string | null) => at !== null && reportedClosed.has(ledgerId(key, at))
     const settledIds = new Set<string>()
@@ -691,7 +855,7 @@ export class Governor implements GovernorPort {
       if (s.ledgerAt === null) settledUndated.add(s.key)
       else settledIds.add(ledgerId(s.key, s.ledgerAt))
       if (inReport(s.key, s.ledgerAt) || s.settledAt < since) continue
-      closed += s.amountUsd
+      closed.push({ amountUsd: s.amountUsd, atMs: s.settledAt })
     }
     const byKey = new Map<string, number>()
     for (const e of report?.open ?? []) {
@@ -711,9 +875,7 @@ export class Governor implements GovernorPort {
       }
       byKey.set(slot.key, slot.estimateUsd)
     }
-    let open = 0
-    for (const v of byKey.values()) open += v
-    return { closed, open }
+    return { closed, open: byKey }
   }
 
   /**
@@ -734,13 +896,16 @@ export class Governor implements GovernorPort {
 
   private refuse(refusal: GovernorRefusal, requestedUsd: number): ReserveResult {
     this.waiters.set(refusal.repository, { limit: refusal.limit, requestedUsd })
-    return { granted: [], refusal }
+    const names = this.namesFor([refusal.repository, refusal.heldFor, ...(refusal.unseeded ?? [])])
+    return { granted: [], refusal: names ? { ...refusal, names } : refusal }
   }
 
   /** Drop startup holds and offers whose time is up, and settlements out of the window. True when a slot came free. */
   private expire(): boolean {
     const now = this.now()
     for (const repo of this.repos.values()) this.pruneSettled(repo)
+    const since = now - this.spendWindowMs
+    if (this.retired.some((r) => r.atMs < since)) this.retired = this.retired.filter((r) => r.atMs >= since)
     let freed = false
     for (const [k, hold] of this.holds) {
       if (hold.expiresAt <= now) {

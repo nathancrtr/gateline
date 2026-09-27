@@ -1,6 +1,7 @@
 export * from './deps.ts'
 export * from './derive.ts'
 export * from './engine.ts'
+export * from './governor.ts'
 export * from './harvest.ts'
 export * from './manifest.ts'
 export * from './observe.ts'

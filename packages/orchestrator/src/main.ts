@@ -13,7 +13,7 @@ import { loadRegistry, type Registry } from './registry.ts'
 import type { Scheduler, SweepOutcome } from './schedule.ts'
 import { formatShadowStep, shadowReplay } from './shadow.ts'
 import { stagedShutdown } from './shutdown.ts'
-import { assembleOrchestrator, BOT_IDENTITY } from './start.ts'
+import { assembleOrchestrator, BOT_IDENTITY, defaultRepositoryId } from './start.ts'
 import { deriveAll } from './tick.ts'
 import { runLoop } from './triggers.ts'
 
@@ -59,6 +59,14 @@ program
     'most dispatches (run roles and scheduled sweeps) running at once in this process; 0 disables the cap (default 2, #227)',
     parseFloat,
   )
+  // MULTI-REPO.md §8.5 (#502): the one place an operator reading --help learns this.
+  .addHelpText(
+    'after',
+    '\nThis binary serves one repository, and its limits are held by a governor of its own that is not\n' +
+      'shared with `gateline up`. Do not run it beside `gateline up` on one machine: each process enforces\n' +
+      '--max-concurrent-dispatches and --spend-limit-usd separately, so together they can run twice the\n' +
+      'dispatches and spend twice the limit per window.',
+  )
 
 interface Opened {
   dir: string
@@ -92,7 +100,8 @@ async function open(): Promise<Opened> {
   const git = new Git(dir)
   return {
     dir,
-    source: new LocalGitSource('local', dir, { frameworkPrefix: gatelinePrefix }),
+    // Named by the repository's id, as the engine's own source is (#502).
+    source: new LocalGitSource(await defaultRepositoryId(dir), dir, { frameworkPrefix: gatelinePrefix }),
     registry: await loadRegistry(git, await git.defaultBranch(), gatelinePrefix),
     frameworkPrefix: gatelinePrefix,
   }

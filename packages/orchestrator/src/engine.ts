@@ -7,7 +7,7 @@
 // a bot identity, and — structurally — no code path that writes gates.*.
 import { hostname } from 'node:os'
 import { type Identity, ROLE_TIMEOUT_MS, type RunState, TERMINAL_PHASES } from '@gateline/core/record'
-import { ensureDraftPr, LocalGitSource, type RunRef, type WriteResult } from '@gateline/core/sources'
+import { ensureDraftPr, type Git, LocalGitSource, type RunRef, type WriteResult } from '@gateline/core/sources'
 import type { Document } from 'yaml'
 import { hasShell, loadRoleCapabilities } from './capabilities.ts'
 import { type Bookkeeping, DEFAULT_ESTIMATE_USD, type DerivedAction, type DispatchIntent, deriveAction } from './derive.ts'
@@ -117,12 +117,18 @@ export interface EngineConfig {
    */
   governor?: GovernorPort
   /**
-   * The repository's key with the governor: a plain string, the same one its
-   * scheduler uses. Defaults to `repoDir`. How a repository is named across
-   * interfaces is #494's to decide; the governor only needs the key to be
-   * stable for the life of the process.
+   * The repository's id (#494, #502): its key with the governor — the same
+   * one its scheduler uses — and the id of the engine's `LocalGitSource`, so
+   * the `RunRef.source` the engine reads carries the id the server gives the
+   * same repository. `assembleOrchestrator` always passes one. Absent (an
+   * engine built directly, as tests do), the governor key is `repoDir` and
+   * the source is named `orchestrator`, as before #502.
    */
   repository?: string
+  /** How the governor's refusal words name this repository (#502). Absent, they use `repository`. */
+  displayName?: string
+  /** Reads sweep markers; defaults to `readSweepMarkers` (#502 — injectable so its failure can be tested). */
+  sweepMarkerReader?: SweepMarkerReader
   /**
    * This repository's own spend ceiling per window, beneath the machine's
    * `spendLimitUsd` (MULTI-REPO.md §7.4). Registered with the governor at
@@ -180,8 +186,15 @@ const DEFAULT_STALE_MS = 5 * 60 * 1000
  * `state.yaml` and specific enough to probe. The blessed topology is one engine
  * per machine (TOPOLOGY.md §3.1), so in production this is exactly that pair;
  * the `#n` suffix exists only so a *second* engine constructed inside one
- * process — a test, a future in-process sibling — never inherits the first
- * one's entries and starts aging live jobs out from under it.
+ * process — a test, or a sibling engine for another repository (#502) — never
+ * inherits the first one's entries and starts aging live jobs out from under
+ * it.
+ *
+ * The counter is module-level on purpose, and is the one piece of mutable
+ * module state the engine keeps (#502): ids must be unique across every
+ * engine in the process, which a per-instance counter cannot promise. Every
+ * engine in the process shares the pid, so each probes as alive to the
+ * others, and after a restart all of them probe as gone.
  */
 let engineSeq = 0
 function defaultEngineId(): string {
@@ -215,37 +228,39 @@ function pidAlive(pid: number): boolean {
 }
 
 /**
- * Run branch tip at the last draft-PR ensure, per slug (ADR-5, R8).
- *
- * Keyed on the tip rather than the slug alone (#208), because the ensure has
- * two jobs now: open the PR when it is missing, and keep the generated
- * description current as artifacts land (#202). A slug-only memo served the
- * first and starved the second — a description was written once per process
- * and then frozen until restart.
- *
- * What this costs, stated plainly: the ensure runs for every derived action,
- * so a dispatching tick re-ensures once — its write always moves the branch —
- * against a dispatch already spending real money on a role. Resting ticks are
- * where the tip-keyed memo earns its place: a resting run's tip is static, so
- * the second tick onward is free, and the cost of covering them is one
- * `gh pr list` per run per moved tip, plus one per run on the first tick after
- * a restart. That is the price of #232 — a run's *last* state change is
- * usually the closing gate approval, which dispatches nothing, so a
- * dispatch-only ensure could never show a finished run as finished. Text that
- * would be identical still issues no `gh pr edit`, so a re-ensure is a read,
- * not churn on the PR timeline. The memo still collapses repeat executions
- * derived from one observed tip, such as a re-derive after a lost CAS.
+ * Is the process an engine id names gone from this machine (#349, #502)? True
+ * only for an id on this host whose pid no longer runs. An id with no name, on
+ * another host, or naming a live pid (any engine inside this very process
+ * among them, whatever its `#n`) is not known to be gone.
  */
-const ensuredDraftPrs = new Map<string, string>()
+export function engineGone(id: string | null): boolean {
+  if (id === null) return false
+  const named = parseEngineId(id)
+  return named !== null && named.host === hostname() && !pidAlive(named.pid)
+}
 
 /**
- * Runs whose leftover task branches have been reaped this process (#225).
- * Retention on a failed fold is what gives an escalated human a diff to
- * inspect, but a terminal run will dispatch nothing further, so the refs stop
- * being evidence and start being litter. Once per run per process is enough:
- * the reap is idempotent and a done run cannot sprout new task branches.
+ * Reads the sweep markers for the seed and the spend report — `readSweepMarkers`
+ * unless a test injects a reader that fails (#502), which is how the report's
+ * `sweepsRead: false` is tested without stubbing the git calls `listRuns` shares.
  */
-const reapedTaskBranches = new Set<string>()
+export type SweepMarkerReader = (git: Git, runsRoot: string, defaultRef: string, sinceMs: number) => Promise<SweepMarker[]>
+
+/**
+ * An engine's fault (#502): the last pass or job settlement that threw, and
+ * how many in a row have. Cleared by the next pass that completes. Written to
+ * the engine's health file as `failed` while it stands.
+ */
+export interface EngineFault {
+  /** ISO timestamp of the latest fault. */
+  at: string
+  /** Where it was caught: a tick, a dispatch's settlement, a sweep's settlement, or the startup seed. */
+  where: 'tick' | 'settlement' | 'sweep' | 'seed'
+  /** The error's message. */
+  reason: string
+  /** Faults since the last pass that completed, this one included. */
+  failures: number
+}
 
 /** Rules that hold a dispatch back without writing anything — see `Deferral`. */
 const DEFERRAL_RULES = new Set(['MC', 'HB', 'CH', 'RF'])
@@ -421,11 +436,50 @@ export class Engine {
    * rather than inventing a reason.
    */
   private readonly lastRefusal = new Map<string, string>()
+  /**
+   * Run branch tip at the last draft-PR ensure, per slug (ADR-5, R8).
+   *
+   * On the instance since #502: a module-level map keyed by slug was shared by
+   * every engine in the process, so two repositories with a run of the same
+   * name — whose tips can even be the same commit, in a copied repository —
+   * skipped each other's ensure.
+   *
+   * Keyed on the tip rather than the slug alone (#208), because the ensure has
+   * two jobs now: open the PR when it is missing, and keep the generated
+   * description current as artifacts land (#202). A slug-only memo served the
+   * first and starved the second — a description was written once per process
+   * and then frozen until restart.
+   *
+   * What this costs, stated plainly: the ensure runs for every derived action,
+   * so a dispatching tick re-ensures once — its write always moves the branch —
+   * against a dispatch already spending real money on a role. Resting ticks are
+   * where the tip-keyed memo earns its place: a resting run's tip is static, so
+   * the second tick onward is free, and the cost of covering them is one
+   * `gh pr list` per run per moved tip, plus one per run on the first tick after
+   * a restart. That is the price of #232 — a run's *last* state change is
+   * usually the closing gate approval, which dispatches nothing, so a
+   * dispatch-only ensure could never show a finished run as finished. Text that
+   * would be identical still issues no `gh pr edit`, so a re-ensure is a read,
+   * not churn on the PR timeline. The memo still collapses repeat executions
+   * derived from one observed tip, such as a re-derive after a lost CAS.
+   */
+  private readonly ensuredDraftPrs = new Map<string, string>()
+  /**
+   * Runs whose leftover task branches this engine has reaped (#225), on the
+   * instance since #502 for the same reason as `ensuredDraftPrs`.
+   * Retention on a failed fold is what gives an escalated human a diff to
+   * inspect, but a terminal run will dispatch nothing further, so the refs stop
+   * being evidence and start being litter. Once per run per engine is enough:
+   * the reap is idempotent and a done run cannot sprout new task branches.
+   */
+  private readonly reapedTaskBranches = new Set<string>()
+  /** The standing fault, if any (#502) — see `EngineFault`. */
+  private fault: EngineFault | null = null
 
   constructor(cfg: EngineConfig) {
     this.cfg = cfg
     this.engineId = cfg.engineId ?? defaultEngineId()
-    this.source = new LocalGitSource('orchestrator', cfg.repoDir, {
+    this.source = new LocalGitSource(cfg.repository ?? 'orchestrator', cfg.repoDir, {
       identity: cfg.identity,
       push: cfg.push,
       localOnly: cfg.localOnly,
@@ -451,7 +505,69 @@ export class Engine {
       )
       this.governor = new Governor({ ...limits, now: cfg.now, log: cfg.log })
     }
-    this.governor.register(this.repository, cfg.repositorySpendLimitUsd !== undefined ? { spendLimitUsd: cfg.repositorySpendLimitUsd } : {})
+    this.governor.register(this.repository, this.registration())
+  }
+
+  /** What this engine registers with the governor: its own ceiling and display name, when set. */
+  private registration(): { spendLimitUsd?: number | null; displayName?: string } {
+    return {
+      ...(this.cfg.repositorySpendLimitUsd !== undefined ? { spendLimitUsd: this.cfg.repositorySpendLimitUsd } : {}),
+      ...(this.cfg.displayName !== undefined ? { displayName: this.cfg.displayName } : {}),
+    }
+  }
+
+  /**
+   * Record a fault caught at a boundary (#502) — a tick that threw, a job
+   * whose settlement threw, a failed startup seed — and log it. The engine is
+   * then "failed" in its health file until a pass completes. It is not
+   * stopped: every trigger still reaches it, except that after repeated tick
+   * faults the run loop retries on the heartbeat only.
+   */
+  noteFault(where: EngineFault['where'], e: unknown, context?: string): EngineFault {
+    const reason = e instanceof Error ? e.message : String(e)
+    this.fault = { at: this.nowIso(), where, reason, failures: (this.fault?.failures ?? 0) + 1 }
+    const what = { tick: 'tick failed', settlement: 'a dispatch settlement failed', sweep: 'a sweep settlement failed', seed: 'governor seed failed' }[where]
+    const then = {
+      tick: '',
+      settlement: '; a ledger entry it could not close is aged by the stale sweep',
+      sweep: '',
+      seed: '; retried on the first tick',
+    }[where]
+    this.log(`${what}${context ? ` (${context})` : ''}: ${reason} — engine marked failed in its health file (${this.fault.failures} in a row)${then}`)
+    return this.fault
+  }
+
+  /** A pass completed: whatever failed before is behind it (#502). */
+  clearFault(): void {
+    if (this.fault) this.log(`recovered after ${this.fault.failures} fault(s) — engine no longer marked failed`)
+    this.fault = null
+  }
+
+  faultState(): EngineFault | null {
+    return this.fault
+  }
+
+  /**
+   * Additive fields for this engine's health file (#502), present only while
+   * they say something, so a healthy engine's file is unchanged: `failed`
+   * (the standing fault) and `unseeded` (the repositories the governor's seed
+   * gate is still waiting on).
+   */
+  healthFields(): { failed?: EngineFault; unseeded?: string[] } {
+    const unseeded = this.governor.unseeded()
+    return {
+      ...(this.fault ? { failed: { ...this.fault } } : {}),
+      ...(unseeded.length > 0 ? { unseeded } : {}),
+    }
+  }
+
+  /**
+   * Leave the governor (#502): for an engine that has stopped and drained. Its
+   * slots and its place in the seed gate and the round-robin are freed; its
+   * spend inside the window keeps counting (`Governor.unregister`).
+   */
+  unregister(): void {
+    this.governor.unregister(this.repository)
   }
 
   private nowIso(): string {
@@ -681,7 +797,14 @@ export class Engine {
   private seedPromise: Promise<void> | null = null
   seedGovernor(): Promise<void> {
     if (!this.seedPromise) {
-      this.seedPromise = this.readSeed().then((entries) => this.governor.seed(this.repository, entries))
+      // Register again in the same step as the seed (#502): an embedding that
+      // unregistered this repository after a failed startup seed — so it would
+      // not hold the others back — has it rejoin already seeded, and with its
+      // own ceiling, never as an unseeded repository that blocks them again.
+      this.seedPromise = this.readSeed().then((entries) => {
+        this.governor.register(this.repository, this.registration())
+        this.governor.seed(this.repository, entries)
+      })
       this.seedPromise.catch(() => {
         this.seedPromise = null
       })
@@ -704,6 +827,14 @@ export class Engine {
     const sweepTimeoutMs = this.cfg.sweepTimeoutMs ?? DEFAULT_SWEEP_TIMEOUT_MS
     for (const m of (await this.sweepMarkers(now - sweepTimeoutMs)) ?? []) {
       if (m.costUsd !== null) continue
+      // A sweep whose engine process is gone from this machine is not running
+      // (#502): its marker stays open, since nothing closes it, and the spend
+      // report keeps counting it at its estimate, but it holds no slot. The
+      // same pid check the ledger's stale sweep makes (`staleVerdict`).
+      if (engineGone(m.engine)) {
+        this.log(`sweep ${m.slug}: its engine ${m.engine} is gone from this machine — the open marker holds no slot`)
+        continue
+      }
       entries.push({ key: sweepKey(m.slug), at: m.at, estimateUsd: this.estimateFor(m.role), timeoutMs: sweepTimeoutMs, kind: 'sweep' })
     }
     return entries
@@ -723,7 +854,7 @@ export class Engine {
   private async sweepMarkers(sinceMs: number): Promise<SweepMarker[] | null> {
     try {
       const { runs } = await this.source.frameworkRoots()
-      return await readSweepMarkers(this.source.git, runs, (await this.hostTip()).ref, sinceMs)
+      return await (this.cfg.sweepMarkerReader ?? readSweepMarkers)(this.source.git, runs, (await this.hostTip()).ref, sinceMs)
     } catch (e) {
       this.log(`could not read sweep markers: ${(e as Error).message} — the governor keeps the sweep figures it had`)
       return null
@@ -778,7 +909,15 @@ export class Engine {
     const markers = await this.sweepMarkers(now - this.governor.spendWindowMs)
     if (markers === null) report.sweepsRead = false
     for (const m of markers ?? []) {
-      if (m.costUsd === null) report.open.push({ key: sweepKey(m.slug), at: m.at, estimateUsd: this.estimateFor(m.role), kind: 'sweep' })
+      if (m.costUsd === null)
+        report.open.push({
+          key: sweepKey(m.slug),
+          at: m.at,
+          estimateUsd: this.estimateFor(m.role),
+          kind: 'sweep',
+          // Its process is gone (#502): still counted, but its startup hold clears.
+          ...(engineGone(m.engine) ? { lost: true } : {}),
+        })
       else report.closed.push({ key: sweepKey(m.slug), at: m.at, costUsd: m.costUsd, kind: 'sweep' })
     }
     return report
@@ -1108,8 +1247,7 @@ export class Engine {
   private staleVerdict(engine: string | null): { prompt: boolean; why: string } {
     if (engine === null) return { prompt: true, why: 'entry names no engine, so this one claims it' }
     if (engine === this.engineId) return { prompt: true, why: `opened here (${engine}) with no live job — lost between commit and completion` }
-    const named = parseEngineId(engine)
-    if (named && named.host === hostname() && !pidAlive(named.pid)) return { prompt: true, why: `opened by ${engine}, whose process is gone from this machine` }
+    if (engineGone(engine)) return { prompt: true, why: `opened by ${engine}, whose process is gone from this machine` }
     return { prompt: false, why: `opened by ${engine}, which may still be running it` }
   }
 
@@ -1178,8 +1316,8 @@ export class Engine {
    * throw, and its result never touches the tick outcome.
    */
   private async ensurePr(ref: RunRef, tip: string): Promise<void> {
-    if (ensuredDraftPrs.get(ref.slug) === tip) return
-    ensuredDraftPrs.set(ref.slug, tip)
+    if (this.ensuredDraftPrs.get(ref.slug) === tip) return
+    this.ensuredDraftPrs.set(ref.slug, tip)
     const ensured = await ensureDraftPr(this.cfg.repoDir, ref.branch, ref.slug, { localOnly: this.cfg.localOnly })
     this.log(`${ref.slug}: draft PR ensure — ${ensured.status}: ${ensured.note}`)
   }
@@ -1200,8 +1338,8 @@ export class Engine {
     const cas = { expectedTip: tip }
     await this.ensurePr(ref, tip)
     // A finished run keeps no evidence it will never be asked for (#225).
-    if (obs.state?.phase === 'done' && !reapedTaskBranches.has(ref.slug)) {
-      reapedTaskBranches.add(ref.slug)
+    if (obs.state?.phase === 'done' && !this.reapedTaskBranches.has(ref.slug)) {
+      this.reapedTaskBranches.add(ref.slug)
       const reaped = await reapTaskBranches(this.cfg.repoDir, ref.branch).catch(() => [] as string[])
       if (reaped.length > 0) this.log(`${ref.slug}: reaped retained task branches — ${reaped.join(', ')}`)
     }
@@ -1456,28 +1594,48 @@ export class Engine {
       }
       metered = await this.closeDispatch(ref, intent, outcome, openedAt)
     })()
-    this.jobs.set(
-      key,
-      job.finally(async () => {
-        // Settlement gives the slot back first, before anything here can
-        // throw. The closing commit has landed (or given up), and the cost it
-        // metered goes with the release, so the governor counts this dispatch
-        // at what it really cost until the next report reads it back. If the
-        // close threw before metering, the governor falls back to the estimate.
-        reservation?.release(metered)
-        this.jobs.delete(key)
-        this.jobMeta.delete(key)
-        // Last job out releases any run checkout still standing — a crashed
-        // predecessor's, or one a sweep left — so state writes go through
-        // plumbing + CAS with nothing holding the branch. Dispatches no
-        // longer create one (#406). Nothing to release for a
-        // managesOwnWorkspace dispatcher either.
-        if (!managesOwnWorkspace && ![...this.jobs.keys()].some((k) => k.startsWith(`${ref.slug}|`))) {
-          await removeRunCheckout(this.cfg.repoDir, ref.branch)
+    const what = `${ref.slug}: ${intent.role}${intent.task ? `(${intent.task})` : ''}`
+    // The settlement's fault boundary (#502). The closing commit can throw — a
+    // git failure reading or writing the state — and before #502 that rejection
+    // was stored as `job.finally(...)` with nothing to catch it, so Node ended
+    // the process: with several engines in one process, one repository's git
+    // error would stop dispatch in all of them. So the rejection is caught
+    // here, logged with the repository, and marks this engine failed. The
+    // ledger entry it could not close stays open and is aged by the stale
+    // sweep like any lost dispatch. The stored promise never rejects.
+    const settled = job
+      .then(
+        () => undefined,
+        (e) => {
+          this.noteFault('settlement', e, what)
+        },
+      )
+      .then(async () => {
+        try {
+          // Settlement gives the slot back first, before anything here can
+          // throw. The closing commit has landed (or given up), and the cost it
+          // metered goes with the release, so the governor counts this dispatch
+          // at what it really cost until the next report reads it back. If the
+          // close threw before metering, the governor falls back to the estimate.
+          reservation?.release(metered)
+          this.jobs.delete(key)
+          this.jobMeta.delete(key)
+          // Last job out releases any run checkout still standing — a crashed
+          // predecessor's, or one a sweep left — so state writes go through
+          // plumbing + CAS with nothing holding the branch. Dispatches no
+          // longer create one (#406). Nothing to release for a
+          // managesOwnWorkspace dispatcher either.
+          if (!managesOwnWorkspace && ![...this.jobs.keys()].some((k) => k.startsWith(`${ref.slug}|`))) {
+            await removeRunCheckout(this.cfg.repoDir, ref.branch)
+          }
+        } catch (e) {
+          this.jobs.delete(key)
+          this.jobMeta.delete(key)
+          this.noteFault('settlement', e, what)
         }
         this.onSettled?.()
-      }),
-    )
+      })
+    this.jobs.set(key, settled)
     // The hand-over, in the same synchronous step as the job's registration:
     // from here the job's settlement owns the slot, and the tick's release of
     // whatever is left in `pending` no longer touches it. `openedAt` is the

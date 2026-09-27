@@ -26,6 +26,18 @@ budget:
           tokens_in: 6,
           tokens_out: 2079,
           cost_usd: 2.690741900000001
+        },
+      {
+          at: 2026-09-27T02:17:23.263Z,
+          role: architect,
+          task: null,
+          round: null,
+          adapter: claude-code,
+          model: claude-fable-5-1,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:26814,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:

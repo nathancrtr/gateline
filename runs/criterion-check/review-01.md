@@ -66,3 +66,69 @@ Both requirements were checked by reading the diff, running the tests, typecheck
 The diff stays inside the declared surface: the lexicon module, the new test file, and appended notes in the task's own file, which the implementer role permits. The existing lexicon test file is untouched.
 
 Housekeeping: I overwrote the lexicon module in place for each broken copy and wrote its original bytes back afterwards. The diff of `packages/` against the reviewed commit is empty, and `git status` shows only this report.
+
+# Round 2
+
+**Verdict:** escalate
+**Round:** 2 of 3
+**Diff reviewed:** commit 88e9206, against the round-1 commit f5b1122 for this task's three files
+**Summary:** The round-2 tests close every gap round 1 found in where a check starts, and the shipped behaviour is unchanged and correct. One finding remains that the implementer cannot fix, because it is a rule in the plan that contradicts two others. Approving the diff accepts the code as it stands; the plan's wording needs a human decision.
+
+## Escalation
+
+**Diff verdict:** approve
+**Traces to:** ADR-1, through the fourth of the Lexicon entry rules in the plan's Interface contracts, which conflicts with the third and sixth
+**Outside every remaining surface:** `runs/criterion-check/plan.md`, which no task's file list names and no implementer may edit
+
+The plan promises that a criterion's full text always equals its promise, one space, then its check. That promise is false for two unusual inputs, and no change inside this task can make it true. The plan also says the full text is computed exactly as today and that the promise is trimmed. Those two rules together produce the mismatch. The code follows them, which is the safer choice, because it keeps every existing view unchanged.
+
+Nothing downstream is harmed if the run proceeds. The four tasks that compare a quotation with the full text all collapse whitespace first, and no spec in the repository has either input. What stays wrong is the record: the plan states a rule the code does not keep.
+
+The two inputs, reproduced this round:
+
+- A first line ending in two spaces, then a check line. The full text has three spaces before the label.
+- An empty first line, then a check line. The promise is empty, so the rebuilt text starts with a space.
+
+The options as I see them:
+- Amend the plan's fourth rule to say the two texts are equal after whitespace is collapsed. This is what I would do. It matches the code and what the later tasks already test.
+- Accept the plan as written and record the mismatch as known. The run proceeds unchanged, and the rule stays false for those two inputs.
+- Change the code so the full text is rebuilt from the two parts. I would not. It breaks the plan's sixth rule and changes what existing views print for a first line with trailing spaces.
+
+## Verify round
+
+- **F1 — resolved** — A new test puts the label mid-line on a continuation line. I broke the lexicon to match a line that contains the label, and that test failed. It passed once restored.
+- **F2 — resolved** — A new test gives two labelled lines. With `findLastIndex` in place of `findIndex`, that test failed. A second broken copy, which ended the check at the last labelled line, failed the contract-example test.
+- **F3 — resolved** — A new test covers `Checks`, `Checking` and `Check:run`. It failed with the colon dropped from the label, and failed again with a space demanded after the colon. One narrower gap remains, recorded as the new finding F7.
+- **F4 — stands** — Nothing changed, and nothing in this task could. I reproduced both inputs and the rule fails for each. The implementer's rebuttal is correct: the defect is in the plan. It is the subject of the Escalation section above.
+- **F5 — resolved** — The space after the equals sign is back. It is the only change to the lexicon module this round.
+- **F6 — resolved** — The test now reads to the next criterion and requires two check lines. I shortened the contract's example check to one line, and the test failed on that requirement. I restored the contract afterwards.
+
+### F7 — minor — No test notices letters allowed between the label's word and its colon
+- **Where:** `packages/core/test/lexicon-check.test.ts:93-102`
+- **Failure scenario:** The code is correct today, but no test would notice a continuation line beginning `Checking:` taken as a check; a broken copy doing so passed all 47 lexicon tests.
+
+## Coverage
+
+The round-2 changes were checked by reading the diff, running the full test suite, typecheck and lint, and running the lexicon tests against eleven deliberately broken copies of the lexicon; ten failed a test and one passed.
+
+| Requirement | Where | Mechanism checked | Status |
+|-------------|-------|-------------------|--------|
+| R1 | `lexicon-check.test.ts:81-85` | label mid-line on a continuation line stays in the promise; contains-the-label break fails | ✓ F1 |
+| R1 | `lexicon-check.test.ts:87-91` | first of two labelled lines starts the check; last-labelled-line break fails | ✓ F2 |
+| R1 | `lexicon-check.test.ts:93-102` | label needs its colon and no space; both breaks fail | partial: F7 |
+| R1 | `lexicon-check.test.ts:61-79` | contract example read to the next criterion; one-line check in the contract fails the test | ✓ AC1.4, F6 |
+| R1 | `lexicon-check.test.ts:104-115` | first-line label and case-insensitive breaks still fail their round-1 tests | ✓ AC1.5, AC1.6 |
+| R1 | `lexicon-check.test.ts:36-38` | break that strips the label from the check fails six tests | ✓ AC1.2 |
+| R2 | `lexicon.ts:60` | only a restored space changed; the full-text expression is untouched | ✓ AC2.1 |
+| R2 | `lexicon.test.ts` | import guard test passes; the round-2 commit does not touch its file | ✓ AC2.4 |
+| fourth plan rule | `lexicon.ts:148-153` | full text against promise, space, check on two unusual inputs | ✗ F4 |
+| lexicon test files | `packages/core/test` | 47 of 47 tests pass in the two lexicon files | ✓ |
+| core test suite | `packages/core/test` | 41 files, 699 tests pass; no timeout this round | ✓ |
+| full test suite | `packages/` | 123 files pass and 2 skip; 1782 tests pass and 2 skip | ✓ |
+| typecheck and lint | `packages/` | both exit 0 | ✓ |
+
+## Boundary check
+
+The round-2 commit stays inside the declared surface: the lexicon module, the new test file, and appended notes in the task's own file.
+
+Housekeeping: I overwrote the lexicon module for each broken copy and edited the spec contract's example once, for F6. Both were restored from byte copies. `git diff` is empty and `git status` shows only this report.

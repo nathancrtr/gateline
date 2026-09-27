@@ -441,7 +441,7 @@ describe('decide card reference rows (#423)', () => {
     expect(kindOf(r.get('tasks/01-core.yaml')!)).toBe('Work item')
     expect(nameOf(r.get('tasks/01-core.yaml')!)).toBe('01-core')
     // The row is the link into the Record reader, as the chip was.
-    expect(markup.G1!).toMatch(/<a [^>]*data-ref-row="tasks\/01-core\.yaml"[^>]*href="\/runs\/local\/refs-run\?tab=record&amp;artifact=tasks%2F01-core\.yaml"/)
+    expect(markup.G1!).toMatch(/<a [^>]*data-ref-row="tasks\/01-core\.yaml"[^>]*href="\/repos\/local\/-\/runs\/refs-run\?tab=record&amp;artifact=tasks%2F01-core\.yaml"/)
   })
 
   it('G2: a review is named by the task it reviews and carries its verdict words, arc and all', () => {

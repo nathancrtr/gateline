@@ -7,6 +7,7 @@ import { api, formatAge, type NeedFact, type RunSummary } from '../api.ts'
 import { BudgetMeter, GateLedger, Imp, type ImpTone, KIND_GLYPH, kindTone, PhaseChip } from '../components/chips.tsx'
 import { UnreadableState } from '../components/unreadable-state.tsx'
 import { gateCardState } from '../gate-state.ts'
+import { runPath } from '../run-path.ts'
 import { EdgeFade, useScrollCue } from '../scroll-cue.tsx'
 import { PageStatus } from './inbox.tsx'
 
@@ -195,7 +196,7 @@ export function PortfolioPage() {
                   </td>
                   <td className={`${TD} min-w-[170px]`}>
                     <div className="min-w-0">
-                      <Link to={`/runs/${run.source}/${run.slug}`} className="font-mono text-[13.5px] font-semibold text-ink hover:underline">
+                      <Link to={runPath(run.source, run.slug)} className="font-mono text-[13.5px] font-semibold text-ink hover:underline">
                         {run.slug}
                       </Link>
                       <div className="mt-[2px] font-ui text-[11.5px] text-muted">

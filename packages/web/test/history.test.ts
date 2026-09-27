@@ -34,7 +34,7 @@ function render(node: ReactNode): string {
 }
 
 const history = (h: HistoryEntry[], opts: { items?: InboxItem[]; artifacts?: ArtifactRef[] } = {}) =>
-  render(createElement(HistoryTab, { history: h, src: 'fixture', slug: 'toy', ...opts }))
+  render(createElement(HistoryTab, { history: h, src: 'local/fixture', slug: 'toy', ...opts }))
 
 /** The page's visible words: tags and attributes stripped, entities decoded. */
 const text = (html: string) =>
@@ -144,7 +144,7 @@ describe('an escalation resolution is named, not numbered', () => {
 describe('an engine row links to the view that exists', () => {
   const review = artifactRef('review-02.md') as ArtifactRef
   const state = artifactRef('state.yaml') as ArtifactRef
-  const ctx = { src: 'fixture', slug: 'toy', items: [] as InboxItem[], artifacts: [review, state] }
+  const ctx = { src: 'local/fixture', slug: 'toy', items: [] as InboxItem[], artifacts: [review, state] }
   const bouncedSubject = 'state(toy): bounced review-02.md — re-dispatching reviewer (missing: Boundary check)'
   const escalatedSubject = 'state(toy): escalated (paused: escalation) — reviewer escalated task 02-errors — see review-02.md'
   const escalatedFacts: Partial<LedgerEntry> = { escalationIndex: 0, target: { decide: 'esc-0', artifact: review } }
@@ -154,20 +154,20 @@ describe('an engine row links to the view that exists', () => {
     expect(text(html)).toContain('bounced review-02.md — re-dispatching reviewer (missing: Boundary check)')
     const link = html.match(/<a [^>]*data-ledger-link[^>]*>([^<]*)<\/a>/)!
     expect(link[1]).toBe('open the review report')
-    expect(link[0]).toContain(`href="/runs/fixture/toy?tab=record&amp;artifact=review-02.md"`)
+    expect(link[0]).toContain(`href="/repos/local/fixture/-/runs/toy?tab=record&amp;artifact=review-02.md"`)
   })
 
   it('opens the card while the run still has the escalation, the report once it does not', () => {
-    expect(ledgerLink(escalatedFacts.target!, { ...ctx, items: [escalationItem(0)] })).toEqual({ label: 'open the card', to: '/runs/fixture/toy?decide=esc-0' })
-    expect(ledgerLink(escalatedFacts.target!, ctx)).toEqual({ label: 'open the review report', to: '/runs/fixture/toy?tab=record&artifact=review-02.md' })
+    expect(ledgerLink(escalatedFacts.target!, { ...ctx, items: [escalationItem(0)] })).toEqual({ label: 'open the card', to: '/repos/local/fixture/-/runs/toy?decide=esc-0' })
+    expect(ledgerLink(escalatedFacts.target!, ctx)).toEqual({ label: 'open the review report', to: '/repos/local/fixture/-/runs/toy?tab=record&artifact=review-02.md' })
     const live = history([row(escalatedSubject, escalatedFacts)], { items: [escalationItem(0)], artifacts: ctx.artifacts })
     const link = live.match(/<a [^>]*data-ledger-link[^>]*>([^<]*)<\/a>/)!
     expect(link[1]).toBe('open the card')
-    expect(link[0]).toContain('href="/runs/fixture/toy?decide=esc-0"')
+    expect(link[0]).toContain('href="/repos/local/fixture/-/runs/toy?decide=esc-0"')
   })
 
   it('falls back to the run state for an engine-originated escalation', () => {
-    expect(ledgerLink({ decide: 'esc-3', artifact: state }, ctx)).toEqual({ label: 'open the run state', to: '/runs/fixture/toy?tab=record&artifact=state.yaml' })
+    expect(ledgerLink({ decide: 'esc-3', artifact: state }, ctx)).toEqual({ label: 'open the run state', to: '/repos/local/fixture/-/runs/toy?tab=record&artifact=state.yaml' })
   })
 
   it('offers no link when neither the card nor the artifact exists — never a dead one', () => {

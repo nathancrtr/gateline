@@ -231,6 +231,6 @@ describe('local-only mode resolution', () => {
     const configPath = await writeConfig(`sources:\n  - name: inert-poller\n    path: ${fx.repo.dir}\n    local_only: true\n    fetch_interval: 30\n`)
 
     const { warnings } = await loadSources({ configPath })
-    expect(warnings).toContain('source inert-poller: fetch_interval ignored — local-only')
+    expect(warnings).toContain('source local/inert-poller: fetch_interval ignored — local-only')
   })
 })

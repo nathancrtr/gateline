@@ -283,6 +283,19 @@ export class Git {
     return head || 'HEAD'
   }
 
+  /**
+   * A remote's URL as git resolves it — `git remote get-url`, which applies
+   * the operator's `url.<base>.insteadOf` rewrites — or null when there is no
+   * such remote. What a repository's id is derived from (#494).
+   */
+  async remoteUrl(name: string): Promise<string | null> {
+    try {
+      return (await this.run(['remote', 'get-url', name])).trim() || null
+    } catch {
+      return null
+    }
+  }
+
   async configGet(key: string): Promise<string | null> {
     try {
       return (await this.run(['config', '--get', key])).trim() || null

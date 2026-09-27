@@ -10,8 +10,21 @@ import { parseRunState, type RunState, STAGED_REASON } from '../record/schema.ts
 import type { ContractTemplates } from '../record/validate.ts'
 import { type FrameworkRoots, memoizedFrameworkRoots } from './framework-roots.ts'
 import { type CommitInfo, Git } from './git.ts'
+import { lastIdSegment } from './repository-id.ts'
 import type { Identity, RunRef, RunSource, StageOutcome, StateCommit, StateDocMutation, WriteResult } from './source.ts'
 import { type ViewRefs, viewRefsOf } from './view-refs.ts'
+
+export interface LocalGitSourceOptions {
+  push?: boolean
+  localOnly?: boolean
+  identity?: Identity
+  fetchIntervalSeconds?: number
+  frameworkPrefix?: string
+  /** The name an interface shows; the id's last segment when absent (§6.2). */
+  displayName?: string
+  /** Names old links may carry for this repository (see `RunSource.formerIds`). */
+  formerIds?: readonly string[]
+}
 
 const RUN_BRANCH_PREFIX = 'run/'
 const ZERO_OID = '0'.repeat(40)
@@ -26,6 +39,8 @@ function deepFreeze<T>(value: T): T {
 
 export class LocalGitSource implements RunSource {
   readonly id: string
+  readonly displayName: string
+  readonly formerIds: readonly string[]
   readonly dir: string
   readonly git: Git
   readonly templates: ContractTemplates
@@ -38,13 +53,7 @@ export class LocalGitSource implements RunSource {
    * assigns cleanly onto a plain own data property.
    */
   readonly localOnly: boolean
-  private readonly options: {
-    push?: boolean
-    localOnly?: boolean
-    identity?: Identity
-    fetchIntervalSeconds?: number
-    frameworkPrefix?: string
-  }
+  private readonly options: LocalGitSourceOptions
   /**
    * Resolved core-layer roots, cached for the life of this source and
    * shared with any other consumer resolving paths against this same repo
@@ -68,19 +77,16 @@ export class LocalGitSource implements RunSource {
    * `syncFromRemote` reads to skip fetching origin entirely. Direct
    * construction without this option behaves exactly as before it existed:
    * no source-level auto-detect.
+   *
+   * `id` is taken as given (#494): `loadSources` derives it from the origin
+   * and checks it, and a direct constructor — the engine, a test — names its
+   * source as it likes. `options.displayName` defaults to the id's last
+   * segment; `options.formerIds` to none.
    */
-  constructor(
-    id: string,
-    dir: string,
-    options: {
-      push?: boolean
-      localOnly?: boolean
-      identity?: Identity
-      fetchIntervalSeconds?: number
-      frameworkPrefix?: string
-    } = {},
-  ) {
+  constructor(id: string, dir: string, options: LocalGitSourceOptions = {}) {
     this.id = id
+    this.displayName = options.displayName ?? lastIdSegment(id)
+    this.formerIds = Object.freeze([...(options.formerIds ?? [])])
     this.dir = dir
     this.localOnly = options.localOnly === true
     this.options = this.localOnly ? { ...options, push: false } : options
@@ -350,14 +356,16 @@ export class LocalGitSource implements RunSource {
   }
 
   /**
-   * `remote.origin.url` as configured, or null when there is nothing to link
-   * out to (#267). Local-only short-circuits before reading git config, the
-   * same way `syncFromRemote` short-circuits before fetching: a local-only
-   * source has no origin by designation, whatever a stale config line says.
+   * The origin URL as git resolves it (`git remote get-url origin`, so an
+   * `insteadOf` rewrite applies — the same string the id is derived from), or
+   * null when there is nothing to link out to (#267). Local-only
+   * short-circuits before asking git, the same way `syncFromRemote`
+   * short-circuits before fetching: a local-only source has no origin by
+   * designation, whatever a stale config line says.
    */
   async originUrl(): Promise<string | null> {
     if (this.localOnly) return null
-    return this.git.configGet('remote.origin.url')
+    return this.git.remoteUrl('origin')
   }
 
   async writeState(ref: RunRef, mutate: StateDocMutation, message: string, options: { expectedTip?: string } = {}): Promise<WriteResult> {

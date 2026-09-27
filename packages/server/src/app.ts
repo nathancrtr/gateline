@@ -60,6 +60,7 @@ import {
 import { type Context, Hono } from 'hono'
 import { ViewCache } from './cache.ts'
 import { API_VERSION, type EngineHealthResponse } from './contract.ts'
+import { chooserPage, runPagePath, sourcesFormerlyNamed, sourceWithId } from './old-links.ts'
 import { RefPrints } from './prints.ts'
 import { fail, respond } from './respond.ts'
 import type { DispatchOutcome, RunnerApi } from './runner-api.ts'
@@ -163,7 +164,30 @@ export function createApp(deps: AppDeps): Hono {
     })
   }
 
-  const sourceById = (id: string) => deps.sources.find((s) => s.id === id)
+  // Ids that differ only in case name one repository (MULTI-REPO.md §6.1).
+  const sourceById = (id: string) => sourceWithId(deps.sources, id)
+
+  // Old links (#494): a run page used to live at /runs/<source>/<slug>, the
+  // source being a config name or a basename. Sent on to the repository it
+  // meant when one matches; a page asks when several do; when none does, the
+  // request falls through to the SPA, which renders its not-found state as
+  // before. Temporary redirects (302), because what an old name means is the
+  // operator's config, which can change; a cached permanent redirect would
+  // outlive it.
+  const toRun = async (c: Context, next: () => Promise<void>, name: string, slug: string) => {
+    const matches = sourcesFormerlyNamed(deps.sources, name)
+    const search = new URL(c.req.url).search
+    if (matches.length === 1) return c.redirect(`${runPagePath(matches[0]!.id, slug)}${search}`, 302)
+    if (matches.length > 1) return c.html(chooserPage(name, slug, matches, search), 300)
+    await next()
+  }
+  app.get('/runs/:old/:slug', (c, next) => toRun(c, next, c.req.param('old'), c.req.param('slug')))
+  // The new shape under an id the repository no longer has (`former_ids:`,
+  // §6.3). A current id passes straight through to the SPA.
+  app.get('/repos/:id{.+}/-/runs/:slug', async (c, next) => {
+    if (sourceById(c.req.param('id'))) return next()
+    return toRun(c, next, c.req.param('id'), c.req.param('slug'))
+  })
 
   const findRun = async (src: string, slug: string): Promise<{ source: RunSource; ref: RunRef } | null> => {
     const source = sourceById(src)
@@ -370,8 +394,8 @@ export function createApp(deps: AppDeps): Hono {
       )
     })
 
-  app.get('/api/runs/:src/:slug', async (c) => {
-    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+  app.get('/api/repos/:id{.+}/-/runs/:slug', async (c) => {
+    const found = await findRun(c.req.param('id'), c.req.param('slug'))
     if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
     const key = `run:${ref.source}:${ref.slug}`
@@ -425,13 +449,13 @@ export function createApp(deps: AppDeps): Hono {
       }
     }
     const payload = await cache.get(key, await prints.run(ref), build, { expires: (v) => inFlight(v.summary.phase) })
-    return respond<'GET /api/runs/:src/:slug'>(c, { ...payload, now: Math.floor(Date.now() / 1000) })
+    return respond<'GET /api/repos/:id/-/runs/:slug'>(c, { ...payload, now: Math.floor(Date.now() / 1000) })
   })
 
-  app.get('/api/runs/:src/:slug/artifact', async (c) => {
+  app.get('/api/repos/:id{.+}/-/runs/:slug/artifact', async (c) => {
     const path = c.req.query('path')
     if (!path) return fail(c, 400, { error: 'path query parameter required' })
-    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+    const found = await findRun(c.req.param('id'), c.req.param('slug'))
     if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
     const content = await source.readArtifact(ref, path)
@@ -447,37 +471,37 @@ export function createApp(deps: AppDeps): Hono {
       const { state, error } = parseRunState(content)
       fields = state ? runStateView(state, content) : unreadableStateView(error ?? 'state.yaml could not be read')
     }
-    return respond<'GET /api/runs/:src/:slug/artifact'>(c, { path, content, validation, fields })
+    return respond<'GET /api/repos/:id/-/runs/:slug/artifact'>(c, { path, content, validation, fields })
   })
 
   // The run lexicon (#163): verbatim R/AC/ADR definitions from this run's
   // own spec.md + plan.md, plus the id grammar as a regex source — shipped
   // as data because the browser must not bundle the core runtime.
-  app.get('/api/runs/:src/:slug/lexicon', async (c) => {
-    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+  app.get('/api/repos/:id{.+}/-/runs/:slug/lexicon', async (c) => {
+    const found = await findRun(c.req.param('id'), c.req.param('slug'))
     if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
     const lexicon = await cache.get(`lexicon:${ref.source}:${ref.slug}`, await prints.run(ref), async () => {
       const [spec, plan] = await Promise.all([source.readArtifact(ref, 'spec.md'), source.readArtifact(ref, 'plan.md')])
       return buildLexicon({ spec, plan })
     })
-    return respond<'GET /api/runs/:src/:slug/lexicon'>(c, { entries: lexicon.entries, pattern: ID_PATTERN })
+    return respond<'GET /api/repos/:id/-/runs/:slug/lexicon'>(c, { entries: lexicon.entries, pattern: ID_PATTERN })
   })
 
-  app.get('/api/runs/:src/:slug/reviews', async (c) => {
-    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+  app.get('/api/repos/:id{.+}/-/runs/:slug/reviews', async (c) => {
+    const found = await findRun(c.req.param('id'), c.req.param('slug'))
     if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
     const reports = await reviewsFor(source, ref)
-    return respond<'GET /api/runs/:src/:slug/reviews'>(c, { reports })
+    return respond<'GET /api/repos/:id/-/runs/:slug/reviews'>(c, { reports })
   })
 
   // The escalation packet (#407): one `state.escalations[i]` entry joined
   // with the report its reason names. The record is read best-effort, as the
   // readiness item is (#49), so a malformed run's open escalation still gets
   // its packet; the reviews come from the same cache the reviews route fills.
-  app.get('/api/runs/:src/:slug/escalation/:index', async (c) => {
-    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+  app.get('/api/repos/:id{.+}/-/runs/:slug/escalation/:index', async (c) => {
+    const found = await findRun(c.req.param('id'), c.req.param('slug'))
     if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
     const index = Number(c.req.param('index'))
@@ -493,14 +517,14 @@ export function createApp(deps: AppDeps): Hono {
       ])
       return buildEscalationPacket({ index, escalation, artifacts, reviews, verification })
     })
-    return respond<'GET /api/runs/:src/:slug/escalation/:index'>(c, packet)
+    return respond<'GET /api/repos/:id/-/runs/:slug/escalation/:index'>(c, packet)
   })
 
   // Evidence-presence rollup (#165): which criteria the verification record
   // cites, computed from the artifacts. Presence, never verdicts — verdict
   // text in the payload is a verbatim quote from the report.
-  app.get('/api/runs/:src/:slug/evidence', async (c) => {
-    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+  app.get('/api/repos/:id{.+}/-/runs/:slug/evidence', async (c) => {
+    const found = await findRun(c.req.param('id'), c.req.param('slug'))
     if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
     const rollup = await cache.get(`evidence:${ref.source}:${ref.slug}`, await prints.run(ref), async () => {
@@ -516,15 +540,15 @@ export function createApp(deps: AppDeps): Hono {
       )
       return buildEvidenceRollup({ lexicon: buildLexicon({ spec }), verification, reviews })
     })
-    return respond<'GET /api/runs/:src/:slug/evidence'>(c, rollup)
+    return respond<'GET /api/repos/:id/-/runs/:slug/evidence'>(c, rollup)
   })
 
   // G0's packet (#440): the spec's Assumptions, its requirement roster and
   // its Out of scope, beside the brief's Problem and Constraints. Two
   // artifacts read side by side — presence only, nothing computed across
   // them. The staged card and the patch G1 card read the brief half of it.
-  app.get('/api/runs/:src/:slug/g0', async (c) => {
-    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+  app.get('/api/repos/:id{.+}/-/runs/:slug/g0', async (c) => {
+    const found = await findRun(c.req.param('id'), c.req.param('slug'))
     if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
     const packet = await cache.get(`g0:${ref.source}:${ref.slug}`, await prints.run(ref), async () => {
@@ -536,15 +560,15 @@ export function createApp(deps: AppDeps): Hono {
       const [specAudit, briefAudit] = await Promise.all([audit('spec.md', spec), audit('intent-brief.md', brief)])
       return buildG0Packet({ spec, brief, audit: { spec: specAudit, brief: briefAudit } })
     })
-    return respond<'GET /api/runs/:src/:slug/g0'>(c, packet)
+    return respond<'GET /api/repos/:id/-/runs/:slug/g0'>(c, packet)
   })
 
   // G1's packet (#255): requirement coverage against the plan's own mapping
   // table, and the surface overlaps between work items no dependency orders.
   // Presence, never verdicts — an uncovered requirement is a statement about
   // the record, not a computed failure, and no plan is scored.
-  app.get('/api/runs/:src/:slug/g1', async (c) => {
-    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+  app.get('/api/repos/:id{.+}/-/runs/:slug/g1', async (c) => {
+    const found = await findRun(c.req.param('id'), c.req.param('slug'))
     if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
     const packet = await cache.get(`g1:${ref.source}:${ref.slug}`, await prints.run(ref), async () => {
@@ -560,21 +584,21 @@ export function createApp(deps: AppDeps): Hono {
       )
       return buildG1Packet({ lexicon: buildLexicon({ spec }), plan, tasks })
     })
-    return respond<'GET /api/runs/:src/:slug/g1'>(c, packet)
+    return respond<'GET /api/repos/:id/-/runs/:slug/g1'>(c, packet)
   })
 
   // G3's packet (#403): the release plan read for what "Ship it?" asks —
   // the rollback facts, CI health, the ordered steps, the audit-time sections.
   // One artifact, one cache entry; the view composes it with the evidence
   // rollup it already has.
-  app.get('/api/runs/:src/:slug/g3', async (c) => {
-    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+  app.get('/api/repos/:id{.+}/-/runs/:slug/g3', async (c) => {
+    const found = await findRun(c.req.param('id'), c.req.param('slug'))
     if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
     const packet = await cache.get(`g3:${ref.source}:${ref.slug}`, await prints.run(ref), async () =>
       buildReleasePacket({ plan: await source.readArtifact(ref, 'release-plan.md') }),
     )
-    return respond<'GET /api/runs/:src/:slug/g3'>(c, packet)
+    return respond<'GET /api/repos/:id/-/runs/:slug/g3'>(c, packet)
   })
 
   // The diff, labelled with the contact surface each work item declared (#270).
@@ -582,8 +606,8 @@ export function createApp(deps: AppDeps): Hono {
   // and `surface` is positional against that list. A run with no readable task
   // set still gets its diff, with `surface.withheld` naming why it carries no
   // labels (FRONTEND.md §4.1).
-  app.get('/api/runs/:src/:slug/diff', async (c) => {
-    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+  app.get('/api/repos/:id{.+}/-/runs/:slug/diff', async (c) => {
+    const found = await findRun(c.req.param('id'), c.req.param('slug'))
     if (!found) return fail(c, 404, { error: 'run not found' })
     const { source, ref } = found
     const { text, tasks } = await cache.get(`diff:${ref.source}:${ref.slug}`, await prints.run(ref), async () => {
@@ -596,7 +620,7 @@ export function createApp(deps: AppDeps): Hono {
       return { text, tasks }
     })
     const files = parseUnifiedDiff(text)
-    return respond<'GET /api/runs/:src/:slug/diff'>(c, {
+    return respond<'GET /api/repos/:id/-/runs/:slug/diff'>(c, {
       files,
       merged: ref.kind === 'default',
       surface: scopeDiff(files, buildTaskSet(tasks)),
@@ -690,13 +714,13 @@ export function createApp(deps: AppDeps): Hono {
     }
   })
 
-  app.get('/api/runs/:src/:slug/decisions', async (c) => {
-    const found = await findRun(c.req.param('src'), c.req.param('slug'))
+  app.get('/api/repos/:id{.+}/-/runs/:slug/decisions', async (c) => {
+    const found = await findRun(c.req.param('id'), c.req.param('slug'))
     if (!found) return fail(c, 404, { error: 'run not found' })
     const records = await cache.get(`decisions:${found.ref.source}:${found.ref.slug}`, await prints.run(found.ref), () =>
       collectRunDecisions(found.source, found.ref),
     )
-    return respond<'GET /api/runs/:src/:slug/decisions'>(c, { decisions: records })
+    return respond<'GET /api/repos/:id/-/runs/:slug/decisions'>(c, { decisions: records })
   })
 
   // SSE: ref movement → one "change" event; clients revalidate their queries.

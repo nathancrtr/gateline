@@ -18,20 +18,19 @@ import { expect, type Page, test } from '@playwright/test'
 import { spawnDemoServer } from './demo-server.ts'
 
 const REMOTE = 'git@github.com:acme/gateline-demo.git'
+/** The repository id that origin gives (#494): with an origin, the id is derived from it. */
+const ID = 'github.com/acme/gateline-demo'
 
 let fixtureDir: string
+let fixtureRoot: string
 let server: ChildProcess
 let ORIGIN: string
-
-function sourceId(): string {
-  return fixtureDir.replace(/\/+$/, '').split('/').pop()!
-}
 
 /** Navigates against this file's own server — never one another suite started. */
 const goto = (page: Page, path: string) => page.goto(ORIGIN + path)
 
 test.beforeAll(async () => {
-  fixtureDir = generateFixtureRepo().dir
+  ;({ dir: fixtureDir, root: fixtureRoot } = generateFixtureRepo())
   // A remote that exists only in config: nothing here pushes or fetches, and
   // the link is derived from the URL string, never from reaching the host.
   execFileSync('git', ['-C', fixtureDir, 'remote', 'add', 'origin', REMOTE])
@@ -40,11 +39,11 @@ test.beforeAll(async () => {
 
 test.afterAll(() => {
   server?.kill()
-  if (fixtureDir) rmSync(fixtureDir, { recursive: true, force: true })
+  if (fixtureRoot) rmSync(fixtureRoot, { recursive: true, force: true })
 })
 
 test('the run header links the branch to its page on the host (AC2)', async ({ page }) => {
-  await goto(page, `/runs/${sourceId()}/g2-pending`)
+  await goto(page, `/repos/${ID}/-/runs/g2-pending`)
   const link = page.locator('[data-branch-link]')
   await expect(link).toHaveAttribute('href', 'https://github.com/acme/gateline-demo/tree/run/g2-pending')
   await expect(link).toHaveAttribute('target', '_blank')
@@ -55,7 +54,7 @@ test('a merged run names the ref it is read at, and links nothing — no dead en
   // done-merged has no run branch left, so the ref shown is the default branch
   // the record is read *at* — never called "branch main", which would name a
   // branch that is not this run's.
-  await goto(page, `/runs/${sourceId()}/done-merged`)
+  await goto(page, `/repos/${ID}/-/runs/done-merged`)
   await expect(page.locator('header')).toContainText('read at main')
   await expect(page.locator('header')).not.toContainText('branch main')
   await expect(page.locator('[data-branch-link]')).toHaveCount(0)

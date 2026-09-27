@@ -57,9 +57,11 @@ export async function resolveFrameworkRoots(git: Git, rev: string, prefixHint?: 
 }
 
 /**
- * Same resolution, but from a live checkout on disk — for the orchestrator's
- * adapter manifests, which it shells out to as installed files rather than
- * reading through git history.
+ * Same resolution, but from a live checkout on disk. The engine does not use
+ * it: since #500 it reads adapter manifests through git at the default-branch
+ * tip. What remains is the runner agent, which reads the manifest from the
+ * clone it makes for one dispatch, and tests that borrow a repository's own
+ * adapters from disk.
  */
 export async function resolveFrameworkRootsFromDisk(repoDir: string, prefixHint?: string): Promise<FrameworkRoots> {
   const prefix = prefixHint ?? DEFAULT_FRAMEWORK_PREFIX

@@ -30,11 +30,16 @@ if (!sourceId) {
   sourceId = health.sources[0]
 }
 
+// A run page is /repos/<repository id>/-/runs/<slug> (#494); the id spans
+// segments (github.com/acme/billing), each encoded on its own.
+const runPage = (id, slug, query = '') =>
+  `/repos/${id.split('/').map(encodeURIComponent).join('/')}/-/runs/${encodeURIComponent(slug)}${query ? `?${query}` : ''}`
+
 const FRAMES = [
   { name: 'inbox', path: '/', ready: '[data-inbox-row]' },
   { name: 'portfolio', path: '/portfolio', ready: 'tbody tr' },
-  { name: 'run-escalation', path: `/runs/${sourceId}/csvpeek`, ready: '[data-needs-card]' },
-  { name: 'run-record', path: `/runs/${sourceId}/fleetview-design?tab=record`, ready: '.prose-artifact' },
+  { name: 'run-escalation', path: runPage(sourceId, 'csvpeek'), ready: '[data-needs-card]' },
+  { name: 'run-record', path: runPage(sourceId, 'fleetview-design', 'tab=record'), ready: '.prose-artifact' },
   { name: 'metrics', path: '/metrics', ready: 'tbody tr', timeout: 120_000 },
 ]
 

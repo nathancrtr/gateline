@@ -12,7 +12,7 @@ import { type ChildProcess, execFileSync } from 'node:child_process'
 import { rmSync } from 'node:fs'
 import { generateFixtureRepo } from '@gateline/fixtures'
 import { expect, type Page, test } from '@playwright/test'
-import { spawnDemoServer } from './demo-server.ts'
+import { DEMO_ID, spawnDemoServer } from './demo-server.ts'
 
 // The fixture's built-in intent-brief.md template (packages/fixtures/src/index.ts's
 // CONTRACTS['intent-brief.md']) — the same order GET /api/staging serves.
@@ -22,29 +22,23 @@ const STAGE_TITLE = 'E2E Staging Flow'
 const STAGE_SLUG = 'e2e-staging-flow'
 
 let fixtureDir: string
+let fixtureRoot: string
 let server: ChildProcess
 let ORIGIN: string
 
 const git = (args: string[]) => execFileSync('git', ['-C', fixtureDir, ...args], { encoding: 'utf8' })
 
-// The server derives a zero-config source's id from its repo path's last
-// segment (loadSources' slugForPath) — not a fixed literal (smoke.spec.ts's
-// own sourceId() idiom).
-function sourceId(): string {
-  return fixtureDir.replace(/\/+$/, '').split('/').pop()!
-}
-
 /** Navigates against this file's own server — never one another suite started. */
 const goto = (page: Page, path: string) => page.goto(ORIGIN + path)
 
 test.beforeAll(async () => {
-  fixtureDir = generateFixtureRepo().dir
+  ;({ dir: fixtureDir, root: fixtureRoot } = generateFixtureRepo())
   ;({ server, origin: ORIGIN } = await spawnDemoServer(fixtureDir))
 })
 
 test.afterAll(() => {
   server?.kill()
-  if (fixtureDir) rmSync(fixtureDir, { recursive: true, force: true })
+  if (fixtureRoot) rmSync(fixtureRoot, { recursive: true, force: true })
 })
 
 /** Mirrors new-run.tsx's own slugify — used only to compute the slug an
@@ -93,7 +87,7 @@ test('entry + stage: Portfolio → New run → fill the brief → land on the ru
   await fillBrief(page)
 
   await page.getByRole('button', { name: 'Stage run' }).click()
-  await expect(page).toHaveURL(new RegExp(`/runs/${sourceId()}/${STAGE_SLUG}$`))
+  await expect(page).toHaveURL(new RegExp(`/repos/${DEMO_ID}/-/runs/${STAGE_SLUG}$`))
 
   // Assert via git (ADR-8's own idiom): branch, author, subject, state.
   const subject = git(['log', '-1', '--format=%s', `run/${STAGE_SLUG}`]).trim()
@@ -124,7 +118,7 @@ test('a staged run renders distinctly and offers only Arm, never Resume (AC6.1/A
   await expect(row).toContainText('staged')
   await expect(row).not.toContainText('paused')
 
-  await goto(page, `/runs/${sourceId()}/${STAGE_SLUG}`)
+  await goto(page, `/repos/${DEMO_ID}/-/runs/${STAGE_SLUG}`)
   // The PhaseChip itself (its data hook) — not the header at large, which
   // also carries the genesis-preview candidate's permanent "staged by
   // <name>" provenance line regardless of current phase.
@@ -141,7 +135,7 @@ test('a staged run renders distinctly and offers only Arm, never Resume (AC6.1/A
 })
 
 test('arm commits "armed by" and clears the staged treatment (AC5.1)', async ({ page }) => {
-  await goto(page, `/runs/${sourceId()}/${STAGE_SLUG}`)
+  await goto(page, `/repos/${DEMO_ID}/-/runs/${STAGE_SLUG}`)
   const card = page.locator('[data-needs-card]').first()
   await card.locator('[data-decide="arm"]').click()
   await card.locator('[data-decide="arm-confirm"]').click()

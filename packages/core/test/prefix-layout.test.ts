@@ -20,8 +20,8 @@ const prefixedSource = (): LocalGitSource => {
 }
 
 afterAll(async () => {
-  await rm(rootRepo.dir, { recursive: true, force: true })
-  await rm(prefixedRepo.dir, { recursive: true, force: true })
+  await rm(rootRepo.root, { recursive: true, force: true })
+  await rm(prefixedRepo.root, { recursive: true, force: true })
 })
 
 describe('prefixed integration layout', () => {

@@ -83,15 +83,23 @@ PR-review sync, headless engine operation:
 
 ```yaml
 sources:
-  - name: sandbox
-    path: ~/repos/gateline
-  - name: product
-    path: ~/repos/product-app
+  - name: sandbox       # a display name; with no origin it also names the id, local/sandbox
+    path: ~/repos/gateline-sandbox
+  - path: ~/repos/billing           # id from its origin: github.com/acme/billing
     push: true          # push run branches after each decision commit
     fetch_interval: 60  # seconds between `git fetch`es of origin; unset = never poll
+    former_ids: [github.com/acme/billing-service]  # links under an old id keep redirecting
 ```
 
 No config file → the current repository, zero setup.
+
+Each repository has an id (docs/MULTI-REPO.md §6). With an origin, it is
+`<host>/<owner>/<name>`, derived from `git remote get-url origin`; without
+one, it is `local/<name>`, the name being the entry's `name` or else the
+directory's basename. A run's page is `/repos/<id>/-/runs/<slug>`. An entry
+may state `id:` outright where the origin would give the wrong one, such as
+an ssh host alias. Two entries with one id, or with one display name, are a
+startup error. Links in the old `/runs/<name>/<slug>` shape redirect.
 
 ## Keyboard model
 

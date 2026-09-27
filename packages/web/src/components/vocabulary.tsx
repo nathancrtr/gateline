@@ -26,6 +26,7 @@ import type { MouseEventHandler, ReactNode } from 'react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import type { WithheldReason } from '../api.ts'
+import { runPath } from '../run-path.ts'
 import { CitedText } from './lexicon.tsx'
 
 /** `data-*` hooks pass through untouched: tests and e2e find surfaces by them. */
@@ -60,7 +61,7 @@ function invariant(ok: boolean, message: string): void {
  * own copy of this template; they now share it.
  */
 export const artifactHref = (src: string, slug: string, path: string, anchor?: string) =>
-  `/runs/${src}/${slug}?tab=record&artifact=${encodeURIComponent(path)}${anchor ? `&anchor=${anchor}` : ''}`
+  runPath(src, slug, `tab=record&artifact=${encodeURIComponent(path)}${anchor ? `&anchor=${anchor}` : ''}`)
 
 // ---------------------------------------------------------------------------
 // Address — the machine's voice (SEAM.md §4 Address, §5 row 1).

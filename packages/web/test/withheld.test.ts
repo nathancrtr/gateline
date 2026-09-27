@@ -25,7 +25,7 @@ import { G1Packet } from '../src/components/g1.tsx'
 import { G3Packet } from '../src/components/g3.tsx'
 import { RoundCapPanel } from '../src/components/rounds.tsx'
 
-const SRC = 'fixture'
+const SRC = 'local/demo'
 
 let fixture: FixtureRepo
 let app: ReturnType<typeof createApp>
@@ -56,7 +56,7 @@ const withheldIn = (html: string) => [...html.matchAll(/<p [^>]*data-withheld-vi
 
 /** Every packet surface a run can show, over the run's own payloads. */
 async function render(slug: string): Promise<Record<string, string[]>> {
-  const base = `/api/runs/${SRC}/${slug}`
+  const base = `/api/repos/${SRC}/-/runs/${slug}`
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Number.POSITIVE_INFINITY } } })
   const detail = await get<RunDetailResponse>(base)
   const diff = await get<DiffResponse>(`${base}/diff`)
@@ -101,7 +101,7 @@ beforeAll(async () => {
   for (const run of fixture.runs) notices.set(run.slug, await render(run.slug))
   if (process.env.WITHHELD_DEBUG) console.log(JSON.stringify(Object.fromEntries(notices), null, 2))
 }, 120_000)
-afterAll(() => rm(fixture.dir, { recursive: true, force: true }))
+afterAll(() => rm(fixture.root, { recursive: true, force: true }))
 
 describe('withheld views over the demo fixtures (#424)', () => {
   it('a forked contract: the work item, the criterion view, the reader’s citations and the diff grouping each name their grammar', () => {

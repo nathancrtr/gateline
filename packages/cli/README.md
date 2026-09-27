@@ -42,7 +42,10 @@ gateline up [--spend-limit-usd N]        web app + the v1 orchestrator over one 
 ```
 
 Global: `--repo <path>` (repeatable) overrides source discovery;
-`--source <id>` disambiguates a slug that exists in more than one source.
+`--source <id>` disambiguates a slug that exists in more than one source. It
+takes the repository's full id (`github.com/acme/billing`, `local/sandbox`) or
+its display name (`billing`), which is also what `status` and `inbox` print
+before each slug.
 
 ## Common workflows
 

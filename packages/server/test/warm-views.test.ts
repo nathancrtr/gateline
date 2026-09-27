@@ -67,7 +67,7 @@ let b: string
 
 beforeEach(async () => {
   fixture = generateFixtureRepo()
-  source = new LocalGitSource('fixture', fixture.dir)
+  source = new LocalGitSource('local/demo', fixture.dir)
   prints = new RefPrints([source])
   app = createApp({ sources: [source], prints })
   readState = vi.spyOn(source, 'readState')
@@ -75,15 +75,15 @@ beforeEach(async () => {
   expect(branches.length).toBeGreaterThanOrEqual(2)
   ;[a, b] = branches as [string, string]
   runs = (await load('/api/runs')).runs.map((r) => r.slug).sort()
-  await load(`/api/runs/fixture/${a}`)
-  await load(`/api/runs/fixture/${b}`)
+  await load(`/api/repos/local/demo/-/runs/${a}`)
+  await load(`/api/repos/local/demo/-/runs/${b}`)
   await prints.changed()
   derived()
 })
 
 afterEach(async () => {
   rmSync(`${fixture.dir}-wt`, { recursive: true, force: true })
-  await rm(fixture.dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
+  await rm(fixture.root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
 })
 
 describe('what counts as a change', () => {
@@ -93,7 +93,7 @@ describe('what counts as a change', () => {
     git(['add', 'README.md'])
     expect(await prints.changed()).toBe(false)
     await load('/api/runs')
-    await load(`/api/runs/fixture/${a}`)
+    await load(`/api/repos/local/demo/-/runs/${a}`)
     expect(derived()).toEqual([])
   })
 
@@ -101,7 +101,7 @@ describe('what counts as a change', () => {
     commitOn('web/unrelated', 'notes.md', 'unrelated work\n', true)
     expect(await prints.changed()).toBe(false)
     await load('/api/runs')
-    await load(`/api/runs/fixture/${a}`)
+    await load(`/api/repos/local/demo/-/runs/${a}`)
     expect(derived()).toEqual([])
   })
 
@@ -128,10 +128,10 @@ describe('what a change costs', () => {
     expect(portfolio.runs.map((r) => r.slug).sort()).toEqual(runs)
     expect(derived()).toEqual([a])
 
-    await load(`/api/runs/fixture/${b}`)
+    await load(`/api/repos/local/demo/-/runs/${b}`)
     expect(derived()).toEqual([])
 
-    const detail = await load(`/api/runs/fixture/${a}`)
+    const detail = await load(`/api/repos/local/demo/-/runs/${a}`)
     expect(detail.artifacts).toContain('note.md')
   })
 
@@ -149,13 +149,13 @@ describe('what a change costs', () => {
     const finished = runs.filter((slug) => ['done', 'closed'].includes(phases.get(slug) ?? ''))
     expect(finished.length).toBeGreaterThan(0)
     expect(finished.length).toBeLessThan(runs.length)
-    for (const slug of runs) await load(`/api/runs/fixture/${slug}`)
+    for (const slug of runs) await load(`/api/repos/local/demo/-/runs/${slug}`)
     derived()
 
     vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 31_000 })
     try {
       await load('/api/runs')
-      for (const slug of runs) await load(`/api/runs/fixture/${slug}`)
+      for (const slug of runs) await load(`/api/repos/local/demo/-/runs/${slug}`)
     } finally {
       vi.useRealTimers()
     }
@@ -169,10 +169,10 @@ describe('what a change costs', () => {
     const res = await app.request('/api/decisions', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ source: 'fixture', slug: item.slug, action: 'approve', gate: item.gate, burden: 'confirmation' }),
+      body: JSON.stringify({ source: 'local/demo', slug: item.slug, action: 'approve', gate: item.gate, burden: 'confirmation' }),
     })
     expect(res.status).toBe(200)
-    const after = await load(`/api/runs/fixture/${item.slug}`)
+    const after = await load(`/api/repos/local/demo/-/runs/${item.slug}`)
     expect(after.state.gates[item.gate]?.approved).toBe(true)
     const stillWaiting = (await load('/api/inbox')).items.filter(
       (i) => i.kind === 'gate' && i.slug === item.slug && i.gate === item.gate,

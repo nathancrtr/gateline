@@ -91,6 +91,12 @@ const EXCEPTIONS: Exception[] = [
     reason:
       "KindLabel's dev-time invariant: it throws when a caption *is* a filename. A guard against printing a path, not a classifier of one — it decides nothing about what an artifact is.",
   },
+  {
+    file: 'run-path.ts',
+    text: "segments[dash + 1] !== 'runs'",
+    reason:
+      "A segment of Gatehouse's own URL shape, `/repos/<id>/-/runs/<slug>` (#494). It decides which page a URL names, and nothing about what an artifact in the record is.",
+  },
 ]
 
 interface Finding {

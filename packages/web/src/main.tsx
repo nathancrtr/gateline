@@ -23,6 +23,11 @@ const router = createBrowserRouter([
       { path: 'portfolio', element: <PortfolioPage /> },
       { path: 'portfolio/new', element: <NewRunPage /> },
       { path: 'metrics', element: <MetricsPage /> },
+      // /repos/<repository id>/-/runs/<slug> (#494). The id spans segments, so
+      // the route is a splat and RunPage parses the pathname itself.
+      { path: 'repos/*', element: <RunPage /> },
+      // The pre-#494 shape. The server redirects an old link it can match;
+      // one it cannot falls through to here and shows "run not found".
       { path: 'runs/:src/:slug', element: <RunPage /> },
     ],
   },

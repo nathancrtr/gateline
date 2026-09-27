@@ -2,13 +2,16 @@
 // converge with no duplicate) and per-task worktree isolation for parallel
 // implementers (the wordfreq retro fix), including the fold-conflict → plan
 // defect escalation.
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { hostname } from 'node:os'
+import { execFileSync } from 'node:child_process'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { hostname, tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { LocalGitSource } from '@gateline/core'
 import { describe, expect, it } from 'vitest'
 import { Engine } from '../src/engine.ts'
+import { Governor, type GovernorPort } from '../src/governor.ts'
 import { parseLedger } from '../src/observe.ts'
+import { ensureDispatchCheckout, heldCheckout, type TaskCheckout } from '../src/workspace.ts'
 import {
   agentCommit,
   deadEngineId,
@@ -176,15 +179,90 @@ describe('the stale sweep reads who opened the entry (#349)', () => {
   })
 })
 
+/** What an implementer's worktree was cut from, read inside the dispatch before the agent writes (#547). */
+interface TaskCut {
+  task: string
+  /** The commit the worktree was cut from: its HEAD before the agent commits. */
+  base: string
+  /** The intent commit that dispatched this task: the newest one in the worktree's history naming it. */
+  intent: string | null
+  /** Sibling tasks whose agent commit is already in the worktree's history — folded before it was cut. */
+  folded: string[]
+}
+
+const readGit = (cwd: string, args: string[]): string => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8' }).trim()
+const short = (sha: string | null): string => (sha === null ? 'none' : sha.slice(0, 7))
+
+function cutOf(cwd: string, task: string, tasks: string[]): TaskCut {
+  const base = readGit(cwd, ['rev-parse', 'HEAD'])
+  const history = readGit(cwd, ['log', '--format=%H %s', 'HEAD']).split('\n')
+  const intent = history.find((l) => l.includes(' dispatched ') && l.includes(`implementer(${task} r`))?.split(' ')[0] ?? null
+  const folded = tasks.filter((t) => t !== task && history.some((l) => l.endsWith(` toy: task ${t} r1`)))
+  return { task, base, intent, folded }
+}
+
+/** The run branch from the first implementer intent on, oldest first: the dispatch and fold order. */
+function foldOrder(dir: string, tasks: string[]): string[] {
+  const history = readGit(dir, ['log', '--reverse', '--format=%h %s', 'run/toy']).split('\n')
+  const from = history.findIndex((l) => l.includes(' dispatched ') && tasks.some((t) => l.includes(`implementer(${t} r`)))
+  return from < 0 ? ['(no implementer was dispatched)'] : history.slice(from).map((l) => `run/toy: ${l}`)
+}
+
+/**
+ * Land a commit on run/toy behind the engine's back, synchronously, with
+ * plumbing only (no checkout of the run branch, which would change how the
+ * engine writes state). It stands for a sibling job's fold landing.
+ */
+function landBehind(dir: string, path: string, message: string): string {
+  const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null', GIT_INDEX_FILE: join(dir, '.git', 'land-behind.index') }
+  const run = (args: string[], input?: string) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', env, input }).trim()
+  const tip = run(['rev-parse', 'refs/heads/run/toy'])
+  run(['read-tree', tip])
+  const blob = run(['hash-object', '-w', '--stdin'], `# ${message}\n`)
+  run(['update-index', '--add', '--cacheinfo', `100644,${blob},${path}`])
+  const tree = run(['write-tree'])
+  const commit = run(['-c', 'user.name=toy-sibling', '-c', 'user.email=sibling@example.test', 'commit-tree', tree, '-p', tip, '-m', message])
+  run(['update-ref', 'refs/heads/run/toy', commit, tip])
+  return commit
+}
+
+/**
+ * A governor that moves the run branch at the moment the engine hands a
+ * matching grant over to its launched job — after the intent commit, and
+ * before that job's `git worktree add` can have run, since the hand-over is
+ * synchronous and the job has at most started its first git command.
+ * That is exactly the window in which a sibling job's fold can land (#547),
+ * made deterministic.
+ */
+function movingGovernor(matches: (key: string) => boolean, move: () => void): GovernorPort {
+  const governor = new Governor({ maxConcurrentDispatches: 2 })
+  const reserve = governor.reserve.bind(governor)
+  governor.reserve = (request) => {
+    const result = reserve(request)
+    for (const slot of result.granted) {
+      if (!matches(slot.key)) continue
+      const commit = slot.commit.bind(slot)
+      slot.commit = (ledgerAt) => {
+        commit(ledgerAt)
+        move()
+      }
+    }
+    return result
+  }
+  return governor
+}
+
 describe('per-task worktree isolation (M4, wordfreq retro fix)', () => {
   /**
    * `leaveUncommitted` plays #184's implementer: it writes its surface file
    * and never commits it, so only the fold's harvest can save the work from
    * the task worktree's teardown.
    */
-  function repoThroughG1(surfaces: Record<string, string>, leaveUncommitted = false) {
+  function repoThroughG1(surfaces: Record<string, string>, leaveUncommitted = false, governor?: (dir: string) => GovernorPort) {
     const { dir, clock } = makeToyRepo()
     const observed: Record<string, boolean> = {}
+    const cuts: Record<string, TaskCut> = {}
+    const timeline: string[] = []
     const dispatcher = new FakeDispatcher((req) => {
       switch (req.role) {
         case 'analyst':
@@ -199,6 +277,15 @@ describe('per-task worktree isolation (M4, wordfreq retro fix)', () => {
         case 'implementer': {
           const task = Object.keys(surfaces).find((t) => req.body.includes(t))!
           const surface = surfaces[task]!
+          // What this worktree was cut from, recorded before the agent writes
+          // anything: the commit, the intent commit that dispatched this task,
+          // and which sibling tasks' work was already folded into it. That is
+          // what lets a failure below say which case it caught (#547).
+          cuts[task] = cutOf(req.cwd, task, Object.keys(surfaces))
+          timeline.push(
+            `${task} starts in a worktree cut from ${short(cuts[task].base)}` +
+              (cuts[task].folded.length > 0 ? `, which already holds ${cuts[task].folded.join(', ')}'s fold` : ''),
+          )
           // The isolation assertion itself: the sibling task's surface file
           // must not be visible in this implementer's working tree.
           for (const [other, otherSurface] of Object.entries(surfaces)) {
@@ -214,6 +301,7 @@ describe('per-task worktree isolation (M4, wordfreq retro fix)', () => {
           } else {
             agentCommit(req.cwd, clock, { [surface]: `# built by ${task}\n`, ...bookkeeping }, `toy: task ${task} r1`)
           }
+          timeline.push(`${task} returns; its fold follows`)
           return {}
         }
         case 'reviewer': {
@@ -229,21 +317,68 @@ describe('per-task worktree isolation (M4, wordfreq retro fix)', () => {
           return {}
       }
     })
-    const engine = new Engine({ repoDir: dir, identity: BOT, dispatcher, registry: TEST_REGISTRY, staleMs: 600_000 })
-    return { dir, engine, observed, dispatcher }
+    // A dispatch refused before spawn or held back by the governor is what
+    // moves a task out of the tick it belonged to, so those engine lines go on
+    // the timeline, one line each.
+    const refusals: string[] = []
+    const log = (line: string) => {
+      if (!/refused|deferred/.test(line)) return
+      const flat = line.replace(/\s*\n\s*/g, ' | ')
+      refusals.push(flat)
+      timeline.push(`engine: ${flat}`)
+    }
+    const engine = new Engine({ repoDir: dir, identity: BOT, dispatcher, registry: TEST_REGISTRY, staleMs: 600_000, governor: governor?.(dir), log })
+    return { dir, engine, observed, dispatcher, cuts, timeline, refusals }
   }
 
   it('parallel implementers never observe each other’s mid-flight state; folds land both', { timeout: 90_000 }, async () => {
-    const { dir, engine, observed } = repoThroughG1({ '01-a': 'src/a.py', '02-b': 'src/b.py' })
+    const { dir, engine, observed, cuts, timeline, refusals } = repoThroughG1({ '01-a': 'src/a.py', '02-b': 'src/b.py' })
     await reconcile(engine)
     await humanDecide(dir, { action: 'approve', gate: 'G0', burden: 'confirmation' })
     await reconcile(engine)
     await humanDecide(dir, { action: 'approve', gate: 'G1', burden: 'confirmation' })
     await reconcile(engine)
 
-    // Neither implementer saw the other's surface file mid-flight.
-    expect(observed['01-a-saw-02-b']).toBe(false)
-    expect(observed['02-b-saw-01-a']).toBe(false)
+    // Three ways the sibling's file can reach an implementer, told apart so a
+    // failure names its case (#547). The order of events goes with each one:
+    // the run branch's intent and fold commits, then what each implementer
+    // saw and what the engine refused, in the order they happened.
+    const a = cuts['01-a']!
+    const b = cuts['02-b']!
+    const story = `\n  ${[...foldOrder(dir, ['01-a', '02-b']), ...timeline].join('\n  ')}`
+    // 1. Held back: both tasks are pending with disjoint surfaces under a cap
+    //    of 2, so one tick dispatches both, in one intent commit. On #547's
+    //    CI failure the likeliest way out of that tick was a refusal before
+    //    spawn: the second worktree cut failed on the first's half-written
+    //    git record, and the task was dispatched again after its sibling folded.
+    for (const [late, early] of [
+      [b, a],
+      [a, b],
+    ] as const) {
+      expect(
+        late.intent,
+        `${late.task} was dispatched by a later intent commit (${short(late.intent)}) than ${early.task} (${short(early.intent)}), ` +
+          `after ${early.task}'s fold: its dispatch was held back out of the tick that dispatched ${early.task}${story}`,
+      ).toBe(early.intent)
+    }
+    // 2. Cut late: a dispatch works on the state its intent commit recorded.
+    //    Its worktree is cut from that commit, never from wherever the run
+    //    branch has moved since, so a sibling that finished and folded first
+    //    is not in it.
+    for (const cut of [a, b]) {
+      expect(
+        cut.base,
+        `${cut.task}'s worktree was cut from ${short(cut.base)}, not from the intent commit that dispatched it (${short(cut.intent)})` +
+          (cut.folded.length > 0 ? `: ${cut.folded.join(', ')} had already folded into the run branch` : '') +
+          story,
+      ).toBe(cut.intent)
+    }
+    // 3. Leaked: neither implementer saw the other's surface file mid-flight.
+    expect(observed['01-a-saw-02-b'], `01-a saw 02-b's file while 02-b was still running${story}`).toBe(false)
+    expect(observed['02-b-saw-01-a'], `02-b saw 01-a's file while 01-a was still running${story}`).toBe(false)
+    // Nothing in this run was refused or held back, reviewers included: the
+    // reviewers of the two tasks also cut their worktrees at the same moment.
+    expect(refusals, `a dispatch was refused or deferred${story}`).toEqual([])
 
     // Both results folded back into the run branch; both tasks progressed.
     const source = new LocalGitSource('check', dir)
@@ -254,6 +389,92 @@ describe('per-task worktree isolation (M4, wordfreq retro fix)', () => {
     expect(await git.show('run/toy', 'src/b.py')).toContain('02-b')
     // No task branches or worktrees left behind.
     expect(await git.forEachRef(['refs/heads/run/toy--task/*'])).toHaveLength(0)
+  })
+
+  it('a dispatch works on the state its intent commit recorded, when the run branch moves before its worktree is cut (#547)', { timeout: 90_000 }, async () => {
+    // A sibling's fold lands on run/toy after 01-a's intent commit and before
+    // 01-a's worktree is cut. That order needs one job to finish and fold
+    // before its sibling's `git worktree add` has run, so it is rare in the
+    // parallel test above; here it is forced every time.
+    let landed: string | null = null
+    const { dir, engine, cuts } = repoThroughG1({ '01-a': 'src/a.py' }, false, (repo) =>
+      movingGovernor(
+        (key) => key === 'toy|implementer|01-a|1',
+        () => {
+          landed = landBehind(repo, 'src/sibling.py', 'toy: a sibling fold lands')
+        },
+      ),
+    )
+    await reconcile(engine)
+    await humanDecide(dir, { action: 'approve', gate: 'G0', burden: 'confirmation' })
+    await reconcile(engine)
+    await humanDecide(dir, { action: 'approve', gate: 'G1', burden: 'confirmation' })
+    await reconcile(engine)
+
+    expect(landed, 'the governor never handed over 01-a’s grant, so nothing moved the run branch').not.toBeNull()
+    const cut = cuts['01-a']!
+    expect(cut.intent).not.toBeNull()
+    expect(
+      cut.base,
+      `01-a's worktree was cut from ${short(cut.base)}, where the run branch stood when the job ran, ` +
+        `not from its intent commit ${short(cut.intent)}; the sibling commit ${short(landed)} had landed in between`,
+    ).toBe(cut.intent)
+    // The fold rebased onto the moved tip, so both reached the run branch.
+    const source = new LocalGitSource('check', dir)
+    expect(await source.git.show('run/toy', 'src/a.py')).toContain('01-a')
+    expect(await source.git.show('run/toy', 'src/sibling.py')).toContain('sibling fold')
+    const { state } = await source.readState(toyRef(dir))
+    expect(state!.tasks.map((t) => t.status)).toEqual(['review-approved'])
+  })
+
+  it('the worktrees one tick cuts are made one git command at a time (#547)', { timeout: 60_000 }, async () => {
+    // Git does not lock `.git/worktrees/` against two worktree commands at
+    // once: an add reading a sibling's half-written record fails, and the job
+    // behind it is refused and dispatched again a tick later. A `git` on the
+    // PATH that logs each worktree command's start and end, and holds each
+    // one open long enough that two unserialized ones must overlap, shows
+    // whether any two ever ran together.
+    const { dir } = makeToyRepo()
+    const bin = mkdtempSync(join(tmpdir(), 'gateline-git-shim-'))
+    const record = join(bin, 'worktree.log')
+    const realGit = execFileSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).trim()
+    writeFileSync(
+      join(bin, 'git'),
+      [
+        '#!/bin/sh',
+        'case " $* " in',
+        `  *" worktree "*) echo "start $$ $*" >> '${record}'; sleep 0.2; '${realGit}' "$@"; rc=$?; echo "end $$" >> '${record}'; exit $rc ;;`,
+        `  *) exec '${realGit}' "$@" ;;`,
+        'esac',
+        '',
+      ].join('\n'),
+    )
+    chmodSync(join(bin, 'git'), 0o755)
+    const path = process.env.PATH
+    process.env.PATH = `${bin}:${path}`
+    let cut: TaskCheckout[] = []
+    try {
+      // The shape of one tick launching two jobs, with the checkout guard's
+      // probe of the next run beside them.
+      const [a, b] = await Promise.all([
+        ensureDispatchCheckout(dir, 'run/toy', 'run/toy--task/01-a'),
+        ensureDispatchCheckout(dir, 'run/toy', 'run/toy--task/02-b'),
+        heldCheckout(dir, 'run/toy'),
+      ])
+      cut = [a, b]
+    } finally {
+      process.env.PATH = path
+    }
+    for (const c of cut) execFileSync('git', ['-C', dir, 'worktree', 'remove', '--force', c.path])
+    const lines = readFileSync(record, 'utf8').split('\n').filter(Boolean)
+    let open = 0
+    let most = 0
+    for (const line of lines) {
+      open += line.startsWith('start ') ? 1 : -1
+      most = Math.max(most, open)
+    }
+    expect(lines.filter((l) => l.includes(' worktree add ')), 'both worktrees were cut').toHaveLength(2)
+    expect(most, `two git worktree commands ran at once:\n  ${lines.join('\n  ')}`).toBe(1)
   })
 
   it('the fold harvests what an implementer left uncommitted inside its own surface (#184)', { timeout: 90_000 }, async () => {

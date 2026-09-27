@@ -1,6 +1,6 @@
 // Checkouts for dispatched agents. Every local dispatch works in its own git
-// worktree on a private branch off the run tip (§5.3, #406), and the
-// orchestrator folds it back into the run branch when the job settles. The
+// worktree on a private branch off its intent commit (§5.3, #406, #547), and
+// the orchestrator folds it back into the run branch when the job settles. The
 // run branch itself is checked out only for a sweep (`schedule.ts`). All of
 // them live under the OS temp dir — host-specific ephemera, like job handles
 // (§4.4): losing them costs a re-checkout, never state, because everything
@@ -8,7 +8,7 @@
 import { createHash } from 'node:crypto'
 import { access } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import type { Identity } from '@gateline/core/record'
 import { Git } from '@gateline/core/sources'
 import { type SeedOptions, seedDependencies } from './deps.ts'
@@ -16,6 +16,42 @@ import { type SeedOptions, seedDependencies } from './deps.ts'
 // A run checkout is shared by whoever asks for it (sweeps); single-flight
 // the worktree creation so concurrent callers don't race `git worktree add`.
 const inFlight = new Map<string, Promise<string>>()
+
+const worktreeQueues = new Map<string, Promise<void>>()
+
+/**
+ * Run `fn` alone among this process's worktree commands for `repoDir` (#547).
+ *
+ * Git keeps its worktree records under `.git/worktrees/`, and its commands
+ * do not lock them against each other. One `git worktree add` reads every
+ * other worktree's record while it runs, so it can fail when another add has
+ * created a record and not yet filled it in ("failed to read
+ * .git/worktrees/<name>/commondir"), or when a remove is deleting one. `git
+ * worktree list` fails the same way when removing the last worktree deletes
+ * the directory under it. The jobs one tick launches all cut their worktrees
+ * at the same moment, so this is the ordinary case for parallel dispatch, and
+ * a job whose cut fails is refused before spawn and dispatched again on a
+ * later tick, from a run branch its sibling has already changed.
+ *
+ * So every worktree command in this module goes through one queue per
+ * repository. The queue holds only those git commands, never an agent's run
+ * or a dependency seed. The queue is per process: one engine process per
+ * repository is the only supported topology (TOPOLOGY.md §3.1).
+ */
+function serialWorktrees<T>(repoDir: string, fn: () => Promise<T>): Promise<T> {
+  const key = resolve(repoDir)
+  const prior = worktreeQueues.get(key) ?? Promise.resolve()
+  const result = prior.then(fn)
+  const tail = result.then(
+    () => {},
+    () => {},
+  )
+  worktreeQueues.set(key, tail)
+  void tail.then(() => {
+    if (worktreeQueues.get(key) === tail) worktreeQueues.delete(key)
+  })
+  return result
+}
 
 /** The marker every orchestrator-owned worktree path carries; anything else holding a run branch is someone's. */
 const OWN_MARKER = 'gateline-orchestrator'
@@ -63,7 +99,7 @@ export function checkoutHeldReason(branch: string, path: string): string {
  * ledger entry, no retry spent — instead of failing it after the fact.
  */
 export async function heldCheckout(repoDir: string, branch: string): Promise<string | null> {
-  const worktrees = await new Git(repoDir).worktrees()
+  const worktrees = await serialWorktrees(repoDir, () => new Git(repoDir).worktrees())
   const foreign = worktrees.find((w) => w.branch === `refs/heads/${branch}` && !w.path.includes(OWN_MARKER))
   return foreign?.path ?? null
 }
@@ -72,7 +108,7 @@ export function ensureRunCheckout(repoDir: string, branch: string): Promise<stri
   const key = `${repoDir}\0${branch}`
   let pending = inFlight.get(key)
   if (!pending) {
-    pending = createRunCheckout(repoDir, branch).finally(() => inFlight.delete(key))
+    pending = serialWorktrees(repoDir, () => createRunCheckout(repoDir, branch)).finally(() => inFlight.delete(key))
     inFlight.set(key, pending)
   }
   return pending
@@ -110,11 +146,13 @@ async function createRunCheckout(repoDir: string, branch: string): Promise<strin
 }
 
 /** Best-effort cleanup after a run completes; state lives in git, not here. */
-export async function removeRunCheckout(repoDir: string, branch: string): Promise<void> {
-  const git = new Git(repoDir)
-  const worktrees = await git.worktrees()
-  const mine = worktrees.find((w) => w.branch === `refs/heads/${branch}` && w.path.includes(OWN_MARKER))
-  if (mine) await git.run(['worktree', 'remove', '--force', mine.path]).catch(() => {})
+export function removeRunCheckout(repoDir: string, branch: string): Promise<void> {
+  return serialWorktrees(repoDir, async () => {
+    const git = new Git(repoDir)
+    const worktrees = await git.worktrees()
+    const mine = worktrees.find((w) => w.branch === `refs/heads/${branch}` && w.path.includes(OWN_MARKER))
+    if (mine) await git.run(['worktree', 'remove', '--force', mine.path]).catch(() => {})
+  })
 }
 
 /**
@@ -123,9 +161,9 @@ export async function removeRunCheckout(repoDir: string, branch: string): Promis
  * observed task 02's mid-flight broken state in the shared tree — and #406
  * extended it to every local dispatch, after two reviewers of one run were
  * found applying in-place mutants to the same shared checkout. Each job works
- * on a private branch in a private worktree, both derived from the run branch
- * tip; the orchestrator folds results back into the run branch serially with
- * `foldTaskBranch`. Nothing a dispatch does to its working tree is visible to
+ * on a private branch in a private worktree, both cut from the intent commit
+ * that dispatched it; the orchestrator folds results back into the run branch
+ * serially with `foldTaskBranch`. Nothing a dispatch does to its working tree is visible to
  * any other, and nothing lands on the run branch except through a fold.
  */
 export interface TaskCheckout {
@@ -155,18 +193,37 @@ export function ensureTaskCheckout(repoDir: string, runBranch: string, task: str
   return ensureDispatchCheckout(repoDir, runBranch, taskBranchName(runBranch, task), seed)
 }
 
-export async function ensureDispatchCheckout(repoDir: string, runBranch: string, branch: string, seed: SeedOptions = {}): Promise<TaskCheckout> {
+/**
+ * `from` is the commit the dispatch's branch starts at. The engine passes the
+ * intent commit that dispatched the job (#547): the job then works on exactly
+ * the state its dispatch was derived from, whatever has landed on the run
+ * branch since. Without it the branch would start wherever the run branch
+ * stands when `git worktree add` runs, which for the second of two jobs
+ * launched in one tick can be after the first has finished and folded. That
+ * is a timing race, and it decided what the second agent saw. The fold rebases
+ * onto the run tip of its own moment either way. Absent, the run branch's
+ * current tip is used.
+ */
+export async function ensureDispatchCheckout(
+  repoDir: string,
+  runBranch: string,
+  branch: string,
+  seed: SeedOptions = {},
+  from: string = runBranch,
+): Promise<TaskCheckout> {
   const git = new Git(repoDir)
   const path = worktreePath(repoDir, branch.replace(/\//g, '-'))
 
-  // A leftover branch from a crashed dispatch is stale by definition — the
-  // heartbeat re-dispatches from the current run tip, never resumes it.
-  const existing = (await git.worktrees()).find((w) => w.branch === `refs/heads/${branch}`)
-  if (existing) await git.run(['worktree', 'remove', '--force', existing.path]).catch(() => {})
-  await git.run(['worktree', 'prune'])
-  if (await git.revParse(`refs/heads/${branch}`)) await git.run(['branch', '-D', branch])
+  await serialWorktrees(repoDir, async () => {
+    // A leftover branch from a crashed dispatch is stale by definition — the
+    // heartbeat re-dispatches from the current run tip, never resumes it.
+    const existing = (await git.worktrees()).find((w) => w.branch === `refs/heads/${branch}`)
+    if (existing) await git.run(['worktree', 'remove', '--force', existing.path]).catch(() => {})
+    await git.run(['worktree', 'prune'])
+    if (await git.revParse(`refs/heads/${branch}`)) await git.run(['branch', '-D', branch])
 
-  await git.run(['worktree', 'add', '-b', branch, path, runBranch])
+    await git.run(['worktree', 'add', '-b', branch, path, from])
+  })
   // A git worktree carries tracked files only, so a fresh one has no
   // dependencies at all and the agent's first act is a cold install (#229).
   // Seed them instead, from the run checkout if one exists with them and the
@@ -417,7 +474,7 @@ export async function foldTaskBranch(
     // fold has landed — on failure it is the sole surviving copy of a
     // dispatch that was paid for, and the escalated human has nothing else
     // to inspect (#225).
-    await git.run(['worktree', 'remove', '--force', checkout.path]).catch(() => {})
+    await serialWorktrees(repoDir, () => git.run(['worktree', 'remove', '--force', checkout.path]).catch(() => ''))
   }
   if (result.ok) await git.run(['branch', '-D', checkout.branch]).catch(() => {})
   else result.message += ` — task branch ${checkout.branch} kept for inspection`
@@ -487,9 +544,11 @@ export async function foldHarvestBranch(
   const fetchedTip = await git.revParse(fetchRef)
   if (!fetchedTip) return { ok: false, cause: 'infra', message: `harvest branch ${harvest.branch} not found on origin after fetch`, retained, discarded: [], harvested: [], leftBehind: [] }
 
-  if (await git.revParse(`refs/heads/${localBranch}`)) await git.run(['branch', '-D', localBranch]).catch(() => {})
-  await git.run(['worktree', 'prune']).catch(() => {})
-  await git.run(['worktree', 'add', '-b', localBranch, path, fetchedTip])
+  await serialWorktrees(repoDir, async () => {
+    if (await git.revParse(`refs/heads/${localBranch}`)) await git.run(['branch', '-D', localBranch]).catch(() => {})
+    await git.run(['worktree', 'prune']).catch(() => {})
+    await git.run(['worktree', 'add', '-b', localBranch, path, fetchedTip])
+  })
   const wtGit = new Git(path)
 
   let result: FoldResult
@@ -533,7 +592,7 @@ export async function foldHarvestBranch(
       return { ok: false, cause: 'contention', message: 'fold lost CAS 3× — will re-derive', retained, discarded: [], harvested: [], leftBehind: [] }
     })()
   } finally {
-    await git.run(['worktree', 'remove', '--force', path]).catch(() => {})
+    await serialWorktrees(repoDir, () => git.run(['worktree', 'remove', '--force', path]).catch(() => ''))
     await git.run(['branch', '-D', localBranch]).catch(() => {})
     await git.run(['update-ref', '-d', fetchRef]).catch(() => {})
   }

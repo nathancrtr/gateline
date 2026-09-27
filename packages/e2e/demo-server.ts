@@ -16,6 +16,8 @@ import { type ChildProcess, spawn } from 'node:child_process'
  * every run — no spec derives it from a temporary directory's name.
  */
 export const DEMO_ID = 'local/demo'
+/** The demo's second repository (#498), `generateDemoSet`'s `demo-small`. */
+export const DEMO_SMALL_ID = 'local/demo-small'
 
 export interface DemoServer {
   server: ChildProcess
@@ -23,12 +25,14 @@ export interface DemoServer {
 }
 
 /**
- * Spawn `server/src/main.ts` against `repoDir` on an OS-assigned port, and
+ * Spawn `server/src/main.ts` against `repoDir` — or several, for the
+ * two-repository form of the demo (#498) — on an OS-assigned port, and
  * resolve once it has printed the address it bound and answered its own
  * health check.
  */
-export async function spawnDemoServer(repoDir: string): Promise<DemoServer> {
-  const server = spawn('node', ['server/src/main.ts', '--repo', repoDir, '--port', '0'], {
+export async function spawnDemoServer(repoDir: string | string[]): Promise<DemoServer> {
+  const repos = (Array.isArray(repoDir) ? repoDir : [repoDir]).flatMap((dir) => ['--repo', dir])
+  const server = spawn('node', ['server/src/main.ts', ...repos, '--port', '0'], {
     cwd: new URL('..', import.meta.url).pathname,
     stdio: ['ignore', 'pipe', 'ignore'],
   })

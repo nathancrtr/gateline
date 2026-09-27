@@ -372,6 +372,14 @@ escalations:
         reason: "implementer (06-e2e-criterion-check) failed twice: Command failed (exit
           1): claude -p Use the implementer subagent, running it in the
           foreground — wait for it to complete…",
-        resolved: false
+        resolved: true,
+        resolved_by: Nathan Carter,
+        resolved_at: 2026-09-27T20:21:34.891Z,
+        resolution: "Dispatch failed twice with no recorded cause (#544); the CLI works
+          now. Finish round 2 from the harvested work in b8a2a9c: prove
+          clipped() and checkVisibility catch the reviewer's 6px height-cap
+          break in the G2 card, hover card and reader at both widths; check F2;
+          run the browser suite; write the round-2 notes.",
+        disposition: return-to-implement
       }
   ]

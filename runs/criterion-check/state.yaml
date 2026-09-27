@@ -284,7 +284,11 @@ tasks:
         review_rounds: 2
       },
     { id: 03-g2-card-check, status: review-approved, review_rounds: 1 },
-    { id: 04-hover-card-and-cited-list, status: in-review, review_rounds: 2 },
+    {
+        id: 04-hover-card-and-cited-list,
+        status: review-approved,
+        review_rounds: 2
+      },
     { id: 05-record-reader-check, status: review-approved, review_rounds: 1 },
     { id: 06-e2e-criterion-check, status: pending, review_rounds: 0 }
   ]

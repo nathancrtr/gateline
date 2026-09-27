@@ -35,7 +35,19 @@
      files, never in Approach or a decision record, which argue to the G1
      approver alone. (i) Nothing addressed to the approver lives only in an
      HTML comment; what the approver needs to read is written into the
-     body. -->
+     body.
+     AMENDMENT (normative): an amending record's heading qualifier is what
+     marks it, per GRAMMAR above — nothing else does. It replaces, wherever
+     it stood in the body (Approach, Interface contracts, Risks, or an
+     earlier record's Choice, Rejected, or Consequences line), the text it
+     supersedes with the text now in force, so the body never states what is
+     no longer true. It adds one bullet per passage replaced, after
+     Consequences: `- **Superseded:** <date> — <reason>. <where it stood>:
+     "<the replaced text, in full>"`. A record superseded this way keeps its
+     own heading — its id still resolves — and its Choice line changes to
+     state the decision now in force, or reads `Withdrawn.`; the amending
+     record's Superseded bullet(s) are what quote its old lines. No amendment
+     history is written to a comment. -->
 
 ## Approach
 <!-- The shape of the solution and how it fits the existing codebase.
@@ -51,7 +63,21 @@
 <!-- Choice/Rejected/Consequences carry the human-readable why for the G1
      approver — READABILITY rules apply, not agent shorthand. Choice says
      what is being done, in words; the exact setting or signature is
-     Interface contracts' province and is cited here, not restated. -->
+     Interface contracts' province and is cited here, not restated. An
+     amending record (heading qualifier) adds a Superseded bullet per
+     replaced passage — see AMENDMENT above. Opens with a
+     `**For G1 to decide:**` paragraph, before the first record: by id, each
+     record that changes existing behavior for a current user or operator,
+     settles something the spec left open, or departs from the spec — one
+     line each, or `none`. Anything else asked of the approver (e.g.
+     reconciling requirement numbers) belongs here, never in a comment
+     (rule i). -->
+
+**For G1 to decide:**
+- ADR-<n> — <what is being decided, in a plain phrase>
+
+<Anything else asked of the approver, e.g. reconciling requirement numbers.>
+(Or, if no record qualifies: **For G1 to decide:** none.)
 
 ### ADR-1: <decision>
 - **Choice:** <what we're doing>

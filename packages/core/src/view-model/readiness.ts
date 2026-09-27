@@ -109,7 +109,7 @@ import {
 import { type Validation, validateArtifact } from '../record/validate.ts'
 import { readBranchOrder, resolutionCommitsOf } from '../sources/branch-order.ts'
 import type { CommitInfo } from '../sources/git.ts'
-import type { RunRef, RunSource } from '../sources/source.ts'
+import { displayNameOf, type RunRef, type RunSource } from '../sources/source.ts'
 import { type ArtifactRef, artifactRef } from './artifact-ref.ts'
 import { describeEscalation } from './escalation.ts'
 import { type StateProblem, stateProblem } from './state-problem.ts'
@@ -242,7 +242,14 @@ export interface RoundCapFact {
 export interface InboxItem {
   kind: InboxKind
   gate: GateId | null
+  /** The repository's id (docs/MULTI-REPO.md §6): what URLs, logs and copies carry. */
   source: string
+  /**
+   * The repository's display name (§6.2): the config `name`, else the id's
+   * last segment. Presentation only (#497). Attached once, from the source,
+   * as `deriveReadiness` returns.
+   */
+  sourceName: string
   slug: string
   /**
    * Kept for one release (#411 step 8): sentences core composed for the inbox
@@ -322,8 +329,8 @@ export interface RunReadiness {
 
 const isTaskFile = (p: string) => describeArtifact(p).kind === 'work-item'
 const isReviewFile = (p: string) => describeArtifact(p).kind === 'review-report'
-/** An item as it is derived, before its packet is given as references. */
-type DerivedItem = Omit<InboxItem, 'packetRefs'>
+/** An item as it is derived, before its packet is given as references and its repository its display name. */
+type DerivedItem = Omit<InboxItem, 'packetRefs' | 'sourceName'>
 
 function taskComplete(status: string): boolean {
   return G2_COMPLETE_STATUSES.has(status)
@@ -581,7 +588,11 @@ function escalationItems(ref: RunRef, escalations: Escalation[], artifacts: read
 
 export async function deriveReadiness(source: RunSource, ref: RunRef): Promise<RunReadiness> {
   const { items, validations } = await deriveItems(source, ref)
-  return { items: items.map((item) => ({ ...item, packetRefs: item.packet.map((p) => artifactRef(p)) })), validations }
+  const sourceName = displayNameOf(source)
+  return {
+    items: items.map((item) => ({ ...item, sourceName, packetRefs: item.packet.map((p) => artifactRef(p)) })),
+    validations,
+  }
 }
 
 async function deriveItems(source: RunSource, ref: RunRef): Promise<{ items: DerivedItem[]; validations: Record<string, Validation> }> {

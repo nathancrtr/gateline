@@ -16,6 +16,7 @@ import { NO_FACTS } from './inbox-facts.helper.ts'
 const item = (over: Partial<InboxItem>): InboxItem =>
   ({
     source: 'local',
+    sourceName: 'local',
     slug: 'a-run',
     kind: 'gate',
     gate: 'G0',

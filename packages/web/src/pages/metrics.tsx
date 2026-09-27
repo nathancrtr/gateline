@@ -5,6 +5,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { api, type MetricsResponse } from '../api.ts'
 import { Imp } from '../components/chips.tsx'
+import { RunName, useNamesRepository } from '../components/repository.tsx'
 import { usd } from '../money.ts'
 import { PageStatus } from './inbox.tsx'
 
@@ -38,7 +39,9 @@ function formatLatency(seconds: number | null): string {
 }
 
 export function MetricsPage() {
-  const { data, isLoading, error } = useQuery({ queryKey: ['metrics'], queryFn: api.metrics })
+  const { data, isLoading: metricsLoading, error } = useQuery({ queryKey: ['metrics'], queryFn: api.metrics })
+  const names = useNamesRepository()
+  const isLoading = metricsLoading || !names.ready
 
   if (isLoading) {
     return (
@@ -71,7 +74,7 @@ export function MetricsPage() {
       )}
 
       <RoundsSection metrics={metrics} />
-      <BudgetSection metrics={metrics} />
+      <BudgetSection metrics={metrics} showRepository={names.show} />
     </div>
   )
 }
@@ -209,7 +212,7 @@ function RoundsSection({ metrics }: { metrics: MetricsResponse }) {
 }
 
 /** Budget honesty: "never updated" is itself the finding (the wordfreq lesson). */
-function BudgetSection({ metrics }: { metrics: MetricsResponse }) {
+function BudgetSection({ metrics, showRepository }: { metrics: MetricsResponse; showRepository: boolean }) {
   if (metrics.runs.length === 0) return null
   return (
     <section>
@@ -230,8 +233,11 @@ function BudgetSection({ metrics }: { metrics: MetricsResponse }) {
           <tbody>
             {metrics.runs.map((r) => (
               <tr key={`${r.source}/${r.slug}`}>
-                <td className={`${TD} font-mono text-xs`}>
-                  {r.source}/{r.slug}
+                <td className={TD}>
+                  {/* The run's name as every row sets it (#497): `billing /
+                      add-export`, or the slug alone when the set has one
+                      repository. */}
+                  <RunName className="inline-block font-mono text-xs" source={r.source} sourceName={r.sourceName} slug={r.slug} showRepository={showRepository} />
                 </td>
                 <td className={`${TD} text-right font-ui text-xs tabular-nums`}>{r.budget.limit === null ? '—' : usd(r.budget.limit)}</td>
                 <td className={`${TD} text-right font-ui text-xs tabular-nums`}>{r.budget.spent === null ? '—' : usd(r.budget.spent)}</td>

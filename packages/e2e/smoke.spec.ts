@@ -18,6 +18,10 @@ const git = (args: string[]) => execFileSync('git', ['-C', fixtureDir, ...args],
  *  started (demo-server.ts, #438). */
 const goto = (page: Page, path: string) => page.goto(ORIGIN + path)
 
+/** Inbox rows whose run is `slug` — matched on the run name, which is `billing / slug`, or the slug alone when the set has one repository (#497). */
+const rowsFor = (page: Page, slug: string) =>
+  page.locator('[data-inbox-row]').filter({ has: page.locator('[data-run-name]', { hasText: new RegExp(`(^|/ )${slug}$`) }) })
+
 test.beforeAll(async () => {
   ;({ dir: fixtureDir, root: fixtureRoot } = generateFixtureRepo())
   ;({ server, origin: ORIGIN } = await spawnDemoServer(fixtureDir))
@@ -38,7 +42,7 @@ test('inbox ranks oldest first and flags bounced packets', async ({ page }) => {
 
 test('inbox rows link to the run at /repos/<id>/-/runs/<slug> (#494)', async ({ page }) => {
   await goto(page, '/')
-  const row = page.locator('[data-inbox-row]').filter({ hasText: /\/g2-pending/ })
+  const row = rowsFor(page, 'g2-pending')
   await expect(row).toHaveAttribute('href', `/repos/${DEMO_ID}/-/runs/g2-pending?decide=G2`)
   await row.click()
   await expect(page).toHaveURL(new RegExp(`/repos/${DEMO_ID}/-/runs/g2-pending\\?decide=G2$`))
@@ -59,23 +63,22 @@ test('a link in the old /runs/<name>/<slug> shape lands on the run at its new ad
 
 test('inbox rows compose their lines from facts (#433)', async ({ page }) => {
   await goto(page, '/')
-  const rows = page.locator('[data-inbox-row]')
   // A gate row is the gate and its question; nothing restates the slug.
-  const gate = rows.filter({ hasText: /\/g2-pending/ })
+  const gate = rowsFor(page, 'g2-pending')
   await expect(gate.locator('[data-inbox-title]')).toHaveText('G2 — Does the evidence support merging?')
   await expect(gate.locator('[data-inbox-line]')).toHaveCount(0)
   // An escalation row names who escalated — no pointer, no filename.
-  const escalation = rows.filter({ hasText: /\/escalated/ })
+  const escalation = rowsFor(page, 'escalated')
   await expect(escalation.locator('[data-inbox-title]')).toHaveText('Escalation from verifier')
   await expect(escalation).not.toContainText('.md')
   // Its reason is the verifier's own words, not a pointer: the row keeps it.
   await expect(escalation.locator('[data-inbox-line]')).toContainText('sample input referenced by the spec does not exist')
   // A paused row quotes the reason after a UI word and says what it spent.
-  const paused = rows.filter({ hasText: /\/paused-budget/ })
+  const paused = rowsFor(page, 'paused-budget')
   await expect(paused.locator('[data-inbox-title]')).toHaveText('Run paused budget-exhausted')
   await expect(paused.locator('[data-quoted-word="budget-exhausted"]')).toBeVisible()
   await expect(paused.locator('[data-inbox-line]')).toHaveText('$10.40 spent · limit $10')
-  const cap = rows.filter({ hasText: /\/round-cap/ })
+  const cap = rowsFor(page, 'round-cap')
   await expect(cap.locator('[data-inbox-title]')).toHaveText('Round cap reached on 01-core')
   await expect(cap.locator('[data-inbox-line]')).toHaveText('review rounds 3/3 without convergence')
 })
@@ -295,6 +298,56 @@ test('the keyboard loop: a → 1 → approve on the primary card', async ({ page
   await expect(card.getByRole('status')).toContainText(/committed/)
   const state = git(['show', 'run/g1-pending:runs/g1-pending/state.yaml'])
   expect(state).toContain('burden: confirmation')
+})
+
+test('a run names its repository: the header states it, rows leave it off in a one-repository set (#497)', async ({ page }) => {
+  // The demo serves one repository, so rows shorten to the slug, as a
+  // single-repository deployment always looked; the full name is the tooltip.
+  await goto(page, '/')
+  const row = rowsFor(page, 'g2-pending')
+  await expect(row.locator('[data-run-name]')).toHaveText('g2-pending')
+  await expect(row.locator('[data-run-name]')).toHaveAttribute('title', `${DEMO_ID}/g2-pending`)
+  await expect(page.locator('[data-inbox-row] [data-repository-name]')).toHaveCount(0)
+  await goto(page, '/portfolio')
+  const cell = page.getByRole('link', { name: 'g2-pending', exact: true })
+  await expect(cell).toHaveAttribute('href', `/repos/${DEMO_ID}/-/runs/g2-pending`)
+  await expect(page.locator('table [data-repository-name]')).toHaveCount(0)
+  await expect(page.getByRole('table')).not.toContainText(DEMO_ID)
+  await goto(page, '/metrics')
+  await expect(page.locator('table [data-run-name]', { hasText: /^g2-pending$/ })).toHaveAttribute('title', `${DEMO_ID}/g2-pending`)
+
+  // The run page names it whatever the set: above the run's name, linking to
+  // the Portfolio with the repository as the scope #498 will honour.
+  await goto(page, `/repos/${DEMO_ID}/-/runs/g2-pending`)
+  const repository = page.locator('[data-run-repository] a')
+  await expect(repository).toHaveText('demo')
+  await expect(repository).toHaveAttribute('title', DEMO_ID)
+  await expect(repository).toHaveAttribute('href', `/portfolio?repo=${encodeURIComponent(DEMO_ID)}`)
+  const above = await repository.boundingBox()
+  const heading = await page.locator('main h1').boundingBox()
+  expect(above!.y + above!.height).toBeLessThanOrEqual(heading!.y)
+  await expect(page).toHaveTitle('g2-pending · demo — Gatehouse')
+
+  // A copy of the name carries the full id, as a reader would make it:
+  // dragging across the text, which selects inside its text node.
+  const copied = await page.evaluate(() => {
+    const text = document.querySelector('[data-run-repository] a')!.firstChild!
+    const range = document.createRange()
+    range.setStart(text, 0)
+    range.setEnd(text, text.textContent!.length)
+    const selection = document.getSelection()!
+    selection.removeAllRanges()
+    selection.addRange(range)
+    const data = new DataTransfer()
+    document.dispatchEvent(new ClipboardEvent('copy', { clipboardData: data, bubbles: true, cancelable: true }))
+    return data.getData('text/plain')
+  })
+  expect(copied).toBe(DEMO_ID)
+
+  await repository.click()
+  await expect(page).toHaveURL(/\/portfolio\?repo=local%2Fdemo$/)
+  await expect(page.getByRole('table')).toContainText('g2-pending')
+  await expect(page).toHaveTitle('Gatehouse — gateline pipeline frontend')
 })
 
 test('portfolio and metrics render', async ({ page }) => {

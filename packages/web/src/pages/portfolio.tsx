@@ -5,6 +5,7 @@ import { type ReactNode, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { api, formatAge, type NeedFact, type RunSummary } from '../api.ts'
 import { BudgetMeter, GateLedger, Imp, type ImpTone, KIND_GLYPH, kindTone, PhaseChip } from '../components/chips.tsx'
+import { RunName, useNamesRepository } from '../components/repository.tsx'
 import { UnreadableState } from '../components/unreadable-state.tsx'
 import { gateCardState } from '../gate-state.ts'
 import { runPath } from '../run-path.ts'
@@ -114,7 +115,11 @@ export function NeedsYou({ mark }: { mark: NeedsYouMark }) {
 }
 
 export function PortfolioPage() {
-  const { data, isLoading, error } = useQuery({ queryKey: ['runs'], queryFn: api.runs })
+  const { data, isLoading: runsLoading, error } = useQuery({ queryKey: ['runs'], queryFn: api.runs })
+  // The rows wait for the set's size too, so a row never gains or loses its
+  // repository after it first paints.
+  const names = useNamesRepository()
+  const isLoading = runsLoading || !names.ready
 
   if (isLoading) {
     return (
@@ -196,12 +201,21 @@ export function PortfolioPage() {
                   </td>
                   <td className={`${TD} min-w-[170px]`}>
                     <div className="min-w-0">
-                      <Link to={runPath(run.source, run.slug)} className="font-mono text-[13.5px] font-semibold text-ink hover:underline">
-                        {run.slug}
+                      {/* The run's name leads the cell: `billing / add-export`
+                          (#497), the repository before the slug as on every
+                          inbox row, where the subline used to carry it beside
+                          the profile. The whole name is the link, so its
+                          accessible name says which repository. */}
+                      <Link to={runPath(run.source, run.slug)} className="hover:underline">
+                        <RunName
+                          className="font-mono text-[13.5px] font-semibold text-ink"
+                          source={run.source}
+                          sourceName={run.sourceName}
+                          slug={run.slug}
+                          showRepository={names.show}
+                        />
                       </Link>
-                      <div className="mt-[2px] font-ui text-[11.5px] text-muted">
-                        {run.source} · {run.profile}
-                      </div>
+                      <div className="mt-[2px] font-ui text-[11.5px] text-muted">{run.profile}</div>
                       {/* Why the state could not be read, from core's fact
                           (#435): the parser's message as a Diagnostic under
                           its producer, as the decide card sets it, with `<pre>`

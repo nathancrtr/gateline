@@ -23,6 +23,7 @@ import { NO_FACTS } from './inbox-facts.helper.ts'
 const item = (over: Partial<InboxItem>): InboxItem =>
   ({
     source: 'local',
+    sourceName: 'local',
     slug: 'a-run',
     kind: 'gate',
     gate: 'G1',
@@ -60,6 +61,7 @@ const undecided = { approved: false, decided: false, by: null, at: null, burden:
 const summary = (gates: Partial<RunSummary['gates']> = {}, phase = 'plan'): RunSummary =>
   ({
     source: 'local',
+    sourceName: 'local',
     slug: 'a-run',
     ref: 'run/a-run',
     kind: 'branch',

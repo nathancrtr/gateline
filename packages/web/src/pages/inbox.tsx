@@ -5,6 +5,7 @@ import { type ReactNode, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, formatAge, type InboxItem } from '../api.ts'
 import { AgeBadge, KeyHints, KindChip } from '../components/chips.tsx'
+import { RunName, useNamesRepository } from '../components/repository.tsx'
 import { Count, isName, Name, QuotedWord } from '../components/vocabulary.tsx'
 import { gateCardState } from '../gate-state.ts'
 import { usd } from '../money.ts'
@@ -232,7 +233,18 @@ export function inboxLine(item: InboxItem, now: number): ReactNode {
  */
 const INBOX_COLUMNS = '150px minmax(0, 1fr) 96px'
 
-export function InboxRow({ item, now, selected }: { item: InboxItem; now: number; selected: boolean }) {
+export function InboxRow({
+  item,
+  now,
+  selected,
+  showRepository,
+}: {
+  item: InboxItem
+  now: number
+  selected: boolean
+  /** Whether the row names the run's repository: false only when the set has one (docs/MULTI-REPO.md §6.2). */
+  showRepository: boolean
+}) {
   const age = formatAge(item.since, now)
   const urgent = item.since !== null && now - item.since > STALE_SECONDS
   const stale = item.since !== null && now - item.since > STALE_DAYS
@@ -254,15 +266,23 @@ export function InboxRow({ item, now, selected }: { item: InboxItem; now: number
           <KindChip item={item} />
         </span>
         <span className="flex min-w-0 flex-col gap-[3px] py-[11px] pr-[14px]" data-inbox-text>
-          {/* Title and slug follow one overflow rule (#280): each truncates
-              inside the cell. */}
+          {/* Title and run name follow one overflow rule (#280): each
+              truncates inside the cell. The run name is `billing /
+              add-export` (#497): the repository before the slug, in the
+              slug's own secondary style, and the slug alone when the set has
+              one repository. */}
           <span className="flex flex-wrap items-baseline gap-[10px]">
             <span className="truncate text-[15px] font-semibold text-ink" data-inbox-title>
               {inboxTitle(item)}
             </span>
-            <span className="min-w-0 truncate font-mono text-[12.5px] text-muted">
-              {item.source}/{item.slug}
-            </span>
+            <RunName
+              className="min-w-0 truncate font-mono text-[12.5px] text-muted"
+              source={item.source}
+              sourceName={item.sourceName}
+              slug={item.slug}
+              showRepository={showRepository}
+              clipped
+            />
           </span>
           {line && (
             <p className="max-w-[var(--measure)] truncate text-[13.5px] text-muted" data-inbox-line data-record-words={recordWords || undefined}>
@@ -298,7 +318,11 @@ interface KindFilter {
 }
 
 export function InboxPage() {
-  const { data, isLoading, error } = useQuery({ queryKey: ['inbox'], queryFn: api.inbox })
+  const { data, isLoading: inboxLoading, error } = useQuery({ queryKey: ['inbox'], queryFn: api.inbox })
+  // The rows wait for the set's size too, so a row never gains or loses its
+  // repository after it first paints.
+  const names = useNamesRepository()
+  const isLoading = inboxLoading || !names.ready
   const navigate = useNavigate()
   const [cursor, setCursor] = useState(0)
   const [filter, setFilter] = useState<KindFilterKey>(null)
@@ -409,6 +433,7 @@ export function InboxPage() {
                 item={item}
                 now={now}
                 selected={i === cursor}
+                showRepository={names.show}
               />
             ))}
           </ul>

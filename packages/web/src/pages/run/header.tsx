@@ -8,8 +8,10 @@
 // only by the genesis line inside `RunHeader`, so the value import moved with
 // its one caller (see the RECORD_VALUE_IMPORTERS comment in boundary.test.ts).
 import { readIntake } from '@gateline/core/record'
+import { Link } from 'react-router-dom'
 import { formatAge, formatWhen, type Phase, PROFILE_PHASES, type RunDetailResponse, type RunSummary } from '../../api.ts'
 import { BudgetMeter, Imp, PhaseChip, PhaseSpine } from '../../components/chips.tsx'
+import { shownName } from '../../components/repository.tsx'
 import { Address, artifactHref } from '../../components/vocabulary.tsx'
 import type { Surface } from '../../landing.ts'
 import { PageStatus } from '../inbox.tsx'
@@ -254,6 +256,7 @@ export function RunHeader({ summary, detail }: { summary: RunSummary; detail: Ru
 
   return (
     <header className="mb-6">
+      <RunRepository summary={summary} />
       <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
         <h1 className="text-[28px] font-semibold leading-[1.15] text-ink">{summary.slug}</h1>
         <p className="min-w-0 font-ui text-[12.5px] leading-[1.6] text-muted">
@@ -307,6 +310,39 @@ export function RunHeader({ summary, detail }: { summary: RunSummary; detail: Ru
         )}
       </div>
     </header>
+  )
+}
+
+/**
+ * Where the header's repository name leads: the Portfolio. The `repo`
+ * parameter is the repository id, as the scope control will carry it
+ * (docs/MULTI-REPO.md §9.1); until that lands (#498) the Portfolio ignores
+ * it and shows the whole set.
+ */
+export const repositoryPortfolioHref = (source: string): string => `/portfolio?${new URLSearchParams({ repo: source })}`
+
+/**
+ * The run's repository, stated above its name (#497). The run page used to
+ * name the repository only in its URL. It is named here even when the set has
+ * one repository, where rows leave it off: a page about one run has room for
+ * the one fact that says where the run lives.
+ *
+ * The display name, in the code face at the size of the inbox row's run
+ * name, and a link, so it takes the signal blue. The full id is the tooltip
+ * and what a copy of the name carries.
+ */
+export function RunRepository({ summary }: { summary: RunSummary }) {
+  return (
+    <p className="mb-1 font-mono text-[12.5px] leading-[1.6] break-words" data-run-repository>
+      <Link
+        to={repositoryPortfolioHref(summary.source)}
+        title={summary.source}
+        data-full-name={summary.source}
+        className="text-accent underline underline-offset-2 hover:text-accent-hover"
+      >
+        {shownName(summary.source, summary.sourceName)}
+      </Link>
+    </p>
   )
 }
 

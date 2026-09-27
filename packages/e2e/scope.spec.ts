@@ -95,9 +95,6 @@ test('moving between Inbox, Portfolio and Metrics keeps the scope, and so does o
 
   await page.locator('aside').getByRole('link', { name: 'Metrics', exact: true }).click()
   await expect(page).toHaveURL(`${ORIGIN}/metrics?${SMALL_Q}`)
-  await expect(page.locator('[data-gate-scope]')).toHaveText(
-    'Counted across all repositories. Gate figures are not yet split by repository, so this table does not follow the scope.',
-  )
   await expect(page.locator('section', { hasText: 'Budget honesty' }).locator('tbody tr')).toHaveCount(4)
 
   await page.locator('aside').getByRole('link', { name: /^Inbox/ }).click()

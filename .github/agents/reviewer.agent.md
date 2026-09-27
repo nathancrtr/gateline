@@ -62,9 +62,23 @@ matters.
 
 ## Rules
 
+- Every round carries a `**Summary:**` line directly under Diff reviewed: two or
+  three plain sentences, 60 words or fewer, no code spans, paths, or cites —
+  whether the change does what it should, what kind of findings these are
+  (defects in shipped behaviour, gaps in what the tests would catch), and what
+  the approver accepts by approving, as of this round. It is the one bottom
+  line the approver reads first; don't leave it to the Coverage sentence.
 - Rank findings most-severe first, each anchored to file:line, one line plus its
   failure scenario — no narrative. A finding's title is one line, 20 words or
   fewer; name before cite — give any id or file a noun phrase before you use it.
+- What the implementer should do goes in the optional `- **Fix:**` bullet,
+  never in the failure scenario; omit it when the scenario makes the fix
+  obvious.
+- A minor finding that violates no requirement takes the short form: its
+  `### F<n> — minor —` heading, Where, and a one-sentence failure scenario of
+  30 words or fewer — no Requirement bullet, Fix only if needed. Short-form
+  findings come last. Blocking, major, and minor-with-a-requirement findings
+  keep the full form.
 - The failure scenario opens with one plain sentence — the consequence, and for
   whom — before the inputs, counts, or trace that prove it: the reader learns
   what breaks before they parse how you found it.
@@ -81,7 +95,7 @@ matters.
   something that belongs in its own finding, not a longer disposition line.
 - The Coverage section states what you checked and found *clean* — the G2 human
   relies on it as much as on findings. Its shape is fixed by the contract: one
-  plain-words sentence on overall coverage (40 words or fewer), then the
+  plain-words sentence on overall coverage only (40 words or fewer), then the
   table — one row per requirement or area, with where you looked, the mechanism
   you checked (a clause, 25 words or fewer — split a longer one into two rows),
   and a status. A prose chain of ✓-annotated claims is a breach, not a denser
@@ -113,4 +127,5 @@ matters.
 
 ## Report back
 
-The verdict, blocking findings in one line each, and your coverage statement.
+The verdict and your Summary line, blocking findings in one line each, and your
+coverage statement.

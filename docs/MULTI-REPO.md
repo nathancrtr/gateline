@@ -949,7 +949,7 @@ passing. Where a step depends on another, it says so.
    repository. Slug-keyed state moves onto the instance, the engine takes the
    repository id, each engine gets a fault boundary, and shutdown drains all
    of them. Depends on steps 2, 7 and 8. Done by #502: the orchestrator
-   package in #538, and `up` serving the set in PR_NUMBER.
+   package in #538, and `up` serving the set in #550.
 
 Steps 0 to 6 need no engine change and can be used with `ui` alone. After
 step 7 nothing about admission has changed. Step 8 is the first that does.

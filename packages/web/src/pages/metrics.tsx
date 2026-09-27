@@ -17,6 +17,7 @@ import { api, type GateMetrics, type MetricsResponse, type RunMetricsSummary } f
 import { Imp } from '../components/chips.tsx'
 import { fullRunName, REPOSITORY_COLUMN, REPOSITORY_FOLD, RepositoryName, useDocumentTitle } from '../components/repository.tsx'
 import { inScope, ScopeHeading, ScopeLine, UnknownScopeNotice, useScope } from '../components/scope.tsx'
+import { UnreadableRepositoriesNotice } from '../components/unreadable-repositories.tsx'
 import { usd } from '../money.ts'
 import { compareRepositories, type Scope, scopeTitle } from '../scope.ts'
 import { PageStatus } from './inbox.tsx'
@@ -85,6 +86,9 @@ export function MetricsPage() {
         <p className="mt-1 text-[13px] text-muted">Computed from state.yaml git history — nothing is logged separately.</p>
         <ScopeLine scope={scope.scope} outside={null} path="/metrics" />
         <UnknownScopeNotice scope={scope.scope} />
+        {/* A repository that could not be read (#499): named as on Inbox and
+            Portfolio, and its figures are in no total or row. */}
+        <UnreadableRepositoriesNotice unreadable={data!.unreadable} scope={scope.scope} rows="figures" left="counted" />
       </header>
 
       {decided === 0 ? (

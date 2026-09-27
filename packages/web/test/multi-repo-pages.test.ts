@@ -23,12 +23,14 @@ import type {
   InboxResponse,
   RunDetailResponse,
   RunsResponse,
+  MetricsResponse,
   StagingConfigResponse,
 } from '../src/api.ts'
 import { App } from '../src/app.tsx'
 import { VIEW_MODE_LINE } from '../src/components/repository.tsx'
 import { InboxPage } from '../src/pages/inbox.tsx'
 import { NewRunPage } from '../src/pages/new-run.tsx'
+import { MetricsPage } from '../src/pages/metrics.tsx'
 import { PortfolioPage } from '../src/pages/portfolio.tsx'
 import { NeedsYouCard } from '../src/pages/run/decide-card.tsx'
 
@@ -40,6 +42,7 @@ interface Served {
   inbox: InboxResponse
   runs: RunsResponse
   staging: StagingConfigResponse
+  metrics: MetricsResponse
   app: ReturnType<typeof createApp>
 }
 
@@ -57,7 +60,7 @@ async function serve(sources: RunSource[]): Promise<Served> {
     expect(res.status, path).toBe(200)
     return (await res.json()) as T
   }
-  return { health: await get('/api/health'), inbox: await get('/api/inbox'), runs: await get('/api/runs'), staging: await get('/api/staging'), app }
+  return { health: await get('/api/health'), inbox: await get('/api/inbox'), runs: await get('/api/runs'), staging: await get('/api/staging'), metrics: await get('/api/metrics'), app }
 }
 
 /** A repository whose runs cannot be listed, the way one gone from disk fails. */
@@ -95,6 +98,7 @@ function renderWith(served: Served, node: ReactNode, route: string, engines: Eng
   client.setQueryData(['inbox'], served.inbox)
   client.setQueryData(['runs'], served.runs)
   client.setQueryData(['staging-config'], served.staging)
+  client.setQueryData(['metrics'], served.metrics)
   client.setQueryData(['engine-health'], { engines, now: NOW } satisfies EngineHealthResponse)
   seed?.(client)
   return renderToStaticMarkup(createElement(QueryClientProvider, { client }, createElement(MemoryRouter, { initialEntries: [route] }, node)))
@@ -268,6 +272,20 @@ describe('a repository that could not be read', () => {
     expect(ledger).toMatch(/<span class="[^"]*\bsr-only"[^>]*data-scope-count="unknown">, could not be read<\/span>/)
     expect(ledger).not.toMatch(/data-scope-count="\d/)
     expect(text(/data-repository-facts="unreadable"[^>]*>([^<]*)</.exec(ledger)![1]!)).toBe('Could not be read.')
+  })
+
+  it('is named on Metrics too, whose figures do not count it, filtered to the scope', () => {
+    const notice = (html: string) => /<div[^>]*data-unreadable-notice[^>]*>([\s\S]*?)<\/div>/.exec(html)?.[1]
+    const joined = notice(renderWith(unreadable, createElement(MetricsPage), '/metrics'))!
+    expect(text(/<p>([\s\S]*?)<\/p>/.exec(joined)![1]!)).toBe('One repository could not be read, so its figures are not counted.')
+    expect(text(/data-unreadable-name[^>]*>([^<]*)</.exec(joined)![1]!)).toBe('ledger')
+    expect(joined).toContain('data-address="true">local/ledger<')
+    expect(text(/<span data-diagnostic="true">([\s\S]*?)<\/span><\/span>/.exec(joined)![1]!)).toBe('Reading it failed with fatal: not a git repository: /srv/ledger/.git')
+    // Scoped to a repository that was read: no notice. Scoped to the one that was not: it is named.
+    expect(notice(renderWith(unreadable, createElement(MetricsPage), '/metrics?repo=local%2Fwebsite'))).toBeUndefined()
+    expect(notice(renderWith(unreadable, createElement(MetricsPage), '/metrics?repo=local%2Fledger'))).toContain('local/ledger')
+    // Nothing unreadable: no notice.
+    expect(notice(renderWith(flooded, createElement(MetricsPage), '/metrics'))).toBeUndefined()
   })
 
   it('keeps an empty page from claiming nothing waits when nothing could be read', async () => {

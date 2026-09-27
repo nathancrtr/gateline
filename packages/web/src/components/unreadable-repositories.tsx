@@ -22,14 +22,28 @@ import { Address, Diagnostic } from './vocabulary.tsx'
  * the page is about that repository, and the rail's scope control still marks
  * every repository that could not be read.
  */
-export function UnreadableRepositoriesNotice({ unreadable, scope, rows }: { unreadable: readonly UnreadableRepository[] | undefined; scope: Scope; rows: string }) {
+export function UnreadableRepositoriesNotice({
+  unreadable,
+  scope,
+  rows,
+  left = 'shown here',
+}: {
+  unreadable: readonly UnreadableRepository[] | undefined
+  scope: Scope
+  /** What the page would have shown from it: "decisions", "runs", "figures". */
+  rows: string
+  /** What the page did not do with them: "shown here" on a list, "counted" on Metrics. */
+  left?: 'shown here' | 'counted'
+}) {
   const shown = (unreadable ?? []).filter((u) => scope.kind !== 'one' || sameRepository(u.source, scope.repository.id))
   if (shown.length === 0) return null
   const one = shown.length === 1
   return (
     <div className="mt-3 border border-warn-line bg-warn-bg px-2.5 py-2 font-ui text-[12.5px] leading-[1.5] break-words text-warn" role="status" data-unreadable-notice>
       <p>
-        {one ? `One repository could not be read, so its ${rows} are not shown here.` : `${shown.length} repositories could not be read, so their ${rows} are not shown here.`}
+        {one
+          ? `One repository could not be read, so its ${rows} are not ${left}.`
+          : `${shown.length} repositories could not be read, so their ${rows} are not ${left}.`}
       </p>
       <ul className="mt-1.5 flex flex-col gap-1.5">
         {shown.map((u) => (

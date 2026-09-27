@@ -1656,13 +1656,28 @@ export class Engine {
         if (result.pushFailed) this.notePushFailure(ref, result.pushFailed)
         else this.notePushAccepted(ref.branch)
 
-        for (const intent of action.dispatches) this.launch(ref, obs, intent, at, pending)
+        // Every job of this tick starts from the intent commit (#547), so what
+        // an agent sees is what its dispatch was derived from, never a sibling
+        // that happened to finish and fold before its worktree was cut.
+        for (const intent of action.dispatches) this.launch(ref, obs, intent, at, pending, result.commit ?? null)
         return { ...base, wrote: true, launched: action.dispatches.length }
       }
     }
   }
 
-  private launch(ref: RunRef, obs: RunObservation, intent: DispatchIntent, openedAt: string, pending: Map<string, Reservation>): void {
+  /**
+   * `intentCommit` is the commit that recorded this dispatch's intent; a local
+   * dispatch's worktree is cut from it (#547). Null only if the write could not
+   * name its commit, and then the worktree is cut from the run branch's tip.
+   */
+  private launch(
+    ref: RunRef,
+    obs: RunObservation,
+    intent: DispatchIntent,
+    openedAt: string,
+    pending: Map<string, Reservation>,
+    intentCommit: string | null,
+  ): void {
     const key = jobKey(ref.slug, intent.role, intent.task, intent.round)
     // The governor's grant for this dispatch (#501). `admit` granted one per
     // dispatch it let through, so a missing one is a bug upstream; launching
@@ -1674,9 +1689,9 @@ export class Engine {
     // "runner-agent" ADR-3) creates and harvests its own checkout — the
     // engine creates no local checkout for it and folds a harvest branch in
     // place of the local fold. Every other dispatch is isolated (§5.3, #406):
-    // a private branch and worktree off the run tip, folded back serially on
-    // success — no two jobs ever observe each other's mid-flight state, and
-    // nothing reaches the run branch except through the fold.
+    // a private branch and worktree off the intent commit (#547), folded back
+    // serially on success — no two jobs ever observe each other's mid-flight
+    // state, and nothing reaches the run branch except through the fold.
     const managesOwnWorkspace = this.cfg.dispatcher.managesOwnWorkspace === true
     const isolate = !managesOwnWorkspace
     const resumeSession = priorSession(obs.ledger, intent, this.cfg.dispatcher.adapterFor?.(intent.role) ?? this.cfg.dispatcher.adapter)
@@ -1692,9 +1707,13 @@ export class Engine {
       let spawned = false
       try {
         const checkout = isolate
-          ? await ensureDispatchCheckout(this.cfg.repoDir, ref.branch, dispatchBranchName(ref.branch, intent), {
-              log: (line) => this.log(`${ref.slug}: ${line}`),
-            })
+          ? await ensureDispatchCheckout(
+              this.cfg.repoDir,
+              ref.branch,
+              dispatchBranchName(ref.branch, intent),
+              { log: (line) => this.log(`${ref.slug}: ${line}`) },
+              intentCommit ?? ref.branch,
+            )
           : null
         const taskFile = intent.task ? (obs.taskFiles.get(intent.task) ?? null) : null
         const taskPath = taskFile?.path ?? null

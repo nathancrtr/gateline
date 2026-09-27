@@ -1,5 +1,5 @@
 // Checkouts for dispatched agents. Every local dispatch works in its own git
-// worktree on a private branch off the run tip (§5.3, #406), and the
+// worktree on a private branch off its intent commit (§5.3, #406, #547), and the
 // orchestrator folds it back into the run branch when the job settles. The
 // run branch itself is checked out only for a sweep (`schedule.ts`). All of
 // them live under the OS temp dir — host-specific ephemera, like job handles
@@ -123,8 +123,8 @@ export async function removeRunCheckout(repoDir: string, branch: string): Promis
  * observed task 02's mid-flight broken state in the shared tree — and #406
  * extended it to every local dispatch, after two reviewers of one run were
  * found applying in-place mutants to the same shared checkout. Each job works
- * on a private branch in a private worktree, both derived from the run branch
- * tip; the orchestrator folds results back into the run branch serially with
+ * on a private branch in a private worktree, both cut from the intent commit
+ * that dispatched it; the orchestrator folds results back into the run branch serially with
  * `foldTaskBranch`. Nothing a dispatch does to its working tree is visible to
  * any other, and nothing lands on the run branch except through a fold.
  */
@@ -155,7 +155,24 @@ export function ensureTaskCheckout(repoDir: string, runBranch: string, task: str
   return ensureDispatchCheckout(repoDir, runBranch, taskBranchName(runBranch, task), seed)
 }
 
-export async function ensureDispatchCheckout(repoDir: string, runBranch: string, branch: string, seed: SeedOptions = {}): Promise<TaskCheckout> {
+/**
+ * `from` is the commit the dispatch's branch starts at. The engine passes the
+ * intent commit that dispatched the job (#547): the job then works on exactly
+ * the state its dispatch was derived from, whatever has landed on the run
+ * branch since. Without it the branch would start wherever the run branch
+ * stands when `git worktree add` runs, which for the second of two jobs
+ * launched in one tick can be after the first has finished and folded. That
+ * is a timing race, and it decided what the second agent saw. The fold rebases
+ * onto the run tip of its own moment either way. Absent, the run branch's
+ * current tip is used.
+ */
+export async function ensureDispatchCheckout(
+  repoDir: string,
+  runBranch: string,
+  branch: string,
+  seed: SeedOptions = {},
+  from: string = runBranch,
+): Promise<TaskCheckout> {
   const git = new Git(repoDir)
   const path = worktreePath(repoDir, branch.replace(/\//g, '-'))
 
@@ -166,7 +183,7 @@ export async function ensureDispatchCheckout(repoDir: string, runBranch: string,
   await git.run(['worktree', 'prune'])
   if (await git.revParse(`refs/heads/${branch}`)) await git.run(['branch', '-D', branch])
 
-  await git.run(['worktree', 'add', '-b', branch, path, runBranch])
+  await git.run(['worktree', 'add', '-b', branch, path, from])
   // A git worktree carries tracked files only, so a fresh one has no
   // dependencies at all and the agent's first act is a cold install (#229).
   // Seed them instead, from the run checkout if one exists with them and the

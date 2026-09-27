@@ -122,6 +122,12 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   it is clean and back on the default branch (a clean fast-forward instead exits the
   engine `75` to be restarted on the new code). Trial an unmerged frontend change
   from that branch's own worktree with `ui`, never `up`.
+* **Host configuration the engine acts on is read at the host repository's
+  default-branch tip** — the registry, `orchestrator.yaml`, adapter manifests and
+  role capabilities, read through git, never from the working tree or a run
+  branch. An unmerged branch must not change what the engine executes or what it
+  meters. An input missing at the tip is an error or a named default, never a
+  silent fallback to the working tree.
 * **Completed runs are historical records, and `run/*` branches are test
   fixtures.** Do not retro-edit artifacts under `runs/<slug>/` for a finished run —
   fold new lessons into roles, contracts, or docs — and do not delete or rewrite

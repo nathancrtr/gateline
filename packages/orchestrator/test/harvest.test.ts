@@ -7,6 +7,7 @@
 // under the bot identity before the worktree is torn down (#406 moved the
 // harvest from a shared run checkout into the fold of each job's private
 // worktree; what it takes, and what it leaves, is unchanged).
+import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { LocalGitSource } from '@gateline/core'
@@ -22,13 +23,19 @@ function makeEngine(dir: string, dispatcher: FakeDispatcher): Engine {
   return new Engine({ repoDir: dir, identity: BOT, dispatcher, registry: TEST_REGISTRY, staleMs: 10 * 60 * 1000 })
 }
 
-/** Frontmatter matching a real roles/analyst.md: no `shell` capability. */
+/**
+ * Frontmatter matching a real roles/analyst.md: no `shell` capability.
+ * Committed to the default branch, because that is where the engine reads
+ * role capabilities (#500).
+ */
 function markAnalystShellLess(dir: string): void {
   mkdirSync(join(dir, 'roles'), { recursive: true })
   writeFileSync(
     join(dir, 'roles', 'analyst.md'),
     '---\nrole: analyst\ndispatch: toy\ncapability_profile: balanced\ncapabilities: [read, search, write-artifacts]\ninputs: []\noutputs: [spec.md]\nwrites_code: false\ngate: G0\n---\n\n# Analyst\n',
   )
+  execFileSync('git', ['-C', dir, 'add', 'roles/analyst.md'])
+  execFileSync('git', ['-C', dir, 'commit', '-q', '-m', 'toy: shell-less analyst'])
 }
 
 describe('engine harvest-commit (#182)', () => {

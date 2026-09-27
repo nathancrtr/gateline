@@ -413,14 +413,21 @@ export class Engine {
     return this.cfg.budgetEnforcement !== false
   }
 
-  /** Loaded once per process (roles/ doesn't change mid-run); a failed read just leaves every role shell-ful. */
+  /**
+   * Loaded once per process, from the role specs at the default-branch tip
+   * (#500) — never the working tree; a failed read just leaves every role shell-ful.
+   */
   private capsPromise: Promise<Map<string, Set<string>>> | null = null
   private capabilities(): Promise<Map<string, Set<string>>> {
     if (!this.capsPromise) {
-      this.capsPromise = loadRoleCapabilities(this.cfg.repoDir, this.cfg.frameworkPrefix).catch((e) => {
-        this.log(`failed to load role capabilities: ${(e as Error).message} — every role defaults shell-ful`)
-        return new Map()
-      })
+      this.capsPromise = this.defaultBranch()
+        .then((rev) =>
+          loadRoleCapabilities(this.source.git, rev, { prefixHint: this.cfg.frameworkPrefix, log: (line) => this.log(line) }),
+        )
+        .catch((e) => {
+          this.log(`failed to load role capabilities: ${(e as Error).message} — every role defaults shell-ful`)
+          return new Map()
+        })
     }
     return this.capsPromise
   }

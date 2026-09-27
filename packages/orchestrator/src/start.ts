@@ -2,11 +2,10 @@
 // run loop the `gateline-orchestrator` binary drives, callable in-process so
 // a frontend can co-locate the engine over its own clone (`gateline up`) —
 // one deployment, one clone, one authority (docs/TOPOLOGY.md §3.1).
-import { stat } from 'node:fs/promises'
 import type { Identity } from '@gateline/core/record'
 import { CodeTreeMonitor, type CodeTreeStatus, Git, LocalOnlyPushConflictError, resolveCodeRepo } from '@gateline/core/sources'
 import { Engine, type InFlightJob } from './engine.ts'
-import { headlessManifestPath, loadHeadlessManifest } from './manifest.ts'
+import { headlessManifestPathAt, loadHeadlessManifestAt } from './manifest.ts'
 import { loadRegistry } from './registry.ts'
 import { RoutingDispatcher } from './router.ts'
 import { type PendingIntent, RemoteDispatcher } from './runner-dispatcher.ts'
@@ -124,26 +123,36 @@ export async function assembleOrchestrator(
   // uses (AC1.1) — only when neither `localOnly` nor `push` was explicit.
   const localOnly = opts.localOnly ?? (opts.push ? false : (await git.configGet('remote.origin.url')) === null)
   const push = localOnly ? false : opts.push
-  const registry = await loadRegistry(git, await git.defaultBranch(), opts.frameworkPrefix)
-  const watched: { adapter: string; path: string; loadedMtimeMs: number }[] = []
+  // Every host input the engine acts on is read at the default-branch tip
+  // (#500): the registry and the adapter manifests here, role capabilities in
+  // the engine, sweep schedules in the scheduler. The local ref, with no fetch,
+  // so a local-only repository reads exactly what it has.
+  const defaultBranch = await git.defaultBranch()
+  const registry = await loadRegistry(git, defaultBranch, opts.frameworkPrefix)
+  const watched: { adapter: string; path: string; loadedOid: string | null }[] = []
   const adapters = await Promise.all(
     (opts.adapters?.length ? opts.adapters : ['claude-code']).map(async (name) => {
-      const manifest = await loadHeadlessManifest(opts.repoDir, name, opts.frameworkPrefix)
-      const path = await headlessManifestPath(opts.repoDir, name, opts.frameworkPrefix)
-      watched.push({ adapter: name, path, loadedMtimeMs: (await stat(path).catch(() => null))?.mtimeMs ?? 0 })
+      const manifest = await loadHeadlessManifestAt(git, defaultBranch, name, opts.frameworkPrefix)
+      const path = await headlessManifestPathAt(git, defaultBranch, name, opts.frameworkPrefix)
+      watched.push({ adapter: name, path, loadedOid: await git.objectId(defaultBranch, path) })
       return { manifest, dispatcher: new HeadlessDispatcher(manifest) }
     }),
   )
-  // Manifests are read once, at process start (the 2026-07-16 trap: an
-  // on-disk fix silently never applied). The probe reports a manifest whose
-  // file changed after load, once per change — the heartbeat surfaces it.
+  // Manifests are read once, at process start, as the registry is (the
+  // 2026-07-16 trap: a fix that silently never applied). The probe reports a
+  // manifest whose blob at the default-branch tip changed after load, once per
+  // change — the heartbeat surfaces it. Edits in the working tree or on another
+  // branch change nothing the engine runs, so they are not reported.
   const manifestStaleProbe = async (): Promise<string[]> => {
     const messages: string[] = []
+    const tip = await git.defaultBranch()
     for (const w of watched) {
-      const mtimeMs = (await stat(w.path).catch(() => null))?.mtimeMs ?? 0
-      if (mtimeMs > w.loadedMtimeMs) {
-        w.loadedMtimeMs = mtimeMs
-        messages.push(`adapter manifest "${w.adapter}" changed on disk after load — manifests are read once at startup; restart to apply (${w.path})`)
+      const oid = await git.objectId(tip, w.path)
+      if (oid !== w.loadedOid) {
+        w.loadedOid = oid
+        messages.push(
+          `adapter manifest "${w.adapter}" changed on ${tip} after load — manifests are read once at startup, from the default-branch tip; restart to apply (${w.path})`,
+        )
       }
     }
     return messages

@@ -40,7 +40,8 @@ function addOrigin(dir: string): string {
  * A minimal `claude-code` headless manifest so `assembleOrchestrator` can
  * resolve an adapter without shelling out to a real harness (loadRegistry
  * itself degrades to `null` with no `registry/models.yaml`, but the
- * adapter manifest is read unconditionally).
+ * adapter manifest is read unconditionally). Committed to the default
+ * branch, where the engine reads it (#500).
  */
 function withAdapterManifest(dir: string): void {
   const manifestDir = join(dir, 'adapters', 'claude-code')
@@ -55,6 +56,8 @@ function withAdapterManifest(dir: string): void {
       model_vendors: {},
     }),
   )
+  execFileSync('git', ['-C', dir, 'add', 'adapters/claude-code/manifest.json'])
+  execFileSync('git', ['-C', dir, 'commit', '-q', '-m', 'toy: claude-code adapter'])
 }
 
 describe('engine heartbeat sync under local-only (AC2.4)', () => {

@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { Git } from '@gateline/core'
 import { describe, expect, it } from 'vitest'
 import { Engine } from '../src/engine.ts'
-import { loadHeadlessManifest } from '../src/manifest.ts'
+import { loadHeadlessManifestAt } from '../src/manifest.ts'
 import { loadRegistry } from '../src/registry.ts'
 import { Scheduler, sweepSlug } from '../src/schedule.ts'
 import { agentCommit, FakeDispatcher, humanDecide, makeToyRepo, reconcile, SPEC, TEST_REGISTRY, toyRef } from './engine.helper.ts'
@@ -41,7 +41,7 @@ describe('loadRegistry against a prefixed host', () => {
   })
 })
 
-describe('loadHeadlessManifest against a prefixed host', () => {
+describe('loadHeadlessManifestAt against a prefixed host', () => {
   it('reads adapters/<name>/manifest.json from under the metadata prefix', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'gateline-manifest-'))
     mkdirSync(join(dir, '.gateline', 'adapters', 'fake'), { recursive: true })
@@ -55,7 +55,12 @@ describe('loadHeadlessManifest against a prefixed host', () => {
         headless: { command: ['fake', '{prompt}'], usage_report: { format: 'static-estimate' } },
       }),
     )
-    const manifest = await loadHeadlessManifest(dir, 'fake')
+    const env = { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_SYSTEM: '/dev/null' }
+    execFileSync('git', ['-C', dir, 'init', '-q', '-b', 'main'], { env })
+    execFileSync('git', ['-C', dir, 'add', '-A'], { env })
+    execFileSync('git', ['-C', dir, '-c', 'user.name=t', '-c', 'user.email=t@example.test', 'commit', '-q', '-m', 'seed'], { env })
+    const git = new Git(dir)
+    const manifest = await loadHeadlessManifestAt(git, await git.defaultBranch(), 'fake')
     expect(manifest.command).toEqual(['fake', '{prompt}'])
     expect(manifest.usage.format).toBe('static-estimate')
   })

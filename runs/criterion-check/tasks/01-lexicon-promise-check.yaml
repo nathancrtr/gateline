@@ -49,3 +49,10 @@ depends_on: []
 status: pending
 
 notes: |
+  round 1:
+  claim: AC8.5 — with the pre-change lexicon.ts from HEAD, `npx vitest run core/test/lexicon-check.test.ts` fails 18 of 29 tests, including every AC1.x test.
+  claim: AC8.6 — if the body join becomes `join('')`, AC2.1 fails, and AC2.2 fails for the four earlier specs that wrap a criterion. Restoring the join turns both green.
+  deviation: breaking the body join cannot fail AC2.3, because that test guards check detection. A check detected on any continuation line failed AC2.3 for the same four specs, and the test passed once restored.
+  claim: each of these mutants is caught by its own test. A case-insensitive label fails AC1.6. A check kept to one line fails AC1.4. A dropped label fails AC1.2. A check found in the first line fails AC1.5.
+  discovery: `body === promise + ' ' + check` fails in one case. The promise's last line must be the criterion's first line and end in trailing spaces. The plan's trim rule removes those spaces from `promise` while `body` keeps them. No spec in the repository has this.
+  `npx vitest run core/test`: 41 files, 696 tests passed. `npm run typecheck`: clean. In the full `npm test`, 1 test failed and 1 file errored, both from a 30-second hook timeout under load, in readiness and blob-reads. Rerun alone, those files passed 85 of 85.

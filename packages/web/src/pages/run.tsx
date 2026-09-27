@@ -9,9 +9,9 @@
 // `RunPage` and re-exports every symbol a test imports from here, so no import
 // path had to change.
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { api } from '../api.ts'
+import { api, type InboxItem } from '../api.ts'
 import { KeyHints } from '../components/chips.tsx'
 import { CloseRunPanel, ClosureRecordBlock } from '../components/close-run.tsx'
 import { LexiconProvider, useRunLexicon } from '../components/lexicon.tsx'
@@ -19,7 +19,7 @@ import { decideTargetIndex, resolveSurface, type Surface } from '../landing.ts'
 import { orderArtifacts } from '../record-rail.ts'
 import { type KeyHint, useKeys } from '../use-keys.ts'
 import { PageStatus } from './inbox.tsx'
-import { burdenPillNeeded, cardInstruction, NeedsYouCard } from './run/decide-card.tsx'
+import { burdenPillNeeded, cardInstruction, DecidedCard, NeedsYouCard } from './run/decide-card.tsx'
 import { LoadingSkeleton, RunHeader, RunMetadata, roundsLabel, SurfaceTab, TaskBoard } from './run/header.tsx'
 import { HistoryTab } from './run/history.tsx'
 import { contractBadgeName, navEntryClass, RECORD_ENTRY_SHAPE, RecordSurface } from './run/record.tsx'
@@ -31,6 +31,18 @@ export {
   navEntryClass,
   RECORD_ENTRY_SHAPE,
   roundsLabel,
+}
+
+/** A card's React key, and the identity a kept confirmation is matched by (#506). */
+const cardKey = (item: InboxItem, i: number) => `${item.kind}-${item.gate ?? item.escalationIndex ?? i}`
+
+/** A committed decision's confirmation, kept past the card it was given on (#506). */
+interface Confirmed {
+  src: string | undefined
+  slug: string | undefined
+  key: string
+  item: InboxItem
+  text: string
 }
 
 export function RunPage() {
@@ -45,10 +57,19 @@ export function RunPage() {
   })
   const lexicon = useRunLexicon(src, slug)
 
+  // The confirmation of the decision just made (#506). It stands in the Decide
+  // surface once the refetch its own write triggers has removed the card, and
+  // until the person leaves this run or a card with the same identity returns
+  // (a declined gate's new packet, say). It is never shown twice: while the card
+  // still exists, the card's own panel is showing it.
+  const [confirmed, setConfirmed] = useState<Confirmed | null>(null)
+  const liveKeys = (data?.items ?? []).map(cardKey)
+  const standing = confirmed && confirmed.src === src && confirmed.slug === slug && !liveKeys.includes(confirmed.key) ? confirmed : null
+
   // Which surface the URL asks for and which it gets. Pure, so it runs before
   // the loading guards below; until the run loads nothing is pending, which is
   // why the rewrite effect waits for `data` rather than acting on that.
-  const pending = (data?.items.length ?? 0) > 0
+  const pending = (data?.items.length ?? 0) > 0 || standing !== null
   const route = resolveSurface({ tab: params.get('tab'), artifact: params.get('artifact') }, { pending })
 
   // A link that named a retired container tab still works, and leaves a
@@ -130,7 +151,7 @@ export function RunPage() {
   // can, so the prediction moved into the surface and the fork went away with
   // the duplicate vitals it required. Status content is still never boxed: card
   // chrome belongs to the decision cards alone.
-  const busy = items.length > 0
+  const busy = items.length > 0 || standing !== null
 
   // The inbox already encodes what it is calling you to decide (`?decide=G2`,
   // `esc-<n>`, `paused`, `staged`); until #216 the run page dropped it on the
@@ -178,15 +199,17 @@ export function RunPage() {
 
         {route.surface === 'decide' && (
           <section className="flex flex-col gap-4 pb-7 border-b border-line">
+            {standing && <DecidedCard key={standing.key} item={standing.item} text={standing.text} />}
             {items.map((item, i) => (
               <NeedsYouCard
-                key={`${item.kind}-${item.gate ?? item.escalationIndex ?? i}`}
+                key={cardKey(item, i)}
                 item={item}
                 now={now}
                 detail={detail}
                 primary={i === primaryIndex}
                 sentHere={i === decideIndex}
                 pageHints={pageHints}
+                onCommitted={(text) => setConfirmed({ src, slug, key: cardKey(item, i), item, text })}
               />
             ))}
           </section>

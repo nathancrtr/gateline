@@ -209,6 +209,11 @@ test('the pointer decision loop: approve G0 with burden → correct commit', asy
   await card.getByPlaceholder(/Notes \(optional\)/).fill('spec is right; two ACs tightened')
   await card.locator('[data-decide="approve-confirm"]').click()
   await expect(card.getByRole('status')).toContainText(/committed [0-9a-f]{10}/)
+  // …and it is still there once the run has been refetched (#506). The
+  // decision's own write removes the G0 card from the run; the assertion
+  // above could pass or miss in the tenth of a second before that landed.
+  await expect(page.locator('[data-spine] [data-spine-gate="G0"]')).toHaveAttribute('data-state', 'approved')
+  await expect(card.getByRole('status')).toContainText(/committed [0-9a-f]{10}/)
 
   const subject = git(['log', '-1', '--format=%s %an', 'run/g0-pending']).trim()
   expect(subject).toBe('state(g0-pending): G0 approved by Fixture Operator [burden: light-correction] Fixture Operator')

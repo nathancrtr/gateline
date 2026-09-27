@@ -24,9 +24,15 @@ permissions:
   pages: write
   id-token: write
 
+# Keyed by ref, so a pull request's run shares a group only with another run
+# on that same pull request (its ref is the stable refs/pull/<n>/merge) and is
+# cancelled only by a newer push there. A push to main is its own group too,
+# but never cancelled in progress: a Pages deploy that is cut off mid-upload
+# can leave the site partially published, so a second push to main queues
+# behind the first instead of cancelling it.
 concurrency:
-  group: site-pages
-  cancel-in-progress: true
+  group: site-pages-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:

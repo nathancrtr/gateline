@@ -12,6 +12,7 @@ import type { Document } from 'yaml'
 import { hasShell, loadRoleCapabilities } from './capabilities.ts'
 import { type Bookkeeping, DEFAULT_ESTIMATE_USD, type DerivedAction, type DispatchIntent, deriveAction } from './derive.ts'
 import { harvestPathspecs } from './harvest.ts'
+import { type HostTip, resolveHostTip } from './manifest.ts'
 import {
   type Anchor,
   after,
@@ -39,6 +40,13 @@ export interface EngineConfig {
    * custom `gateline init --prefix` (#95) — otherwise auto-detected.
    */
   frameworkPrefix?: string
+  /**
+   * The commit the host's configuration is read at (#500). `assembleOrchestrator`
+   * passes the one it resolved at startup, so role capabilities come from the
+   * same snapshot as the registry and adapter manifests; absent, the engine
+   * resolves its own on first use.
+   */
+  hostTip?: HostTip
   /** Dispatch wall clock per role before the job is killed (default 30 min). */
   roleTimeoutMs?: number
   /** Age at which an open ledger entry with no live job is declared lost (default 5 min). */
@@ -413,14 +421,25 @@ export class Engine {
     return this.cfg.budgetEnforcement !== false
   }
 
-  /** Loaded once per process (roles/ doesn't change mid-run); a failed read just leaves every role shell-ful. */
+  /**
+   * Loaded once per process, from the role specs at the host tip (#500) —
+   * never the working tree; a failed read just leaves every role shell-ful.
+   */
   private capsPromise: Promise<Map<string, Set<string>>> | null = null
   private capabilities(): Promise<Map<string, Set<string>>> {
     if (!this.capsPromise) {
-      this.capsPromise = loadRoleCapabilities(this.cfg.repoDir, this.cfg.frameworkPrefix).catch((e) => {
-        this.log(`failed to load role capabilities: ${(e as Error).message} — every role defaults shell-ful`)
-        return new Map()
-      })
+      this.capsPromise = (this.cfg.hostTip ? Promise.resolve(this.cfg.hostTip) : resolveHostTip(this.source.git))
+        .then((tip) =>
+          loadRoleCapabilities(this.source.git, tip.commit, {
+            prefixHint: this.cfg.frameworkPrefix,
+            refName: tip.name,
+            log: (line) => this.log(line),
+          }),
+        )
+        .catch((e) => {
+          this.log(`failed to load role capabilities: ${(e as Error).message} — every role defaults shell-ful`)
+          return new Map()
+        })
     }
     return this.capsPromise
   }

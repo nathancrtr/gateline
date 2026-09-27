@@ -69,6 +69,7 @@ test('with no scope, each gate shows its total and then each repository, the fla
 test('under a scope, the gate table is that repository’s own figures', async ({ page }) => {
   await page.goto(`${ORIGIN}/metrics?repo=${encodeURIComponent(DEMO_SMALL_ID)}`)
   await expect(page.locator('[data-scope-heading]')).toContainText('demo-small')
+  await expect(gateRows(page)).toHaveCount(4)
   expect(await readRows(page)).toEqual([
     ['G0', '', 'G0 3 3 of 3 approved too few to rate confirmation: 3 1m'],
     ['G1', '', 'G1 2 2 of 2 approved too few to rate confirmation: 2 1m'],
@@ -79,6 +80,9 @@ test('under a scope, the gate table is that repository’s own figures', async (
   await expect(page.getByText('over-triggering?')).toHaveCount(0)
 
   await page.goto(`${ORIGIN}/metrics?repo=${encodeURIComponent(DEMO_ID)}`)
+  // The rows arrive after the page loads; read them once all four are drawn.
+  await expect(page.locator('[data-scope-heading]')).toContainText('demo')
+  await expect(gateRows(page)).toHaveCount(4)
   const rows = await readRows(page)
   expect(rows.map(([gate, , text]) => [gate, text])).toEqual([
     ['G0', 'G0 10 100% over-triggering? 1m'],
@@ -92,6 +96,7 @@ test('under a scope, the gate table is that repository’s own figures', async (
 test('a one-repository set shows one row per gate, the flag on the total', async ({ page }) => {
   await page.goto(`${SINGLE}/metrics`)
   await expect(page.locator('main h1')).toHaveText('Metrics')
+  await expect(gateRows(page)).toHaveCount(4)
   expect((await readRows(page)).map(([gate, where]) => [gate, where])).toEqual([
     ['G0', ''],
     ['G1', ''],

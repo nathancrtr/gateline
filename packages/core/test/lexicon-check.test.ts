@@ -60,17 +60,45 @@ describe('where a check starts and ends', () => {
 
   it("AC1.4 — a check that wraps keeps every line (the spec contract's own example)", () => {
     // The example sits in an HTML comment, indented and without a list
-    // marker; lift its three lines into a list item as the contract shapes it.
+    // marker; lift its lines, up to the next criterion, into a list item as
+    // the contract shapes it.
     const lines = read('contracts/spec.md').split('\n')
     const start = lines.findIndex((l) => l.trim().startsWith('AC1.1 — The snapshot generator'))
     expect(start).toBeGreaterThan(-1)
-    const [first, ...rest] = lines.slice(start, start + 3).map((l) => l.trim())
+    const end = lines.findIndex((l, i) => i > start && /^AC\d+\.\d+ — /.test(l.trim()))
+    expect(end).toBeGreaterThan(start)
+    const [first, ...rest] = lines.slice(start, end).map((l) => l.trim())
     expect(rest[0]).toMatch(/^Check:/)
+    // The check this test is for wraps: at least two lines of it.
+    expect(rest.length).toBeGreaterThanOrEqual(2)
     const ac = criterion(specWith(`- [ ] ${first}`, ...rest.map((l) => `  ${l}`)))
     expect(ac.promise).toBe('The snapshot generator never opens a network port.')
     expect(ac.check).toMatch(/^Check: /)
-    expect(ac.check!.endsWith(rest[1]!)).toBe(true)
-    expect(ac.check).toBe(`${rest[0]} ${rest[1]}`)
+    expect(ac.check!.endsWith(rest.at(-1)!)).toBe(true)
+    expect(ac.check).toBe(rest.join(' '))
+  })
+
+  it('a label in the middle of a continuation line does not start a check', () => {
+    const ac = criterion(specWith('- [ ] AC1.1 — The page shows the label', '  named Check: before the result.'))
+    expect(ac.promise).toBe('The page shows the label named Check: before the result.')
+    expect(Object.hasOwn(ac, 'check')).toBe(false)
+  })
+
+  it('the check starts at the first labelled line and keeps every later one', () => {
+    const ac = criterion(specWith('- [ ] AC1.1 — P.', '  Check: one.', '  Check: two.'))
+    expect(ac.promise).toBe('P.')
+    expect(ac.check).toBe('Check: one. Check: two.')
+  })
+
+  it('the label needs its colon, and nothing after it', () => {
+    for (const word of ['Checks', 'Checking']) {
+      const ac = criterion(specWith('- [ ] AC1.1 — The report lists what it ran.', `  ${word} the output is optional.`))
+      expect(ac.promise, word).toBe(`The report lists what it ran. ${word} the output is optional.`)
+      expect(Object.hasOwn(ac, 'check'), word).toBe(false)
+    }
+    const ac = criterion(specWith('- [ ] AC1.1 — The tool exits zero.', '  Check:run it on an empty file.'))
+    expect(ac.promise).toBe('The tool exits zero.')
+    expect(ac.check).toBe('Check:run it on an empty file.')
   })
 
   it('AC1.5 — `Check:` inside the first line does not start a check', () => {

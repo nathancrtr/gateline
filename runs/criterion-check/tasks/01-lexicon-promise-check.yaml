@@ -56,3 +56,11 @@ notes: |
   claim: each of these mutants is caught by its own test. A case-insensitive label fails AC1.6. A check kept to one line fails AC1.4. A dropped label fails AC1.2. A check found in the first line fails AC1.5.
   discovery: `body === promise + ' ' + check` fails in one case. The promise's last line must be the criterion's first line and end in trailing spaces. The plan's trim rule removes those spaces from `promise` while `body` keeps them. No spec in the repository has this.
   `npx vitest run core/test`: 41 files, 696 tests passed. `npm run typecheck`: clean. In the full `npm test`, 1 test failed and 1 file errored, both from a 30-second hook timeout under load, in readiness and blob-reads. Rerun alone, those files passed 85 of 85.
+  round 2:
+  fixed F1: a new test puts `Check:` mid-line on a continuation line. The mutant that matches a line containing the label fails it.
+  fixed F2: a new test gives two labelled lines. Swapping `findIndex` for `findLastIndex` fails it.
+  fixed F3: a new test keeps `Checks` and `Checking` lines in the promise and treats `Check:run` as a check. Dropping the colon fails it, and so does demanding a space after it.
+  rebuttal F4: no fix inside this task can make the plan's fourth rule hold. It conflicts with the sixth (`body` as today) and the third (trim) together, and changing either breaks the plan. The Architect has to settle it. No spec has either shape.
+  fixed F5: restored the space in `CHOICE_ITEM = /`.
+  fixed F6: AC1.4 now reads up to the next criterion and requires a check of two or more lines. With the contract's check shrunk to one line (a scratch edit, since restored), the test fails.
+  `npx vitest run core/test`: 41 files, 699 tests passed. `npm test`: 123 files passed, 2 skipped. `npm run typecheck` and `npm run lint`: clean.

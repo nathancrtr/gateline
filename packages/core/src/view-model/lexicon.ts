@@ -57,7 +57,7 @@ const ADR_HEADING = /^#{1,6}\s*ADR-(\d+)(?:\s*\(([^)]+)\))?:\s*(.+?)\s*$/
 const AC_ITEM = /^\s*[-*]\s*(?:\[[ xX]\]\s*)?(AC\d+\.\d+)\s+—\s*(.*)$/
 const AC_LABEL = /^\s*\*\*Acceptance criteria:?\*\*/i
 const CHECK_LABEL = 'Check:'
-const CHOICE_ITEM =/^\s*[-*]\s*\*\*Choice:?\*\*\s*(.*)$/i
+const CHOICE_ITEM = /^\s*[-*]\s*\*\*Choice:?\*\*\s*(.*)$/i
 const LIST_ITEM = /^\s*[-*]\s/
 const FENCE = /^\s*(```|~~~)/
 

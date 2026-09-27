@@ -7,18 +7,27 @@
 //
 // Static markup, as g2-criterion-check.test.ts renders the G2 card: element
 // structure and quoted words are what these tests pin. Where the check lands
-// on screen, and whether the clamp cuts it, are browser facts tested in the
-// e2e suite. The lexicon is core's own, built from a real spec, so a change to
-// its grammar fails here rather than passing against a hand-built object.
+// on screen is a browser fact tested in the e2e suite. The rule that lifts the
+// clamp is pinned here as Tailwind compiles it, because the e2e suite's demo
+// criterion is too short for a six-line cut to show. The lexicon is core's
+// own, built from a real spec, so a change to its grammar fails here rather
+// than passing against a hand-built object.
 
+import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { buildLexicon, ID_PATTERN, type LexiconEntry } from '@gateline/core/view-model'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
+import { compile } from 'tailwindcss'
 import { describe, expect, it } from 'vitest'
 import { CitedObjects, LexiconProvider, LexRef, type RunLexicon } from '../src/components/lexicon.tsx'
 
-/** AC1.1 carries a check that wraps onto a second line; AC1.2 has none. */
+/** AC1.1 carries a check; its promise and check each run past 110
+ *  characters and wrap, so a quote cut short loses words. AC1.2 has no check.
+ *  AC1.3 writes markdown in both halves, so a half printed as plain text shows. */
 const SPEC = `# Specification: sample
 
 ## Requirements
@@ -26,17 +35,21 @@ const SPEC = `# Specification: sample
 ### R1 — Snapshots
 The generator writes a snapshot of every run.
 **Acceptance criteria:**
-- [ ] AC1.1 — The snapshot generator never opens a network port.
-  Check: its script contains neither
-  port-binding call the server makes.
+- [ ] AC1.1 — The snapshot generator never opens a network port, not while it
+  reads the record and not while it writes the pages it renders from it.
+  Check: its script contains neither port-binding call the server makes, and no
+  module it imports reaches for a socket of any kind at all.
 - [ ] AC1.2 — The snapshot lists every run
   in the order the record gives them.
+- [ ] AC1.3 — The snapshot names its **source** commit.
+  Check: the page footer holds the \`git rev-parse\` output.
 `
 
 const LEXICON = buildLexicon({ spec: SPEC })
 const entry = (id: string) => LEXICON.entries.find((e) => e.id === id) as LexiconEntry
 const CHECKED = entry('AC1.1')
 const PLAIN = entry('AC1.2')
+const MARKDOWN = entry('AC1.3')
 const REQUIREMENT = entry('R1')
 
 function runLexicon(): RunLexicon {
@@ -92,6 +105,9 @@ const textOf = (html: string) =>
 /** Each run of whitespace to one space, none at either end (plan.md, Lexicon entry). */
 const collapse = (s: string) => s.replace(/\s+/g, ' ').trim()
 
+/** A class or inline style inside a quote that would cut its text short. */
+const CUT = /\sclass="(?:[^"]*\s)?(?:truncate|line-clamp-\d+|text-ellipsis|overflow-hidden|max-h-\S+)(?:\s[^"]*)?"|\sstyle="/
+
 /** The card's definition quote: the `.lex-card-def` element. */
 function quoteOf(markup: string): string {
   const el = element(markup, 'class="lex-card-def[^"]*"')
@@ -114,9 +130,17 @@ describe('the fixture', () => {
   it('holds one checked and one unchecked criterion', () => {
     // Guards the input, not the views: without a check on AC1.1 every
     // checked-path assertion below would be testing the unchecked path.
-    expect(CHECKED.check).toBe('Check: its script contains neither port-binding call the server makes.')
-    expect(CHECKED.promise).toBe('The snapshot generator never opens a network port.')
+    expect(CHECKED.check).toBe(
+      'Check: its script contains neither port-binding call the server makes, and no module it imports reaches for a socket of any kind at all.',
+    )
+    expect(CHECKED.promise).toBe(
+      'The snapshot generator never opens a network port, not while it reads the record and not while it writes the pages it renders from it.',
+    )
+    expect(CHECKED.promise!.length).toBeGreaterThan(110)
+    expect(CHECKED.check!.length).toBeGreaterThan(110)
     expect('check' in PLAIN).toBe(false)
+    expect(MARKDOWN.promise).toBe('The snapshot names its **source** commit.')
+    expect(MARKDOWN.check).toBe('Check: the page footer holds the `git rev-parse` output.')
   })
 })
 
@@ -147,11 +171,71 @@ describe('hover card: a criterion with a check (AC4.1, AC4.2)', () => {
     expect(collapse(textOf(inner(quote)))).toBe(collapse(CHECKED.body))
     // Whitespace separates the promise from its check, so the two do not run
     // together in the quote's text content.
-    expect(textOf(inner(quote))).not.toContain('port.Check:')
+    expect(textOf(inner(quote))).not.toContain(`${CHECKED.promise}${CHECKED.check}`)
   })
 
   it('lifts the six-line clamp, so the end of the check is never cut (ADR-3)', () => {
     expect(openTag(quote)).toMatch(/\sclass="lex-card-def lex-card-def-full"/)
+  })
+
+  it('cuts neither half short inside the quote', () => {
+    expect(inner(quote)).not.toMatch(CUT)
+  })
+})
+
+describe('hover card: a checked criterion written in markdown (AC4.1)', () => {
+  const quote = quoteOf(hover('AC1.3'))
+  const check = element(quote, 'data-criterion-check')
+
+  it('renders the promise through markdown', () => {
+    expect(check).not.toBeNull()
+    const promise = inner(quote).slice(0, inner(quote).indexOf(check!))
+    expect(promise).toContain('<p>The snapshot names its <strong>source</strong> commit.</p>')
+  })
+
+  it('renders the check through markdown', () => {
+    expect(inner(check!)).toBe('<p>Check: the page footer holds the <code>git rev-parse</code> output.</p>')
+  })
+
+  it('cuts neither half short inside the quote', () => {
+    expect(inner(quote)).not.toMatch(CUT)
+  })
+})
+
+describe('stylesheet: the clamp modifier (ADR-3)', async () => {
+  // styles.css compiled as the build compiles it, `@import 'tailwindcss'`
+  // resolved to the installed package. The modifier and the base rule share a
+  // specificity, so the one written later wins.
+  const src = fileURLToPath(new URL('../src/styles.css', import.meta.url))
+  const require = createRequire(import.meta.url)
+  const compiler = await compile(readFileSync(src, 'utf8'), {
+    base: dirname(src),
+    loadStylesheet: async (id) => {
+      const path = require.resolve(id === 'tailwindcss' ? 'tailwindcss/index.css' : id)
+      return { path, base: dirname(path), content: readFileSync(path, 'utf8') }
+    },
+  })
+  const css = compiler.build([])
+  /** The declarations of the top-level rule for exactly `selector`, and where it sits. */
+  const rule = (selector: string) => {
+    const at = css.indexOf(`\n${selector} {`)
+    expect(at, `styles.css compiles a ${selector} rule`).toBeGreaterThan(-1)
+    return { at, body: css.slice(css.indexOf('{', at) + 1, css.indexOf('}', at)) }
+  }
+
+  it('the base quote is clamped to six lines', () => {
+    expect(rule('.lex-card-def').body).toMatch(/-webkit-line-clamp:\s*6;/)
+  })
+
+  it('the modifier unsets the clamp and lets the text show', () => {
+    const { body } = rule('.lex-card-def-full')
+    expect(body).toMatch(/-webkit-line-clamp:\s*unset;/)
+    expect(body).toMatch(/overflow:\s*visible;/)
+    expect(body).toMatch(/display:\s*block;/)
+  })
+
+  it('the modifier comes after the base rule, so it wins', () => {
+    expect(rule('.lex-card-def-full').at).toBeGreaterThan(rule('.lex-card-def').at)
   })
 })
 

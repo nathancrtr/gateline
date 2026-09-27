@@ -1,7 +1,7 @@
 run: criterion-check
 branch: run/criterion-check
-phase: implement # staged — not yet armed; `gateline arm criterion-check` starts the run
-paused_reason: null
+phase: paused # staged — not yet armed; `gateline arm criterion-check` starts the run
+paused_reason: escalation
 profile: standard # patch | standard | full
 intake:
   # source-agnostic staging provenance; free-form path: nulls + client_key
@@ -300,9 +300,10 @@ budget:
           adapter: claude-code,
           model: claude-opus-5-5,
           engine: Carter-Nathan-MacBook Pro-L0295K7GD7:26814,
-          tokens_in: null,
-          tokens_out: null,
-          cost_usd: null
+          tokens_in: 0,
+          tokens_out: 0,
+          cost_usd: 0,
+          failed: true
         }
     ]
 gates:
@@ -339,7 +340,7 @@ tasks:
         review_rounds: 2
       },
     { id: 05-record-reader-check, status: review-approved, review_rounds: 1 },
-    { id: 06-e2e-criterion-check, status: dispatched, review_rounds: 1 }
+    { id: 06-e2e-criterion-check, status: failed, review_rounds: 1 }
   ]
 escalations:
   [
@@ -364,5 +365,13 @@ escalations:
         resolved_by: Nathan Carter,
         resolved_at: 2026-09-27T04:06:36.713Z,
         resolution: Amendment acknowledged. Collapsing includes trimming both ends.
+      },
+    {
+        at: 2026-09-27T06:15:40.689Z,
+        from_role: orchestrator,
+        reason: "implementer (06-e2e-criterion-check) failed twice: Command failed (exit
+          1): claude -p Use the implementer subagent, running it in the
+          foreground — wait for it to complete…",
+        resolved: false
       }
   ]

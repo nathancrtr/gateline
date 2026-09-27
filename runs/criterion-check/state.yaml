@@ -254,6 +254,18 @@ budget:
           tokens_in: 8,
           tokens_out: 2151,
           cost_usd: 2.23846675
+        },
+      {
+          at: 2026-09-27T05:16:23.649Z,
+          role: implementer,
+          task: 06-e2e-criterion-check,
+          round: 1,
+          adapter: claude-code,
+          model: claude-opus-5-5,
+          engine: Carter-Nathan-MacBook Pro-L0295K7GD7:26814,
+          tokens_in: null,
+          tokens_out: null,
+          cost_usd: null
         }
     ]
 gates:
@@ -290,7 +302,7 @@ tasks:
         review_rounds: 2
       },
     { id: 05-record-reader-check, status: review-approved, review_rounds: 1 },
-    { id: 06-e2e-criterion-check, status: pending, review_rounds: 0 }
+    { id: 06-e2e-criterion-check, status: dispatched, review_rounds: 0 }
   ]
 escalations:
   [

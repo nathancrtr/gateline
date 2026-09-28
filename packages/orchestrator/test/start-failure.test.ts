@@ -3,10 +3,10 @@
 // left watching refs, ticking on a timer or dispatching. An assembly error
 // names its repository too. Toy repositories and fake dispatchers only.
 import { execFileSync } from 'node:child_process'
-import { readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { engineHealthPath } from '@gateline/core'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Governor } from '../src/governor.ts'
 import { assembleOrchestrators } from '../src/start.ts'
 import { agentCommit, type Clock, FakeDispatcher, makeToyRepo, SPEC } from './engine.helper.ts'
@@ -61,6 +61,10 @@ describe('start() when one engine cannot start', () => {
     expect((set.governor as Governor).snapshot().occupied).toBe(0)
     // alpha's loop is stopped: a ref that moves now wakes no pass, and no health file is rewritten.
     const healthFile = await engineHealthPath(a.dir)
+    // Its startup pass wrote the health file before the stop returned (a loop
+    // still running would write it again below).
+    await vi.waitFor(() => expect(existsSync(healthFile)).toBe(true), { timeout: 10_000, interval: 50 })
+    await new Promise((r) => setTimeout(r, 500))
     const before = readFileSync(healthFile, 'utf8')
     const tipBefore = git(a.dir, ['rev-parse', 'run/toy'])
     git(a.dir, ['branch', 'poke', 'main'])

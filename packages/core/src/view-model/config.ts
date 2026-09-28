@@ -49,6 +49,14 @@ export class ConfigError extends Error {
 const MODE_LIST = REPOSITORY_MODES.join(', ')
 const MODE_HELP = '`mode: view` (read only), `mode: decide` (also record decisions) or `mode: dispatch` (also run an engine under `up`)'
 
+/**
+ * The longest interval, in seconds, a heartbeat or a role timeout may be
+ * (#502): Node's timers hold a signed 32-bit count of milliseconds, and a
+ * longer delay is silently replaced by 1 ms, so an engine would tick every
+ * millisecond and a role would be killed as it started.
+ */
+export const MAX_TIMER_SECONDS = 2_147_483
+
 const repositoryLimitsSchema = z
   .object({
     /** This repository's own spend ceiling, beneath the machine's (§7.4, P3). */
@@ -105,9 +113,9 @@ const engineSchema = z
     /** Headless adapters every `dispatch` repository may run; the first is the default (as `--adapter`). */
     adapters: z.array(z.string().min(1)).min(1).optional(),
     /** Wall clock per dispatched role, in seconds (as `--role-timeout`). */
-    role_timeout_seconds: z.number().positive().optional(),
+    role_timeout_seconds: z.number().positive().max(MAX_TIMER_SECONDS).optional(),
     /** Engine heartbeat interval, in seconds (as `--heartbeat`). */
-    heartbeat_seconds: z.number().positive().optional(),
+    heartbeat_seconds: z.number().positive().max(MAX_TIMER_SECONDS).optional(),
     /**
      * What replaces this machine's hostname in every engine id `up` writes
      * (as `--engine-name`, #502). It must differ from the name of every other
@@ -173,10 +181,17 @@ export interface RepositorySettings {
 
 export interface LoadedConfig {
   sources: RunSource[]
-  /** Where the config was read from, or null when defaulted. */
+  /** Where the set came from: the config file's path when it listed the set, or null (`--repo`, the working directory). */
   configPath: string | null
+  /**
+   * The config file whose `limits:` and `engine:` were read, or null when
+   * none was (#502). The same as `configPath` when the file listed the set;
+   * set with a null `configPath` when the file lists no repositories and the
+   * working directory is served under the file's limits.
+   */
+  settingsPath: string | null
   warnings: string[]
-  /** The config file's `limits:`; empty when no config file was read (`--repo`, the working directory). */
+  /** The config file's `limits:`; empty when no config file was read (`--repo`, or the working directory with no file). */
   limits: OperatorLimits
   /** The config file's `engine:`; empty when no config file was read. */
   engine: EngineDefaults
@@ -544,7 +559,7 @@ export async function loadSources(opts: {
         new LocalGitSource(n.id, n.top, { push, localOnly, displayName: n.displayName, formerIds: n.formerIds, mode: zeroConfigMode }),
       )
     }
-    return { sources, configPath: null, warnings, ...none, repositorySettings }
+    return { sources, configPath: null, settingsPath: null, warnings, ...none, repositorySettings }
   }
 
   const configPath = opts.configPath ?? defaultConfigPath()
@@ -616,10 +631,16 @@ export async function loadSources(opts: {
       )
     }
     if (sources.length === 0) {
-      warnings.push(`config at ${configPath} yielded no usable sources; falling back to current repo`)
-      return fallbackToCwd(cwd, warnings, zeroConfigMode, opts.push, opts.localOnly)
+      // The file lists no repositories (no list key, or an empty list): the
+      // working directory is served, and the file's `limits:` and `engine:`
+      // still hold (#502) — a one-repository operator's natural file is one
+      // with a spend limit and no list. (A file whose listed repositories
+      // were all left out was refused above.)
+      warnings.push(`config at ${configPath} lists no repositories; the working directory's repository is served, under the file's limits: and engine:`)
+      const fallback = await fallbackToCwd(cwd, warnings, zeroConfigMode, opts.push, opts.localOnly)
+      return { ...fallback, settingsPath: configPath, limits: parsed.limits, engine: parsed.engine }
     }
-    return { sources, configPath, warnings, limits: parsed.limits, engine: parsed.engine, repositoryLimits, repositorySettings }
+    return { sources, configPath, settingsPath: configPath, warnings, limits: parsed.limits, engine: parsed.engine, repositoryLimits, repositorySettings }
   }
 
   return fallbackToCwd(cwd, warnings, zeroConfigMode, opts.push, opts.localOnly)
@@ -654,13 +675,14 @@ async function fallbackToCwd(
         }),
       ],
       configPath: null,
+      settingsPath: null,
       warnings,
       ...none,
       repositorySettings: { [n.id]: resolved },
     }
   }
   warnings.push(`${cwd} is not a git repository and no config exists at ${defaultConfigPath()}`)
-  return { sources: [], configPath: null, warnings, ...none }
+  return { sources: [], configPath: null, settingsPath: null, warnings, ...none }
 }
 
 // --- Editing the list: `gateline repo add|remove|list` (§7.1) -----------------------

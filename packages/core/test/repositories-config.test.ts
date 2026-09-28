@@ -319,3 +319,31 @@ describe('how each repository is served, named for `up` (#502)', () => {
     expect(sources[0]!.workingDirectory?.()).toBe(billing)
   })
 })
+
+describe('a config file that lists no repositories keeps its limits (review of #550)', () => {
+  it.each([
+    ['no list key', 'limits:\n  spend_limit_usd: 5\nengine:\n  name: workstation-1\n  budget_enforcement: false\n'],
+    ['an empty list', 'limits:\n  spend_limit_usd: 5\nengine:\n  name: workstation-1\n  budget_enforcement: false\nrepositories: []\n'],
+  ])('%s: the working directory is served, under the file’s limits: and engine:', async (_name, body) => {
+    const path = await config(body)
+    const loaded = await loadSources({ configPath: path, cwd: website, engine: true })
+    expect(loaded.sources.map((s) => s.id)).toEqual(['local/website'])
+    expect([loaded.configPath, loaded.settingsPath]).toEqual([null, path])
+    expect(loaded.limits).toEqual({ spendLimitUsd: 5 })
+    expect(loaded.engine).toEqual({ name: 'workstation-1', budgetEnforcement: false })
+    expect(loaded.warnings).toEqual([
+      `config at ${path} lists no repositories; the working directory's repository is served, under the file's limits: and engine:`,
+    ])
+  })
+
+  it('a file that lists the set reports it as both the set’s source and the settings’', async () => {
+    const path = await config(`repositories:\n  - path: ${website}\n    mode: decide\n`)
+    const loaded = await loadSources({ configPath: path })
+    expect([loaded.configPath, loaded.settingsPath]).toEqual([path, path])
+  })
+
+  it('refuses a heartbeat above what a timer holds', async () => {
+    const path = await config(`engine:\n  heartbeat_seconds: 2147484\nrepositories:\n  - path: ${website}\n    mode: decide\n`)
+    expect(await refusal(path)).toBe(`config at ${path}: engine.heartbeat_seconds: Too big: expected number to be <=2147483`)
+  })
+})

@@ -6,12 +6,13 @@
 // reaches a network. Expected values are written out, never computed by the
 // code under test.
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { type AddressInfo, createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { engineHealthPath } from '@gateline/core'
 import type { Governor, GovernorPort, OrchestratorsHandle } from '@gateline/orchestrator'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { UpRunning } from '../src/up.ts'
+import { parseStrictNumber, type UpRunning } from '../src/up.ts'
 import { fakeGhOnPath, git, heldSpec, nothingListening, promptSpec, REFUSAL_PORT, stopAll, type Toy, toyRepo, up, withBareOrigin } from './up.helper.ts'
 
 let xdg: string
@@ -52,6 +53,14 @@ function writeConfig(body: string): void {
 const running = (outcome: Awaited<ReturnType<typeof up>>['outcome']): UpRunning => {
   if (!outcome.ok) throw new Error('expected up to be running')
   return outcome
+}
+
+/** A refusal's error lines (warnings aside), after checking exit 1 and nothing listening on the refusal port. */
+async function refusedLines(flags: Parameters<typeof up>[0]): Promise<string[]> {
+  const run = await up({ port: REFUSAL_PORT, ...flags }, { configPath })
+  expect(run.outcome).toEqual({ ok: false, code: 1 })
+  expect(await nothingListening(REFUSAL_PORT)).toBe(true)
+  return run.lines.filter((l) => l.startsWith('err: ') && !l.startsWith('err: warning:'))
 }
 
 /** Wait until a run's branch shows the analyst's closing commit. */
@@ -411,13 +420,252 @@ describe('push and local-only, per repository (R2)', () => {
     ])
   })
 
-  it('--local-only with a config file is said to reach no listed repository', { timeout: 60_000 }, async () => {
+  it.each([
+    ['--local-only', { localOnly: true }],
+    ['--no-push', { push: false }],
+  ] as const)('%s with a config entry that would push is refused, and origin is never touched', { timeout: 60_000 }, async (flag, flags) => {
+    const billing = toyRepo(parent, 'billing')
+    const bare = withBareOrigin(billing)
+    const notes = toyRepo(parent, 'notes')
+    const before = git(bare, ['rev-parse', 'run/toy'])
+    writeConfig(
+      [
+        'repositories:',
+        `  - path: ${billing.dir}`,
+        '    id: github.com/acme/billing',
+        '    mode: dispatch',
+        `  - path: ${notes.dir}`,
+        '    mode: dispatch',
+        '',
+      ].join('\n'),
+    )
+    const run = await up(
+      { ...flags, port: REFUSAL_PORT, heartbeat: 600, engineName: 'test-engine' },
+      { configPath, dispatchers: { 'github.com/acme/billing': promptSpec(billing.clock), 'local/notes': promptSpec(notes.clock) } },
+    )
+    // What the engine does comes first: had it started, it would have pushed
+    // its intent commit to billing's origin by the end of its first pass.
+    if (run.outcome.ok) {
+      await run.outcome.orchestrators.started
+      await settled(billing.dir)
+    }
+    expect(git(bare, ['rev-parse', 'run/toy'])).toBe(before)
+    expect(run.outcome).toEqual({ ok: false, code: 1 })
+    expect(run.lines.filter((l) => l.startsWith('err: ') && !l.startsWith('err: warning:'))).toEqual([
+      `err: ${flag} cannot reach a repository listed in ${configPath}, and these would still fetch from or push to origin: ` +
+        'github.com/acme/billing (pushing to origin (origin auto-detected)). ' +
+        'Set `local_only: true` on each of them in the config file, or pass --repo <path> for the repositories to serve local-only',
+    ])
+    expect(await nothingListening(REFUSAL_PORT)).toBe(true)
+  })
+
+  it('--local-only with a config whose every dispatch entry is already local-only starts, and says so', { timeout: 60_000 }, async () => {
+    const billing = toyRepo(parent, 'billing')
+    const bare = withBareOrigin(billing)
+    const notes = toyRepo(parent, 'notes')
+    writeConfig(
+      [
+        'repositories:',
+        `  - path: ${billing.dir}`,
+        '    mode: dispatch',
+        '    local_only: true',
+        `  - path: ${notes.dir}`,
+        '    mode: dispatch',
+        `  - path: ${toyRepo(parent, 'website').dir}`,
+        '    mode: decide',
+        '',
+      ].join('\n'),
+    )
+    const before = git(bare, ['rev-parse', 'run/toy'])
+    const run = await up({ localOnly: true, heartbeat: 600 }, { configPath, dispatchers: { 'local/billing': promptSpec(billing.clock), 'local/notes': promptSpec(notes.clock) } })
+    const outcome = running(run.outcome)
+    await outcome.orchestrators.started
+    await settled(billing.dir)
+    expect(run.lines[0]).toBe(`err: --local-only: every dispatch repository in ${configPath} is already local-only`)
+    expect(git(bare, ['rev-parse', 'run/toy'])).toBe(before)
+  })
+
+  it('--push with a config file is a warning: ignoring it touches origin less', { timeout: 60_000 }, async () => {
     const billing = toyRepo(parent, 'billing')
     writeConfig(['repositories:', `  - path: ${billing.dir}`, '    mode: dispatch', ''].join('\n'))
-    const run = await up({ localOnly: true, heartbeat: 600 }, { configPath, dispatchers: { 'local/billing': promptSpec(billing.clock) } })
+    const run = await up({ push: true, heartbeat: 600 }, { configPath, dispatchers: { 'local/billing': promptSpec(billing.clock) } })
     running(run.outcome)
     expect(run.lines.filter((l) => l.startsWith('err: warning:'))).toEqual([
-      `err: warning: --local-only applies only to a repository given by --repo or the working directory; every repository here is listed in ${configPath} and keeps its own push and local_only settings (docs/TOPOLOGY.md §3.6)`,
+      `err: warning: --push applies only to a repository given by --repo or the working directory; every repository here is listed in ${configPath} and keeps its own push and local_only settings (docs/TOPOLOGY.md §3.6)`,
+    ])
+  })
+})
+
+describe('a config file that lists no repositories (F1, review of #550)', () => {
+  it.each([
+    ['no repositories: key', 'limits:\n  spend_limit_usd: 5\n  max_concurrent_dispatches: 1\nengine:\n  name: config-engine\n  budget_enforcement: true\n'],
+    ['repositories: []', 'limits:\n  spend_limit_usd: 5\n  max_concurrent_dispatches: 1\nengine:\n  name: config-engine\n  budget_enforcement: true\nrepositories: []\n'],
+  ])('%s: the working directory is served under the file’s limits and engine settings', { timeout: 60_000 }, async (_name, body) => {
+    const toy = toyRepo(parent, 'toy')
+    writeConfig(body)
+    const run = await up({ heartbeat: 600 }, { cwd: toy.dir, configPath, dispatchers: { 'local/toy': promptSpec(toy.clock) } })
+    const outcome = running(run.outcome)
+    await outcome.orchestrators.started
+    await settled(toy.dir)
+    await quiet(outcome)
+    expect(run.lines.slice(0, 6)).toEqual([
+      `err: warning: config at ${configPath} lists no repositories; the working directory's repository is served, under the file's limits: and engine:`,
+      `out: up: 1 repository from the working directory (${configPath} lists no repositories; its limits: and engine: apply); an engine in it`,
+      'out: limits: at most 1 dispatch at once across every repository (config limits.max_concurrent_dispatches)',
+      'out: limits: machine spend limit $5 per 24 h across every dispatch repository (config limits.spend_limit_usd; window: default)',
+      'out: limits: budget enforcement on (config engine.budget_enforcement)',
+      'out: engine name: config-engine (config engine.name)',
+    ])
+    const refusal = probe(outcome.orchestrators.governor, 'local/toy', [1000]).refusal!
+    expect([refusal.limit, refusal.limitUsd]).toEqual(['spend', 5])
+    expect(outcome.orchestrators.engines[0]!.engine.hostName).toBe('config-engine')
+  })
+
+  it('a file whose listed repositories were all left out is still refused', async () => {
+    const bare = toyRepo(parent, 'bare', { framework: false })
+    writeConfig(`limits:\n  spend_limit_usd: 5\nrepositories:\n  - path: ${bare.dir}\n    mode: dispatch\n`)
+    const run = await up({ port: REFUSAL_PORT }, { cwd: bare.dir, configPath })
+    expect(run.outcome).toEqual({ ok: false, code: 1 })
+    expect(run.lines.filter((l) => l.startsWith('err: '))[0]).toMatch(new RegExp(`^err: config at ${configPath.replaceAll('/', '\\/')}: no listed repository can be served, so there is nothing to start:`))
+    expect(await nothingListening(REFUSAL_PORT)).toBe(true)
+  })
+})
+
+describe('a bare up whose working directory is not in the set (F2, review of #550)', () => {
+  it('names the working directory, runs no engine there, and runs the listed one', { timeout: 60_000 }, async () => {
+    const x = toyRepo(parent, 'xrepo')
+    const y = toyRepo(parent, 'yrepo')
+    writeConfig(['repositories:', `  - path: ${y.dir}`, '    mode: dispatch', ''].join('\n'))
+    const run = await up({ heartbeat: 600 }, { cwd: join(x.dir, 'contracts'), configPath, dispatchers: { 'local/yrepo': promptSpec(y.clock), 'local/xrepo': promptSpec(x.clock) } })
+    const outcome = running(run.outcome)
+    await outcome.orchestrators.started
+    await settled(y.dir)
+    expect(run.lines.slice(0, 2)).toEqual([
+      `out: up: 1 repository from ${configPath}; an engine in it`,
+      `out: the working directory (${x.dir}) is not in the set: no engine runs here. The set is the config file's (${configPath}); pass --repo ${x.dir} to run an engine here instead.`,
+    ])
+    expect(engineIds(outcome.orchestrators)).toEqual(['local/yrepo'])
+    expect(subjects(x.dir)).toEqual(FIXTURE_SUBJECTS)
+    expect(await healthExists(x.dir)).toBe(false)
+  })
+
+  it('says nothing when the working directory is in the set', { timeout: 60_000 }, async () => {
+    const y = toyRepo(parent, 'yrepo')
+    writeConfig(['repositories:', `  - path: ${y.dir}`, '    mode: dispatch', ''].join('\n'))
+    const run = await up({ heartbeat: 600 }, { cwd: y.dir, configPath, dispatchers: { 'local/yrepo': promptSpec(y.clock) } })
+    running(run.outcome)
+    expect(run.lines.filter((l) => l.includes('is not in the set'))).toEqual([])
+  })
+
+  it('says nothing when the working directory is another checkout of a repository in the set', { timeout: 60_000 }, async () => {
+    const y = toyRepo(parent, 'yrepo')
+    const worktree = join(parent, 'y-wt')
+    git(y.dir, ['worktree', 'add', '-q', '-b', 'wt', worktree, 'main'])
+    writeConfig(['repositories:', `  - path: ${y.dir}`, '    mode: dispatch', ''].join('\n'))
+    const run = await up({ heartbeat: 600 }, { cwd: worktree, configPath, dispatchers: { 'local/yrepo': promptSpec(y.clock) } })
+    running(run.outcome)
+    expect(run.lines.filter((l) => l.includes('is not in the set'))).toEqual([])
+  })
+})
+
+describe('numbers, ports and budget flags (F5, F6, F9, review of #550)', () => {
+  it('parses a flag’s number strictly', () => {
+    expect(['10', '2.5', '.5', '1e3', '-1', '0'].map(parseStrictNumber)).toEqual([10, 2.5, 0.5, 1000, -1, 0])
+    expect(['10abc', '3x', '0x10', '', ' ', 'abc', '1,5', 'Infinity', 'NaN'].map((v) => Number.isNaN(parseStrictNumber(v)))).toEqual([
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+    ])
+  })
+
+  it('refuses a heartbeat or role timeout Node’s timers cannot hold, from a flag', async () => {
+    const billing = toyRepo(parent, 'billing')
+    expect(await refusedLines({ repo: [billing.dir], heartbeat: 2_147_484 })).toEqual([
+      'err: --heartbeat must be at most 2147483 seconds (got 2147484): a longer timer is cut to 1 ms by Node',
+    ])
+    expect(await refusedLines({ repo: [billing.dir], roleTimeout: 3_000_000 })).toEqual([
+      'err: --role-timeout must be at most 2147483 seconds (got 3000000): a longer timer is cut to 1 ms by Node',
+    ])
+  })
+
+  it('refuses one from the config', async () => {
+    const billing = toyRepo(parent, 'billing')
+    writeConfig(`engine:\n  heartbeat_seconds: 3000000\n  role_timeout_seconds: 2147484\nrepositories:\n  - path: ${billing.dir}\n    mode: dispatch\n`)
+    expect(await refusedLines({})).toEqual([
+      `err: config at ${configPath}: engine.role_timeout_seconds: Too big: expected number to be <=2147483; engine.heartbeat_seconds: Too big: expected number to be <=2147483`,
+    ])
+  })
+
+  it('refuses a port that is not a port', async () => {
+    const billing = toyRepo(parent, 'billing')
+    expect(await refusedLines({ repo: [billing.dir], port: Number.NaN })).toEqual(['err: --port must be a whole number from 0 to 65535 (got NaN)'])
+    expect(await refusedLines({ repo: [billing.dir], port: 70_000 })).toEqual(['err: --port must be a whole number from 0 to 65535 (got 70000)'])
+  })
+
+  it('refuses a port another listener holds, naming it, with nothing left behind', { timeout: 60_000 }, async () => {
+    const billing = toyRepo(parent, 'billing')
+    const blocker = createServer()
+    await new Promise<void>((r) => blocker.listen(0, '127.0.0.1', () => r()))
+    const port = (blocker.address() as AddressInfo).port
+    try {
+      const run = await up({ repo: [billing.dir], port, heartbeat: 600 }, { configPath, dispatchers: { 'local/billing': promptSpec(billing.clock) } })
+      expect(run.outcome).toEqual({ ok: false, code: 1 })
+      expect(run.lines.filter((l) => l.startsWith('err: '))).toEqual([
+        `err: port ${port} on 127.0.0.1 is already in use — another \`gateline up\` (or \`gateline ui\`) may be running there. Stop it, or pass --port <n>`,
+      ])
+      expect(run.signals).toEqual([])
+      await new Promise((r) => setTimeout(r, 300))
+      expect(await healthExists(billing.dir)).toBe(false)
+      expect(subjects(billing.dir)).toEqual(FIXTURE_SUBJECTS)
+    } finally {
+      blocker.close()
+    }
+  })
+
+  it('--budget-enforcement overrides budget_enforcement: false, and both flags together are refused', { timeout: 60_000 }, async () => {
+    const billing = toyRepo(parent, 'billing')
+    writeConfig(`limits:\n  spend_limit_usd: 10\nengine:\n  budget_enforcement: false\nrepositories:\n  - path: ${billing.dir}\n    mode: dispatch\n`)
+    const run = await up({ budgetEnforcement: true, heartbeat: 600 }, { configPath, dispatchers: { 'local/billing': promptSpec(billing.clock) } })
+    const outcome = running(run.outcome)
+    await outcome.orchestrators.started
+    await settled(billing.dir)
+    await quiet(outcome)
+    expect(run.lines[3]).toBe("out: limits: budget enforcement on (--budget-enforcement, over the config's engine.budget_enforcement: false)")
+    expect(probe(outcome.orchestrators.governor, 'local/billing', [1000]).refusal!.limit).toBe('spend')
+    await stopAll()
+    expect(await refusedLines({ budgetEnforcement: false, budgetEnforcementConflict: true })).toEqual([
+      'err: --budget-enforcement and --no-budget-enforcement are both given — pick one',
+    ])
+  })
+
+  it('a dispatch entry with fetch_interval is fetched by its engine only', { timeout: 60_000 }, async () => {
+    const billing = toyRepo(parent, 'billing')
+    withBareOrigin(billing)
+    const website = toyRepo(parent, 'website')
+    withBareOrigin(website)
+    writeConfig(
+      [
+        'repositories:',
+        `  - path: ${billing.dir}`,
+        '    mode: dispatch',
+        '    fetch_interval: 60',
+        `  - path: ${website.dir}`,
+        '    mode: decide',
+        '    fetch_interval: 60',
+        '',
+      ].join('\n'),
+    )
+    const run = await up({ heartbeat: 600 }, { configPath, dispatchers: { 'local/billing': promptSpec(billing.clock) } })
+    running(run.outcome)
+    expect(run.lines.filter((l) => l.includes('from origin every'))).toEqual([
+      'out: not polling local/billing from origin every 60s: its engine syncs it on each heartbeat',
+      'out: syncing local/website from origin every 60s',
     ])
   })
 })
@@ -530,7 +778,7 @@ describe('limits: the config, flags over it, and each repository’s ceiling (P3
   it('--no-budget-enforcement overrides budget_enforcement: true', { timeout: 60_000 }, async () => {
     const billing = toyRepo(parent, 'billing')
     writeConfig([...machine(10), 'engine:', '  budget_enforcement: true', 'repositories:', `  - path: ${billing.dir}`, '    mode: dispatch', ''].join('\n'))
-    const run = await up({ noBudgetEnforcement: true }, { configPath, dispatchers: { 'local/billing': promptSpec(billing.clock) } })
+    const run = await up({ budgetEnforcement: false }, { configPath, dispatchers: { 'local/billing': promptSpec(billing.clock) } })
     const outcome = running(run.outcome)
     await outcome.orchestrators.started
     await settled(billing.dir)
@@ -613,6 +861,25 @@ describe('shutdown and supersede', () => {
     await settled(b.dir)
     await new Promise((r) => setTimeout(r, 200))
     expect(run.exits).toEqual([0])
+  })
+
+  it.each([
+    ['a supersede, then a signal during its drain', 'supersede' as const, [75]],
+    ['a signal, then a supersede during its drain', 'signal' as const, [0]],
+  ])('%s: one drain, one exit, the first one asked for', { timeout: 60_000 }, async (_name, first, expected) => {
+    const { alpha, beta, run, outcome } = await twoHeld()
+    if (first === 'supersede') {
+      void outcome.stop(75)
+      run.signals[0]!()
+    } else {
+      run.signals[0]!()
+      void outcome.stop(75)
+    }
+    alpha.open()
+    beta.open()
+    await vi.waitFor(() => expect(run.exits.length).toBeGreaterThan(0), { timeout: 20_000, interval: 50 })
+    await new Promise((r) => setTimeout(r, 300))
+    expect(run.exits).toEqual(expected)
   })
 
   it('a code-tree fast-forward supersedes once: every engine drains, then exit 75, once', { timeout: 90_000 }, async () => {
@@ -744,7 +1011,7 @@ describe('refusals: exit 1, the message, nothing started', () => {
     const run = await up({ repo: [billing.dir, website.dir], port: REFUSAL_PORT }, { configPath, dispatchers: { 'local/billing': promptSpec(billing.clock) } })
     expect(run.outcome).toEqual({ ok: false, code: 1 })
     expect(run.lines.filter((l) => l.startsWith('err: '))).toEqual([
-      'err: adapter "claude-code": no adapters/claude-code/manifest.json at main, the default-branch tip — the engine runs only an adapter merged there',
+      `err: website (local/website at ${website.dir}): adapter "claude-code": no adapters/claude-code/manifest.json at main, the default-branch tip — the engine runs only an adapter merged there`,
     ])
     // The summary is printed before assembly; with no name given, the hostname stands.
     expect(run.lines[4]).toMatch(/^out: engine name: .+ \(this machine's hostname; set engine\.name in the config or --engine-name to choose another\)$/)

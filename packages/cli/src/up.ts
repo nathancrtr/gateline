@@ -4,17 +4,22 @@
 // process; tests hand it a fake dispatcher, a throwaway code checkout and a
 // recording `exit`, so the whole startup runs with nothing dispatched.
 import { existsSync } from 'node:fs'
+import { realpath } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import {
   ConfigError,
   defaultConfigPath,
+  deriveRepositoryId,
   displayNameOf,
+  Git,
   type LoadedConfig,
   LocalOnlyPushConflictError,
   loadSources,
+  MAX_TIMER_SECONDS,
   RepositoryIdError,
   type RepositorySettings,
   ROLE_TIMEOUT_MS,
+  repositoryIdKey,
   repoToplevel,
   SUPERSEDE_EXIT_CODE,
 } from '@gateline/core'
@@ -46,8 +51,10 @@ export interface UpFlags {
   adapter: string[]
   spendLimitUsd?: number
   spendWindow?: number
-  /** True when `--no-budget-enforcement` was given. */
-  noBudgetEnforcement?: boolean
+  /** `true` for `--budget-enforcement`, `false` for `--no-budget-enforcement`, absent for neither. */
+  budgetEnforcement?: boolean
+  /** True when both `--budget-enforcement` and `--no-budget-enforcement` were typed: refused. */
+  budgetEnforcementConflict?: boolean
   /** `true` for `--push`, `false` for `--no-push`, absent for neither. */
   push?: boolean
   localOnly?: boolean
@@ -143,14 +150,73 @@ function pick<T>(flag: T | undefined, flagName: string, config: T | undefined, c
 const usd = (n: number) => `$${n}`
 const hours = (h: number) => `${h} h`
 
+/**
+ * A flag's number, parsed strictly: a plain decimal (`10`, `2.5`, `.5`, `1e3`,
+ * `-1`) or NaN. `parseFloat` read `10abc` as 10, `3x` as 3 and `0x10` as 0,
+ * and `Number` reads `0x10` as 16 and the empty string as 0; a limit on money
+ * takes neither guess (review of #550). A NaN is refused by `runUp`.
+ */
+export function parseStrictNumber(value: string): number {
+  return /^\s*-?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?\s*$/.test(value) ? Number(value) : Number.NaN
+}
+
 /** A number a flag gave, checked: the config's values are checked by its loader, and a flag's must not be weaker. */
-function flagProblem(name: string, value: number | undefined, rule: 'nonnegative' | 'positive' | 'count'): string | null {
+function flagProblem(name: string, value: number | undefined, rule: 'nonnegative' | 'positive' | 'count' | 'timer'): string | null {
   if (value === undefined) return null
   if (!Number.isFinite(value)) return `${name} must be a number`
-  if (rule === 'positive' && value <= 0) return `${name} must be greater than 0 (got ${value})`
-  if (rule !== 'positive' && value < 0) return `${name} must not be negative (got ${value})`
+  if ((rule === 'positive' || rule === 'timer') && value <= 0) return `${name} must be greater than 0 (got ${value})`
+  if (rule === 'timer' && value > MAX_TIMER_SECONDS)
+    return `${name} must be at most ${MAX_TIMER_SECONDS} seconds (got ${value}): a longer timer is cut to 1 ms by Node`
+  if (value < 0) return `${name} must not be negative (got ${value})`
   if (rule === 'count' && !Number.isInteger(value)) return `${name} must be a whole number (got ${value})`
   return null
+}
+
+/**
+ * What the `up` command hands `runUp` from the real process (#502): the
+ * console, `process.exit`, and the staged shutdown installed for SIGINT and
+ * SIGTERM. A function of its own so the wiring is tested, not only read.
+ */
+export function processDeps(proc: Pick<NodeJS.Process, 'on' | 'exit'> = process, out: Pick<Console, 'log' | 'error'> = console): UpDeps {
+  return {
+    log: (line) => out.log(line),
+    error: (line) => out.error(line),
+    exit: (code) => proc.exit(code),
+    onSignal: (handler) => {
+      proc.on('SIGINT', handler)
+      proc.on('SIGTERM', handler)
+    },
+  }
+}
+
+/**
+ * Whether the repository at `top` is one of `sources` (#502): the same
+ * directory, the same git directory (another checkout of one clone), or the
+ * same id compared without case — the rules the set itself is checked by.
+ */
+async function inTheSet(top: string, sources: readonly { id: string; workingDirectory?(): string }[]): Promise<boolean> {
+  const real = (dir: string) => realpath(dir).catch(() => dir)
+  const commonDir = async (dir: string) => {
+    try {
+      return await real((await new Git(dir).run(['rev-parse', '--path-format=absolute', '--git-common-dir'])).trim())
+    } catch {
+      return null
+    }
+  }
+  const here = await real(top)
+  const hereCommon = await commonDir(top)
+  let hereId: string | null = null
+  try {
+    hereId = deriveRepositoryId({ origin: await new Git(top).remoteUrl('origin'), dir: top }).id
+  } catch {
+    hereId = null
+  }
+  for (const source of sources) {
+    const dir = source.workingDirectory?.()
+    if (dir !== undefined && ((await real(dir)) === here || (hereCommon !== null && (await commonDir(dir)) === hereCommon))) return true
+    if (hereId !== null && repositoryIdKey(hereId) === repositoryIdKey(source.id)) return true
+  }
+  return false
 }
 
 /**
@@ -168,14 +234,16 @@ export async function runUp(flags: UpFlags, deps: UpDeps): Promise<UpOutcome> {
 
   // Numbers from the command line are checked before anything is read: a
   // spend limit that is not a number would admit every dispatch.
+  if (!Number.isInteger(flags.port) || flags.port < 0 || flags.port > 65535) return refuse(`--port must be a whole number from 0 to 65535 (got ${flags.port})`)
   for (const problem of [
     flagProblem('--spend-limit-usd', flags.spendLimitUsd, 'nonnegative'),
     flagProblem('--spend-window', flags.spendWindow, 'positive'),
     flagProblem('--max-concurrent-dispatches', flags.maxConcurrentDispatches, 'count'),
-    flagProblem('--heartbeat', flags.heartbeat, 'positive'),
-    flagProblem('--role-timeout', flags.roleTimeout, 'positive'),
+    flagProblem('--heartbeat', flags.heartbeat, 'timer'),
+    flagProblem('--role-timeout', flags.roleTimeout, 'timer'),
   ])
     if (problem) return refuse(problem)
+  if (flags.budgetEnforcementConflict) return refuse('--budget-enforcement and --no-budget-enforcement are both given — pick one')
   if (flags.engineName !== undefined) {
     const problem = engineNameProblem(flags.engineName)
     if (problem) return refuse(`--engine-name: ${problem}`)
@@ -215,20 +283,32 @@ export async function runUp(flags: UpFlags, deps: UpDeps): Promise<UpOutcome> {
   const configFile = deps.configPath ?? defaultConfigPath()
   if (repoOverrides.length && existsSync(configFile))
     deps.error(`warning: --repo given, so ${configFile} is not read: its repositories, limits: and engine: do not apply to this run`)
-  const { sources, configPath } = loaded
+  const { sources, configPath, settingsPath } = loaded
   if (sources.length === 0)
     return refuse('`up` has no repository to serve — run inside a repository, pass --repo <path>, or list repositories in the config file (`gateline repo add`)')
 
   if (configPath !== null) {
-    const given = [flags.push === true ? '--push' : null, flags.push === false ? '--no-push' : null, flags.localOnly ? '--local-only' : null].filter(
-      (f): f is string => f !== null,
-    )
     // The same conflict a repository with no entry is refused for: the command line contradicts itself.
     if (flags.localOnly && flags.push === true)
       return refuse(`--local-only and --push: local-only and push are both explicitly requested — they conflict (local-only forces push off); pick one`)
-    if (given.length)
+    // --local-only and --no-push promise that nothing touches origin
+    // (TOPOLOGY.md §3.6). They cannot reach a config entry, so where one would
+    // push, that promise would be broken: refused, never a warning (review of #550).
+    const wanted = flags.localOnly ? '--local-only' : flags.push === false ? '--no-push' : null
+    if (wanted) {
+      const pushing = sources.filter((s) => s.mode === 'dispatch' && loaded.repositorySettings[s.id]?.localOnly !== true)
+      if (pushing.length)
+        return refuse(
+          `${wanted} cannot reach a repository listed in ${configPath}, and these would still fetch from or push to origin: ` +
+            `${pushing.map((s) => `${s.id} (${pushMarker(loaded.repositorySettings[s.id]!)})`).join(', ')}. ` +
+            'Set `local_only: true` on each of them in the config file, or pass --repo <path> for the repositories to serve local-only',
+        )
+      deps.error(`${wanted}: every dispatch repository in ${configPath} is already local-only`)
+    }
+    // --push reaches no entry either; ignoring it touches origin less, not more.
+    if (flags.push === true)
       deps.error(
-        `warning: ${given.join(' and ')} ${given.length === 1 ? 'applies' : 'apply'} only to a repository given by --repo or the working directory; ` +
+        `warning: --push applies only to a repository given by --repo or the working directory; ` +
           `every repository here is listed in ${configPath} and keeps its own push and local_only settings (docs/TOPOLOGY.md §3.6)`,
       )
   }
@@ -241,7 +321,7 @@ export async function runUp(flags: UpFlags, deps: UpDeps): Promise<UpOutcome> {
         : null
   if (engineName?.from === 'config engine.name') {
     const problem = engineNameProblem(engineName.value)
-    if (problem) return refuse(`config at ${configPath}: engine.name: ${problem}`)
+    if (problem) return refuse(`config at ${settingsPath}: engine.name: ${problem}`)
   }
 
   // One engine per `dispatch` repository; `view` and `decide` repositories
@@ -268,8 +348,8 @@ export async function runUp(flags: UpFlags, deps: UpDeps): Promise<UpOutcome> {
   const spendLimit = pick<number | null>(flags.spendLimitUsd, '--spend-limit-usd', loaded.limits.spendLimitUsd, 'limits.spend_limit_usd', null)
   const spendWindow = pick(flags.spendWindow, '--spend-window', loaded.limits.spendWindowHours, 'limits.spend_window_hours', DEFAULT_SPEND_WINDOW_MS / 3_600_000)
   const enforcement = pick(
-    flags.noBudgetEnforcement ? false : undefined,
-    '--no-budget-enforcement',
+    flags.budgetEnforcement,
+    flags.budgetEnforcement === false ? '--no-budget-enforcement' : '--budget-enforcement',
     loaded.engine.budgetEnforcement,
     'engine.budget_enforcement',
     true,
@@ -305,11 +385,30 @@ export async function runUp(flags: UpFlags, deps: UpDeps): Promise<UpOutcome> {
   }
 
   // What will be allowed to spend money, said before anything starts.
-  const from = configPath !== null ? `from ${configPath}` : repoOverrides.length ? 'from --repo' : 'from the working directory'
+  const from =
+    configPath !== null
+      ? `from ${configPath}`
+      : repoOverrides.length
+        ? 'from --repo'
+        : settingsPath !== null
+          ? `from the working directory (${settingsPath} lists no repositories; its limits: and engine: apply)`
+          : 'from the working directory'
   deps.log(
     `up: ${sources.length} ${sources.length === 1 ? 'repository' : 'repositories'} ${from}; ` +
       `an engine in ${dispatching.length === sources.length ? (sources.length === 1 ? 'it' : 'each') : `${dispatching.length} of them`}`,
   )
+  // Before #502 a bare `up` served the working directory and never read the
+  // config file. Now the file's list is the set wherever `up` runs, so a
+  // working directory outside it is named (review of #550): no engine runs there.
+  if (configPath !== null) {
+    const cwd = deps.cwd ?? process.cwd()
+    const top = await repoToplevel(cwd)
+    if (top !== null && !(await inTheSet(top, sources)))
+      deps.log(
+        `the working directory (${top}) is not in the set: no engine runs here. The set is the config file's (${configPath}); ` +
+          `pass --repo ${top} to run an engine here instead.`,
+      )
+  }
   deps.log(
     maxConcurrent.value === 0
       ? `limits: no limit on dispatches at once (${maxConcurrent.from})`
@@ -406,7 +505,31 @@ export async function runUp(flags: UpFlags, deps: UpDeps): Promise<UpOutcome> {
   }
 
   const { startServer } = await import('@gateline/server/main')
-  const server = await startServer({ port: flags.port, host: flags.host, open: flags.open, resolved: { sources, configPath } })
+  let server: { url: string; close(): void }
+  try {
+    server = await startServer({
+      port: flags.port,
+      host: flags.host,
+      open: flags.open,
+      resolved: { sources, configPath },
+      // Each engine syncs its repository from origin on its heartbeat; the
+      // server does not fetch it a second time on a `fetch_interval`.
+      engineSynced: repositories.map((r) => r.repositoryId),
+    })
+  } catch (e) {
+    // Nothing started: the engines were assembled, never run. They leave the
+    // governor so nothing of them is left behind.
+    for (const e2 of set.engines) {
+      e2.engine.beginStop()
+      set.governor.unregister(e2.repositoryId)
+    }
+    const code = (e as NodeJS.ErrnoException).code
+    if (code === 'EADDRINUSE')
+      return refuse(
+        `port ${flags.port} on ${flags.host} is already in use — another \`gateline up\` (or \`gateline ui\`) may be running there. Stop it, or pass --port <n>`,
+      )
+    return refuse(`the server could not listen on ${flags.host}:${flags.port}: ${(e as Error).message}`)
+  }
   live.server = server
 
   const starting = set.start()

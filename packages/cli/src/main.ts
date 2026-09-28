@@ -1187,13 +1187,15 @@ program
   )
   .option(
     '--spend-limit-usd <usd>',
-    "the machine's spend limit: defer new dispatches while projected spend across every dispatch repository inside the window exceeds this (a rate limit, never a pause; #97); overrides the config's limits.spend_limit_usd",
-    parseFloat,
+    "the machine's spend limit: defer new dispatches while projected spend across every dispatch repository inside the window exceeds this (a rate limit, never a pause; #97); overrides the config's limits.spend_limit_usd; 0 admits no dispatch that costs anything",
   )
   .option(
     '--spend-window <hours>',
     "the rolling window the spend limit measures over (default: the config's limits.spend_window_hours, else 24)",
-    parseFloat,
+  )
+  .option(
+    '--budget-enforcement',
+    "enforce the spend limits and per-run caps (the default); overrides the config's engine.budget_enforcement: false",
   )
   .option(
     '--no-budget-enforcement',
@@ -1211,16 +1213,14 @@ program
     '--local-only',
     'no push, no gh/GitHub calls, no origin fetch — everything about this run stays in this clone; for a repository with no config entry',
   )
-  .option('--heartbeat <seconds>', "engine heartbeat interval (default: the config's engine.heartbeat_seconds, else 180)", parseFloat)
+  .option('--heartbeat <seconds>', "engine heartbeat interval, at most 2147483 (default: the config's engine.heartbeat_seconds, else 180)")
   .option(
     '--role-timeout <seconds>',
-    "wall clock per dispatched role before its process group is killed (default: the config's engine.role_timeout_seconds, else 1800)",
-    parseFloat,
+    "wall clock per dispatched role before its process group is killed, at most 2147483 (default: the config's engine.role_timeout_seconds, else 1800)",
   )
   .option(
     '--max-concurrent-dispatches <n>',
     "most dispatches running at once across every repository; 0 disables the cap (default: the config's limits.max_concurrent_dispatches, else 2; #227)",
-    parseFloat,
   )
   .option(
     '--engine-name <name>',
@@ -1248,49 +1248,44 @@ program
         host: string
         open?: boolean
         adapter: string[]
-        spendLimitUsd?: number
-        spendWindow?: number
+        spendLimitUsd?: string
+        spendWindow?: string
         budgetEnforcement?: boolean
         push?: boolean
         localOnly?: boolean
-        heartbeat?: number
-        roleTimeout?: number
-        maxConcurrentDispatches?: number
+        heartbeat?: string
+        roleTimeout?: string
+        maxConcurrentDispatches?: string
         engineName?: string
       },
       cmd: Command,
     ) => {
-      const { runUp } = await import('./up.ts')
+      const { parseStrictNumber, processDeps, runUp } = await import('./up.ts')
       const opts = program.opts<{ repo: string[] }>()
+      // Numbers are parsed strictly and checked by runUp (review of #550).
+      const num = (value: string | undefined) => (value === undefined ? undefined : parseStrictNumber(value))
       const outcome = await runUp(
         {
           repo: opts.repo,
-          port: Number(flags.port),
+          port: parseStrictNumber(flags.port),
           host: flags.host,
           open: flags.open !== false,
           adapter: flags.adapter,
-          spendLimitUsd: flags.spendLimitUsd,
-          spendWindow: flags.spendWindow,
+          spendLimitUsd: num(flags.spendLimitUsd),
+          spendWindow: num(flags.spendWindow),
           // Explicitness, not just the resolved boolean (commander ^14): what
           // the operator typed must be told apart from a default, for the
           // conflict check, the startup markers and what overrides the config.
-          noBudgetEnforcement: cmd.getOptionValueSource('budgetEnforcement') === 'cli',
+          budgetEnforcement: cmd.getOptionValueSource('budgetEnforcement') === 'cli' ? flags.budgetEnforcement === true : undefined,
+          budgetEnforcementConflict: process.argv.includes('--budget-enforcement') && process.argv.includes('--no-budget-enforcement'),
           push: cmd.getOptionValueSource('push') === 'cli' ? flags.push === true : undefined,
           localOnly: flags.localOnly === true,
-          heartbeat: flags.heartbeat,
-          roleTimeout: flags.roleTimeout,
-          maxConcurrentDispatches: flags.maxConcurrentDispatches,
+          heartbeat: num(flags.heartbeat),
+          roleTimeout: num(flags.roleTimeout),
+          maxConcurrentDispatches: num(flags.maxConcurrentDispatches),
           engineName: flags.engineName,
         },
-        {
-          log: (line) => console.log(line),
-          error: (line) => console.error(line),
-          exit: (code) => process.exit(code),
-          onSignal: (handler) => {
-            process.on('SIGINT', handler)
-            process.on('SIGTERM', handler)
-          },
-        },
+        processDeps(),
       )
       if (!outcome.ok) process.exit(outcome.code)
     },

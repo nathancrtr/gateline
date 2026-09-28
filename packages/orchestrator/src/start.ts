@@ -600,6 +600,8 @@ export async function assembleOrchestrators(
     // Every line an engine, its scheduler and its loop write names the
     // repository by display name (#502).
     const log = (line: string) => opts.log?.(`[${displayName}] ${line}`)
+    // An assembly error names its repository (review of #550): with several,
+    // "no adapters/claude-code/manifest.json at main" alone says not which.
     const assembled = await assembleOrchestrator({
       repoDir: entry.repoDir,
       adapters: entry.adapters ?? defaults.adapters,
@@ -618,6 +620,12 @@ export async function assembleOrchestrators(
       dispatcher: entry.dispatcher,
       engineName: opts.engineName,
       log,
+    }).catch((err: unknown) => {
+      if (err instanceof Error) {
+        err.message = `${displayName} (${entry.repositoryId} at ${entry.repoDir}): ${err.message}`
+        throw err
+      }
+      throw new Error(`${displayName} (${entry.repositoryId} at ${entry.repoDir}): ${String(err)}`)
     })
     engines.push({
       repositoryId: entry.repositoryId,
@@ -706,30 +714,46 @@ async function startAssembled(engines: AssembledEngine[], governor: GovernorPort
   // repository whose first pass is slow or hangs holds up neither the others
   // nor the handle. Each pass has its own fault boundary (triggers.ts), which
   // marks that engine failed. Round-robin order was fixed at registration.
-  let loops: RunLoop[]
-  try {
-    loops = await Promise.all(
-      engines.map((e) =>
-        runLoop(e.engine, e.repoDir, {
-          heartbeatMs: (opts.heartbeatSeconds ?? 180) * 1000,
-          scheduler: e.scheduler,
-          log: e.log,
-          staleProbe: e.manifestStaleProbe,
-          codeMonitor: shared ? shared.view(e.repositoryId) : codeMonitor,
-          onSupersede,
-          awaitStartup: false,
-          stopWaitMs: opts.stopWaitMs,
-        }),
-      ),
-    )
-  } catch (err) {
+  const settledLoops = await Promise.allSettled(
+    engines.map((e) =>
+      runLoop(e.engine, e.repoDir, {
+        heartbeatMs: (opts.heartbeatSeconds ?? 180) * 1000,
+        scheduler: e.scheduler,
+        log: e.log,
+        staleProbe: e.manifestStaleProbe,
+        codeMonitor: shared ? shared.view(e.repositoryId) : codeMonitor,
+        onSupersede,
+        awaitStartup: false,
+        stopWaitMs: opts.stopWaitMs,
+      }),
+    ),
+  )
+  const failedIndex = settledLoops.findIndex((r) => r.status === 'rejected')
+  if (failedIndex !== -1) {
     // A loop that cannot even be set up (its repository's git directory
-    // cannot be read) is a startup failure, not a fault at run time: every
-    // engine stops admitting and leaves the governor.
+    // cannot be read) is a startup failure, not a fault at run time. The
+    // loops that did start are stopped and drained, each within the bound
+    // its `stop()` keeps, so none is left watching refs or ticking on a
+    // timer (#502, review of #550); then every engine leaves the governor.
     for (const e of engines) e.engine.beginStop()
+    await Promise.allSettled(
+      settledLoops.map(async (r, i) => {
+        if (r.status !== 'fulfilled') return
+        try {
+          await r.value.stop()
+        } catch (err) {
+          engines[i]!.log(`stopping failed: ${(err as Error)?.stack ?? String(err)}`)
+        }
+      }),
+    )
     for (const e of engines) governor.unregister(e.repositoryId)
-    throw err
+    const failed = engines[failedIndex]!
+    const reason = (settledLoops[failedIndex] as PromiseRejectedResult).reason
+    throw new Error(
+      `${failed.displayName} (${failed.repositoryId} at ${failed.repoDir}): its engine could not start: ${(reason as Error)?.message ?? String(reason)}`,
+    )
   }
+  const loops = settledLoops.map((r) => (r as PromiseFulfilledResult<RunLoop>).value)
   const running: RunningEngine[] = engines.map((e, i) => ({ ...e, loop: loops[i]! }))
   let stopping: Promise<void> | null = null
   return {

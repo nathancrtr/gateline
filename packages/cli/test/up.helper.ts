@@ -130,6 +130,9 @@ export async function up(
       exit: (code) => exits.push(code),
       onSignal: (handler) => signals.push(handler),
       codeRepo: null,
+      // Outside any repository unless a test says otherwise, so a set from the
+      // config file is not compared with this checkout.
+      cwd: realpathSync(tmpdir()),
       dispatcher: dispatchers ? (id) => dispatchers[id] : undefined,
       ...rest,
     },

@@ -4,6 +4,7 @@
 // the server serves exactly that set, prints it as it would a loaded one, and
 // reads neither `repoOverrides` nor the config file.
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { type AddressInfo, createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { LocalGitSource } from '@gateline/core'
@@ -44,6 +45,29 @@ describe('a set resolved by the caller', () => {
       }
     } finally {
       log.mockRestore()
+    }
+  })
+})
+
+describe('a listen that fails', () => {
+  it('rejects with the listen error, where it used to throw uncaught (review of #550)', async () => {
+    const served = generateFixtureRepo()
+    cleanups.push(served.dir)
+    const blocker = createServer()
+    await new Promise<void>((r) => blocker.listen(0, '127.0.0.1', () => r()))
+    const port = (blocker.address() as AddressInfo).port
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    try {
+      const source = new LocalGitSource('local/served', served.dir, { mode: 'decide' })
+      const error = await startServer({ port, host: '127.0.0.1', resolved: { sources: [source], configPath: null } }).then(
+        () => null,
+        (e: unknown) => e as NodeJS.ErrnoException,
+      )
+      expect(error?.code).toBe('EADDRINUSE')
+      expect(log.mock.calls.map((c) => String(c[0])).filter((l) => l.includes('listening on'))).toEqual([])
+    } finally {
+      log.mockRestore()
+      blocker.close()
     }
   })
 })

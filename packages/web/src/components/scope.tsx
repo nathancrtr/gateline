@@ -61,6 +61,14 @@ export interface ScopeState {
  * fetches on every page, and so does the list of repositories that could not
  * be read. A server built before #499 lists bare ids, and a repository with
  * nothing waiting is then named by its id.
+ *
+ * `setKnown` — whether the served set itself is known — is `health.data !==
+ * undefined` alone, not `ready` below: a page's full loading gate also waits
+ * on the inbox, but resolving `?repo=` only needs to know what is served
+ * (#551). While `/api/health` is still in flight, or has failed outright, the
+ * set is not known, so the scope reads `loading` rather than guessing
+ * `unknown` — a repository that never answers keeps the URL's scope forever,
+ * which is the safe default.
  */
 export function useScope(): ScopeState {
   const { pathname } = useLocation()
@@ -73,8 +81,9 @@ export function useScope(): ScopeState {
   const set = repositoriesOf(health.data?.repositories ?? ids, items, items, unreadable)
   const loaded = (q: { data?: unknown; isError: boolean }) => q.data !== undefined || q.isError
   const ready = loaded(health) && loaded(inbox)
+  const setKnown = health.data !== undefined
   const several = health.data ? ids.length > 1 : true
-  const scope = resolveScope(isScopedPage(pathname) ? params.get(SCOPE_PARAM) : null, set)
+  const scope = resolveScope(isScopedPage(pathname) ? params.get(SCOPE_PARAM) : null, set, setKnown)
   return {
     ready,
     set,

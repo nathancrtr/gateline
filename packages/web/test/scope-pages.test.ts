@@ -328,6 +328,133 @@ describe('grouping', () => {
   })
 })
 
+describe('while /api/health has not yet answered (#551)', () => {
+  // The race the issue reports: a click on a rail link right after the page
+  // loads, before /api/health has come back. "Not loaded yet" and "not a
+  // repository served here" are different states — while the served set is
+  // unknown, the rail must carry the URL's `repo` through unchanged, never
+  // drop it as it would if it were guessed `unknown`.
+  const SMALL_Q = `repo=${encodeURIComponent(SMALL)}`
+
+  /** A client that fetches nothing on its own: every query is either seeded here or left pending. */
+  const pendingClient = () => new QueryClient({ defaultOptions: { queries: { retry: false, enabled: false, staleTime: Number.POSITIVE_INFINITY } } })
+
+  /** The rail (App), with three routed pages, over a client seeded only by `seed`. */
+  function renderPending(route: string, seed: (client: QueryClient) => void): string {
+    const client = pendingClient()
+    seed(client)
+    return renderToStaticMarkup(
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(
+          MemoryRouter,
+          { initialEntries: [route] },
+          createElement(
+            Routes,
+            null,
+            createElement(
+              Route,
+              { path: '/', element: createElement(App) },
+              createElement(Route, { index: true, element: createElement(InboxPage) }),
+              createElement(Route, { path: 'portfolio', element: createElement(PortfolioPage) }),
+              createElement(Route, { path: 'metrics', element: createElement(MetricsPage) }),
+            ),
+          ),
+        ),
+      ),
+    )
+  }
+
+  it('keeps the URL’s repo on the rail’s Inbox, Portfolio and Metrics links', () => {
+    const html = renderPending(`/?${SMALL_Q}`, () => {})
+    expect(navLinks(html)).toEqual([
+      ['Inbox', `/?${SMALL_Q}`],
+      ['Portfolio', `/portfolio?${SMALL_Q}`],
+      ['Metrics', `/metrics?${SMALL_Q}`],
+    ])
+  })
+
+  it('with no repo parameter, the links stay bare — there is nothing to lose', () => {
+    const html = renderPending('/', () => {})
+    expect(navLinks(html)).toEqual([
+      ['Inbox', '/'],
+      ['Portfolio', '/portfolio'],
+      ['Metrics', '/metrics'],
+    ])
+  })
+
+  it('shows no scope control yet, rather than guessing at a set it has not read', () => {
+    const html = renderPending(`/?${SMALL_Q}`, () => {})
+    expect(html).not.toContain('data-scope-control')
+  })
+
+  it('shows the page’s existing loading skeleton, never a heading naming an unconfirmed repository or the unknown notice', () => {
+    const html = renderPending(`/?${SMALL_Q}`, () => {})
+    expect(html).not.toContain('data-scope-heading')
+    expect(html).not.toContain('data-scope-unknown')
+    expect(html).toContain('Reading repositories')
+  })
+
+  it('shows no badge count until it can count — total is 0 until the inbox answers', () => {
+    const html = renderPending(`/?${SMALL_Q}`, () => {})
+    expect(badge(html)).toBe(null)
+  })
+
+  it('once /api/health answers — even with the inbox still pending — the scope resolves and the control appears', () => {
+    const html = renderPending(`/?${SMALL_Q}`, (client) => client.setQueryData(['health'], two.health))
+    expect(navLinks(html)).toEqual([
+      ['Inbox', `/?${SMALL_Q}`],
+      ['Portfolio', `/portfolio?${SMALL_Q}`],
+      ['Metrics', `/metrics?${SMALL_Q}`],
+    ])
+    // The set is known from health alone; the control lists it with each
+    // repository's count, 0 for now, since the inbox has not answered.
+    expect(entries(html)).toEqual([
+      ['All repositories', '0', '/', false],
+      ['demo', '0', '/?repo=local%2Fdemo', false],
+      ['demo-small', '0', `/?${SMALL_Q}`, true],
+    ])
+  })
+
+  it('a failed /api/health reads the same way, forever: the safe default is to keep the URL’s repo', async () => {
+    const client = pendingClient()
+    // A permanently failed health check: fetched once, through the public
+    // API, so the query really settles into an error state rather than one
+    // hand-assembled — then left there, as `enabled: false` ensures no retry.
+    await client.fetchQuery({ queryKey: ['health'], queryFn: () => Promise.reject(new Error('offline')), retry: false }).catch(() => {})
+    client.setQueryData(['inbox'], two.inbox)
+    const html = renderToStaticMarkup(
+      createElement(
+        QueryClientProvider,
+        { client },
+        createElement(
+          MemoryRouter,
+          { initialEntries: [`/?${SMALL_Q}`] },
+          createElement(
+            Routes,
+            null,
+            createElement(
+              Route,
+              { path: '/', element: createElement(App) },
+              createElement(Route, { index: true, element: createElement(InboxPage) }),
+              createElement(Route, { path: 'portfolio', element: createElement(PortfolioPage) }),
+            ),
+          ),
+        ),
+      ),
+    )
+    expect(navLinks(html)).toEqual([
+      ['Inbox', `/?${SMALL_Q}`],
+      ['Portfolio', `/portfolio?${SMALL_Q}`],
+      ['Metrics', `/metrics?${SMALL_Q}`],
+    ])
+    // The inbox has answered, so the page itself renders — but it never
+    // claims the named repository is unknown, since health never said so.
+    expect(html).not.toContain('data-scope-unknown')
+  })
+})
+
 describe('the scope lives in the URL alone (decision P9)', () => {
   const saved = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
   afterEach(() => {

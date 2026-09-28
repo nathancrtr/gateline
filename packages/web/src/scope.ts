@@ -126,12 +126,29 @@ export function repositoriesOf(
  * - `unknown`: `?repo=` named a repository this deployment does not serve.
  *   Every repository is shown, and the page says once that the one named is
  *   not served here, rather than showing an empty page.
+ * - `loading`: `?repo=` asked for a repository, and the served set is not
+ *   known yet — `/api/health` has neither answered nor failed. "Not loaded
+ *   yet" and "not a repository served here" are different states (#551): a
+ *   `loading` scope is never `unknown`, and it carries `asked` through
+ *   unresolved rather than guessing. A repository that never answers (a
+ *   failed `/api/health`) reads the same way, forever, which is the safe
+ *   default — a link keeps the scope it was given rather than dropping it.
  */
-export type Scope = { kind: 'all' } | { kind: 'one'; repository: Repository } | { kind: 'unknown'; asked: string }
+export type Scope =
+  | { kind: 'all' }
+  | { kind: 'one'; repository: Repository }
+  | { kind: 'unknown'; asked: string }
+  | { kind: 'loading'; asked: string }
 
-/** The scope `?repo=` asks for, against the set. */
-export function resolveScope(asked: string | null, set: readonly Repository[]): Scope {
+/**
+ * The scope `?repo=` asks for, against the set. `setKnown` is false while the
+ * served set has not yet been read (or could not be): until then, an asked-for
+ * repository cannot be told apart from one this deployment does not serve, so
+ * the scope is reported `loading` rather than `unknown` (#551).
+ */
+export function resolveScope(asked: string | null, set: readonly Repository[], setKnown = true): Scope {
   if (asked === null || asked.trim() === '') return { kind: 'all' }
+  if (!setKnown) return { kind: 'loading', asked }
   const repository = set.find((r) => sameRepository(r.id, asked))
   if (!repository) return { kind: 'unknown', asked }
   return set.length > 1 ? { kind: 'one', repository } : { kind: 'all' }
@@ -143,8 +160,15 @@ export function inScope<T extends Sourced>(rows: readonly T[], scope: Scope): T[
   return rows.filter((row) => sameRepository(row.source, scope.repository.id))
 }
 
-/** The scope's repository id, or null when the page shows the whole set. */
-export const scopeId = (scope: Scope): string | null => (scope.kind === 'one' ? scope.repository.id : null)
+/**
+ * The scope's repository id, for a link to carry: the resolved repository
+ * when the scope is `one`, and the URL's own asked-for id, unchanged, while
+ * it is still `loading` (#551) — a click in that window must not lose it.
+ * Null when the page shows the whole set outright, or when the id turned out
+ * to name nothing served here.
+ */
+export const scopeId = (scope: Scope): string | null =>
+  scope.kind === 'one' ? scope.repository.id : scope.kind === 'loading' ? scope.asked : null
 
 /** One group: a repository of the set and its rows, in the order they came. */
 export interface Group<T> {

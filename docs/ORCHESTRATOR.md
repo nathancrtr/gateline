@@ -690,8 +690,9 @@ One object per process, the governor (`governor.ts`), owns the concurrency cap
 count an engine took of its own work at launch, and a scheduled sweep passed
 neither. Several engines cannot share a limit that way (MULTI-REPO.md §8.2), so
 admission is now a reservation, made by every engine and every sweep scheduler
-the process runs. Since #502 one process can run one engine per repository under
-this one governor (§6.2); `gateline up` still passes it a single repository.
+the process runs. Since #502 one process runs one engine per repository under
+this one governor (§6.2); `gateline up` passes it every repository in `dispatch`
+mode.
 
 The governor is a guard applied after derivation, like the engine's other guards.
 Derivation stays a pure function of committed state, and the governor writes
@@ -994,8 +995,9 @@ refused with more than one repository.
   compared without case throughout the governor, as core compares them, and each is
   written as it was first registered.
 
-`gateline up` still serves one repository through `startOrchestrator`. What it
-observes from this, against main:
+`gateline up` calls `startOrchestrators` with every `dispatch` repository in its
+set (MULTI-REPO.md §8). With one repository, what it observes against the code
+before #502:
 
 | | |
 |---|---|
@@ -1159,8 +1161,8 @@ it already has in memory. This section is the mechanism (#141) that turns that
 staleness into a bounded, self-detected process replacement.
 
 **Deployment model.** The blessed topology (#100/#112, [TOPOLOGY.md](TOPOLOGY.md)
-§3.1) is one checkout, co-located: the server, the engine, and the CLI are one
-process (`gateline up`) reading and writing one clone, with the globally
+§3.1) is one checkout, co-located: the server, the engines, and the CLI are one
+process (`gateline up`) reading and writing the clones it serves, with the globally
 installed `gateline` binary `npm link`ed to that checkout's
 `packages/cli`. There is exactly one blessed tree per deployment, so
 "update the code" reduces to "advance that one checkout" — no fleet of
@@ -1197,7 +1199,7 @@ between calls:
 | `fresh` | On-disk `HEAD` equals the commit the process started on | Ticks normally |
 | `superseded-pending` | Clean fast-forward of the default branch, observed for the first time | Tick bodies idle; heartbeat keeps writing |
 | `supersede-confirmed` | The same fast-forward observed on a second consecutive boundary check (the debounce) | `onSupersede` fires once, after the confirming heartbeat write; the process drains and exits `75` |
-| `paused` | Dirty tree, a rebase/merge in progress, non-fast-forward movement, or the checkout switched off the default branch (including detached HEAD) | Tick bodies idle; recovers to `fresh`/`superseded-pending` once the tree returns clean |
+| `paused` | Dirty tree, a rebase/merge in progress, non-fast-forward movement, or the checkout switched off the default branch (including detached HEAD) | Tick bodies idle, but origin is still fetched on the heartbeat (a fetch is not a dispatch; under `up` the server keeps no fetch timer for a repository with an engine); recovers to `fresh`/`superseded-pending` once the tree returns clean |
 
 A heartbeat never reports `supersede-confirmed` itself — by the time a
 confirmed check is written the process is already draining toward exit, so

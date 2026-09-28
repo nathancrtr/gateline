@@ -54,7 +54,7 @@ over a real repository: [Setup](#setup), below.
 | Path | What it is | Portable? |
 |------|-----------|-----------|
 | [`docs/DESIGN.md`](docs/DESIGN.md) | The architecture: principles, roles, gates, failure modes | — |
-| [`docs/TOPOLOGY.md`](docs/TOPOLOGY.md) | Control-plane topology: one authority per deployment, origin as linearization point | — |
+| [`docs/TOPOLOGY.md`](docs/TOPOLOGY.md) | Control-plane topology: one engine per repository, origin as linearization point | — |
 | [`docs/FRONTEND.md`](docs/FRONTEND.md) | Design for the gate frontend — the human interfaces to the pipeline (plan: [FRONTEND-PLAN.md](docs/FRONTEND-PLAN.md)) | — |
 | [`docs/INTEGRATION.md`](docs/INTEGRATION.md) | Design (draft) for the workflow that imports the framework into a host repo | — |
 | [`docs/ORCHESTRATOR.md`](docs/ORCHESTRATOR.md) | Design for the v1 agent-orchestrated operating mode (implemented in `packages/orchestrator`) | — |
@@ -173,7 +173,7 @@ declare a **profile** — `patch | standard | full` ([DESIGN.md](docs/DESIGN.md)
 — that scales which roles run and which gates exist to the size of the change, so a
 bug fix no longer pays for the full ceremony. The gate frontend (web, CLI, server)
 and the v1 orchestrator are implemented in `packages/` and run as one co-located unit
-(`gateline up`) over a single clone — one authority per deployment
+(`gateline up`), with one engine for each repository it dispatches in
 ([TOPOLOGY.md](docs/TOPOLOGY.md)); a single-user hosting recipe lives in
 [`deploy/`](deploy/). Autonomy stays gated on the DESIGN.md §7 promotion criterion.
 

@@ -303,6 +303,11 @@ export class LocalGitSource implements RunSource {
     return this.git.revParse(branch)
   }
 
+  /** This clone's top directory, where `gh` and an engine run (`RunSource.workingDirectory`). */
+  workingDirectory(): string {
+    return this.dir
+  }
+
   async readState(ref: RunRef) {
     const raw = await this.git.show(ref.ref, `${await this.runDir(ref.slug)}/state.yaml`)
     if (raw === null) return { raw, state: null, error: 'state.yaml missing' }

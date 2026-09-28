@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { dirname, extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { LOCAL_ID_PREFIX, loadSources } from '@gateline/core'
+import { LOCAL_ID_PREFIX, loadSources, type RunSource, sameRepositoryId } from '@gateline/core'
 import { serve } from '@hono/node-server'
 import { createAnnouncer } from './announce.ts'
 import { createApp } from './app.ts'
@@ -61,6 +61,21 @@ export interface ServeOptions {
    * engine runs.
    */
   engine?: boolean
+  /**
+   * A set the caller has already resolved (#502): `gateline up` loads the set
+   * once, builds its engines from it, and hands the same sources here, so the
+   * server and the engines cannot disagree about which repositories are
+   * served or how. When given, `loadSources` is not called, the caller has
+   * printed its warnings, and `repoOverrides`, `demo`, `push`, `localOnly`
+   * and `engine` are not read.
+   */
+  resolved?: { sources: RunSource[]; configPath: string | null }
+  /**
+   * Repositories an engine beside this server syncs from origin on its own
+   * heartbeat (`gateline up`, #502), by id. The server keeps no fetch timer of
+   * its own for them, so a `fetch_interval` does not fetch twice.
+   */
+  engineSynced?: { ids: readonly string[]; heartbeatSeconds: number }
 }
 
 const MIME: Record<string, string> = {
@@ -77,7 +92,8 @@ const MIME: Record<string, string> = {
 /** How often the refs are read again with no watcher event to prompt it. */
 const RECHECK_MS = 30_000
 
-export async function startServer(opts: ServeOptions = {}): Promise<{ url: string; close: () => void }> {
+/** The set from the options: the demo, `--repo` paths, the config file or the working directory. */
+async function resolveSet(opts: ServeOptions): Promise<{ sources: RunSource[]; configPath: string | null }> {
   let repoOverrides = opts.repoOverrides
   if (opts.demo) {
     const { generateDemoSet } = await import('@gateline/fixtures')
@@ -85,9 +101,13 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
     for (const fixture of demo.repos) console.log(`demo repository generated at ${fixture.dir}`)
     repoOverrides = demo.repos.map((fixture) => fixture.dir)
   }
-
   const { sources, configPath, warnings } = await loadSources({ repoOverrides, push: opts.push, localOnly: opts.localOnly, engine: opts.engine })
   for (const w of warnings) console.warn(`warning: ${w}`)
+  return { sources, configPath }
+}
+
+export async function startServer(opts: ServeOptions = {}): Promise<{ url: string; close: () => void }> {
+  const { sources, configPath } = opts.resolved ?? (await resolveSet(opts))
   if (sources.length === 0) {
     throw new Error('no run sources — run inside a repository, pass --repo <path>, or create ~/.config/gateline/config.yaml')
   }
@@ -123,6 +143,12 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
   for (const source of sources) {
     const syncFromRemote = source.syncFromRemote?.bind(source)
     if (!source.fetchIntervalSeconds || !syncFromRemote) continue
+    if (opts.engineSynced?.ids.some((id) => sameRepositoryId(id, source.id))) {
+      console.log(
+        `not polling ${source.id} from origin every ${source.fetchIntervalSeconds}s: its engine syncs it on each heartbeat, every ${opts.engineSynced.heartbeatSeconds}s, paused or not`,
+      )
+      continue
+    }
     // LocalGitSource.syncFromRemote self-guards under local-only (AC2.4) — this
     // skip is honesty in the log, not the safety mechanism.
     if (source.localOnly) {
@@ -215,12 +241,26 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
   // port comes from the listener callback rather than being assumed back
   // from what was passed in.
   let boundPort = port
-  const server = await new Promise<ReturnType<typeof serve>>((resolveServer) => {
-    const s = serve({ fetch: app.fetch, port, hostname: host }, (info) => {
-      boundPort = info.port
-      resolveServer(s)
+  // A listen that fails (the port is taken, the port is not a port) rejects
+  // (#502, review of #550): before, the error surfaced as an uncaught
+  // exception with a stack trace and the caller never heard. What this call
+  // started before the listen is stopped first, so nothing is left behind.
+  let server: ReturnType<typeof serve>
+  try {
+    server = await new Promise<ReturnType<typeof serve>>((resolveServer, rejectServer) => {
+      const s = serve({ fetch: app.fetch, port, hostname: host }, (info) => {
+        boundPort = info.port
+        s.off('error', rejectServer)
+        resolveServer(s)
+      })
+      s.once('error', rejectServer)
     })
-  })
+  } catch (e) {
+    for (const t of syncTimers) clearInterval(t)
+    clearInterval(recheck)
+    for (const u of unwatchers) u()
+    throw e
+  }
   const url = `http://${host === '0.0.0.0' ? 'localhost' : host}:${boundPort}`
   console.log(`gateline ui listening on ${url}${hasSpa ? '' : '  (API only — run `npm run build` for the SPA, or `npm run dev -w @gateline/web`)'}`)
 

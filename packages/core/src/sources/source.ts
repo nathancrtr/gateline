@@ -234,6 +234,13 @@ export interface RunSource {
    * driver cannot resolve names.
    */
   branchTip?(branch: string): Promise<string | null>
+  /**
+   * The top directory of this repository's local clone: where a tool that
+   * works inside a clone runs (`gh`, for a draft PR or a review sync; an
+   * engine under `gateline up`). Absent on a source with no local clone,
+   * and a caller that needs one says so rather than guessing a path.
+   */
+  workingDirectory?(): string
 }
 
 /** The name an interface shows for a source: its own display name, or else its id's last segment (§6.2). */

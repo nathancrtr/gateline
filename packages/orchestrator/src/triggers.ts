@@ -339,6 +339,12 @@ export async function runLoop(engine: EngineLike, repoDir: string, cfg: RunLoopC
         failedPasses = 0
         backoffLogged = false
         engine.clearFault?.()
+      } else if (!fresh && (why === 'heartbeat' || why === 'startup')) {
+        // Paused or pending a restart on new code: nothing is derived or
+        // dispatched, but origin is still fetched on the heartbeat (a fetch is
+        // not a dispatch). Under `up` the server keeps no fetch timer for a
+        // repository with an engine, so otherwise nobody would (review of #550).
+        await engine.syncFromRemote()
       }
       // else: idle. Not dispatching on mixed code is the whole point of D2 —
       // the loop still counts as having ticked (the heartbeat below fires).
@@ -400,15 +406,17 @@ export async function runLoop(engine: EngineLike, repoDir: string, cfg: RunLoopC
     }
   }
 
+  // Ref watcher: refs/ + packed-refs, debounced, worktree-correct. Resolved
+  // first: a loop that cannot be set up must leave no completion hook and no
+  // governor wake behind (review of #550).
+  const git = new Git(repoDir)
+  const commonDir = (await git.run(['rev-parse', '--path-format=absolute', '--git-common-dir'])).trim()
+
   // Dispatch completion → tick (the closing commit just landed).
   engine.onSettled = () => void tick('completion')
   // The governor's wake → tick (#501): another engine, a sweep, or this
   // engine's own settlement freed a slot this engine was refused.
   const unsubscribeWake = engine.subscribeWake?.(() => tick('wake'))
-
-  // Ref watcher: refs/ + packed-refs, debounced, worktree-correct.
-  const git = new Git(repoDir)
-  const commonDir = (await git.run(['rev-parse', '--path-format=absolute', '--git-common-dir'])).trim()
   let timer: NodeJS.Timeout | null = null
   const fire = () => {
     if (timer) clearTimeout(timer)

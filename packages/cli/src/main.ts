@@ -1055,8 +1055,9 @@ program
  * `gateline arm`'s body: `decide()`-style flow with `{ action: 'arm' }`
  * (DecisionError → exit 1 with its message — covers already-armed;
  * nonexistent-run comes from `findRun`'s existing refusal), then a
- * best-effort draft-PR ensure (R8) using the source's dir (the `sync`
- * command's `(source as {dir?}).dir` pattern) — a skipped note is success.
+ * best-effort draft-PR ensure (R8) in the source's local clone
+ * (`workingDirectory`, as `sync` uses) — a skipped note is success, and so
+ * is a source with no local clone, which says it ensured nothing.
  */
 export async function armRun(slug: string, flags: RepositoryFlags): Promise<number> {
   const { sources } = await resolveSources()
@@ -1077,12 +1078,15 @@ export async function armRun(slug: string, flags: RepositoryFlags): Promise<numb
   }
   const code = await planAndWrite(source, ref, who, { action: 'arm' })
   if (code !== null) return code
-  const dir = (source as { dir?: string }).dir
-  if (dir) {
-    const localOnly = (source as { localOnly?: boolean }).localOnly
-    const note = await ensureDraftPr(dir, ref.branch, slug, { localOnly })
-    console.log(note.note)
+  // `gh` runs inside the repository's clone (MULTI-REPO.md §5 rule 3): a
+  // source with no local clone has nowhere to run it.
+  const dir = source.workingDirectory?.()
+  if (dir === undefined) {
+    console.log(`draft PR not ensured: ${displayNameOf(source)} (${source.id}) has no local clone for gh to run in`)
+    return 0
   }
+  const note = await ensureDraftPr(dir, ref.branch, slug, { localOnly: source.localOnly })
+  console.log(note.note)
   return 0
 }
 
@@ -1129,8 +1133,12 @@ program
         console.log(`skipped: ${displayNameOf(source)} is in view mode, so nothing is recorded there`)
         continue
       }
-      const dir = (source as { dir?: string }).dir
-      if (!dir) continue
+      // The review sync runs `gh` inside the repository's clone.
+      const dir = source.workingDirectory?.()
+      if (dir === undefined) {
+        console.log(`skipped: ${displayNameOf(source)} (${source.id}) has no local clone for gh to run in`)
+        continue
+      }
       anyConsidered = true
       const plan = await planSyncForSource(source, () => new GhCliProvider(dir))
       if (plan === 'local-only') {
@@ -1161,89 +1169,76 @@ program
     if (failed) process.exitCode = 1
   })
 
-// --- ui ----------------------------------------------------------------------
-
-/**
- * Pure resolution of `up`'s startup marker and the push value the engine
- * should use, from the CLI flags (as read via commander's
- * `getOptionValueSource`, plan risk #1) and the source's already-resolved
- * `localOnly` (the one true precedence chain lives in `loadSources` —
- * `resolveUpMode` never re-derives it, only names why it came out the way it
- * did, AC4.2). `enginePush` is `false` whenever `localOnly` is, else the
- * explicit push setting if any, else `true` — equivalent to the source's own
- * resolved `push` in every row of the plan's mode-resolution table.
- */
-export function resolveUpMode(
-  flags: { pushExplicit: boolean; push: boolean; localOnly: boolean },
-  sourceLocalOnly: boolean,
-): { enginePush: boolean; localOnly: boolean; marker: string } {
-  const localOnly = sourceLocalOnly
-  const enginePush = localOnly ? false : flags.pushExplicit ? flags.push : true
-  let marker: string
-  if (localOnly) {
-    marker = flags.localOnly
-      ? 'local-only (--local-only)'
-      : flags.pushExplicit && !flags.push
-        ? 'local-only (--no-push)'
-        : 'local-only (no origin remote)'
-  } else {
-    marker = flags.pushExplicit && flags.push ? 'pushing to origin (--push)' : 'pushing to origin (origin auto-detected)'
-  }
-  return { enginePush, localOnly, marker }
-}
-
-/**
- * Resolves `up`'s `--repo` (or the cwd default) to its work-tree toplevel —
- * the same normalization `loadSources` already applies to `--repo` and
- * config entries (#493, the engine-side half of #83). The engine reads by
- * pathspec (`ls-tree`/`log -- <path>`), which resolves relative to the cwd's
- * prefix inside a work tree, unlike `show(ref:path)` — a subdirectory
- * `repoDir` would dispatch against an engine that lists no artifacts and
- * misses default-branch runs, with no warning.
- */
-export async function resolveUpRepoDir(raw: string): Promise<{ ok: true; dir: string } | { ok: false; error: string }> {
-  const dir = await repoToplevel(raw)
-  if (dir === null) return { ok: false, error: `${raw} is not a git repository — \`up\` needs one writable clone (pass --repo)` }
-  return { ok: true, dir }
-}
+// --- up ----------------------------------------------------------------------
 
 program
   .command('up')
-  .description('Gatehouse + the v1 orchestrator over one clone — the single-authority deployment (docs/TOPOLOGY.md §3.1)')
+  .description(
+    'Gatehouse over the set, and one v1 orchestrator engine for each repository in dispatch mode, in one process (docs/MULTI-REPO.md §8)',
+  )
   .option('--port <n>', 'port', '4310')
   .option('--host <h>', 'bind address', '127.0.0.1')
   .option('--no-open', 'do not open the browser')
   .option(
     '--adapter <name>',
-    'headless adapter(s), repeatable; the first is the default runner',
+    "headless adapter(s), repeatable; the first is the default runner (default: the config's engine.adapters, else claude-code)",
     (value: string, acc: string[]) => [...acc, value],
     [] as string[],
   )
   .option(
     '--spend-limit-usd <usd>',
-    'defer new dispatches while projected spend across all active runs inside the window exceeds this (a rate limit, never a pause; #97)',
-    parseFloat,
+    "the machine's spend limit: defer new dispatches while projected spend across every dispatch repository inside the window exceeds this (a rate limit, never a pause; #97); overrides the config's limits.spend_limit_usd; 0 admits no dispatch that costs anything",
   )
-  .option('--spend-window <hours>', 'the rolling window --spend-limit-usd measures over (default 24)', parseFloat)
+  .option(
+    '--spend-window <hours>',
+    "the rolling window the spend limit measures over (default: the config's limits.spend_window_hours, else 24)",
+  )
+  .option(
+    '--budget-enforcement',
+    "enforce the spend limits and per-run caps (the default); overrides the config's engine.budget_enforcement: false",
+  )
   .option(
     '--no-budget-enforcement',
-    'meter spend but never pause on it: no per-run cap requirement, no cap pauses (for flat-rate-billed harnesses, #109)',
+    "meter spend but never pause or defer on it: no per-run cap requirement, no cap pauses, no spend limit (for flat-rate-billed harnesses, #109); overrides the config's engine.budget_enforcement",
   )
-  .option('--push', 'push every orchestrator/decision commit to origin (default: auto-detect from origin presence)')
-  .option('--no-push', 'keep orchestrator commits local, and stop fetching/gh-calling origin too — an alias for --local-only')
-  .option('--local-only', 'no push, no gh/GitHub calls, no origin fetch — everything about this run stays in this clone')
-  .option('--heartbeat <seconds>', 'engine heartbeat interval', '180')
-  .option('--role-timeout <seconds>', 'wall clock per dispatched role before its process group is killed (default 1800)', parseFloat)
+  .option(
+    '--push',
+    'push every orchestrator/decision commit to origin (default: auto-detect from origin presence); for a repository with no config entry',
+  )
+  .option(
+    '--no-push',
+    'keep orchestrator commits local, and stop fetching/gh-calling origin too — an alias for --local-only; for a repository with no config entry',
+  )
+  .option(
+    '--local-only',
+    'no push, no gh/GitHub calls, no origin fetch — everything about this run stays in this clone; for a repository with no config entry',
+  )
+  .option('--heartbeat <seconds>', "engine heartbeat interval, at most 2147483 (default: the config's engine.heartbeat_seconds, else 180)")
+  .option(
+    '--role-timeout <seconds>',
+    "wall clock per dispatched role before its process group is killed, at most 2147483 (default: the config's engine.role_timeout_seconds, else 1800)",
+  )
   .option(
     '--max-concurrent-dispatches <n>',
-    'most dispatches running at once across all runs; 0 disables the cap (default 2, #227)',
-    parseFloat,
+    "most dispatches running at once across every repository; 0 disables the cap (default: the config's limits.max_concurrent_dispatches, else 2; #227)",
+  )
+  .option(
+    '--engine-name <name>',
+    "the name that replaces this machine's hostname in every engine id written to a ledger (default: the config's engine.name, else the hostname); letters, digits, '.', '_' and '-'. It must be unique among the machines running an engine against the same repository (below)",
   )
   .addHelpText(
     'after',
-    '\nEngine only, no server or browser: the orchestrator has its own binary —\n' +
+    '\nWhich repositories: every --repo given, else the config file\'s list, else the working directory. A repository\n' +
+      'given by --repo or the working directory is in dispatch mode; a config entry states its own mode. Each dispatch\n' +
+      'repository gets an engine, all under one set of limits; view and decide repositories are served with no engine.\n' +
+      '\nThe engine name must differ from the name of every other machine that runs an engine against the same\n' +
+      'repository. An engine reads a ledger entry that carries its own name, and whose process is not running on this\n' +
+      'machine, as one it left behind when it died, and dispatches that work again: two machines sharing a name would\n' +
+      'each read the other\'s live work as dead and pay for it twice.\n' +
+      '\nEngine only, no server or browser: the orchestrator has its own binary, for ONE repository —\n' +
       '  gateline-orchestrator watch   resident engine (this command minus Gatehouse)\n' +
       '  gateline-orchestrator tick    one reconcile pass, --dry-run to preview\n' +
+      'It keeps limits of its own: running it beside `up` on the same machine counts every limit twice.\n' +
       'See packages/cli/README.md, "Headless / no browser".',
   )
   .action(
@@ -1253,133 +1248,46 @@ program
         host: string
         open?: boolean
         adapter: string[]
-        spendLimitUsd?: number
-        spendWindow?: number
+        spendLimitUsd?: string
+        spendWindow?: string
         budgetEnforcement?: boolean
         push?: boolean
         localOnly?: boolean
-        heartbeat: string
-        roleTimeout?: number
-        maxConcurrentDispatches?: number
+        heartbeat?: string
+        roleTimeout?: string
+        maxConcurrentDispatches?: string
+        engineName?: string
       },
       cmd: Command,
     ) => {
+      const { parseStrictNumber, processDeps, runUp } = await import('./up.ts')
       const opts = program.opts<{ repo: string[] }>()
-      // One engine per `up`: dispatching needs exactly one writable clone.
-      // The server may aggregate several sources; the engine takes the one
-      // repo named (or the cwd) — a second engine belongs to a second `up`.
-      if (opts.repo.length > 1) {
-        console.error('`up` serves one repository with one engine — pass a single --repo (`ui` serves the config file\'s list)')
-        process.exit(1)
-      }
-      const resolvedRepoDir = await resolveUpRepoDir(opts.repo[0] ?? process.cwd())
-      if (!resolvedRepoDir.ok) {
-        console.error(resolvedRepoDir.error)
-        process.exit(1)
-      }
-      const repoDir = resolvedRepoDir.dir
-
-      // Explicitness, not just the resolved boolean: auto-detect and an
-      // explicit `--push`/`--no-push` must be distinguishable for both the
-      // conflict check and the marker (commander ^14 — plan risk #1).
-      const pushExplicit = cmd.getOptionValueSource('push') === 'cli'
-
-      // Resolve before starting anything (AC4.1): a `--local-only --push`
-      // conflict must exit 1 with no server and no engine started.
-      let sources: RunSource[]
-      let warnings: string[]
-      try {
-        ;({ sources, warnings } = await loadSources({
-          repoOverrides: [repoDir],
-          push: pushExplicit ? flags.push : undefined,
-          localOnly: flags.localOnly || undefined,
-          // `up` runs an engine: its one repository is `dispatch` (§7.3).
-          engine: true,
-        }))
-      } catch (e) {
-        if (isStartupError(e)) {
-          console.error(e.message)
-          process.exit(1)
-        }
-        throw e
-      }
-      for (const w of warnings) console.error(`warning: ${w}`)
-      const source = sources[0]
-      if (!source) {
-        console.error(`${repoDir} is not a git repository — \`up\` needs one writable clone (pass --repo)`)
-        process.exit(1)
-      }
-      const { enginePush, localOnly, marker } = resolveUpMode(
-        { pushExplicit, push: flags.push === true, localOnly: flags.localOnly === true },
-        (source as { localOnly?: boolean }).localOnly === true,
-      )
-
-      const { startServer } = await import('@gateline/server/main')
-      const { stagedShutdown, startOrchestrator } = await import('@gateline/orchestrator')
-      const server = await startServer({
-        port: Number(flags.port),
-        host: flags.host,
-        open: flags.open !== false,
-        repoOverrides: [repoDir],
-        // The resolved pair, not the raw flags (ADR-7): `up` is the one
-        // conflict gate, so the server never re-derives (or re-throws) it.
-        push: enginePush,
-        localOnly,
-        engine: true,
-      })
-      // `orchestrator` and the supersede callback below both close over
-      // `stop`, but `stop` needs `orchestrator` to drain it — same
-      // forward-reference the `watch` command resolves by leaving the
-      // variable nullable until startOrchestrator returns; the callback only
-      // fires later, on a heartbeat, by which point it's set.
-      let orchestrator: Awaited<ReturnType<typeof startOrchestrator>> | null = null
-      // A supersede can race the operator's ^C ladder (both end in the same
-      // drain); share one idempotent drain so the second caller awaits the
-      // first's work instead of double-draining or double process.exit.
-      let drained: Promise<void> | null = null
-      const drain = () =>
-        (drained ??= (async () => {
-          await orchestrator?.stop()
-          server.close()
-        })())
-      const stop = async (exitCode: number) => {
-        console.log('draining in-flight dispatches…')
-        await drain()
-        process.exit(exitCode)
-      }
-      orchestrator = await startOrchestrator({
-        repoDir,
-        adapters: flags.adapter,
-        push: enginePush,
-        localOnly,
-        // Hosted hard line unless the operator opts out (#109): with
-        // enforcement off, requiring a per-run cap would be requiring a
-        // number nothing reads.
-        requireBudget: flags.budgetEnforcement !== false,
-        budgetEnforcement: flags.budgetEnforcement,
-        spendLimitUsd: flags.spendLimitUsd ?? null,
-        spendWindowHours: flags.spendWindow,
-        roleTimeoutSeconds: flags.roleTimeout,
-        maxConcurrentDispatches: flags.maxConcurrentDispatches,
-        heartbeatSeconds: Number(flags.heartbeat),
-        log: (line) => console.log(line),
-        onSupersede: (status) => {
-          console.log(
-            `code tree moved ${status.startHead.slice(0, 10)}..${status.codeHead.slice(0, 10)} — superseding, restart to load fresh code`,
-          )
-          void stop(SUPERSEDE_EXIT_CODE)
+      // Numbers are parsed strictly and checked by runUp (review of #550).
+      const num = (value: string | undefined) => (value === undefined ? undefined : parseStrictNumber(value))
+      const outcome = await runUp(
+        {
+          repo: opts.repo,
+          port: parseStrictNumber(flags.port),
+          host: flags.host,
+          open: flags.open !== false,
+          adapter: flags.adapter,
+          spendLimitUsd: num(flags.spendLimitUsd),
+          spendWindow: num(flags.spendWindow),
+          // Explicitness, not just the resolved boolean (commander ^14): what
+          // the operator typed must be told apart from a default, for the
+          // conflict check, the startup markers and what overrides the config.
+          budgetEnforcement: cmd.getOptionValueSource('budgetEnforcement') === 'cli' ? flags.budgetEnforcement === true : undefined,
+          budgetEnforcementConflict: process.argv.includes('--budget-enforcement') && process.argv.includes('--no-budget-enforcement'),
+          push: cmd.getOptionValueSource('push') === 'cli' ? flags.push === true : undefined,
+          localOnly: flags.localOnly === true,
+          heartbeat: num(flags.heartbeat),
+          roleTimeout: num(flags.roleTimeout),
+          maxConcurrentDispatches: num(flags.maxConcurrentDispatches),
+          engineName: flags.engineName,
         },
-      })
-      console.log(`engine watching ${repoDir} (heartbeat ${flags.heartbeat}s, ${marker}) — ^C to stop`)
-      const onSignal = stagedShutdown({
-        inFlight: () => orchestrator?.inFlightDetail() ?? [],
-        drain,
-        abort: () => orchestrator?.abortInFlight() ?? 0,
-        log: (line) => console.log(line),
-        exit: (code) => process.exit(code),
-      })
-      process.on('SIGINT', onSignal)
-      process.on('SIGTERM', onSignal)
+        processDeps(),
+      )
+      if (!outcome.ok) process.exit(outcome.code)
     },
   )
 
@@ -1659,6 +1567,8 @@ program
     }
     process.exit(await runSelfUpdate(repoDir))
   })
+
+// --- ui ----------------------------------------------------------------------
 
 program
   .command('ui')

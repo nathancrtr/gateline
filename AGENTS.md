@@ -41,13 +41,13 @@ Then, by area:
   screen: the verbatim rule's scope, the representation vocabulary, the layering
 * [`docs/INTEGRATION.md`](docs/INTEGRATION.md) — importing the framework into a host
   repo (plan: [`docs/INTEGRATION-PLAN.md`](docs/INTEGRATION-PLAN.md))
-* [`docs/TOPOLOGY.md`](docs/TOPOLOGY.md) — control-plane topology: one authority per
-  deployment, origin as the linearization point, and how to trial unmerged changes
+* [`docs/TOPOLOGY.md`](docs/TOPOLOGY.md) — control-plane topology: one engine per
+  repository, origin as the linearization point, and how to trial unmerged changes
   without disturbing the blessed checkout
 * [`docs/MULTI-REPO.md`](docs/MULTI-REPO.md) — one deployment serving several
   repositories: repository identity, registration and modes, one engine per
   repository under shared limits, and how Gatehouse scopes and groups runs.
-  Decided, being built under #492; the invariants below describe what is built
+  Built under #492, except the per-repository credential and webhook overrides
 * [`docs/DEPLOY.md`](docs/DEPLOY.md) — hosting the frontend (and, opt-in, the
   orchestrator) as a single-user instance; read its security model first
 
@@ -61,10 +61,11 @@ contracts, and adapters. Runs declare a **profile** — `patch | standard | full
 change; a run whose `state.yaml` carries no `profile:` is `full`. Three runner
 adapters are built: `claude-code`, `copilot-cli`, and `opencode` (the any-provider
 one). The gate frontend (Gatehouse) and the v1 orchestrator are implemented and
-co-located by design — `gateline up` runs both over a single clone, which is the
-blessed topology; the hosted recipe under `deploy/` remains a documented self-host
-option. Integration tooling ships as `gateline init|validate|fork`.
-Autonomy remains gated on the DESIGN.md §7 promotion criterion.
+co-located by design — `gateline up` runs both in one process, with one engine for
+each repository it dispatches in, which is the blessed topology; the hosted recipe
+under `deploy/` remains a documented self-host option. Integration tooling ships
+as `gateline init|validate|fork`. Autonomy remains gated on the DESIGN.md §7
+promotion criterion.
 
 ## Invariants — check before editing
 
@@ -113,14 +114,20 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   are one-way and human-decided (a human edits `profile:` and resumes — the reconciler
   derives the backfill); downgrading mid-run is forbidden, and an engine that
   observes a profile lighter than the gates already decided escalates.
-* **One authority per deployment, and the blessed checkout stays on the default
-  branch** (TOPOLOGY.md §3.1, §3.5). Never point a second writable clone's engine at
-  the same runs, and never move the checkout the global `gateline` resolves to onto a
-  branch — an engine there would put unreviewed code in charge of live, metered
-  dispatch. The code-tree monitor enforces this: a checkout that leaves the default
-  branch, goes dirty, or moves by anything but a fast-forward pauses dispatch until
-  it is clean and back on the default branch (a clean fast-forward instead exits the
-  engine `75` to be restarted on the new code). Trial an unmerged frontend change
+* **One engine per repository, and the blessed checkout stays on the default
+  branch** (TOPOLOGY.md §3.1, §3.5). `gateline up` runs one engine for each
+  `dispatch` repository in its set, in one process under one set of limits, and one
+  such process per machine is the supported topology; nothing enforces it, and a
+  second `up` on the same machine would put a second engine in every dispatch
+  repository. Never point a second engine at the same runs (a second `up`, a second
+  writable clone's, or the standalone `gateline-orchestrator` beside `up`, whose
+  limits are its own), and never move the checkout the global `gateline` resolves
+  to onto a branch — an engine there would put unreviewed code in charge of live,
+  metered dispatch. The code-tree monitor enforces that the blessed checkout stays
+  clean and on the default branch: a checkout that leaves the default branch, goes
+  dirty, or moves by anything but a fast-forward pauses dispatch until it is clean
+  and back on the default branch (a clean fast-forward instead exits the engine
+  `75` to be restarted on the new code). Trial an unmerged frontend change
   from that branch's own worktree with `ui`, never `up`.
 * **Host configuration the engine reads comes from the host's local
   default-branch ref** — the registry, `orchestrator.yaml`, adapter manifests and
@@ -173,9 +180,10 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   * end a run short of `done` — `close <slug> --as <disposition> --reason <text>`
     (`already-delivered | superseded | obsolete | abandoned`); `reopen` undoes it
   * create a run — `new` stages `runs/<slug>/` on its branch; `arm <slug>` starts it
-  * serve — `up [--repo <path>]` (Gatehouse + engine over one clone, the blessed
-    topology), `ui` (viewer only), `self-update` (pull + rebuild the web dist, then
-    let the running engine self-supersede)
+  * serve — `up [--repo <path>]...` (Gatehouse over the set, and one engine per
+    `dispatch` repository in one process — the blessed topology), `ui` (viewer
+    only), `self-update` (pull + rebuild the web dist, then let the running
+    engine self-supersede)
   * render — `render [repo]` re-renders that tree's adapter agent files
 * Verify the orchestrator without dispatching: `gateline-orchestrator tick --dry-run`
   or `shadow <slug>` (replay a finished run); `watch` and `sweep <role>` are live

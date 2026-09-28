@@ -251,3 +251,139 @@ describe('push by mode (R2, TOPOLOGY.md §3.6)', () => {
     }
   })
 })
+
+describe('engine.name and engine.budget_enforcement (#502)', () => {
+  it('parses both, as written: the orchestrator checks the name', async () => {
+    const path = await config(`engine:\n  name: "my laptop"\n  budget_enforcement: false\nrepositories:\n  - path: ${billing}\n    mode: dispatch\n`)
+    expect((await loadSources({ configPath: path })).engine).toEqual({ name: 'my laptop', budgetEnforcement: false })
+  })
+
+  it('refuses a budget_enforcement that is not a boolean', async () => {
+    const path = await config(`engine:\n  budget_enforcement: "no"\nrepositories:\n  - path: ${billing}\n    mode: dispatch\n`)
+    expect(await refusal(path)).toBe(`config at ${path}: engine.budget_enforcement: Invalid input: expected boolean, received string`)
+  })
+})
+
+describe('how each repository is served, named for `up` (#502)', () => {
+  const settings = async (opts: Parameters<typeof loadSources>[0]) => (await loadSources(opts)).repositorySettings
+  const entry = (path: string, mode: string, extra = '') => `  - path: ${path}\n    mode: ${mode}\n${extra}`
+
+  it.each([
+    ['dispatch', '', { push: true, localOnly: false, pushBecause: 'origin auto-detected' }],
+    ['decide', '', { push: false, localOnly: false, pushBecause: 'view and decide entries push only with push: true' }],
+    ['dispatch', '    push: false\n', { push: false, localOnly: false, pushBecause: 'push: false' }],
+    ['decide', '    push: true\n', { push: true, localOnly: false, pushBecause: 'push: true' }],
+    ['dispatch', '    local_only: true\n', { push: false, localOnly: true, pushBecause: 'local_only: true' }],
+    ['dispatch', '    local_only: false\n', { push: true, localOnly: false, pushBecause: 'origin auto-detected' }],
+  ])('a %s entry with an origin and %j', async (mode, extra, expected) => {
+    const path = await config(`repositories:\n${entry(billing, mode, extra)}`)
+    expect(await settings({ configPath: path })).toEqual({ 'github.com/acme/billing': expected })
+  })
+
+  it('a config entry with no origin', async () => {
+    const path = await config(`repositories:\n${entry(website, 'dispatch')}`)
+    expect(await settings({ configPath: path })).toEqual({ 'local/website': { push: false, localOnly: true, pushBecause: 'no origin remote' } })
+  })
+
+  it('carries a gateline_prefix through', async () => {
+    const prefixed = join(base, 'prefixed')
+    await mkdir(join(prefixed, '.framework'), { recursive: true })
+    git(prefixed, 'init', '-q', '-b', 'main')
+    await writeFile(join(prefixed, '.framework', 'framework-lock.json'), '{}\n')
+    git(prefixed, 'add', '-A')
+    git(prefixed, '-c', 'user.name=Seed', '-c', 'user.email=seed@example.test', 'commit', '-q', '-m', 'seed')
+    const top = await realpath(prefixed)
+    const path = await config(`repositories:\n${entry(top, 'dispatch', '    gateline_prefix: .framework\n')}`)
+    expect(await settings({ configPath: path })).toEqual({
+      'local/prefixed': { push: false, localOnly: true, pushBecause: 'no origin remote', frameworkPrefix: '.framework' },
+    })
+  })
+
+  it.each([
+    [{}, { push: true, localOnly: false, pushBecause: 'origin auto-detected' }],
+    [{ push: true }, { push: true, localOnly: false, pushBecause: '--push' }],
+    [{ push: false }, { push: false, localOnly: true, pushBecause: '--no-push' }],
+    [{ localOnly: true }, { push: false, localOnly: true, pushBecause: '--local-only' }],
+  ])('a repository given by --repo, with %j', async (flags, expected) => {
+    expect(await settings({ repoOverrides: [billing], ...noConfig, engine: true, ...flags })).toEqual({ 'github.com/acme/billing': expected })
+  })
+
+  it('the working directory, with no origin', async () => {
+    expect(await settings({ cwd: website, ...noConfig, engine: true })).toEqual({
+      'local/website': { push: false, localOnly: true, pushBecause: 'no origin remote' },
+    })
+  })
+
+  it('a source reports its clone as its working directory', async () => {
+    const { sources } = await loadSources({ repoOverrides: [billing], ...noConfig })
+    expect(sources[0]!.workingDirectory?.()).toBe(billing)
+  })
+})
+
+describe('a config file that lists no repositories keeps its limits (review of #550)', () => {
+  it.each([
+    ['no list key', 'limits:\n  spend_limit_usd: 5\nengine:\n  name: workstation-1\n  budget_enforcement: false\n'],
+    ['an empty list', 'limits:\n  spend_limit_usd: 5\nengine:\n  name: workstation-1\n  budget_enforcement: false\nrepositories: []\n'],
+  ])('%s: the working directory is served, under the file’s limits: and engine:', async (_name, body) => {
+    const path = await config(body)
+    const loaded = await loadSources({ configPath: path, cwd: website, engine: true })
+    expect(loaded.sources.map((s) => s.id)).toEqual(['local/website'])
+    expect([loaded.configPath, loaded.settingsPath]).toEqual([null, path])
+    expect(loaded.limits).toEqual({ spendLimitUsd: 5 })
+    expect(loaded.engine).toEqual({ name: 'workstation-1', budgetEnforcement: false })
+    expect(loaded.warnings).toEqual([
+      `config at ${path} lists no repositories; the working directory's repository is served, under the file's limits: and engine:`,
+    ])
+  })
+
+  it('a file that lists the set reports it as both the set’s source and the settings’', async () => {
+    const path = await config(`repositories:\n  - path: ${website}\n    mode: decide\n`)
+    const loaded = await loadSources({ configPath: path })
+    expect([loaded.configPath, loaded.settingsPath]).toEqual([path, path])
+  })
+
+  it('refuses a heartbeat above what a timer holds', async () => {
+    const path = await config(`engine:\n  heartbeat_seconds: 2147484\nrepositories:\n  - path: ${website}\n    mode: decide\n`)
+    expect(await refusal(path)).toBe(`config at ${path}: engine.heartbeat_seconds: Too big: expected number to be <=2147483`)
+  })
+})
+
+describe('--repo with settingsWithRepo: the file’s limits apply, its list does not (second review of #550)', () => {
+  it('returns the file’s limits and engine settings, and the ceiling of an entry that names a --repo repository', async () => {
+    const path = await config(
+      `limits:\n  spend_limit_usd: 40\nengine:\n  name: workstation-1\nrepositories:\n  - path: ${billing}\n    mode: view\n    limits:\n      spend_limit_usd: 25\n`,
+    )
+    const loaded = await loadSources({ repoOverrides: [billing, website], configPath: path, engine: true, settingsWithRepo: true })
+    expect(loaded.sources.map((s) => [s.id, s.mode])).toEqual([
+      ['github.com/acme/billing', 'dispatch'],
+      ['local/website', 'dispatch'],
+    ])
+    expect([loaded.configPath, loaded.settingsPath]).toEqual([null, path])
+    expect(loaded.limits).toEqual({ spendLimitUsd: 40 })
+    expect(loaded.engine).toEqual({ name: 'workstation-1' })
+    expect(loaded.repositoryLimits).toEqual({ 'github.com/acme/billing': { spendLimitUsd: 25 } })
+    expect(loaded.matchedEntries).toEqual({ 'github.com/acme/billing': `repositories[0] (${billing})` })
+  })
+
+  it('refuses an invalid file', async () => {
+    const path = await config('limits: [\n')
+    const err = await loadSources({ repoOverrides: [billing], configPath: path, engine: true, settingsWithRepo: true }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ConfigError)
+  })
+
+  it('without it (the CLI and `ui`), --repo still reads no file, a broken one included', async () => {
+    const path = await config('limits: [\n')
+    const loaded = await loadSources({ repoOverrides: [billing], configPath: path })
+    expect([loaded.settingsPath, loaded.limits]).toEqual([null, {}])
+  })
+})
+
+describe('a config path that exists and cannot be read (second review of #550)', () => {
+  it('a directory at the path is a ConfigError, not an absent file', async () => {
+    const dir = join(base, `config-dir-${Math.random().toString(36).slice(2)}`)
+    await mkdir(dir)
+    const err = await loadSources({ configPath: dir, cwd: website }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ConfigError)
+    expect((err as Error).message).toBe(`config at ${dir} exists and cannot be read: EISDIR: illegal operation on a directory, read`)
+  })
+})

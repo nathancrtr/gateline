@@ -1817,7 +1817,12 @@ describe('the startup wait is said out loud (second review of #538)', () => {
     expect(lines).toContain('[alpha] startup seed: counting open dispatches and spend in the window')
     expect(lines).toContain('[beta] startup seed: counting open dispatches and spend in the window')
     expect(lines.filter((l) => /^\[alpha\] startup seed: done in (\d+ ms|[\d.]+ s)$/.test(l))).toHaveLength(1)
-    expect(lines.filter((l) => l.startsWith('startup is waiting for the seed of: '))).toEqual(['startup is waiting for the seed of: beta (each is given up on after 1.5 s)'])
+    // Exactly one notice, and it names beta, whose seed is held. alpha's seed is
+    // not held, but whether it finishes inside the 300 ms before the notice is
+    // up to the machine's load, so the notice may name it too (review of #550).
+    const notices = lines.filter((l) => l.startsWith('startup is waiting for the seed of: '))
+    expect(notices).toHaveLength(1)
+    expect(notices[0]).toMatch(/^startup is waiting for the seed of: (alpha, )?beta \(each is given up on after 1\.5 s\)$/)
     expect(lines).toContain('[beta] governor seed failed: the startup seed and report did not finish within 1.5 s — engine marked failed; its health file says so from its next write (1 in a row); retried on the first tick')
     hang.resolve()
     await handle.started

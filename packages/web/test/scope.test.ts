@@ -16,6 +16,7 @@ import {
   repositoriesOf,
   resolveScope,
   scopedHref,
+  scopeId,
   scopeTitle,
 } from '../src/scope.ts'
 
@@ -123,6 +124,61 @@ describe('the scope', () => {
 
   it('applies to Inbox, Portfolio and Metrics and to no other page', () => {
     expect(['/', '/portfolio', '/metrics', '/portfolio/new', '/repos/local/demo/-/runs/x'].map(isScopedPage)).toEqual([true, true, true, false, false])
+  })
+})
+
+describe('the scope while the served set is not yet known (#551)', () => {
+  // /api/health has neither answered nor failed, so `setKnown` is false. A
+  // link built from this scope must keep the URL's `repo` unchanged — it is
+  // not yet known to be `unknown`, and must not be reported as such.
+  it('is `loading`, carrying the asked id through, rather than `unknown`', () => {
+    expect(resolveScope(WEBSITE, [], false)).toEqual({ kind: 'loading', asked: WEBSITE })
+    // Even against the full set: not-yet-known outranks a set that would
+    // otherwise resolve the id, because the caller passed `setKnown: false`.
+    expect(resolveScope(WEBSITE, set, false)).toEqual({ kind: 'loading', asked: WEBSITE })
+  })
+
+  it('is still `all` with no repo parameter: there is nothing to carry through', () => {
+    expect(resolveScope(null, [], false)).toEqual({ kind: 'all' })
+    expect(resolveScope('', [], false)).toEqual({ kind: 'all' })
+  })
+
+  it('keeps every row, the same as `unknown` and `all`', () => {
+    expect(inScope(rows, { kind: 'loading', asked: WEBSITE }).map((r) => r.slug)).toEqual(rows.map((r) => r.slug))
+  })
+
+  it('is not named in the page title: nothing has been confirmed to name', () => {
+    expect(scopeTitle('Inbox', { kind: 'loading', asked: WEBSITE })).toBe(null)
+  })
+
+  it('a failed /api/health reads exactly the same way, forever: keeping the URL’s repo is the safe default (#551)', () => {
+    // Whether /api/health is still in flight or has failed outright, the
+    // served set is equally unknown, so `resolveScope` is given `setKnown:
+    // false` either way (see `useScope`, which sets it from `health.data !==
+    // undefined` alone, never from whether the query has merely settled).
+    expect(resolveScope(WEBSITE, [], false)).toEqual({ kind: 'loading', asked: WEBSITE })
+  })
+
+  describe('links built from it (scopeId + scopedHref)', () => {
+    it('carries the asked id through to a rail link, unresolved', () => {
+      const loading = resolveScope(WEBSITE, [], false)
+      expect(scopeId(loading)).toBe(WEBSITE)
+      expect(scopedHref('/portfolio', scopeId(loading))).toBe('/portfolio?repo=github.com%2Facme%2Fwebsite')
+      expect(scopedHref('/metrics', scopeId(loading))).toBe('/metrics?repo=github.com%2Facme%2Fwebsite')
+      expect(scopedHref('/', scopeId(loading))).toBe('/?repo=github.com%2Facme%2Fwebsite')
+    })
+
+    it('for comparison: the resolved states’ literal links', () => {
+      // loaded and known
+      expect(scopeId(resolveScope(WEBSITE, set))).toBe(WEBSITE)
+      expect(scopedHref('/portfolio', scopeId(resolveScope(WEBSITE, set)))).toBe('/portfolio?repo=github.com%2Facme%2Fwebsite')
+      // loaded and unknown: the id resolved to nothing, so the link drops it
+      expect(scopeId(resolveScope('github.com/acme/nope', set))).toBe(null)
+      expect(scopedHref('/portfolio', scopeId(resolveScope('github.com/acme/nope', set)))).toBe('/portfolio')
+      // loaded with one repository: the parameter names the whole set, so the link drops it too
+      expect(scopeId(resolveScope(BILLING, [set[0]!]))).toBe(null)
+      expect(scopedHref('/portfolio', scopeId(resolveScope(BILLING, [set[0]!])))).toBe('/portfolio')
+    })
   })
 })
 

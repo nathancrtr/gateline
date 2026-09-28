@@ -633,7 +633,10 @@ repository.
 - It is hidden when the set has one repository. A single-repository deployment
   looks as it does today, apart from its URLs (§15).
 - The scope is carried in the URL as a `repo` query parameter, so a scoped view
-  can be linked and reloaded.
+  can be linked and reloaded. While the served set has not yet loaded (or
+  `/api/health` has failed), a link built from it keeps the URL's `repo`
+  unchanged rather than resolving it against a set that is not yet known
+  (#551).
 - The Inbox badge always counts the whole set. When a scope is active it reads
   as two numbers, for example `3 of 30`. A decision waiting outside the scope
   stays visible as a number, which is the reason a switcher was declined.

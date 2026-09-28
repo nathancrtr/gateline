@@ -178,14 +178,15 @@ trailing `.` or surrounding spaces are refused;
 `--budget-enforcement` and `--no-budget-enforcement` each override
 `engine.budget_enforcement`, and both together are refused. A spend limit or a
 repository's ceiling of 0 admits no dispatch that has a cost estimate above
-zero. `--repo` replaces the config file whole, its limits included, and `up`
-warns when it is not reading one that exists.
+zero. Under `--repo` the file's `limits:` and `engine:` still apply, and `up`
+says so; only its list of repositories is not served.
 
 `--push`, `--no-push` and `--local-only` reach only a repository with no config
 entry. With a set from the config file, `--local-only` and `--no-push` are
 refused unless every entry in the set, of any mode, is already local-only, and
 the refusal names each entry that would touch origin and how: set
-`local_only: true` on it in the file. `--push` there is a warning, since ignoring it touches origin less.
+`local_only: true` on it in the file. `--push` there is a warning, since
+ignoring it touches origin less.
 
 `--engine-name` (or `engine.name`) replaces the hostname in the engine id each
 ledger entry records. Give each machine that runs an engine against the same

@@ -6,14 +6,14 @@
 // The file is the only place anything about the set is stored (§5, rule 2).
 // `gateline repo add|remove|list` edit and print it through the functions at
 // the end of this module, which keep its comments and ordering.
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { Document, isMap, isNode, isScalar, isSeq, parseDocument, parse as parseYaml, type YAMLMap, type YAMLSeq } from 'yaml'
 import { z } from 'zod'
 import { checkFramework, type FrameworkCheck } from '../sources/framework-check.ts'
 import { Git } from '../sources/git.ts'
-import { LocalGitSource, readFileIfExists, repoToplevel } from '../sources/local-source.ts'
+import { LocalGitSource, repoToplevel } from '../sources/local-source.ts'
 import {
   type DerivedRepositoryId,
   deriveRepositoryId,
@@ -199,6 +199,13 @@ export interface LoadedConfig {
   repositoryLimits: Record<string, { spendLimitUsd?: number }>
   /** How each source in `sources` is served, by source id (every source has an entry). */
   repositorySettings: Record<string, RepositorySettings>
+  /**
+   * With `--repo` and `settingsWithRepo` (#502, review of #550): each `--repo`
+   * repository that a config entry also names, by source id, with that
+   * entry's label (`repositories[0] (~/repos/billing)`). The entry's ceiling
+   * applies to it; its mode, push and local_only do not. Absent otherwise.
+   */
+  matchedEntries?: Record<string, string>
 }
 
 export function defaultConfigPath(): string {
@@ -213,6 +220,21 @@ function expandPath(path: string, cwd = process.cwd()): string {
 }
 
 // --- Reading and checking the file --------------------------------------------
+
+/**
+ * The config file's text, or null when there is no file (review of #550).
+ * Only "does not exist" means absent: a file that exists and cannot be read
+ * (no permission, a directory at the path) is a `ConfigError`, because
+ * treating it as absent would start `up` with none of its limits and no word.
+ */
+async function readConfigFile(configPath: string): Promise<string | null> {
+  try {
+    return await readFile(configPath, 'utf8')
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null
+    throw new ConfigError(`config at ${configPath} exists and cannot be read: ${(e as Error).message}`)
+  }
+}
 
 interface ParsedConfig {
   /** Which key holds the list in the file, or null when neither appears. */
@@ -488,6 +510,49 @@ function effectiveMode(declared: RepositoryMode, engine: boolean): RepositoryMod
 
 // --- Loading the set ----------------------------------------------------------------
 
+/** A directory's real path, or the path as given when it cannot be resolved. */
+const realOrSame = (dir: string) => realpath(dir).catch(() => dir)
+
+/** The real path of a repository's git common directory, or null. */
+async function commonGitDir(dir: string): Promise<string | null> {
+  try {
+    return await realOrSame((await new Git(dir).run(['rev-parse', '--path-format=absolute', '--git-common-dir'])).trim())
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Which `--repo` repositories a config entry names (review of #550): the same
+ * directory, the same git directory, or the same id compared without case.
+ * A matched entry's ceiling applies to its repository; nothing else of it does.
+ */
+async function matchEntries(named: Named[], parsed: ParsedConfig): Promise<{ repositoryLimits: LoadedConfig['repositoryLimits']; matchedEntries: Record<string, string> }> {
+  const repositoryLimits: LoadedConfig['repositoryLimits'] = {}
+  const matchedEntries: Record<string, string> = {}
+  const listed: { label: string; entry: RepositoryEntry; top: string; common: string | null; idKey: string | null }[] = []
+  for (const [index, entry] of parsed.entries.entries()) {
+    const top = await repoToplevel(expandPath(entry.path))
+    if (top === null) continue
+    let idKey: string | null = null
+    try {
+      idKey = repositoryIdKey((await nameRepository(top, entry)).id)
+    } catch {
+      idKey = null
+    }
+    listed.push({ label: entryLabel(parsed.key ?? 'repositories', index, entry), entry, top: await realOrSame(top), common: await commonGitDir(top), idKey })
+  }
+  for (const n of named) {
+    const top = await realOrSame(n.top)
+    const common = await commonGitDir(n.top)
+    const match = listed.find((l) => l.top === top || (common !== null && l.common === common) || l.idKey === repositoryIdKey(n.id))
+    if (!match) continue
+    matchedEntries[n.id] = match.label
+    if (match.entry.limits?.spend_limit_usd !== undefined) repositoryLimits[n.id] = { spendLimitUsd: match.entry.limits.spend_limit_usd }
+  }
+  return { repositoryLimits, matchedEntries }
+}
+
 /**
  * Resolve sources in precedence order: explicit --repo paths, then the config
  * file, then the cwd's repository.
@@ -525,6 +590,14 @@ export async function loadSources(opts: {
    * `decide` (§7.3, R3).
    */
   engine?: boolean
+  /**
+   * With `repoOverrides`, still read and check the config file, and return its
+   * `limits:` and `engine:` (`gateline up`, review of #550): `--repo` chooses
+   * the set, and never the limits. A `--repo` repository that an entry names
+   * takes that entry's ceiling. Off, `--repo` replaces the file whole, as the
+   * CLI and `ui` have always had it.
+   */
+  settingsWithRepo?: boolean
 }): Promise<LoadedConfig> {
   const warnings: string[] = []
   const cwd = opts.cwd ?? process.cwd()
@@ -559,11 +632,22 @@ export async function loadSources(opts: {
         new LocalGitSource(n.id, n.top, { push, localOnly, displayName: n.displayName, formerIds: n.formerIds, mode: zeroConfigMode }),
       )
     }
+    if (opts.settingsWithRepo) {
+      const settingsPath = opts.configPath ?? defaultConfigPath()
+      const text = await readConfigFile(settingsPath)
+      if (text !== null) {
+        // The file is checked as it is for a bare `up`, and its limits and
+        // engine settings apply; its list is not served, since --repo chose the set.
+        const parsed = parseConfigText(text, settingsPath)
+        const { repositoryLimits, matchedEntries } = await matchEntries(named, parsed)
+        return { sources, configPath: null, settingsPath, warnings, limits: parsed.limits, engine: parsed.engine, repositoryLimits, repositorySettings, matchedEntries }
+      }
+    }
     return { sources, configPath: null, settingsPath: null, warnings, ...none, repositorySettings }
   }
 
   const configPath = opts.configPath ?? defaultConfigPath()
-  const text = await readFileIfExists(configPath)
+  const text = await readConfigFile(configPath)
   if (text !== null) {
     // Two kinds of problem, treated differently (§10). One in the file itself
     // (parseConfigText, checkUnique) stops startup: the operator's list is
@@ -717,7 +801,7 @@ export interface RepositoryList {
  */
 export async function listRepositories(opts: { configPath?: string } = {}): Promise<RepositoryList> {
   const configPath = opts.configPath ?? defaultConfigPath()
-  const text = await readFileIfExists(configPath)
+  const text = await readConfigFile(configPath)
   if (text === null) return { configPath, exists: false, entries: [] }
   const parsed = parseConfigText(text, configPath)
   const entries: RepositoryListing[] = []
@@ -825,7 +909,7 @@ export async function addRepository(opts: {
   if (!framework.ok) throw new ConfigError(framework.message)
   const n = await nameRepository(top, { name: opts.name })
 
-  const text = await readFileIfExists(configPath)
+  const text = await readConfigFile(configPath)
   const { doc, seq } = editableList(text, configPath, true)
   for (const item of seq!.items) {
     const existing = await nameEntry(plain(item))
@@ -880,7 +964,7 @@ export interface RemovedRepository {
  */
 export async function removeRepository(opts: { configPath?: string; which: string }): Promise<RemovedRepository> {
   const configPath = opts.configPath ?? defaultConfigPath()
-  const text = await readFileIfExists(configPath)
+  const text = await readConfigFile(configPath)
   if (text === null) throw new ConfigError(`no config file at ${configPath}, so there is nothing to remove`)
   const { doc, seq } = editableList(text, configPath, false)
   const want = opts.which.toLowerCase()

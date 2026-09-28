@@ -3,12 +3,10 @@
 // #502). The command in main.ts parses flags and hands this module the real
 // process; tests hand it a fake dispatcher, a throwaway code checkout and a
 // recording `exit`, so the whole startup runs with nothing dispatched.
-import { existsSync } from 'node:fs'
 import { realpath } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import {
   ConfigError,
-  defaultConfigPath,
   deriveRepositoryId,
   displayNameOf,
   Git,
@@ -24,12 +22,14 @@ import {
   SUPERSEDE_EXIT_CODE,
 } from '@gateline/core'
 import {
+  type AssembledEngine,
   assembleOrchestrators,
   DEFAULT_MAX_CONCURRENT_DISPATCHES,
   DEFAULT_SPEND_WINDOW_MS,
   type Dispatcher,
   DuplicateRepositoryError,
   engineNameProblem,
+  type GovernorPort,
   type OrchestratorsHandle,
   type RepositoryEngineConfig,
   stagedShutdown,
@@ -83,6 +83,8 @@ export interface UpDeps {
   /** See `OrchestratorsOptions.stopWaitMs` and `startupTimeoutMs` (tests). */
   stopWaitMs?: number
   startupTimeoutMs?: number
+  /** Called once the engines are assembled, before the server starts (tests reach the governor through it). */
+  onAssembled?(engines: readonly AssembledEngine[], governor: GovernorPort): void
 }
 
 /** A running `up`: its engines, its server, and the shutdown paths the command wires to signals. */
@@ -151,13 +153,15 @@ const usd = (n: number) => `$${n}`
 const hours = (h: number) => `${h} h`
 
 /**
- * A flag's number, parsed strictly: a plain decimal (`10`, `2.5`, `.5`, `1e3`,
- * `-1`) or NaN. `parseFloat` read `10abc` as 10, `3x` as 3 and `0x10` as 0,
- * and `Number` reads `0x10` as 16 and the empty string as 0; a limit on money
- * takes neither guess (review of #550). A NaN is refused by `runUp`.
+ * A flag's number, parsed strictly (review of #550): digits, optionally one
+ * `.` followed by more digits, optionally led by `-` (so a negative is refused
+ * as negative, not as garbage): `10`, `2.5`, `-1`. Anything else is NaN, which
+ * `runUp` refuses: no exponent (`1e-400` is 0, "admit nothing"), no `+`, no
+ * bare `.5` or `5.`, no surrounding whitespace, no hex. `parseFloat` read
+ * `10abc` as 10 and `0x10` as 0; a limit on money takes no guess.
  */
 export function parseStrictNumber(value: string): number {
-  return /^\s*-?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?\s*$/.test(value) ? Number(value) : Number.NaN
+  return /^-?\d+(\.\d+)?$/.test(value) ? Number(value) : Number.NaN
 }
 
 /** A number a flag gave, checked: the config's values are checked by its loader, and a flag's must not be weaker. */
@@ -187,6 +191,16 @@ export function processDeps(proc: Pick<NodeJS.Process, 'on' | 'exit'> = process,
       proc.on('SIGTERM', handler)
     },
   }
+}
+
+/** How a repository that is not local-only would touch origin, for the local-only refusal (review of #550). */
+function howItTouchesOrigin(source: { mode?: string; fetchIntervalSeconds?: number }, settings: RepositorySettings): string {
+  if (source.mode === 'dispatch') return settings.push ? 'its engine fetches from origin and pushes to it' : 'its engine fetches from origin'
+  const parts = [
+    settings.push ? 'pushes decisions' : null,
+    source.fetchIntervalSeconds ? `fetches every ${source.fetchIntervalSeconds} s` : null,
+  ].filter((p): p is string => p !== null)
+  return parts.length ? parts.join(', ') : `not local-only (${settings.pushBecause})`
 }
 
 /**
@@ -272,17 +286,15 @@ export async function runUp(flags: UpFlags, deps: UpDeps): Promise<UpOutcome> {
       push: flags.push,
       localOnly: flags.localOnly || undefined,
       engine: true,
+      // --repo chooses the set, never the limits: the config file's limits:
+      // and engine: apply, and the file is checked (review of #550).
+      settingsWithRepo: true,
     })
   } catch (e) {
     if (isStartupError(e)) return refuse(e.message)
     throw e
   }
   for (const w of loaded.warnings) deps.error(`warning: ${w}`)
-  // --repo replaces the config file whole, its limits with its list: said,
-  // because a machine limit an operator wrote there does not hold this time.
-  const configFile = deps.configPath ?? defaultConfigPath()
-  if (repoOverrides.length && existsSync(configFile))
-    deps.error(`warning: --repo given, so ${configFile} is not read: its repositories, limits: and engine: do not apply to this run`)
   const { sources, configPath, settingsPath } = loaded
   if (sources.length === 0)
     return refuse('`up` has no repository to serve — run inside a repository, pass --repo <path>, or list repositories in the config file (`gateline repo add`)')
@@ -292,18 +304,19 @@ export async function runUp(flags: UpFlags, deps: UpDeps): Promise<UpOutcome> {
     if (flags.localOnly && flags.push === true)
       return refuse(`--local-only and --push: local-only and push are both explicitly requested — they conflict (local-only forces push off); pick one`)
     // --local-only and --no-push promise that nothing touches origin
-    // (TOPOLOGY.md §3.6). They cannot reach a config entry, so where one would
-    // push, that promise would be broken: refused, never a warning (review of #550).
+    // (TOPOLOGY.md §3.6): no push, no gh call, no fetch. They cannot reach a
+    // config entry, so where any entry, of any mode, would touch origin, that
+    // promise would be broken: refused, never a warning (review of #550).
     const wanted = flags.localOnly ? '--local-only' : flags.push === false ? '--no-push' : null
     if (wanted) {
-      const pushing = sources.filter((s) => s.mode === 'dispatch' && loaded.repositorySettings[s.id]?.localOnly !== true)
-      if (pushing.length)
+      const touching = sources.filter((s) => loaded.repositorySettings[s.id]?.localOnly !== true)
+      if (touching.length)
         return refuse(
-          `${wanted} cannot reach a repository listed in ${configPath}, and these would still fetch from or push to origin: ` +
-            `${pushing.map((s) => `${s.id} (${pushMarker(loaded.repositorySettings[s.id]!)})`).join(', ')}. ` +
+          `${wanted} cannot reach a repository listed in ${configPath}, and these would still touch origin: ` +
+            `${touching.map((s) => `${s.id} (${s.mode}: ${howItTouchesOrigin(s, loaded.repositorySettings[s.id]!)})`).join(', ')}. ` +
             'Set `local_only: true` on each of them in the config file, or pass --repo <path> for the repositories to serve local-only',
         )
-      deps.error(`${wanted}: every dispatch repository in ${configPath} is already local-only`)
+      deps.error(`${wanted}: every repository in ${configPath} is already local-only`)
     }
     // --push reaches no entry either; ignoring it touches origin less, not more.
     if (flags.push === true)
@@ -397,6 +410,22 @@ export async function runUp(flags: UpFlags, deps: UpDeps): Promise<UpOutcome> {
     `up: ${sources.length} ${sources.length === 1 ? 'repository' : 'repositories'} ${from}; ` +
       `an engine in ${dispatching.length === sources.length ? (sources.length === 1 ? 'it' : 'each') : `${dispatching.length} of them`}`,
   )
+  // With --repo and a config file: the set is --repo's, and the file's limits
+  // and engine settings still apply (review of #550). A --repo repository an
+  // entry names takes that entry's ceiling, and nothing else of it.
+  if (repoOverrides.length && settingsPath !== null) {
+    deps.log(`the set is --repo's; ${settingsPath}'s limits: and engine: apply, and its list of repositories is not served`)
+    for (const source of sources) {
+      const label = loaded.matchedEntries?.[source.id]
+      if (label === undefined) continue
+      const ceiling = loaded.repositoryLimits[source.id]?.spendLimitUsd
+      deps.log(
+        `${source.id} is ${label} in ${settingsPath}: ` +
+          (ceiling !== undefined ? `its limits.spend_limit_usd (${usd(ceiling)}) applies; ` : '') +
+          'its mode, push and local_only do not (a repository given by --repo is dispatch under up, and pushes as --push, --no-push, --local-only or its origin decide)',
+      )
+    }
+  }
   // Before #502 a bare `up` served the working directory and never read the
   // config file. Now the file's list is the set wherever `up` runs, so a
   // working directory outside it is named (review of #550): no engine runs there.
@@ -503,6 +532,7 @@ export async function runUp(flags: UpFlags, deps: UpDeps): Promise<UpOutcome> {
     // Every assembly failure is a refusal: the library's message, exit 1.
     return refuse((e as Error).message)
   }
+  deps.onAssembled?.(set.engines, set.governor)
 
   const { startServer } = await import('@gateline/server/main')
   let server: { url: string; close(): void }
@@ -514,7 +544,7 @@ export async function runUp(flags: UpFlags, deps: UpDeps): Promise<UpOutcome> {
       resolved: { sources, configPath },
       // Each engine syncs its repository from origin on its heartbeat; the
       // server does not fetch it a second time on a `fetch_interval`.
-      engineSynced: repositories.map((r) => r.repositoryId),
+      engineSynced: { ids: repositories.map((r) => r.repositoryId), heartbeatSeconds: heartbeat.value },
     })
   } catch (e) {
     // Nothing started: the engines were assembled, never run. They leave the
@@ -528,7 +558,11 @@ export async function runUp(flags: UpFlags, deps: UpDeps): Promise<UpOutcome> {
       return refuse(
         `port ${flags.port} on ${flags.host} is already in use — another \`gateline up\` (or \`gateline ui\`) may be running there. Stop it, or pass --port <n>`,
       )
-    return refuse(`the server could not listen on ${flags.host}:${flags.port}: ${(e as Error).message}`)
+    return refuse(
+      code
+        ? `the server could not listen on ${flags.host}:${flags.port}: ${(e as Error).message}`
+        : `the server could not start: ${(e as Error).message}`,
+    )
   }
   live.server = server
 

@@ -347,3 +347,43 @@ describe('a config file that lists no repositories keeps its limits (review of #
     expect(await refusal(path)).toBe(`config at ${path}: engine.heartbeat_seconds: Too big: expected number to be <=2147483`)
   })
 })
+
+describe('--repo with settingsWithRepo: the file’s limits apply, its list does not (second review of #550)', () => {
+  it('returns the file’s limits and engine settings, and the ceiling of an entry that names a --repo repository', async () => {
+    const path = await config(
+      `limits:\n  spend_limit_usd: 40\nengine:\n  name: workstation-1\nrepositories:\n  - path: ${billing}\n    mode: view\n    limits:\n      spend_limit_usd: 25\n`,
+    )
+    const loaded = await loadSources({ repoOverrides: [billing, website], configPath: path, engine: true, settingsWithRepo: true })
+    expect(loaded.sources.map((s) => [s.id, s.mode])).toEqual([
+      ['github.com/acme/billing', 'dispatch'],
+      ['local/website', 'dispatch'],
+    ])
+    expect([loaded.configPath, loaded.settingsPath]).toEqual([null, path])
+    expect(loaded.limits).toEqual({ spendLimitUsd: 40 })
+    expect(loaded.engine).toEqual({ name: 'workstation-1' })
+    expect(loaded.repositoryLimits).toEqual({ 'github.com/acme/billing': { spendLimitUsd: 25 } })
+    expect(loaded.matchedEntries).toEqual({ 'github.com/acme/billing': `repositories[0] (${billing})` })
+  })
+
+  it('refuses an invalid file', async () => {
+    const path = await config('limits: [\n')
+    const err = await loadSources({ repoOverrides: [billing], configPath: path, engine: true, settingsWithRepo: true }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ConfigError)
+  })
+
+  it('without it (the CLI and `ui`), --repo still reads no file, a broken one included', async () => {
+    const path = await config('limits: [\n')
+    const loaded = await loadSources({ repoOverrides: [billing], configPath: path })
+    expect([loaded.settingsPath, loaded.limits]).toEqual([null, {}])
+  })
+})
+
+describe('a config path that exists and cannot be read (second review of #550)', () => {
+  it('a directory at the path is a ConfigError, not an absent file', async () => {
+    const dir = join(base, `config-dir-${Math.random().toString(36).slice(2)}`)
+    await mkdir(dir)
+    const err = await loadSources({ configPath: dir, cwd: website }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ConfigError)
+    expect((err as Error).message).toBe(`config at ${dir} exists and cannot be read: EISDIR: illegal operation on a directory, read`)
+  })
+})

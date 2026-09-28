@@ -5,7 +5,7 @@
 // throwaway one, and a fake `gh`: nothing is dispatched for real and nothing
 // reaches a network. Expected values are written out, never computed by the
 // code under test.
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { type AddressInfo, createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -54,6 +54,9 @@ const running = (outcome: Awaited<ReturnType<typeof up>>['outcome']): UpRunning 
   if (!outcome.ok) throw new Error('expected up to be running')
   return outcome
 }
+
+/** A string as a literal inside a RegExp. */
+const asPattern = (text: string) => text.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /** A refusal's error lines (warnings aside), after checking exit 1 and nothing listening on the refusal port. */
 async function refusedLines(flags: Parameters<typeof up>[0]): Promise<string[]> {
@@ -261,19 +264,6 @@ describe('several repositories', () => {
     ])
   })
 
-  it('--repo with a config file present says the file, and its limits, are not read', { timeout: 60_000 }, async () => {
-    const toy = toyRepo(parent, 'toy')
-    writeConfig('limits:\n  spend_limit_usd: 5\n')
-    const run = await up({ repo: [toy.dir], heartbeat: 600 }, { configPath, dispatchers: { 'local/toy': promptSpec(toy.clock) } })
-    running(run.outcome)
-    expect(run.lines.slice(0, 4)).toEqual([
-      `err: warning: --repo given, so ${configPath} is not read: its repositories, limits: and engine: do not apply to this run`,
-      'out: up: 1 repository from --repo; an engine in it',
-      'out: limits: at most 2 dispatches at once across every repository (default)',
-      'out: limits: no machine spend limit (default)',
-    ])
-  })
-
   it('the two engines share one limit: with one slot, one analyst runs and the other waits', { timeout: 60_000 }, async () => {
     const a = toyRepo(parent, 'alpha')
     const b = toyRepo(parent, 'beta')
@@ -452,8 +442,8 @@ describe('push and local-only, per repository (R2)', () => {
     expect(git(bare, ['rev-parse', 'run/toy'])).toBe(before)
     expect(run.outcome).toEqual({ ok: false, code: 1 })
     expect(run.lines.filter((l) => l.startsWith('err: ') && !l.startsWith('err: warning:'))).toEqual([
-      `err: ${flag} cannot reach a repository listed in ${configPath}, and these would still fetch from or push to origin: ` +
-        'github.com/acme/billing (pushing to origin (origin auto-detected)). ' +
+      `err: ${flag} cannot reach a repository listed in ${configPath}, and these would still touch origin: ` +
+        'github.com/acme/billing (dispatch: its engine fetches from origin and pushes to it). ' +
         'Set `local_only: true` on each of them in the config file, or pass --repo <path> for the repositories to serve local-only',
     ])
     expect(await nothingListening(REFUSAL_PORT)).toBe(true)
@@ -481,8 +471,38 @@ describe('push and local-only, per repository (R2)', () => {
     const outcome = running(run.outcome)
     await outcome.orchestrators.started
     await settled(billing.dir)
-    expect(run.lines[0]).toBe(`err: --local-only: every dispatch repository in ${configPath} is already local-only`)
+    expect(run.lines[0]).toBe(`err: --local-only: every repository in ${configPath} is already local-only`)
     expect(git(bare, ['rev-parse', 'run/toy'])).toBe(before)
+  })
+
+  it('--local-only is refused when a decide entry would still push and fetch', { timeout: 60_000 }, async () => {
+    const billing = toyRepo(parent, 'billing')
+    const website = toyRepo(parent, 'website')
+    const bare = withBareOrigin(website)
+    const before = git(bare, ['for-each-ref'])
+    writeConfig(
+      [
+        'repositories:',
+        `  - path: ${billing.dir}`,
+        '    mode: dispatch',
+        `  - path: ${website.dir}`,
+        '    mode: decide',
+        '    push: true',
+        '    fetch_interval: 60',
+        `  - path: ${toyRepo(parent, 'notes').dir}`,
+        '    mode: view',
+        '',
+      ].join('\n'),
+    )
+    const run = await up({ localOnly: true, port: REFUSAL_PORT, heartbeat: 600 }, { configPath, dispatchers: { 'local/billing': promptSpec(billing.clock) } })
+    expect(run.outcome).toEqual({ ok: false, code: 1 })
+    expect(run.lines.filter((l) => l.startsWith('err: ') && !l.startsWith('err: warning:'))).toEqual([
+      `err: --local-only cannot reach a repository listed in ${configPath}, and these would still touch origin: ` +
+        'local/website (decide: pushes decisions, fetches every 60 s). ' +
+        'Set `local_only: true` on each of them in the config file, or pass --repo <path> for the repositories to serve local-only',
+    ])
+    expect(await nothingListening(REFUSAL_PORT)).toBe(true)
+    expect(git(bare, ['for-each-ref'])).toBe(before)
   })
 
   it('--push with a config file is a warning: ignoring it touches origin less', { timeout: 60_000 }, async () => {
@@ -570,18 +590,9 @@ describe('a bare up whose working directory is not in the set (F2, review of #55
 
 describe('numbers, ports and budget flags (F5, F6, F9, review of #550)', () => {
   it('parses a flag’s number strictly', () => {
-    expect(['10', '2.5', '.5', '1e3', '-1', '0'].map(parseStrictNumber)).toEqual([10, 2.5, 0.5, 1000, -1, 0])
-    expect(['10abc', '3x', '0x10', '', ' ', 'abc', '1,5', 'Infinity', 'NaN'].map((v) => Number.isNaN(parseStrictNumber(v)))).toEqual([
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-      true,
-    ])
+    expect(['10', '2.5', '-1', '0', '007', '-0.5'].map(parseStrictNumber)).toEqual([10, 2.5, -1, 0, 7, -0.5])
+    const refused = ['10abc', '3x', '0x10', '', ' ', 'abc', '1,5', 'Infinity', 'NaN', '1e3', '1E3', '1e-400', '0.1e1', '.5', '5.', '+5', ' 10', '10 ', '\t10\n', '--1', '1_000', '1 0', '-', '.']
+    expect(refused.filter((v) => !Number.isNaN(parseStrictNumber(v)))).toEqual([])
   })
 
   it('refuses a heartbeat or role timeout Node’s timers cannot hold, from a flag', async () => {
@@ -614,8 +625,13 @@ describe('numbers, ports and budget flags (F5, F6, F9, review of #550)', () => {
     await new Promise<void>((r) => blocker.listen(0, '127.0.0.1', () => r()))
     const port = (blocker.address() as AddressInfo).port
     try {
-      const run = await up({ repo: [billing.dir], port, heartbeat: 600 }, { configPath, dispatchers: { 'local/billing': promptSpec(billing.clock) } })
+      let governor: GovernorPort | null = null
+      const run = await up(
+        { repo: [billing.dir], port, heartbeat: 600 },
+        { configPath, dispatchers: { 'local/billing': promptSpec(billing.clock) }, onAssembled: (_engines, g) => (governor = g) },
+      )
       expect(run.outcome).toEqual({ ok: false, code: 1 })
+      expect(governor!.registered('local/billing')).toBe(false)
       expect(run.lines.filter((l) => l.startsWith('err: '))).toEqual([
         `err: port ${port} on 127.0.0.1 is already in use — another \`gateline up\` (or \`gateline ui\`) may be running there. Stop it, or pass --port <n>`,
       ])
@@ -664,7 +680,7 @@ describe('numbers, ports and budget flags (F5, F6, F9, review of #550)', () => {
     const run = await up({ heartbeat: 600 }, { configPath, dispatchers: { 'local/billing': promptSpec(billing.clock) } })
     running(run.outcome)
     expect(run.lines.filter((l) => l.includes('from origin every'))).toEqual([
-      'out: not polling local/billing from origin every 60s: its engine syncs it on each heartbeat',
+      'out: not polling local/billing from origin every 60s: its engine syncs it on each heartbeat, every 600s, paused or not',
       'out: syncing local/website from origin every 60s',
     ])
   })
@@ -1048,5 +1064,178 @@ describe('refusals: exit 1, the message, nothing started', () => {
     expect(await refused({ repo: [billing.dir, plain] }, {}, [billing])).toEqual([
       `err: ${plain} is not a git repository — \`up\` needs one writable clone (pass --repo)`,
     ])
+  })
+})
+
+describe('--repo chooses the set, never the limits (second review of #550)', () => {
+  it('the config file’s limits and engine name apply under --repo, and the lines say what applies', { timeout: 60_000 }, async () => {
+    const toy = toyRepo(parent, 'toy')
+    writeConfig('limits:\n  spend_limit_usd: 5\n  max_concurrent_dispatches: 1\nengine:\n  name: config-engine\n')
+    const run = await up({ repo: [toy.dir], heartbeat: 600 }, { configPath, dispatchers: { 'local/toy': promptSpec(toy.clock) } })
+    const outcome = running(run.outcome)
+    await outcome.orchestrators.started
+    await settled(toy.dir)
+    await quiet(outcome)
+    expect(run.lines.slice(0, 6)).toEqual([
+      'out: up: 1 repository from --repo; an engine in it',
+      `out: the set is --repo's; ${configPath}'s limits: and engine: apply, and its list of repositories is not served`,
+      'out: limits: at most 1 dispatch at once across every repository (config limits.max_concurrent_dispatches)',
+      'out: limits: machine spend limit $5 per 24 h across every dispatch repository (config limits.spend_limit_usd; window: default)',
+      'out: limits: budget enforcement on (default)',
+      'out: engine name: config-engine (config engine.name)',
+    ])
+    const refusal = probe(outcome.orchestrators.governor, 'local/toy', [1000]).refusal!
+    expect([refusal.limit, refusal.limitUsd]).toEqual(['spend', 5])
+    expect(outcome.orchestrators.engines[0]!.engine.hostName).toBe('config-engine')
+  })
+
+  it('a flag still overrides the file under --repo', { timeout: 60_000 }, async () => {
+    const toy = toyRepo(parent, 'toy')
+    writeConfig('limits:\n  spend_limit_usd: 5\n')
+    const run = await up({ repo: [toy.dir], heartbeat: 600, spendLimitUsd: 2000 }, { configPath, dispatchers: { 'local/toy': promptSpec(toy.clock) } })
+    const outcome = running(run.outcome)
+    await outcome.orchestrators.started
+    await settled(toy.dir)
+    await quiet(outcome)
+    expect(run.lines[3]).toBe(
+      "out: limits: machine spend limit $2000 per 24 h across every dispatch repository (--spend-limit-usd, over the config's limits.spend_limit_usd: 5; window: default)",
+    )
+    expect(probe(outcome.orchestrators.governor, 'local/toy', [1000]).refusal).toBeNull()
+  })
+
+  it('an invalid config file is refused under --repo too', async () => {
+    const toy = toyRepo(parent, 'toy')
+    writeConfig('limits: [\n')
+    const lines = await refusedLines({ repo: [toy.dir] })
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toMatch(new RegExp(`^err: config at ${asPattern(configPath)}: not valid YAML \\(`))
+  })
+
+  it('a matched entry’s ceiling applies to its --repo repository, and its mode does not', { timeout: 60_000 }, async () => {
+    const billing = toyRepo(parent, 'billing')
+    const notes = toyRepo(parent, 'notes')
+    const other = toyRepo(parent, 'other')
+    writeConfig(
+      [
+        'limits:',
+        '  spend_limit_usd: 40',
+        'repositories:',
+        `  - path: ${billing.dir}`,
+        '    mode: view',
+        '    limits:',
+        '      spend_limit_usd: 25',
+        `  - path: ${other.dir}`,
+        '    mode: decide',
+        '',
+      ].join('\n'),
+    )
+    const run = await up(
+      { repo: [billing.dir, notes.dir], heartbeat: 600, engineName: 'test-engine' },
+      { configPath, dispatchers: { 'local/billing': promptSpec(billing.clock), 'local/notes': promptSpec(notes.clock) } },
+    )
+    const outcome = running(run.outcome)
+    await outcome.orchestrators.started
+    await settled(billing.dir)
+    await settled(notes.dir)
+    await quiet(outcome)
+    expect(run.lines.slice(1, 3)).toEqual([
+      `out: the set is --repo's; ${configPath}'s limits: and engine: apply, and its list of repositories is not served`,
+      `out: local/billing is repositories[0] (${billing.dir}) in ${configPath}: its limits.spend_limit_usd ($25) applies; its mode, push and local_only do not (a repository given by --repo is dispatch under up, and pushes as --push, --no-push, --local-only or its origin decide)`,
+    ])
+    expect(run.lines.filter((l) => l.includes(other.dir))).toEqual([])
+    // billing runs an engine although its entry says `view`, under its entry's $25.
+    expect(engineIds(outcome.orchestrators)).toEqual(['local/billing', 'local/notes'])
+    const own = probe(outcome.orchestrators.governor, 'local/billing', [30]).refusal!
+    expect([own.limit, own.limitUsd]).toEqual(['repository-spend', 25])
+    expect(probe(outcome.orchestrators.governor, 'local/notes', [30]).refusal).toBeNull()
+  })
+})
+
+describe('a config file that exists and cannot be read (second review of #550)', () => {
+  afterEach(() => {
+    try {
+      chmodSync(configPath, 0o644)
+    } catch {}
+    rmSync(configPath, { recursive: true, force: true })
+  })
+
+  it.each([
+    ['unreadable (mode 000), bare up', 'unreadable', false],
+    ['unreadable (mode 000), up --repo', 'unreadable', true],
+    ['a directory at the path, bare up', 'directory', false],
+    ['a directory at the path, up --repo', 'directory', true],
+  ] as const)('%s: refused, naming the path and the error', async (_name, how, withRepo) => {
+    const toy = toyRepo(parent, 'toy')
+    if (how === 'unreadable') {
+      writeConfig('limits:\n  spend_limit_usd: 5\n')
+      chmodSync(configPath, 0o000)
+    } else mkdirSync(configPath, { recursive: true })
+    const run = await up({ port: REFUSAL_PORT, ...(withRepo ? { repo: [toy.dir] } : {}) }, { cwd: toy.dir, configPath })
+    expect(run.outcome).toEqual({ ok: false, code: 1 })
+    const code = how === 'unreadable' ? 'EACCES: permission denied' : 'EISDIR: illegal operation on a directory'
+    expect(run.lines).toEqual([`err: config at ${configPath} exists and cannot be read: ${code}, ${how === 'unreadable' ? `open '${configPath}'` : 'read'}`])
+    expect(await nothingListening(REFUSAL_PORT)).toBe(true)
+    expect(await healthExists(toy.dir)).toBe(false)
+  })
+})
+
+describe('--local-only with several --repo repositories touches no origin (second review of #550)', () => {
+  it('neither origin moves, neither FETCH_HEAD is written, and each draft-PR ensure is skipped', { timeout: 90_000 }, async () => {
+    const a = toyRepo(parent, 'alpha')
+    const b = toyRepo(parent, 'beta')
+    const bareA = withBareOrigin(a)
+    const bareB = withBareOrigin(b)
+    // Origin moves on after the clone: a fetch would bring this ref in.
+    git(bareA, ['branch', 'moved-on', 'main'])
+    git(bareB, ['branch', 'moved-on', 'main'])
+    const fetchHead = (dir: string) => (existsSync(join(dir, '.git', 'FETCH_HEAD')) ? readFileSync(join(dir, '.git', 'FETCH_HEAD'), 'utf8') : null)
+    const before = { refsA: git(bareA, ['for-each-ref']), refsB: git(bareB, ['for-each-ref']), headA: fetchHead(a.dir), headB: fetchHead(b.dir) }
+    const run = await up(
+      { repo: [a.dir, b.dir], localOnly: true, heartbeat: 600, engineName: 'test-engine' },
+      { configPath, dispatchers: { 'local/alpha': promptSpec(a.clock), 'local/beta': promptSpec(b.clock) } },
+    )
+    const outcome = running(run.outcome)
+    await outcome.orchestrators.started
+    await settled(a.dir)
+    await settled(b.dir)
+    await quiet(outcome)
+    expect({ refsA: git(bareA, ['for-each-ref']), refsB: git(bareB, ['for-each-ref']), headA: fetchHead(a.dir), headB: fetchHead(b.dir) }).toEqual(before)
+    expect(git(a.dir, ['for-each-ref', 'refs/remotes/origin/moved-on'])).toBe('')
+    expect(git(b.dir, ['for-each-ref', 'refs/remotes/origin/moved-on'])).toBe('')
+    expect(run.lines.filter((l) => l.includes('draft PR ensure')).every((l) => l.endsWith('skipped: local-only mode — draft-PR ensure suppressed'))).toBe(true)
+    expect(run.lines.filter((l) => l.startsWith('out: engine watching')).map((l) => l.replace(/^out: engine watching \S+ /, ''))).toEqual([
+      '(heartbeat 600s, local-only (--local-only)) — ^C to stop',
+      '(heartbeat 600s, local-only (--local-only)) — ^C to stop',
+    ])
+  })
+})
+
+describe('cleanup after a failure leaves nothing (second review of #550)', () => {
+  it('a start failure in up: nothing listens, the governor holds no repository, no signal handler', { timeout: 60_000 }, async () => {
+    const a = toyRepo(parent, 'alpha')
+    const b = toyRepo(parent, 'beta')
+    let governor: GovernorPort | null = null
+    const run = await up(
+      { repo: [a.dir, b.dir], port: REFUSAL_PORT, heartbeat: 600 },
+      {
+        configPath,
+        dispatchers: { 'local/alpha': promptSpec(a.clock), 'local/beta': promptSpec(b.clock) },
+        startupTimeoutMs: 5_000,
+        // beta's loop cannot be set up: its subscription to the governor's wakes throws.
+        onAssembled: (engines, g) => {
+          governor = g
+          engines[1]!.engine.subscribeWake = () => {
+            throw new Error('beta cannot subscribe to the governor')
+          }
+        },
+      },
+    )
+    expect(run.outcome).toEqual({ ok: false, code: 1 })
+    expect(run.lines.filter((l) => l.startsWith('err: ')).at(-1)).toBe(
+      `err: beta (local/beta at ${b.dir}): its engine could not start: beta cannot subscribe to the governor`,
+    )
+    expect(await nothingListening(REFUSAL_PORT)).toBe(true)
+    expect([governor!.registered('local/alpha'), governor!.registered('local/beta')]).toEqual([false, false])
+    expect(run.signals).toEqual([])
   })
 })

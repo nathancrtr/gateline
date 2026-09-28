@@ -75,7 +75,7 @@ export interface ServeOptions {
    * heartbeat (`gateline up`, #502), by id. The server keeps no fetch timer of
    * its own for them, so a `fetch_interval` does not fetch twice.
    */
-  engineSynced?: readonly string[]
+  engineSynced?: { ids: readonly string[]; heartbeatSeconds: number }
 }
 
 const MIME: Record<string, string> = {
@@ -143,8 +143,10 @@ export async function startServer(opts: ServeOptions = {}): Promise<{ url: strin
   for (const source of sources) {
     const syncFromRemote = source.syncFromRemote?.bind(source)
     if (!source.fetchIntervalSeconds || !syncFromRemote) continue
-    if (opts.engineSynced?.some((id) => sameRepositoryId(id, source.id))) {
-      console.log(`not polling ${source.id} from origin every ${source.fetchIntervalSeconds}s: its engine syncs it on each heartbeat`)
+    if (opts.engineSynced?.ids.some((id) => sameRepositoryId(id, source.id))) {
+      console.log(
+        `not polling ${source.id} from origin every ${source.fetchIntervalSeconds}s: its engine syncs it on each heartbeat, every ${opts.engineSynced.heartbeatSeconds}s, paused or not`,
+      )
       continue
     }
     // LocalGitSource.syncFromRemote self-guards under local-only (AC2.4) — this

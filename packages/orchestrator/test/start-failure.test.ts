@@ -73,6 +73,11 @@ describe('start() when one engine cannot start', () => {
     expect(readFileSync(healthFile, 'utf8')).toBe(before)
     expect(git(a.dir, ['rev-parse', 'run/toy'])).toBe(tipBefore)
     expect(set.engines[0]!.engine.inFlightDetail()).toEqual([])
+    // Neither engine admits anything more, the one whose loop failed included:
+    // a pass started by hand now dispatches nothing, and beta keeps no hook.
+    expect(set.engines.map((e) => e.engine.isStopping())).toEqual([true, true])
+    expect(await set.engines[1]!.engine.tick()).toEqual([])
+    expect(set.engines[1]!.engine.onSettled ?? null).toBeNull()
   })
 })
 

@@ -1199,7 +1199,7 @@ between calls:
 | `fresh` | On-disk `HEAD` equals the commit the process started on | Ticks normally |
 | `superseded-pending` | Clean fast-forward of the default branch, observed for the first time | Tick bodies idle; heartbeat keeps writing |
 | `supersede-confirmed` | The same fast-forward observed on a second consecutive boundary check (the debounce) | `onSupersede` fires once, after the confirming heartbeat write; the process drains and exits `75` |
-| `paused` | Dirty tree, a rebase/merge in progress, non-fast-forward movement, or the checkout switched off the default branch (including detached HEAD) | Tick bodies idle; recovers to `fresh`/`superseded-pending` once the tree returns clean |
+| `paused` | Dirty tree, a rebase/merge in progress, non-fast-forward movement, or the checkout switched off the default branch (including detached HEAD) | Tick bodies idle, but origin is still fetched on the heartbeat (a fetch is not a dispatch; under `up` the server keeps no fetch timer for a repository with an engine); recovers to `fresh`/`superseded-pending` once the tree returns clean |
 
 A heartbeat never reports `supersede-confirmed` itself — by the time a
 confirmed check is written the process is already draining toward exit, so

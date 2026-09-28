@@ -246,11 +246,13 @@ run touch origin?" without reading code.
 **The command line's tier under `up`.** `--push`, `--no-push` and
 `--local-only` reach only a repository with no config entry: one given by
 `--repo`, or the working directory. When the set comes from the config file,
-`--local-only` and `--no-push` are refused unless every `dispatch` entry
-already resolves local-only: they promise the guarantees below, and a flag
-whose purpose is a guarantee is never dropped with a warning. The refusal
-names each entry that would touch origin and says to set `local_only: true` on
-it. `--push` with a config file is a warning, since ignoring it touches origin
+`--local-only` and `--no-push` are refused unless every entry in the set, of
+any mode, already resolves local-only: they promise the guarantees below for
+the whole deployment, and a `decide` entry that pushes decisions or fetches on
+`fetch_interval` breaks them as surely as an engine does. A flag whose purpose
+is a guarantee is never dropped with a warning. The refusal names each entry
+that would touch origin and how (its engine fetches and pushes, it pushes
+decisions, it fetches every N s), and says to set `local_only: true` on it. `--push` with a config file is a warning, since ignoring it touches origin
 less, not more. `--local-only --push` is refused as the contradiction it is.
 
 **Out of scope: the hosted deployment.** The `deploy/` hosted entrypoint

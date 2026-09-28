@@ -63,8 +63,9 @@ adapters are built: `claude-code`, `copilot-cli`, and `opencode` (the any-provid
 one). The gate frontend (Gatehouse) and the v1 orchestrator are implemented and
 co-located by design — `gateline up` runs both in one process, with one engine for
 each repository it dispatches in, which is the blessed topology; the hosted recipe
-under `deploy/` remains a documented self-host option. Integration tooling ships as `gateline init|validate|fork`.
-Autonomy remains gated on the DESIGN.md §7 promotion criterion.
+under `deploy/` remains a documented self-host option. Integration tooling ships
+as `gateline init|validate|fork`. Autonomy remains gated on the DESIGN.md §7
+promotion criterion.
 
 ## Invariants — check before editing
 
@@ -122,10 +123,11 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   writable clone's, or the standalone `gateline-orchestrator` beside `up`, whose
   limits are its own), and never move the checkout the global `gateline` resolves
   to onto a branch — an engine there would put unreviewed code in charge of live,
-  metered dispatch. The code-tree monitor enforces this: a checkout that leaves the
-  default branch, goes dirty, or moves by anything but a fast-forward pauses dispatch until
-  it is clean and back on the default branch (a clean fast-forward instead exits the
-  engine `75` to be restarted on the new code). Trial an unmerged frontend change
+  metered dispatch. The code-tree monitor enforces that the blessed checkout stays
+  clean and on the default branch: a checkout that leaves the default branch, goes
+  dirty, or moves by anything but a fast-forward pauses dispatch until it is clean
+  and back on the default branch (a clean fast-forward instead exits the engine
+  `75` to be restarted on the new code). Trial an unmerged frontend change
   from that branch's own worktree with `ui`, never `up`.
 * **Host configuration the engine reads comes from the host's local
   default-branch ref** — the registry, `orchestrator.yaml`, adapter manifests and

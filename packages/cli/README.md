@@ -142,13 +142,16 @@ or the working directory is `dispatch`; a config entry states its own mode, and
 repository and no config file, `up` behaves as it always has, with the startup
 summary below printed first.
 
-**A bare `up` now reads the config file.** Before this change `up` ignored the
-file and ran one engine in the working directory. Now a bare `up` runs an engine
-in every repository the file lists as `dispatch`, wherever it is run from. When
-the working directory is not in the set, `up` says so and runs no engine there;
-pass `--repo <path>` to run one there instead. A file that lists no
-repositories serves the working directory under the file's `limits:` and
-`engine:`.
+**`up` now reads the config file.** Before this change `up` ignored the file
+and ran one engine in the working directory. Now a bare `up` runs an engine in
+every repository the file lists as `dispatch`, wherever it is run from. When the
+working directory is not in the set, `up` says so and runs no engine there; pass
+`--repo <path>` to run one there instead. `--repo` chooses the set and never the
+limits: the file's `limits:` and `engine:` apply either way, a flag overrides
+them, and an invalid or unreadable file is refused either way. A `--repo`
+repository that the file also lists takes that entry's ceiling, and nothing else
+of it. A file that lists no repositories serves the working directory under the
+file's `limits:` and `engine:`.
 
 Before anything starts, `up` prints what will be allowed to spend money, with
 where each value came from (a flag, the config, or the default):
@@ -168,7 +171,10 @@ The config keys are `limits:` (`max_concurrent_dispatches`, `spend_limit_usd`,
 `spend_window_hours`), a repository's own `limits.spend_limit_usd` beneath the
 machine's, and `engine:` (`adapters`, `role_timeout_seconds`,
 `heartbeat_seconds`, `name`, `budget_enforcement`); the
-[packages README](../README.md) has the file. Flags override them;
+[packages README](../README.md) has the file. Flags override them. A number
+on the command line is digits with at most one `.` and more digits after it,
+optionally led by `-` (`10`, `2.5`); an exponent, a leading `+` or `.`, a
+trailing `.` or surrounding spaces are refused;
 `--budget-enforcement` and `--no-budget-enforcement` each override
 `engine.budget_enforcement`, and both together are refused. A spend limit or a
 repository's ceiling of 0 admits no dispatch that has a cost estimate above
@@ -177,9 +183,9 @@ warns when it is not reading one that exists.
 
 `--push`, `--no-push` and `--local-only` reach only a repository with no config
 entry. With a set from the config file, `--local-only` and `--no-push` are
-refused unless every `dispatch` entry is already local-only, and the refusal
-names each entry that would touch origin: set `local_only: true` on it in the
-file. `--push` there is a warning, since ignoring it touches origin less.
+refused unless every entry in the set, of any mode, is already local-only, and
+the refusal names each entry that would touch origin and how: set
+`local_only: true` on it in the file. `--push` there is a warning, since ignoring it touches origin less.
 
 `--engine-name` (or `engine.name`) replaces the hostname in the engine id each
 ledger entry records. Give each machine that runs an engine against the same

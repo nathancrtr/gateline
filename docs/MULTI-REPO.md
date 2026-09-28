@@ -288,7 +288,15 @@ plus an opt-in committed to the repository.
 ### 7.1 The list
 
 - The list stays in `~/.config/gateline/config.yaml`. Repeated `--repo` flags
-  remain the no-file form.
+  remain the no-file form of the list.
+- Under `up`, `--repo` chooses the set and never the limits (#502, review of
+  #550). When the file exists, its `limits:` and `engine:` apply and the file
+  is checked, whether the set comes from its list or from `--repo`; flags still
+  override it. Its `repositories:` are not served under `--repo`. A `--repo`
+  repository that an entry also names (the same directory, git directory or
+  id) takes that entry's ceiling; its `mode`, `push` and `local_only` do not
+  apply, and `up` says so. A file that exists and cannot be read is a startup
+  error, never an absent file.
 - `gateline repo add <path>`, `repo remove <id>` and `repo list` edit and print
   the list. `repo list` shows each repository's id, origin, display name, mode,
   and the framework ref its lock pins.
@@ -437,8 +445,8 @@ repositories:
 ```
 
 Flags to `up` override `limits:` and `engine:`, and `up` prints at startup each
-value it took and where it came from. `--repo` replaces the file whole, its
-`limits:` and `engine:` with its list. The `sources:` key is read as
+value it took and where it came from. `--repo` replaces the file's list, and
+never its `limits:` or `engine:` (§7.1). The `sources:` key is read as
 an alias of `repositories:`. An existing file needs a `mode` added to each
 entry, and the refusal message says so.
 
@@ -450,8 +458,8 @@ entry, and the refusal message says so.
 TOPOLOGY.md §3.1 read "one authority per deployment", meaning one supervised
 unit over one clone. This design restated it, and #502 made the restatement
 true: **one authority per repository, and one process per machine**. Each
-repository still has exactly one engine. The machine has one process to supervise, one liveness signal and
-one place where limits are enforced.
+repository still has exactly one engine. The machine has one process to
+supervise, one liveness signal and one place where limits are enforced.
 
 ### 8.1 What each engine keeps
 

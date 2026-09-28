@@ -220,7 +220,17 @@ describe('one repository, as on main', () => {
       'out: engine: adapters claude-code (default); role timeout 1800 s (default); heartbeat 180 s (default)',
       'out: repository local/toy (toy): dispatch, engine; local-only (no origin remote); no spend ceiling of its own',
     ])
-    const rest = lines.slice(7)
+    // After the analyst settles, the completion trigger and the ref watcher
+    // (debounced) run one or two more passes before the signal, depending on
+    // timing, and each logs the same draft-PR skip again: main's code does the
+    // same, and the capture happened to signal before either ran. The repeats
+    // are checked to be that line exactly, then compared once.
+    const skip = MAIN_THEN[1]!
+    const all = lines.slice(7)
+    const firstSkip = all.indexOf(skip)
+    const repeats = all.filter((l, i) => l === skip && i !== firstSkip)
+    expect(repeats.length).toBeLessThanOrEqual(2)
+    const rest = all.filter((l, i) => l !== skip || i === firstSkip)
     expect(rest.slice(0, 4)).toEqual(MAIN_FIRST)
     expect(rest.slice(4, 4 + MAIN_THEN.length).sort()).toEqual([...MAIN_THEN].sort())
     expect(rest.slice(4 + MAIN_THEN.length)).toEqual(MAIN_STOP)

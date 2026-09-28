@@ -413,9 +413,13 @@ describe('fault isolation: one engine failing leaves the others running', () => 
     // Later faults of the same streak log their message and no stack.
     expect(lines.filter((l) => l.startsWith('[alpha] stack: '))).toHaveLength(1)
     // The heartbeat still retries: after the fault clears, alpha recovers and dispatches.
+    // At least one pass, not exactly one (#555): the recovered pass's own commits
+    // and settlement can queue a refs or completion pass while it runs, and that
+    // pass starts before the heartbeat's trigger returns. Every pass before the
+    // heartbeat backed off, so any count above zero is the heartbeat's retry.
     broken = false
     await ea!.loop.trigger('heartbeat')
-    expect(ticks).toBe(1)
+    expect(ticks).toBeGreaterThanOrEqual(1)
     expect((await health(a.dir)).failed).toBeUndefined()
     expect(lines.some((l) => /^\[alpha\] recovered after \d fault\(s\) — engine no longer marked failed for its passes$/.test(l))).toBe(true)
 

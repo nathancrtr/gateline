@@ -9,11 +9,13 @@ document it amends). The companion issues are #33 (the view across many
 repositories as a rebuildable projection) and #34 (budget caps shared across
 repositories), both under the scaling epic #27.
 
-**Status (2026-09-27): decided and built.** The maintainer
+**Status (2026-09-27): decided, and built for operator scale.** The maintainer
 confirmed twenty-three decisions in §11 on 2026-09-26, and four more while the
 work was built. One further decision was taken in review and awaits him. All ten
-steps of §14 have merged; the last, step 9, runs one engine per `dispatch`
-repository under `up` (#502). §17 lists what remains open.
+steps of §14 are built; the last, step 9, runs one engine per `dispatch`
+repository under `up` (#502: #538 and #550). The per-repository credential and
+webhook-secret override that §8.4 decides is not built. §17 lists what remains
+open.
 
 **Prerequisite reading:** [TOPOLOGY.md](TOPOLOGY.md) §3,
 [FRONTEND.md](FRONTEND.md) §4–§5, [ORCHESTRATOR.md](ORCHESTRATOR.md) §4 and §6,
@@ -971,6 +973,13 @@ The remote runner and the hosted recipe are outside this order (§8.5).
   header. On the Metrics page a gate with fewer than five decisions shows its
   counts and no rate. Runs are dispatched oldest-waiting first, where they
   went in alphabetical order of slug.
+- A bare `gateline up` reads the config file (#502). Before, `up` ignored the
+  file and ran an engine in the working directory. Now it runs an engine in
+  every repository the file lists as `dispatch`, wherever it is run from; when
+  the working directory is not in the set, its startup log says so and names
+  `--repo` as the way to run an engine there. A file that lists no
+  repositories serves the working directory under the file's `limits:` and
+  `engine:`.
 
 ## 16. Documents this design amends
 

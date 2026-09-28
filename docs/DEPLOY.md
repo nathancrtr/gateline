@@ -211,7 +211,7 @@ poll; the server names each such repository once at startup.
 
 `ORCH_ENABLED=1` runs the v1 orchestrator (`gateline-orchestrator watch`) as a
 second process against the same clone. **Co-located is the blessed topology**
-(one machine, one clone, one authority — [TOPOLOGY.md](TOPOLOGY.md) §3.1), and
+(one machine, one clone, one engine for its one repository — [TOPOLOGY.md](TOPOLOGY.md) §3.1), and
 the example config ships with it on. Hosted dispatch bills by API key
 (`ANTHROPIC_API_KEY`); an operator who wants subscription-billed dispatch runs
 the same co-located pair on their own machine with `gateline up` (below)

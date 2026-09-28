@@ -79,7 +79,9 @@ lands) and locally (`gateline up`). Locally that unit is one process per machine
 `up` serves every repository in its set and runs one engine for each repository in
 `dispatch` mode, each over its own clone with its own sync loop and push path, all
 under one set of limits ([MULTI-REPO.md](MULTI-REPO.md) §8). Each repository still
-has exactly one engine, and the machine has one process to supervise. The hosted
+has exactly one engine, the one authority over its runs. One such process per
+machine is the supported topology, and nothing enforces it: a second `up` on the
+same machine would put a second engine in every dispatch repository. The hosted
 recipe serves one repository. The ad-hoc pattern this replaces — a second
 clone with its own fetch loop and `watch --push` — is retired in favor of that
 single `up` authority (#104); so is the standalone `gateline-orchestrator` run
@@ -244,8 +246,12 @@ run touch origin?" without reading code.
 **The command line's tier under `up`.** `--push`, `--no-push` and
 `--local-only` reach only a repository with no config entry: one given by
 `--repo`, or the working directory. When the set comes from the config file,
-`up` says at startup that the flag reaches no listed repository, and refuses
-`--local-only --push` as the contradiction it is.
+`--local-only` and `--no-push` are refused unless every `dispatch` entry
+already resolves local-only: they promise the guarantees below, and a flag
+whose purpose is a guarantee is never dropped with a warning. The refusal
+names each entry that would touch origin and says to set `local_only: true` on
+it. `--push` with a config file is a warning, since ignoring it touches origin
+less, not more. `--local-only --push` is refused as the contradiction it is.
 
 **Out of scope: the hosted deployment.** The `deploy/` hosted entrypoint
 (`PUSH_DECISIONS`, the GitHub webhook) legitimately requires a remote — it

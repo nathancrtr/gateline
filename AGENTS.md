@@ -41,13 +41,13 @@ Then, by area:
   screen: the verbatim rule's scope, the representation vocabulary, the layering
 * [`docs/INTEGRATION.md`](docs/INTEGRATION.md) — importing the framework into a host
   repo (plan: [`docs/INTEGRATION-PLAN.md`](docs/INTEGRATION-PLAN.md))
-* [`docs/TOPOLOGY.md`](docs/TOPOLOGY.md) — control-plane topology: one authority per
-  deployment, origin as the linearization point, and how to trial unmerged changes
+* [`docs/TOPOLOGY.md`](docs/TOPOLOGY.md) — control-plane topology: one engine per
+  repository, origin as the linearization point, and how to trial unmerged changes
   without disturbing the blessed checkout
 * [`docs/MULTI-REPO.md`](docs/MULTI-REPO.md) — one deployment serving several
   repositories: repository identity, registration and modes, one engine per
   repository under shared limits, and how Gatehouse scopes and groups runs.
-  Decided and built under #492; the invariants below describe what it built
+  Built under #492, except the per-repository credential and webhook overrides
 * [`docs/DEPLOY.md`](docs/DEPLOY.md) — hosting the frontend (and, opt-in, the
   orchestrator) as a single-user instance; read its security model first
 
@@ -113,10 +113,12 @@ Autonomy remains gated on the DESIGN.md §7 promotion criterion.
   are one-way and human-decided (a human edits `profile:` and resumes — the reconciler
   derives the backfill); downgrading mid-run is forbidden, and an engine that
   observes a profile lighter than the gates already decided escalates.
-* **One engine per repository and one process per machine, and the blessed
-  checkout stays on the default branch** (TOPOLOGY.md §3.1, §3.5). `gateline up`
-  runs one engine for each `dispatch` repository in its set, in one process under
-  one set of limits. Never point a second engine at the same runs (a second
+* **One engine per repository, and the blessed checkout stays on the default
+  branch** (TOPOLOGY.md §3.1, §3.5). `gateline up` runs one engine for each
+  `dispatch` repository in its set, in one process under one set of limits, and one
+  such process per machine is the supported topology; nothing enforces it, and a
+  second `up` on the same machine would put a second engine in every dispatch
+  repository. Never point a second engine at the same runs (a second `up`, a second
   writable clone's, or the standalone `gateline-orchestrator` beside `up`, whose
   limits are its own), and never move the checkout the global `gateline` resolves
   to onto a branch — an engine there would put unreviewed code in charge of live,

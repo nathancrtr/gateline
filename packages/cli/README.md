@@ -142,6 +142,14 @@ or the working directory is `dispatch`; a config entry states its own mode, and
 repository and no config file, `up` behaves as it always has, with the startup
 summary below printed first.
 
+**A bare `up` now reads the config file.** Before this change `up` ignored the
+file and ran one engine in the working directory. Now a bare `up` runs an engine
+in every repository the file lists as `dispatch`, wherever it is run from. When
+the working directory is not in the set, `up` says so and runs no engine there;
+pass `--repo <path>` to run one there instead. A file that lists no
+repositories serves the working directory under the file's `limits:` and
+`engine:`.
+
 Before anything starts, `up` prints what will be allowed to spend money, with
 where each value came from (a flag, the config, or the default):
 
@@ -160,10 +168,18 @@ The config keys are `limits:` (`max_concurrent_dispatches`, `spend_limit_usd`,
 `spend_window_hours`), a repository's own `limits.spend_limit_usd` beneath the
 machine's, and `engine:` (`adapters`, `role_timeout_seconds`,
 `heartbeat_seconds`, `name`, `budget_enforcement`); the
-[packages README](../README.md) has the file. Flags override them. `--push`,
-`--no-push` and `--local-only` reach only a repository with no config entry, and
-`up` warns when they reach none. `--repo` replaces the config file whole, its
-limits included, and `up` warns when it is not reading one that exists.
+[packages README](../README.md) has the file. Flags override them;
+`--budget-enforcement` and `--no-budget-enforcement` each override
+`engine.budget_enforcement`, and both together are refused. A spend limit or a
+repository's ceiling of 0 admits no dispatch that has a cost estimate above
+zero. `--repo` replaces the config file whole, its limits included, and `up`
+warns when it is not reading one that exists.
+
+`--push`, `--no-push` and `--local-only` reach only a repository with no config
+entry. With a set from the config file, `--local-only` and `--no-push` are
+refused unless every `dispatch` entry is already local-only, and the refusal
+names each entry that would touch origin: set `local_only: true` on it in the
+file. `--push` there is a warning, since ignoring it touches origin less.
 
 `--engine-name` (or `engine.name`) replaces the hostname in the engine id each
 ledger entry records. Give each machine that runs an engine against the same
@@ -174,10 +190,13 @@ the other's live work.
 
 `up` refuses to start, exits 1 and starts nothing, when the config file breaks
 a rule, two entries name one repository or one id, `--local-only` meets
-`--push`, an engine name or a numeric flag is unusable, a `dispatch`
-repository cannot be assembled (an adapter manifest missing at its
-default-branch tip, say), or no repository in the set is in `dispatch` mode —
-then `gateline ui` is the command that serves it. A listed repository that
+`--push` or a config entry that would push, an engine name, a port or a numeric
+flag is unusable (flags parse strictly: `10abc` is refused, not read as 10; a
+heartbeat or role timeout is at most 2147483 seconds), the port is already in
+use (another `gateline up` may be running), a `dispatch` repository cannot be
+assembled (an adapter manifest missing at its default-branch tip, say; the
+message names the repository), or no repository in the set is in `dispatch`
+mode — then `gateline ui` is the command that serves it. A listed repository that
 fails the framework check is left out with a warning, and the others start.
 
 ## Pitfalls

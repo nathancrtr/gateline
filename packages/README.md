@@ -164,13 +164,23 @@ repository can be served. `repo add` refuses such a repository outright.
 serves every repository in the file and runs one engine for each `dispatch`
 repository, in one process, under the one set of `limits:`. A flag to `up`
 (`--max-concurrent-dispatches`, `--spend-limit-usd`, `--spend-window`,
-`--no-budget-enforcement`, `--adapter`, `--role-timeout`, `--heartbeat`,
+`--budget-enforcement`, `--no-budget-enforcement`, `--adapter`, `--role-timeout`, `--heartbeat`,
 `--engine-name`) overrides the matching key. A repository's own
 `limits.spend_limit_usd` is its ceiling beneath the machine's; one above the
 machine's is refused when the file is read. `up` prints, before anything
 starts, every limit it took and where from, and each repository's mode, push or
 local-only, and ceiling. `--repo` replaces the file whole, its limits with its
-list, and `up` warns when a file it is not reading exists.
+list, and `up` warns when a file it is not reading exists. A file with
+`limits:` and no repositories serves the working directory under those limits.
+A limit or ceiling of 0 admits no dispatch with a cost estimate above zero.
+
+**A bare `gateline up` now reads this file.** Before, `up` ignored it and ran
+one engine in the working directory. Now a bare `up` runs an engine in every
+repository the file lists as `dispatch`, wherever it is run from, and says so
+when the working directory is not in the set (`--repo <path>` runs an engine
+there instead). With the set from the file, `--local-only` and `--no-push` are
+refused unless every `dispatch` entry is already local-only; `--push` is a
+warning.
 
 `engine.name` (or `--engine-name`) replaces this machine's hostname in every
 engine id written to a ledger. It must be unique among the machines that run an

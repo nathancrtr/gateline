@@ -6,7 +6,10 @@
 they are the GIF's sources.
 
 **Recipe.** Serve the cockpit read-only over this repository, with no
-orchestrator running (nothing dispatches, nothing is billed):
+orchestrator running (nothing dispatches, nothing is billed). The source id
+the slugs carry is the checkout directory's name, so capture from a checkout
+named `gateline` — from a worktree, add a detached one at such a path and
+point `--repo` at it:
 
 ```sh
 cd packages && node cli/src/main.ts ui --repo .. --no-open --port 4312

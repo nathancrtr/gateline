@@ -35,6 +35,10 @@ export interface LexiconEntry {
   line: number
   /** Parenthetical heading qualifier, e.g. 'amended 2026-07-13, G1 decline'. */
   qualifier?: string
+  /** Criteria only. The lines before the check, joined as `body` joins them. */
+  promise?: string
+  /** Criteria only, and only when the spec gives one. Begins with `Check:`. */
+  check?: string
 }
 
 export interface Lexicon {
@@ -52,6 +56,7 @@ const R_HEADING = /^#{1,6}\s*R(\d+)\s+—\s+(.+?)\s*$/
 const ADR_HEADING = /^#{1,6}\s*ADR-(\d+)(?:\s*\(([^)]+)\))?:\s*(.+?)\s*$/
 const AC_ITEM = /^\s*[-*]\s*(?:\[[ xX]\]\s*)?(AC\d+\.\d+)\s+—\s*(.*)$/
 const AC_LABEL = /^\s*\*\*Acceptance criteria:?\*\*/i
+const CHECK_LABEL = 'Check:'
 const CHOICE_ITEM = /^\s*[-*]\s*\*\*Choice:?\*\*\s*(.*)$/i
 const LIST_ITEM = /^\s*[-*]\s/
 const FENCE = /^\s*(```|~~~)/
@@ -139,7 +144,13 @@ export function buildLexicon(input: { spec?: string | null; plan?: string | null
         const definition = itemFrom(lines, i)
         // A criterion is one wrapped sentence; its body joins the
         // continuation lines back into it (elision of markers, no rewording).
-        const body = [ac[2]!, ...definition.split('\n').slice(1).map((l) => l.trim())].join(' ').trim()
+        const rest = definition.split('\n').slice(1).map((l) => l.trim())
+        const body = [ac[2]!, ...rest].join(' ').trim()
+        // Its check (contracts/spec.md READABILITY i) starts at the first
+        // continuation line labelled `Check:` — case-sensitive, never inside
+        // the first line — and runs to the item's end, label kept.
+        const k = rest.findIndex((l) => l.startsWith(CHECK_LABEL))
+        const promise = [ac[2]!, ...(k < 0 ? rest : rest.slice(0, k))].join(' ').trim()
         entries.push({
           id: ac[1]!,
           kind: 'criterion',
@@ -148,6 +159,8 @@ export function buildLexicon(input: { spec?: string | null; plan?: string | null
           body,
           artifact: 'spec.md',
           line: line.n,
+          promise,
+          ...(k < 0 ? {} : { check: rest.slice(k).join(' ').trim() }),
         })
       }
     }

@@ -1,0 +1,79 @@
+id: 06-e2e-criterion-check
+title: A browser test proves the check's placement at both widths and saves the screenshots
+requirements: [R3, R4, R5, R6, R8]
+
+scope: |
+  Create `packages/e2e/criterion-check.spec.ts`. It starts its own server
+  the way `packages/e2e/smoke.spec.ts` does: `generateFixtureRepo()` from
+  `@gateline/fixtures`, then `spawnDemoServer` from `./demo-server.ts`, and
+  navigates against the origin read back. Edit no existing e2e file.
+
+  The run is the fixture's `g2-pending`. Its AC1.1 has a check (task 02);
+  its AC2.1 has none. The spec's words come from the fixture repo itself
+  (`git show run/g2-pending:<runs path>/spec.md`), never from a string
+  copied into the test.
+
+  Views and where to find them:
+  - G2 card: the run page, `[data-criterion="AC1.1"]` and `="AC2.1"`
+  - hover card: the Record reader on `verification-report.md`, hovering the
+    first `.lex-ref` for each id
+  - Record reader: the Record reader on `spec.md`
+  - cited-ids list: `.lex-cited` on `verification-report.md`, opened
+
+  At each of 320 and 1280 pixels wide, assert:
+  - AC3.1, AC4.1, AC5.1: the `data-criterion-check` element's first line
+    box starts below the last line box of the promise, and its text starts
+    with `Check:`
+  - AC3.2, AC4.2: the `data-criterion-quote` text, whitespace collapsed,
+    equals the spec's AC1.1 item after its `- [ ] AC1.1 — ` marker,
+    whitespace collapsed
+  - AC8.4: the check element's right edge is inside the card or pane that
+    holds it, for all three views
+  - the Record reader's check text equals the G2 card's check text for
+    AC1.1 (plan.md ADR-2: the two rules must agree)
+
+  At 1280 only:
+  - AC6.1: the AC1.1 entry of the cited-ids list lacks `Check:`
+  - AC6.2: the AC2.1 entry's text equals AC2.1's full text
+  - AC8.1: the G2 card shows AC1.1 with a check element and AC2.1 without
+
+  Save the twelve screenshots named in plan.md "Interface contracts —
+  Screenshots" with `testInfo.outputPath`. Commit no image and use no
+  `toHaveScreenshot` baseline (plan.md ADR-6). AC3.3 and AC4.3 are compared
+  by the verifier against captures from the pre-change commit; the `plain`
+  screenshots are this task's contribution to them.
+
+  If an overflow assertion fails at 320 for the criterion WITHOUT a check,
+  the layout was already broken there: record a `discovery:` note and stop
+  for escalation. Restyling the cards is out of scope.
+
+file_contact_surface:
+  - packages/e2e/criterion-check.spec.ts
+
+acceptance_tests:
+  - AC3.1
+  - AC3.2
+  - AC4.1
+  - AC4.2
+  - AC5.1
+  - AC6.1
+  - AC6.2
+  - AC8.1
+  - AC8.2
+  - AC8.3
+  - AC8.4
+  - "In packages/: `npm run build && npx playwright test` passes, the existing specs included"
+  - "AC8.5: the placement and quotation assertions fail with the web build of the pre-change commit; recorded as a claim in notes"
+  - "AC8.6: the AC6.2 assertion fails when the cited-ids list's text is deliberately broken, then passes once restored; recorded as a claim in notes"
+
+depends_on: [02-cli-footnotes-and-fixture, 03-g2-card-check, 04-hover-card-and-cited-list, 05-record-reader-check]
+
+status: pending
+
+notes: |
+  round 1:
+  deviation: each view's check test also asserts the check's computed display is `block` (the plan's DOM-hook table). At 320px the fixture's promise happens to end its line, so an inline check passed the geometry alone.
+  claim: AC8.5. Against main's packages/web/src with this branch's fixture, `npx playwright test e2e/criterion-check.spec.ts` failed 10 of 17. Every checked-criterion, ADR-2, AC6 and AC8.1 test failed; the premise and six plain-shape tests passed and wrote all twelve screenshots. Those failures were missing hooks, so layout was killed by mutants instead. An inline check failed placement in all three views. Dropping the space before the check failed AC3.2 and AC4.2. A nowrap check failed containment at 320px in all three views. A reader check without its final period failed the ADR-2 test.
+  claim: AC8.6. Cutting the unchecked cited-ids entry to 30 characters failed AC6.2, which passed once restored. Nowrap on each plain criterion failed its 320px control.
+  discovery: no plain-shape control overflows at 320px, so no layout was broken before this run.
+  `npm run build && npx playwright test`: 83 passed. `npm test`: 1817 passed, 2 skipped. `npm run lint`, `npm run typecheck`: exit 0.

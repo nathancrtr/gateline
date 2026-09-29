@@ -1,0 +1,73 @@
+id: 04-hover-card-and-cited-list
+title: The hover card shows the check on its own line, and the cited-ids list shows the promise alone
+requirements: [R4, R6]
+
+scope: |
+  Both changes live in `packages/web/src/components/lexicon.tsx`, which is
+  why they are one task.
+
+  1. Hover card (`LexRef`). For a criterion with a check, render `promise`
+     and then `check` inside `.lex-card-def`, each through the markdown
+     renderer the card uses today, the check inside an element carrying
+     `data-criterion-check` so it starts a new line. `.lex-card-def` gains
+     `data-criterion-quote` for criterion entries. Whitespace separates the
+     two renders so the wrapper's text content, whitespace collapsed, equals
+     `body` (plan.md "Interface contracts — DOM hooks").
+
+     Per plan.md ADR-3, the six-line clamp must not apply to an entry that
+     has a check. Do it with a modifier class in
+     `packages/web/src/styles.css` beside the existing `.lex-card-def` rules;
+     leave the existing rules as they are.
+
+     Every entry without a check — requirements, decisions, unchecked
+     criteria — renders from `body` through today's path, clamp included.
+
+  2. Cited-ids list (`CitedObjects`). A criterion's entry shows `promise`,
+     whitespace collapsed, in place of `body`. Requirements and decisions
+     are unchanged.
+
+  Tests go in the new file `packages/web/test/lexicon-check.test.ts`, as
+  static markup, with a `LexiconProvider` value built from `buildLexicon`
+  over a spec holding one checked and one unchecked criterion. Assert:
+  - hover card, checked: a `data-criterion-check` element holds the check;
+    the quote's collapsed text equals `body`; the clamp modifier is present
+  - hover card, unchecked: no `data-criterion-check`; no clamp modifier;
+    quote text equals `body`
+  - cited-ids list, checked: the entry's text lacks `Check:`
+  - cited-ids list, unchecked: the entry's text equals `body`
+
+  Do not change `cardPlacement`, `lexiconRehype`, `CitedText` or the walk.
+
+file_contact_surface:
+  - packages/web/src/components/lexicon.tsx
+  - packages/web/src/styles.css
+  - packages/web/test/lexicon-check.test.ts
+
+acceptance_tests:
+  - AC4.1
+  - AC4.2
+  - AC4.3
+  - AC6.1
+  - AC6.2
+  - "In packages/: `npx vitest run web/test`, `npm run typecheck` and `npm run lint` pass"
+  - "AC8.5: the checked-criterion assertions fail against the pre-change lexicon.tsx; recorded as a claim in notes"
+  - "AC8.6: the unchecked-criterion assertions fail when their path is deliberately broken, then pass once restored; recorded as a claim in notes"
+
+depends_on: [01-lexicon-promise-check]
+
+status: pending
+
+notes: |
+  round 1:
+  claim: AC8.5. Against the pre-change lexicon.tsx, `npx vitest run web/test/lexicon-check.test.ts` gave 7 failed, 6 passed. All checked-criterion assertions failed, for both the hover card and the cited-ids list. Other checked-path mutants were each killed: no separating space failed 1, check not `block` failed 1, list quoting `body` failed 2.
+  claim: AC8.6. Each break of an unchecked path failed and then passed once restored. Hover quoting `definition` failed 2. Hover gaining the clamp modifier failed 2. Hover routing every criterion through the check branch failed 3. List quoting `definition` failed 1.
+  claim: the clamp modifier is `lex-card-def-full` (`@apply line-clamp-none`), placed after `.lex-card-def`. Compiling styles.css with @tailwindcss/node gives `overflow: visible; display: block; -webkit-line-clamp: unset`. Deleting the rule fails no static test, because whether the clamp cuts is a browser fact for task 06.
+  discovery: `npm run build -w @gateline/web` could not load `@vitejs/plugin-react`, because this worktree's install has an empty `node_modules/@vitejs`. The build is not one of this task's checks, and it was not reinstalled.
+  `npx vitest run web/test`: 35 files, 557 passed. `npm run typecheck` and `npm run lint` exited 0. `npm test`: 125 files passed, 2 skipped; 1806 passed, 2 skipped.
+  round 2:
+  fixed F1: the test file compiles styles.css with the `tailwindcss` devDependency's `compile`. It asserts the base rule clamps at six, the modifier unsets the clamp with overflow visible and display block, and the modifier comes after the base rule. Deleting the rule failed 2 tests, a six-line modifier failed 1, and moving it before the base rule failed 1.
+  fixed F2: the new criterion AC1.3 has markdown in its promise and its check, and its inner markup is asserted. Printing the promise as plain text failed 1 test, and printing the check as plain text failed 1.
+  fixed F3: AC1.1's promise and check each run past 110 characters, and both checked quotes are asserted free of cutting classes and inline styles. A `truncate` on the check failed 2, a `line-clamp-2` round the promise failed 2, and cutting the check or the promise at 110 characters failed 2 each.
+  rebuttal F4: the fix is in `packages/orchestrator/src/deps.ts`, outside this task's surface, and this task names no build check.
+  claim: AC8.5. Against the pre-change lexicon.tsx and styles.css, 11 of 20 tests failed. Every new-behaviour test failed. The passes are guards, plus a word-for-word test the old full-text render already met.
+  `npx vitest run web/test`: 35 files, 564 passed. `npm run typecheck` and `npm run lint` exited 0. `npm test`: 124 files passed, 1 failed (core/test/readiness.test.ts, beforeAll timed out at 30 s during a 355 s run). Run alone, it passed 72 of 72.

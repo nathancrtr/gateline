@@ -532,6 +532,19 @@ program
         continue
       }
       const name = def.shortName + (def.qualifier ? ` (${def.qualifier})` : '')
+      if (def.check !== undefined) {
+        // A checked criterion never runs its check into the promise: the
+        // default mode quotes the promise alone, and full mode puts the check
+        // on the next line under the promise's first letter, one quote pair
+        // spanning both. An empty promise quotes nothing by default, as an
+        // empty body does below.
+        const promise = (def.promise ?? '').replace(/\s+/g, ' ').trim()
+        const check = def.check.replace(/\s+/g, ' ').trim()
+        const quote =
+          flags.refs === 'full' ? `"${promise}\n${' '.repeat(width + 5)}${check}"` : promise ? `"${truncate(promise, 110)}"` : ''
+        console.log(`  ${id.padEnd(width)}  ${[name, quote].filter(Boolean).join(' — ')}`)
+        continue
+      }
       const body = def.body.replace(/\s+/g, ' ').trim()
       const quote = body ? `"${flags.refs === 'full' ? body : truncate(body, 110)}"` : ''
       console.log(`  ${id.padEnd(width)}  ${[name, quote].filter(Boolean).join(' — ')}`)

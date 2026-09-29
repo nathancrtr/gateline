@@ -1,0 +1,66 @@
+id: 01-lexicon-promise-check
+title: The lexicon returns a criterion's promise and check beside its full text
+requirements: [R1, R2]
+
+scope: |
+  Add the optional `promise` and `check` fields to `LexiconEntry` and fill
+  them for criterion entries in `buildLexicon`, exactly per plan.md
+  "Interface contracts — Lexicon entry". `body` and every other field stay
+  computed as today. The module keeps zero imports.
+
+  Put every new test in the new file `packages/core/test/lexicon-check.test.ts`.
+  Do not edit `packages/core/test/lexicon.test.ts`: AC2.4 is evidenced by its
+  import test passing unmodified.
+
+  Test inputs:
+  - the brief's port example (two lines) for AC1.1, AC1.2, AC2.1
+  - the three-line example criterion in the comment of `contracts/spec.md`
+    (read the file; do not edit it) for AC1.4
+  - for AC2.2 and AC2.3, read from disk the specs of these runs, by explicit
+    list: creation-seam, dupefind, escalation-visibility-2, fleetview-design,
+    local-only-mode, mdtoc, runner-agent, web-staging, wordfreq,
+    writestate-kill-window. Assert each yields at least one criterion, so the
+    loop cannot pass on nothing.
+
+  Also assert that a requirement entry and a decision entry carry neither key,
+  and that a criterion without a check has no `check` key at all.
+
+file_contact_surface:
+  - packages/core/src/view-model/lexicon.ts
+  - packages/core/test/lexicon-check.test.ts
+
+acceptance_tests:
+  - AC1.1
+  - AC1.2
+  - AC1.3
+  - AC1.4
+  - AC1.5
+  - AC1.6
+  - AC2.1
+  - AC2.2
+  - AC2.3
+  - AC2.4
+  - "In packages/: `npx vitest run core/test` and `npm run typecheck` pass"
+  - "AC8.5: the new-behaviour tests (AC1.x) fail against the pre-change lexicon.ts; recorded as a claim in notes"
+  - "AC8.6: the AC2.1-AC2.3 tests fail when the `body` join is deliberately broken, then pass once restored; recorded as a claim in notes"
+
+depends_on: []
+
+status: pending
+
+notes: |
+  round 1:
+  claim: AC8.5 — with the pre-change lexicon.ts from HEAD, `npx vitest run core/test/lexicon-check.test.ts` fails 18 of 29 tests, including every AC1.x test.
+  claim: AC8.6 — if the body join becomes `join('')`, AC2.1 fails, and AC2.2 fails for the four earlier specs that wrap a criterion. Restoring the join turns both green.
+  deviation: breaking the body join cannot fail AC2.3, because that test guards check detection. A check detected on any continuation line failed AC2.3 for the same four specs, and the test passed once restored.
+  claim: each of these mutants is caught by its own test. A case-insensitive label fails AC1.6. A check kept to one line fails AC1.4. A dropped label fails AC1.2. A check found in the first line fails AC1.5.
+  discovery: `body === promise + ' ' + check` fails in one case. The promise's last line must be the criterion's first line and end in trailing spaces. The plan's trim rule removes those spaces from `promise` while `body` keeps them. No spec in the repository has this.
+  `npx vitest run core/test`: 41 files, 696 tests passed. `npm run typecheck`: clean. In the full `npm test`, 1 test failed and 1 file errored, both from a 30-second hook timeout under load, in readiness and blob-reads. Rerun alone, those files passed 85 of 85.
+  round 2:
+  fixed F1: a new test puts `Check:` mid-line on a continuation line. The mutant that matches a line containing the label fails it.
+  fixed F2: a new test gives two labelled lines. Swapping `findIndex` for `findLastIndex` fails it.
+  fixed F3: a new test keeps `Checks` and `Checking` lines in the promise and treats `Check:run` as a check. Dropping the colon fails it, and so does demanding a space after it.
+  rebuttal F4: no fix inside this task can make the plan's fourth rule hold. It conflicts with the sixth (`body` as today) and the third (trim) together, and changing either breaks the plan. The Architect has to settle it. No spec has either shape.
+  fixed F5: restored the space in `CHOICE_ITEM = /`.
+  fixed F6: AC1.4 now reads up to the next criterion and requires a check of two or more lines. With the contract's check shrunk to one line (a scratch edit, since restored), the test fails.
+  `npx vitest run core/test`: 41 files, 699 tests passed. `npm test`: 123 files passed, 2 skipped. `npm run typecheck` and `npm run lint`: clean.

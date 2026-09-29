@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { ArtifactKind } from '../api.ts'
+import { criterionCheckRehype } from './criterion-check.ts'
 import { LexRef, lexiconRehype, useLexicon } from './lexicon.tsx'
 
 interface HNode {
@@ -82,7 +83,9 @@ export const stampLines = (first: number) => () => (tree: Positioned) => {
 export function Markdown({ children, sourceKind, unwrapped, line }: { children: string; sourceKind?: ArtifactKind; unwrapped?: boolean; line?: number }) {
   const lex = useLexicon()
   const rehypePlugins = useMemo(() => {
-    const plugins = lex ? [rawAsText, lexiconRehype(lex.pattern, sourceKind)] : [rawAsText]
+    // The check step reads no lexicon, so it runs with or without one (R5).
+    const base = [rawAsText, criterionCheckRehype(sourceKind)]
+    const plugins = lex ? [...base, lexiconRehype(lex.pattern, sourceKind)] : base
     return line === undefined ? plugins : [stampLines(line), ...plugins]
   }, [lex, sourceKind, line])
   const components = useMemo(() => (lex ? ({ 'lex-ref': LexRef } as unknown as Components) : undefined), [lex])
